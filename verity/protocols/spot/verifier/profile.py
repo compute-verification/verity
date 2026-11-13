@@ -8,8 +8,8 @@ its reader lives with the application, not in core.  One `delta` serves every co
 union counts it once.
 
 The sampling design is stated over named levels of a partition hierarchy (`verity.circuits.partition.Level`): each level's members
-partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
+only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
 carries samples, never roles.
 """
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
-from math import comb, expm1, floor, inf, lgamma, log, log1p, nextafter, prod
+from math import ceil, comb, expm1, floor, inf, log, log1p, nextafter, prod
 from types import MappingProxyType
 
 from verity.circuits.partition import Hierarchy, Level
@@ -98,8 +98,9 @@ class IntegrityProfile:
     """Checked by sampling over `levels`, coarse to fine: `sizes[0]` members at the top level, then `sizes[i]`
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the sampled levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; unsampled levels only group.  A `Stratified` sample is the only sample, of the checked level, with its strata
-    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    level; unsampled levels only group.  A `Stratified` or `Work` sample is the only sample, of the checked level, with
+    its strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
+    `strata`.
     `drawn` counts the members actually sampled at each level, all passed.
 
     `accept(m)` reads m at a member's footprint.  When the checked level is committed before the first sample (as
@@ -124,7 +125,7 @@ class IntegrityProfile:
 
     levels: Hierarchy
     sizes: tuple[int, ...]
-    draws: Mapping[str, Draw] = field(hash=False)
+    draws: Mapping[str, SamplingDesign] = field(hash=False)
     delta: float
     programs: tuple[str, ...] = field(default=(), kw_only=True)
     prescribed: frozenset[str] = field(default=frozenset(), kw_only=True)
@@ -148,13 +149,13 @@ class IntegrityProfile:
         object.__setattr__(self, "drawn", MappingProxyType({n: int(self.drawn[n]) for n in names if n in self.drawn}))
         bernoulli = [n for n, d in self.draws.items() if isinstance(d, Bernoulli)]
         subsets = [n for n, d in self.draws.items() if isinstance(d, Subset)]
-        stratified = [n for n, d in self.draws.items() if isinstance(d, Stratified)]
+        stratified = [n for n, d in self.draws.items() if isinstance(d, (Stratified, Work))]
         if len(bernoulli) + len(subsets) + len(stratified) != len(self.draws) or len(bernoulli) > 1:
-            raise ValueError("a profile's draws are Bernoulli, Subset or Stratified, with at most one Bernoulli level")
+            raise ValueError("a profile's draws are Bernoulli, Subset, Stratified or Work, with at most one Bernoulli level")
         if names[-1] not in self.draws or subsets not in ([], [names[-1]]):
             raise ValueError("the checked (finest) level is drawn, and only it may be drawn by Subset")
         if stratified and list(self.draws) != [names[-1]]:
-            raise ValueError("a Stratified draw is the profile's only draw, of the checked level")
+            raise ValueError("a Stratified or Work draw is the profile's only draw, of the checked level")
         if any(v < 0 for v in self.drawn.values()):
             raise ValueError("drawn counts are >= 0")
         if stratified:
@@ -187,7 +188,7 @@ class IntegrityProfile:
     def _law(self) -> tuple[int, int, Fraction, int]:
         """(Bernoulli members, checked members n inside each, p, k)."""
         checked = self.levels[-1].name
-        if isinstance(self.draws[checked], Stratified):
+        if isinstance(self.draws[checked], (Stratified, Work)):
             raise ValueError("a stratified profile has no single k: read it through `strata`")
         at = next((n for n, d in self.draws.items() if isinstance(d, Bernoulli)), None)
         p = self.draws[at].p if at is not None else Fraction(1)
@@ -267,13 +268,15 @@ class IntegrityProfile:
         return best if cap is None else min(best, float(cap))
 
     def strata(self) -> Stratified | None:
-        """The sampling design as independent uniform samples inside strata of the checked level: its `Stratified` sample, or, when a
-        `Subset(k)` of the checked level is the only sample, one stratum of all its members, named after the level.  None
-        when a level is sampled `Bernoulli`."""
+        """The sampling design as independent uniform samples inside strata of the checked level: its `Stratified`
+        sample, a `Work` sample's at its k_s, or, when a `Subset(k)` of the checked level is the only sample, one stratum
+        of all its members, named after the level.  None when a level is sampled `Bernoulli`."""
         checked = self.levels[-1].name
         law = self.draws[checked]
         if isinstance(law, Stratified):
             return law
+        if isinstance(law, Work):
+            return law.stratified
         if isinstance(law, Subset) and len(self.draws) == 1:
             return Stratified.uniform(self.count(checked), law.k, checked)
         return None
@@ -318,10 +321,64 @@ class IntegrityProfile:
                 "delta": self.delta, "drawn": dict(self.drawn)}
 
 
-#: `Stratified.harm_bound`'s margin: the risk budget and the result are raised by this relative amount, above the float
-#: risks' error (lgamma differences at a billion units are within 2^-26 relative), so the bound is never below the
-#: relaxation's optimum
+#: `Stratified.harm_bound`'s margin: the risk budget and the result are raised by this relative amount, far above what
+#: a float risk can exceed the exact one by (`neg_log_escape`: 2^-38 relative at any size), so the bound is never below
+#: the relaxation's optimum
 HARM_MARGIN = 2.0 ** -20
+
+#: `Stratified.harm_bound` spends what its search leaves of the budget one proof block at a time while at most this
+#: many of the cheapest fit in it; where the search closed on one float and more fit (past 2^53 units a float
+#: threshold moves many blocks at once), they are ties to the floats' resolution and are taken at once
+HARM_WHOLE = 1 << 10
+
+#: `neg_log_escape` sums its terms one by one up to this many, and takes their closed form beyond
+ESCAPE_TERMS = 1 << 14
+
+
+def _log1p_less(y: float) -> float:
+    """log1p(y) - y for y >= 0, to a few units in the last place.  Below 1/4, where the difference would cancel, it is
+    -y^2 / (2 + y) + 2 z^3 (1/3 + z^2/5 + z^4/7 + ...) at z = y / (2 + y), from log1p(y) = 2 atanh(z): eleven terms
+    of a series whose ratio z^2 is under 1/81."""
+    if y >= 0.25:
+        return log1p(y) - y
+    z = y / (2 + y)
+    w, series = z * z, 0.0
+    for j in range(10, -1, -1):
+        series = series * w + 1 / (2 * j + 3)
+    return 2 * z * w * series - y * y / (2 + y)
+
+
+def neg_log_escape(n: int, k: int, m: int, terms: int = ESCAPE_TERMS) -> float:
+    """-ln(C(n - m, k) / C(n, k)) in floats, for 0 <= k, 0 <= m and m + k <= n: the risk of m incorrect proof blocks
+    among n when k are sampled.  It is never above the exact value by more than 2^-38 of it, at any size.
+
+    The ratio is prod_{i < t} (1 - s / (n - i)) at t = min(m, k), s = max(m, k) (it is symmetric in m and k).  While
+    t <= `terms` the t terms are summed, each to a few units in the last place (`neg_log_ratio`'s, its log1p taken
+    directly where every term's ratio is at least 1/2), and a sum of 2^14 floats of one sign is within 2^-39 of itself
+    however it rounds.  (A caller that only prices may sum fewer `terms`: the closed form is then as far under the exact
+    value as stated below, which need not be small beside it.)
+
+    Beyond, the sum of f(i) = ln(n - i) - ln(n - s - i) over i < t is taken from below by the trapezoid rule: f is
+    convex, so the sum is at least the integral of f over [0, t - 1] plus (f(0) + f(t - 1)) / 2, and exceeds it by at
+    most (f'(t - 1) - f'(0)) / 8, which is under s / (8 (n - t + 1)(n - s - t + 1)), 2^-35 of the risk wherever the risk
+    is under 745 (the most a float delta asks).  The integral, a ln a - b ln b - c ln c + d ln d at a = n, b = n - t + 1,
+    c = n - s, d = n - s - t + 1, is not evaluated in that form, whose four terms cancel to nothing at large n (as
+    four `lgamma` values do): with tau = t - 1 it is tau f(0) + b g(tau / b) - d g(tau / d), g(y) = log1p(y) - y
+    (`_log1p_less`), where neither b g nor d g is more than 2.2 times the integral in size, so the float result is
+    within 2^-44 of the trapezoid's exact value."""
+    if not (0 <= k and 0 <= m and m + k <= n):
+        raise ValueError("neg_log_escape needs 0 <= k, 0 <= m and m + k <= n")
+    t, s = min(m, k), max(m, k)
+    if t == 0:
+        return 0.0
+    if t <= terms:
+        if n >= 2 * s + t - 1:
+            return -sum(log1p(-s / (n - i)) for i in range(t))
+        return sum(neg_log_ratio(n - s - i, n - i) for i in range(t))
+    tau = t - 1
+    b, c, d = n - tau, n - s, n - s - tau
+    first, last = neg_log_ratio(c, n), neg_log_ratio(d, b)
+    return (tau + 0.5) * first + 0.5 * last + (b * _log1p_less(tau / b) - d * _log1p_less(tau / d))
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,16 +402,17 @@ class Stratum:
         return self.size - self.k if self.k else self.size
 
     def _risk(self, m: int) -> float:
-        """-ln escape(m) in floats, for searching only: the log1p sum to a few units in the last place per term while k
-        is small, the lgamma difference beyond."""
+        """-ln escape(m) in floats, for searching only (`neg_log_escape`: at most 2^-38 above the exact value)."""
         if self.k == 0 or m == 0:
             return 0.0
         if m > self._finite():
             return inf
-        if self.k <= 1 << 14:
-            return -sum(log1p(-m / (self.size - i)) for i in range(self.k))
-        n, k = self.size, self.k
-        return (lgamma(n + 1) - lgamma(n - k + 1)) - (lgamma(n - m + 1) - lgamma(n - m - k + 1))
+        return neg_log_escape(self.size, self.k, m)
+
+    def _step(self, m: int) -> float:
+        """The risk's increment from m to m + 1 incorrect proof blocks, -ln(1 - k / (size - m)), for m < `_finite()`:
+        taken in its own closed form, never as a difference of two risks, which at a large size is all rounding."""
+        return neg_log_ratio(self.size - m - self.k, self.size - m) if self.k else 0.0
 
 
 def _key_lt(a: Stratum, ma: int, b: Stratum, mb: int) -> bool:
@@ -517,7 +575,11 @@ class Stratified:
         fills the most harmful units first, so the value of m incorrect proof blocks is concave in m while the risk is convex, and
         the linear relaxation (units taken in the order of risk increment per unit of harm, the last one fractionally)
         is the optimum from above.  The float risks are searched, then the budget and the result are raised by
-        `HARM_MARGIN`."""
+        `HARM_MARGIN`.  What the search leaves of the budget is spent one proof block at a time, each at its own
+        increment (`Stratum._step`), the last one fractionally.  Where the search closed on one float and more than
+        `HARM_WHOLE` blocks still fit, every block that fits is within the floats' resolution of the best ratio of
+        increment to harm still open, which no later block beats, and the rest of the budget is spent at that ratio at
+        once: never less than the blocks one by one."""
         if not 0 < delta < 1:
             raise ValueError("0 < delta < 1")
         if not set(harm) <= {s.name for s in self.strata}:
@@ -546,7 +608,7 @@ class Stratified:
                 for v, c in sg:
                     top = min(m + c, f)
                     x = top if s.k == 0 else 0 if tau * v <= 0 else \
-                        max(0, min(top, floor(s.size - s.k / -expm1(-tau * v)) + 1))
+                        max(0, min(top, s.size - ceil(s.k / -expm1(-tau * v)) + 1))
                     whole = x == m + c
                     if x > m:
                         value, m = value + (x - m) * v, x
@@ -563,27 +625,87 @@ class Stratified:
             mid = (lo + hi) / 2
             lo, hi = (mid, hi) if fill(mid)[2] <= budget else (lo, mid)
         ms, value, risk = fill(lo)
+        room, closed = budget - risk, lo < hi <= nextafter(lo, inf)
         while True:
-            options = [(s._risk(m + 1) - s._risk(m)) / unit(i, m) for i, (s, m) in enumerate(zip(self.strata, ms))
+            options = [(s._step(m) / unit(i, m), i) for i, (s, m) in enumerate(zip(self.strata, ms))
                        if m < s._finite() and unit(i, m) > 0]
             if not options:
                 break
-            ratio = min(options)
-            i = next(i for i, (s, m) in enumerate(zip(self.strata, ms))
-                     if m < s._finite() and unit(i, m) > 0 and (s._risk(m + 1) - s._risk(m)) / unit(i, m) == ratio)
-            step = self.strata[i]._risk(ms[i] + 1) - self.strata[i]._risk(ms[i])
-            if risk + step > budget:
-                value += unit(i, ms[i]) * (budget - risk) / step
+            _, i = min(options)
+            step = self.strata[i]._step(ms[i])
+            if step > 0 and (room < step or (closed and room > step * HARM_WHOLE)):
+                value += unit(i, ms[i]) * room / step
                 break
-            risk, value, ms[i] = risk + step, value + unit(i, ms[i]), ms[i] + 1
+            room, value, ms[i] = room - step, value + unit(i, ms[i]), ms[i] + 1
         return nextafter(value * (1 + HARM_MARGIN), inf)
 
     def to_json(self) -> dict:
         return {"law": "stratified", "strata": [{"name": s.name, "size": s.size, "k": s.k} for s in self.strata]}
 
 
-Draw = Bernoulli | Subset | Stratified
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
+    `floor` and at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum",
-           "Subset", "neg_log_ratio"]
+@dataclass(frozen=True, slots=True)
+class WorkStratum:
+    """A stratum of the work sampling design: `size` members, `k` of them sampled, each doing `work` (an integer in any
+    fixed unit, 0 for members that do none), and `floor`, the fewest it samples."""
+
+    name: str
+    size: int
+    k: int
+    work: int
+    floor: int
+
+
+@dataclass(frozen=True, slots=True)
+class Work:
+    """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform samples inside disjoint strata of
+    the checked level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified
+    one at those k_s, so its bounds are `stratified`'s."""
+
+    k: int
+    strata: tuple[WorkStratum, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "strata", tuple(self.strata))
+        if not all(isinstance(s, WorkStratum) for s in self.strata):
+            raise ValueError("a work design's strata are WorkStratum")
+        if not self.strata or not 1 <= self.k <= self.population:
+            raise ValueError("a work design needs strata and 1 <= k <= population")
+        total = sum(s.work * s.size for s in self.strata)
+        if total == 0:
+            raise ValueError("a work design's population does no work")
+        seen: set[str] = set()
+        for s in self.strata:
+            if s.name in seen:
+                raise ValueError(f"stratum {s.name!r} twice")
+            seen.add(s.name)
+            if s.floor < 1:
+                raise ValueError(f"stratum {s.name!r}: a floor is at least one")
+            if s.k != work_k(self.k, s.work, s.size, total, s.floor):
+                raise ValueError(f"stratum {s.name!r}: k is not the work rule's")
+
+    @property
+    def population(self) -> int:
+        return sum(s.size for s in self.strata)
+
+    @property
+    def stratified(self) -> Stratified:
+        """Its sample's design: the stratified one at its k_s."""
+        return Stratified(tuple(Stratum(s.name, s.size, s.k) for s in self.strata))
+
+    def to_json(self) -> dict:
+        return {"law": "work", "k": self.k,
+                "strata": [{"name": s.name, "size": s.size, "k": s.k, "work": s.work, "floor": s.floor}
+                           for s in self.strata]}
+
+
+SamplingDesign = Bernoulli | Subset | Stratified | Work
+
+
+__all__ = ["ESCAPE_TERMS", "HARM_MARGIN", "HARM_WHOLE", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile",
+           "SamplingDesign", "Stratified", "Stratum", "Subset", "neg_log_escape", "neg_log_ratio"]

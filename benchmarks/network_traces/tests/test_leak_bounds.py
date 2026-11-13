@@ -1,17 +1,19 @@
-"""leak_bounds, the one calculator of K. `per_link`, `datacenter` and `world` give chain_record.leak's rows on a warden
-run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
+"""leak_bounds, the one calculator of K, in its scaling by links. `per_link` and `at_link_rate` give chain_record.leak's
+rows on a warden run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
 - the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
 - a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
-- the datacenter's links are the census's reference datacenter's machines, and the world's are the adversary resource
-  model's compute in machines of the datacenter's GPUs;
-- a share is of one copy of the weights, labelled with what it is;
+- a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
+- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of rho's
+  world fleet, the census's inference at the fleet's serving MFU;
+- a share is of one copy of the served model's weights, the workload card's parameters in FP4, labelled with what it
+  is;
 - ε is the scans' δ summed, m·δ_scan over the period's sampling blocks and the links.
 
-At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the weights. A window class
-stands in for its scan class and its T, and the calculator refuses what it can't count."""
+At δ = 1% for the whole datacenter, the pooled form pays its incorrect proof blocks whatever its links serve. A window
+class stands in for its scan class and its T, and the calculator refuses what it can't count."""
 
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ import importlib.util
 import json
 import math
 import sys
+import tomllib
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
@@ -32,6 +35,7 @@ import leak_bounds as LB  # noqa: E402
 from verity.protocols.certifier.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
+RHO = HERE.parents[1] / "verity" / "protocols" / "inference_only" / "rho" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
 #: the warden's scan class, KO 64 (`scan_zk.CLASS`)
@@ -56,7 +60,7 @@ def clog2(x: int) -> int:
     return 0 if x <= 1 else int(math.log2(x - 1)) + 1
 
 
-def test_per_link_datacenter_and_world_are_chain_records_rows(tmp_path):
+def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
     import scan_zk as sz
     assert sz.CLASS == W63
     cr = _load("chain_record")
@@ -71,11 +75,10 @@ def test_per_link_datacenter_and_world_are_chain_records_rows(tmp_path):
     for r in doc["rows"]:
         if r["scope"] == "link":
             got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["prog"], d, **at) for d in (None, *LB.DELTAS)}
-        elif r["scope"] == "world":
-            got = {d: LB.world(link, r["period"], r["prog"], d) for d in (None, *LB.DELTAS)}
         else:
-            got = {d: LB.datacenter({link: LB.datacenter_links()}, r["period"], r["prog"], d)
-                   for d in (None, *LB.DELTAS)}
+            links = {"datacenter": LB.datacenter_links(), "world": LB.world_links()}[r["scope"]]
+            got = {d: LB.at_link_rate(link, links, r["period"], r["prog"], d) for d in (None, *LB.DELTAS)}
+            assert got[None] == LB.datacenter({link: links}, r["period"], r["prog"])
         assert r["per_period"] == got[None].bits and r["per_period_share"] == got[None].share
         assert Fraction(r["eps"]) == got[None].eps
         assert r["pooled"] == {f"{float(d):g}": got[d].bits for d in LB.DELTAS}
@@ -126,36 +129,46 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
         link = LB.link(W63, RATE, T=32, egress_cells=cells)
         assert link.cell == clog2(cells + 1) and link.cap == 2 * clog2(cells + 1)
     assert [LB.link(W63, RATE, T=32, egress_cells=c).cap for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
+    assert LB.JITTER_BOUND == 2
+    steps = (16, 32, 48)
+    assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
     tau = Fraction(4)
     four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
     schedules = cells = clog2(65 + 1) * 4
-    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 == 9_144
+    jitter = clog2(LB.JITTER_BOUND ** 32)
+    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 9_176
 
 
-def test_the_census_sets_the_datacenter_and_the_world():
+def test_the_census_sets_the_datacenter_and_rhos_fleet_the_world():
     dc, world = _reference("deployments.json"), _reference("adversary.json")
     assert LB.datacenter_links() == dc["machines"] == 12_500
-    flop_s = world["flop_per_s_per_h100"] * world["monitoring_period_s"]
-    machines = world["total_flop"] / flop_s / dc["gpus_per_machine"]
-    assert LB.world_links() == math.ceil(machines) == 18_550_229
+    fleet = tomllib.loads((RHO / "reference.toml").read_text())["fleet"]["world-h200"]
+    machine = tomllib.loads((RHO / "hardware.toml").read_text())["location"][fleet["location"]]
+    assert LB.world_links() == fleet["count"]["value"] == 46_870_000
+    served = machine["flops"]["value"] * world["monitoring_period_s"] * fleet["mfu_serve"]["value"]
+    assert LB.world_links() == pytest.approx(world["total_flop"] / served, rel=1e-4)
+    assert machine["devices"]["value"] == dc["gpus_per_machine"] == 8
     one = LB.link(W63, RATE, T=32)
     for delta in (None, *LB.DELTAS):
-        got = LB.world(one, "year", "registered", delta)
-        assert got == LB.datacenter({one: 18_550_229}, "year", "registered", delta)
+        got = LB.at_link_rate(one, LB.world_links(), "year", "registered", delta)
+        assert got == LB.datacenter({one: 46_870_000}, "year", "registered", delta)
         assert got.statement == LB.STATEMENTS["datacenter"]
-    assert LB.world(one, "week", "anchors").bits == pytest.approx(
-        18_550_229 * LB.per_link(W63, RATE, "week", "anchors", T=32).bits, rel=1e-12)
+    assert LB.at_link_rate(one, 46_870_000, "week", "anchors").bits == pytest.approx(
+        46_870_000 * LB.per_link(W63, RATE, "week", "anchors", T=32).bits, rel=1e-12)
 
 
-def test_a_share_is_of_one_bf16_copy_and_says_so():
-    assert LB.WEIGHTS == LB.Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
+def test_a_share_is_of_one_fp4_copy_of_the_served_model_and_says_so():
+    card = json.loads((HERE.parents[1] / LB.WORKLOAD).read_text())
+    assert card["model"] == LB.MODEL == "GLM-5.3"
+    assert LB.WEIGHTS == LB.Weights(card["value"]["params"] * 4, "GLM-5.3 in FP4") and LB.FP4 == 4
+    assert LB.WEIGHTS.bits == 753_329_940_480 * 4 and round(LB.WEIGHTS.bits / LB.GB, 1) == 376.7
     one = LB.link(W63, RATE, T=32)
     for got in (LB.per_link(W63, RATE, "week", "registered", T=32), LB.datacenter([one] * 3, "week", "registered"),
-                LB.world(one, "week", "registered", Fraction(1, 100))):
+                LB.at_link_rate(one, 5, "week", "registered", Fraction(1, 100))):
         assert got.weights == LB.WEIGHTS.label and got.share == got.bits / LB.WEIGHTS.bits
-    int8 = LB.Weights(1_235_814_400 * 8, "an int8 copy")
-    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=int8)
-    assert got.weights == "an int8 copy" and got.share == 2 * LB.per_link(W63, RATE, "week", "registered", T=32).share
+    half = LB.Weights(LB.WEIGHTS.bits // 2, "a copy at half the bits")
+    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=half)
+    assert got.weights == half.label and got.share == 2 * LB.per_link(W63, RATE, "week", "registered", T=32).share
 
 
 def test_eps_is_the_scans_delta_summed():
@@ -171,15 +184,17 @@ def test_eps_is_the_scans_delta_summed():
             assert LB.datacenter([one] * 5, period, "registered", delta).eps == 5 * per.eps
     assert LB.per_link(W63, RATE, "week", "registered", T=32, scan_delta=Fraction(1, 2 ** 40)).eps == Fraction(
         189_000, 2 ** 40)
-    assert LB.world(one, "week", "registered").eps == 18_550_229 * Fraction(189_000, 2 ** 20)
+    assert LB.at_link_rate(one, 46_870_000, "week", "registered").eps == 46_870_000 * Fraction(189_000, 2 ** 20)
 
 
-def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_weights():
+def test_the_pooled_datacenter_pays_its_incorrect_blocks_whatever_it_serves():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
-    assert LB.fmax(one / n) == 15 and floor.share > 1
-    assert floor.bits == pytest.approx(n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1)))
-    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == 0
+    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
+    jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
+    assert LB.fmax(one / n) == 15 and floor.share == floor.bits / LB.WEIGHTS.bits
+    assert floor.bits == pytest.approx(faulty + jitter)
+    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter
 
 
 def test_a_window_class_and_refusals():

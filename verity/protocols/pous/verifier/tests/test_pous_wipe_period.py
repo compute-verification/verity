@@ -4,13 +4,15 @@ difftested in `verity/protocols/pous/device/lean/tests/test_wipe_protocol.py`): 
 `StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`), its bound
 vacuous when the egress is uncounted, a prover keeping one label past it and a late read rejected, a session the prover
 left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
-is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
+is checked at `k = 2906`, the H200's (`StreamedWipeMeetsH200`), and against the streamed wipe's own bound. The leg runs
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
 (the links leaving the node, the undeclared tiers, an uncounted egress, what a joint store's disks leave outside the
-boundary), the reads and the session's window."""
+boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
+session signed under another is rejected, and a challenger on its own host with no key pinned is refused."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -22,6 +24,7 @@ import pytest
 
 from pous_fakes import Clock
 import pous_test_signer as ts
+import wipe_side
 from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
@@ -45,7 +48,10 @@ SEGMENT_2152 = 11_709_069
 
 def test_an_honest_segment_is_certified_at_its_reads() -> None:
     w = _run(W.params_for(), egress_bits=3 * sw.EGRESS_UNIT_BITS - 5)
-    assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS}
+    key, = w.case["params"]["trusted"]
+    assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS,
+                                                  "key_sha512": hashlib.sha512(bytes.fromhex(key)).hexdigest(),
+                                                  "key_pinned": False}
     assert w.answer["public"] == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
                                   "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
                                   "memory_bits": M, "r": 24}
@@ -78,23 +84,36 @@ def test_a_prover_keeping_one_label_past_the_threshold_is_rejected() -> None:
 
 def test_the_certificate_at_the_challengers_reads() -> None:
     """`ratio(k)` is the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, and `certify` publishes the threshold at it: one
-    segment at `k = 2152` and at `k = 5231`, and `StreamedWipeMeets141GB5`'s H200 (its fill and 2.3 GB of driver reserve
-    declared, `R = 18.4·10^9` bits) at its `39,721,768,854` bits; past `MAX_READS` the certificate is vacuous."""
-    assert [W.ratio(k) for k in (1, 90, 91, 2151, 2152, 5230, 5231, 74_000)] == [1, 1, 1, 24, 24, 58, 59, 828]
-    for k in (1, 91, 400, 2152, 5231, 10_000, W.MAX_READS):
+    segment at `k = 2152` and at `k = 5231`, and `StreamedWipeMeetsH200`'s H200 (141 GiB filled whole, `R = 0`)
+    at its `39,068,035,213` bits; past `MAX_READS` the certificate is vacuous."""
+    assert [W.ratio(k) for k in (1, 90, 91, 2151, 2152, 2905, 2906, 5230, 5231, 74_000)] == [
+        1, 1, 1, 24, 24, 32, 33, 58, 59, 828]
+    for k in (1, 91, 400, 2152, 2906, 5231, 10_000, W.MAX_READS):
         r = W.ratio(k)
         assert (r - 1) ** k << 129 <= r ** k and r ** k << 129 > (r + 1) ** k, k
     assert (W.certify(W.params_for(), 0)["foreign_bits"], W.certify(W.params_for(k=5231), 0)["foreign_bits"]) == (
         SEGMENT_2152, 5_074_062)
-    h200 = sw.WipeParams(2_203_125_000, 5231, 1, W.LIMIT_NS, (("gpu-hbm", 143_300_000_000),))
-    assert h200.outside_bits == 18_400_000_000
+    h200 = sw.WipeParams(2_365_587_456, 2906, 1, W.LIMIT_NS, (("gpu-hbm", 151_397_597_184),))
+    assert h200.outside_bits == 0
     assert W.certify(h200, 2) == {"certified": True, "egress_mib": 2, "eps": f"1/{2 ** 128}",
-                                  "foreign_bits": 39_721_768_854 + 2 * sw.EGRESS_UNIT_BITS, "k": 5231,
-                                  "memory_bits": 1_146_400_000_000, "r": 59}
+                                  "foreign_bits": 39_068_035_213 + 2 * sw.EGRESS_UNIT_BITS, "k": 2906,
+                                  "memory_bits": 1_211_180_777_472, "r": 33}
     past = W.params_for(k=W.MAX_READS + 1)
     assert W.certify(past, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M,
                                   "k": W.MAX_READS + 1, "memory_bits": M, "r": 0}
     assert W.gaps(past, 0) == [f"k = {W.MAX_READS + 1}: the certificate is computed for at most {W.MAX_READS} reads"]
+
+
+def test_a_wipe_of_no_reads_bounds_nothing() -> None:
+    """`WipeParams` refuses `k = 0`, so neither a commitment nor the challenger's side (`--reads 0`) holds it; past that
+    refusal `gaps` names it and the certificate is vacuous, as `MemoryChallenger.WipeProtocol.gaps`' guard has it."""
+    with pytest.raises(ValueError, match="1 <= batch <= k"):
+        WP.params_of(WP.request_of("n0", W.params_for()), 0)
+    zero = W.params_for()
+    object.__setattr__(zero, "k", 0)
+    assert W.gaps(zero, 0) == ["k = 0: a session of no timed reads bounds nothing"]
+    assert W.certify(zero, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M, "k": 0,
+                                  "memory_bits": M, "r": 1}
 
 
 def test_the_challenger_chooses_the_reads(tmp_path) -> None:
@@ -124,7 +143,8 @@ def test_a_late_read_is_rejected() -> None:
             return super().answer(indices)
 
     w = _run(clock=clock, prover=Late, egress_bits=0)
-    assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6}
+    assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6,
+                                                  "key_sha512": w.report["key_sha512"], "key_pinned": False}
     assert "batch 5 is past its deadline of 1000 ns" in w.answer["reason"]
 
 
@@ -191,9 +211,11 @@ CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
 def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
+    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": wipe}))
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
+                                                    "wipe": {"trusted_sha512": wipe_side.key_sha512()} | wipe}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
@@ -219,7 +241,8 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
     assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "k": W.READS, "links": [CONTROL], "memory_bits": M,
-                                         "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER}
+                                         "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER,
+                                         "trusted_sha512": wipe_side.key_sha512()}
     control, challenger = record["placement"]["links"]
     assert control == WP.link("control", "n0", "outside", CONTROL["via"])
     assert challenger["name"] == "challenger" and challenger["ends"] == ["n0", "auditor"]
@@ -238,6 +261,20 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = W.summary(record)
     assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
+    key, = case["params"]["trusted"]
+    assert s["decided_by"] == record["decided_by"] == {"program": "python", "host": socket.gethostname()}
+    assert s["key_sha512"] == record["report"]["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
+    assert s["key_sha512"] == wipe_side.key_sha512() and s["key_pinned"] is record["report"]["key_pinned"] is True
+
+
+def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> None:
+    """`period.decided_by`, what a piece's summary says of its verdict: the Lean by its executable's name, wherever it
+    was built, and `python` when none answered, each on the host that ran it."""
+    host = socket.gethostname()
+    assert W.decided_by(tmp_path / "scratch" / ".lake" / "build" / "bin" / "wipe-protocol") == {
+        "program": "wipe-protocol", "host": host}
+    assert W.decided_by("pous-run-protocol") == {"program": "pous-run-protocol", "host": host}
+    assert W.decided_by(None) == {"program": "python", "host": host}
 
 
 def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
@@ -255,6 +292,61 @@ def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, 
     period = _side(tmp_path, monkeypatch, {"egress_bits": 0})
     with pytest.raises(ValueError, match="reaches only a challenger on this node"):
         W.leg(period, "n0", tmp_path / "out")
+
+
+UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
+
+
+def test_the_verifier_trusts_the_pinned_key_alone() -> None:
+    """`run`'s `trusted_sha512`: under the digest of the key the session is signed under the wipe is accepted and the
+    key reported pinned; under another digest the same session is rejected, its case naming no trusted key; with no
+    pin the key the session came with is trusted and reported unpinned."""
+    unpinned = _run()
+    own = unpinned.report["key_sha512"]
+    pinned, other = _run(trusted_sha512=own), _run(trusted_sha512=hashlib.sha512(b"another key").hexdigest())
+    assert (unpinned.verdict, unpinned.report["key_pinned"]) == ("accept", False)
+    assert (pinned.verdict, pinned.report["key_pinned"]) == ("accept", True)
+    key, = pinned.case["params"]["trusted"]
+    assert unpinned.case["params"]["trusted"] == [key] and hashlib.sha512(bytes.fromhex(key)).hexdigest() == own
+    assert (other.verdict, other.answer["reason"], other.answer["public"]) == ("reject", UNTRUSTED, None)
+    assert other.report == pinned.report | {"key_pinned": False} and other.case["params"]["trusted"] == []
+
+
+def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_path, monkeypatch, capsys) -> None:
+    """`main` on a period whose challenger, on its own host, signs under another key than the one `wipe.trusted_sha512`
+    pins: the session, honest in every read, is rejected, by a case that trusts no key, and the record and the printed
+    summary say whose key it was and that it wasn't the pinned one."""
+    other = hashlib.sha512(b"another key").hexdigest()
+    period = _side(tmp_path, monkeypatch, {"trusted_sha512": other})
+    out = tmp_path / "out"
+    argv = ["--period", str(period), "--out", str(out), "--node", "n0"]
+    assert W.main(argv) == 1
+    s = json.loads(capsys.readouterr().out)
+    assert (s["verdict"], s["reason"], s["public"]) == ("reject", UNTRUSTED, None)
+    assert (s["key_pinned"], s["key_sha512"]) == (False, wipe_side.key_sha512())
+    assert json.loads((out / "wipe.case.json").read_text())["params"]["trusted"] == []
+    record = json.loads((out / "wipe.json").read_text())
+    assert record["report"]["ended"] == sw.COMPLETE and record["wipe"]["trusted_sha512"] == other
+    assert record["answer"]["verdict"] == "reject" and W.summary(record) == s
+
+
+def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, monkeypatch) -> None:
+    """With no pin the verifier trusts the key the session came with, which only a challenger whose key the run made
+    may be given: one on its own host is refused before its session starts."""
+    period = _side(tmp_path, monkeypatch, {"trusted_sha512": None})
+    started = []
+    monkeypatch.setattr(W, "run", lambda *a, **kw: started.append(a))
+    with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory challenger on auditor"):
+        W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"])
+    assert not started and not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("pin", ["ab" * 63, "AB" * 64, "ab" * 64 + "\n", 7])
+def test_a_pin_is_a_sha512_in_lowercase_hex(pin) -> None:
+    with pytest.raises(ValueError, match="wipe.trusted_sha512 is null or the SHA-512"):
+        W.config({"wipe": {"trusted_sha512": pin}})
+    assert W.config({"wipe": {"trusted_sha512": "ab" * 64}})["trusted_sha512"] == "ab" * 64
+    assert W.config({})["trusted_sha512"] is None
 
 
 def test_what_the_bound_does_not_cover() -> None:

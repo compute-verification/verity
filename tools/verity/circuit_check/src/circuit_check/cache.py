@@ -133,12 +133,19 @@ module the process imported but the checker's own (its version) and every bindin
 unchanged where it was, never through a move; a run reuses it only when every target it lists is reused that way too, and then
 builds no Definition.
 
-Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
-shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
+Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``, with no path or time shortcut.  An entry
+counts only for the checker version it was stored by, and a version expires: each run that uses a cache marks its own version
+used when it starts and removes every other one no run has used for `EXPIRE_S` (`expire`; a session reading records only
+marks, `mark`), never its own.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
+An entry holds in itself only the reads no other entry is likely to hold (its pins, and each read that names its Definition); the
+rest are records under ``<dir>/<version>/reads/`` that any number of entries share, each stored once under the SHA-512 of its
+bytes and checked against it when read (`_hold`).  An entry and each record name the records they are read with (``needs``),
+which a verdict pack carries with them (`tools/verity/check/verdicts.py`).
 
-A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
-the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as that path's
-(`probed`), and, for reads of what the registries registered, every module the registries import (`registry_inputs`).
+A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, in its report's ``reads``),
+are the paths of the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as
+that path's (`probed`), and, for reads of what the registries registered, every module the registries import
+(`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -149,6 +156,7 @@ import importlib
 import json
 import os
 import platform
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -157,7 +165,7 @@ from typing import Any, Iterable, Iterator
 
 from . import entries as E
 
-SCHEMA = "circuit-check-cache/v3"
+SCHEMA = "circuit-check-cache/v4"
 _ROOT: list[Path] = []
 #: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): a remote run
 #: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
@@ -731,7 +739,8 @@ def _instrument() -> None:
         batch._KERNELS = _RecordedKernels(batch._KERNELS)
     if not isinstance(D.REGISTRY.defs, _RecordedDefs):
         D.REGISTRY.defs = _RecordedDefs(D.REGISTRY.defs)
-    add0 = D.Registry.add
+    table = type(D.REGISTRY)
+    add0 = table.add
 
     def add(self, d):
         _INTERNAL.append(True)                         # registering is no lookup
@@ -751,7 +760,7 @@ def _instrument() -> None:
                 _REGISTRAR[fid] = mods
         return out
 
-    D.Registry.add = add
+    table.add = add
     build0 = D._build_body
 
     def _build_body(sp):
@@ -2093,6 +2102,140 @@ def version() -> str:
         _INTERNAL.pop()
 
 
+#: how long a cache keeps a version of the checker that no run has used (`expire`)
+EXPIRE_S = 72 * 3600
+#: a cache's marks, one empty file per version named by it, whose mtime is when a run last used that version or first saw it
+#: unmarked: beside the versions, and hidden, so a verdict pack never walks it (tools/verity/check/verdicts.py's `entries`)
+USED = ".used"
+#: what a version's directory is renamed to before it is deleted, ``<EXPIRED><version>.<pid>.<random>``: hidden for the same
+#: reason, and taken by `sweep` wherever a run left one
+EXPIRED = ".expired-"
+_VERSION_NAME = re.compile(r"[0-9a-f]{128}")
+#: what this process's stores lost because their version's directory went while they wrote (`expire`): an entry (`store`) or
+#: the seconds beside one (`units.store`), each as its key's directory and what it met
+LOST: list[str] = []
+
+
+def _mark(p: Path, now: float) -> None:
+    try:
+        os.utime(p, (now, now))
+    except FileNotFoundError:
+        with open(p, "a"):
+            pass
+        os.utime(p, (now, now))
+
+
+def mark(cache: Path, now: float | None = None) -> str | None:
+    """Mark this checker's version used now in ``cache``, when ``cache`` holds it: a run that only reads the cache (a session of
+    this package's suite taking its catalog from records) leaves this trace of a hit and writes nothing else.  What kept it from
+    marking, or None: an unmarked version only goes `EXPIRE_S` after another run that uses the cache saw it."""
+    now = _clock() / 1e9 if now is None else now
+    own = version()
+    with internal():
+        try:
+            if (Path(cache) / own).is_dir():
+                (Path(cache) / USED).mkdir(exist_ok=True)
+                _mark(Path(cache) / USED / own, now)
+        except OSError as e:
+            return f"not marked: {e!r}"
+    return None
+
+
+def expire(cache: Path, now: float | None = None, delete: Any = None) -> dict[str, list]:
+    """What a run that uses ``cache`` does first: mark this checker's version used now (`USED`), then rename away each other
+    version whose mark is `EXPIRE_S` old, and hand what is renamed away to ``delete`` (default: `sweep` in a process of its own,
+    not waited for).  A version with no mark is marked now, so it goes `EXPIRE_S` after the first run that saw it.  A record: the
+    versions renamed away (``gone``), and what it met and let be, each ``[what, why]`` (``left``).
+
+    It reads the cache's top and each other version's mark, never what a version holds: on a cache of N other versions, all
+    marked, a start makes N + 4 filesystem calls (a mkdir and a stat of `USED`, its own mark's utime, one listing of the top,
+    a stat of each other mark), and a version that goes adds a rename, a stat and an unlink, and starts `sweep`.  Nothing it meets
+    raises: a mark it can't write leaves its version for a later run, and a rename another run made first is that run's.  A run
+    of a version renamed away while it runs (one idle `EXPIRE_S`, which this one's mark rules out but for a run that started
+    between another's reading the mark and renaming) misses what it had, and its stores remake the directory or give none."""
+    now = _clock() / 1e9 if now is None else now
+    own, top = version(), Path(cache)
+    out: dict[str, list] = {"gone": [], "left": []}
+    with internal():
+        try:
+            (top / USED).mkdir(parents=True, exist_ok=True)
+            _mark(top / USED / own, now)
+            names = os.listdir(top)
+        except OSError as e:
+            out["left"].append([str(top), f"not marked or listed: {e!r}"])
+            return out
+        for name in names:
+            if name == own or not _VERSION_NAME.fullmatch(name):
+                continue
+            m = top / USED / name
+            try:
+                try:
+                    at = os.stat(m).st_mtime
+                except FileNotFoundError:
+                    _mark(m, now)
+                    continue
+                if now - at < EXPIRE_S:
+                    continue
+                away = top / f"{EXPIRED}{name}.{os.getpid()}.{os.urandom(4).hex()}"
+                os.rename(top / name, away)
+            except OSError as e:                       # a rename another run made first is the usual one
+                out["left"].append([name, repr(e)])
+                continue
+            out["gone"].append(name)
+            try:
+                if os.stat(m).st_mtime != at:          # a run of it marked it between the two: give it back if it is still free
+                    os.rename(away, top / name)
+                    out["gone"].pop()
+                    out["left"].append([name, "marked while it was renamed away: given back"])
+                    continue
+                m.unlink()
+            except OSError as e:
+                out["left"].append([name, f"renamed away, its mark kept: {e!r}"])
+        if out["gone"] or any(n.startswith(EXPIRED) for n in names):
+            if isinstance(started := (delete or _sweep_apart)(top), OSError):
+                out["left"].append([str(top), f"no sweep started: {started!r}"])
+    return out
+
+
+def sweep(cache: Path) -> str:
+    """Delete every directory `expire` renamed away in ``cache``, one sweeper a cache at a time (a lock under `USED`): another
+    that finds the lock held leaves them to the one holding it, which lists them again until none is left, and to a later run
+    if it ends first.  What it did."""
+    import fcntl
+    import shutil
+
+    top = Path(cache)
+    try:
+        lock = open(top / USED / ".sweep.lock", "a")
+    except OSError as e:
+        return f"no lock: {e!r}"
+    with lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return "another sweeper holds the lock"
+        done: set[str] = set()
+        while left := {n for n in os.listdir(top) if n.startswith(EXPIRED)} - done:
+            for n in sorted(left):
+                shutil.rmtree(top / n, ignore_errors=True)
+            done |= left                               # one it could not delete is not tried again here
+    return f"swept {len(done)}"
+
+
+def _sweep_apart(top: Path) -> Any:
+    """`sweep` in a process of its own that outlives this one, not waited for: a version runs to hundreds of thousands of files,
+    and a check's start does not wait on another version's delete.  The process, or the error that kept it from starting."""
+    import subprocess
+
+    try:
+        return subprocess.Popen([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                                 "from circuit_check.cache import sweep; sweep(sys.argv[2])", str(_HERE.parent), str(top)],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+    except OSError as e:
+        return e
+
+
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
 #: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
@@ -2430,11 +2573,194 @@ def _moved(root: Path, rec: dict, now: dict, renamed: dict[str, str] | None = No
     return True
 
 
-_MEMO: dict[tuple[str, str, str], str | None] = {}
+_MEMO: dict[tuple[str, str, str], Any] = {}
 
 
 def _dir(cache: Path, k: dict) -> Path:
     return Path(cache) / k["version"] / hashlib.sha512(json.dumps(k, sort_keys=True, default=str).encode()).hexdigest()[:32]
+
+
+# --- the reads entries share: records stored once ------------------------------------------------------------------------------
+
+#: the directory of a version's records, each ``<part>/<sha512 of its bytes>.json``: a read set (``set``: each kind's runs), a
+#: run of one kind's reads (the kind), a sited value (``values``)
+READS = "reads"
+#: the kinds whose values are a module's or a unit's record (its content and import sites): each value is a record of its own
+_SITED = ("modules", "units")
+#: a sited kind's reads are cut, in the order of their names, after each name whose digest is 0 modulo this: the same reads are
+#: cut the same way in every entry, so that an entry that holds a module more or less than another shares the rest of its runs
+_RUN = 16
+#: what an entry or a record that can't be read raises while it is read: it counts as none, and `unread` names it
+_UNREAD = (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError)
+#: each entry this process found under a key it looked up and could not read, with what reading it raised (`unread`)
+_MISSED: dict[str, None] = {}
+#: each record this process wrote, or found holding the bytes its name digests (`_put`)
+_PUT: set[str] = set()
+
+
+def _put(top: Path, part: str, body: Any) -> str:
+    """Store ``body`` once, the record ``READS/<part>/<sha512 of its bytes>.json`` under ``top`` (a version's directory); its path
+    from there.  A file there whose bytes are not the record's (cut short, or written by hand), which `_record` refuses, is
+    written again, so the next lookup of every entry that names it can hit; each record is read for that once a process."""
+    data = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()
+    name = f"{READS}/{part}/{hashlib.sha512(data).hexdigest()}.json"
+    if (k := str(p := top / name)) not in _PUT:
+        if not (p.is_file() and p.read_bytes() == data):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            # a temporary name of this writer's own, renamed into place whole: two stores may write one record at once
+            tmp = p.with_name(f".{p.stem}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+            tmp.write_bytes(data)
+            os.replace(tmp, p)
+        _PUT.add(k)
+    return name
+
+
+def _miss(p: Path, x: BaseException) -> None:
+    _MISSED[f"{p}: {type(x).__name__}: {x}; counted as no entry"] = None
+
+
+def unread() -> list[str]:
+    """Each entry this process found under a key it looked up (`lookup`, `recorded`, `units`' records) but could not read,
+    with what reading it raised: a record it names missing (OSError) or not the bytes its name digests (ValueError, `_record`),
+    or the entry not one this version writes.  Each counted as no entry; a run's report lists them (its ``cache.unread``)."""
+    return list(_MISSED)
+
+
+def _ref(needs: list[str], path: str) -> int:
+    """The index of ``path`` in ``needs``, added when it isn't there."""
+    if path not in needs:
+        needs.append(path)
+    return needs.index(path)
+
+
+def _cut(kind: str, reads: dict[str, Any]) -> list[dict[str, Any]]:
+    """One kind's ``reads`` as runs: a sited kind's cut by `_RUN`, any other kind's whole."""
+    if kind not in _SITED:
+        return [reads] if reads else []
+    runs, cur = [], {}
+    for n in sorted(reads):
+        cur[n] = reads[n]
+        if int.from_bytes(hashlib.sha512(f"{kind}\0{n}".encode()).digest()[:8], "big") % _RUN == 0:
+            runs.append(cur)
+            cur = {}
+    return [*runs, cur] if cur else runs
+
+
+def _hold(top: Path, k: dict, now: dict[str, dict[str, Any]]) -> dict:
+    """The fields of an entry of key ``k`` that holds the reads ``now``, its records stored under ``top`` (its version's directory):
+    in itself (``own``) its pins and each read whose name holds the id of the Definition it checks; every other read in a read set
+    it names (``shared``), each kind's runs (`_cut`) in it by reference; and each sited value, in the entry or a run, by
+    reference.  A reference is an index into the ``needs`` of the entry or record that holds it."""
+    target = (k.get("request") or {}).get("target")
+    label = target[1] if isinstance(target, list) and target[:1] == ["definition"] and isinstance(target[1], str) else None
+
+    def held(kind: str, reads: dict[str, Any], needs: list[str], up: str) -> dict[str, Any]:
+        return {n: _ref(needs, f"{up}{_put(top, 'values', v)}") if kind in _SITED and isinstance(v, dict) else v
+                for n, v in reads.items()}
+
+    own: dict[str, dict[str, Any]] = {}
+    runs: dict[str, list[int]] = {}
+    needs: list[str] = []
+    with internal():
+        for kind, reads in now.items():
+            if mine := {n: v for n, v in reads.items() if kind == "pins" or (label is not None and label in n)}:
+                own[kind] = mine
+            runs[kind] = []
+            for run in _cut(kind, {n: v for n, v in reads.items() if n not in mine}):
+                values: list[str] = []
+                kept = held(kind, run, values, "../../")
+                runs[kind].append(_ref(needs, f"../../{_put(top, kind, {'needs': values, 'reads': kept})}"))
+        refs = [f"../{_put(top, 'set', {'needs': needs, 'runs': runs})}"]
+        return {"needs": refs, "own": {kind: held(kind, reads, refs, "../") for kind, reads in own.items()}, "shared": 0}
+
+
+#: each record read, by its path: a record never changes
+_RECORDS: dict[str, Any] = {}
+
+
+def _record(p: Path) -> Any:
+    """The record at ``p``, read once per process; ValueError when its bytes are not those its name digests."""
+    if (k := str(p)) not in _RECORDS:
+        with internal():
+            data = p.read_bytes()
+        if hashlib.sha512(data).hexdigest() != p.stem:
+            raise ValueError(f"{p}: its bytes are not the record its name digests")
+        _RECORDS[k] = json.loads(data)
+    return _RECORDS[k]
+
+
+def _need(p: Path, rec: dict, i: Any) -> Path:
+    """The record that ``rec``, the entry or record at ``p``, refers to by ``i``."""
+    if type(i) is not int or i < 0:
+        raise ValueError(f"{p}: {i!r} refers to no record")
+    return Path(os.path.normpath(p.parent / rec["needs"][i]))
+
+
+def _valued(p: Path, rec: dict, kind: str, reads: dict[str, Any]) -> dict[str, Any]:
+    """``reads``, of kind ``kind``, that the entry or record ``rec`` at ``p`` holds, each sited value read from its record."""
+    return {n: _record(_need(p, rec, v)) if kind in _SITED and type(v) is int else v for n, v in reads.items()}
+
+
+def _run(p: Path, kind: str) -> dict[str, Any]:
+    """The reads of kind ``kind`` the run at ``p`` holds."""
+    rec = _record(p)
+    return _valued(p, rec, kind, rec["reads"])
+
+
+def _expand(p: Path, e: dict) -> dict[str, dict[str, Any]]:
+    """The reads the entry ``e``, at ``p``, holds, by kind, as `store` was handed them."""
+    s = _need(p, e, e["shared"])
+    rec = _record(s)
+    out = {kind: {n: v for i in runs for n, v in _run(_need(s, rec, i), kind).items()} for kind, runs in rec["runs"].items()}
+    for kind, reads in e["own"].items():
+        out[kind].update(_valued(p, e, kind, reads))
+    return {kind: dict(sorted(reads.items())) for kind, reads in out.items()}
+
+
+def _current(root: Path, p: Path, e: dict) -> bool:
+    """Whether each read the entry ``e``, at ``p``, holds is as it is under ``root`` (what `_expand` gives, digested now, is the
+    same), held to the tree by its records: each read set and run once per process."""
+    own = e["own"]
+    now = _digests(root, {"files": [], "dirs": [], **{kind: list(reads) for kind, reads in own.items()}})
+    return all(now[kind] == _valued(p, e, kind, reads) for kind, reads in own.items()) and _fresh(root, _need(p, e, e["shared"]), None)
+
+
+def _fresh(root: Path, p: Path, kind: str | None) -> bool:
+    """Whether the read set (``kind`` None) or the run of kind ``kind`` at ``p`` holds each read as it is under ``root``."""
+    if (k := (str(root), "=", str(p))) not in _MEMO:
+        if kind is None:
+            rec = _record(p)
+            _MEMO[k] = rec["runs"].keys() == _digests(root, {"files": [], "dirs": []}).keys() and all(
+                _fresh(root, _need(p, rec, i), part) for part, runs in rec["runs"].items() for i in runs)
+        else:
+            reads = _run(p, kind)
+            _MEMO[k] = _digests(root, {"files": [], "dirs": [], kind: list(reads)})[kind] == reads
+    return _MEMO[k]
+
+
+def read(p: Path) -> dict:
+    """The entry at ``p``: its key, its reads by kind as `store` was handed them, and its report; OSError or ValueError when it
+    can't be read."""
+    with internal():
+        e = json.loads(Path(p).read_text())
+    try:
+        return {"key": e["key"], "reads": _expand(Path(p), e), "report": e["report"]}
+    except (KeyError, TypeError, IndexError, AttributeError) as x:
+        raise ValueError(f"{p}: no entry it can read ({type(x).__name__}: {x})") from None
+
+
+def held(paths: Iterable[Path]) -> int:
+    """The bytes the entries at ``paths`` take with the records they are read with, each once: what a copy of them copies."""
+    files: set[Path] = set()
+    todo = [Path(p) for p in paths]
+    with internal():
+        while todo:
+            if (p := Path(os.path.normpath(todo.pop()))) in files or not p.is_file():
+                continue
+            files.add(p)
+            if isinstance(got := json.loads(p.read_bytes()), dict) and isinstance(needs := got.get("needs"), list):
+                todo += [p.parent / n for n in needs if isinstance(n, str)]
+        return sum(p.stat().st_size for p in files)
 
 
 #: the reads that name modules, which a move renames, and those that name a sidecar by its module's
@@ -2443,16 +2769,21 @@ _SIDE_RENAMED = ("units", "pins")
 
 
 def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, str] | None:
-    """(report, entry id) of an entry with key ``k`` whose every recorded read is unchanged under ``root``, else None.  An entry
-    found only where its modules moved (`_moved`) is stored again with its reads renamed to where they are, digested now (what
-    a run would record), so that a later edit of a moved module is told from a move; not with ``moved`` false, which `_moved`
-    needs for the modules this process imported (`_loaded`)."""
-    for e, p, now in _entries(cache, k, root):
-        rec = e["reads"]
-        if now == rec:
-            return e["report"], p.stem
-        if not moved:
+    """(report, entry id) of an entry with key ``k`` whose every recorded read is unchanged under ``root`` (`_current`), else None.
+    An entry found only where its modules moved (`_moved`) is stored again with its reads renamed to where they are, digested now
+    (what a run would record), so that a later edit of a moved module is told from a move; not with ``moved`` false, which
+    `_moved` needs for the modules this process imported (`_loaded`)."""
+    for e, p in _entries(cache, k):
+        try:
+            if _current(root, p, e):
+                return e["report"], p.stem
+            if not moved:
+                continue
+            rec = _expand(p, e)
+        except _UNREAD as x:
+            _miss(p, x)
             continue
+        now = _digests(root, {kind: list(v) for kind, v in rec.items()})
         renamed: dict[str, str] = {}
         _INTERNAL.append(True)
         try:
@@ -2469,31 +2800,33 @@ def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, 
     return None
 
 
-def _entries(cache: Path, k: dict, root: Path) -> Iterator[tuple[dict, Path, dict]]:
-    """Each entry stored under key ``k``, with its file and its recorded reads as they are now."""
+def _entries(cache: Path, k: dict) -> Iterator[tuple[dict, Path]]:
+    """Each entry stored under key ``k``, with its file."""
     d = _dir(cache, k)
-    _INTERNAL.append(True)
-    try:
+    with internal():
         found = sorted(d.glob("*.json")) if d.is_dir() else []
-    finally:
-        _INTERNAL.pop()
     for p in found:
-        _INTERNAL.append(True)
         try:
-            e = json.loads(p.read_text())
-        except (OSError, ValueError):
+            with internal():
+                e = json.loads(p.read_text())
+        except (OSError, ValueError) as x:
+            _miss(p, x)
             continue
-        finally:
-            _INTERNAL.pop()
-        if e.get("key") == k:
-            yield e, p, _digests(root, {k: list(v) for k, v in e["reads"].items()})
+        if isinstance(e, dict) and e.get("key") == k:
+            yield e, p
 
 
 def recorded(cache: Path, k: dict, root: Path) -> dict[str, list[str]] | None:
     """What the entry with key ``k`` that `lookup` finds where its modules are (no move) recorded reading, by kind; None when
     there is none."""
-    return next(({kind: list(v) for kind, v in e["reads"].items()} for e, _p, now in _entries(cache, k, root)
-                 if now == e["reads"]), None)
+    for e, p in _entries(cache, k):
+        try:
+            if _current(root, p, e):
+                return {kind: list(v) for kind, v in _expand(p, e).items()}
+        except _UNREAD as x:
+            _miss(p, x)
+            continue
+    return None
 
 
 def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | None]]:
@@ -2647,18 +2980,6 @@ def registry_inputs(root: Path) -> dict[str, list[str]]:
     return {"files": got["files"], "listed": got["listed"], "probes": sorted((set(got["probes"]) | sidecars) - set(got["files"]))}
 
 
-def undeclared(now: dict[str, Any], was: dict[str, Any] | None) -> dict[str, Any]:
-    """What read set ``now`` (`declared`) holds beyond the declared ``was``: each kind's paths ``was`` lacks (a probe's, where
-    ``was`` holds the path as no file or listing either, whose bytes or listing hold its kind), ``registry`` when ``now`` reads
-    the registries and ``was`` doesn't, and every library git doesn't have (``untracked``)."""
-    was = was or {}
-    out: dict[str, Any] = {k: sorted(set(now.get(k, ())) - set(was.get(k, ()))) for k in DECLARED}
-    out["probes"] = sorted(set(out["probes"]) - set(was.get("files", ())) - set(was.get("listed", ())))
-    out["untracked"] = list(now.get("untracked", ()))
-    out["registry"] = bool(now.get("registry")) and not was.get("registry")
-    return {k: v for k, v in out.items() if v}
-
-
 def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
     """What a catalog binding's build read (`circuit_check.units`): what its ``units`` read and ran while they made their roots
     (`producing`), and `attributed` over its ``roots``: the build of every Definition they reach, the bindings that made those,
@@ -2717,22 +3038,27 @@ def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, s
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
           worker: dict[str, dict[str, str | None]] | None = None) -> str | None:
     """Record ``report`` under ``k`` with its reads' digests; None, and nothing stored, when ``worker`` (`seen` in the process that
-    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names."""
+    ran the check) differs from them: the tree changed while the run went on, and the report may be of a tree no digest names.
+    None too, and the entry in `LOST`, when the version's directory went while it was written (`expire`)."""
     now = _digests(root, got)
     if worker is not None and worker != now:
         return None
-    e = {"key": k, "reads": now, "report": report}
-    body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
-    eid = hashlib.sha512(body.encode()).hexdigest()
     d = _dir(cache, k)
-    d.mkdir(parents=True, exist_ok=True)
-    # a temporary name of this writer's own: two checks may store the same entry at once
-    tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    tmp.write_text(body)
-    os.replace(tmp, d / f"{eid}.json")
+    try:
+        e = {"key": k, **_hold(d.parent, k, now), "report": report}
+        body = json.dumps(e, sort_keys=True, separators=(",", ":"), default=str)
+        eid = hashlib.sha512(body.encode()).hexdigest()
+        d.mkdir(parents=True, exist_ok=True)
+        # a temporary name of this writer's own: two checks may store the same entry at once
+        tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+        tmp.write_text(body)
+        os.replace(tmp, d / f"{eid}.json")
+    except FileNotFoundError as e:
+        LOST.append(f"{d.name}: {e!r}")
+        return None
     return eid
 
 
-__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup",
-           "modules_since", "pin_files", "probed", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
-           "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]
+__all__ = ["PINS", "READS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "held", "internal", "key",
+           "lookup", "modules_since", "pin_files", "probed", "produced", "read", "recorded_pins", "recording", "registries", "seen",
+           "seen_all", "store", "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "unread", "untraced", "version", "warm"]

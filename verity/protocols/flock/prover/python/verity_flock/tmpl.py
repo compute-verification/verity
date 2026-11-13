@@ -686,10 +686,22 @@ class _Evaluator:
         given = self.given if d == self.t.root else np.zeros(0, np.int64)
         rows = [r for r in D.rows if not (d == self.t.root and r[0] in self.given_set)]
         binds = [_bindings(c) for c in D.calls]
-        spans = [(c.base, c.base + c.count * c.stride) for c in D.calls]
+        # ``Def.spans``: first copy's first column to last copy's last; one copy's stride places nothing
+        spans = [(c.base, c.base + (c.count - 1) * c.stride + self.t.defs[c.e].cols if c.count else c.base) for c in D.calls]
         for c in D.calls:
             if c.count > 1 and c.stride < self.t.defs[c.e].cols:
                 raise ValueError(f"evaluate: definition {d}: a call's copies overlap")
+        lo = [np.fromiter((r[0] for r in rows), np.int64, len(rows)), given]
+        lo += [c.base + c.stride * np.arange(c.count, dtype=np.int64) for c in D.calls]
+        hi = np.concatenate([lo[0] + 1, given + 1, *(s + self.t.defs[c.e].cols for s, c in zip(lo[2:], D.calls))])
+        lo = np.concatenate(lo)
+        o = np.argsort(lo, kind="stable")
+        inside = lo[o][1:] < np.maximum.accumulate(hi[o])[:-1]
+        if inside.any():
+            raise ValueError(f"evaluate: definition {d}: column {int(lo[o][1:][inside][0])} is written twice or inside a "
+                             f"copy's columns by its caller or another copy, and a copy is evaluated on its own, where it "
+                             f"would read zero for that write: make the column a row of the callee, or place it outside "
+                             f"the copy")
         # candidate own columns: everything wanted, given or read, so liveness is marks on one sorted array
         reads = [want, given, np.fromiter((x for _c, a, b in rows for x in a + b if x < cols), np.int64)]
         reads.append(np.fromiter((c for c, _a, _b in rows), np.int64, len(rows)))

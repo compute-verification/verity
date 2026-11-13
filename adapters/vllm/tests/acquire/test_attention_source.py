@@ -111,12 +111,12 @@ def expected(tid: str, seen: dict[str, Any]) -> torch.Tensor:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", [True, False], ids=["on-target", "off-target"])
-def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, capsys, target):
+def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, target):
     r = runs[target]
     for k, (_md, routes, phase) in enumerate(STEPS):
         got = r.names(k)
         assert len(got) == len(set(got)), f"step {k} binds a name twice"
-        assert sorted(got) == sorted(map_names(capsys, routes, phase, binders=(AS.BINDER,), off_target=not target)), f"step {k}"
+        assert sorted(got) == sorted(map_names(routes, phase, binders=(AS.BINDER,), off_target=not target)), f"step {k}"
     assert r.att.stats["unpaired"] == 0 and r.att.stats["layout_refused"] == 0 and r.att.stats["mha_unbound"] == 0
 
 
@@ -168,8 +168,8 @@ def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(
     assert runs[True].att.stats["copied_by_tap"]["q_nope_absorb"] == multi * L
 
 
-def full_steps(r: AttnRun, capsys, target: bool) -> dict[int, list[str]]:
-    return {k: r.names(k) + map_names(capsys, routes, phase, binders=OTHERS, off_target=not target)
+def full_steps(r: AttnRun, target: bool) -> dict[int, list[str]]:
+    return {k: r.names(k) + map_names(routes, phase, binders=OTHERS, off_target=not target)
             for k, (_md, routes, phase) in enumerate(STEPS)}
 
 
@@ -180,15 +180,15 @@ def routes_bad(violation: dict[str, Any], names: set[str], counts: tuple[int, in
 
 
 @pytest.mark.slow
-def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs, capsys):
+def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs):
     q8 = f"model.layers.{min(INDEXER)}.self_attn/index_q"
     on, off = runs[True], runs[False]
-    steps = full_steps(on, capsys, True)
+    steps = full_steps(on, True)
     got = on.check(steps, sources=[on.src, on.att])
     assert got["ok"] is True, got["violations"][:2]
     v = on.check({**steps, 1: [n for n in steps[1] if n != q8]}, sources=[on.src, on.att])["violations"]
     assert [x["step"] for x in v] == [1] and routes_bad(v[0], {q8}, (0, 1)), "on the target a step without it fails"
-    steps = full_steps(off, capsys, False)
+    steps = full_steps(off, False)
     got = off.check(steps, sources=[off.src, off.att])
     assert got["ok"] is True, got["violations"][:2]
     v = off.check({**steps, 1: steps[1] + [q8]}, sources=[off.src, off.att])["violations"]
@@ -196,7 +196,7 @@ def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(
 
 
 @pytest.mark.slow
-def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
+def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows():
     r = AttnRun()
     wrapped, G.fused_norm_rope = G.fused_norm_rope, NORM_ROPE
     try:
@@ -205,14 +205,14 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
         G.fused_norm_rope = wrapped
         r.close()
     rows = {r.att.names["mla_kv_cache"][i] for i in range(L)} | {r.att.names[t][i] for t in ("indexer.k_cache", "indexer.k_scale") for i in INDEXER}
-    assert set(map_names(capsys, SPARSE, "decode", binders=(AS.BINDER,))) - set(r.names(0)) == rows
+    assert set(map_names(SPARSE, "decode", binders=(AS.BINDER,))) - set(r.names(0)) == rows
     assert r.att.stats["unpaired"] == L and G.fused_norm_rope is NORM_ROPE
-    v = r.check({0: r.names(0) + map_names(capsys, SPARSE, "decode", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
+    v = r.check({0: r.names(0) + map_names(SPARSE, "decode", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
     assert routes_bad(v[0], rows, (0, 1))
 
 
 @pytest.mark.slow
-def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
+def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound():
     md = metadata(prefill=True, dense=True)
     md.prefill.chunked_context = types.SimpleNamespace()
     r = AttnRun()
@@ -222,7 +222,7 @@ def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
         r.close()
     mha = {r.att.names["attn.mha"][i] for i in range(L)}
     assert not mha & set(r.names(0)) and r.att.stats["mha_unbound"] == L
-    v = r.check({0: r.names(0) + map_names(capsys, ("dense-mha",), "prefill", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
+    v = r.check({0: r.names(0) + map_names(("dense-mha",), "prefill", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
     assert routes_bad(v[0], mha, (0, 1)), "the step fails closed"
 
 

@@ -19,10 +19,10 @@ import json
 import struct
 from pathlib import Path
 
-from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
 #: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming[, hashing])
@@ -59,7 +59,7 @@ def rows_f32(case: str, name: str, count: int, k: int) -> list[bytes]:
 
 def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int, wide: bool = False) -> Context:
     h = lambda s: hashlib.sha256(f"{s}/{case}".encode()).digest()  # noqa: E731
-    r = (lambda s: hashlib.sha512(f"{s}/{case}".encode()).digest()) if wide else h  # noqa: E731
+    r = (lambda s: hashlib.sha512(f"{s}/{case}".encode()).digest()) if wide else h
     return Context(h("salt"), Matmul(index, Shape(*shape), weight), r("root_a"), r("root_b"))
 
 

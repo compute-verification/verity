@@ -132,7 +132,6 @@ MOVED = [r + m for r in ("li", *ROUTES) for m in ("-rt3", "-wideh", "-rt3-wideh"
 H200_ROUTES = ROUTES + MOVED + ["li-bulk", "li-bulk-bt1024", "li-bulk-trim-inf"]
 #: the H200's counted folds, none built: on the cheater's menu, never in ♭'s fold
 COUNTED = MOVED + ["li-bulk-bt1024", "li-bulk-trim-inf"]
-BUILT = ROUTES + ["li-bulk"]
 
 
 def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
@@ -190,6 +189,7 @@ def _cheaper_counted(monkeypatch, scale: float):
     monkeypatch.setattr(H.E, "design", design)
 
 
+@pytest.mark.slow
 def test_flat_never_folds_by_a_counted_route(monkeypatch):
     """♭ is credited only with programs a run has built: on every reading its fold is the design's fold and its built
     routes (the twelve loops and li-bulk at its measured cost), never a counted one, which the cheater's menu holds. So
@@ -215,6 +215,7 @@ def test_flat_never_folds_by_a_counted_route(monkeypatch):
         H.reading(fam, fam.measured)
 
 
+@pytest.mark.slow
 def test_each_statement_has_its_eps_and_b_flat_as_one_pair(tmp_path):
     """The pairing hazard: ε is a fraction of one B_♭, so a reading emits them together (`Reading.pair`): the
     statement's name, its ε (the exact bound rounded up at 10^-5, the literal `1 - N / 100000` the Models file states

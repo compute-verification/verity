@@ -52,7 +52,6 @@ from __future__ import annotations
 
 import bisect
 import functools
-import hashlib
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
@@ -543,7 +542,7 @@ def query_header(profile: str, *, return_slots: bool, query: str = QUERY_OF_RECO
          ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
         "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \
         f"; profile = {profile}"
-    return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
+    return {"query_id": query, "query_id_digest": fmt.query_id_digest(text), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
             "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] +
@@ -665,9 +664,12 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         step = step_of(c.id)
         if c.family in SAMPLING_EVENTS:
             add("sampled_token_ids", step, 0, "runner.sampler", "sampled_token_ids", 0, n_seq, dtype="i64", spec=c.family)
-            for r in c.reads:                                   # the runtime inputs the selector consumes (seed, splits): the sampler's
+            for r in c.reads:                                   # the runtime inputs the selector consumes (its seed): the sampler's
                 if r.call < 0 and r not in record_fields and r not in pop.supplied:
                     pin = P.input(r.call)
+                    if pin.name not in fmt.SAMPLER_INPUTS:
+                        raise ValueError(f"{c.family} at step {step} reads the runtime input {pin.name!r}: a selector reads only "
+                                         f"{sorted(fmt.SAMPLER_INPUTS)}; its split count is the registered constant, a Const32[S] of the Program")
                     add(f"sampler_{pin.name}", step, 0, "runner.sampler", pin.name, 0, n_seq, dtype=_dtype(pin.port_table[0].width), spec=c.family)
             continue
         for cm in pop.members_of(cid):

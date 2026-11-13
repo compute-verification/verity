@@ -4,14 +4,13 @@
 # through config-run), writing its record under /workspace/jobs, never into the tree. It runs no Build, so it doesn't block a
 # prover bench.
 #
-#   sky jobs launch -n capture-<what> tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml \
-#     --env CMD='python -m tc_probe ...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#   tools/research/src/research/pods/nebius/sky/submit.sh port-capture capture-<what> --env CMD='python -m tc_probe ...'
 #
 # Resources: one GPU (a TP2 capture: --gpus RTXPRO6000:2), and the small-dense class's host peak, 94-188 GB, since a capture
 # serves a model without a Build. No capture has a recorded peak on the PRO 6000 yet: take the first run's peak from its Attempt's
 # telemetry and lower --memory.
-# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
-#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+# The job runs from the tree at $SRC on the host's /workspace (no upload). submit.sh ships this checkout there, sets SRC and mints
+# the job's store key; a launch by hand that names AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY would hand it the shell's own pair.
 name: port-capture
 
 resources:

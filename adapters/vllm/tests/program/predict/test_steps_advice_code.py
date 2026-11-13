@@ -27,16 +27,16 @@ TICK = SC.Tick(bucket_us=1000, sat_us=1000, free_us=1000)
 CAP = 1 << 13
 
 
-def _v1_session() -> tuple[V1.Record, V1.Registered, I1.Advice, bytes, dict]:
-    """Three greedy requests of 6 prompt tokens and 4 outputs each under the certified tick with no prefix cache, so the replay
-    fixes every step and v1 sends nothing but its windows' frames and its length terms: the honest advice is the one W empty
-    windows decode to with no length terms sent, and its v1 string is that advice's encoding under the registration, which
-    sends them. With the record, the code's registration, and the certified bodies."""
+def _v1_session(tick: bool = True) -> tuple[V1.Record, V1.Registered, I1.Advice, bytes, dict]:
+    """Three greedy requests of 6 prompt tokens and 4 outputs each with no prefix cache. Under the certified tick the replay
+    fixes every step and v1 sends nothing but its length terms: the honest advice is the one the empty string decodes to with
+    no length terms sent. Without the tick (`tick=False`) the same advice's string sends the replay's decisions too. With the
+    record, the code's registration, the advice's v1 string under it, which sends the length terms, and the certified bodies."""
     reqs = tuple(V1.Request(f"q{k}", tuple(_prompt(k, 6)), 4, (5, 6, 7, 8), end, (end + 2, end + 3, end + 4, end + 5))
                  for k, end in enumerate((0, 0, 2)))
-    record, code = V1.Record(reqs), V1.Registered(ENGINE, (EOS,), T=3, tick=TICK)
-    empty = CV.encode([CV.Window()] * V1.windows(record, code.T), CV.Book.uniform(V1.TICK_CAPS)).bitlist()
-    advice = V1.decode_bits(empty, record, replace(code, send_lengths=False))
+    record, ticked = V1.Record(reqs), V1.Registered(ENGINE, (EOS,), T=3, tick=TICK)
+    advice = V1.decode_bits([], record, replace(ticked, send_lengths=False))
+    code = ticked if tick else V1.Registered(ENGINE, (EOS,), T=3)
     ingress = {q.id: {**GREEDY, "prompt": list(q.prompt), "model": "m", "user": q.id} for q in reqs}
     return record, code, advice, V1.encode(advice, record, code), ingress
 
@@ -46,21 +46,25 @@ def _coded(code: V1.Registered, cap_bits: int = CAP) -> Registered:
 
 
 def test_a_v1_string_compiles_to_the_compilation_of_the_i1_it_carries():
-    """The string and the I1 v0 bytes of one session compile alike, every request's Program and every step's rows, while the
-    string, its length terms included, is under a seventh of I1's bits."""
-    record, code, advice, data, ingress = _v1_session()
-    assert [[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps][:2] == [[(0, 0, 2), (1, 0, 6)], [(1, 6, 1), (0, 2, 4)]]
-    coded = compile_steps(_coded(code), data, ingress, record=record)
-    plain = compile_steps(_registered(cap_bits=CAP), I1.encode(advice), ingress)
-    assert coded.summary() == plain.summary() and len(coded.programs) == 1 and coded.batch_rule is None
-    assert plan_steps(_coded(code), data, ingress, record=record).steps == plan_steps(_registered(), advice, ingress).steps
-    assert 7 * 8 * len(data) < 8 * len(I1.encode(advice))
+    """The string and the I1 v0 bytes of one session compile alike, every request's Program and every step's rows. Under the
+    certified tick the string is its length terms alone, 4 bits a request; without it, where it sends the decisions too, it is
+    still under a seventh of I1's bits."""
+    for tick in (True, False):
+        record, code, advice, data, ingress = _v1_session(tick)
+        assert [[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps][:2] == [[(0, 0, 2), (1, 0, 6)], [(1, 6, 1), (0, 2, 4)]]
+        coded = compile_steps(_coded(code), data, ingress, record=record)
+        plain = compile_steps(_registered(cap_bits=CAP), I1.encode(advice), ingress)
+        assert coded.summary() == plain.summary() and len(coded.programs) == 1 and coded.batch_rule is None
+        assert plan_steps(_coded(code), data, ingress, record=record).steps == plan_steps(_registered(), advice, ingress).steps
+        bits = sum(V1.bits_by_window(data, record, code).values())
+        assert bits == 12 if tick else bits > 12
+        assert 7 * 8 * len(data) < 8 * len(I1.encode(advice))
 
 
 def test_the_cap_bounds_the_v1_strings_bits():
     """ℓ is held to the string's bits before any of it is read: at its length the string compiles, a bit below it is refused, and
     at that ℓ a registration that selects no code refuses the session's I1 bytes."""
-    record, code, advice, data, ingress = _v1_session()
+    record, code, advice, data, ingress = _v1_session(tick=False)
     n = 8 * len(data)
     assert compile_steps(_coded(code, n), data, ingress, record=record).cap_bits == n
     with pytest.raises(Unexpressible, match=f"the advice is {n} bits, over the registered cap ℓ = {n - 1} bits"):
@@ -109,8 +113,7 @@ def _lengths_session() -> tuple[V1.Record, V1.Registered, I1.Advice]:
     reqs = tuple(V1.Request(i, tuple(_prompt(k, 6)), m, o, end, tuple(range(end + 2, end + 2 + len(o))))
                  for k, ((i, (m, o)), end) in enumerate(zip(outs.items(), (0, 0, 2))))
     record, code = V1.Record(reqs), V1.Registered(ENGINE, (EOS,), T=2, tick=TICK)
-    empty = CV.encode([CV.Window()] * V1.windows(record, code.T), CV.Book.uniform(V1.TICK_CAPS)).bitlist()
-    return record, code, V1.decode_bits(empty, record, replace(code, send_lengths=False))
+    return record, code, V1.decode_bits([], record, replace(code, send_lengths=False))
 
 
 def test_a_length_term_is_charged_its_formula_in_its_bodys_window():
@@ -146,15 +149,15 @@ def test_a_wrong_sent_length_or_finish_is_refused_by_name():
             plan_steps(_coded(code), CV.pack(bits)[0], _ingress(record), record=record)
 
 
-def test_with_the_switch_off_the_string_is_the_old_one():
-    """Off, the string is byte for byte what the code wrote before it sent lengths (pinned from that code), its charge
-    is the window code's alone, and it decodes to the advice; each switch's string is refused under the other."""
+def test_with_the_switch_off_the_string_is_the_window_codes_alone():
+    """Off, the string is the window code's alone, which under the certified tick is the empty string, 0 bits in every
+    window, and it decodes to the advice; each switch's string is refused under the other."""
     record, code, advice = _lengths_session()
     off = replace(code, send_lengths=False)
     data = V1.encode(advice, record, off)
-    assert data == bytes.fromhex("00080040020010008004") and V1.lengths(record, off) == [[]] * 6
+    assert data == b"" and V1.lengths(record, off) == [[]] * 6
     old = CV.encode(V1.residual(advice, record, off), V1.book_of(off))
-    assert (data, V1.bits_by_window(data, record, off)) == (CV.pack(old.bitlist())[0], dict(enumerate(old.lens)))
+    assert (data, V1.bits_by_window(data, record, off)) == (CV.pack(old.bitlist())[0], dict.fromkeys(range(6), 0))
     assert V1.decode(data, record, off) == advice
     with pytest.raises(V1.AdviceCodeError, match="^no 6 windows end the string"):
         V1.decode(data, record, code)
@@ -164,10 +167,11 @@ def test_with_the_switch_off_the_string_is_the_old_one():
 
 def test_a_small_record_round_trips_with_its_lengths_sent():
     """On, encode and decode invert each other, the charge sums to the string's bits less padding, and the string
-    compiles as the I1 it carries does."""
+    compiles as the I1 it carries does. Under the certified tick the string is the length terms alone: window 0's
+    (4, length) in 3 + 1 bits and (3, eos) in 4 + 1, then window 1's (7, length) in 3 + 1."""
     record, code, advice = _lengths_session()
     data = V1.encode(advice, record, code)
-    assert data == bytes.fromhex("000c98003e00100080040020")
+    assert data == bytes([0b1001_0011, 0b0111_1000])
     got = V1.decode_full(data, record, code)
     assert got.advice == advice and got.streams == V1.streams(advice, record)
     assert 0 <= 8 * len(data) - sum(V1.bits_by_window(data, record, code).values()) < 8

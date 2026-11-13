@@ -1571,9 +1571,19 @@ fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C
     (mch, sent)
 }
 
+/// Whether this process's environment puts its `--zk` statements behind the ZK server.
+fn zk_server_asked() -> bool {
+    std::env::var("FC_FIREWALL").as_deref() == Ok("1")
+}
+
+/// Starts the ZK server's Lean tap for this process. Each caller starts it before the prover samples anything.
+fn start_lean_tap() {
+    flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+}
+
 /// Whether the ZK server's send check (PROTOCOL.md §10) runs: `FC_FIREWALL=1` on a `--zk` statement.
 fn firewall_on(st: &Stmt) -> bool {
-    is_zk(st) && std::env::var("FC_FIREWALL").as_deref() == Ok("1")
+    is_zk(st) && zk_server_asked()
 }
 
 /// The Lean verifier's name of the statement a ZK server session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
@@ -1591,30 +1601,24 @@ fn lean_public(inst: &Instances, what: &str, tables: usize) -> Result<std::path:
 }
 
 /// The statement flags the Lean session loop sets a ZK server session's `Hello` up on (`Flock.Firewall.Hello.Setup`): the statement, the
-/// circuit, the public file `public`, the lookup tables and `tables`, then `FC_FIREWALL_HELLO_ARGS`' flags.
-fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Vec<String> {
-    let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
-        "--public".into(), public.display().to_string(), "--tables".into(), arg("--tables", "tables"), "--session-tables".into(), tables.to_string()];
+/// circuit file `circuit`, the public file `public`, the lookup tables under `lookups` and `tables`, then
+/// `FC_FIREWALL_HELLO_ARGS`' flags.
+fn lean_statement_args(st: &Stmt, circuit: &str, lookups: &str, public: &std::path::Path, tables: usize) -> Vec<String> {
+    let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), circuit.into(),
+        "--public".into(), public.display().to_string(), "--tables".into(), lookups.into(), "--session-tables".into(), tables.to_string()];
     args.extend(std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default().split_whitespace().map(String::from));
     args
 }
 
-/// Where a session of `tables` tables against the auditor at `verifier` connects, and, where that is the ZK server's Lean
-/// session loop (`firewall::LeanSession`, one process for every such session), which then owns the auditor's connection,
-/// where its reps' Lean frames connect: a firewalled statement's ([`firewall_on`]); otherwise the auditor's own address.
-/// With `fw` (`--firewall-state`) the loop is `core-firewall session`, the release side around it (PROTOCOL.md §10.5),
-/// and with `FC_FIREWALL_SALT_KEY` it admits the statement's registrations on the ZK server's record (`--salt-key`).
-fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: Option<&ReleaseArgs>) -> Result<(String, Option<String>), String> {
-    if !firewall_on(st) {
-        return Ok((verifier.to_string(), None));
-    }
-    static SESSIONS: Mutex<Vec<(String, usize, flock_live::firewall::LeanSession)>> = Mutex::new(Vec::new());
-    let mut g = SESSIONS.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some((.., s)) = g.iter().find(|(v, j, _)| v == verifier && *j == tables) {
-        return Ok((s.addr().to_string(), Some(s.frames().to_string())));
-    }
+/// The ZK server's Lean session loop (`firewall::LeanSession`) for sessions of `st` on `inst` over `tables` tables against
+/// the auditor at `verifier`, set up on the circuit file `circuit` and the lookup tables under `lookups`
+/// ([`lean_statement_args`]). With `fw` (`--firewall-state`) the loop is `core-firewall session`, the release side around it
+/// (PROTOCOL.md §10.5), and with `FC_FIREWALL_SALT_KEY` it admits the statement's registrations on the ZK server's record
+/// (`--salt-key`).
+fn lean_loop(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, circuit: &str, lookups: &str, fw: Option<&ReleaseArgs>)
+                -> Result<flock_live::firewall::LeanSession, String> {
     let public = lean_public(inst, "session", tables)?;
-    let mut args = lean_statement_args(st, &public, tables);
+    let mut args = lean_statement_args(st, circuit, lookups, &public, tables);
     if let Ok(key) = std::env::var("FC_FIREWALL_SALT_KEY") {
         args.extend(["--salt-key".into(), key]);
     }
@@ -1627,7 +1631,23 @@ fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: 
     };
     let s = flock_live::firewall::LeanSession::start(&exe, verifier, &args);
     let _ = std::fs::remove_file(&public);
-    let s = s?;
+    s
+}
+
+/// Where a session of `tables` tables against the auditor at `verifier` connects, and, where that is the ZK server's Lean
+/// session loop ([`lean_loop`] on this process's `--circuit` and `--tables`, one process for every such session), which
+/// then owns the auditor's connection, where its reps' Lean frames connect: a firewalled statement's ([`firewall_on`]);
+/// otherwise the auditor's own address.
+fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str, fw: Option<&ReleaseArgs>) -> Result<(String, Option<String>), String> {
+    if !firewall_on(st) {
+        return Ok((verifier.to_string(), None));
+    }
+    static SESSIONS: Mutex<Vec<(String, usize, flock_live::firewall::LeanSession)>> = Mutex::new(Vec::new());
+    let mut g = SESSIONS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((.., s)) = g.iter().find(|(v, j, _)| v == verifier && *j == tables) {
+        return Ok((s.addr().to_string(), Some(s.frames().to_string())));
+    }
+    let s = lean_loop(st, inst, tables, verifier, &arg("--circuit", "circuit.txt"), &arg("--tables", "tables"), fw)?;
     let (addr, frames) = (s.addr().to_string(), s.frames().to_string());
     g.push((verifier.to_string(), tables, s));
     Ok((addr, Some(frames)))
@@ -4842,9 +4862,13 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 
 /// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
 /// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
-/// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
-/// whether its packed words are the first run's. The walk reads no input value, so seeded words time it as a served
-/// statement's do.
+/// pool size (default the global pool's) in turn, asking the cache for z at each `--ahead` distance (default 0, never, then
+/// the walk's own, `ir_block::unit_ahead`), `--reps` rounds, first with every walk mapping its own row vectors and then with
+/// the vectors kept between walks, on the prover's pages and on huge ones (`--keep`, default 0,1,2; `ir_block::keep_rows`,
+/// `set_keep_huge`): a `WALK` line each with its wall and CPU
+/// seconds, the CPU seconds spent in the kernel, and whether its packed words are the first run's. The walk reads no input
+/// value, so seeded words time it as a served statement's do, and it runs on the device prover's small pages (`main`;
+/// `--huge-pages`: with the huge-page advice a CPU prover takes).
 fn unit_walk(c: &Composite) {
     let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
     let net = &c.nets[ni].1;
@@ -4852,6 +4876,8 @@ fn unit_walk(c: &Composite) {
     let reps: usize = arg("--reps", "2").parse().expect("--reps");
     let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
     let widths = list("--wide", "1,2,4,8");
+    let aheads = list("--ahead", &format!("0,{}", flock_live::ir_block::unit_ahead()));
+    let keeps = list("--keep", "0,1,2");
     let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
         .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
         .collect();
@@ -4863,19 +4889,31 @@ fn unit_walk(c: &Composite) {
     let one_pass = net.one_pass();
     let flat_s = t.elapsed().as_secs_f64();
     let nnz = net.a.nnz() + net.b.nnz();
+    // this process's CPU seconds in the kernel so far: `/proc/self/stat`'s stime, as `cpu_seconds` reads its sum with utime
+    let sys_seconds = || {
+        let s = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+        s.rsplit_once(')').and_then(|x| x.1.split_whitespace().nth(12)).and_then(|x| x.parse::<f64>().ok()).unwrap_or(0.0) / 100.0
+    };
     let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
-    for rep in 0..reps {
-        for pool in &pools {
-            for &n in &widths {
-                out.fill(0);
-                let (t, cpu) = (Instant::now(), cpu_seconds());
-                let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
-                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu);
-                let want = first.get_or_insert_with(|| (ok, out.clone()));
-                println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
-                    "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
-                    "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s, "cpu_s": cpu_s, "ok": ok,
-                    "same": want.0 == ok && want.1 == out}));
+    // the kept vectors outermost: a walk that keeps them maps them once, on its first pass, as a prover's first statement does
+    for &keep in &keeps {
+        // the vectors kept before are dropped, so each case maps its own
+        flock_live::ir_block::set_keep_rows(false);
+        flock_live::ir_block::set_keep_huge(keep == 2);
+        flock_live::ir_block::set_keep_rows(keep != 0);
+        for rep in 0..reps {
+            for pool in &pools {
+                for (&n, &ahead) in widths.iter().flat_map(|n| aheads.iter().map(move |d| (n, d))) {
+                    out.fill(0);
+                    let (t, cpu, sys) = (Instant::now(), cpu_seconds(), sys_seconds());
+                    let ok = pool.install(|| flock_live::circuit::unit_ab_into_at(net, ni, uw, &ins, &mut out, n, ahead));
+                    let (wall_s, cpu_s, sys_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu, sys_seconds() - sys);
+                    let want = first.get_or_insert_with(|| (ok, out.clone()));
+                    println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
+                        "groups": slots.div_ceil(64), "wide": n, "ahead": ahead, "keep": keep, "rep": rep,
+                        "threads": pool.current_num_threads(), "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s,
+                        "cpu_s": cpu_s, "sys_s": sys_s, "ok": ok, "same": want.0 == ok && want.1 == out}));
+                }
             }
         }
     }
@@ -6776,13 +6814,13 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                   fw: Option<&ReleaseArgs>, emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
     let addrs: Vec<&str> = addr.split(',').collect();
     let jobs = seeds.iter().enumerate().map(|(run, &seed)| Job {
-        st: st.clone(), inst: inst.clone(), addr: addrs[run % addrs.len()].to_string(), seed, label: None, self_check: None,
+        st: st.clone(), inst: inst.clone(), addr: addrs[run % addrs.len()].to_string(), seed, label: None, self_check: None, own_loop: None,
     });
     prove_jobs(Jobs::of(jobs.collect()), base, warm, verify_ahead, fw, emit)
 }
 
 /// A session of the prove loop: its statement, its population, its verifier's address and its seed, and what a stream gives
-/// it: its name and a negative control's `FC_ZK_SELF_CHECK`.
+/// it: its name, a negative control's `FC_ZK_SELF_CHECK`, and behind the ZK server its line's circuit file and lookup tables.
 struct Job {
     st: Arc<Stmt>,
     inst: Arc<Instances>,
@@ -6790,6 +6828,9 @@ struct Job {
     seed: ProverSeed,
     label: Option<String>,
     self_check: Option<zkv::SelfCheck>,
+    /// a stream's session behind the ZK server: the circuit file and the lookup tables its line names, which a Lean session
+    /// loop of its own is set up on ([`lean_loop`]), started at the session's turn and ended once its verdict is emitted
+    own_loop: Option<(String, String)>,
 }
 
 /// The prove loop's sessions in order: a list, or a stream's, each taken as it arrives (`prove --stream`).
@@ -6826,7 +6867,9 @@ impl Jobs {
 /// [`prove_sessions`]'s loop over its [`Jobs`]: session `run` proves its job's statement against its verifier, so the witness
 /// pipeline and verify-ahead run across statements of different circuits (`prove --stream`). The pipeline builds ahead only
 /// jobs that have arrived, and before waiting for the next job the loop emits every session awaiting its verdict. Each record
-/// carries the job's label and the prover's statement cache so far ([`stmt_cache_seen`]).
+/// carries the job's label and the prover's statement cache so far ([`stmt_cache_seen`]). A job with a Lean session loop of
+/// its own ([`Job::own_loop`]) comes with `verify_ahead` 0 and no front ahead ([`prove_stream`]), so it runs alone: its loop
+/// starts at its turn, once the session before it has its verdict, and ends once its own verdict is emitted.
 fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw: Option<&ReleaseArgs>,
               emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
     let t_start = Instant::now();
@@ -6945,7 +6988,7 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
         if let Some(c) = job.self_check {
             plan.zk_self_check = c;
         }
-        let job_addr = job.addr.clone();
+        let (job_addr, own_loop) = (job.addr.clone(), job.own_loop.clone());
         if pipeline {
             if run == 0 && prepin {
                 let p = prebuild(&st, &inst, base, seed).join().expect("the first session's witness");
@@ -6973,7 +7016,13 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
             }
         }
         let (st, inst) = (&st, &inst);
-        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &job_addr, fw).unwrap_or_else(|e| refuse(e));
+        let tables = table_names(plan.tables).len();
+        assert!(own_loop.is_none() || verify_ahead == 0, "a session with a Lean session loop of its own is proved alone: FC_VERIFY_AHEAD=0");
+        let own = own_loop.map(|(circuit, lookups)| lean_loop(st, inst, tables, &job_addr, &circuit, &lookups, None).unwrap_or_else(|e| refuse(e)));
+        let (addr, frames) = match &own {
+            Some(s) => (s.addr().to_string(), Some(s.frames().to_string())),
+            None => session_addr(st, inst, tables, &job_addr, fw).unwrap_or_else(|e| refuse(e)),
+        };
         plan.lean_session = frames.is_some();
         plan.lean_frames = frames;
         let addr = addr.as_str();
@@ -6998,6 +7047,7 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
         };
         if verify_ahead == 0 {
             emit_one(run, label, finish(), rtt);
+            drop(own);
             continue;
         }
         verdicts.push_back((run, label, rtt, flock_live::spawn(finish)));
@@ -7323,10 +7373,11 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// as `serve` checks it (no rows, its public words, Linking) once for its consecutive sessions, each population size's
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
 /// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
-/// closed when the queue ends. No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
+/// closed when the queue ends. A templated statement's circuit is loaded with its unit (`--tmpl-unit`), as `serve` loads it.
+/// No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--tmpl-unit"]
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
@@ -7404,17 +7455,35 @@ fn serve_queue(c: Composite, path: &str) {
 /// `prove --stream FILE [--gpu] [--warm W]`: a long-lived proof server's prove loop over sessions of statements of any
 /// circuits, read a line at a time as they arrive (FILE `-`: stdin, until it closes). A line is `{"circuit": FILE, "tables":
 /// DIR, "instances": INST, "verifier": ADDR, "label": NAME}`, optionally with `"pin"`, the circuit's SHA-512, by which it is
-/// loaded once (else by its path), and `"self_check": "skip"` (a negative control's session, as `FC_ZK_SELF_CHECK=skip`). A
+/// loaded once (else by its path), `"tmpl_unit": F`, a templated statement's unit rows at their positions, which its circuit
+/// is loaded with (as `--tmpl-unit`), and `"self_check": "skip"` (a negative control's session, as `FC_ZK_SELF_CHECK=skip`). A
 /// reader thread loads each circuit and builds its population's statement once, and a population's instance file once
 /// for its consecutive sessions, while earlier sessions prove. The sessions run in order through one prove loop
 /// ([`prove_jobs`]), so the witness pipeline and `FC_VERIFY_AHEAD` span statements, and `FC_STMT_CACHE` keeps each drawn
-/// statement for the process. The first W sessions are warm. Each session's `LIVE` record carries its label. No ZK server
-/// (`FC_FIREWALL=1`), salt refs, session tables or templated units.
+/// statement for the process. The first W sessions are warm. Each session's `LIVE` record carries its label. No salt refs
+/// or session tables, and a templated unit comes on its circuit's line, not `--tmpl-unit`.
+///
+/// Behind the ZK server (`--zk` with `FC_FIREWALL=1`) each session is a `prove` process's, one after another: the Lean tap
+/// starts before the first sample, as `prove` starts it ([`start_lean_tap`]), and each session goes through a Lean session
+/// loop of its own ([`lean_loop`]), set up on its line's circuit and tables as a `prove` process's is on its `--circuit`
+/// and `--tables` (the statement's name and the `Hello` flags are the process's environment's, so every line's:
+/// [`lean_statement`], [`lean_statement_args`]). The loop starts at the session's turn, once the session before it has
+/// its verdict, and ends once its own verdict is emitted: no `FC_VERIFY_AHEAD`, and no session's front ahead of the
+/// previous session's reps.
 fn prove_stream(path: &str) {
     if tables_arg() > 1 || !arg("--salt-refs", "").is_empty() || !arg("--firewall-state", "").is_empty() || !arg("--tmpl-unit", "").is_empty() {
-        refuse("--stream: one table a session, and no --salt-refs, --firewall-state or --tmpl-unit".into());
+        refuse("--stream: one table a session, no --salt-refs or --firewall-state, and a templated unit on its line (\"tmpl_unit\"), not --tmpl-unit".into());
     }
     sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
+    let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    // every statement of the stream has this process's `--zk` in its identity, so the ZK server is on for all of them or none
+    let zk_server = zk_mode() && zk_server_asked();
+    if zk_server {
+        if verify_ahead != 0 {
+            refuse("--stream behind the ZK server (FC_FIREWALL=1) proves one session at a time, each verdict before the next session's loop starts: FC_VERIFY_AHEAD=0".into());
+        }
+        start_lean_tap();
+    }
     let (tx, rx) = std::sync::mpsc::channel();
     let path = path.to_string();
     flock_live::spawn(move || {
@@ -7435,11 +7504,13 @@ fn prove_stream(path: &str) {
             let j: Value = serde_json::from_str(&line).unwrap_or_else(|e| refuse(format!("--stream {path}, line {i}: {e}")));
             let field = |k: &str| j[k].as_str().map(str::to_string).unwrap_or_else(|| refuse(format!("--stream {path}, line {i}: no {k:?}")));
             let (circuit, instances) = (field("circuit"), field("instances"));
+            let own_loop = zk_server.then(|| (circuit.clone(), field("tables")));
             let key = j["pin"].as_str().map_or_else(|| circuit.clone(), str::to_string);
             let tb = Instant::now();
             let loaded = (!stmts.contains_key(&key)).then(|| {
+                let unit = j["tmpl_unit"].as_str().map(|f| std::fs::read_to_string(f).unwrap_or_else(|e| refuse(format!("{f}: {e}"))));
                 let c = Composite::parse_with(&std::fs::read_to_string(&circuit).unwrap_or_else(|e| refuse(format!("{circuit}: {e}"))),
-                                              Some(&field("tables")), None).unwrap_or_else(|e| refuse(e));
+                                              Some(&field("tables")), unit.as_deref()).unwrap_or_else(|e| refuse(e));
                 if j["pin"].is_string() && hex(&c.sha512) != key {
                     refuse(format!("{circuit}: its SHA-512 {} is not the pinned circuit {key}", hex(&c.sha512)));
                 }
@@ -7468,9 +7539,6 @@ fn prove_stream(path: &str) {
                     };
                     let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                     statement_checks(&st);
-                    if firewall_on(&st) {
-                        refuse("--stream: no ZK server path (FC_FIREWALL=1)".into());
-                    }
                     statement_built(&st, tb);
                     have.push(st.clone());
                     st
@@ -7481,23 +7549,23 @@ fn prove_stream(path: &str) {
                 Some("skip") => Some(zkv::SelfCheck::Skip),
                 Some(v) => refuse(format!("--stream {path}, line {i}: self_check {v:?}: stop or skip")),
             };
-            let job = Job { st, inst, addr: field("verifier"), seed: ProverSeed::from_os(), label: j["label"].as_str().map(str::to_string), self_check };
+            let job = Job { st, inst, addr: field("verifier"), seed: ProverSeed::from_os(), label: j["label"].as_str().map(str::to_string), self_check, own_loop };
             if tx.send(job).is_err() {
                 break;
             }
         }
     });
     let warm: usize = arg("--warm", "0").parse().unwrap_or_else(|_| refuse("--warm W".into()));
-    let base = Plan { gpu: flag("--gpu"), tables: 1, zk_self_check: zk_self_check(), ..Plan::default() };
-    let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    let base = Plan { gpu: flag("--gpu"), tables: 1, zk_self_check: zk_self_check(), front_ahead: zk_server.then_some(false), ..Plan::default() };
     let jobs = Jobs { queued: Default::default(), first: 0, rx: Some(rx) };
     prove_jobs(jobs, &base, warm, verify_ahead, None, &mut |_, v, _| println!("LIVE\t{v}"));
 }
 
 fn main() {
-    flock_live::huge_pages::set(!flag("--gpu"));
-    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
+    // unit-walk times the device witness's host units, so it runs on the device prover's pages unless --huge-pages asks
+    flock_live::huge_pages::set(!(flag("--gpu") || (cmd == "unit-walk" && !flag("--huge-pages"))));
+    flock_live::init_threads();
     if cmd == "replay-coins" {
         let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
         match flock_live::replay_coin_seed(&rec) {
@@ -7592,7 +7660,7 @@ fn main() {
         }
         "prove" => {
             if firewall_on(&st) {
-                flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+                start_lean_tap();
             }
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
@@ -7612,6 +7680,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages]"),
     }
 }

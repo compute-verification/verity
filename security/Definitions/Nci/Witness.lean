@@ -3,10 +3,8 @@ module
 public import Definitions.Nci.Capability.Toy
 public import Definitions.Nci.Threads
 public import Definitions.Nci.Dark
-public import Definitions.Nci.Links
 public import Definitions.Nci.Fit
 public import Definitions.Nci.Layered
-public import Definitions.Nci.Packed
 public import Definitions.Nci.BitView
 public import Definitions.Nci.Covering
 
@@ -19,11 +17,9 @@ gates `2` and `3` computing `0 ∧ 1`. Its registered circuit `Toy.D` registers 
 that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 
 * `idC`: a circuit contained in itself, and `M1` and `Mθ`, the toy in `Toy.D` and in `Dθ` through it;
-* `ch1`: the one-product chain, `W[0, 0] x[0]` at gate `2`, its entry complete there; `ch0`, the chain of no
-  multiplication;
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
-  `noLinks`, links with no sources; `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
+  `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
 * `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
   outcome, and no incorrect proof block (`bad`).
@@ -53,43 +49,6 @@ abbrev M1 : PartialContainment D D := PartialContainment.ofContainment (idC C)
 
 /-- The toy contained in itself with the token registered (`Dθ`). -/
 abbrev Mθ : PartialContainment D Dθ := PartialContainment.ofContainment (idC C)
-
-/-- The one-product chain: one multiplication of inner and output dimension `1` at one position, its product
-`W[0, 0] x[0]` at gate `2`, which holds the complete entry. -/
-def ch1 : Chain C where
-  L := 1
-  N := 1
-  d _ := 1
-  e _ := 1
-  prod _ _ _ _ := 2
-  prod_inj := by
-    rintro ⟨ℓ, t, i, j⟩ ⟨ℓ', t', i', j'⟩ -
-    obtain rfl : ℓ = ℓ' := Subsingleton.elim _ _
-    obtain rfl : t = t' := Subsingleton.elim _ _
-    obtain rfl : i = i' := Subsingleton.elim (α := Fin 1) _ _
-    obtain rfl : j = j' := Subsingleton.elim (α := Fin 1) _ _
-    rfl
-  prod_computed _ _ _ _ := rfl
-  y _ _ _ := 2
-  sums _ _ _ _ := .refl 2
-  π ℓ h := absurd h (by omega)
-  π_inj ℓ h := absurd h (by omega)
-  links ℓ h := absurd h (by omega)
-
-/-- The chain of no multiplication. -/
-def ch0 (D : Circuit) : Chain D where
-  L := 0
-  N := 0
-  d := Fin.elim0
-  e := Fin.elim0
-  prod ℓ := ℓ.elim0
-  prod_inj p := p.1.elim0
-  prod_computed ℓ := ℓ.elim0
-  y ℓ := ℓ.elim0
-  sums ℓ := ℓ.elim0
-  π ℓ := ℓ.elim0
-  π_inj ℓ := ℓ.elim0
-  links ℓ := ℓ.elim0
 
 /-- The threading of no counted multiplication. -/
 def T0 (r : RegisteredCircuit) : Threading r where
@@ -137,12 +96,6 @@ def σ1 : T1.Slots where
   p := 1
   slot _ := 0
   reuse_le := by decide
-
-/-- Links with no sources: every activation is computed from no counted multiplication. -/
-def noLinks {r : RegisteredCircuit} (T : Threading r) : T.Links where
-  src _ := ∅
-  src_M _ := empty_subset _
-  src_feeds _ _ h := absurd h (notMem_empty _)
 
 /-- `T0` keyed with no roots and no lookups. -/
 def layered0 (r : RegisteredCircuit) (d e eLk b : ℕ) : Layered (T0 r) d e eLk b where

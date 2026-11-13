@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.ExecDelta
 public import Proofs.Flock.Soundness.ExecRows
 public import Proofs.Flock.Soundness.Lowering
 import Batteries.Data.UInt
-import Flock.Sizes
+import Base.Sizes
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Algebra.Polynomial.SpecificDegree
 import Mathlib.Combinatorics.Matroid.Init

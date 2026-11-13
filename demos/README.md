@@ -2,33 +2,38 @@
 
 One directory per demo. A demo holds what is its own: the workload it serves, its placement (where each party
 runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the integration's
-(`adapters/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from `demos/`
+(`adapters/`), and the protocols it runs stay in `verity/protocols/`. `verity` imports nothing from `demos/`
 (`tests/test_boundaries.py`), and `verity demo NAME` runs `demos/<NAME>/config.toml` (`verity run`), else its `run.py`
 or `run.sh`.
 
 ## The remote protocol
 
-Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/protocols/remote/verifier/CoreRemote.lean`) is what the verifier
-establishes with no hardware of its own at the developer's site. It composes three protocols (`Core.Remote.components`):
+Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/protocols/remote/verifier/CoreRemote.lean`) is what the
+verifier establishes with no hardware of its own at the developer's site. It composes three protocols
+(`Core.Remote.V1.components`):
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
-- work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
+- work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, sampled by work
+  weight on a live coin, are recomputed, and the run's commitment names the one record the policy and SPOT
+  committed to (`Core.Remote.V1.run`). H1's development executable, `verity/remote/v0` (`Core.Remote.protocol`),
+  which no configuration names, has PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too) in its place: the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
-  record the one record the policy and the one-stage audit committed to;
+  record that one record;
 - the inference-only policy (`verity/inference-only/v0`): the registered circuit divides into inference blocks within
   their gate and fresh-input budgets, checked from the registered circuit and the registered information alone.
 
 Remote accepts only when all three accept over one commitment that binds them, each having committed to the same record
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
 the commitment, never flipped again) and on what each subprotocol's own
-guarantee assumes; each subprotocol states its guarantee in `security/`, and the composite states none of its own in Lean
-yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet. `lifecycle/` is the
-only demo that steps through the whole remote composite, on CPU with a
-stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
-sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
-remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
+guarantee assumes; each subprotocol states its guarantee in `security/`, and the composite's
+(`Verity.RemoteSoundness`, `security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
+hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
+remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
+(`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
+and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
+runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
 `verity/protocols/remote/verifier/README.md`, "Which remote", lists them.
 
@@ -84,20 +89,8 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   its placement is `placement.toml`, which `run.sh` reads, and its scripts reach the integration by `PYTHONPATH`; it is
   not a package. The auditor's devices (the verifier, the network certifier and the memory challenger) are not placed:
   the Lean verifier runs on the GPU node with the endpoint and the prover, and the other two may run there too.
-- `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
-  frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity demo h200
-  --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a
-  replay bundle and a block record; `phases.sh` runs the sampled-proof-block proving, one phase a run, from the step's commit on
-  the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
-  Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
-  on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
-  subprotocols) and the memory wipe (onsite's) exist here as a skeleton on fixture coins, not as runs, and nothing
-  claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
   `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
-- `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
-  full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt. It has no runner and no run of
-  record, so `verity demo dither_full_util` runs nothing yet, and it is not a remote run.

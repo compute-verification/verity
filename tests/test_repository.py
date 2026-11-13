@@ -67,11 +67,11 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
+    "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
-    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -216,9 +216,8 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Test files that need torch, a GPU or cargo, and were never part of `check`; and the tests of archived code, which go to
-#: `archive/` with it and which no suite runs.
-UNSUITED_TEST_DIRS = ("verity/definitions/kernels/", "archive/")
+#: Test files that need torch, a GPU or cargo, and were never part of `check`.
+UNSUITED_TEST_DIRS = ("verity/definitions/kernels/",)
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
@@ -365,6 +364,30 @@ def test_tracked_data_within_budget() -> None:
             continue
     assert total <= DATA_BUDGET, (f"tracked data is {total / 2**20:.1f} MiB, over the {DATA_BUDGET / 2**20:.0f} MiB budget: register large "
                                   f"fixtures in {REGISTRY} rather than tracking them")
+
+
+#: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
+#: outputs or archives matches.
+IGNORED_TRACKED = frozenset({
+    "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
+    "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
+})
+
+
+def test_no_ignore_line_covers_a_tracked_file() -> None:
+    """A `.gitignore` merges as a union of both sides' lines (`.gitattributes`), so a merge can bring back a line one branch
+    deleted, or leave a re-include (`!`) above the pattern it re-includes.  Either one that matters shows here: a tracked
+    file an ignore line covers, beside which `git add` skips a new file without a word."""
+    if not (ROOT / ".git").exists():
+        return
+    out = subprocess.run(["git", "ls-files", "-z", "--cached", "--ignored", "--exclude-per-directory=.gitignore"], cwd=ROOT,
+                         check=True, capture_output=True).stdout
+    covered = {p.decode() for p in out.split(b"\0") if p}
+    new, stale = sorted(covered - IGNORED_TRACKED), sorted(IGNORED_TRACKED - covered)
+    assert not new, ("tracked files that a `.gitignore` line covers (`git check-ignore -v --no-index PATH` names the line): "
+                     "delete the line if a merge brought it back, move a `!` re-include below its pattern, or list a file "
+                     "added on purpose in IGNORED_TRACKED:\n" + "\n".join(new))
+    assert not stale, "IGNORED_TRACKED lists files no ignore line covers any more; drop them:\n" + "\n".join(stale)
 
 
 def test_fetched_fixtures_are_gitignored() -> None:

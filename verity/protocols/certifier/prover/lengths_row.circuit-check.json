@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "LengthsRow_v1{K=1,B=4096,IW=32,LW=18}": {
+   "and": 349,
+   "type": "b7bd3f47f6075542bcc6c694b740611d9173d38f7d1527497363dbcd44a0b521ed092a6fd07a1ff78003a2e6b2809b313518535d81b87ebb5234226fd4308428"
+  },
+  "LengthsRow_v1{K=1,B=509,IW=32,LW=12}": {
+   "and": 266,
+   "type": "287d9345d40d6c9bfe16a8744732cb1fc5bf2d1db8252f551f6fed40f59de425bd34b1ff572940efa5578ff57cc4afb6a6596f42c1b08e306d54189d9c3c7ad0"
+  },
+  "LengthsRow_v1{K=16,B=4096,IW=32,LW=18}": {
+   "and": 5614,
+   "type": "ae38f54d70469ff9d4d42b0846ac282b4c670c7b0dd557fce0c6fd32d5732942a22f45a6474a48729290cf2565a3c14af940792b28dc7e57b38a31a906086c45"
+  },
+  "LengthsRow_v1{K=2,B=512,IW=32,LW=8}": {
+   "and": 402,
+   "type": "05d6a8ebc10e58e0d92a8b79de4f2537410e3c9485cd3240a0edac1b1aa6165a8e27361cf3093706507e8a4bf7258c3dcb650b4d22d1a6f1726802547ed2fb46"
+  },
+  "LengthsRow_v1{K=3,B=505,IW=7,LW=10}": {
+   "and": 549,
+   "type": "ec0bbf4fc9340318d481cbb109e1c457756623f1e851a37cd6a9684feafdfead2e9d778879eb826f1c12c6f3d255fbb5a6ca04f2f048d5afebb52e1049ace9c2"
+  }
+ }
+}

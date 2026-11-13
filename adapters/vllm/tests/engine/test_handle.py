@@ -40,3 +40,14 @@ def test_a_multiprocess_engine_core_is_refused_by_name(get):
     llm = NS(llm_engine=NS(engine_core=MultiprocClient()))
     with pytest.raises(RuntimeError, match="engine core MultiprocClient.*VLLM_ENABLE_V1_MULTIPROCESSING=0"):
         get(llm)
+
+
+def test_scheduler_or_none_is_the_scheduler_that_holds_its_requests_in_a_dict_else_none():
+    sched = NS(requests={})
+    for kind, llm in _engines(NS(scheduler=sched)).items():
+        assert handle.scheduler_or_none(llm) is sched, kind
+    assert handle.scheduler_or_none(NS(llm_engine=NS(engine_core=NS(scheduler=sched)))) is sched
+    assert handle.scheduler_or_none(NS()) is None
+    assert handle.scheduler_or_none(NS(llm_engine=None)) is None
+    assert handle.scheduler_or_none(NS(llm_engine=NS(engine_core=NS(scheduler=NS(requests=[]))))) is None
+    assert handle.scheduler_or_none(NS(llm_engine=NS(engine_core=MultiprocClient()))) is None

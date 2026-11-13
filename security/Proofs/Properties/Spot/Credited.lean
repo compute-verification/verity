@@ -246,7 +246,8 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
         .ok law ∧
       nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.base.verifier law n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
-  unfold OneStageZk.checkBlobsAt at h
+  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   case h_1 => cases h
@@ -429,7 +430,8 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     (hpB : bs.get p.own.pub "public file" = .ok pubB) {tags : Flock.Tags} {cc : Flock.Circuit}
     {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
     nat? (getD c.record "population") = some P.n := by
-  unfold OneStageZk.checkBlobsAt at h
+  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   case h_1 => cases h
@@ -514,7 +516,8 @@ theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} 
     {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
     ∃ n, nat? (getD c.record "population") = some n ∧
       _root_.Spot.FilePart.indicesOf P.header = .ok (Array.range n) := by
-  unfold OneStageZk.checkBlobsAt at h
+  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   case h_1 => cases h

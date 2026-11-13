@@ -11,10 +11,12 @@ import os
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
 
+from circuit_check import cache as CC
 from test_cache import REPO, _bindings, _edit, _run, _tree
 
 #: one cached `--all` run over the synthetic bindings with the catalog's records; prints its cache stats and each target's value
@@ -158,7 +160,7 @@ def test_records_digest_each_read_once_and_store_what_each_records_own_digest_ga
     assert json.loads(made.read_text()) == 1
     after = {p.name: p.read_bytes() for p in _records(root)}
     assert len(after) == 5 and after == before
-    assert sum("syn.prims" in json.loads(b)["reads"]["modules"] for b in after.values()) == 4
+    assert sum("syn.prims" in CC.read(p)["reads"]["modules"] for p in _records(root)) == 4
 
 
 #: after the full build stored its records, `syn/prims.py` edited and every record stored again in the same process: the
@@ -262,6 +264,41 @@ def test_the_registered_roots_are_runs_in_their_order_each_a_record_of_its_own()
     assert len({e.name for e in es}) == len({json.dumps(e.key, sort_keys=True) for e in es}) == len(es)
     assert all(e.units == UN.REGISTERED for e in es)
     assert [(e.name, e.roots) for e in UN.registered_entries([])] == [("<registered>:0", [])]
+
+
+#: a registry module that registers eight primitives, `SynBASE0_v1` to `SynBASE7_v1`, when it is imported
+REGISTRY_MODULE = """
+from verity.circuits import Value, primitive
+
+V = Value(16)
+for i in range(8):
+    primitive(f"SynBASE{i}", 1, [("a", V)], V)(lambda a: a)
+"""
+
+
+def test_the_registered_records_hold_the_same_roots_whichever_registry_module_was_imported_first(tmp_path, monkeypatch):
+    """`units.registered_entries` cuts `targets._registered` into records by position, and a record counts only for the roots
+    it lists: so the cut is the same whichever of two registry modules made the registry first.  circuit-check's own process
+    loads the registries before anything else, and a session of this suite imports its test modules first."""
+    import importlib
+
+    from circuit_check import targets as TG
+    from circuit_check import units as UN
+    from verity.circuits.defs import REGISTRY
+
+    names = ("syn_registry_a", "syn_registry_b")
+    for name in names:
+        (tmp_path / f"{name}.py").write_text(REGISTRY_MODULE.replace("BASE", name[-1].upper()))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    cuts = []
+    for order in (names, names[::-1]):
+        monkeypatch.setattr(REGISTRY, "defs", {})
+        for name in order:
+            monkeypatch.delitem(sys.modules, name, raising=False)
+            importlib.import_module(name)
+        cuts.append([e.root_ids for e in UN.registered_entries(TG._registered())])
+    assert cuts[0] == cuts[1], cuts
+    assert len(cuts[0]) == UN.REGISTERED_RECORDS and sum(map(len, cuts[0])) == 16
 
 
 def test_an_edit_of_a_registered_roots_module_rebuilds_only_the_record_that_holds_it(tmp_path):
@@ -496,7 +533,7 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5 and first["scratch_bytes"] > 0, first
     # the records and the catalog's roots record (`units.store_roots`): no target's entry, no task list
     assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 6
-    assert first["bytes"] == sum(p.stat().st_size for p in _records(root))
+    assert first["bytes"] == sum(p.stat().st_size for p in (root / "cache").rglob("*.json"))     # with the read records they share
     assert _records_only(root) == {"reused": 5, "rebuilt": [], "scratch_bytes": 0, "stored": 0, "bytes": first["bytes"]}
 
     warm = _copied(root, tmp_path / "warm")
@@ -870,11 +907,16 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
                                                     "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
+    from circuit_check import sidecars as SC
+
+    syn = types.ModuleType("syn.circuit-check")
+    vars(syn).update(__file__="syn.circuit-check.py", _vocabulary_roots=lambda: [],
+                     _vocabulary_bindings=lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "templates", lambda: [])
-    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    monkeypatch.setattr(SC, "binding_modules", lambda: [("syn", syn)])
     with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
         UN.call_families([], nothing, {})
 

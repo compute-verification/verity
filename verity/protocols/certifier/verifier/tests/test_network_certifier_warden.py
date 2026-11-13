@@ -18,10 +18,12 @@ import pytest
 from verity.protocols.certifier.verifier import active, io_tie as IT
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.certifier.verifier.grid import Reason
+from verity.protocols.certifier.verifier.pacer import Report
 from verity.protocols.certifier.verifier.release import read_watermark, release_of, watermark_head, with_release
-from verity.protocols.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, REASONS, REFUSED,
-                                                    WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell, cells,
-                                                    read_cell, read_reason, reason_frame)
+from verity.protocols.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
+                                                    REFUSED, WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell,
+                                                    cells, read_cell, read_reason, reason_frame)
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12, egress="bytes")
@@ -435,6 +437,23 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
         Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
 
 
+def test_a_warden_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
+    """Only a warden on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
+    A release the pacer reports on time and written faults nothing; one it reports unwritten, a connection's socket
+    not yet the pacer's so that its cells are on no wire, faults the three grids' window `monitor-unavailable`, as a
+    bucket it got late does."""
+    with pytest.raises(ValueError, match="host's clock is paced"):
+        Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
+    clock = VirtualClock(0.0)
+    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    grids = (warden.ingress, warden.egress, warden.fails)
+    warden._unreleased[0] = 2
+    warden._report(Report(0, -0.04, 0.001, None, True))
+    assert [g.faulted for g in grids] == [None] * 3
+    warden._report(Report(1, -0.04, 0.001, None, False))
+    assert [g.faulted for g in grids] == [Reason.MONITOR_UNAVAILABLE] * 3 and not warden._unreleased[0]
+
+
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
     warden, _, _ = run([[(0, b"x" * 200), (0, EOF)]], {0: [cells(request(5), B)]})
     ingress, egress, fails = records(warden)
@@ -559,6 +578,128 @@ def test_the_audit_refuses_an_egress_cell_out_of_the_id_form():
     verdict = audit(GATED, ingress, [forged], fails)
     assert verdict["windows"][0]["problems"] == [f"egress bucket {t}: a cell out of the id egress form"]
     assert audit(dataclasses.replace(GATED, egress="bytes"), ingress, [forged], fails)["accepted"]
+
+
+# --- the response cap ------------------------------------------------------------------------------------------------
+
+#: GATED with a response cap of four tokens
+CAPPED = dataclasses.replace(GATED, max_tokens_cap=4)
+
+
+def id_req(max_tokens: int) -> bytes:
+    """An id request in the network certifier's cells (offset 0), of two cells at GB."""
+    return active.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
+
+
+def capped(request_bytes: bytes, response: bytes, params: WardenParams = CAPPED):
+    warden, (client,), server = run([[(0, response), (0, EOF)]], {1: [cells(request_bytes, GB)]}, params=params)
+    (e,) = warden.log
+    return warden, client, server, e
+
+
+def test_a_request_at_the_cap_passes_and_its_response_is_released():
+    """Under a cap of four a request of `max_tokens` four reaches the server, and its response of four ids, or fewer,
+    leaves as the id form's cells; the log and the audit name the request's `max_tokens` and the schedule's cap, and
+    the audit accepts."""
+    for ids in ([1, 2, 3, 4], [9]):
+        warden, client, server, e = capped(id_req(4), id_answer(ids))
+        assert (e["failed"], e["max_tokens"], e["egress_cells"]) == (None, 4, len(ids) + 1)
+        assert server.conns[0].received and live_cells(client) == [IT.data_cell(x, 1, GB) for x in ids] + \
+            [IT.end_cell(1, GB)]
+        verdict = audit(CAPPED, *records(warden))
+        assert verdict["accepted"], verdict["windows"]
+        assert verdict["max_tokens_cap"] == 4 and [c["max_tokens"] for c in verdict["connections"]] == [4]
+    assert active.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
+
+
+def refused(request_bytes: bytes) -> None:
+    """The request is refused under CAPPED: none of its bytes is cut into a cell or reaches the server, the client gets
+    one `FAIL` at once (in the bucket its first cell's bytes are read in, the one after its admission, before s + D),
+    the `fails` record holds `cap`, and the audit names it."""
+    warden, client, server, e = capped(request_bytes, id_answer([1]))
+    assert (e["failed"], e["failed_at"], e["ended"], e["release"]) == ("cap", 0, e["admitted"] + 1, None)
+    assert server.conns[0].received == b"" and live_cells(client) == [cell(FAIL, 1, b"", GB)]
+    assert client.shim().outcome == "fail"
+    ingress = [f for r in records(warden)[0] for row in r.grid for f in row if f is not None]
+    assert ingress and all(f[0] == PAD for f in ingress)
+    assert reasons(warden) == [(e["ended"], 1, "cap")]
+    verdict = audit(CAPPED, *records(warden))
+    assert verdict["windows"][0]["problems"] == ["connection 1 failed closed (cap) at egress cell 0"]
+    assert [c["max_tokens"] for c in verdict["connections"]] == [None]
+
+
+def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_clamped():
+    """cap + 1 is refused (cap): the network certifier never rewrites the field to the cap, it sends nothing."""
+    refused(id_req(5))
+    refused(id_req((1 << 32) - 1))
+
+
+def malformed_requests() -> dict[str, bytes]:
+    """Requests whose `max_tokens` the network certifier can't read as `active.id_request` writes one."""
+    good, at = id_req(4), active.MAX_TOKENS_AT
+    field = lambda f: good[:at] + f + good[at + active.ID_DIGITS:]  # noqa: E731
+    return {
+        "a leading zero": field(b"0000000004"), "a sign": field(b"        -4"), "not digits": field(b"      four"),
+        "past a u32": field(b"4294967296"), "no digits": field(b" " * active.ID_DIGITS),
+        "another key": good.replace(b'{"max_tokens":', b'{"max_tokenz":'), "not an id request": request(300),
+        "a short request": good[:at + 4], "no request": b"",
+        "a content-length that isn't a u32": good.replace(b"content-length:", b"content-length:x", 1)[:len(good)],
+    }
+
+
+@pytest.mark.parametrize("name", sorted(malformed_requests()))
+def test_a_request_whose_max_tokens_field_does_not_parse_is_refused(name):
+    """A request whose field isn't a u32 at its place is refused (cap) as one past the cap is."""
+    request_bytes = malformed_requests()[name]
+    assert active.id_request_max_tokens(request_bytes[:GP]) is None
+    refused(request_bytes)
+
+
+def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
+    """Under the cap a server is held to its request's `max_tokens`: a third id on a request of two fails the
+    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of zero gets its END alone or
+    fails at cell 0. Without a cap the same response is released whole."""
+    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (0, [], (None, None)),
+                                     (0, [7], ("limit", 0))):
+        warden, client, _, e = capped(id_req(max_tokens), id_answer(ids))
+        assert (e["failed"], e["failed_at"]) == outcome
+        sent = ids[:max_tokens]
+        assert live_cells(client) == [IT.data_cell(x, 1, GB) for x in sent] + \
+            [cell(FAIL, 1, b"", GB) if outcome[0] else IT.end_cell(1, GB)]
+        verdict = audit(CAPPED, *records(warden))
+        assert verdict["accepted"] == (outcome[0] is None)
+        if outcome[0]:
+            assert reasons(warden) == [(e["ended"], 1, "limit")]
+    _, client, _, e = capped(id_req(2), id_answer([1, 2, 3]), params=GATED)
+    assert (e["failed"], e["max_tokens"]) == (None, None) and len(live_cells(client)) == 4
+
+
+def test_the_audit_holds_released_requests_and_responses_to_the_cap():
+    """The audit under a cap reads each request's `max_tokens` from its cells: records an uncapped run made, with a
+    request past the cap released or a response past its request's `max_tokens`, are refused; a `cap` reason under a
+    schedule without a cap is not the schedule's."""
+    warden, _, _, _ = capped(id_req(5), id_answer([1]), params=GATED)
+    verdict = audit(CAPPED, *records(warden))
+    assert verdict["windows"][0]["problems"] == ["connection 1: its request's max_tokens (5) is past the cap, and was "
+                                                 "released"]
+    warden, _, _, _ = capped(id_req(2), id_answer([1, 2, 3]), params=GATED)
+    verdict = audit(CAPPED, *records(warden))
+    assert verdict["windows"][0]["problems"] == ["connection 1: its response has 3 DATA cells, past its max_tokens (2)"]
+    warden, _, _, _ = capped(id_req(5), id_answer([1]))
+    assert "fails bucket 2: cap, not this schedule's" in audit(GATED, *records(warden))["windows"][0]["problems"]
+
+
+def test_the_cap_is_a_u32_below_egress_cells_in_the_id_form():
+    """A cap is a positive u32 below `egress_cells` (a capped response's END is its egress cell `max_tokens`), only in
+    the id egress form, at cells that hold an id request's `max_tokens` field."""
+    for bad in (0, -1, True, 1.0, "4", GATED.egress_cells, 1 << 32):
+        with pytest.raises(ValueError, match="max_tokens_cap is a u32"):
+            dataclasses.replace(GATED, max_tokens_cap=bad)
+    with pytest.raises(ValueError, match="egress form is id"):
+        dataclasses.replace(GATED, egress="bytes", max_tokens_cap=4)
+    with pytest.raises(ValueError, match="doesn't hold an id request's max_tokens"):
+        dataclasses.replace(PARAMS, egress="id", max_tokens_cap=4)
+    assert dataclasses.replace(GATED, max_tokens_cap=GATED.egress_cells - 1).max_tokens_cap == 11
 
 
 # --- admission -------------------------------------------------------------------------------------------------------
@@ -957,15 +1098,23 @@ def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
 
 
 def test_the_parameters_digest_binds_every_parameter():
-    """Each integer parameter and the egress form move the digest, as do the cell kinds and the reasons it binds; an
-    egress form other than id or bytes is refused."""
+    """Each integer parameter, the egress form and the response cap move the digest, as do the cell kinds and the
+    reasons it binds; a schedule without a cap hashes neither it nor its reason, so its digest is the period check's
+    (`NetworkCheck.Period.Schedule.digest`, over the integer fields and the first six reasons). An egress form other
+    than id or bytes is refused."""
     moved = [dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}) for f in INTEGER_FIELDS]
-    moved.append(dataclasses.replace(PARAMS, egress="id"))
-    digests = {PARAMS.digest} | {p.digest for p in moved}
-    assert len(digests) == len(moved) + 1 and all(len(d) == 64 for d in digests)
-    assert {*INTEGER_FIELDS, "egress"} == {f.name for f in dataclasses.fields(WardenParams)}
+    moved += [dataclasses.replace(PARAMS, egress="id"), CAPPED, dataclasses.replace(CAPPED, max_tokens_cap=5)]
+    digests = {PARAMS.digest, GATED.digest} | {p.digest for p in moved}
+    assert len(digests) == len(moved) + 2 and all(len(d) == 64 for d in digests)
+    assert {*INTEGER_FIELDS, "egress", "max_tokens_cap", "lengths", "content"} == {
+        f.name for f in dataclasses.fields(WardenParams)}
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)
-    assert WardenParams().egress == "id" and REASONS[-1] == "format"
+    assert WardenParams().egress == "id" and WardenParams().max_tokens_cap is None and REASONS[-2:] == ("format", "cap")
+    assert GATED.reasons == REASONS[:-1] and CAPPED.reasons == REASONS
+    for p in (PARAMS, GATED, WardenParams()):
+        values = {f: getattr(p, f) for f in (*INTEGER_FIELDS, "egress")}
+        assert p.digest == tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(
+            values | {"kinds": sorted(KIND_NAMES), "reasons": list(REASONS[:-1])}))
     for bad in ("", "text", "ID", 1, None):
         with pytest.raises(ValueError, match="egress is one of id, bytes"):
             WardenParams(egress=bad)

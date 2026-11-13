@@ -48,9 +48,9 @@ The trimmed record's KS holds with no premise (`zk_KS`), and does not give the u
 
 * `zkSimForkLeCapTau`: the fork bound at the caps and `τ`, from the caps' alignment and clash (`zkSlotAlign`,
   `zkForkClash`) and `τ`'s bound (`zkSimForkLeTau`);
-* `zk_KS_untrim_of_extendJ`: with the pads' fork bound and view clash (`zkSimForkLePads`, `zkViewClashQP`), KS at the
-  untrimmed instance at SHA-512 at the deployed relation from `ExtendJ` alone, which `ZkExtend` proves
-  (`zk_extendJ`, `zk_KS_untrim`).
+* `zk_oneWait_untrim_of_extendJ` and `zk_KS_untrim_of_extendJ`: with the pads' fork bound and view clash
+  (`zkSimForkLePads`, `zkViewClashQP`), one wait's bound and KS at the untrimmed instance at SHA-512 at the deployed
+  relation from `ExtendJ` alone, which `ZkExtend` proves (`zk_extendJ`, `zk_oneWait_untrim`, `zk_KS_untrim`).
 -/
 
 @[expose] public section
@@ -77,18 +77,25 @@ namespace Gen
 
 variable [S : ZkSetup]
 
+/-- **One wait's bound at the untrimmed masked instance**, at SHA-512 at the deployed relation, from `ExtendJ` at
+full-width columns alone (`TrimBridge.zk_oneWait_untrim_of_kinds`). -/
+theorem zk_oneWait_untrim_of_extendJ
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
+  TrimBridge.zk_oneWait_untrim_of_kinds (fun x _ => zkSimForkLeCapTau x) (fun x _ => zkSimForkLePads x)
+    (fun x _ => zkViewClashQP x) hext
+
 /-- **KS at the untrimmed masked instance**, at SHA-512 at the deployed relation, from `ExtendJ` at full-width columns
-alone (`TrimBridge.zk_KS_untrim_of_kinds`). -/
+alone (`zk_oneWait_untrim_of_extendJ`). -/
 theorem zk_KS_untrim_of_extendJ
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  TrimBridge.zk_KS_untrim_of_kinds (fun x _ => zkSimForkLeCapTau x) (fun x _ => zkSimForkLePads x)
-    (fun x _ => zkViewClashQP x) hext
+  zk_of_oneWait_sha512 Readable.relation zk_splits (zk_oneWait_untrim_of_extendJ hext)
 
 end Gen
 
 /-- **KS at the untrimmed masked instance**, at SHA-512 at the deployed relation, from `ExtendJ` at full-width columns
-alone (`TrimBridge.zk_KS_untrim_of_kinds`). -/
+alone (`zk_oneWait_untrim_of_extendJ`). -/
 theorem zk_KS_untrim_of_extendJ
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=

@@ -66,7 +66,8 @@ from pathlib import Path
 from typing import Any
 
 import verity.protocols.certifier.verifier.advice as I1
-from verity.circuits.codec import canonical_json
+from verity.hardware import registration as REG
+from verity.commitments.windows import interface as IF
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -81,7 +82,6 @@ COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 PENDING = 3
 
 
-#: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
 CAP_BITS = AW.CAP_BITS
 
 
@@ -92,20 +92,25 @@ class Compiler:
     digest: str
 
 
-def compiler_digest(name: str, code: str) -> str:
-    """The inner compiler's digest: SHA-512 of its name and its code identity."""
-    return hashlib.sha512(canonical_json({"name": name, "code": code})).hexdigest()
-
-
 def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
-    """The compiler the advice is bound to: `advice_windows.Capped` (PROVE-PATH's, whose digest names the inner compiler's and ℓ =
-    ``cap_bits``) over ``name``, whose digest is ``digest``, else `compiler_digest` over `name` and the tree's code identity
-    (`source_identity.code_identity`)."""
+    """The compiler the advice is bound to: `advice_windows.Capped` (whose digest names the inner compiler's and ℓ =
+    ``cap_bits``) over ``name``, whose digest is ``digest``, else the verifier's `interface.compiler_digest` of ``name`` over
+    the integration's import closure (`research_tools.CLOSURE`) in this git work tree."""
     if digest is None:
-        # TODO: COMPILER's own registered digest once compile_steps lands with one
+        from verity_vllm.pipeline import research_tools as RT
         from verity_vllm.pipeline import source_identity as SI
-        digest = compiler_digest(name, SI.code_identity_of("the advice digest", SI.TREE)["sha256"])
+        try:
+            code = [g.removesuffix("/**") for g in RT.CLOSURE]
+        except UsageError as e:
+            raise UsageError(f"the advice digest: {e}") from e
+        digest = IF.compiler_digest(name, SI.TREE, code)
     return AW.Capped(Compiler(name, digest), cap_bits)
+
+
+def builder_item(compiler: AW.Capped) -> dict[str, Any]:
+    """B's item in the deployment's registration log (`verity.hardware.registration`, kind ``builder``): the inner
+    compiler's digest, the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
+    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -181,9 +186,10 @@ def _reach(made: list[list[int]], at: int) -> int:
     return next((b for a, b in made if a <= at < b), at)
 
 
-def _sources(q: _Req, hit: int, tokens: dict[str, list[int]], reqs: dict[str, _Req]) -> tuple[I1.Source, ...]:
+def _sources(q: _Req, hit: int, tokens: dict[str, list[int]], reqs: dict[str, _Req], block: int = 1) -> tuple[I1.Source, ...]:
     """The runs of positions 0 … hit − 1 and the requests whose computed KV each reuses: at each position, the request (first by
-    index) that computed it with the same tokens up to there and runs furthest.  Its own KV only on a resume."""
+    index) that computed it with the same tokens up to there and runs furthest.  Its own KV only on a resume.  The prefix cache
+    serves whole blocks of ``block`` tokens, each one request's, so a run ends on a block boundary or at the hit's end."""
     mine = tokens[q.rid]
     out: list[I1.Source] = []
     at = 0
@@ -196,6 +202,8 @@ def _sources(q: _Req, hit: int, tokens: dict[str, list[int]], reqs: dict[str, _R
             agree = at
             while agree < end and theirs[agree] == mine[agree]:
                 agree += 1
+            if agree < hit:
+                agree -= agree % block
             if agree > reach and theirs[:at] == mine[:at]:
                 best, reach = p, agree
         if best is None:
@@ -266,6 +274,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 raise ValueError(f"request {r['request']} arrives twice")
             reqs[r["request"]] = _Req(r["request"], int(r["prompt_len"]))
     tokens = {rid: rec["prompt_ids"] + rec["output_ids"] for rid, rec in io.items()} if io is not None else None
+    block = next((int(r["config"].get("block_size") or 1) for r in recs if r["kind"] == "header" and "config" in r), 1)
     steps = ST.steps(recs)
     outside = {r["request"]: r for r in recs if r["kind"] == "finish"}
     built: list[list[tuple[_Req, int, int, int, bool]]] = []
@@ -304,7 +313,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             if hit:
                 if tokens is None:
                     raise ValueError(f"step {s}: request {q.rid} has a cache hit, whose sources need the Commit record's tokens")
-                sources = _sources(q, hit, tokens, reqs)
+                sources = _sources(q, hit, tokens, reqs, block)
             q.preempted = q.preempted and not resume
             out_rows.append((q, start, n, hit, resume, sources))
         built.append(out_rows)
@@ -619,7 +628,8 @@ class Options:
     window: int | None = option("--window", type=int, default=None, help="a server's run: only this Commit window (default every closed one)")
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
-                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
+                                         help="its digest, 128 hex digits (default: interface.compiler_digest of the name over "
+                                              "the integration's import closure in this git work tree)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
                       help="ℓ, the cap on the advice's length in bits the compiler is total up to: the registered compiler is "
                            "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")

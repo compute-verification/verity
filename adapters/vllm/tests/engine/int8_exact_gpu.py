@@ -25,9 +25,8 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
   attention (attention) the first and last attention layers' first calls, request by request (`int8_attention_gpu`): the served
             rows against a GPU rerun, the CPU and `fattn_oracle.attention`, `fattn_ref.check` on the GPU's softmax of a row at
             every head dimension 128 call (all bit for bit), and solo requests against the batched ones.  The K scales are the served revision's
-            (`engine.int8_k_scales`; `VERITY_VLLM_INT8_K_SCALES` names a calibration run's table).  With
-            `VERITY_INT8_CREDITED_READ=MODE:PAGED_SO` (`engine.int8_credited_env`) every window is the credited read's, decoded
-            by pg_window, and each decode's window is checked against the K and V written in the earlier steps.
+            (`engine.int8_k_scales`; `VERITY_VLLM_INT8_K_SCALES` names a calibration run's table).
+            Each decode's window is checked against the K and V written in the earlier steps.
 
     cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     $PY tests/engine/int8_exact_gpu.py --out DIR --at ISO_TIME --by LANE
@@ -35,8 +34,6 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
 from __future__ import annotations
 
 import argparse
-import contextlib
-import io
 import json
 import os
 import sys
@@ -48,6 +45,7 @@ import numpy as np
 import torch
 
 from tests.engine import ppl_oracle as O
+from tests.engine.int8_pin import PROMPTS, pin, scratch_checkpoints
 from verity_vllm.config import checkpoint_entries
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
@@ -55,35 +53,7 @@ from verity_vllm.engine import int8_exact as E
 
 SCHEMA = "verity-vllm/int8-exact-gpu/v5"
 RECORD = "int8_exact_gpu.json"
-PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the n-th Fibonacci number.\"\"\"\n",
-           "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,"]
 MERGED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}
-
-
-def pin(a: argparse.Namespace) -> tuple[dict[str, Any], str]:
-    """The int8 pin of `a.role`: the registered one (re-made and checked by `int8-checkpoint make` when its snapshot is missing
-    here), else a new one (`int8-checkpoint pin`)."""
-    out = io.StringIO()
-    entry = next((c for c in checkpoint_entries(a.checkpoints) if c.get("role") == a.role), None)
-    if entry is not None and Path(entry["local_path"]).is_dir():
-        return entry, "registered"
-    with contextlib.redirect_stdout(out):
-        rc = I.main(I.MakeOptions(role=a.role, checkpoints=a.checkpoints, hf_home=a.hf_home) if entry is not None else
-                    I.PinOptions(base_role=a.base_role, role=a.role, repo=a.repo, checkpoints=a.checkpoints, hf_home=a.hf_home,
-                                 by=a.by, at=a.at))
-    if rc:
-        raise SystemExit(f"int8-checkpoint exited {rc}: {out.getvalue()[-2000:]}")
-    return (entry, "remade") if entry is not None else (json.loads(out.getvalue()), "made")
-
-
-def scratch_checkpoints(checkpoints: str, entry: dict[str, Any], scratch: Path) -> Path:
-    p = scratch / "checkpoints.json"
-    p.write_text(Path(checkpoints).read_text())
-    sib = Path(checkpoints).with_name("checkpoints-int8.json")
-    doc = json.loads(sib.read_text()) if sib.is_file() else {"checkpoints": []}
-    doc["checkpoints"] = [c for c in doc["checkpoints"] if c.get("role") != entry["role"]] + [{**entry, "downloaded": True}]
-    (scratch / "checkpoints-int8.json").write_text(json.dumps(doc, indent=1) + "\n")
-    return p
 
 
 class BaseWeights:
@@ -227,14 +197,13 @@ def attention_checks(doc: dict[str, Any], taps: Any, tapped: list[str]) -> bool:
             print(f"[int8] attn {phase} {name} call {rec['call']} req {rec['request']}: s={rec['s']} n={rec['n']} "
                   f"rerun!={rec['rerun_mismatch']} cpu!={rec['cpu_mismatch']} oracle!={rec['oracle_mismatch']} kv!={rec['kv_mismatch']} "
                   f"fattn_ref={rec['fattn_ref']} k_clamped={rec['k_clamped']} cache!={rec.get('cache_mismatch', '-')} "
-                  f"defs!={rec['defs_mismatch']}/{rec['defs_evaluated']} window={rec['window']}", flush=True)
+                  f"defs!={rec['defs_mismatch']}/{rec['defs_evaluated']}", flush=True)
     eq = doc["attention_equal"]
     keys = ("rerun_mismatch", "cpu_mismatch", "oracle_mismatch", "kv_mismatch", "cache_mismatch", "defs_mismatch", "written_mismatch")
     wr = AG.written(taps.got)
     doc["attention_totals"] = t = {"compared": len(eq), "prefills": sum(r["n"] == r["s"] for r in eq), "words": sum(r["words"] for r in eq),
                                    **{k: sum(r.get(k, 0) for r in eq) for k in keys}, **wr,
                                    "defs_evaluated": sum(r["defs_evaluated"] for r in eq),
-                                   "windows": sorted({r["window"] for r in eq}),
                                    "head_dims": sorted({r["head_dim"] for r in eq}),
                                    "fattn_ref_due": sum(r["head_dim"] == AG.FATTN_REF_HEAD_DIM for r in eq),
                                    "fattn_ref_rows": sum(r["fattn_ref"] is not None for r in eq),
@@ -285,8 +254,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         eng = build_engine(checkpoints, case=role, target=target, max_num_seqs=len(PROMPTS))
     doc["engine"] = {"build_s": round(eng.build_s, 1), "effective": eng.effective, "target_mismatches": target_mismatches(eng),
                      "int8_exact": int8_exact_of(eng.model), "quantization": eng.kwargs.get("quantization"),
-                     "attention_backend": eng.kwargs.get("attention_backend"), "enforce_eager": eng.kwargs.get("enforce_eager"),
-                     "credited_read": eng.credited_read}
+                     "attention_backend": eng.kwargs.get("attention_backend"), "enforce_eager": eng.kwargs.get("enforce_eager")}
     print(f"[int8] engine {json.dumps(doc['engine'], default=str)[:800]}", flush=True)
 
     before, lin_names = applied(eng.model)

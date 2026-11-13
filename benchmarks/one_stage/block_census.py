@@ -3,10 +3,11 @@ of each rank, sized with ``--estimate``) cut into proof blocks, and the proof bl
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
-a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``CHAINS`` row's key blocks, ends, column ends and combines and
-a ``STAGES`` row's stages are a slot each; a
-``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
-coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
+a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
+``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
+coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
+(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns, the way the
+served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
 row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
 split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
@@ -14,9 +15,10 @@ width of least leakage-weighted proving cost (`width_pick`, the row's own width 
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
 input (a constant) is no proof block.
 
-Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (an upper
-bound, `m1_families.estimate`), its served MACs and the bytes of the rows it opens (a row per parameter and per returned
-field). Beside them, every row's own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
+Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (its leaves'
+ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with its reads inline, as `m1_families` says),
+its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
+own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
 
     python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR
 """
@@ -42,6 +44,9 @@ LOCATION_BITS = 80
 #: width fits: below it a block is mostly its rows' hashing slots (Flock's 2^18-row slots), so a narrower one proves about as
 #: much and adds a hiding leaf a row to every token's commitments
 WIDTH_FLOOR = 22
+#: the columns of a values unit where a ``CHAINS`` row's key blocks are served as scores and values units: the served
+#: partition's width, the combine's column block, so a split's end reads one values unit's row whole
+CHAIN_COLS = 64
 
 
 def misfit(e: dict) -> str | None:
@@ -62,11 +67,19 @@ def misfit(e: dict) -> str | None:
 
 def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
-    list of options coarse to fine, an option the units it takes."""
+    list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
+    has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one).
+    A ``CHAINS`` row's options are its key blocks as scores and values units of `CHAIN_COLS` columns, then whole."""
     base = spec_base(spec)
     if base in ST.PARTS:
-        return [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in ST.PARTS[base]]
-    if base in ST.CUT or base in ST.CHAINS or base in ST.STAGES:
+        for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
+            got = [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in c]
+            if all(got):
+                return got
+    if base in ST.CHAINS:
+        by, ways = {u["spec"]: u for u in units}, dict(ST.chain_ways(spec))
+        return [[[by[u] for u, _n in ways[g]] for g in (CHAIN_COLS, None) if g in ways and all(u in by for u, _n in ways[g])]]
+    if base in ST.CUT or base in ST.STAGES:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:
         whole, chunks = [], defaultdict(list)

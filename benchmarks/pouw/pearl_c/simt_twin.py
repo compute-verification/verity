@@ -1,10 +1,12 @@
 """A host build of `hash_h3.cuh` and `pearl_c_sm120/hash_fast.cuh` that runs their kernels thread for thread, for byte tests
 without a GPU.
 
-Every CUDA thread of a block is a host thread; `__syncthreads` and `__syncwarp` are one barrier over the block (stronger than
-a warp's, which the kernels here allow: every thread of a block reaches the same syncs), which a thread leaves when it
-returns. Blocks run one after another. `build()` compiles it with g++ (C++20) and returns the library; `launch()` runs a
-kernel over a grid with `Args` built from host buffers.
+Every CUDA thread of a block is a context on the launching thread (`host_threads.h`); `__syncthreads` and `__syncwarp` are one
+barrier over the block (stronger than a warp's, which the kernels here allow: every thread of a block reaches the same syncs),
+which a thread leaves when it returns. Blocks run one after another, and a block whose threads all wait at a barrier no
+thread reaches fails its launch. `build()` compiles it with g++ (C++20) and returns the library, whose
+``run_<kernel>(&args, grid, block, smem)`` runs one of `KERNELS` over a grid: 0 when every block finished, 2 when a
+block's threads wait at a barrier none reaches, 3 when its threads' stacks can't be mapped.
 """
 from __future__ import annotations
 
@@ -15,19 +17,19 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
+__all__ = ["Args", "KERNELS", "build"]
+
 HERE = Path(__file__).parent
 KERNELS = ("s512_rows", "s512_seeds", "s512_tickets", "s512_tile_leaves", "s512_pads", "s512_nodes", "s512_tree_small", "hm_leaves",
            "s512_frame_leaves", "s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds")
 
 PRELUDE = r"""
 #include <cmath>
-#include <condition_variable>
 #include <cstddef>
-#include <mutex>
 #include <cstdint>
 #include <cstring>
-#include <thread>
 #include <vector>
+#include "host_threads.h"
 #define __device__
 #define __host__
 #define __constant__ static
@@ -56,24 +58,21 @@ static inline int min(int a, int b) { return a < b ? a : b; }
 static inline int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
 static inline int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 struct Dim { unsigned x = 0, y = 0, z = 0; };
-static thread_local Dim threadIdx;
+static Dim threadIdx;
 static Dim blockIdx, blockDim, gridDim;
 // a block's barrier that a returning thread leaves (drop), releasing the others if they were the rest of the phase
 struct TwinBarrier {
-  std::mutex mu;
-  std::condition_variable cv;
   int expected, arrived = 0;
   unsigned gen = 0;
   explicit TwinBarrier(int n) : expected(n) {}
   void wait() {
-    std::unique_lock<std::mutex> l(mu);
     const unsigned g = gen;
-    if (++arrived == expected) { arrived = 0; gen++; cv.notify_all(); }
-    else cv.wait(l, [&] { return gen != g; });
+    host_threads::progress++;
+    if (++arrived == expected) { arrived = 0; gen++; }
+    else while (gen == g) host_threads::yield();
   }
   void drop() {
-    std::unique_lock<std::mutex> l(mu);
-    if (--expected > 0 && arrived == expected) { arrived = 0; gen++; cv.notify_all(); }
+    if (--expected > 0 && arrived == expected) { arrived = 0; gen++; }
   }
 };
 static TwinBarrier* twin_bar;
@@ -103,12 +102,13 @@ def _source() -> str:
         '#include "sha512.cuh"', (HERE / "sha512.cuh").read_text()).replace("#pragma once", "")
     body += (HERE.parent / "pearl_c_sm120" / "hash_fast.cuh").read_text().replace("#pragma once", "")
     runs = "".join(
-        f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
+        f'extern "C" int run_{k}(const Args* a, int grid, int block, int smem) {{\n'
         f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block; gridDim.x = grid;\n"
         f"  for (int b = 0; b < grid; b++) {{\n"
-        f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
-        f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
-        f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in KERNELS)
+        f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar;\n"
+        f"    if (const int rc = host_threads::run(block, &threadIdx.x, [](void* a) {{ {k}(*static_cast<const Args*>(a)); twin_bar->drop(); }},\n"
+        f"                                         const_cast<Args*>(a))) return rc;\n"
+        f"  }}\n  return 0;\n}}\n" for k in KERNELS)
     return PRELUDE + body + runs
 
 
@@ -126,16 +126,3 @@ def build() -> C.CDLL:
     subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-I", str(HERE), "-o", str(out / "twin.so"),
                     str(out / "twin.cpp")], check=True, capture_output=True, text=True)
     return C.CDLL(str(out / "twin.so"))
-
-
-def buffer(data: bytes | int):
-    return C.create_string_buffer(data, len(data)) if isinstance(data, bytes) else C.create_string_buffer(max(data, 16))
-
-
-def launch(kernel: str, grid: int, block: int, ptrs, ints, smem: int = 0) -> None:
-    a = Args()
-    for j, p in enumerate(ptrs):
-        a.p[j] = 0 if p is None else C.addressof(p)
-    for j, v in enumerate(ints):
-        a.i[j] = v
-    getattr(build(), f"run_{kernel}")(C.byref(a), grid, block, smem)

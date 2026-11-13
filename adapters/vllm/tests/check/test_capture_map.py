@@ -16,12 +16,11 @@ from pathlib import Path
 import pytest
 import torch
 
+from tests.check.capture_map_check import check, check_target, report
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.commit import identity as ID
-from verity_vllm.check.capture_map import check, check_target
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine import meta_inventory as MI
-from verity_vllm.pipeline import cli
 from verity.definitions.registry import catalog
 
 HERE = Path(__file__).parent
@@ -273,27 +272,26 @@ def test_moe_source_binds_its_ten_block_fp8_planes_and_the_unreduced_output_on_e
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == CM.layer_set(CMAP, "moe", ENV)
 
 
-def _cli_check(inventory: Path, capsys) -> tuple[int, str]:
-    code = cli.main(["capture-map", "check", "--map", str(MAP), "--config", str(FIX / "config.json"), "--inventory", str(inventory)])
-    return code, capsys.readouterr().out
+def _check_document(inventory: Path) -> tuple[int, str]:
+    return report(MAP, FIX / "config.json", inventory)
 
 
-def test_the_check_command_passes_the_meta_build_and_a_live_document(tmp_path, capsys):
-    code, out = _cli_check(FIX / "inventory-tp8-rank0.json", capsys)
+def test_the_check_passes_the_meta_build_and_a_live_document(tmp_path):
+    code, out = _check_document(FIX / "inventory-tp8-rank0.json")
     assert code == 0 and "FAIL" not in out and f"rank 0: 0 problems, signature {RANK0['signature']}" in out
     per_rank = [{"rank": r, **copy.deepcopy(RANK0)} for r in reversed(range(TP))]
     live = MI.live_document(per_rank, repo=DOC["repo"], revision=DOC["revision"])
     assert list(live["ranks"]) == [str(r) for r in range(TP)] and live["repo"] == DOC["repo"]
     (tmp_path / "live.json").write_text(json.dumps(live))
-    code, out = _cli_check(tmp_path / "live.json", capsys)
+    code, out = _check_document(tmp_path / "live.json")
     assert code == 0 and out.count(": 0 problems") == TP
     per_rank[2]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": False}
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
-    code, out = _cli_check(tmp_path / "live.json", capsys)
+    code, out = _check_document(tmp_path / "live.json")
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 5: switch VLLM_USE_DEEP_GEMM" in out
 
 
-def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engine_before_any_request(tmp_path, capsys):
+def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engine_before_any_request(tmp_path):
     """`tp-capture --inventory-out` (the H200 runbook's serve smoke, capture-map check and observer log in one engine load): the
     document `write_live` makes of the ranks' `rank_inventory` passes the check, and the capture writes it once the engine is built,
     before the warm-up and the observer."""
@@ -310,7 +308,7 @@ def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engi
 
     live = MI.write_live(_LLM(), tmp_path / "inv" / "live.json", timeout=rpc_timeout, repo=DOC["repo"], revision=DOC["revision"], tp=TP)
     assert json.loads((tmp_path / "inv" / "live.json").read_text()) == live and live["source"] == "live" and live["tp"] == TP
-    code, out = _cli_check(tmp_path / "inv" / "live.json", capsys)
+    code, out = _check_document(tmp_path / "inv" / "live.json")
     assert code == 0 and out.count(": 0 problems") == TP
     src = Path(TPL.__file__).with_name("capture.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
@@ -318,11 +316,11 @@ def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engi
     assert at == sorted(at), at
 
 
-def test_ranks_that_build_different_modules_fail_the_check(tmp_path, capsys):
+def test_ranks_that_build_different_modules_fail_the_check(tmp_path):
     per_rank = [{"rank": r, **copy.deepcopy(RANK0)} for r in range(TP)]
     per_rank[3]["signature"] = "0" * 64
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
-    code, out = _cli_check(tmp_path / "live.json", capsys)
+    code, out = _check_document(tmp_path / "live.json")
     assert code == 1 and out.count("FAIL") == 1 and "FAIL ranks: the ranks disagree on the inventory signature" in out
 
 

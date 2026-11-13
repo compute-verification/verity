@@ -13,9 +13,7 @@ paged KV cache (block sizes, `reshape_and_cache_flash` writing K after RoPE and 
 bf16 on every window: K's per-token scales could be stored with an int8 K (a cache spec of its own, more than a backend), but V's
 per-channel scale reads the whole window, so an int8 V would have to be requantized as the window grows.
 
-`Int8AttentionImpl.forward` runs `engine.int8_ops.paged_attention` on the cache (or, once the store's session installs a credited
-read, `install_credited_read`, `engine.int8_window`'s windows decoded from the encoded cache by pg_window and
-`int8_ops.window_attention` on them, the same bits), with its layer's K scales (the served
+`Int8AttentionImpl.forward` runs `engine.int8_ops.paged_attention` on the cache, with its layer's K scales (the served
 checkpoint's `engine.int8_k_scales` table, looked up by the model's revision when the impl is built, cut to its tensor-parallel rank's
 KV heads, and by the layer's name in each call), and counts its calls (`int8_arm` and `calls`, read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
 ALiBi, a sliding window, a logit soft cap, sinks, non-decoder attention, a quantized KV cache, cascade attention, decode context
@@ -27,16 +25,15 @@ from functools import cache
 from pathlib import Path
 
 import torch
-from vllm.utils.torch_utils import is_quantized_kv_cache
 from vllm.v1.attention.backend import AttentionType
 from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend, FlashAttentionImpl
 from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_backend
+from vllm.v1.kv_cache_interface import is_quantized_kv_cache
 from vllm.v1.kv_cache_layout import KVCacheLayout
 
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_k_scales as K
 from verity_vllm.engine import int8_ops
-from verity_vllm.engine.int8_window import CreditedRead
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAME = TargetProfile.INT8_EXACT_ATTENTION_BACKEND
@@ -48,8 +45,6 @@ class Int8AttentionImpl(FlashAttentionImpl):
     """One attention layer on `engine.int8_attention` (FlashAttention's construction, cache and metadata)."""
 
     int8_arm = A.ARM
-    #: the store session's cache read (`install_credited_read`); None reads the cache as it is
-    credited: CreditedRead | None = None
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -90,10 +85,6 @@ class Int8AttentionImpl(FlashAttentionImpl):
         n = attn_metadata.num_actual_tokens
         self.calls += 1
         ks, md = self.k_scales(layer.layer_name, query.device), attn_metadata
-        if (read := self.credited) is not None:
-            int8_ops.credited_attention(read, query[:n], kv_cache, K.layer_index(layer.layer_name), md, self.num_kv_heads, ks, self.scale,
-                                        output[:n])
-            return output
         key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
         int8_ops.paged_attention(query[:n], key_cache, value_cache, md.query_start_loc, md.seq_lens, md.block_table, ks, self.scale,
                                  output[:n], host=int8_ops.host_lists(md))
@@ -129,20 +120,6 @@ class Int8AttentionBackend(FlashAttentionBackend):
     @classmethod
     def supported_kv_cache_layouts(cls) -> tuple[KVCacheLayout, ...]:
         return (KV_LAYOUT,)
-
-
-def install_credited_read(model: torch.nn.Module, read: CreditedRead | None) -> list[str]:
-    """Every int8 attention layer of ``model`` reads its cache through ``read`` from its next call (None: as it is again);
-    their layer names, in module order.  Refuses a model with none."""
-    names = []
-    for _, m in model.named_modules():
-        impl = getattr(m, "impl", None)
-        if isinstance(impl, Int8AttentionImpl):
-            impl.credited = read
-            names.append(m.layer_name)
-    if not names:
-        raise ValueError("the model has no int8 attention layer (attention_backend CUSTOM, engine.int8_attention_vllm)")
-    return names
 
 
 @cache

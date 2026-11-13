@@ -3,8 +3,10 @@ it doesn't, beyond the edges `public_boundary_allowed.txt` lists, which only shr
 (`public_export.py`), whose manifests lose only the entries naming what it doesn't copy."""
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -49,6 +51,45 @@ def test_every_public_group_covers_a_file() -> None:
     boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
     empty = [g for g, r in boundary.groups.items() if not any(r.fullmatch(f) for f in tree.files)]
     assert not empty, f"public groups whose globs cover no tracked file: {empty}; fix their globs in public_boundary.toml"
+
+
+#: the vLLM integration's Pearl-C path, and the kernel directories a run's `kernel` setting names to it
+PEARL_C = ROOT / "adapters" / "vllm" / "verity_vllm" / "protocols" / "pouw" / "pearl_c"
+PEARL_C_KERNELS = ("benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90")
+INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]+"([^"]+)"', re.MULTILINE)
+
+
+def _loaded(module: Path) -> set[str]:
+    """The files a module's `_load` calls take from a kernel directory: each call's ``"NAME.py"``."""
+    calls = [n for n in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_load"]
+    return {c.value for n in calls for c in ast.walk(n)
+            if isinstance(c, ast.Constant) and isinstance(c.value, str) and c.value.endswith(".py")}
+
+
+def test_the_pearl_c_kernels_the_integration_loads_are_public() -> None:
+    """`verity_vllm.protocols.pouw.pearl_c.kernel` loads ``run.py``, ``fixture.py`` and the cubin from the directory a run's
+    ``kernel`` setting names, and `pearl_c.grouped` the ``grouped.py`` beside that ``run.py``: paths a run gives, which the
+    check reads no edge for. So a `public` glob covers each kernel directory's loaded files and what builds its cubin:
+    ``build.sh``, the source it compiles and every file that source includes, which the check doesn't read either. What
+    those files import, reach and run in turn are edges the check reads."""
+    boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
+    always, beside = _loaded(PEARL_C / "kernel.py"), _loaded(PEARL_C / "grouped.py")
+    assert {"run.py", "fixture.py"} <= always and beside, (
+        f"pearl_c's `_load` calls name {sorted(always)} and {sorted(beside)}: read here what it loads as it names it now")
+    needs: set[str] = set()
+    for d in PEARL_C_KERNELS:
+        needs |= {f"{d}/{n}" for n in always} | {f"{d}/{n}" for n in beside if f"{d}/{n}" in tree.files} | {f"{d}/build.sh"}
+        todo = [f"{d}/{n}" for n in re.findall(r"\$HERE/([\w.-]+\.cu)\b", tree.text(f"{d}/build.sh"))]
+        assert todo, f"{d}/build.sh compiles no `$HERE/NAME.cu`: read here the source its cubin is built from"
+        while todo:
+            f = todo.pop()
+            if f in tree.files and f not in needs:
+                todo += [PB._rel(os.path.join(os.path.dirname(f), i)) for i in INCLUDE.findall(tree.text(f))]
+            needs.add(f)
+    private = sorted(f for f in needs if f not in tree.files or boundary.is_private(f) or boundary.group(f) is None)
+    assert not private, ("the public vLLM integration serves Pearl-C from files the export doesn't copy; name each in "
+                         f"public_boundary.toml's `benchmarks` group (a boundary decision), or stop loading it: {private}")
 
 
 BOUNDARY = """
@@ -189,6 +230,33 @@ def test_the_command_refuses_a_new_edge_and_only_shrinks(judged, capsys) -> None
     capsys.readouterr()
     assert PB.main(args) == 1, "an edge the list dropped can't come back"
     assert "lean import Priv" in capsys.readouterr().out
+
+
+def test_a_path_anchored_on_a_package_is_an_edge(tmp_path: Path, capsys) -> None:
+    """`resources.files("pkg")` is the directory an import of `pkg` from the file finds (a package's own, the one holding a
+    module, a namespace package's itself), so a chain on it that reaches a directory the export doesn't copy is an edge:
+    refused while the list lacks it, allowed once it is listed."""
+    files = {"verity/pub/pkg/__init__.py": "",
+             "verity/pub/pkg/config.py": ('from importlib import resources\nfrom pathlib import Path\n\n'
+                                          'ROOT = Path(str(resources.files("pkg"))).resolve().parent\n'
+                                          'SESSION = ROOT.parent.parent / "tools" / "priv" / "session"\n'),
+             "tools/priv/session/run.py": ""}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    (tmp_path / "boundary.toml").write_text(BOUNDARY, encoding="utf-8")
+    tree, edge = PB.Tree(tmp_path, files=files), "verity/pub/pkg/config.py:5: path tools/priv/session -> tools/priv/session"
+    assert [tree._package(n, "verity/pub/pkg/config.py") for n in ("pkg", "pkg.config", "tools.priv.session", "pkg.gone",
+                                                                 "json")] == ["verity/pub/pkg", "verity/pub/pkg",
+                                                                              "tools/priv/session", None, None]
+    assert [str(e) for e in PB.judge(tree, PB.Boundary.load(tmp_path / "boundary.toml")).edges] == [edge]
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", *files], cwd=tmp_path, check=True)
+    args = ["--root", str(tmp_path), "--boundary", str(tmp_path / "boundary.toml"), "--allowed", str(tmp_path / "allowed.txt")]
+    assert PB.main(args) == 1
+    assert edge in capsys.readouterr().out
+    (tmp_path / "allowed.txt").write_text("verity/pub/pkg/config.py -> tools/priv/session\n", encoding="utf-8")
+    assert PB.main(args) == 0
 
 
 @pytest.mark.parametrize(("files", "read"), [
@@ -470,6 +538,278 @@ def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tm
     monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied: (text, []))
     with pytest.raises(ValueError, match="rewrite kept them: .*lake require priv"):
         PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"), {})
+
+
+LOCK_BOUNDARY = """
+when_closed = ["tests"]
+[public]
+a = ["lean"]
+[private]
+team = ["lean/Lib/Hidden.lean", "lean/Lib/Hidden/Deep.lean"]
+"""
+
+#: a Lake package the export copies less `Lib.Hidden` and one of the two modules under it
+LOCK_TREE = {
+    "lean/lakefile.toml": 'name = "lib"\n[[lean_lib]]\nname = "Lib"\n',
+    "lean/Lib.lean": "import Lib.Shown\n",
+    "lean/Lib/Shown.lean": ("namespace Lib\nstructure Shape where\n  side : Nat\ntheorem Kept : True := trivial\n"
+                            "theorem _root_.Lib.Rooted : True := trivial\ndef walk : Nat := go 0\n"
+                            "where go (n : Nat) : Nat := n\nend Lib\n"),
+    "lean/Lib/Hidden.lean": ("namespace Lib\ntheorem Withheld : True := trivial\ndef walk.aside : Nat := 0\n"
+                             "theorem Twice : True := trivial\nend Lib\n"),
+    "lean/Lib/Hidden/Deep.lean": "namespace Lib.Inner\ntheorem Deep : True := trivial\nend Lib.Inner\n",
+    "lean/Lib/Hidden/Open.lean": "namespace Lib\ntheorem Open : True := trivial\ntheorem Twice : True := trivial\nend Lib\n",
+}
+
+
+def _record(**more) -> dict:
+    return {"owner": "@lane", "signature": [], "assumptions": [],
+            "premises": {"assumptions": [], "domain": [], "open": [], "reads": []}, "type_hash": "00"} | more
+
+
+def _lock() -> dict:
+    return {
+        "format": 3,
+        "roots": ["Lib"],
+        "exempt": {"Lib.Hidden": "its runners", "Lib.Hidden.Deep": "a runner"},
+        "runs": {"Lib.Hidden": {"why": "vectors"}, "Lib.Hidden.Open": {"why": "vectors"}},
+        "open": {"Lib.Kept": {"owner": "@lane", "digest": "01", "issue": "LANE-1", "due": "2026-01-01"},
+                 "Lib.Withheld": {"owner": "@lane", "digest": "02", "issue": "LANE-2", "due": "2026-01-02"}},
+        "default_owner": "@lane",
+        "escapes": {"Lib.walk.go": "its loop", "Lib.walk.aside": "a partial def"},
+        "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden", "Lib.Hidden.Deep"],
+                           "why": "all of it"}},
+        "four_names": ["Lib", "Lib.Inner"],
+        "four_names_except": {"Lib.Twice": "named before the rule"},
+        "guarantees": {"Lib.Rooted": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Kept"],
+                                                       "reads": ["Lib.Shape.mk"]}),
+                       "Lib.Withheld": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Withheld"],
+                                                         "reads": []}),
+                       "Lib.Outgrown": _record()},
+        "reads": {"Lib.Shown": {"digest": "03", "definitions": {"Lib.Shape": "04", "Lib.Shape.casesOn": "05"}},
+                  "Lib.Hidden": {"digest": "06", "definitions": {"Lib.walk.aside": "07"}},
+                  "Lib.Hidden.Deep": {"digest": "08", "definitions": {}}},
+    }
+
+
+def _lean(root: Path, lock: dict):
+    """The tree of `LOCK_TREE` with ``lock`` as its package's, tracked, and its judgment."""
+    files = LOCK_TREE | {"lean/lean-audit.json": PE.LEAN_CHECK.text(lock)}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text, encoding="utf-8")
+    (root / "boundary.toml").write_text(LOCK_BOUNDARY, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *files], cwd=root, check=True)
+    tree, boundary = PE.PB.Tree(root, files=files), PE.PB.Boundary.load(root / "boundary.toml")
+    return tree, boundary, PE.PB.judge(tree, boundary)
+
+
+def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_factory) -> None:
+    """An entry stays only if a copied file declares its name, is its module, or lies under its prefix, and none carries
+    its owner, issue or due date; the rest of the lock reads as it did."""
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
+    assert "lean/Lib/Hidden.lean" not in j.public and "lean/Lib/Hidden/Deep.lean" not in j.public
+    assert {"lean/Lib/Hidden/Open.lean", "lean/lean-audit.json"} <= set(j.public)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    wrote = (dest / "lean/lean-audit.json").read_text(encoding="utf-8")
+    source = _lock()
+    public = {
+        "format": 3,
+        "roots": ["Lib"],
+        "exempt": {"Lib.Hidden": "its runners"},
+        "runs": {"Lib.Hidden.Open": {"why": "vectors"}},
+        "open": {"Lib.Kept": {"digest": "01"}},
+        "escapes": {"Lib.walk.go": "its loop"},
+        "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden"], "why": "all of it"}},
+        "four_names": ["Lib"],
+        "four_names_except": {"Lib.Twice": "named before the rule"},
+        "guarantees": {"Lib.Rooted": {k: v for k, v in source["guarantees"]["Lib.Rooted"].items() if k != "owner"}},
+        "reads": {"Lib.Shown": source["reads"]["Lib.Shown"]},
+    }
+    assert json.loads(wrote) == public
+    assert wrote == PE.LEAN_CHECK.text(public)
+    for word in ("Withheld", "Deep", "Outgrown", "aside", "Inner", "@lane", "LANE-", "2026-01"):
+        assert word not in wrote
+    assert got["rewrites"]["lean/lean-audit.json"] == [
+        "exempt Lib.Hidden.Deep", "runs Lib.Hidden", "open Lib.Withheld", "escapes Lib.walk.aside",
+        "layers.*.imports Lib.Hidden.Deep", "four_names Lib.Inner", "guarantees Lib.Withheld", "guarantees Lib.Outgrown",
+        "reads Lib.Hidden", "reads Lib.Hidden.Deep"]
+    report = got["locks"]["lean/lean-audit.json"]
+    assert report["kept"] == {"roots": 1, "exempt": 1, "runs": 1, "open": 1, "escapes": 1, "layers": 1,
+                              "layers.*.imports": 3, "four_names": 1, "four_names_except": 1, "guarantees": 1,
+                              "reads": 1}
+    assert report["dropped"] == {"exempt": 1, "runs": 1, "open": 1, "escapes": 1, "layers.*.imports": 1, "four_names": 1,
+                                 "guarantees": 2, "reads": 2}
+    assert report["undeclared"] == ["guarantees: Lib.Outgrown"] and report["witness_withheld"] == []
+    assert report["also_withheld"] == ["four_names_except: Lib.Twice"]
+    assert report["lane_fields"] == 3 + 2 * 3 + 1
+    assert report["sites"] == {} and report["site_list"] == []
+    assert report["spelled"] == {} and report["spelled_list"] == []
+    assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]
+
+
+def test_the_export_leaves_a_lock_that_is_public_as_it_stands(tmp_path_factory) -> None:
+    lock = {"format": 3, "roots": ["Lib"], "layers": {"Lib": {"imports": ["Lib", "Mathlib"], "why": "all of it"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert (dest / "lean/lean-audit.json").read_bytes() == (tree.root / "lean/lean-audit.json").read_bytes()
+    assert "lean/lean-audit.json" not in got["rewrites"]
+    assert got["locks"]["lean/lean-audit.json"]["dropped"] == {}
+
+
+def test_the_export_refuses_a_lock_it_wrote_that_names_what_no_copied_file_has(tmp_path_factory, monkeypatch) -> None:
+    """The export reads back each lock it wrote: one that still names a declaration or a module no copied file has, or
+    carries an owner, fails by name rather than ship."""
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
+    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held: (text, []))
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+    said = str(e.value)
+    assert "lean/lean-audit.json, as the export wrote it, still names what no copied file has" in said
+    for named in ("exempt: Lib.Hidden.Deep", "runs: Lib.Hidden;", "open: Lib.Withheld", "escapes: Lib.walk.aside",
+                  "layers[Lib].imports: Lib.Hidden.Deep", "four_names: Lib.Inner", "guarantees: Lib.Withheld",
+                  "guarantees: Lib.Outgrown", "reads: Lib.Hidden;", "reads: Lib.Hidden.Deep",
+                  "guarantees[Lib.Withheld].premises.open: Lib.Withheld", "guarantees.Lib.Rooted.owner: a lane field",
+                  "open.Lib.Kept.due: a lane field", "default_owner: a lane field"):
+        assert named in said
+
+
+def test_the_export_refuses_a_public_guarantee_that_rests_on_a_premise_it_does_not_copy(tmp_path_factory) -> None:
+    lock = _lock()
+    lock["guarantees"]["Lib.Rooted"]["premises"]["open"] = ["Lib.Withheld"]
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    with pytest.raises(ValueError, match=r"cite what it doesn't copy.*guarantees\[Lib.Rooted\].premises.open: Lib.Withheld"):
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+
+
+def test_the_export_drops_a_witness_entry_whose_witness_it_does_not_copy(tmp_path_factory) -> None:
+    lock = _lock() | {"witnesses": {"Lib.Rooted": {"honest": ["Lib.Kept"], "nontrivial": "Lib.Withheld"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    wrote = json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))
+    assert wrote["witnesses"] == {} and "Lib.Rooted" in wrote["guarantees"]
+    assert "witnesses.*.nontrivial Lib.Rooted" in got["rewrites"]["lean/lean-audit.json"]
+    assert got["locks"]["lean/lean-audit.json"]["dropped"]["witnesses.*.nontrivial"] == 1
+    assert got["locks"]["lean/lean-audit.json"]["witness_withheld"] == ["witnesses.*.nontrivial: Lib.Rooted"]
+
+
+def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:
+    tree, _, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
+    held, L = PE.Held(tree, set(j.public)), PE.PUBLIC_LOCK
+    has = {kind: [n for n in names if held.has("lean", kind, n)] for kind, names in {
+        L.DECLARATION: ["Lib.Kept", "Lib.Rooted", "Lib.Shape", "Lib.Withheld", "Lib.walk.go", "Lib.Inner.Deep"],
+        L.CONSTANT: ["Lib.walk", "Lib.walk.go", "Lib.Shape.mk", "Lib.walk.aside", "Lib.Withheld.go", "Lib.Shape.mk.inner"],
+        L.NAMESPACE: ["Lib", "Lib.Shape", "Lib.Inner", "Other"],
+        L.MODULE: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Lib.Hidden.Deep", "Mathlib"],
+        L.PREFIX: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Lib.Hidden.Deep", "Mathlib"],
+        L.IMPORT: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Lib.Hidden.Deep", "Mathlib", "Mathlib.Tactic"],
+        L.PACKAGE: [".", "../lean", "../gone"],
+    }.items()}
+    assert has == {
+        L.DECLARATION: ["Lib.Kept", "Lib.Rooted", "Lib.Shape"],
+        L.CONSTANT: ["Lib.walk", "Lib.walk.go", "Lib.Shape.mk"],
+        L.NAMESPACE: ["Lib", "Lib.Shape"],
+        L.MODULE: ["Lib", "Lib.Shown", "Lib.Hidden.Open"],
+        L.PREFIX: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open"],
+        L.IMPORT: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Mathlib", "Mathlib.Tactic"],
+        L.PACKAGE: [".", "../lean"],
+    }
+    assert [n for n in ("Lib.Outgrown", "Lib.Withheld", "Lib.Kept") if held.undeclared(L.DECLARATION, n)] == ["Lib.Outgrown"]
+    assert [m for m in ("Gone", "Lib.Hidden", "Lib") if held.undeclared(L.MODULE, m)] == ["Gone"]
+    assert [m for m in ("Gone", "Lib.Hidden.Deep") if held.undeclared(L.PREFIX, m)] == ["Gone"]
+    with pytest.raises(ValueError, match="a kind it doesn't know"):
+        held.has("lean", "theorem", "Lib.Kept")
+
+
+def test_every_section_the_lean_check_writes_has_its_rule_for_the_export() -> None:
+    """A section added to the lock's schema (`check.ORDER`) with no rule in `public_lock.py` would refuse every lock that
+    holds it on the export's day; it fails here first."""
+    L = PE.PUBLIC_LOCK
+    ruled = {s.partition(".")[0] for s in L.RULED}
+    assert not sorted(set(PE.LEAN_CHECK.ORDER) - ruled), "give each its rule in tools/verity/lean/public_lock.py"
+    assert ruled <= set(PE.LEAN_CHECK.ORDER) | {"four_names_except"}
+
+
+def test_a_locks_leftovers_are_named_by_section_and_entry() -> None:
+    lock = {"format": 3, "exempt": {"Lib.Run": "a runner, since #4321"}, "deployed": ["Lib.G"],
+            "shape": {"frozen": {"Lib.G": "frozen: see note:lean/20260101T0000Z-report-x"}, "events": ["Lib.E"]}}
+    sites = PE.PUBLIC_LOCK.leftovers(lock, PE.lane_text)
+    assert [(section, entry, kind) for section, entry, kind, _ in sites] == [("exempt", "Lib.Run", "pr"),
+                                                                             ("shape.frozen", "Lib.G", "note")]
+    assert sites[0][3] == "#4321" and sites[1][3].startswith("note:")
+
+
+def _known(boundary, pattern: str):
+    """``boundary`` with the text of the package's lock that ``pattern`` matches as known residue."""
+    entry = PE.PB.Residue("known", re.compile(pattern), PE.PB.globs(["lean/lean-audit.json"]), "the change that removes it")
+    return boundary._replace(residue=(*boundary.residue, entry))
+
+
+#: a reason that spells what only the files left out have (a declaration, a module, a file), and what a copied file has
+SPELLS = ("runs beside Lib.Withheld and Lib.Hidden.Deep (lean/Lib/Hidden.lean, lean/Lib/Hidden/); Lib.Kept, Lib.Twice, "
+          "Lib.Hidden.Open, Mathlib.Tactic and lean/Lib/Shown.lean are another matter.")
+
+
+def test_the_export_refuses_a_lock_whose_kept_text_names_what_it_leaves_out(tmp_path_factory) -> None:
+    """A reason is prose, so the export never rewords it: one that still spells a declaration, a module or a path only
+    the files left out have refuses the export by file, section, entry and text, and not for what a copied file has."""
+    lock = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Hidden": SPELLS}, "shape": {"frozen": {"Lib.Kept": "as Lib.Withheld"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, boundary, j, dest, {})
+    said = str(e.value)
+    for named in ("4 place(s)", "lean/lean-audit.json: exempt[Lib.Hidden] holds declaration 'Lib.Withheld'",
+                  "lean/lean-audit.json: exempt[Lib.Hidden] holds module 'Lib.Hidden.Deep'",
+                  "lean/lean-audit.json: exempt[Lib.Hidden] holds path 'lean/Lib/Hidden.lean'",
+                  "lean/lean-audit.json: shape.frozen[Lib.Kept] holds declaration 'Lib.Withheld'",
+                  "reword each in the lock itself", "[[residue]]"):
+        assert named in said
+    for kept in ("Lib.Twice", "Lib.Hidden.Open", "Mathlib.Tactic", "Shown.lean"):
+        assert kept not in said
+    assert not (dest / ".git").exists(), "a refused export commits nothing"
+
+
+def test_the_export_refuses_a_lock_whose_kept_text_holds_lane_text(tmp_path_factory) -> None:
+    lock = _lock()
+    lock["layers"]["Lib"]["why"] = "all of it, since #1234"
+    lock["exempt"]["Lib.Hidden"] = "its runners (Daniel, 5 Oct)"
+    lock["exempt"]["Lib.Hidden.Deep"] = "a runner, since #99"
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+    said = str(e.value)
+    assert "2 place(s)" in said and "lean/lean-audit.json: layers[Lib] holds pr '#1234'" in said
+    assert "lean/lean-audit.json: exempt[Lib.Hidden] holds attribution '(Daniel, 5 Oct)'" in said
+    assert "#99" not in said, "an entry the export drops is not its to refuse"
+
+
+def test_the_export_ships_what_the_boundary_lists_as_known_residue_and_reports_it(tmp_path_factory) -> None:
+    """A `[[residue]]` entry covers a lock's text by the lock's path and the text its pattern matches: the export ships
+    that and reports it, and still refuses what no entry covers."""
+    lock = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Hidden": SPELLS},
+            "shape": {"frozen": {"Lib.Kept": "as Lib.Withheld, since #1234"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    with pytest.raises(ValueError) as e:
+        PE.export(tree, _known(boundary, r"^Lib\.|^lean/"), j, tmp_path_factory.mktemp("export"), {})
+    assert "1 place(s)" in str(e.value) and "shape.frozen[Lib.Kept] holds pr '#1234'" in str(e.value)
+    elsewhere = boundary._replace(residue=(PE.PB.Residue("known", re.compile("."), PE.PB.globs(["other"]), "a change"),))
+    with pytest.raises(ValueError, match=r"5 place\(s\)"):
+        PE.export(tree, elsewhere, j, tmp_path_factory.mktemp("export"), {})
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, _known(boundary, r"^Lib\.|^lean/|^#1234$"), j, dest, {})
+    assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8")) == lock
+    report = got["locks"]["lean/lean-audit.json"]
+    assert report["spelled"] == {"exempt": 3, "shape.frozen": 1}
+    assert report["spelled_list"] == [
+        ["exempt", "Lib.Hidden", "declaration", "Lib.Withheld"], ["exempt", "Lib.Hidden", "module", "Lib.Hidden.Deep"],
+        ["exempt", "Lib.Hidden", "path", "lean/Lib/Hidden.lean"],
+        ["shape.frozen", "Lib.Kept", "declaration", "Lib.Withheld"]]
+    assert report["sites"] == {"shape.frozen": 1} and report["site_list"] == [["shape.frozen", "Lib.Kept", "pr", "#1234"]]
 
 
 def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_path_factory, monkeypatch) -> None:

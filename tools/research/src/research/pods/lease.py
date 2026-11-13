@@ -8,7 +8,8 @@ The dead-man is `sh/lease.sh` on the pod: a loop that re-reads the lease file (L
 pod's own key once the lease has expired and its grace (LEASE_GRACE_S, the runs' own custody push) has passed.  It is armed:
 
   over ssh   `arm`, once sshd answers: ships lease.sh and pod_guard.sh to LEASE_DIR, writes the lease file, starts the loop unless
-             a boot one runs, and starts the idle guard (pod_guard.sh daemon) with a short first-run window;
+             the one lease.pid names runs (`lease.sh start`: a boot one, an earlier arm's), and starts the idle guard
+             (pod_guard.sh daemon) with a short first-run window;
   at boot    only with `pods create --boot-lease` (`boot_fields`): for RunPod's own images (BOOT_IMAGES, whose CMD is /start.sh) a
              start command that writes lease.sh from the environment and runs it before /start.sh, so the lease holds before any ssh.
              Opt-in: a live run ended the pod in the window of its lease plus grace, but sshd never answered, and whether the start
@@ -71,7 +72,8 @@ def _payload() -> bytes:
 def arm_script(seconds: int, *, first_idle_min: float, idle_min: float, root: str = ROOT, lease_dir: str = LEASE_DIR,
                extra_env: dict[str, str] | None = None) -> str:
     """The shell `arm` runs on the pod (stdin: a tar of lease.sh and pod_guard.sh).  It prints `LEASE <line>`, `LEASE_PID <pid>
-    <alive|dead>` and `GUARD_PID <pid> <alive|dead>` (`none` with `idle_min` 0: no idle guard, for a pool pod kept up idle)."""
+    <alive|dead>` (alive: lease.pid names a running loop, by lease.sh's rule) and `GUARD_PID <pid> <alive|dead>` (`none` with
+    `idle_min` 0: no idle guard, for a pool pod kept up idle)."""
     d, r = shlex.quote(lease_dir), shlex.quote(root)
     genv = {**guard_env(), "GUARD_TERMINAL": "done failed cancelled", "GUARD_FIRST_IDLE_MIN": f"{first_idle_min:g}",
             "GUARD_LEASE_FILE": f"{lease_dir}/lease", **(extra_env or {})}
@@ -83,14 +85,7 @@ tar -xf - -C {d}
 export LEASE_DIR={d} {lenv}
 sh {d}/lease.sh extend {int(seconds)} create > /dev/null
 set +e
-old=$(cat {d}/lease.pid 2>/dev/null)
-if [ -n "$old" ] && kill -0 "$old" 2>/dev/null && tr '\\0' ' ' < /proc/$old/cmdline 2>/dev/null | grep -q lease.sh; then
-  lease_pid=$old
-else
-  setsid nohup sh {d}/lease.sh loop >> {d}/lease.log 2>&1 < /dev/null &
-  lease_pid=$!
-  echo "$lease_pid" > {d}/lease.pid
-fi
+lease_pid=$(sh {d}/lease.sh start)
 if [ {1 if idle_min > 0 else 0} = 1 ]; then
   cd {r}/guard && setsid nohup env {env} bash {d}/pod_guard.sh daemon {r} {idle_min:g} >> {r}/guard/daemon.log 2>&1 < /dev/null &
   guard_pid=$!
@@ -98,7 +93,7 @@ else
   guard_pid=none
 fi
 echo "LEASE $(cat {d}/lease)"
-echo "LEASE_PID $lease_pid $(kill -0 "$lease_pid" 2>/dev/null && echo alive || echo dead)"
+echo "LEASE_PID $lease_pid $(sh {d}/lease.sh pid > /dev/null && echo alive || echo dead)"
 echo "GUARD_PID $guard_pid $([ "$guard_pid" != none ] && kill -0 "$guard_pid" 2>/dev/null && echo alive || echo dead)"
 """
 

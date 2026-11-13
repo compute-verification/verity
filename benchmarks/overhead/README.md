@@ -3,7 +3,8 @@
 `verity bench overhead` is the one front door for an overhead measurement: a scheme's prover overhead γ over stock, at a
 card's operating points, from labelled runs of record alone. Its code is `verity-bench`'s (`benchmarks/harness`:
 `verity_bench/overhead.py` holds the rules, `overhead_node.py` and `overhead_node.sh` the node side, `overhead_records.py`
-the store side and the table); this directory holds its runner.
+the store side and the table, and `kit.py`, the harness's kit, the run's lease, γ's pairing and the result's measurements
+with their host stamp); this directory holds its runner.
 
 ```text
 verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
@@ -22,9 +23,11 @@ A run takes one GPU of its node through the node's `gpu-lease`, which waits for 
 ## The operating points
 
 A card's points belong to it, a model and a precision (`overhead.MODELS`: Llama-3.1-70B's four linears for the kernel
-points). Each is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs (on the
-H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the graph replays'
-wall time, summed. A sweep or a timed run in which one of the card's libraries didn't load is refused.
+points). Every figure of the door is over those four linears of one layer and leaves the LM head out
+(`overhead.LEFT_OUT`), though serving computes it: `table` says so in its coverage line (`overhead.covers`, the JSON's
+`covers`). Each point is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs
+(on the H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the
+graph replays' wall time, summed. A sweep or a timed run in which one of the card's libraries didn't load is refused.
 
 - **C**: the smallest m at which the layer's throughput reaches 90% of the best sampled, and every m sampled above it does.
 - **L**: the largest m whose time, and every sampled time below it, stays within 10% of the time at m = 1.
@@ -49,7 +52,7 @@ may have run traced), or if a traced item is in no report.
 Rep r of the layer is every linear's rep r, summed. γ's numerator is the scheme's busy SM-time plus the host CPU
 core-seconds it spends above stock's, at the node's weight (0.48 SM-s a core-second on the H200 node, 1.64 on the
 RTX PRO 6000's); its denominator is the stock arm's busy SM-time. γ is the median over the reps of their ratio, less one,
-with a 95% interval from the ratios' order statistics.
+with a 95% interval from the ratios' order statistics (`kit.paired`).
 
 - The stock arm is each linear's fastest by wall time; the least-SM-time arm's γ is beside it, and so is γ with the arm's
   weight side added, a bound.
@@ -75,7 +78,8 @@ gate passed; a cubin built in the run is development only), and its point passed
 20 paired reps, a 95% interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every
 row (`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
 and says why. A reader of γ outside `benchmarks/` takes it from `table --json`, whose rows carry `of_record` and `why`;
-inside, `overhead_records.gamma_of_record` raises on a γ without one.
+inside, `overhead_records.gamma_of_record` raises on a γ without one. Either way the row carries its `note` (A scheme's
+arm, below), and a γ quoted from it keeps the note.
 
 `table` presents each γ of record per window and per monitoring period of a week, a month and a year, over all compute:
 the census's datacenter (`dc-12500-machines-600s`: the GPU-hours spent proving at the share γ/(1+γ), and their FLOP at the
@@ -97,6 +101,15 @@ exists. The arm keeps the harness's arm contract (`benchmarks/pouw/harness/arm.p
   development only;
 - its build record's `verifier`: its reference verifier's declaration (`arm.check_verifier`), whose commands `verify.py`
   runs on the run's own transcripts, `ACCEPT` or `REJECT` naming each transcript's sha256.
+
+A scheme's entry also says whether its arm's timed call commits y, the call's output (y's tree): `commits_y`, false unless
+the entry states it. A timed run records it beside its arm (`overhead.json`'s `arm.commits_y`), and `table` reads each
+row's own run, a record without the field counting as false. A row whose run committed no y carries the note `without y's
+commitment (y tree not timed)` in the last column of both tables and in `--json` (`commits_y` and `note`): where the
+served call commits y, its γ leaves y's tree out and is understated by it. Pearl+'s arm commits A's root, the tile
+leaves and the screen's flags and no y, so its C and L rows carry the note until an arm that commits y is timed at them;
+`stock` has no arm, so its rows carry none. The entry's `commits_y` becomes true in the change that makes the arm's call
+hash y's rows, never before (the arm's test holds the entry to `work`'s hashed bytes).
 
 `overhead.json` keeps the cubin's art and sha256, the binaries the gate passed and the verifier beside γ.
 `epsilon(m, n, k, card)` returns `{"epsilon", "delta", "basis"}` at one linear of the layer, and `overhead.json` records it

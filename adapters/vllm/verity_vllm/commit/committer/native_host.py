@@ -53,7 +53,6 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer import weights_rows
-from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY
 from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import DROPPED, NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
@@ -63,8 +62,8 @@ from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
 
-# the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
-# CompiledGraphSource.wrap_model); TP rank committers (pipeline/tp/rank_worker.py) have no plan yet and keep it
+# the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer); TP rank committers
+# (pipeline/tp/rank_worker.py) have no plan yet and keep it
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
@@ -207,9 +206,6 @@ RETAIN_MODES = ("device", "host", "none", "sample")
 HIDDEN_M1_PREFIXES = ("fa2.m1/", "fa3.m1/")
 TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # <module path>/part_rank<r>: the rank-local input of that module's collective
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
-#: bound only on the sampling steps whose batch takes vLLM's split top-p path (a row with top_p < 1), so traffic that mixes it with greedy
-#: rows binds it on some steps; a derived-S Program's manifest requires it at every sampling event (`sampler_splits`)
-STEP_DEPENDENT_NAMES = frozenset({SPLITS_IDENTITY})
 
 
 def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
@@ -740,7 +736,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self.hash_threads = int(hash_threads)
         self.retain_values = retain_values
         self.run_id = run_id
-        self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
+        self.program_digest = program_digest
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
         self.spans = Spans(step_rows.NAME)
         self.gc_pauses = GcPauses()
@@ -792,6 +788,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         if gpu_tree:
             self.name = f"{self.name}_gputree"
         self.name = f"{self.name}+{step_rows.NAME}"
+        self.program_digest = program_digest or (step_rows.run_program_digest(run_id) if self.rows else
+                                                 hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest())
         # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none", and the offline core
         # (no engine, no device) keeps them on host.  Host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable
         # D2H is ~1 GB/s and synchronous)
@@ -834,7 +832,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             if self.arena is not None and self.arena_explicit:
                 self.arena.prealloc()               # auto mode preallocates in size_arena() once the envelope is known
         else:
-            self._geo_digest = geo_digest or hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest()
+            self._geo_digest = geo_digest or (step_rows.offline_geo_digest(run_id) if self.rows else
+                                              hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest())
             self._modules = []
 
     def size_arena(self, envelope: dict[str, Any], *, hidden_m1: bool | None = None, margin_bytes: int = 1 << 30) -> dict[str, Any]:
@@ -968,9 +967,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         doc["repo"] = self.engine.cp.get("repo")
         doc["revision"] = self.engine.cp.get("revision")
         doc["chunk"] = self.chunk
+        if self.rows:
+            return step_rows.geo_digest(doc)
         return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
 
     def _ctx_digest(self, step: int) -> bytes:
+        if self.rows:
+            return step_rows.ctx_digest(self.run_id, step)
         return hashlib.sha256(f"{self.run_id}/step={step}".encode()).digest()
 
     def _select_modules(self) -> list[tuple[str, Any]]:
@@ -1048,9 +1051,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         mods = dict(self.model.named_modules())
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
-    @staticmethod
-    def layout_digest(metas: list[TensorMeta]) -> bytes:
+    def layout_digest(self, metas: list[TensorMeta]) -> bytes:
         # NOTE: packed mode adds stream_off (>= 0); per-tensor mode leaves it at -1 -> the two layouts never collide
+        if self.rows:
+            return step_rows.layout_digest(metas)
         doc = [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off] for m in metas]
         return hashlib.sha256(json.dumps(doc, separators=(",", ":")).encode()).digest()
 
@@ -1768,7 +1772,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
-        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources), STEP_DEPENDENT_NAMES)   # what no module produced (KV slots)
+        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what no module produced (KV slots)
         moe_of = self._moe_layer_of()
 
         # no step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only

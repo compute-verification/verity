@@ -1,0 +1,106 @@
+{
+ "definitions": {
+  "PearlCBf16Neg_v2": {
+   "and": 0,
+   "type": "39c9066549d55d67e941211327bc98c14d54f2ef08a6b6b917f4a0a88aff06dd9e355fafb2cd725ae164a96206bfb319d0d80e7adbe0e5d1736e1e6aad1320ad"
+  },
+  "PearlCChain_v2{K=128,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 36933,
+   "type": "9f65226edfdd42f043a19414d6d9fc3305becdbf2a7eb4e08477fc8af60532dd64f5fe446b336d8a2e74596787f463b2bcfc67a121a87ced6973e90fc7f973ff"
+  },
+  "PearlCChain_v2{K=128,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 27577,
+   "type": "ab091d0dbda53662a842dced0746620af15f9de164ad1d0438489bb0d95e37408c663cfc67eeb197e17f4ce4ce0ff4e7049ad2cec71ab2ded39417a39a7dbd04"
+  },
+  "PearlCChain_v2{K=160,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 34910,
+   "type": "92e9bacff38b9b5bab508e2cd1629e89a94be16fefc4be8ef976e19926454e07f4f5514b974a508f69833f0658f4a4851fd131764c28c349acd547c2b28034c9"
+  },
+  "PearlCChain_v2{K=32,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 9549,
+   "type": "64ddaf61895d0d6ddf47b6f2f778fd82c7f5a6da08e4fad86a175cdc2a97971f4cec26b4d1de1cbd90fe2c2ee2e78bc8b9e5101c7dcf178fb5bb048d2f344201"
+  },
+  "PearlCChain_v2{K=32,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 7255,
+   "type": "2bdab4d921e704065c2b794fda5d6191fb414171cb5d44f9fb647d40db31eb1c2e848522279450a3ce2ae6961de902f04ca48173ade4698e29d1a9f60a2b0475"
+  },
+  "PearlCChain_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2,G=0}": {
+   "and": 17936,
+   "type": "09a67aa142fe1b3e8025cbfdb27ecc7b0565ba7484594f2a69f6b8da846445771838414faa4e512b6cb899f84f8aeb408f48c669309b3b2c5546b677f0518ced"
+  },
+  "PearlCFormCode_v2{DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 11757,
+   "type": "df2a918076c3796bdba08efe403b4f0d0814e08e46b6c3d15039db717b01b51d09038322a9d4811159f2b1f57d79683826ad21999360432e1d565cc324c73ac3"
+  },
+  "PearlCFormCode_v2{DOT=HopperE4m3QgmmaDot32_v2}": {
+   "and": 9396,
+   "type": "f31b40067ceda40690ceda4431cb58def9a77bc091af746808c26273e475bbddbfa82a5e14fd8091ec132743825702f4bf3c7adf2e6da150a88a28ce24dad942"
+  },
+  "PearlCGram_v2{K=32,R=2,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 38196,
+   "type": "e8a076e75772a84160b078629379406630960fef3ecc60a425709a93c0f626220503d6ad3ff2082e040f5aa225c3cfd5a3b7035a49862562408f041d9278eea7"
+  },
+  "PearlCGram_v2{K=32,R=2,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 29020,
+   "type": "6e7fe8d895ce11b1c20ab997dbd4b8023270bfd0471ea6faaa99ee439bd6cda9ffd816baa069103d9a3abdc35992ba50ea5ff8e504429dd5176fc21ea9ff5852"
+  },
+  "PearlCPeelA_v2{K=128,R=1,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 37048,
+   "type": "0e8a4ac0fa0a0e7f6d5d16c974f1189ae42e1c800ea330622bd7e108e261e12f16bc69d38c89ff5f84e7975992acdc9fc6170a9dcc07a08318993dc5fbd1d1ac"
+  },
+  "PearlCPeelA_v2{K=128,R=1,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 27692,
+   "type": "54896721367ca41b15a1dfb6c6067784602744fd626097e00a1d9c8df435493b96bb8508c0ee40ba52c1130421f429c8d4498bf28a3e3025b5e732450f6fee47"
+  },
+  "PearlCPeelA_v2{K=32,R=2,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 19328,
+   "type": "3621063901bfb9196e14e8a46d33133c37111be30495a4a174615644caad3b968ffc33b4dda198e90a5fc6d2a40a67749d0e9e673aa948c27fc2b40acafa2a5b"
+  },
+  "PearlCPeelA_v2{K=32,R=2,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 14740,
+   "type": "17f8c51c066f6340ca57bd3c4e59c7e9b6b3243ad1f751d974d42a9366f12797e3a3620aa71e0334b201408a5fc7e2a789ae59643193296b8202e8746f75346f"
+  },
+  "PearlCPeelB_v2{K=128,R=1,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 39884,
+   "type": "79f6eb40c3c38c71678831e218402ad66a596c5bed648c4bbcf56b9ea64121de0520f0b72949334937891deb68e0649321ae8043fc38873fb0f43f152ddcf7a3"
+  },
+  "PearlCPeelB_v2{K=128,R=1,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 30528,
+   "type": "919e11a55fc0298fda256a17487cd28ffa226f20b385500191fba26749e3097fca57eb683a6c3c46262d31123edbc01922a11d4f681afc1d9c06944d42be6588"
+  },
+  "PearlCPeelB_v2{K=32,R=2,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
+   "and": 30656,
+   "type": "36fb715511111b966b2d688359e8fb54ec9651a9235811841736ab50b941728d6a8b7a4f76aa5106fadf7a78579f41920b6867e9c8245d9171d0625ec42e57d5"
+  },
+  "PearlCPeelB_v2{K=32,R=2,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
+   "and": 26068,
+   "type": "9c0b2f8ac40ffbe63a757ce30c43cd0b8a653f8598e0ad16e38abdac88d48f2d7b8f956d23dbddabe85b2386f8aedd77a1c6b78c40d6166bcdb203d711404404"
+  },
+  "PearlCPeel_v2{R=32,STEP=HopperBF16WgmmaDot16_v2}": {
+   "and": 31488,
+   "type": "40c751a84ee6537fc6efb08c909f6afdafa67893b422b6fdeee902fb7a7fe3c08c7e55a41cb65bc890fc645ff11305135d5d432ae2a16f1b3cc3f6e04f1ef5f3"
+  },
+  "PearlCRowStats_v2{K=32}": {
+   "and": 29951,
+   "type": "c5515c7cdb7c908283113284726c27d2048782eae53aa9905fd795b993737896bd4d91525d924ee01870bd593d36edd8f51ef7e94b65dbb7221b182627a95c26"
+  },
+  "PearlCRowStats_v2{K=8}": {
+   "and": 14811,
+   "type": "7c31e428328165843c37fd665cece7920657e8b3fe723e885e07f24b035e23902bb57aba2f6fa3ec7a37fefddb905ca3a8ec66ac325a4b49e7ece5865be41b17"
+  },
+  "PearlCScaledCode_v2": {
+   "and": 1669,
+   "type": "0c022a1d579bf271b6134bf7e528ee5e96a05a2634b282e5282062845a155b0c0591087ecda162d416ca46c935ab490487a08ff6c4945f82b66d43988d6b8ec0"
+  },
+  "PearlCSqrt_v2": {
+   "and": 937,
+   "type": "80a36398318b3b7bfd1ab78d020fdad7e685c104a23557297767076c3d15017198e91c1b8f70533389ebbd1c4c385e254035bac2f693778ceae71c1c49b44c50"
+  }
+ },
+ "pieces": {
+  "PearlCBf16Neg_v1": {
+   "and": 0,
+   "type": "038bd9169b7f9b00fa5056b0b84091f41e1842829d80596b3ef53985766b0f30d13656f9687fb60412a2b3a1a9a6561e1b40eca55bbc1f9166e458d7ffdce10a"
+  }
+ }
+}

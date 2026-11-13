@@ -50,14 +50,6 @@ def test_the_library_models_rho_also_has_are_its_sizes():
         assert (m["n_total"], m["n_active"], m["d_model"]) == (shape.n_total, shape.n_active, shape.d_model), name
 
 
-def kimi_chain_products() -> float:
-    """The products of the Kimi K2 rows' chain: per layer q_a, q_b, o and the shared expert's up and down."""
-    m = K.MODELS["kimi-k2"]
-    d, a = m["d"], m["attention"]
-    return (a["q_rank"] * d + a["heads"] * (a["nope"] + a["rope"]) * a["q_rank"] + d * a["heads"] * a["v"]
-            + 2 * m["expert_ffn"] * d) * m["layers"]
-
-
 @pytest.mark.parametrize("name", sorted(K.MODELS))
 def test_kappa_is_below_two_thirds_and_falls_with_context(name):
     m = K.MODELS[name]
@@ -75,36 +67,30 @@ def test_a_schedule_is_the_token_weighted_harmonic_mean_of_its_phases():
 
 
 def test_the_kimi_rows_carry_kappa_py():
-    """kappa rounded down to two digits, the work per token to 1%, and the chain's share of that work."""
+    """kappa rounded down to two digits and the work per token to 1%."""
     k, gates = K.schedule(K.MODELS["kimi-k2"])
     for rid in KIMI_ROWS:
-        i, c = rows()[rid]["inputs"], rows()[rid]["chain"]
+        i = rows()[rid]["inputs"]
         assert k - 0.01 < i["kappa"] <= k, rid
         assert i["flops_per_token"] == pytest.approx(gates, rel=0.01), rid
-        assert c["kappa"] == pytest.approx(2 * kimi_chain_products() / i["flops_per_token"], rel=0.01), rid
 
 
 @pytest.mark.parametrize("rid", sorted(K.ROWS))
 def test_the_other_rows_carry_kappa_py(rid):
-    """kappa rounded down to two digits and the work per token to 1%; a chain is the Kimi K2 path's share of it."""
+    """kappa rounded down to two digits and the work per token to 1%."""
     k, gates = K.row(rid)
     r = rows()[rid]
     assert k - 0.01 < r["inputs"]["kappa"] <= k
     assert r["inputs"]["flops_per_token"] == pytest.approx(gates, rel=0.01)
-    if "chain" in r:
-        assert r["chain"]["kappa"] == pytest.approx(2 * kimi_chain_products() / gates, rel=0.01)
 
 
 def test_the_dense_row_carries_its_models_schedule():
     m = K.MODELS["dense-100b"]
-    a = m["attention"]
     assert K.active_weights(m) == pytest.approx(1e11, rel=0.005)
-    q_o_up_down = (2 * a["heads"] * a["head_dim"] * m["d"] + 2 * m["ffn"] * m["d"]) * m["layers"]
     k, gates = K.schedule(m)
     r = rows()["dense-pretrain-thread-draft"]
     assert k - 0.01 < r["inputs"]["kappa"] <= k
     assert r["inputs"]["flops_per_token"] == pytest.approx(gates, rel=0.01)
-    assert r["chain"]["kappa"] == pytest.approx(2 * q_o_up_down / gates, rel=0.01)
 
 
 def test_frozen_weights_leave_the_count_and_their_gradients_the_work():
@@ -131,6 +117,4 @@ def test_rl_trains_like_pretraining_at_the_rollout_length():
 
 
 def test_the_tiers_defaults_are_the_kimi_rows():
-    i, c = rows()["pretrain-full"]["inputs"], rows()["pretrain-full"]["chain"]
-    assert T.DEFAULTS["kappa"] == i["kappa"] and c["kappa"] == 0.0695
-    assert T.DEFAULTS["kappa_chain"] == 0.0, "the partial-sum law stays off while its support premises are falsified"
+    assert T.DEFAULTS["kappa"] == rows()["pretrain-full"]["inputs"]["kappa"]

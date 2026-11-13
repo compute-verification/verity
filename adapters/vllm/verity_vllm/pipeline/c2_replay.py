@@ -3,7 +3,9 @@
 One implementation for both places it runs: the Commit, in process, right after the committed run (`pipeline.commit`), and the CPU
 replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage replay`).  What differs between them is passed in on the
 `ReplaySources`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
-checkpoint opened against the committed weights root), the weights check and the VU export hook.
+checkpoint opened against the committed weights root), the weights check and the VU export hook.  In both places it's the prover's
+pre-flight check: it reads committed values in the clear, so it's no verifier's check.  A verifier checks the sampled proof
+blocks' proofs (`sampled_proofs.one_stage`).
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
@@ -22,7 +24,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from verity_vllm.check.replay.linkage import splits_of_record
 from verity_vllm.commit import challenge as CH
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
@@ -244,7 +245,10 @@ def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
 
 
 def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
-    """[O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given."""
+    """[O6] the seed, its source text, its form and its challenge: `args.replay_seed` (prover-chosen), else sha256(`args.replay_challenge` |
+    run root)[:8], else the run root's first 8 bytes.  That last form has no coin: a prover steers the sample by committing again, in about
+    the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
+    replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
     from verity_vllm.check.replay import driver as SR, replay_codes as RC
 
     _seed_chal = None
@@ -264,8 +268,8 @@ def draw_of(args: Any) -> str:
 
 
 def linkage_facts(loaded: dict, progs: dict, index: Any) -> dict[str, Any]:
-    """What the linkage reads of the Programs: their steps of record, splits of record and the embedding's op path."""
-    return {"program_steps": program_steps(loaded, progs), "splits": splits_of_record(loaded), "embed_op_path": index.embed_op_path()}
+    """What the linkage reads of the Programs: their steps of record and the embedding's op path."""
+    return {"program_steps": program_steps(loaded, progs), "embed_op_path": index.embed_op_path()}
 
 
 def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
@@ -298,9 +302,11 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
 
 
 def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str, dict[str, Any]]:
-    """Each warm request's cached rows and the label of the request that computed each cached block (`load_workload`: `cached`,
-    `cached_from`): what the replay resolves its `prefix` reads to (`driver.populate`)."""
-    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()]}
+    """Each warm request's cached rows, the label of the request that computed each cached block and its certified prompt
+    (`load_workload`: `cached`, `cached_from`, `prompt_token_ids`): what the replay resolves its `prefix` reads to, or, where its
+    Program recomputes the hit, what the replay recomputes it from (`driver.populate`)."""
+    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()],
+                                           "prompt": [int(t) for t in r.get("prompt_token_ids") or ()]}
             for r in reqs if int(r.get("cached") or 0)}
 
 
@@ -371,6 +377,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
     from verity_vllm.commit import executed_prefix as EPX
+    from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
@@ -390,13 +397,6 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     from verity_vllm.pipeline import serving_rows as SRW
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
                                   _loaded, s.manifest, args.label, _digs)
-    if not plan and getattr(args, "memory_map", None):
-        from verity_vllm.acquire.sources.kv_slots_source import caches_of
-        from verity_vllm.check.oracle_compare import OpenedReader
-        from verity_vllm import protocols
-        CM = protocols.driver("remote-bandwidth", "commit_map")
-        CM.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                        caches=caches_of(s.com), session=s.out / CM.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -413,11 +413,10 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         print(f"[delta] replay/linkage horizons = the executed prefix of record: {_horizons} (LAG {_epr_r['lag']}; "
               f"{'ok' if _epr_r['ok'] else 'PROBLEMS ' + str(_epr_r['problems'][:2])})", flush=True)
     _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
-    _spr = facts["splits"]
     # the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
     # a request linked over fewer steps than its cap fails closed by name -- never the engine value as the rule
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
-    lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
+    lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
     _kw = dict(arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                seed_challenge=_seed_chal,
@@ -444,6 +443,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         s.reads.update(SR.sampled_replay(_progs, _bm, _rd, _wp, plan=True, **_kw))
     sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
     sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
+    if _premises := DF.premises(r for v in _progs.values() for r in v["rows"]):
+        sr["premises"] = _premises                    # what an equal row leaves unshown, read beside the verdict (`c2_rules`)
     sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
                                        for k, v in _epr_r["requests"].items()} | {"lag": _epr_r["lag"], "ok": _epr_r["ok"], "problems": _epr_r["problems"][:3],
                                                                                   "facts_of_record": _ep_facts, "mechanism": ("population.not_executed_by_rule" if "executed_prefix" in _sr_kw else "none in this tree (rows past the stop sampled as ordinary strata)")}
@@ -535,9 +536,9 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
                                     "reference": "registered relation evaluators (verity.definitions.numerics.derived_rows) on the COMMITTED input bytes (C2 of record)"}
     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
-                                      "prescribed": lk.get("prescribed"),      # seed / splits linkage record
+                                      "prescribed": lk.get("prescribed"),      # seed linkage record
                                       "reference": "declared workload prompt ids (arrival step) + the committed sampled ids of the previous step (ordered interfaces)"
-                                                   " + declared per-request seed / SplitsFor_v1(committed live count, num_SMs of record) (prescribed inputs)"}
+                                                   " + declared per-request seed (prescribed input)"}
     components["negatives"] = {"suite": "tests/check/test_sampled_replay.py + tests/commit/test_binding_negatives.py",
                                "results": "unit: flipped committed byte, equal-shape request swap, wrong member, missing committed input (partial), unlinked decode "
                                           "chain, foreign prompt, verdict gates"}

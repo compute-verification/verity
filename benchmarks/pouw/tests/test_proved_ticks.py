@@ -2,22 +2,17 @@
 8 IMAD warp instructions a unit, B_♭ with ε_skip's work is Lean's 17.097571, and a GPU-second of linears at a cycle a
 unit is (1 − 5.860%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
 places PoUW's compiled Program is its tiles' `z` products, a linear's each at the tile's K, of the int8 products census/v1
-and Lean's `h1Rows` count there, r·c·(2K + 32m) a tile (benchmarks/datacenter's test of that Program credits this figure
-as the block's compute)."""
+and Lean's `h1Rows` count there, r·c·(2K + 32m) a tile (test_proved_ticks_placed places that Program and credits this
+figure as the block's compute)."""
 
 from __future__ import annotations
 
 import importlib.util
 import re
-import sys
 from pathlib import Path
 
+import proved_ticks as P
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[1] / "proved_ticks.py")
-P = importlib.util.module_from_spec(spec)
-sys.modules["pouw_proved_ticks"] = P
-spec.loader.exec_module(P)
 
 S = P.sheet()
 #: 4096 int8 products a cycle on every SMSP of one GPU for one second at f_max
@@ -29,7 +24,7 @@ def test_the_sheet_is_h1_fx1_on_ds120():
     assert P.SHEET_EPS == 0.0586
 
 
-def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
+def test_b_flat_is_the_floor_programs_issue_bound_with_eps_skips_free_compute():
     data = P.device(S.family)
     assert P.EB.prices(S.design, data, S.vector).mma == pytest.approx(1 + 1 / 39 + 8 + 8, abs=5e-7)
     assert P.unit_cycles(S) == pytest.approx(17.097571, abs=5e-7)     # Accounting.TS.Headline.Sm120.flat
@@ -64,7 +59,8 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
     from verity.protocols.pouw.prover.circuit import h1tile
 
     assert (h1tile.SCHEME, h1tile.FOLD) == (P.SCHEME, "fx1") and all("S8" in k for k in h1tile.KINDS)
-    # benchmarks/datacenter's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_datacenter's `work["a"]`):
+    # benchmarks/datacenter's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_proved_ticks_placed's
+    # `work["a"]`):
     # census/v1's int8 products are z's and the lanes' segment dots', 4·16·(64 + 64 + 32·2), of which z's 4·16·64 credit
     grid = {P.Tile(4, 16, 64, 64): 1}
     block = {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}

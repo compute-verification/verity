@@ -88,7 +88,7 @@ def test_every_window_opens_drained(recs):
 def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
     decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
-    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Window(arrived=…)`, every other count
+    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Advice(arrived=…)`, every other count
     0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
     which resets ``run``), each forced admission would change 330 windows' charges."""
@@ -105,8 +105,8 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
         as_ones.append([b for *_at, b in sorted([(d.step, d.request, int(d.arrived)) for d in ds] + ones)])
     D = 32
     ses = CC.session(D, book, [([1] * len(d) + [0] * (D - len(d)), d + [0] * (D - len(d))) for d in per])
-    lens = list(CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens)
-    other = CV.encode([CV.Window(arrived=d) for d in as_ones], CV.Book.from_json(book)).lens
+    lens = list(CV.encode([CV.Advice(arrived=d) for d in per], CV.Book.from_json(book)).lens)
+    other = CV.encode([CV.Advice(arrived=d) for d in as_ones], CV.Book.from_json(book)).lens
     assert forced == [1] * 339
     assert [s[0] for s in ses] == lens and sum(lens) == 5500
     assert (sum(a != b for a, b in zip(other, lens)), sum(other)) == (330, 5968)
@@ -119,7 +119,8 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's max_tokens and
     output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own statics
     (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's carry and
-    refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``). code_v1's term
+    refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``), except those the
+    certified tick admits, which name none. code_v1's term
 width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits`) for every max_tokens up to 4,096 and
 at each power of two to 2^32 − 1."""
     from types import SimpleNamespace
@@ -143,7 +144,7 @@ at each power of two to 2^32 − 1."""
                 [r.max_tokens for r in rq] + pad, [r.output_len for r in rq] + pad)
 
     ses = WC.session(D, 0, 0, L, book, [slots(d, rq) for d, rq in zip(per, reqs)])
-    seg = CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens
+    seg = CV.encode([CV.Advice(arrived=d) for d in per], CV.Book.from_json(book)).lens
     tails = [sum(width(r.max_tokens + 1) + 1 for r in rq) for rq in reqs]
     assert [s[0] for s in ses] == [a + b for a, b in zip(seg, tails)]
 
@@ -161,7 +162,7 @@ at each power of two to 2^32 − 1."""
     low = V7.case(S, sl, book, charge=honest.length - 1, **kw)
     assert V7.evaluate(st, [honest, low]) == [V7.ACCEPT, V7.ACCEPT & ~(1 << 3)]
     assert V7.CompileSlice.id == "CompileSlice_v7"
-    around = {m for k in range(WC.MW + 1) for m in ((1 << k) - 1, 1 << k) if m <= WC.MT_CAP}
+    around = {m for k in range(WC.MW + 1) for m in ((1 << k) - 1, 1 << k) if m < 1 << WC.MW}
     assert all(width(m + 1) + 1 == WC.length_bits(m) for m in sorted(around | set(range(4097))))
 
 

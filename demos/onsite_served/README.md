@@ -8,6 +8,17 @@ The file is `served_table.configuration` rendered by `verity.configuration.deplo
 `tools/verity/cli/tests/test_onsite_served.py` holds it to that byte for byte. It names no host and no address: those are
 the deploy bindings' (below), so binding another host changes no hash.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `verity run demos/onsite_served/config.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | The directory's one command (Running it, below). It reads `config.toml` and the deploy bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
+| `config.toml` | The configuration, `verity/config/v0` (`verity.configuration.deploy.config`): the workload and its parameters, the listed subprotocols, each party's machine and the channels. `served_table.configuration(commit: str) -> dict[str, Any]` is the same configuration as data. |
+| `served_table` (`served_table.py`), the table `verity run` loads by its path | What `verity run` reads of the served window: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
+| `demo.toml` | The demo's doneness for the examples' ladder (`demos/README.md`): its protocol, workload and placement, and how far its run and its proof have got (`run`, `proof`). |
+
 ## The phases
 
 - **Registration**: the site (the prover node the configuration places the developer's parties on), θ (the served
@@ -42,12 +53,12 @@ deploy bindings:
 | --- | --- | --- |
 | `REPO`, `REV`, `PRECISION`, `SLOTS`, `WINDOW_STEPS`, `LOAD` | the workload | `[workload.params]` |
 | `V3C_LAW` | sampled proofs | `[service] law` |
-| `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; with no `gate` the records audit samples on its own live coins |
+| `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY`, `DEVELOPMENT` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; the records audits, V3c's of record among them, take their coins from the live challenger when `gate` is bound, else from a local development session in a development run (`DEVELOPMENT=1`) |
 | `H1_GATE`, `H1_PEER`, `H1_KEY_SHA512` | PoUW | `challenger.pouw`: `gate` (the gate command), `peer`, `key-sha512`; `POUW_CMD` is the runner's default then |
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
 | `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`) |
-| `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command` |
+| `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND`, `WIPE_KEY_SHA512` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command`, `key-sha512` |
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
 `BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing and composes `pending` while it is.
@@ -77,6 +88,7 @@ key-sha512 = "HEX"
 host = "HOST"
 address = "HOST:PORT"
 command = "COMMAND"
+key-sha512 = "HEX"               # the wipe party's own key, not PoUS's
 
 [bandwidth-verifier.bandwidth]
 address = "HOST:PORT"

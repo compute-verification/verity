@@ -1,8 +1,8 @@
 # The NVIDIA H200 SXM 141 GB: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
-# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to this file. The
-# host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
+# runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to
+# this file. The host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
 
 kind = "gpu"
 sku = "h200-sxm-141gb"
@@ -14,25 +14,31 @@ vbios = "96.00.A5.00.03"
 lean = "security/Definitions/Core/Accel/H200.lean"
 nodes = "two H200 nodes (art:72daa20de42c, art:28ff838a63c9: identical apart from the current clocks)"
 
+# count: the SMs. warps: the most warps resident on an SM at once.
 [sm]
 count = { value = 132, unit = "SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3 (H100 SXM5: 132 SMs; the H200 is the same GH100 with HBM3e)" }
+warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 9.0: 64 (and 2048 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
 [clock]
 sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: max, application, default application and max customer boost clocks 1980 MHz); art:d10829e5b08e (SM and memory clock offset ranges [0, 0], supported clocks top at 1980 and 3201); H100 whitepaper V1.04 Table 3, 'GPU Boost Clock ... 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'" }
 tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's clock ceiling, not a clock a loaded card holds, on two readings, each figure it moves quoted at both. 1830 MHz, this card's: the tensor boost clock the H200 data sheet quotes its dense tensor peaks at, its 1,979 dense INT8 TOPS being 4096 a SM-clock on 132 SMs at 1830 MHz (Accounting.TS.Sheets.H200 A3), so 9.894e14 s8 MACs a second. 1980 MHz, clock.sm: the card's maximum boost clock, which the driver reports (art:72daa20de42c, art:28ff838a63c9: nvidia-smi -q max and application clocks 1980 MHz), so 1.0705e15 s8 MACs a second. Falsified by any run of benchmarks/tensor_duty above 132 x 4096 x 1830 MHz = 9.894e14 s8 MACs a second over the host's wall clock (its summarize.py exits 1); the GPU's own timers (clock64, %globaltimer, cudaEvent) are diagnostics. Its run art:f1bb35d70476 (the SM clock locked at 1980 MHz and power at the board's 700 W maximum; zero, constant, uniform and random operands, s8 on wgmma m64n256k32 and mma.sync m16n8k32, e4m3 on wgmma; tensor duty cycles from 50% to 100%, 1% steps above 90%, the rest idle or FFMA; 1.2 s a point) read at most 988.59 T s8 MACs a second over the host's wall clock, 0.99915 of 9.894e14 and 0.92346 of 1.0705e15, and under 9.894e14 at the host stamps' 1 ms resolution. A served workload under the 700 W limit holds lower clocks still" }
 memory = { value = 3201, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (max and application memory clock 3201 MHz); art:d10829e5b08e (offset range [0, 0])" }
 
-# The stores. Registers in 32-bit words an SM; the rest in bytes.
+# The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
+# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own. dram is
+# the device memory a program gets and dram_installed the memory on the board, a second reading of the same store.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Register File Size / SM 256 KB', 64 Ki 32-bit registers" }
-reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words)" }
-smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Combined L1 Cache / Shared Memory 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
+reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words); no run has swept this card's uniform registers, and a run on the RTX PRO 6000 found 80 a warp hold values (that card's store.reg_extra)" }
+smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepaper V1.04 page 27, 'Combined L1 Data Cache and Shared Memory': 'The combined capacity of the L1 data cache and shared memory is 256 KB/SM in H100'; shared memory alone is store.smem_carveout, so the pool is the larger" }
+smem_carveout = { value = 233472, unit = "B/SM", mark = "ceiling", source = "shared memory alone, the most of store.smem's pool a kernel can configure as shared memory, inside the pool and not added to it: CUDA C++ Programming Guide 12.9 section 18.2 Table 28, CC 9.0, 'Maximum amount of shared memory per SM 228 KB' (the table's KB is 1024 bytes); H100 whitepaper V1.04 Table 3, 'Shared Memory Size / SM Configurable up to 228 KB'" }
 l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'L2 Cache Size 50 MB', taken as 50 MiB" }
 dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data sheet, 'GPU Memory 141GB', taken as 141 GiB, above the 143,771 MiB the driver reports" }
+dram_installed = { value = 154618822656, unit = "B", mark = "ceiling", source = "144 GiB, the memory on the board, six HBM3e stacks (memory.bus) of 24 GB, of which store.dram is what a program gets. No NVIDIA document read states 144. Micron's press release of 26 Feb 2024 on its HBM3E: 'Micron's 24GB 8H HBM3E will be part of NVIDIA H200 Tensor Core GPUs'. ServeTheHome's report of that release, the same day: 'six packages of 24GB to increase memory to 141GB with 144GB physically on the card'. AnandTech, 'NVIDIA at SC23: H200 Accelerator with HBM3e and Jupiter Supercomputer for 2024', 13 Nov 2023, in the Internet Archive's copy: the memory 'physically has a capacity of 144GB', 'six 24GB stacks', and 'NVIDIA is holding back some of that capacity for yield reasons'" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]
-tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at clock.tensor, 989.4 T MACs a second (1070.5 T at clock.sm's 1980 MHz); measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd) and 4096 (art:50daf54f471b), a SM-clock each" }
+tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at clock.tensor, 989.4 T MACs a second (1070.5 T at clock.sm's 1980 MHz); measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd) and 4096 (art:50daf54f471b), a SM-clock each; mma.sync reaches less: m16n8k32 (IMMA.16832.S8.S8) measured at 2687 a SM-clock, 65.6% of wgmma's, in the first two records" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "H100 whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler dispatching one warp instruction a clock" }
 alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer add, compare, min, max, logic and shift 64" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer multiply and multiply-add 64" }
@@ -46,21 +52,27 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 bus = { value = 6144, unit = "bit", mark = "ceiling", source = "six HBM3e stacks of 1024 bits; no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3201 MHz nvidia-smi reports" }
 bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, art:df775b659979)" }
+read = { value = 4.26e12, unit = "B/s", mark = "measurement", source = "streaming 16-B loads of 24.08 GB of device memory in 5.65 ms on one card, 4261.2 GB/s rounded down, 86.6% of memory.bandwidth: a stand-in calibrated to a decode step's time, not a peak probe (art:df775b659979)" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]
 s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "rate.tensor's unit" }
 u8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheet's INT8 rate, u8 as s8" }
-b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate; no document gives a b1 peak" }
+b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate (art:83dbd28b545b; both rows carry the probe's throttled tag); no document gives a b1 peak" }
 e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP8 1,979 dense TFLOPS, the INT8 rate" }
 e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3" }
 e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the card has no FP4 MMA: an op the card lacks only adds programs to the model" }
-f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP16 989.5 dense TFLOPS, half the FP8 rate" }
-bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: BF16 989.5 dense TFLOPS" }
-tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS" }
+f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP16 989.5 dense TFLOPS, half the FP8 rate; measured at this weight on wgmma m64n256k16 (2047.8 MACs a SM-clock) and at 1344 on mma.sync m16n8k16 (art:83dbd28b545b, art:9ed5ca6ccddd; the rows carry the probe's throttled tag); mma.sync m16n8k8 is not timed" }
+bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: BF16 989.5 dense TFLOPS; measured as f16: wgmma m64n256k16 2047.8 MACs a SM-clock, mma.sync m16n8k16 1344 (art:83dbd28b545b, art:9ed5ca6ccddd)" }
+tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS; measured at this weight on wgmma m64n256k8 (1023.9 MACs a SM-clock) and at 672 on mma.sync m16n8k8 (art:83dbd28b545b, art:9ed5ca6ccddd; the rows carry the probe's throttled tag); mma.sync m16n8k4 is not timed" }
 nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
-f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 whitepaper: FP64 Tensor Core 67 TFLOPS over 132 SMs at its 1980 MHz FP64 boost clock is 128.2 DMMA MACs a SM-clock there; at clock.tensor that is 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate stays at or above the whitepaper's; 32 at clock.sm's 1980 MHz" }
+f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H200 data sheet: 'FP64 Tensor Core 67 TFLOPS', which over 132 SMs at the 1980 MHz boost clock the H100 whitepaper V1.04 Table 3 gives FP64 tensor operations is 128.2 DMMA MACs a SM-clock there (the whitepaper's own 'Peak FP64 Tensor TFLOPS' 66.9 is 128.0); 128 a SM-clock there is, at clock.tensor, 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate, 67.08 TFLOPS, stays at or above both figures; 32 at clock.sm's 1980 MHz" }
+
+# What an operation costs in tensor units (rate.tensor's unit) in a timed loop. A measured price is that loop's, at or
+# above the operation's price at the card's ceilings, which the rates above give.
+[price]
+fp32_loop = { value = 33.5, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's ceilings, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is 32; a run of that loop on an H200 closes it" }
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]

@@ -20,8 +20,6 @@ import pytest
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
 
 KNOWN_FAILURES = {
-    "tests/acquire/test_compiled_source.py::test_renumber_assigns_invocations_per_call_site":
-        "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
     "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":

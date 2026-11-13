@@ -66,18 +66,19 @@ from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.certifier.verifier import head_check as HC
 from verity.protocols.certifier.verifier import io_tie as IT
 from verity.protocols.certifier.verifier import warden as W
-from verity.protocols.certifier.verifier.active import (DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES, ID_NAME_BYTES,
-                                                   ID_REQUEST_HEAD, PAD, id_request)
+from verity.protocols.certifier.verifier.active import (DATA, HEADER, ID_BODY_AT, ID_DIGITS, ID_FIELD_BYTES,
+                                                   ID_NAME_BYTES, ID_REQUEST_HEAD, MAX_TOKENS_KEY, PAD, id_request,
+                                                   u32_field)
 from verity.protocols.certifier.verifier.grid import Certifier
 
 BIT, BYTE = HC.BIT, HC.BYTE
 END = b"]}"
 #: the variable fields of an id request's head: (key, width, kind)
-FIELDS = ((b'{"max_tokens":', ID_DIGITS, "u32"), (b',"temperature":', 8, "ratio"), (b',"top_p":', 8, "ratio"),
+FIELDS = ((MAX_TOKENS_KEY, ID_DIGITS, "u32"), (b',"temperature":', 8, "ratio"), (b',"top_p":', 8, "ratio"),
           (b',"seed":', ID_DIGITS, "u32"), (b',"model":', ID_NAME_BYTES, "name"),
           (b',"user":', ID_NAME_BYTES, "name"))
 #: the body's offset in an id request: `ID_REQUEST_HEAD`, the content-length in `ID_DIGITS`, then CRLF CRLF
-BODY_AT = len(ID_REQUEST_HEAD) + ID_DIGITS + 4
+BODY_AT = ID_BODY_AT
 #: `IoTieRequestFrame`'s output: pad, req, start, ended, left and fields
 FRAME_OUT = 4 + 32 + 32
 #: `IoTieRequestStep`'s state: left, fields, over, padded, ok
@@ -122,9 +123,7 @@ def layout(B: int) -> FirstCell:
 
 
 def _u32(field: bytes) -> bool:
-    s = field.lstrip(b" ")
-    return len(field) == ID_DIGITS and 0 < len(s) and s.isdigit() and (s == b"0" or s[:1] != b"0") and \
-        int(s) < 1 << 32
+    return u32_field(field) is not None
 
 
 def _ratio(field: bytes) -> bool:

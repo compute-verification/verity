@@ -55,9 +55,9 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable, Sequence
 
-from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
+from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, BodyNode, PrimitiveDefinition, SpecializedDefinition, bind,
                     composite)
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Type, Value
 from verity.definitions.registry import b1, operand_widths
 
@@ -737,96 +737,8 @@ class ContinuationChain:
         return Coll(Array(self.cap, Value(33)), concat([o.refs for o in self.outs]))
 
 
-# --- CANDIDATE: the split count's operand -----------------------------------------
-
-SPLITS_MAX_BATCH = 64  # `topp_geometry.SPLIT_MAX_BATCH`: above it vLLM serves the sampler batch by the sort path (no `_apply_topp_split`)
-N_LIVE_BITS = 7  # the unlifted count `n_live_t ∈ [0, 64]` as a `Value<7>` (a candidate width, with `LSplitsForSMS`)
-SPLITS_BITS = 6  # stoch's `SPLITS_FOR_V1_WIDTH`: S ∈ {1, 2, 4, 8, 16, 32}
-_SPLITS_FOR: dict[int, PrimitiveDefinition] = {}
-_L_SPLITS_FOR: dict[int, PrimitiveDefinition] = {}
-
-
-def _splits_for_v1(n_live: int, num_sms: int) -> int:
-    """`SplitsFor_v1` (`topp_geometry.splits_for_v1`) when the tree has it; otherwise the same
-    domain rule (verbatim) over the base tree's `splits_for` loop.  Refuses by name outside `1 ≤ n_live ≤ 64`, `num_SMs ≥ 1`."""
-    from verity.definitions.registry import topp_geometry
-    f = getattr(topp_geometry, "splits_for_v1", None)
-    if f is not None:
-        return int(f(n_live, num_sms))
-    n, m = int(n_live), int(num_sms)
-    if n < 1 or n > topp_geometry.SPLIT_MAX_BATCH:
-        raise ValueError(f"SplitsFor_v1: n_live={n} outside the domain 1..{topp_geometry.SPLIT_MAX_BATCH} (0 = no sampling event; > {topp_geometry.SPLIT_MAX_BATCH} = not the split pipeline)")
-    if m < 1:
-        raise ValueError(f"SplitsFor_v1: num_SMs={m} is not a target profile")
-    s = topp_geometry.splits_for(n, m)
-    assert 1 <= s <= topp_geometry.SPLIT_MAX_SPLITS and s & (s - 1) == 0 and s < (1 << SPLITS_BITS)
-    return s
-
-
-def splits_for_prim(num_sms: int) -> PrimitiveDefinition:
-    """`SplitsForSMS<SMS>_v1(n_live: Value<7>) -> Value<6>` — the UNLIFTED primitive form of `SplitsFor_v1`
-    (`S_t = SplitsFor_v1(n_live_t, num_SMs)`, `num_SMs` a target-profile static).  Total on `1 ≤ n_live ≤ 64`; `n_live = 0`
-    and `n_live > 64` are refused by name (no launch exists there).  Built here so the lifted form has an
-    original to be measured against; registering it as the operand of `TopPMask_v1` is a Program-side change."""
-    if int(num_sms) < 1:
-        raise ValueError(f"SplitsFor_v1: num_SMs={num_sms} is not a target profile")
-    p = _SPLITS_FOR.get(int(num_sms))
-    if p is None:
-        p = PrimitiveDefinition(f"SplitsForSMS{int(num_sms)}", 1, (("n_live", Value(N_LIVE_BITS)),), Value(SPLITS_BITS),
-                                lambda n, _m=int(num_sms): _splits_for_v1(n, _m), doc=splits_for_prim.__doc__ or "",
-                                conformance="protocol-defined")
-        _SPLITS_FOR[int(num_sms)] = p
-    return p
-
-
-def l_splits_for(num_sms: int) -> PrimitiveDefinition:
-    """CANDIDATE — `LSplitsForSMS<SMS>_v1(n_live: Value<8>) -> Value<7>`, proposed SIXTH member of the closed specified
-    class.  Rule: `INV` operand → `INV_6`; `⊥` operand → `⊥` (strictness; an honest Program never
-    produces a ⊥ count — `n_live_t = Σ_r LIsActive(tok_in_{r,t})` is Active by construction); **`Active(0)` → `⊥`** — the
-    specified exception and a new KIND of rule (an Active operand mapped to ⊥): no live row ⇒ no sampler launch ⇒ no sampling
-    event ⇒ the split count is not a value of any execution (state/batching); `Active(n)`,
-    `1 ≤ n ≤ 64` → `0‖SplitsFor_v1(n, SMS)` (payload agreement with the original, measured); `Active(n > 64)` is **refused by
-    name** — the total behaviour is a STRUCTURAL refusal: a lifted Program binding this primitive must have at most 64
-    requests (`n_live_t ≤ #requests` by construction), asserted where the Program is built (`assert_splits_domain`), never
-    INV and never an invented S.  Hook: the operand is the sum of the steps' INPUT-token activity
-    `LIsActive(tok_in_{r,t})`, never of `out_r[t−1]` (which over-counts the EOS-stopped request at `a_r`)."""
-    orig = splits_for_prim(num_sms)
-    p = _L_SPLITS_FOR.get(int(num_sms))
-    if p is None:
-        bot6, inv6 = enc_bot(SPLITS_BITS), inv(SPLITS_BITS)
-
-        def ev(n: int, _o=orig, _bot=bot6, _inv=inv6) -> int:
-            c = _classify((n,), (N_LIVE_BITS,))
-            if c == 2:
-                return _inv
-            if c == 1:
-                return _bot
-            if n == 0:
-                return _bot  # the specified rule: no live row, no sampling event
-            if n > SPLITS_MAX_BATCH:
-                raise ValueError(f"LSplitsFor_v1: n_live={n} > {SPLITS_MAX_BATCH}: not the split pipeline — a structural bound "
-                                 f"(≤ {SPLITS_MAX_BATCH} requests) the Program builder asserts; no S is invented")
-            return _o.evaluate(n)
-
-        p = PrimitiveDefinition(f"LSplitsForSMS{int(num_sms)}", 1, (("n_live", Value(N_LIVE_BITS + 1)),), Value(SPLITS_BITS + 1), ev,
-                                doc=l_splits_for.__doc__ or "", conformance="protocol-defined")
-        p.lifted_from = orig  # type: ignore[attr-defined]
-        p.candidate = "PAD-04"  # type: ignore[attr-defined]
-        _L_SPLITS_FOR[int(num_sms)] = _register_specified(p, "state/batching: the empty sampler batch has no event (a candidate)")
-    return p
-
-
-def assert_splits_domain(n_requests: int) -> int:
-    """The structural bound `LSplitsFor_v1` relies on: a lifted Program with `n_requests` requests has `n_live_t ≤ n_requests` at
-    every step; more than 64 requests is not the split pipeline — refused at build, by name."""
-    if not (1 <= int(n_requests) <= SPLITS_MAX_BATCH):
-        raise ValueError(f"{n_requests} requests: the split pipeline serves at most {SPLITS_MAX_BATCH} live rows per step "
-                         f"(topp_split.SPLIT_MAX_BATCH); a Program binding LSplitsFor_v1 must be built with 1..{SPLITS_MAX_BATCH} requests")
-    return int(n_requests)
-
-
 def specified_ids() -> frozenset[str]:
-    """The closed list of specified-class primitive ids materialised so far (`LSplitsForSMS<SMS>_v1` is a candidate member)."""
+    """The closed list of specified-class primitive ids materialised so far."""
     return frozenset(_SPECIFIED_IDS)
 
 
@@ -957,7 +869,7 @@ def _sources(refs: Refs) -> set[tuple[str, int]]:
     return {(space, idx) for space, idx, _ in refs}
 
 
-def _is_ordinary_node(node: Node) -> bool:
+def _is_ordinary_node(node: BodyNode) -> bool:
     """A node whose output is ordinary in every padded Program: an `Input<w>` gate (a prescribed value, produced by no body)."""
     return getattr(node.fn, "family", None) == "Input"
 
@@ -1291,7 +1203,7 @@ def _remap(r: Refs, args: Sequence[Coll], k0: int) -> Refs:
     return Explicit(tuple(items))
 
 
-def emit_lifted_node(B: Builder, node: Node, lf: Any, largs: Sequence[Coll], enable: Coll | None) -> Coll:
+def emit_lifted_node(B: Builder, node: BodyNode, lf: Any, largs: Sequence[Coll], enable: Coll | None) -> Coll:
     """Emit ONE lifted node with `enable` as the callee's last operand (B7): a `call`/`primitive` appends it; a `batch` shares it across
     the members (axis `None`); a `scan` passes it as the last `shared` argument (the lifted step's last parameter).  A callee without an
     enable parameter (`Input<w+1>`, the root-owned controller members) takes none."""
@@ -1305,7 +1217,7 @@ def emit_lifted_node(B: Builder, node: Node, lf: Any, largs: Sequence[Coll], ena
     raise ValueError(node.form)
 
 
-def lifted_callee_for(node: Node, acls: Sequence[str], node_class: str = ORDINARY) -> FunctionDefinition:
+def lifted_callee_for(node: BodyNode, acls: Sequence[str], node_class: str = ORDINARY) -> FunctionDefinition:
     """The lifted callee of `node` reading its arguments at the classes `acls` (G1): a primitive -> `with_ordinary(lifted_prim(fn), mask)`;
     a specialization -> `lift_def(fn, acls)` (a scan's carry is always lifted); an `Input<w>` gate -> itself (ordinary, A11) unless the
     body forced it lifted (`node_class`), then `Input<w+1>`."""
@@ -1329,7 +1241,7 @@ def lifted_callee_for(node: Node, acls: Sequence[str], node_class: str = ORDINAR
 
 def replay_lifted(B: Builder, body, args: Sequence[Coll], enable: Coll | Callable[[int], Coll] | None = None, *,
                   arg_classes: Sequence[str] | None = None) -> Coll:
-    """Emit `body`'s nodes into `B` with lifted callees/types.  Node `k` of the replay is node `k` of the original with the
+    """Emit `body`'s nodes into `B` with lifted callees/types.  BodyNode `k` of the replay is node `k` of the original with the
     same gate count (one lifted gate per gate, by induction), so offsets, node indices and operand runs are identical.
     `enable` (B7): the enable every replayed node receives as its last operand — one `Coll` (the call's enable: every node the call
     owns inherits it, `a_local = 1`), or a function of the ORIGINAL node index (a flat body whose segments are owned by different
@@ -2129,90 +2041,16 @@ def expected_bot_return_leaves(C: dict, cap: int, a_r: int, *, lag: int) -> int:
     return (cap - expected_served(a_r, cap, lag)) * (1 + 2 * C["NL"] * C["KVH"] * C["D"])
 
 
-# ---------------------------------------------------------------------------------------------------------
-# MIXED BATCH — the lifted fixed WORKLOAD Program: the workload Program's compose, verbatim, over lifted components
-# ---------------------------------------------------------------------------------------------------------
-
-
-_LIVE_COUNT: dict[int, PrimitiveDefinition] = {}
-
-
-def live_count_prim(R: int) -> PrimitiveDefinition:
-    """`LiveCount<R>_v1(live: Array<R, Value<1>>) → Value<7>`: the number of live rows among the `R` requests programmed for an engine step
-    (a popcount).  The UNLIFTED count; its strict lift `Lifted[LiveCount<R>_v1]` (`Array<R, Value<2>>` → `Value<8>`) is the operand of
-    `LSplitsForSMS` (a candidate).  `R ≤ 64`: the split pipeline's batch bound (`assert_splits_domain`)."""
-    R = assert_splits_domain(R)
-    p = _LIVE_COUNT.get(R)
-    if p is None:
-        p = PrimitiveDefinition(f"LiveCount{R}", 1, (("live", Array(R, Value(1))),), Value(N_LIVE_BITS), lambda *bits: sum(int(b) & 1 for b in bits),
-                                doc=live_count_prim.__doc__ or "", conformance="protocol-defined")
-        _LIVE_COUNT[R] = p
-    return p
-
-
-def live_count_hook(B: Builder, outs: Sequence[Coll], arrivals: Sequence[int], cap: int | Sequence[int], eos_set: Coll, bot: Coll, lag: int, *,
-                    num_sms: int | None = None, name: str = "S") -> tuple[list[Coll], list[Coll]]:
-    """The live-count hook as Program nodes at the WORKLOAD root (the candidate `LSplitsForSMS`'s wiring): for every engine step
-    `t` of the programmed horizon, `n_live_t = LiveCount(live_{r,t} : r programmed for t)` where `live_{r,t}` is recomputed from request
-    `r`'s committed tokens exactly as its own guard computes it — `LAG = 0`: `1` at `t = a_r`, `LStepLive(out_r[s−1], E)` for `s = t − a_r ≥ 1`;
-    `LAG = 1`: `1` at `s ∈ {0, 1}`, `LStepLive(tok_in_{r,s−1}, E)` for `s ≥ 2` with `tok_in_{r,1} = out_r[0]`, `tok_in_{r,s} = LSelect(live_{r,s},
-    out_r[s−1], ⊥)` — so `n_live_t = Σ_r LIsActive(tok_in_{r,t})` as a value of the Program, never of an observation.
-    With `num_sms` the split count `S_t = LSplitsForSMS<SMS>(n_live_t)` is appended (⊥ when no request is live: no sampler launch).
-    Returns `(n_live[t], S[t])` per engine step (`S` empty without `num_sms`).  Rows outside a request's window are not members (structural).
-    `cap` is per request (the workload Program's populations have UNEQUAL caps — its standard B2 fixture is cap 3 / cap 2): one int
-    for all or one per request; request `r` is a member of engine steps `a_r <= t < a_r + cap_r`, and `len(out_r) != cap_r` is refused by
-    name (a served-length `out_r` is not the fixed population)."""
-    check_lag(lag)
-    R = len(outs)
-    if R != len(arrivals):
-        raise ValueError(f"{R} request outputs but {len(arrivals)} arrivals")
-    caps = [int(cap)] * R if isinstance(cap, int) else [int(c) for c in cap]
-    if len(caps) != R:
-        raise ValueError(f"{R} request outputs but {len(caps)} caps: one cap per request (or one int for all)")
-    for r, (out, c) in enumerate(zip(outs, caps)):
-        if c < 1:
-            raise ValueError(f"request {r}: cap {c} < 1")
-        if out.type.leaves != c:
-            raise ValueError(f"request {r}: out has {out.type.leaves} events but its declared cap is {c}: the hook takes the FIXED population "
-                             "(cap_r events per request), never a served length")
-    assert_splits_domain(R)
-    horizon = max(a + c for a, c in zip(arrivals, caps))
-    live: list[list[Coll]] = [[] for _ in range(R)]
-    one = B.call(b1.const(2, enc_active(1, 1)), name=f"{name}/one")
-    for r, (out, a) in enumerate(zip(outs, arrivals)):
-        tok_in: Coll | None = None
-        for s in range(caps[r]):
-            if s <= lag:
-                lv = one
-            else:
-                gate = out[s - 1] if lag == 0 else tok_in
-                lv = B.call(l_step_live(len(eos_set)), gate, eos_set, name=f"{name}/live[r{r},s{s}]")
-            live[r].append(lv)
-            if lag == 1 and s >= 1:
-                tok_in = out[0] if s == 1 else B.call(l_select(32), lv, out[s - 1], bot, name=f"{name}/tok_in[r{r},s{s}]")
-    n_live, S = [], []
-    for t in range(horizon):
-        members = [live[r][t - a] for r, a in enumerate(arrivals) if 0 <= t - a < caps[r]]
-        if not members:
-            raise ValueError(f"engine step {t}: no request is programmed for it (a gap in the declared chronology)")
-        # the hook is ROOT-owned (always enabled, A9.1): the propagation lift `Lifted[LiveCount]_v1` is its total relation, no enable operand
-        n = B.call(lifted_prim_v1(live_count_prim(len(members))), coll_concat(Array(len(members), Value(2)), members), name=f"{name}/n_live[t{t}]")
-        n_live.append(n)
-        if num_sms is not None:
-            S.append(B.call(l_splits_for(num_sms), n, name=f"{name}/S[t{t}]"))
-    return n_live, S
-
-
 __all__ = ["LIFTING_VERSION", "LABEL", "enc_bot", "inv", "tag", "payload", "valid", "is_bot", "is_active", "enc_active", "in_width",
            "WORD_BITS", "LiftedLayoutError", "leaf_words", "pack_leaf", "unpack_leaf", "lifted_request", "expected_bot_return_leaves",
            "lift_request_component", "request_boundaries", "address_map_modulo_guards", "BOUNDARY_PREFIX",
            "BoundaryFailure", "check_boundary", "lift_type", "unlift_type", "lift_words", "bot_words", "lifted_prim", "lifted_prim_v1", "LIFT_VERSION",
            "ENABLE_PARAM", "ENABLE_T", "has_enable", "enable_one", "emit_lifted_node", "l_enable", "enable_gate_count", "state_select_count",
            "register_hand_lift", "hand_lift_of", "l_select",
-           "l_is_active", "l_bot", "l_gather_row", "l_gather_row_of", "registered_oor_extension", "l_step_live", "splits_for_prim", "l_splits_for", "assert_splits_domain", "SPLITS_MAX_BATCH", "N_LIVE_BITS", "SPLITS_BITS", "specified_ids", "lift_callee", "lift_composite", "lift_def",
+           "l_is_active", "l_bot", "l_gather_row", "l_gather_row_of", "registered_oor_extension", "l_step_live", "specified_ids", "lift_callee", "lift_composite", "lift_def",
            "replay_lifted", "replay_body", "as_program", "Prefill", "StepBody", "LServe", "lserve", "lserve_validate", "GUARD_IN", "LAGS_IMPLEMENTED", "check_lag", "guard_gate_count", "expected_served", "GUARDS_IMPLEMENTED", "ServedPrefixFailure",
            "activity_prefix", "served_count",
            "check_served_prefix", "assign_inactive", "W_MAX", "W_MAX_LIFTED", "W_MAX_LIFTED_STATUS", "LIFTED_RULES_VERSION", "PADDED_RULES_VERSION", "USE_KIND_LIFTED",
            "lifted_width_summary", "lifted_width_admissibility", "n_out_structural_bound", "n_out_histogram", "N_OUT_HISTOGRAM_MAX_SETS", "width_summary_a44", "WIDTH_SUMMARY_FIELDS",
            "word_class", "commit_leaf",
-           "live_count_prim", "live_count_hook", "DP_PAD_02"]
+           "DP_PAD_02"]
