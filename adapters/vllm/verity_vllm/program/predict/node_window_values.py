@@ -580,13 +580,13 @@ class Check:
         fn, lay = self.fns[tid], self.lay[tid]
         n = rows[0].shape[0] if rows else 0
         params = fn.signature()[0]
-        leaves = [IF.port_leaves(r, ty) for r, (_n, ty) in zip(rows, params)]
+        leaves = [IF.leaves_of_rows(r, ty) for r, (_n, ty) in zip(rows, params)]
         got = np.asarray(evaluate_batch(fn, *leaves)).reshape(n, -1)
         ret = fn.signature()[1]
         fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
         out, at = {}, 0
         for (name, words), ty in zip(lay.outs, fields):
-            out[name] = IF.port_rows(got[:, at:at + ty.leaves], ty, words)
+            out[name] = IF.rows_of_leaves(got[:, at:at + ty.leaves], ty, words)
             at += ty.leaves
         return out
 
