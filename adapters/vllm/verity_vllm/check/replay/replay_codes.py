@@ -82,7 +82,8 @@ def not_evaluable_codes(population: dict) -> dict[str, dict]:
         return stamped
     domain = {str(v) for v in NOT_YET.values()}
     out = {}
-    for why in map(str, population.get("not_evaluable") or {}):
+    reasons = population.get("not_evaluable")                                   # reason text -> count; a population that states none has none to code
+    for why in map(str, reasons if reasons else {}):
         cls = why_class(why)
         fam = why[len(_NO_EVALUATOR_PREFIX):].strip() if cls == "no-evaluator" and why.startswith(_NO_EVALUATOR_PREFIX) else None
         out[why] = reason_code(cls, fam or None, domain=why in domain, tags=tuple(t for t in ("MAN-06f", "MAN-06g") if t in why))

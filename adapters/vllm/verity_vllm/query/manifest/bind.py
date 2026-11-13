@@ -155,8 +155,10 @@ class Binder:
         #: engine step -> (op_path, member, invocation) -> {request: the first row of the runtime tensor its Values are (`runtime_rows`)}
         self.offsets: dict[int, dict[tuple[str, str, int], dict[str, int]]] = defaultdict(dict)
         for row in rows:
+            r = {**row}                                        # the row first: one that is no mapping is refused here, as a `TypeError`
             nested = row.get("identity")                       # a row may hold its key's fields under `identity`: they read as its own
-            r = {**row, **nested} if nested else {**row}
+            if nested:
+                r = {**r, **nested}
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
                 continue
             key = (str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0)))

@@ -7,6 +7,7 @@ import json
 import math
 import time
 import types
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import numpy as np
@@ -16,16 +17,16 @@ import methodology
 from gates import Gates
 from matmul import MM, Run, run_chain
 from model import Config, Weights, check_reference, head, make_layer, rotary
-from spec import HEAD
+from spec import HEAD, Arm
 from steps import FIRST, GROUP
 
 
-def stream_key(arm, seed: int) -> str:
+def stream_key(arm: Arm, seed: int) -> str:
     return f"{arm.name}/s{seed}"
 
 
-def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list, seeds, calib_ids: np.ndarray | None,
-             device="cuda", log=print, hf_check: bool = True) -> dict:
+def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list[Arm], seeds: Iterable[int], calib_ids: np.ndarray | None,
+             device: torch.device | str = "cuda", log: Callable[[str], None] = print, hf_check: bool = True) -> dict:
     """NLL of every scored token of the windows `ids` (n x T, global ids `window_ids`) under the bf16 reference and
     each (arm, seed); the gates' log; per-layer divergence from the reference."""
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -89,7 +90,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                         H[key] = H[key] + h if key in H else h
 
                     for arm in gptq_arms:
-                        def collect_h(name, x, arm=arm):
+                        def collect_h(name, x, arm=arm, layer=layer, cache=cache, calib=calib):
                             if name == "keys":
                                 return
                             run = Run(arm, 0, -1, layer, gates, cache, rotations, calib, hessian=hess)
@@ -98,7 +99,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                                 run_chain(steps, MM("linear", name, run, x, layer.weight(name), maps=(lambda t: t.float(),)))
                         for i in range(0, len(cal_in), B):
                             layer.forward(cal_in[i:i + B], cos_c, sin_c, collect=collect_h)
-                    del cal_in
+                    del cal_in, collect_h  # the collector's defaults hold the layer, its cache and its calibration
                     ntok = cal.shape[0] * cal.shape[1]
                     calib["H"] = {k: v * (2 / ntok) for k, v in H.items()}
             new_ref = torch.empty_like(ref)
@@ -114,6 +115,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                     h[j:j + 1] = layer.forward(h[j:j + 1], cos, sin, run)
                     attn_err[k][0] += run.attn_err[0]
                     attn_err[k][1] += run.attn_err[1]
+                    del run  # a Run holds the layer, its cache and its calibration
                 d = (h.float() - new_ref.float()).norm()
                 diverge[k].append(float(d / new_ref.float().norm().clamp(min=1e-30)))
             ref = new_ref
@@ -137,7 +139,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
             if not steps:
                 return None
             return lambda x, c: run_chain(steps, MM("linear", HEAD, run, x.float(), head_w, maps=(lambda t: t.float(),),
-                                                    extra={"weight64": head_w.double}, draws=[2 * c]))
+                                                    extra={"weight64": head_w.double}, coin_calls=[2 * c]))
 
         nll = {}
         for k, h in [("bf16/s0", ref)] + list(streams.items()):

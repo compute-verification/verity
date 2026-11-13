@@ -4,12 +4,15 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), its
   records stamped with the wall clock and written by a thread of its own to ``step_trace.PID.jsonl``;
+- ``ids``: `ServedIds`, each request's prompt ids and the ids it was served, a line a request when it finishes, written
+  by a thread of its own to ``ids.PID.jsonl``: what a replay of a pass is given and compared with where the client that
+  sent it keeps neither (vLLM's own);
 - ``release_order``: `ReleaseGate`, the requests added to the scheduler in the certifier's release order
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the certifier's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
-- ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
+- ``boundary_rows`` (object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``, ``verdicts``): the
   two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), each window's finished
   requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
   directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's
@@ -178,6 +181,34 @@ class TokenCommit:
             self.close()
         self.jobs.put(None)
         self.thread.join()
+
+
+class ServedIds:
+    """Each request's prompt ids and the ids the engine core sampled for it, in the order it saw them: ``sink`` gets a
+    request's line (``id``, its engine id, first; ``prompt_ids``; ``output_ids``) with the output that finishes it. A
+    request finished from outside the scheduler (aborted) has no line, and its ids are dropped (`dropped`)."""
+
+    def __init__(self, sink: Callable[[dict], None]) -> None:
+        self.sink = sink
+        self.open: dict[str, tuple[list[int], list[int]]] = {}
+
+    def prompt(self, request: Any) -> None:
+        self.open.setdefault(request.request_id, (list(request.prompt_token_ids or ()), []))
+
+    def sampled(self, outputs: Any) -> None:
+        for eco in (outputs or {}).values():
+            for o in getattr(eco, "outputs", None) or ():
+                kept = self.open.get(o.request_id)
+                if kept is None:
+                    continue
+                kept[1].extend(o.new_token_ids or ())
+                if o.finish_reason is not None:
+                    del self.open[o.request_id]
+                    self.sink({"id": o.request_id, "prompt_ids": kept[0], "output_ids": kept[1]})
+
+    def dropped(self, requests: Iterable[Any]) -> None:
+        for r in requests or ():
+            self.open.pop(r.request_id, None)
 
 
 def rows_root(window: int, data: bytes) -> bytes:
@@ -596,8 +627,9 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
-    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit and the
-    boundary commitment, then the release gate (outside them, so that they see a request when the gate adds it)."""
+    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the served ids, the tokens'
+    commit and the boundary commitment, then the release gate (outside them, so that they see a request when the gate
+    adds it)."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -608,6 +640,33 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         trace = StepTrace(out / f"step_trace.{pid}.jsonl", clock=time.time, writer=True).install(sched)
         done.append(trace)
     hooks = Hooks(tag="serve-tax")
+    if cfg.get("ids"):
+        ids = ServedIds(_lines_behind(out / f"ids.{pid}.jsonl"))
+
+        def keep_prompt(orig):
+            def wrapped(request, *a, **kw):
+                ids.prompt(request)
+                return orig(request, *a, **kw)
+            return wrapped
+
+        def keep_sampled(orig):
+            def wrapped(so, mro, *a, **kw):
+                outs = orig(so, mro, *a, **kw)
+                ids.sampled(outs)
+                return outs
+            return wrapped
+
+        def drop_aborted(orig):
+            def wrapped(request_ids, finished_status, *a, **kw):
+                gone = orig(request_ids, finished_status, *a, **kw)
+                ids.dropped(gone)
+                return gone
+            return wrapped
+
+        hooks.wrap(sched, "add_request", keep_prompt)
+        hooks.wrap(sched, "update_from_output", keep_sampled)
+        hooks.wrap(sched, "finish_requests", drop_aborted)
+        done.append(ids)
     if cfg.get("tokens"):
         tc = TokenCommit(float(cfg.get("window_s", 600)), _lines(out / f"tokens.{pid}.jsonl"))
 
