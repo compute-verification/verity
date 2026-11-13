@@ -154128,3 +154128,70 @@ Still out [run, 17:37Z]: #9441's `42de` and #9555's `1e2c` are in their first au
 - My VM was replaced at about 17:25Z; worktrees and the pen are back, nothing lost (all pushed).
 - One premise moved, [read]: `scope_wired` takes `TwoHolds A.h` (given data; `couplesAt_wired` already took it) where it read it off `h.heldOfAt`.
 - I wait on the four runs; full entry when `joinedOfLaw` compiles, by 19:30Z in any case.
+
+## ASSEMBLY, Fri 13 Nov 17:39Z: THE CARRIED JOIN DID NOT COMPILE, AND IS MENDED BY ONE COMMIT OF MINE: the join's tip is `20936c91d40bd5bf4143d22770786677f5243bb8`, the carried head `daa91ec75a3e` plus that commit (5 files, 12 lines); beyond the carried `a61b7adf0d83` it holds MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`, the tool's pin and the mend; no whole build is back yet
+
+The carry's `clean` says the moves crossed. It does not say the tree builds. This is why, and what I did.
+
+**1. What failed at `daa91ec75a3e`** [run]
+
+| Run | What | Result |
+|---|---|---|
+| `r20261113-171620-df47` | the accept test (`verity-core-composition`, `test_sampled_two_difftest.py`) | **rc 1**: 1 failed, 2 passed, 63 errors, all one build error |
+| `r20261113-171810-48a0` | `sampled_two_small.sh` | **rc 7**, the same build error |
+| `r20261113-171825-9788` | `two_stage_small.sh` | rc 0, `SMALL` all eight true |
+| `r20261113-171724-5183` | the adapter's engine and interior tests, `serve_tax`'s replay | rc 0: 1,268 passed, 150 skipped; 21 passed |
+| `r20261113-171338-d51a` | the records run | **cancelled by me at 17:34Z**, 20 minutes in, before its first audit ended |
+
+The error, in the log of `df47` (read on its node by `r20261113-172220-aa2f`) and of `48a0`:
+
+`VStarRecursive/SampledTwo.lean:412:23: Unknown identifier 'Challenger.trustedSessionOf'`
+
+**2. The cause** [git, read]
+
+- The chain renames some declarations **only in a named list of files**: a map's `[[words_in]]` entry, where the same word names something else elsewhere. The list is the files that named the declaration on `main`.
+- The join's own files are in no such list. So the rerun of `rename.py` left them naming declarations that no longer exist.
+- Three declarations, all of `tools/move/period_proofs_map.toml` and `period_proofs_map_2.toml`:
+
+| Old name | Name on `4ae17f7eafd7` | Where the join named it |
+|---|---|---|
+| `Spot.Challenger.trustedSessionOf` | `trustedChallengePhaseOf` | `VStarRecursive/SampledTwo.lean` (`interiorUnshown` and its docstring); `SampledTwo/CutRoots.lean` (5 lines), `StageAlone.lean`, `Steps.lean` |
+| `Properties.Challenger.ChallengePhase.trustedSessionOf_ok` | `trustedChallengePhaseOf_ok` | `SampledTwo/CutOrder.lean` (`lines_signed`) |
+| `Properties.Challenger.Window.window_opens` | `run_opens` | two docstrings of `CutOrder.lean` |
+
+- `Verity.Sampled.trustedSessionOf_ok` and `sessionNamed_ok` keep their names on `main`, so the join's ten uses of them stand.
+- FRAME's grep is over old paths and modules. It cannot see this: the word is a declaration's name.
+
+**3. How far it goes** [run on this machine; a scan of text, not a build]
+
+- I took every `[[words_in]]` word of the seven `rename.py` maps the carry reran that can name a declaration, and searched the Lean lines the carried join adds over `4ae17f7eafd7` for it as a whole word: 123 lines. The other scoped words are lower-case prose, each replaced by a phrase.
+- I read each. All but the 12 above still resolve: `Flock.Draw`, `Draw.Law`, `Properties.Challenger.Window`'s other lemmas and `Proofs.Pouw.Period.Sort` exist under those names at the carried head.
+- No declaration named `trustedSessionOf` or `window_opens` is left anywhere in the tree, so `d51a` was sure to fail in `security/Proofs`. That is why I cancelled it: it held cpu-14's Lean slot.
+- **What the scan cannot show**: a name the chain changed by hand and not by a map. Only the build shows that, and it is out (4).
+
+**4. The mend, and what is out at it** [git, run]
+
+- `20936c91d40b`, on top of `daa91ec75a3e`, pushed 17:33Z by a plain push. It changes those 12 lines and nothing else. By the rule you gave for a failing run: the mend is a commit on top.
+- On this machine at it: `pins.py --stale` silent, `lock_roots.py --check` clean, `dup_names.py` the same 17, `public_boundary.py` the same 7 edges, the five root test files 84 passed.
+
+| Run | Node | What | Since |
+|---|---|---|---|
+| `r20261113-173448-4205` | cpu-14 | the records run, `--records security/Proofs --update` | 17:35Z |
+| `r20261113-173602-46e8` | cpu-2 | the accept test | 17:36Z |
+| `r20261113-173632-0332` | cpu-3 | `sampled_two_small.sh` | 17:36Z |
+| `r20261113-171656-0e89` | cpu-6 | the whole `benchmarks/one_stage` suite, **at the unmended head**; I rerun what it fails on the build | 17:17Z |
+
+- The records run is on cpu-14 because that node keeps `d51a`'s 20 minutes of build. The node was cold for the new layout, so I expect it back about 18:30Z, by FRAME's fifty minutes for a whole run. That hour is a guess.
+
+**5. What it means for the other lines** [read]
+
+- **Every line cut from the join holds these five files unmended until it holds `20936c91d40b`.** A try at such a line's carried head that builds `sampled-two`, or `SampledTwo`'s `CutRoots`, `StageAlone`, `Steps` or `CutOrder`, fails on the same names. A merge of the join's tip cures it with no conflict unless the line edits those lines.
+- The own files of the three lines I merge next name none of the scoped words, at their old heads: MESSAGES's replay (3 Lean files), SESSIONOF2's params (3), GATHER (9). I search each again at its carried head before I merge it.
+- I have not looked at HELDOF's, TWOLEG's, MEMBERS's, WINDOWAT's or ADDRROW2's own files.
+- The five carried pull requests are not touched by this as far as FRAME's table 3 shows: `security/Proofs` passes at #9681's and #9713's carried heads.
+- For FRAME: a `clean` carry of a line that adds Lean is not known to build. The check that would have caught this is the search in 3, or a build of the line's own files.
+
+**6. Next**
+
+- My entry on the whole build when `4205` is back, as you ordered. Before it, one line when `46e8` and `0332` are back, since they say whether the verifier's code builds.
+- Then your 16:40Z order, each from its carried head as FRAME names it. None of the three is named yet: GATHER stopped at a conflict (FRAME, 17:17Z), and MESSAGES's and SESSIONOF2's are in FRAME's dry run `627b`.
