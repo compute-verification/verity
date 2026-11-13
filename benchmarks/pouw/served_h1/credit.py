@@ -31,7 +31,7 @@ sample is uniform over every unit position of the window, dead ones included, ne
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 

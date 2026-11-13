@@ -25,9 +25,10 @@ from __future__ import annotations
 
 import copy
 import json
+from collections.abc import Callable, Mapping
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import verity_difftest as D
 

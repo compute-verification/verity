@@ -30,10 +30,11 @@ import hashlib
 import json
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import asdict
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import verity_difftest as D
 from replay_core import store_runs
