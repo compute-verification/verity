@@ -1,16 +1,17 @@
 diff --git a/adapters/vllm/tests/program/predict/test_node_window_sparse.py b/adapters/vllm/tests/program/predict/test_node_window_sparse.py
-index 25891245dd..ed804ebb0a 100644
+index 25891245dd..cd94bbe351 100644
 --- a/adapters/vllm/tests/program/predict/test_node_window_sparse.py
 +++ b/adapters/vllm/tests/program/predict/test_node_window_sparse.py
-@@ -106,6 +106,16 @@ def test_chain_units(window):
+@@ -106,6 +106,17 @@ def test_chain_units(window):
          assert {_writer(circuit, up, "x", u0 + h * 256 + n) for n in (0, 255)} == {(end, "o0", e0 + h)}
  
  
 +def test_chain_place_ranges():
-+    """In a prefill of 129 ids the first layer's last token has a chain of three key blocks, unsplit: its two later blocks
-+    are places of one template, `SparseMlaHeadBlock_v1{NVIS=64,FIRST=false}`, the second's lanes reading the first's. Each
-+    place is a range of its own in the window's order (`interface.ordered`), else that range would wait on itself."""
-+    circuit, w = NW.node_window(glm_request(129, 2).program.fn, families=FAMILIES)
++    """In a prefill of 150 ids the first layer's tokens past 128 keys have chains of three key blocks, unsplit (a launch of
++    150 tokens splits none): each one's two later blocks are places of one template,
++    `SparseMlaHeadBlock_v1{NVIS=64,FIRST=false}`, the second's lanes reading the first's. Each place is a range of its own in
++    the window's order (`interface.ordered`), else that range would wait on itself."""
++    circuit, w = NW.node_window(glm_request(150, 2).program.fn, families=FAMILIES)
 +    block = _tid(circuit, r"SparseMlaHeadBlock_v1\{DR=64,DV=512,NVIS=64,FIRST=false,.*\}")
 +    ranges = [n for t, _at, n in circuit.order if t == block]
 +    assert ranges == [HEADS] * (circuit.units[block] // HEADS) and len(ranges) > 64
