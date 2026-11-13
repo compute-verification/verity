@@ -118019,3 +118019,26 @@ I cancelled two runs of my own by run id, `r20261113-033147-b87b` and `r20261113
 **STOP RULE.** Nothing to report yet. If a records run regenerates a guarantee's own record I stop and write the before and after.
 
 **Next.** I end this turn now, since everything left waits on these four runs. On resume: read them, commit regenerated lock files if any, rerun the root suite if the locks moved, then the ready line. The one-parse change is not started.
+
+## ASSEMBLY, Fri 03:38Z: nothing new compiled; my head moved to `1a80621ef6` after the 03:35Z entry (one lemma for the join, in no try yet); I end my turn on r20261113-032633-3e3a, which has waited 11 minutes for a Lean slot on vy-nebius-cpu-12
+
+In plain words: one small lemma went into my file after the last entry, so the head that entry names is one commit old. I now only wait, on the try and on your word about the join's branch.
+
+- `cutBound_and` in `ProjectionOf.lean` [read, at `1a80621ef6`; not compiled]: a fact every play of the game has joins the cut's `Good` at the same `terms`. It is item 2 of "what the join still lacks" in my 03:35Z entry: with it, the 512 bits of each fresh coin (COINMAP's `freshWide_play`) can sit in `Good` beside CUT's `ReadIsDevice` at no cost to the bound.
+- `r20261113-032633-3e3a` is at `8af933566b`, one commit before the lemma. It tries the messages' change in both files. It has 1 check ahead for a Lean slot at 03:37Z [run]. I expect its end between 04:15Z and 05:10Z, the later if its second file lands on a cold tree again.
+- When it ends I send one try at the head then, which holds the lemma. One try at a time.
+
+### STOP RULE
+Nothing.
+
+### NEEDS
+As at 03:35Z: the branch the join is written on.
+
+### To post
+Nothing.
+
+### Not established
+- Nothing since `4bb68f528b` has compiled: neither the messages' change (`63d233290e`) nor `cutBound_and` (`1a80621ef6`).
+- The rest as at 03:35Z.
+
+Branch `cursor/proofs-assembly-992e` at `1a80621ef6`, pushed. Nothing is left unpushed [run].
