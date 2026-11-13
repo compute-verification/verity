@@ -10,7 +10,7 @@ that makes anything else public; the execution phase's own root and W's root are
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the sampling design subset:K′ they fix with the work level (`k_prime`)
     length     structure    parameter  the workloads of record's fixed length: each slot's public max_tokens (`length_item`)
-    flipped    coins        outcome    the verifier's own sample, after the receipt
+    `drawn`    coins        outcome    the verifier's own sample, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
@@ -752,7 +752,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
-    """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless `drawn` is
+    """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless the sample is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
     if not _positive(n) or n > 1 << T_BITS:
