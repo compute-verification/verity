@@ -111795,3 +111795,37 @@ An incorrect inner block is caught only if its outer block is drawn and it is th
 - How many classes Friday's 8 requests make, and what a cell holds for a request that stops early.
 - The exact worst case of ε below 8 of 8: my figure is a floor from one shape of placement.
 - The second try on a model's logits.
+
+## STOPDRIVER, Fri 13 Nov 01:13Z: Lean accepts all four served-size sessions: at V = 154,880 the chunk and the combine prove on one card and verify; I stop to wait on two suites runs (about 01:50Z and 02:05Z) and wake myself at 02:00Z
+
+In plain words: at the real vocabulary size, one statement of each of the two kinds the token-selection audit proves was proved on a single GPU, and the Lean verifier then checked every one of those proofs and accepted it. That was the one size no card had seen before Friday's second try. Each proof covers 2 of 4 inner blocks. What is left tonight is two test runs, one for each branch, which are both running.
+
+Mailbox read to its last heading, "Coordinator, Fri 13 Nov 00:30Z: #9458 conflicts with main: merge and give a new ready line".
+
+**The one entry you asked for, at V = 154,880** [run: staging `r20261112-231149-d852`, card job `r20261112-234712-4ed2`, Lean `r20261113-002435-08a7`, all vy-nebius-2, all done with exit 0]:
+
+| statement | `k_log` | card's peak memory | prover's own timer, first and second session | ZK server's verifier | Lean (`flock-verify`) |
+|---|---|---|---|---|---|
+| chunk `GreedyChunk_v2{N=7744,OFF=0}` | 24 | 2,619 MiB | 2.247 s and 0.152 s | accepted, accepted | accepted in 26.5 s, accepted in 26.2 s |
+| combine `GreedyCombine_v2{V=154880,N=7744}` | 25 | 4,381 MiB | 2.502 s and 0.413 s | accepted, accepted | accepted in 26.8 s, accepted in 27.1 s |
+
+- [run] Lean's line: `LEAN {"chunk": [true, true], "combine": [true, true]}`, each verdict `of_record` true. The job builds `flock-verify` in its own clone of the cards branch at `2c5806b33e8c` and calls it as the audit does (`a0.lean_verify`, `--zk`, with the staged partition, program and `--registered` file of each statement) on each session's record and proofs as the card job kept them. The samples it verified are the card job's verifier's: proof blocks [2, 3] and [0, 3] of 4 for the chunk, [2, 3] and [0, 1] for the combine.
+- [run] The first session's timer holds about 1.8 s of setup (`h.setup` 1.83 s and 1.87 s); the second session has none. One RTX PRO 6000 Blackwell Server Edition; card memory read with `nvidia-smi` about every 0.3 s.
+- [run] The same Lean job on the dry run's sessions (V = 2,560, `r20261112-233759-ce6a`) accepted all four, as my 00:55Z entry says.
+- [derived] So no refusal of the device prover stops either statement at the served size, and what a card proves there the Lean verifier accepts.
+
+**Not established by this.** A ratio against CPUs: the CPU figures I have are another job's and another timer's. Card memory with more than 2 sampled proof blocks a session. The driver's own `second` command on a card at this size: these four sessions are the kernels lane's job (`prove_time.sh`) on the audit's staged statements, and the driver on a card has run only at V = 2,560 (20 of 20, three runs). Lean's 26 to 27 s a session is one session at a time on a busy node, and is no figure of the verifier's cost.
+
+**#9458** at `049c5875989c` (unchanged since my 00:55Z entry):
+- [run] Its body is replaced at 01:04Z (`research queue edit`): it says the head holds `main` merged twice with the one conflict resolved, names the rewording, and no longer says the suites pass at this head. [run] `git merge-tree` of this head onto #9375's head `34c5cbb3705c`: exit 0, no conflict, so that note in the body stays true.
+- [run] `r20261113-005103-99bb` (its quick suites): took a place at 01:09:06Z after 17 minutes 39 seconds in line, so I did not move it to cpu-11, whose line was 6 long at 00:57Z. 5 suites passed and none failed at 01:12Z. [guess] It ends about 02:05Z.
+
+**Cards branch** at `2c5806b33e8c` (unchanged): [run] `r20261112-234519-8cc3` took a place at 00:57:59Z after 72 minutes in line; 45 suites passed and none failed at 01:12Z. [derived] `research` will be red in it for the node's hold file (the two tests of my 00:40Z entry), and I will name that in the ready line. [guess] It ends about 01:50Z.
+
+**Machines and waits, as you asked** [run: each run's `slot.json`]: all on vy-nebius-2, nothing sent elsewhere. `ce6a` waited 68 minutes, `8cc3` 72, `08a7` 42, `99bb` 18. Memory, not places, held the line from about 00:55Z: free places stood blocked on what running runs had reserved.
+
+**The second build** (the read across a tie's streams; first entry due Fri 22:00Z): not started beyond three facts, kept in my note `proofs/20261113T0105Z-report-stopdriver`: [run] the revert of the cut (`99ff4197a4`) applies on `main` at `4352bffdc16b` with no conflict, 222 lines in four files; [read: Linear] network's response tie verifier is not written (Backlog, no worker, dated 19 Nov), so there is nothing of it to read yet; [read] #9378 is open and unmarked at `a852289e494b`, two commits above the head I read on Thursday. I take it up after the two ready lines.
+
+**I end this turn now**, as your rule says, with a one-off timer for 02:00Z that carries the branches, heads and run ids. On waking: `8cc3`'s verdict and the cards branch's ready line; `99bb`'s verdict, the body's last line and #9458's ready line; then the second build.
+
+**Pushed.** `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8cb4db0359554bd0e3903d2dac6d9d`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Unpushed: nothing. The job files are in the runs' `inputs/`, not in the tree.
