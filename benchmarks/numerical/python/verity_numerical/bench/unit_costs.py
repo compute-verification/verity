@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The sample is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.protocols.pouw.prover.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.protocols.accounting.pouw.prover.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -77,7 +77,7 @@ from verity.circuits.cut import separable
 from verity.circuits.evaluation.reference import resolve, signature_of
 from verity.circuits.ops.boolean import attention as AT
 from verity.definitions.registry import sampling_boolean as SB
-from verity.protocols.pouw.prover.circuit.plan import record_k
+from verity.protocols.accounting.pouw.prover.circuit.plan import record_k
 from verity_flock import ir_lower, lowerings
 from verity_flock import subcircuit_templates as TM
 

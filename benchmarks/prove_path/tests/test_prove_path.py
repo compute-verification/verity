@@ -47,8 +47,8 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import interface as IF, rows as CS
 from verity_difftest import settings as opt
@@ -1668,7 +1668,7 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
     refused by name."""
     from verity.circuits.defs import bind
     from verity.circuits.ops import gemm as G
-    from verity.protocols.spot.verifier import service as S
+    from verity.protocols.proofs.spot.verifier import service as S
 
     small, large = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
     circuit = IF.Circuit("test", ((small, 3), (large, 37)))

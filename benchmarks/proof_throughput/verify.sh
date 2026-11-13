@@ -10,7 +10,7 @@
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
 #      JOBS=1 (sessions verified at once: more share the node's memory bandwidth, so the timings are one session's alone
 #      only at 1)
-#      PT_WORK=/workspace/cache/proof-throughput (the Lean build, keyed by verity/protocols/flock/verifier's files, and the venv;
+#      PT_WORK=/workspace/cache/proof-throughput (the Lean build, keyed by verity/protocols/proofs/flock/verifier's files, and the venv;
 #      the CPU nodes' /workspace is root's, its cache/ the research user's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
@@ -25,19 +25,19 @@ S=$(mktemp -d "$W/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 
-# the Lean verifier, built once per tree of verity/protocols/flock/verifier and the packages it requires by path (as
+# the Lean verifier, built once per tree of verity/protocols/proofs/flock/verifier and the packages it requires by path (as
 # benchmarks/pouw/hidden_zk/job.sh builds it)
-KEY=$(python3 verity/protocols/flock/prover/pod/lake_closure.py key verity/protocols/flock/verifier)
+KEY=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
 L=$W/lean-$KEY
 (
   exec 8>"$W/lean.lock"; flock 8
   if [ ! -x "$L/.lake/build/bin/flock-verify" ]; then
-    rm -rf "$L.tmp" && P=$(python3 verity/protocols/flock/prover/pod/lake_closure.py copy verity/protocols/flock/verifier "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
+    rm -rf "$L.tmp" && P=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
       && (cd "$P" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
   fi
 )
 LEAN=$L/.lake/build/bin/flock-verify
-. "$REPO/verity/protocols/spot/verifier/one_stage/verifier_env.sh"
+. "$REPO/verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
 [ -x "$LEAN" ] || { tail -20 "$O/lake-build.log"; log "Lean build failed"; exit 1; }
 sha256sum "$LEAN" | cut -d' ' -f1 > "$O/lean.sha256"; echo "$KEY" > "$O/lean.key"
 PYBIN=$W/py/bin/python3
@@ -45,7 +45,7 @@ if [ ! -x "$PYBIN" ]; then
   UV=$(command -v uv || echo "$HOME/.local/bin/uv")
   (exec 8>"$W/venv.lock"; flock 8; [ -x "$PYBIN" ] || { "$UV" venv -q --python 3.12 "$W/py" && "$UV" pip install -q --python "$PYBIN" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 [ "${BUILD_ONLY:-0}" = 1 ] && { log "BUILD_ONLY: $LEAN ($(cat "$O/lean.sha256"))"; exit 0; }
 
 log "fetching $BUNDLE"

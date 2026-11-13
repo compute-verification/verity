@@ -16,7 +16,7 @@ import pytest
 from verity import config as K
 from verity.protocol import Channel
 from verity.channel import Refused
-from verity.protocols.spot.verifier.service import Law
+from verity.protocols.proofs.spot.verifier.service import Law
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
