@@ -16,7 +16,8 @@ open only at their own files' places (`OpensOwn`). This module proves `OpensOwn`
   position is a `Hash.RowLeaf` opening at the place the committed files register for the gate
   (`Commit.opens_rowLeaf`, `Commit.placeOfRead_eq`), of every value of the gate's one bit.
 * **A member** (`opensOwn_of_ready`): a member whose files the verifier checked (`MemberV5.Checked`) and whose
-  commitment is ready for its openings opens only at its own files' places.
+  commitment is ready for its openings opens only at its own files' places. Its files' circuit is its parsed
+  circuit file's (`checked_circuit`), of one bit a gate.
 * **A window** (`MembersSetUp.opensOwn`, `MembersSetUp.opensWith`): at a window the verifier sets up, every member's
   files pass the files check, so each member of Flock's window opens only at its own files' places and the
   vocabulary's openings hold wherever each member's deployed commitment opens, where the vocabulary places each gate
@@ -60,6 +61,11 @@ theorem opensPlace_of_ready {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll
   rw [hk, Nat.add_zero, hrow]
   exact congrArg some hv.symm
 
+/-- **A checked member's committed files' circuit is its parsed circuit file's**, at its population. -/
+theorem checked_circuit {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) (hc : m.Checked) :
+    m.fileRead.circuit = Flock.Bridge.circuitOf m.D m.hU m.n :=
+  Flock.Bridge.circuitOfFile_eq hc.parsed
+
 /-- **A checked member whose commitment is ready for its openings opens only at its own files' places**: its files
 parse to its descriptor and load, over no public input port, to its public file, of its population
 (`MemberV5.Checked`), so an opening its deployed commitment accepts is one at the place those files register
@@ -69,10 +75,8 @@ theorem opensOwn_of_ready {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) (hc : m.
   intro hN g b dg _ hop v hv
   obtain ⟨-, pubO, hO, hnO⟩ := Flock.Bridge.parse_of_parsedOf hc.parsed
   have hn : m.pub.n = m.n := (Flock.Bridge.loadPublic_inOut m.hpub hO).1.symm.trans hnO
-  have hcirc : m.fileRead.circuit = Flock.Bridge.circuitOf m.D m.hU m.n :=
-    Flock.Bridge.circuitOfFile_eq hc.parsed
   have hw : m.fileRead.circuit.w g = 1 :=
-    w_ofAudit (hcirc.trans (Flock.Bridge.circuitOf_eq m.D m.hU m.n)) g
+    w_ofAudit ((checked_circuit m hc).trans (Flock.Bridge.circuitOf_eq m.D m.hU m.n)) g
   exact opensPlace_of_ready (r := m.fileRead) hc.noPublic hr m.hD m.hpub hn hN g hw hop hv
 
 /-- **A member whose files pass has a commitment ready for its openings**, at rows of the `sha512/row/v2` or
