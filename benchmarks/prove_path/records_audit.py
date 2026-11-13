@@ -984,7 +984,8 @@ def audit(a: argparse.Namespace) -> int:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
                          more, rank=0, registered=reads or None, ports=a.ports,
-                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None)
+                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None,
+                         session=finisher)
     finally:
         a.coins.skip(0)
         finisher.join()

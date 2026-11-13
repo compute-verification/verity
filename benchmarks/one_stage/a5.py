@@ -762,7 +762,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
           ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None,
-          history: Callable[[dict[str, bytes]], dict | None] | None = None) -> tuple[dict, bool]:
+          history: Callable[[dict[str, bytes]], dict | None] | None = None,
+          session: threading.Thread | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -780,7 +781,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the
     verifier's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
     registration's check holds the window's registered roots before the sample, and the stream's registrations for its run
-    of record; None for a window with none."""
+    of record; None for a window with none. ``session``: the thread of the challenger session the audit samples on
+    (`a5_coins.start`'s, which the caller holds), ended before a negative's worker is forked (`session_ended`); None
+    where the caller hands none, and its thread is then one more the workers' fork refuses while it lives."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     out.mkdir(parents=True, exist_ok=True)
@@ -1159,7 +1162,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             summary.setdefault("challengers", {})[f"m{mm['k']}"] = got["challenger"]
     coin_neg: list[Negative] = []
     workers = NegativeWorkers(getattr(a, "negative_workers", 1), audit_memory(a, available_memory), available_memory,
-                              refused=functools.partial(not_forked, out, summary))
+                              refused=functools.partial(not_forked, out, summary),
+                              before=functools.partial(session_ended, a.coins, session))
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
@@ -1734,6 +1738,18 @@ def threads_alive() -> dict[str, Any]:
     return {"python": [t.name for t in threading.enumerate()], "os": len(os.listdir("/proc/self/task"))}
 
 
+def session_ended(coins: Any, session: threading.Thread | None) -> None:
+    """The audit's own challenger session has ended, thread and all, before a negative's worker is forked: its evidence
+    is published (`a5_coins.Draws.evidence`: the session closed and its record read, the last thing ``session``, the
+    thread `a5_coins.start` gave the audit's caller, does), and the thread is joined. So the workers' fork reads no
+    thread of an honest audit's own session and refuses none for it; any other thread it still refuses
+    (`NegativeWorkers.run`). Nothing to wait for off a challenger's coins or with no thread handed in."""
+    if coins is None or session is None:
+        return
+    coins.evidence()
+    session.join()
+
+
 def not_forked(out: Path, summary: dict, timing: dict[str, Any]) -> None:
     """The result of an audit whose negatives' workers were refused their fork (`NegativeWorkers.run`): its summary so
     far, written with the refusal and the workers' ``timing``, the threads read at the fork among it."""
@@ -1805,16 +1821,18 @@ class NegativeWorkers:
     and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
     falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
     killed. No worker is forked beside another Python thread of the audit's, whose locks would stay held in it: `run`
+    first calls ``before`` (the audit's: its own session's thread ended, `session_ended`), then
     reads the audit's threads before its first fork (`threads_alive`), prints them, keeps them in `timing`
-    (``threads_at_fork``, one reading a `run` that forks) and, where Python holds more than the one that calls it,
+    (``threads_at_fork``, one reading a `run` that forks, with Python's as they were before ``before`` beside it,
+    ``before_session_ended``) and, where Python holds more than the one that calls it,
     hands `timing` to ``refused`` and raises `NegativeFailed` with the fix. No worker outlives the audit: one killed outright takes its workers with it (`die_with`). `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
     process's as the workers started (``memory``), which a worker's ``private`` is to be read against."""
 
     def __init__(self, workers: int, budget: float, available: Callable[[], float],
                  need: Callable[[], float] = worker_need, own: Callable[[], float] = audit_own,
-                 refused: Callable[[dict[str, Any]], None] | None = None):
+                 refused: Callable[[dict[str, Any]], None] | None = None, before: Callable[[], None] | None = None):
         self.workers, self.budget, self.available, self.need, self.own = workers, budget, available, need, own
-        self.refused = refused
+        self.refused, self.before = refused, before
         self.tasks: list[Negative] = []
         self.waiting: list[Negative] = []
         self.stage: dict[str, Any] = {"workers": workers, "wall_s": 0.0, "threads_at_fork": []}
@@ -1835,7 +1853,11 @@ class NegativeWorkers:
         """Every task still waiting, each in its worker; returns once all ended, or raises `NegativeFailed`."""
         if not self.waiting:
             return
-        alive = threads_alive()
+        was: dict[str, Any] = {}
+        if self.before is not None:
+            was["before_session_ended"] = threads_alive()["python"]
+            self.before()
+        alive = {**threads_alive(), **was}
         self.stage["threads_at_fork"].append(alive)
         print("A5 " + json.dumps({"negative_workers": {"threads_at_fork": alive}}), flush=True)
         if len(alive["python"]) > 1:

@@ -47,8 +47,8 @@ GB = 2**30
 
 
 def workers(n: int, budget: float = 1000 * GB, free: float = 1000 * GB, need: float = GB, own: float = GB,
-            refused=None) -> a5.NegativeWorkers:
-    return a5.NegativeWorkers(n, budget, lambda: free, need=lambda: need, own=lambda: own, refused=refused)
+            refused=None, before=None) -> a5.NegativeWorkers:
+    return a5.NegativeWorkers(n, budget, lambda: free, need=lambda: need, own=lambda: own, refused=refused, before=before)
 
 
 AUDIT = os.getpid()
@@ -378,6 +378,57 @@ def test_the_threads_read_before_the_first_fork_are_printed_and_kept_where_the_r
     one.run()
     assert one.timing()["threads_at_fork"] == [] and _fork_line(capsys.readouterr().out) == []
     assert not multiprocessing.active_children()
+
+
+def test_the_audits_own_session_thread_has_ended_before_the_first_fork_and_any_other_is_still_refused(tmp_path, capsys):
+    """The challenger session's own thread, as `a5_coins.start` runs it: its last act is to publish the evidence, after
+    which it may still be alive. Here it then waits on an event that only the audit's read of the evidence sets, so it
+    is alive when `run` starts. The audit reads the evidence and joins it before it reads its threads
+    (`a5.session_ended`), so the first fork sees the caller's thread alone and the workers run: an honest audit is not
+    refused for its own session. A thread that is not the session's is refused as before, the session's joined all the
+    same. Off a challenger's coins, or with no thread handed in, nothing is waited for."""
+    log, me = tmp_path / "log", threading.current_thread().name
+    published, read, reads = threading.Event(), threading.Event(), []
+
+    def finish() -> None:
+        published.set()
+        read.wait()
+
+    def evidence() -> dict:
+        published.wait()
+        reads.append("the-session" in [t.name for t in threading.enumerate()])
+        read.set()
+        return {}
+
+    coins = SimpleNamespace(evidence=evidence)
+    session = threading.Thread(target=finish, name="the-session", daemon=True)
+    session.start()
+    w = workers(2, before=lambda: a5.session_ended(coins, session))
+    tasks = [w.submit(name, lambda name=name: logged(log, name)) for name in ("a", "b")]
+    assert list(w.entries(tasks)) == ["a", "b"] and not session.is_alive()
+    assert reads == [True], "the session's thread was not alive when the audit read its evidence"
+    at_fork, = w.timing()["threads_at_fork"]
+    assert (at_fork["before_session_ended"], at_fork["python"]) == ([me, "the-session"], [me]) and "refused" not in w.timing()
+    assert _fork_line(capsys.readouterr().out) == [at_fork]
+
+    up, done = threading.Event(), threading.Event()
+    other = threading.Thread(target=lambda: (up.set(), done.wait()), name="not-the-session", daemon=True)
+    session = threading.Thread(target=finish, name="the-session", daemon=True)
+    published.clear(), read.clear()
+    other.start(), session.start()
+    up.wait()
+    w = workers(2, before=lambda: a5.session_ended(coins, session))
+    w.submit("c", lambda: logged(log, "c"))
+    try:
+        with pytest.raises(a5.NegativeFailed, match=rf"holds 2 Python threads \({me}, not-the-session\)"):
+            w.run()
+    finally:
+        done.set()
+        other.join()
+    assert not session.is_alive() and {x[1] for x in lines(log)} == {"a", "b"}
+
+    a5.session_ended(None, session)
+    a5.session_ended(SimpleNamespace(evidence=lambda: pytest.fail("no thread was handed in")), None)
 
 
 def test_the_flag_reaches_the_audit_and_defaults_to_one():

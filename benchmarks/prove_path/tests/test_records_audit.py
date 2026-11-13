@@ -1443,6 +1443,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     workers = {}
 
     def audit(a, *rest, **kw):
+        assert kw["session"] is session  # the session's own thread, which a5 ends before its negatives' workers fork
         workers.update(lean_workers=a.lean_workers, audit_mem_gb=a.audit_mem_gb, negative_workers=a.negative_workers)
         return {"audit": {"accepted": True}, "negative_workers": {"workers": a.negative_workers}}, True
 
