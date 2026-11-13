@@ -113,8 +113,8 @@ def device_cc() -> tuple[tuple[int, int] | None, str]:
         import torch  # the fallback only: this module is torch-free at import
 
         if torch.cuda.is_available():
-            major, minor = torch.cuda.get_device_capability(0)
-            return (major, minor), "torch.cuda.get_device_capability"
+            capability: Any = tuple(torch.cuda.get_device_capability(0))
+            return capability, "torch.cuda.get_device_capability"
         return None, "torch.cuda.is_available() False"
     except Exception as e:  # noqa: BLE001
         return None, f"no device: {type(e).__name__}"
