@@ -155931,3 +155931,61 @@ Both tries at my live line's head `d37d01aaecad1822ca95665e2a69a8f3bbab9829` end
 - My machine restarted at about 18:31Z and came back at FIRSTACCEPT's branch and head, with my scratch gone (the stand-in of the imports I checked the proof against, and the entries' worktree, which I made again). Nothing of the line was only there: every commit was pushed before it [read].
 
 Not established: what my 18:09Z entry lists, less its first line. No `check-stream` run at the merged head; the package's root imports neither proof file; no suite or `check` at my head.
+
+## STAGECOINS, Fri 13 Nov 18:35Z: PRF-549 STOPPED on your stop rule: the records run refuses fix 2 as written, three lines, all on the lemma; no record moved; quick suites passed; no pull request
+
+**Verdict.** The check refuses the form. Once no `witnesses` entry names `Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial`, the check holds the lemma itself as a guarantee, because the lock lists it under `guarantees`. I have changed nothing since 17:46Z and opened no pull request. The branch is still `cursor/proofs-prf549-unwitnessed-a06a` at `8daeb1da366`.
+
+**A correction of mine first.** At 18:17Z, woken by events that were yours, I wrote in my turn's last message that the 17:46Z entry was not mine and that I held no PRF-549 order. That was wrong. The work is this agent's, from turns my context had lost; the worktree, the pen and your resume text show it. Nothing was acted on wrongly. I had skipped reading the pen before writing in it.
+
+### 1. The check's words [run]
+
+Run `r20261113-174342-acec` (vy-nebius-cpu-7, at `8daeb1da366`): `lean_changed.py --records security --update`.
+
+- `security/Proofs`: PASS (204,314 declarations in 4,051 modules; the three axioms only).
+- `security`: FAIL, `check.py` exit 1, with three failures (`witnesses.missing`, `four-names`, `shape.refused`), each on the lemma:
+
+~~~text
+witnesses: Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial lists no witnesses that it says something, and the rule holds it to them (it reads the claim Claims.Flock.Wit): prove `Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_honest : each of its hypotheses at d` (its hypotheses hold at the honest deployed instance d, at the deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or `witnesses_assumed`) and `Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_nontrivial : ¬ Claims.ZKServer.Loop.ZkAnyAt at acceptAll …` (its conclusion is false for a verifier that accepts everything). Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field that can't be built a named assumption. List both under `guarantees`, and write "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {"honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_honest"], "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_nontrivial"} under `witnesses`: a guarantee carries an honest and a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": "4506aaf50fe9d724a2ecc5ccff7ae1a40d56f6a54eaa63d3409e35ea9944a3d2"; a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks)
+four names: Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial is a guarantee of Flock, which `four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee
+shape: Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial has no entry under shape.properties naming its function and its outcome (accept, undecided, reject, none)
+~~~
+
+- The run goes on to `security/Properties`, as a records run for `security` does. It was still running at 18:32Z; its end I expect by 19:00Z [guess].
+
+### 2. Why [read]
+
+- The lemma has a record of its own under `guarantees` in `security/lean-audit.json`: owner `@proofs`, type hash `4506aaf5…`, no premises.
+- `check.py`'s `claim_witnesses` (line 1761) is the exemption: a listed theorem that a `witnesses` or `claims.witnesses` entry names is held to a witness's form "instead of `shape` and `four_names`", and is "no guarantee the witnesses rule holds to witnesses of their own".
+- My edit took away the only entry that named it. So the three rules for a guarantee now apply to it.
+- This is the case my 17:46Z entry guessed at, on the lemma rather than on the guarantee.
+
+### 3. What did not move [run]
+
+- **No record moved.** The lock the run wrote back (`lean-audit/audit-security/lean-audit.json`) is byte for byte the branch's (4,428,160 bytes, `diff` empty), and the audit's `regenerated` is empty.
+- **The entry's own form drew no line.** The three failures are the whole list in the report, and none is on `SessionLoopZKAnyDeployed`. So `{type_hash, missing, why}` with the one hash is accepted [derived].
+- **Quick suites passed.** Run `r20261113-174537-76ff` (vy-nebius-cpu-5, at `8daeb1da366`): `suites.py --changed origin/main --quick`, 10 suites, 10 passed, 0 failed, exit 0. The root suite (`repository`, 359 passed) is among them, so the cap commit holds `test_the_unwitnessed_list_only_shrinks`.
+- The cap commit's comment already says what lean asked for at 18:11Z on PRF-549 (the guarantee named beside the three, its nontrivial witness due at the deployed session, no issue id) [read].
+
+### 4. The ways on, for your word; I have tried none
+
+- **(a) Take the lemma's record out of `guarantees` too, and keep the lemma in the tree.** This is what I would do.
+  - It moves two records besides the entry's witness lists, so it breaks the letter of your stop rule: the lemma's own record goes, and so does the `reads` record of `Proofs.Flock.SessionLoop.ZkAnyNontrivial` (six definitions: `NT`, `constRel`, `noReal`, `noTables`, `noVals`, `noWk`). No other Lean file under `security/` or `verity/` names any of the six, and the sibling lemma `SampledAuditAnyDeployed_nontrivial` does not import the file, so no other listed theorem reads that module [read].
+  - No guarantee's statement and no other definition's record changes [derived].
+  - The unread ratchet keeps the lemma: every constant with a `SecurityProofs` component is one of its seeds (`unread.py`'s docstring) [read].
+  - I found no rule in `check.py` that refuses a theorem with that component which the lock does not list [read; a search of the file, not a run].
+  - No Lean changes. One more records run shows it: this one waited about 29 minutes for a slot and then took 13 minutes on `security`.
+- **(b) Delete the lemma and its file** (`security/Proofs/Flock/SessionLoop/ZkAnyNontrivial.lean`, 137 lines, imported by `Proofs/Flock.lean`). The same two records go, and Lean changes, so the modules compile again. Fix 1 would then start without the lemma's helpers. Your order says to stop rather than do this.
+- **(c) Fix 1 instead of fix 2.** The lemma is restated at the deployed session and stays the `nontrivial` witness: no `unwitnessed` entry, the cap stays 221, both commits are dropped. It has no date, and I have not started its reading, which your order puts after the pull request.
+- **(d) What the check's words ask for**: witnesses, the four-name form and a `shape` entry for the lemma. That makes a lemma a guarantee. I do not propose it.
+
+For lean, if you pass it on: fix 2 as PRF-549 words it (`witnesses` keeps `honest`, `unwitnessed` gains the entry, the lemma stays) is refused by today's check wherever the missing half's lemma has a record under `guarantees`. The lock's eight other entries that exempt one half (four `honest`, four `nontrivial`) did not meet this: none has a lemma named for its missing half under `guarantees` [read, by the names `G_honest` and `G_nontrivial` only].
+
+### Not established
+
+- Whether (a) passes the check. It is my reading of `check.py` and `unread.py`, not a run.
+- Whether `--update` drops the two records by itself under (a), or I take the `reads` record out by hand.
+- The verdict on `security/Properties` in `acec`: not back.
+- Whether lean's coming rule (LEAN-273) says anything of a lemma that no entry names. I read lean's 11 Nov comment, which speaks only of a lemma listed as a witness.
+
+**Asked of you:** (a), (b) or (c). On (a) I make the lock edit as a third commit, send one records run and open the pull request when it is back, well before 23:00Z if the word comes by 20:00Z. Until your word I hold: no edit, no run, no fix 1 reading.
