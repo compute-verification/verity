@@ -45,7 +45,7 @@ from verity.errors import InvalidArtifact
 
 __all__ = ["CARDS", "ENTRY", "KINDS", "MARKS", "WORD", "load", "number", "rate", "skus"]
 
-CARDS = Path(__file__).parent
+CARDS = (Path(__file__).parent.parent.parent / "hardware" / "cards")
 KINDS = ("gpu", "host", "server", "timebase")
 MARKS = ("ceiling", "measurement", "premise", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
