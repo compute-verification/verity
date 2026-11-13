@@ -2,7 +2,7 @@ Lane proofs
 
 Goal proofs/sampled-audits-sound
 
-Issue: PRF-600. The second of its pull requests: the audits' half of a monitoring period's check, on the ledger's half's head (`cursor/proofs-prf600-period-ledger-3b1f`), which lands first. It is the compiled check `verity/sampled-proofs/period/v1`: every window the ledger's half lists is held to one accepting one-stage v2 audit. It states no guarantee and adds no lock entry, and nothing calls it yet but its difftest.
+Issue: PRF-600. The second of its pull requests: the audits' half of a monitoring period's check, on the ledger's half's head (#9537), which lands first. It is the compiled check `verity/sampled-proofs/period/v1`: every window the ledger's half lists is held to one accepting one-stage v2 audit. It states no guarantee and adds no lock entry, and nothing calls it yet but its difftest.
 
 **Only a window of one registration passes.** A session whose log shows the sample's coins released after several registrations (several ranks', or one registered again) is refused under its own code, `members`.
 
@@ -70,5 +70,5 @@ The reference and the Lean share an author.
 
 - **Build and difftests on the head** `5dacc95eab9e`: `r20261112-232219-e334`, exit 0: `lake build Spot sampled-proofs-difftest`; both period difftests, 24 passed in 129 s.
 - **The proofs that read the split**: `r20261112-204826-f29e`, exit 0, at `4fa7425a19`.
-- **Records**: RECORDS
-- **Quick tier on the head**: QUICK
+- **Records**: none run on this head: it edits no lock by hand, so the candidate's records run writes what moves. The records run of the stack's last branch (`r20261113-015344-d333`), which holds this change, is not in; the two records named above are my reading until it is.
+- **Quick tier on the head**: `r20261112-232219-a005`, at `5dacc95eab9e`: **60 of 61 suites passed, 1 failed.** The red one is `research`, which this pull request does not touch: two tests of `tools/research/tests/test_auto.py` read the node's own hold file (`/etc/vy/auto-hold`), and vy-nebius-2 carries one today. The same two fail there on `main`'s tree (`r20261113-023127-b5e6`, at `8c11a1d5ab`) and on this tree alone (`r20261113-023120-7179`); the suite passed on the first pull request's head before the hold (`r20261112-203704-77ca`). The two tests are fixed in a pull request of their own.

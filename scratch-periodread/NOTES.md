@@ -137,3 +137,31 @@ Coordinator's words since 02:00Z:
 
 Mailbox last read at `bea8cf9117` (02:11Z), plus the hook's 02:13Z word.
 Entries: last `9be616f60c` (02:12Z).
+
+## State at Fri 02:52Z (read this first on a new machine)
+
+- PR 2 = #9595 (unmarked) at `5dacc95eab9e`. Quick tier `a005`: 60 of 61; `research` red = the node's hold file
+  (`/etc/vy/auto-hold`, `auto.HOLD_FILE`) read by two tests of `tools/research/tests/test_auto.py`; red on main's tree
+  too (`b5e6`), on PR 2's (`7179`). Body `pr2-body.md`; its Records section says two records, the run says four in
+  `security` (`RecursiveAuditC3`, `remote_soundness_deployedReady` and its `_honest`, `_nontrivial`): correct it when
+  `d333` ends, then give #9595's ready line.
+- Fix = #9596 (unmarked) `cursor/proofs-auto-hold-tests-7d2e` at `7764f46a6233`; `2380`: 76 passed on the node. Whole
+  `research` suite at that head: `r20261113-024735-2bee` (script `run-fix-suite.sh`). Ready line after it.
+- PR 3 = #9581 at `43fde9d04680`; quick tier `efae` running (research red there too). Records run NOT started.
+- Coordinator's rulings of 02:43Z on STOPS's second reading (`stops-0222-second-reading.md`), placed in my 02:50Z
+  entry (`d5f9b8e69b`):
+  1. corollary by name (accept ∧ `pub.others = #[]` → every committed root is one published window's, audited
+     `AuditedAt`); `CommittedOnce`'s title and the opening sentences reworded ("one audit entry", "every root on a
+     session with the sample's family"). Statement PR 3, proof PR 4.
+  2. decoder lemma: `AuditParams.of j = .ok p` → `p.keyJ` reads as `p.ledger.key`, `p.audit` names none of the five
+     keys. Statement PR 3, proof PR 4.
+  3. lemma `au.session = w.session` (from `checked` refusing a second open of a root). Statement PR 3, proof PR 4.
+  4. (h) answered in the 02:50Z entry.
+  5. (i) (j) (b) (c) (d) (e): one sentence each in "what this does not say", STOPS's words. PR 3.
+  6. (l): not PR 3's; size it (lines' whole texts among the strings the finder hashes; the last line's signature
+     stays free).
+  7. (o): weaken `Numbered` to "a line of the device's that is an entry numbered i is at place i". PR 3 + PR 4 proof.
+  8. remove `periods` from `CommittedOnce`. PR 3 + PR 4.
+  A23's day: firm word due Fri 12:00Z.
+- After the statement edits: one try of the two Properties files and PR 4's two proof files; then PR 3's records run
+  (after `d333`), then PR 4's.
