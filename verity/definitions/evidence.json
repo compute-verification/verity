@@ -100,5 +100,7 @@
                                            "art:0100e5b51638084905fb91111c22e76b30993856de32d908d49c2f00db84e0c3"]},
   "sampled_accept_ptx": {"run_record": "art:d1e9f5cb5c2d7e2a1bbed2a0950123f1f0922fdef7378549ffb7c15ec0e11cf9"},
   "sampled_accept_capture": {"run_record": "art:22646cae49d02752d3296b87110b3bcaafd221d5a7d58fa8789fcaacaedd9a21",
-                             "replay_run_record": "art:69f76ea2ce962f904e997d8076d77be09cdbdf2288d4be63b14fbaf068a09555"}
+                             "replay_run_record": "art:69f76ea2ce962f904e997d8076d77be09cdbdf2288d4be63b14fbaf068a09555"},
+  "sampled_accept_split_rate": {"run_record": "art:fc64796c7c3fca12298583b9a4f49eee54431e4909ac1bd5b0c63591ded29e03",
+                                "harness": "37eeb6d81"}
 }
