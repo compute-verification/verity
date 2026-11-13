@@ -312,14 +312,14 @@ theorem unitOf_row {u i : ℕ} (hu : u < n) (hi : i < (bitsRows c).nComp) :
     Spot.Bits.unitOf (Spot.Bits.keyProg c n) (2 + n * (bitsRows c).nIn + (u * (bitsRows c).nComp + i)) =
       some u := by
   have h := mul_add_lt hu hi
+  have hs := keyProg_size c n
+  have hin : (Spot.Bits.keyProg c n).inputs = 2 + n * (bitsRows c).nIn := keyProg_inputs c n
+  have hpu : (Spot.Bits.keyProg c n).perUnit = (bitsRows c).nComp := keyProg_perUnit c n
   unfold Spot.Bits.unitOf
-  split
-  · rename_i hc
-    exfalso
-    simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, keyProg_inputs, keyProg_perUnit,
-      keyProg_size] at hc
+  rw [if_neg]
+  · rw [hin, hpu, Nat.add_sub_cancel_left, div_units hi]
+  · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or]
     omega
-  · rw [keyProg_inputs, keyProg_perUnit, Nat.add_sub_cancel_left, div_units hi]
 
 /-- **What a unit's row reads**: the constant, the zero, one of the unit's own source gates, or one of its own rows. -/
 theorem args_of_unit {g u w : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g = some u)
@@ -468,6 +468,7 @@ theorem gates_bitsProgs {m p : ℕ} (hm : m < ms.length) (hp : p < (memberProg m
 
 theorem exists_of_mem_outs_bitsProgs {i : ℕ} (hi : i ∈ (bitsProgs ms).outs) :
     ∃ m, ∃ hm : m < ms.length, ∃ p ∈ (memberProg ms[m].1 ms[m].2.size).outs, i = Spot.Bits.base ms m + p := by
+  unfold bitsProgs at hi
   obtain ⟨m, hm, p, hp, rfl⟩ := exists_of_mem_outs (ms.map fun ci => memberProg ci.1 ci.2.size) hi
   have hm' : m < ms.length := by simpa using hm
   refine ⟨m, hm', p, by simpa using hp, ?_⟩
@@ -573,17 +574,17 @@ theorem member_closed {u q : ℕ} (hq : q ∈ Spot.Bits.blockOf (Spot.Bits.keyPr
     rcases (show j = 0 ∨ j = 1 ∨ j = 2 by omega) with rfl | rfl | rfl
     · obtain rfl : x = .xor (a.map (Spot.Bits.posOf (Spot.Bits.keyProg c n))) := by
         simpa [bitsGate] using hx.symm
-      refine ⟨fun b h => by cases h, fun w hw => ?_⟩
+      refine ⟨fun b h => (by cases h), fun w hw => ?_⟩
       obtain ⟨w0, hw0, rfl⟩ := List.mem_map.1 hw
       exact harg w0 (by simp [Spot.Bits.args, hab, hw0])
     · obtain rfl : x = .xor (b.map (Spot.Bits.posOf (Spot.Bits.keyProg c n))) := by
         simpa [bitsGate] using hx.symm
-      refine ⟨fun b h => by cases h, fun w hw => ?_⟩
+      refine ⟨fun b h => (by cases h), fun w hw => ?_⟩
       obtain ⟨w0, hw0, rfl⟩ := List.mem_map.1 hw
       exact harg w0 (by simp [Spot.Bits.args, hab, hw0])
     · obtain rfl : x = .and [Spot.Bits.off (Spot.Bits.keyProg c n) g, Spot.Bits.off (Spot.Bits.keyProg c n) g + 1] := by
         simpa [bitsGate] using hx.symm
-      refine ⟨fun b h => by cases h, fun w hw => ?_⟩
+      refine ⟨fun b h => (by cases h), fun w hw => ?_⟩
       have hw' : w = Spot.Bits.off (Spot.Bits.keyProg c n) g + 0 ∨ w = Spot.Bits.off (Spot.Bits.keyProg c n) g + 1 := by
         simpa [BGate.reads] using hw
       rcases hw' with rfl | rfl
@@ -593,7 +594,7 @@ theorem member_closed {u q : ℕ} (hq : q ∈ Spot.Bits.blockOf (Spot.Bits.keyPr
     obtain ⟨hgs, hr, hκ, -⟩ := mem_insOf.1 hg
     rw [gate_free _ hgs hr hκ] at hx
     cases hx
-    exact ⟨fun b h => by cases h, fun w hw => by simp [BGate.reads] at hw⟩
+    exact ⟨fun b h => (by cases h), fun w hw => absurd hw (by simp [BGate.reads])⟩
 
 end closed
 
@@ -848,9 +849,9 @@ theorem neededBits_of_membersRowed {h : _root_.SpotFlock.Held} (hR : _root_.Spot
     refine ⟨he3, Or.inr ⟨?_, ?_, hout, hgate⟩⟩
     · rw [List.find?_eq_none]
       intro e' he' hpe'
-      obtain ⟨m, hm, g', hg', -, -, -, rfl⟩ := of_mem_sourceBits he'
-      simp only [beq_iff_eq] at hpe'
-      exact src_ne_row ht hm hgu hj hg' hpe'
+      obtain ⟨m, hm, g', hg', hκ', r', hr', hee⟩ := of_mem_sourceBits he'
+      rw [hee] at hpe'
+      exact src_ne_row ht hm hgu hj hg' (beq_iff_eq.1 hpe')
     · rw [hfe]
       exact congrArg some (Prod.ext he1 (Prod.ext he2 rfl))
   · obtain ⟨g, hg, rfl⟩ := List.mem_map.1 hq
