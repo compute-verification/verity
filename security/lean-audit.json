@@ -44,14 +44,6 @@
    "owner": "@compute-accounting",
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
   },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
-   "owner": "@compute-accounting",
-   "digest": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8"
-  },
-  "Pouw.PearlC.Assumptions.W1CompleteH100": {
-   "owner": "@compute-accounting",
-   "digest": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286"
-  },
   "WeightSecurity.Assumptions.FaultedUseHard": {
    "owner": "@proofs",
    "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
@@ -3044,6 +3036,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
+   "owner": "@compute-accounting",
+   "digest": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": {
    "owner": "@compute-accounting",
    "digest": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801",
@@ -3059,6 +3057,12 @@
   "Pouw.PearlC.Assumptions.TileProofSoundAll": {
    "owner": "@compute-accounting",
    "digest": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.PearlC.Assumptions.W1CompleteH100": {
+   "owner": "@compute-accounting",
+   "digest": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3409,8 +3413,6 @@
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
    "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
-   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "Pearl-C's TT_OUT per audit tile at the H100 rev1's tensor-clock record (devH100Tensor): no W1 program on the H100 with INT8 does a good tile's work for less than (1 - g0) of its credit (tt-out-tile-pearl-c-h100-rev1, conjectured)",
-   "Pouw.PearlC.Assumptions.W1CompleteH100": "the audited GPU's cost: W1 on the H100 with INT8 dominates the cost model within every bound on rev1's audit tiles at the H100 record per second at the tensor clock (every adversary within a cost and a query count has a W1 adversary within them whose good tiles exceed every credit at least as often), at the data sheets' per-MAC ratios with the SM pipes priced per second at the 1830 MHz tensor clock beside the 1980 MHz SM clock (H100 whitepaper Tables 1 and 3, H200 data sheet, the H200 card file's clock.tensor and clock.sm) with SHA-512 and first fetches free (w1-complete-h100, measured)",
    "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
    "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
    "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
@@ -5793,11 +5795,10 @@
     "Definitions.Core.Assumptions",
     "Definitions.Pouw",
     "Definitions.Pouw.Assumptions",
-    "Definitions.Pouw.Guarantees",
-    "Definitions.Assumptions.PearlC"
+    "Definitions.Pouw.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof; Pearl-C's TT_OUT at the H100 restated over W1 (PearlCS8) takes its two halves from the named-assumptions module (Definitions.Assumptions.PearlC)",
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
   },
   "Definitions.Pouw": {
@@ -6105,13 +6106,12 @@
     "Definitions.Accounting",
     "Definitions.Nci",
     "Definitions.Pouw",
-    "Definitions.Pouw.Assumptions.PearlC",
     "Definitions.WeightSecurity",
     "Definitions.WeightSecurity.Assumptions",
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw), Pearl-C's TT_OUT forms over W1 (Definitions.Pouw.Assumptions.PearlC, for Definitions.Assumptions.PearlC) and weight security's definitions and premises, never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw) and weight security's definitions and premises, never a guarantee or a proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
    "imports": [
@@ -28080,8 +28080,8 @@
    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1W1 (the device's timing at the cap at the W1 machine, W1.w1Priced), the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (security/Proofs/Pouw/PearlC/FlockTile/Statement.lean:32-33, :47-51), and it holds trivially for an empty class until TileRead lands. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is drawn from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is drawn from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
-   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "frozen (conjecture,no-function,hash): It is a consequence of two named assumptions, W1CompleteH100 (w1-complete-h100: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1: TT_OUT per audit tile at the H100 record per second at the tensor clock, rev1, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it.",
-   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "frozen (conjecture,no-function,hash): It is a consequence of two named assumptions, W1CompleteH100 (w1-complete-h100: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1: TT_OUT per audit tile at the H100 record per second at the tensor clock, rev1, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it.",
+   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
+   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
@@ -28732,7 +28732,11 @@
    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
     "status": "open",
     "test": "benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py::test_cross_group_joint_skips_stay_within_the_gap",
-    "why": "TT_OUT(1/400) per audit tile at the H100 record, rev1, over W1 on the H100 with INT8 at zero SHA-512 and fetch prices (tt-out-tile-pearl-c-h100-rev1); open, with no program beating the bound on the census's known skip classes that its file replays: cross-group joint skips (this test) and the first promotion (test_first_promotion_skip_is_outside_rev1s_credit)."
+    "why": "TT_OUT(1/400) per audit tile at the H100 rev1's tensor-clock record (devH100Tensor), over W1 on the H100 with INT8 at zero SHA-512 and fetch prices (tt-out-tile-pearl-c-h100-rev1); an open premise, not a named assumption. No program beats the bound on the census's known skip classes that its file replays: cross-group joint skips (this test) and the first promotion (test_first_promotion_skip_is_outside_rev1s_credit). TT_OUT rev1 is refuted by the proofs red team's rating."
+   },
+   "Pouw.PearlC.Assumptions.W1CompleteH100": {
+    "status": "falsified",
+    "why": "W1 on the H100 with INT8 at the data sheets' prices per second at the tensor clock dominates the card's cost model within every bound on rev1's audit tiles (w1-complete-h100); an open premise, falsified on the H200: the timed loop of FP32 beside the tensor pipe (run r20261113-180927-646d) refutes both data-sheet readings of an FP32 instruction's price, the per-clock 32 and the tensor-clock 976/33 (29.58)."
    },
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",

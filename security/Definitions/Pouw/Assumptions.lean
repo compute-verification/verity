@@ -52,6 +52,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.RelativeSecurity

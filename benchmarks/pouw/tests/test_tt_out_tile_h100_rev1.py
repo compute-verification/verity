@@ -1,5 +1,5 @@
 """The falsification test of `tt-out-tile-pearl-c-h100-rev1` (`Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`,
-security/Definitions/Assumptions/PearlC.lean; `shape.conjectures` in security/lean-audit.json).
+security/Definitions/Pouw/Assumptions/PearlC/TTOutS8.lean; `shape.conjectures` in security/lean-audit.json).
 
 The conjecture is TT_OUT(1/400) per audit tile, rev1, at the H100 record per second at the tensor clock (`devH100Tensor`,
 `Prices.h100Tensor`), over W1 on the H100 with INT8 at that clock (`W1Prices.h100Tensor`): no program outputs a good

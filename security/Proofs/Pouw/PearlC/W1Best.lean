@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.TTOutW1
-public import Definitions.Assumptions.PearlC
+public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 
 /-!
 # TT_OUT along a domination within every bound, and W1's unpriced resources at the adversary's best case

@@ -167,17 +167,18 @@ reads. Proved:
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s
   (n = 2048, K = 8192); as an advantage, ε = g/(1 − g) = 69533/10666467 (0.652%). This is the assumption's gap alone:
   sampling's ε_s at δ_s multiplies in as (1 + ε)/(1 − ε_s), and the assumption's own δ adds.
-- **The two S8 guarantees** (`security/Definitions/Assumptions/PearlC.lean`) bound the credit of the tensor-clock
+- **The two S8 guarantees** (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`) bound the credit of the tensor-clock
   record `devH100Tensor`, the H100 record with its SM pipes priced per second at the 1830 MHz tensor clock beside the
   1980 MHz SM clock: `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` at g = 5040227/775520000 (0.650%,
-  ε = 0.654%) and `…S8_8192` at 8192³ (0.538%). Their premises are `w1-complete-h100` (W1 on the H100 with INT8 at
-  those prices, at zero SHA-512 and fetch prices, matches every adversary within its cost and query bound with
-  good-tile credit at least as likely to exceed any threshold) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
+  ε = 0.654%) and `…S8_8192` at 8192³ (0.538%). Their open premises are `w1-complete-h100` (W1 on the H100 with INT8
+  at those prices, at zero SHA-512 and fetch prices, matches every adversary within its cost and query bound with
+  good-tile credit at least as likely to exceed any threshold; the device reading's FP32 price is refuted on the H200,
+  so this premise is falsified there) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
   audit tile over that W1 setting, falsification test `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`). They do
   not cover what is served: `pearl-c-h100-v1-h3` pays by the per-clock record `devH100`, about 1.5% more, and at the
   two-clock reading no statement of this form covers that credit, since the honest program with its first promotion
   skipped falls about 1% under TT_OUT's threshold for it. TT_OUT rev1 is refuted by proofs' red-team rating, so both
-  guarantees are implications from a refuted premise.
+  guarantees are implications from refuted premises.
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
   `security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, and the
   sample misses more than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.PearlC
-public import Definitions.Assumptions.PearlC
+public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 
 /-!
 # The H100 headlines under rev1 per audit tile, on the card's own cost model (trusted)
@@ -9,12 +9,12 @@ public import Definitions.Assumptions.PearlC
 `Pouw.Guarantees.PearlC.SampledH100Rev1_8192` and its kin are stated at W1 on `W1Device.h100 sha fetch`, a setting
 without the card's integer tensor core and at prices per SM clock. These are the gaps at the card's cost model `CM` on
 `devH100Tensor`, the H100 record with its SM pipes priced per second at the tensor clock (`Prices.h100Tensor`), so
-that they hold whichever clock each pipe holds under a mixed load. They rest on the two named assumptions of
-`Definitions.Assumptions.PearlC`, which together imply TT_OUT at `CM` on that record: the device model `W1CompleteH100`
+that they hold whichever clock each pipe holds under a mixed load. They are conditional on the two open premises of
+`Definitions.Pouw.Assumptions.PearlC.TTOutS8`, which together imply TT_OUT at `CM` on that record: the device model `W1CompleteH100`
 (`w1-complete-h100`, W1 on `W1Device.s8H100Best` dominates `CM` within every bound on rev1's audit tiles) and the conjecture
-`TTOutTilePearlCH100Rev1S8` (`tt-out-tile-pearl-c-h100-rev1`, TT_OUT over W1 there).
-It is the one PoUW statement module that reads a named assumptions module (the `Definitions.Pouw` layer's exception in
-`lean-audit.json`).
+`TTOutTilePearlCH100Rev1S8` (`tt-out-tile-pearl-c-h100-rev1`, TT_OUT over W1 there). The first is falsified on the
+H200 and TT_OUT rev1 is refuted by the proofs red team's rating, so the two are implications from refuted premises, kept
+for the record.
 -/
 
 @[expose] public section
