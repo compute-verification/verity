@@ -15,10 +15,12 @@ was written. A tag's second-pass outcome, from its own run's files:
     not-run           why: estimate-past-64GB (p2.py: its stager over 62 GB or its Lean check over 60 GB by the estimate, or a
                       measurement that did; not staged), not-reached (its run's budget), past-limit (its own limit, `timeout`),
                       stage-past-62GB (the stager stopped), lean-gate-past-60GB (staged; 4.42 x circuit GiB over 60 GB, the Lean
-                      checks not run), lean-past-62GB (a Lean check stopped past 62 GB resident)
+                      checks not run), lean-past-62GB (a Lean check stopped past 62 GB resident), session-past-ulimit,
+                      cancelled (its run, given as RUN:LIST:NODE:MEM_GB:cancelled, was cancelled before the tag ended)
     running           its run had not ended
 
-The v3 record of a second-pass tag is kept under its ``v3`` key. bound_totals counts the card's 254 types by outcome, and
+The v3 record of a second-pass tag is kept under its ``v3`` key. A tag that a job with more memory ran again after a smaller
+job's limit stopped it takes the larger job's record, the smaller's kept under ``smaller_jobs``. bound_totals counts the card's 254 types by outcome, and
 bound_extras the 18 extras; cover_check.py recomputes both."""
 import json
 import re
@@ -76,7 +78,8 @@ assert cover["schema"] == "circuits/request-cover/v3", cover["schema"]
 RUNS = []
 for a in sys.argv[4:]:
     run, lst, node, mem, *st = a.split(":") + ["", ""]
-    RUNS.append({"run": run, "list": lst, "node": node, "mem_gb": int(mem), "state": "running" if "running" in st else "ended"})
+    RUNS.append({"run": run, "list": lst, "node": node, "mem_gb": int(mem),
+                 "state": "running" if "running" in st else "cancelled" if "cancelled" in st else "ended"})
 J = lambda p: json.loads(p.read_text()) if p.exists() else None  # noqa: E731
 
 
@@ -120,6 +123,8 @@ for R in RUNS:
         d = out / tag
         if tag in nr:
             r.update(outcome="not-run", why="not-reached", text=nr[tag])
+        elif not (d / "done").exists() and R["state"] == "cancelled":
+            r.update(outcome="not-run", why="cancelled", text=f"its run was cancelled {'while it staged' if d.exists() else 'before it'}")
         elif not (d / "done").exists():
             assert R["state"] == "running", (R["run"], tag)
             r.update(outcome="running", text="started" if d.exists() else "not started")
@@ -145,10 +150,14 @@ for R in RUNS:
             elif done["timeout"]:
                 r.update(outcome="not-run", why="past-limit", text=(d / "timeout").read_text().strip())
             elif (d / "lean-not-run").exists():
-                r.update(outcome="not-run", why="lean-gate-past-60GB", lean_need_gb=int((d / "lean-not-run").read_text()),
-                         text=next(l for l in r["lines"] if "Lean not run" in l))
+                text = next(l for l in r["lines"] if "Lean not run" in l)
+                gate = re.search(r"over this job's (\d+) GB for Lean", text)
+                r.update(outcome="not-run", why=f"lean-gate-past-{gate[1] if gate else 60}GB", lean_need_gb=int((d / "lean-not-run").read_text()),
+                         text=text)
             elif any(l.startswith("stopped: the stager's resident memory") for l in err):
-                r.update(outcome="not-run", why="stage-past-62GB", text=next(l for l in err if l.startswith("stopped:")))
+                text = next(l for l in err if l.startswith("stopped:"))
+                stop = re.search(r"passed this job's (\d+) GB", text)
+                r.update(outcome="not-run", why=f"stage-past-{stop[1] if stop else 62}GB", text=text)
             elif stopped:
                 r.update(outcome="not-run", why="lean-past-62GB", text="; ".join(stopped))
             elif oom := [(side, l, (J(d / "B" / f"{side}.time") or {}).get("cmd", "")) for side, log_ in (("serve", "serve.log"), ("prove", "prove.err"))
@@ -166,11 +175,16 @@ for R in RUNS:
                 if not st:
                     texts.append(f"stager: {err[-1] if err else ''}")
                 r.update(outcome="refused", text=texts)
-        reached = not (r.get("why") == "not-reached" or r.get("text") == "not started")
+        reached = not (r.get("why") in ("not-reached", "cancelled") or r.get("text") == "not started")
         if tag in seen:
-            assert not (reached and seen[tag]["_reached"]), f"{tag} staged in two runs: {seen[tag]['run']} and {R['run']}"
-            if not reached and seen[tag]["_reached"]:
+            prev = seen[tag]
+            bigger = (re.fullmatch(r"stage-past-\d+GB|lean-gate-past-\d+GB|lean-past-62GB|session-past-ulimit", prev.get("why") or "")
+                      and R["mem_gb"] > prev["mem_gb"])
+            assert bigger or not (reached and prev["_reached"]), f"{tag} staged in two runs: {prev['run']} and {R['run']}"
+            if not reached and prev["_reached"]:
                 continue
+            if bigger and reached:
+                r["smaller_jobs"] = [*prev.get("smaller_jobs", []), {k: v for k, v in prev.items() if k not in ("lines", "_reached", "smaller_jobs")}]
         seen[tag] = {**r, "_reached": reached}
 
 for r in seen.values():
