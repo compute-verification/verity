@@ -158091,3 +158091,16 @@ The hold to 19:27Z ended with no word in my mailbox, so I stacked it as you orde
 - #9795: its records run `r20261113-190838-cc57` on vy-nebius-cpu-7 holds a Lean slot since 19:14Z and is building. The ready line follows when it is back.
 - #9728's names: mended locally as one commit over `ca0ae1a5b314`, not pushed yet. `Steps.lean` elaborates on vy-nebius-cpu-8 (`r20261113-191926-986e`, lean exit 0 in 115 s, 20 theorems, no axiom beyond the three). `Withheld.lean`'s try is building its imports. One thing you did not list: `sessionOf`, now `challengePhaseOf`, is a third old name in both files. The entry with the head follows.
 - The names run `r20261113-182631-21be` holds a Lean slot since 19:23Z. The table keeps Sat 14 Nov 18:00Z.
+
+
+## RATING, Fri 13 Nov 19:33Z: ready to mark #9735 at `9dca1601a6d7bd7a6fb69c98623a5187fcc745df`. Records run `r20261113-172245-63a8`: pass, no record regenerated. Suites `r20261113-172250-a922`: 63 of 63. The head is FRAME's carried commit with no commit of mine on top
+
+- [run] **Records**, `lean_changed.py --records security --update` at `9dca1601a6d7`, `--on auto`: exit 0, outcome pass. security: PASS, 731 modules, 1,137 guarantees. security/Proofs: PASS, 4,052 modules. security/Properties: PASS, 540 guarantees, 0 files changed. Axioms `propext`, `Classical.choice`, `Quot.sound` only. It printed no "regenerated record" line and kept no `record/` directory, so the carried locks are the ones the head regenerates. The three reordered lists of the Properties lock (my 18:06Z) are left as they are. It is the fast path: no kernel replay.
+- [run] **Suites**, `suites.py --changed 4ae17f7eafd7 --quick` at `9dca1601a6d7`, `--on auto`: 63 of 63 suites passed, 0 cached, in 2,998 s. `verity/protocols/accounting/pouw/verifier` 2,008 passed; `verity-pouw-benchmarks` 1,489 passed, 15 skipped; `verity-pouw-window-difftest` 122 passed. Those three counts are the ones before the carry.
+- [run] **A correction to my 18:06Z.** I wrote that the change "is the same after the carry" from line counts. Compared line by line, the carry rewrites five import lines of the change to the modules' new paths: three in `test_tt_out_tile_h100_rev1.py` (`verity.protocols.accounting.pouw.…`) and two in `pearl_c_debit.py` (`verity.circuits.silicon.…`). Every other changed line of the 26 files outside the Properties lock is the same. The suites above ran with those imports.
+- [run] **The body** now says the head is the carried one, names both runs, and says the rating's rows are at the old head `4d4950f1bb9`. Replaced with `research queue edit` and read back: head `9dca1601a6d7`, open, not marked.
+- **Not run again at the carried head:** the Pearl+ Lean difftest's slow tier, `--siblings`, and the rating's tiles. The body says so.
+- **The sweep does not run over the carried head as it stands**: at `6d48b81e4e8` it imports the old module paths. Next I change its imports on my rating branch and run one two-raiser tile at the H100 over `9dca1601a6d7`, to see the body's "not refused" row again figure for figure. I say what it gives. It holds nothing here.
+- The sm_120 rows are not in the body. They ran over the old head and went to PRF-612 through you. I add them on your word.
+
+Mailbox read at 19:33Z; nothing newer than your 17:07Z.
