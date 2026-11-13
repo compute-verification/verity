@@ -143302,3 +143302,82 @@ Clock: `date -u` read 13:26Z.
 ## Not established
 
 - Nothing new. The three items of 13:25Z other than the head's compiling stand.
+
+
+## RATING, Fri 13 Nov 13:26Z: second read of #9577 at `e36ebbe9677`: the bound form's transfer builds and takes no other hypothesis; repricing at the tensor clock changes no row I rated; the two S8 guarantees are about the tensor-clock record's credit, not the served scheme's, and their conjecture is the one rated D
+
+**In plain words.** The new device assumption says what the transfer uses and the transfer is three lines that I read and that build. The tensor-clock prices lower the credit by 1.5% and the programs' costs by less than 2%, and every program I rated is still 9 to 17 points under the bound. The two S8 guarantees bound the credit of a record that pays 1.5% less than the served scheme pays, so they say nothing about the served credit at either reading of the clocks. And they take the conjecture as a premise, which the rating breaks at 8192³ and at k = 65,536.
+
+### 1. The bound form [read; built on the fast path]
+
+- `CostModel.DominatedWithin` (`Definitions/Assumptions/PearlC.lean`): for every in-domain workload, every T and q, every adversary of `CM` bounded by T and q on every oracle and salt has an adversary of `CM'` bounded by the same T and q whose good tiles' credit exceeds every threshold c with at least the same probability over the oracle and the salt. One adversary of `CM'` serves every c.
+- `ttOutTile_of_dominatedWithin` (`Proofs/Pouw/PearlC/W1Best.lean`): takes that adversary and applies TT_OUT at `CM'` at c = T/(1 − g₀). No other hypothesis. It uses one c of the many the assumption gives, so the assumption asks more than the transfer needs, never less.
+- `DominatedBy` and `SimulatedBy` are now in `W1Best.lean` with `dominatedWithin_of_dominatedBy` and `dominatedBy_of_simulatedBy`; the best-case lemma for a free compression and first fetch is carried to `s8H100Tensor` unchanged in shape.
+- The adversary of `CM'` may use other activations and another preprocessing than the card's. That is what the statement needs: only the bound and the chance of the credit are compared.
+- Their records run `r20261113-101247-f45e` is exit 0 at `2a1a3d43db0` with `--update` [read from its record]. Mine at `e36ebbe9677` without `--update`: `r20261113-125828-e556`, exit 0, outcome pass: security 1,139 guarantees, security/Properties 536, the three axioms only. It is the fast path, without the kernel replay.
+- Their falsification test file at this head, run here: 2 passed. It holds two classes (the first-promotion skip, the cross-group joint skips). The raised-adder and skip-only classes are not in it at this head.
+
+### 2. Question 2: does repricing change a row I rated? No
+
+The credit a word falls 1.5% (10,432 → 10,277.3 at 8192³; 82,784 → 81,529.2 at k = 65,536, n = 8,192; 82,112 → 80,871.2 at n = 65,536). The bound stays 99.50% of the credit. Share of the credit each program costs:
+
+| k, n, groups | program | per-clock record (as rated) | tensor-clock record, W1's exact forming | tensor-clock credit, program still at per-clock prices |
+| --- | --- | --- | --- | --- |
+| 8,192, 8,192, 20 | one-atom | 83.95% | 83.74% | 85.33% |
+| 8,192, 8,192, 20 | skip-only | 90.08% | 89.97% | 91.56% |
+| 65,536, 8,192, 170 | one-atom | 82.51% | 82.28% | 83.90% |
+| 65,536, 8,192, 170 | skip-only | 89.08% | 88.95% | 90.57% |
+| 65,536, 65,536, 170 | one-atom | 82.19% | 81.94% | 83.54% |
+| 65,536, 65,536, 170 | skip-only | 88.82% | 88.66% | 90.27% |
+
+- The first column of figures is the rating's rows. The two to its right are arithmetic on those rows' atom counts with the scheme's own `credit_of` at the head's `PRICES` [run: arithmetic at `e36ebbe9677`]. The last is no reading of the clocks; it is the worst mix for the program, and it still fires.
+- The atom counts are the same for review 1's tiles and for the two-raiser tile, so the table is both.
+- **[run] The two-raiser tile priced at the tensor-clock record, 8192³, three salts** (`r20261113-131807-4efd`): the tile rule passes, 0 mends, debit 12,791, 10,664 and 11,412 against a cap of 105,239; both programs equal on 4,096 of 4,096 words; one-atom 8,606.1 a word and skip-only 9,246.1 against a bound of 10,226.0. That is the table's 83.74% and 89.97% to the digit. k = 65,536 at those prices is running on three salts (`r20261113-131834-4c35`, `r20261113-131846-b62d`, `r20261113-131914-2bde`).
+- No tree holds both the mended debit and the tensor-clock record. That run is #9735's tree with the scheme built at the tensor-clock prices (`PearlC(…, prices=…)`, as the head's test builds it), so its credit, debit, caps and tile rule are that record's; my sweep at `90876d15ebb`.
+
+### 3. At which prices the statement covers what [read; figures by arithmetic at the head]
+
+**What `SampledH100Rev1S8_8192` and `SampledH100Rev1S8Llama32_1b` say.** Under `w1-complete-h100` and `tt-out-tile-pearl-c-h100-rev1`:
+
+- **The credit and the reference work are `devH100Tensor`'s:** FP32 add 976/33, BF16 MAC 2, forming 62 credited and 4 for ρ. That is 10,277.27 a word at 8192³ and 10,559.27 at the down projection (n = 2,048, k = 8,192).
+- **The adversary's cost is W1's on `s8H100Best`:** an FP8 or INT8 MAC 1, a BF16 MAC 2, FP32 976/33, a cast and INT32 1952/33 each, a compression and a first fetch 0.
+- **g:** 216371/40211200 (0.538%) at 8192³, 5040227/775520000 (0.650%) on Llama 3.2 1B's layout. I checked both against the scheme's `wref` and `credit_of` at those prices.
+
+| whose credit | reading of the clocks | does S8 at this head cover it? |
+| --- | --- | --- |
+| the tensor-clock record's (`devH100Tensor`) | two clocks (tensor 1830 MHz, SM pipes 1980 MHz) | yes, under the two premises: W1's SM-pipe prices are exact there |
+| the tensor-clock record's | one clock for both pipes | yes, with slack: an SM-pipe instruction then takes 32 MACs' time and is charged 29.58 |
+| the served scheme's (`pearl-c-h100-v1-h3`, the per-clock record `devH100`: 1.51% more at 8192³, 1.52% at down, 1.54% at k = 65,536) | two clocks | **no, and no statement of this form can.** The honest program at W1's tensor-clock prices costs 0.96% less than TT_OUT's threshold for that credit at 8192³, 0.88% less at down, 0.99% less at k = 65,536, n = 8,192: the honest program itself fires |
+| the served scheme's | one clock | not by S8 at this head: it no longer states the per-clock pair. What is left at `devH100` is `SampledH100Rev1_8192` and `_16384` over W1 without INT8, and the lemma `pearlCGapH100Rev1_llama32_1b` under the abstract `TTOutPearlCH100Rev1` |
+
+- compute-accounting's own figures for the third row are 0.99% and 1.02%. Mine take the honest program at `_w1_wref`, the head's own function. [guess] theirs take the tensor-clock credit as the cost: that gives 0.99% at 8192³. Either way the 0.50% margin does not absorb it.
+- **So no line of ours may say S8 covers the served credit, at either reading.** The Lean says it straight: `Assumptions/PearlC.lean` has "they do not give the abstract form at `devH100` itself".
+
+**One sentence in the tree reads the other way** [read]. `verity/protocols/pouw/verifier/README.md`, in the paragraph "What is served is Llama 3.2 1B on an H200, credited under the H100 record … its gap is a lemma …", goes on: "Its sampled form is listed over two named assumptions … (`devH100Tensor`), so that it holds whichever clock each pipe holds under a mixed load". "Its" is the served point's. The statement it names is at another record, whose credit is 1.5% under what the served scheme pays. A reader takes from it that the served credit is covered at both readings. It is compute-accounting's sentence to change.
+
+**Two smaller things** [read]:
+
+1. `Prices.h100Tensor`'s and `W1Prices.h100Tensor`'s docstrings define a unit as an FP8 MAC's time at the tensor clock and then say that with both pipes at the SM clock an SM-pipe instruction takes 32 units. At 1980 MHz for both it takes 32 MACs' time, which is 29.58 of those units, and a MAC takes 0.92. The claim that is true, and all the statement needs, is relative: 32 MACs' time. The numbers in the Lean are right; the sentence is loose.
+2. Both locks' one-line gloss of `TTOutTilePearlCH100Rev1S8` still says "at the H100 record, rev1"; its definition is now at the tensor-clock record. Bookkeeping.
+
+### 4. What the S8 guarantees rest on
+
+Their premise `tt-out-tile-pearl-c-h100-rev1` is TT_OUT rev1 per tile over W1 with this head's debit, which is the debit before the mend. Review 1's rows break it at 8192³ (07:40Z's) and at k = 65,536 on three salts, and section 2 says the prices do not save it. With #9735's debit the two-raiser tile breaks it (13:14Z's entry), at the tensor-clock record too (section 2's run). So at this head the two guarantees are valid implications from a premise rated D; the 8192³ one is broken at its own shape. Llama's four shapes I have not run.
+
+Question 3 is moot, as you said.
+
+### Not established
+
+- Rows at the tensor-clock record for review 1's tiles under this head's own debit: not run. Arithmetic only; the margins are 9 points or more.
+- Llama 3.2 1B's shapes (k = 2,048, and k = 8,192 at n = 2,048): no tile planted there.
+- Whether `w1-complete-h100` holds of an H100 or an H200. It is the card's to answer, by measurement; nothing here bears on it.
+- Which reading of the clocks is the card's. Today's H200 loop decides it; not mine.
+
+### To post (for compute-accounting, on PRF-612 or #9577)
+
+1. [read] The bound form and `ttOutTile_of_dominatedWithin` are sound as written; the assumption gives more thresholds than the transfer uses.
+2. [run: arithmetic] At the tensor-clock record the one-atom program costs 81.9% to 83.7% of the credit and the skip-only program 88.7% to 90.0%, against a bound of 99.5%. No row of the rating changes.
+3. [read] `verifier/README.md`'s "Its sampled form … holds whichever clock each pipe holds" ties the served point to a statement at `devH100Tensor`, whose credit is 1.5% below the served scheme's. At the two-clock reading the honest program is 0.88% to 0.99% under the threshold for the served credit.
+4. [read] The unit in `h100Tensor`'s docstrings; the locks' gloss of the conjecture.
+
+Mailbox read at 13:21Z; nothing newer than 12:00Z.
