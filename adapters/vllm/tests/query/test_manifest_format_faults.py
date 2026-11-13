@@ -53,6 +53,7 @@ def test_what_a_batch_launchs_committed_stream_lacks_is_named(geometry, active, 
 
 @pytest.mark.parametrize(("args", "windowed", "launch"), [
     ((64, 128, 4, 4, 64, 2), False, (8, 64, 1, 128, "g8x64x1")),             # a prefill of two sequences: every head a slab of its rows
+    ((64, 6, 8, 4, 64, 2), False, (16, 3, 1, 128, "g16x3x1")),               # ... of grouped heads too: the fold is a decode's
     ((129, 1, 8, 4, 64, 1), False, (4, 2, 2, 128, "g4x2x2")),                # a GQA decode: a slab per KV head, its query heads the rows
     ((129, 1, 8, 4, 64, 1), True, (8, 1, 2, 128, "g8x1x2")),                 # ... never under a sliding window
     ((129, 2, 8, 4, 64, 2), False, (8, 2, 2, 128, "g8x2x2")),                # ... and per sequence
