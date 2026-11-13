@@ -258,13 +258,15 @@ theorem reaches_finish {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Arr
     {o : Exchange} (h : ∃ s, PlayReaches (finish D Ds θ F c a L) s o) : o.params = θ ∧ o.log = L := by
   obtain ⟨s, h⟩ := h
   obtain ⟨ρ, ho⟩ : ∃ ρ : Fin D.draws → Bool,
-      o = ⟨θ, F, c, a, L, s.1, List.ofFn ρ, D.signatures a L s.1 (List.ofFn ρ), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
+      o = ⟨θ, F, c, a, L, s.1, List.ofFn ρ, D.signatures a (spotLog Ds L) s.1 (List.ofFn ρ),
+        Ds.map (fun P => P.signatures a (P.logOf L) s.1 []), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
   rw [ho]
   exact ⟨rfl, rfl⟩
 
 theorem exists_reaches_finish (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
     (L : List Release) : ∃ o, (∃ s, PlayReaches (finish D Ds θ F c a L) s o) ∧ o.log = L :=
-  ⟨⟨θ, F, c, a, L, .empty, List.ofFn fun _ => false, D.signatures a L .empty (List.ofFn fun _ => false), .empty, #[]⟩,
+  ⟨⟨θ, F, c, a, L, .empty, List.ofFn fun _ => false, D.signatures a (spotLog Ds L) .empty (List.ofFn fun _ => false),
+      Ds.map (fun P => P.signatures a (P.logOf L) .empty []), .empty, #[]⟩,
     ⟨⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩, fun _ => false, rfl⟩, rfl⟩
 
 /-- **A node whose outputs' logs are `pre`, the release `r`, then any**, one of them `pre` and `r` alone. -/

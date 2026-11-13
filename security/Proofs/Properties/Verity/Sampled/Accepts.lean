@@ -437,8 +437,9 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
   obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) (V.devices θ) θ F c σ.1)
     (releases (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
   obtain ⟨ρ, ho⟩ : ∃ ρ : Fin (V.signer θ).draws → Bool, Verity.Game.CoinTape.run (V.game θ F c) σ x =
-      ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ, (V.signer θ).signatures σ.1 log s.1 (List.ofFn ρ), (s.2 ρ).1.1,
-        (s.2 ρ).1.2⟩ := h
+      ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ,
+        (V.signer θ).signatures σ.1 (spotLog (V.devices θ) log) s.1 (List.ofFn ρ),
+        (V.devices θ).map (fun P => P.signatures σ.1 (P.logOf log) s.1 []), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
   rw [ho]
   exact ⟨rfl, rfl⟩
 

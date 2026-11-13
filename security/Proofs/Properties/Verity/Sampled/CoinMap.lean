@@ -695,7 +695,8 @@ theorem log_of_finish {sg : Signer} {Ds : List Signer} {θ : ByteArray} {F : Arr
     {s : Strategy (finish sg Ds θ F c rq log)} {ex : Exchange} (h : PlayReaches (finish sg Ds θ F c rq log) s ex) :
     ex.log = log := by
   obtain ⟨ρ, he⟩ : ∃ ρ : Fin sg.draws → Bool, ex = ⟨θ, F, c, rq, log, s.1, List.ofFn ρ,
-      sg.signatures rq log s.1 (List.ofFn ρ), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
+      sg.signatures rq (spotLog Ds log) s.1 (List.ofFn ρ), Ds.map (fun P => P.signatures rq (P.logOf log) s.1 []),
+      (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
   rw [he]
 
 /-- **A close that records the device's log**: every output a play of `E log` reaches reads, under `lg`, the log
