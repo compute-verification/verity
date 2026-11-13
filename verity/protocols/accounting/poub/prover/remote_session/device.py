@@ -36,14 +36,18 @@ skip       the dropped blocks zeroed where they are stored, their true blocks ke
 Gates, before anything is timed (`GpuBackend.gates`), over a small store across the same GPUs and tiers (three chunks a
 GPU, and with a host tier one more a GPU in host memory, so its tree has padding on every GPU when there are several):
 the payload root against `audit.payload_tree` and blocks of the store against `codec.encode` (at each segment's first
-block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
-the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
-a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; with
-`--leaf-ctas`, the leaf pass over the same store (`GpuBackend.gate_leaf_pass`): that pass's root and kept levels, no
-receipt written, its receipts when asked for against the reference's, the same with no reading CTA, so that every
-tile is a consumer's own, and its sessions; then in
-calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
-against the reference's.
+block and the store's last), a pass's receipts and root against the reference's and `receipts.tree` over them, and
+sessions under the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped
+and rejected at a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a
+receipt; with `--leaf-ctas`, the leaf pass over the same store (`GpuBackend.gate_leaf_pass`): that pass's root and kept
+levels, no receipt written, its receipts when asked for against the reference's, the same with no reading CTA, so that
+every tile is a consumer's own, and its sessions; then in calibration, the chained pass against the plain pass at every
+kept level over the whole store, and its seed and signs against the reference's. Every buffer a gate store's pass or
+opening writes holds 0xA5 before it (`DeviceStore.poison`), and after the first pass a control under the same seed
+launches nothing: the gate must refuse its receipts and root (`no_write`), which are what the poison left of the first
+pass's. So what the gates accept, the pass they ran wrote. At 64 rows (the registration's k_s, which the leaf pass
+does not take) one more pass has no receipt grid (`rs_pass` at −1 CTAs), so every tile is a consumer's own
+(`consumer_tiles`), which no other pass is sure to run.
 """
 from __future__ import annotations
 
@@ -84,6 +88,13 @@ import reader as rdr  # noqa: E402
 BLOCK = rcodec.BLOCK_BYTES
 PER_LEAF = rb.PER_LEAF
 PACK16_WORDS = BLOCK // 64 * 32  # session.cu's SK16_PACK
+
+
+def pack_words(rows: int) -> int:
+    """The packed signs' words at k_s = `rows`: session.cu's SK16_PACK at 16 rows, its SK64_PACK at 64."""
+    return PACK16_WORDS * rows // skr.ROWS
+
+
 TOP_SEGS = 32  # session.cu's: rs_top's segments, real and padding
 SLOTS = 8
 """A GPU's root ring: the root of the k-th pass launched goes to slot k mod SLOTS, the window's previous root from the
@@ -92,10 +103,11 @@ OPEN_BATCH = 128
 """Passes whose kept levels are brought back to a GPU at once to open a window."""
 
 
-def stream_head(seed: bytes) -> bytes:
-    """The head of row 0's stream of a pass's signs (`skr.sign_bits`), its last byte the row: `rs_signs16`'s input."""
+def stream_head(seed: bytes, rows: int = skr.ROWS) -> bytes:
+    """The head of row 0's stream of a pass's signs at k_s = `rows` (`skr.sign_bits`), its last byte the row:
+    `rs_signs16`'s input, and at 64 rows `rs_signs64`'s."""
     key = randomness.derive(rb._digest(seed, "a pass seed"), rb.SIGN_DOMAIN,
-                            {"tag": rb.SKETCH_SHA512, "k": skr.ROWS, "n": BLOCK})
+                            {"tag": rb.SKETCH_SHA512, "k": rows, "n": BLOCK})
     return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
@@ -113,6 +125,16 @@ def percentiles(xs: list[int]) -> dict:
 
 def u64s(values) -> ctypes.Array:
     return (ctypes.c_uint64 * len(values))(*values)
+
+
+POISON = 0xA5
+"""The byte a gate store's buffers hold before a pass or an opening writes them (`DeviceStore.poison`)."""
+
+
+def poison(torch, *tensors) -> None:
+    """Every byte of each tensor POISON, a device's on the current stream."""
+    for t in tensors:
+        t.view(torch.uint8).fill_(POISON)
 
 
 ALLOCATOR_STATS = ("num_alloc_retries", "num_ooms", "num_sync_all_streams", "num_device_alloc", "num_device_free",
@@ -207,7 +229,9 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
     "rs_enable_peers": [],
     "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
+    "rs_rows": [_i],
     "rs_signs16": [_b, _i, _v, _v],
+    "rs_signs64": [_b, _i, _v, _v],
     "rs_chain_set": [_b, _v],
     "rs_chain_prepare": [ctypes.c_uint, _v, _v, _v, _v],
     "rs_pack16": [_v, _v, _v],
@@ -228,6 +252,11 @@ class Lib:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
         if rc:
             raise RuntimeError(f"{fn}: {rc}")
+
+    def set_rows(self, rows: int) -> None:
+        """The registration's k_s for this library's passes, subtrees and chained signs (`rs_rows`), on every GPU."""
+        if self.so.rs_rows(rows):
+            raise ValueError(f"the session's passes are sketch-sha512 at {skr.ROWS} or {skr.ROWS64} rows, not {rows}")
 
     def set_tree(self, receipt_prefix: bytes, row_bytes: int, last_row_bytes: int, domain_id: bytes, salt_in: bytes,
                  positions: int) -> None:
@@ -388,11 +417,19 @@ class DeviceStore:
 
     What a pass keeps goes to a ring of SLOTS on each GPU and from there, on each GPU's offload stream as its part ends,
     to a pinned host ring, both allocated with the store's shape (`shape`); the store's offloader copies each slot into
-    the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates."""
+    the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates.
+
+    `rows` is the registration's k_s, 16 or 64 (`set_rows`): both libraries run their passes, subtrees and chained
+    signs at it, and a pass's packed signs are `pack_words(rows)` words. The leaf pass is 16 rows only.
+
+    With `poison` set (a gate's store), every buffer a pass writes on a device holds POISON before the pass runs
+    (`_poison`), and so does each buffer an opening recomputes into: what a gate then reads there, that pass or
+    opening wrote."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, hbm=None) -> None:
+                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, hbm=None,
+                 rows: int = skr.ROWS) -> None:
         gpus = gpus or [Gpu(torch, torch.cuda.current_device(), own=False)]
         G = len(gpus)
         if blocks % PER_LEAF or blocks % chunk or blocks // chunk < G or G > 16 or host_blocks % chunk:
@@ -403,6 +440,9 @@ class DeviceStore:
         total = blocks + host_blocks
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
         self.payload_key = key
+        self.rows = rows
+        for each in (lib, lib_open):
+            each.set_rows(rows)
         self.gpus, self.hbm_blocks = gpus, blocks
         self.host_ctas, self.host_consumers = host_ctas, host_consumers
         self.leaf_ctas, self.leaf_receipts = 0, False
@@ -478,6 +518,7 @@ class DeviceStore:
         self.free = [threading.Event() for _ in range(SLOTS)]
         for f in self.free:
             f.set()
+        self.poison = False
         self.trace: list | None = None
         self._launch_trace: dict = {}
         self.offload_ns: list[int] = []
@@ -547,12 +588,12 @@ class DeviceStore:
                 r = {"pad": torch.empty((max(2 * pad_n, 1), 8), dtype=torch.int64, device=dev),
                      "pad_out": torch.empty((max(self.pads[g][1], 1), 8), dtype=torch.int64, device=dev),
                      "seed": torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev),
-                     "pk": torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev),
+                     "pk": torch.empty(pack_words(self.rows), dtype=torch.int32, device=dev),
                      "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev)}
                 parts = []
                 if g == 0:
                     r["seeds"] = torch.empty((SLOTS, rb.DIGEST_BYTES), dtype=torch.uint8, device=dev)
-                    r["pks"] = torch.empty((SLOTS, PACK16_WORDS), dtype=torch.int32, device=dev)
+                    r["pks"] = torch.empty((SLOTS, pack_words(self.rows)), dtype=torch.int32, device=dev)
                     r["top"] = torch.empty((SLOTS, self.top_at[H + 1], 8), dtype=torch.int64, device=dev)
                     parts += ["seeds", "pks", "top"]
                 r["host"] = {k: torch.empty(r[k].shape, dtype=r[k].dtype, pin_memory=True) for k in parts}
@@ -583,10 +624,12 @@ class DeviceStore:
         a consumer warp's own, which is a gate's and no way to run a store. The roots, the kept levels and the
         openings are the same either way, and a host segment is always `rs_pass`'s. A caller sets it for the passes
         it wants and puts it back. The leaf pass pays only where the read sets a pass's time, so it is asked for per
-        card type, after a measurement on that card type."""
+        card type, after a measurement on that card type. It is 16 rows only (`rows`)."""
         if leaf_ctas < -1 or (receipts and not leaf_ctas):
             raise ValueError("a leaf pass has reading CTAs or, with -1, none, and only a leaf pass is asked for its "
                              "receipts")
+        if leaf_ctas and self.rows != skr.ROWS:
+            raise ValueError(f"the leaf pass is {skr.ROWS} rows only, not the store's {self.rows}")
         if leaf_ctas and self.h0 > 8:
             raise ValueError(f"a leaf pass keeps its levels from h0 <= 8, not {self.h0}")
         self.sync()
@@ -690,6 +733,24 @@ class DeviceStore:
         self.sync()
         return self.blocks * BLOCK / ((time.perf_counter_ns() - t0) / 1e9)
 
+    def set_rows(self, rows: int) -> None:
+        """The registration's k_s, 16 or 64: both libraries' (`Lib.set_rows`), and at a new count the rings again, a
+        pass's packed signs being `pack_words(rows)` words. A store made at the registration's rows needs no call."""
+        if rows != skr.ROWS and self.leaf_ctas:
+            raise ValueError(f"the leaf pass is {skr.ROWS} rows only: pass_mode(0) before {rows} rows")
+        for lib in (self.lib, self.lib_open):
+            lib.set_rows(rows)
+        if rows != self.rows:
+            self.rows = rows
+            self.shape(self.chunk, self.h0, self.sketch_ctas)
+
+    def signs(self, head: bytes, pk, stream=None) -> int:
+        """A pass's packed signs from its stream head into pk on the current GPU (`rs_signs16`, at 64 rows
+        `rs_signs64`), on `stream` (the current one if None): the library's return code."""
+        s = self.torch.cuda.current_stream() if stream is None else stream
+        fn = self.lib.so.rs_signs64 if self.rows == skr.ROWS64 else self.lib.so.rs_signs16
+        return fn(head, len(head), pk.data_ptr(), s.cuda_stream)
+
     def set_pass(self, lib: Lib, seed: bytes) -> None:
         """A pass's constants from the host on the current GPU."""
         dom = rb.domain(seed, self.plan)
@@ -707,10 +768,25 @@ class DeviceStore:
                                    x["kept"][slot].data_ptr(), self.h0, self.chunk, self.host_ctas, 0, 0, None, None,
                                    gpu.host_main.cuda_stream, gpu.host_side.cuda_stream, self.host_consumers)
 
-    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
+    def _poison(self, g: int, slot: int) -> None:
+        """POISON in every buffer the pass about to take `slot` writes on GPU g, on the current stream: its seed and
+        packed signs, its root, its padding's scratch and nodes, each of its segments' counters, receipts, tree
+        scratch and kept levels, and on the leader its top levels. The host's copies of them are made after the pass
+        whatever it wrote (`launch`), so they hold what the pass wrote or this."""
+        ring = self.ring[g]
+        mine = [ring["seed"], ring["pk"], ring["pad"], ring["pad_out"], ring["roots"][slot]]
+        mine += [ring[k][slot] for k in ring["host"]]
+        for q in self.gpu_segs[g]:
+            x = self.seg_ring[q]
+            mine += [x["ctr"], x["ys"], x["dig"], x["up"], x["kept"][slot]]
+        poison(self.torch, *mine)
+
+    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None, write: bool = True) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
         each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
-        from the host; its ticket at once (`wait`)."""
+        from the host; its ticket at once (`wait`). Without `write` nothing that computes the pass is launched (its
+        signs, its receipts and tree, its top levels), only what carries its buffers to the host: a gate's control,
+        whose root and receipts are whatever the buffers held."""
         so, G, hc = self.lib.so, len(self.gpus), self.hc
         tr = None if self.trace is None else [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         slot = self.launched % SLOTS
@@ -719,13 +795,15 @@ class DeviceStore:
         self.free[slot].wait()
         self.free[slot].clear()
         prev = SLOTS if after is None else after.slot
-        head = stream_head(seed) if seed is not None else None
+        head = stream_head(seed, self.rows) if seed is not None else None
         lc = self.chunk // PER_LEAF
         for g, gpu in enumerate(self.gpus):
             ring = self.ring[g]
             with self.on(gpu) as s:
                 if after is not None:
                     s.wait_event(self.top_done[after.slot])
+                if self.poison:
+                    self._poison(g, slot)
                 if g == 0:
                     self.started[slot].record(s)
                 self.began[g][slot].record(s)
@@ -733,30 +811,32 @@ class DeviceStore:
                 pk = ring["pks"][slot] if g == 0 else ring["pk"]
                 if tr is not None:
                     tr.append(time.perf_counter_ns())
-                if seed is None:
+                if not write:
+                    rc = 0
+                elif seed is None:
                     rc = so.rs_chain_prepare(i, ring["roots"].data_ptr() + 64 * prev, sd.data_ptr(), pk.data_ptr(),
                                              s.cuda_stream)
                 else:
                     self.set_pass(self.lib, seed)
-                    rc = so.rs_signs16(head, len(head), pk.data_ptr(), s.cuda_stream)
+                    rc = self.signs(head, pk, s)
                 hbm, *host = self.gpu_segs[g]
                 if host and not rc:
                     # The host segment first, so its few CTAs are on the device before the shard's grids fill it.
                     self.prepared[g][slot].record(s)
                     gpu.host_main.wait_event(self.prepared[g][slot])
                     for q in host:
-                        rc = rc or self.host_pass(q, pk, slot)
+                        rc = rc or (write and self.host_pass(q, pk, slot))
                     self.host_done[g][slot].record(gpu.host_main)
                 first, count = self.pads[g]
                 x = self.seg_ring[hbm]
                 leaf = bool(self.leaf_ctas) and not rc
-                if leaf:
+                if leaf and write:
                     rc = so.rs_leaf_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
                                          x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
                                          x["kept"][slot].data_ptr(), self.h0, self.chunk, self.leaf_ctas, first * lc,
                                          count * lc, ring["pad"].data_ptr(), ring["pad_out"].data_ptr(),
                                          s.cuda_stream, gpu.side.cuda_stream, int(self.leaf_receipts))
-                else:
+                elif write:
                     rc = rc or so.rs_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
                                           x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
                                           x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
@@ -764,7 +844,8 @@ class DeviceStore:
                                           ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
                 if leaf and rc == 5:
                     raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the shard does not fit the leaf pass (h0 "
-                                       f"{self.h0} over 8, or its kernels on this device); pass_mode(0) is rs_pass's")
+                                       f"{self.h0} over 8, {self.rows} rows, or its kernels on this device); "
+                                       "pass_mode(0) is rs_pass's")
                 if rc:
                     raise RuntimeError(f"{'rs_leaf_pass' if leaf else 'rs_pass'} on GPU {gpu.index}: {rc}")
                 if host:
@@ -786,8 +867,8 @@ class DeviceStore:
             top = self.ring[0]["top"][slot]
             if tr is not None:
                 tr.append(time.perf_counter_ns())
-            rc = so.rs_top(u64s(segs), u64s(counts), len(segs), top.data_ptr(), hc, self.H, u64s(roots), G,
-                           s.cuda_stream)
+            rc = write and so.rs_top(u64s(segs), u64s(counts), len(segs), top.data_ptr(), hc, self.H, u64s(roots), G,
+                                     s.cuda_stream)
             if rc:
                 raise RuntimeError(f"rs_top: {rc}")
             self.top_done[slot].record(s)
@@ -863,6 +944,11 @@ class DeviceStore:
                                "host_ms": host})
         return root, ticket.handle
 
+    def receipts(self) -> list[bytes]:
+        """The receipts on the devices, every block's in store order: the last pass's, once it is waited for."""
+        self.sync()
+        return [y for x in self.seg_ring for y in digests(x["ys"])]
+
     def run_pass(self, seed: bytes):
         """One unchained pass under `seed`: its root, and what its openings need, (seed, packed signs, each segment's
         kept levels, the top levels)."""
@@ -933,15 +1019,21 @@ class DeviceStore:
         return {"passes": passes, "ns": time.perf_counter_ns() - t0}
 
     def signs_match(self, seed: bytes) -> bool:
-        """The leader's packed signs of a pass (`rs_signs16`) against the reference's (`skr.signs`, packed)."""
+        """The leader's packed signs of a pass (`signs`) against the reference's, packed: `skr.signs` by `rs_pack16`
+        at 16 rows, `skr.sign_bits` by the reader's `pack64` at 64."""
         torch = self.torch
-        head = stream_head(seed)
+        head = stream_head(seed, self.rows)
         with self.on(self.gpus[0]):
             dev = self.data_g[0].device
-            got, want = (torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev) for _ in range(2))
-            self.lib.call("rs_signs16", head, len(head), got.data_ptr())
-            signs = torch.from_numpy(skr.signs(seed)).to(dev)
-            self.lib.call("rs_pack16", signs.data_ptr(), want.data_ptr())
+            got = torch.empty(pack_words(self.rows), dtype=torch.int32, device=dev)
+            if self.signs(head, got):
+                raise RuntimeError("the pass's signs on the device failed")
+            if self.rows == skr.ROWS64:
+                want = torch.from_numpy(rdr.pack64(skr.sign_bits(seed, self.rows)).view(np.int32).reshape(-1)).to(dev)
+            else:
+                want = torch.empty_like(got)
+                signs = torch.from_numpy(skr.signs(seed)).to(dev)
+                self.lib.call("rs_pack16", signs.data_ptr(), want.data_ptr())
             return bool(torch.equal(got, want))
 
     def plain_root(self, seed: bytes, expected=None) -> bytes:
@@ -953,6 +1045,7 @@ class DeviceStore:
         and its segment boundaries, the tiers' among them, are part of the gate rather than only its final digest."""
         torch, chunk, hc, h0 = self.torch, self.chunk, self.hc, self.h0
         lc = chunk // PER_LEAF
+        wide = self.rows == skr.ROWS64
         matches = {h: True for h in range(h0, self.H + 1)}
         level = []
         for s, g in enumerate(self.seg_gpu):
@@ -960,17 +1053,24 @@ class DeviceStore:
             with self.on(gpu):
                 dev = torch.device("cuda", gpu.index)
                 self.set_pass(self.lib, seed)
-                signs = torch.from_numpy(skr.signs(seed)).to(dev)
-                sk = torch.empty((chunk, skr.ROWS), dtype=torch.int32, device=dev)
+                if wide:   # the reader's two kernels at 64 rows, under the reference's signs
+                    signs = torch.from_numpy(rdr.pack64(skr.sign_bits(seed, self.rows)).view(np.int32)).to(dev)
+                else:
+                    signs = torch.from_numpy(skr.signs(seed)).to(dev)
+                sk = torch.empty((chunk, self.rows), dtype=torch.int32, device=dev)
                 ys = torch.empty((chunk, 8), dtype=torch.int64, device=dev)
                 dig = torch.empty((lc, 8), dtype=torch.int64, device=dev)
                 up = torch.empty((lc, 8), dtype=torch.int64, device=dev)
                 want = None if expected is None else expected[2][s].to(dev)
                 for k in range(self.n[s] // chunk):
                     j0 = self.base[s] + k * chunk
-                    self.lib.call("rb_sketch", self.data_g[s].data_ptr() + k * chunk * BLOCK, None, chunk,
-                                  signs.data_ptr(), sk.data_ptr(), 0)
-                    self.lib.call("rb_sketch_hash", sk.data_ptr(), j0, chunk, ys.data_ptr())
+                    src = self.data_g[s].data_ptr() + k * chunk * BLOCK
+                    if wide:
+                        self.lib.call("rb_sketch64", src, None, chunk, signs.data_ptr(), sk.data_ptr(), 2, 0)
+                        self.lib.call("rb_sketch64_hash", sk.data_ptr(), j0, chunk, ys.data_ptr())
+                    else:
+                        self.lib.call("rb_sketch", src, None, chunk, signs.data_ptr(), sk.data_ptr(), 0)
+                        self.lib.call("rb_sketch_hash", sk.data_ptr(), j0, chunk, ys.data_ptr())
                     self.lib.call("rb_leaves", ys.data_ptr(), j0 // PER_LEAF, lc, dig.data_ptr(), None)
                     levels = climb(self.lib, dig, j0 // PER_LEAF, lc, up)
                     if want is not None:
@@ -1036,6 +1136,8 @@ class DeviceStore:
             total = sum(len(f) for f in firsts)
             ys = torch.empty((total * S, 8), dtype=torch.int64, device=dev)
             nodes = torch.empty((total * per, 8), dtype=torch.int64, device=dev)
+            if self.poison:
+                poison(torch, ys, nodes)
             cs = torch.from_numpy(np.concatenate(firsts)).to(dev)
             ys0, nd0 = np.uint64(ys.data_ptr()), np.uint64(nodes.data_ptr())
             rows, order, hold, q0 = [], [], [], 0
@@ -1070,6 +1172,8 @@ class DeviceStore:
             addrs = np.concatenate(rows)
             n = addrs.size
             got = torch.empty((n, 8), dtype=torch.int64, device=dev)
+            if self.poison:
+                poison(torch, got)
             self.lib_open.call("rs_gather64", torch.from_numpy(addrs.reshape(-1).view(np.int64)).to(dev).data_ptr(), n,
                                got.data_ptr())
             idx = np.concatenate(order)
@@ -1199,6 +1303,7 @@ class GpuBackend:
         return root
 
     def encode(self, registration: audit.Registration) -> dict:
+        self.store.set_rows(registration.rows)
         self.gates = self.gate(registration)
         self.log(f"device: gates {self.gates}")
         if not self.gates["ok"]:
@@ -1210,6 +1315,11 @@ class GpuBackend:
             raise RuntimeError("the store's last block is not the codec's encode of its payload")
         self.encode_bytes_per_s = rate
         return {"encode_bytes_per_s": rate, "blocks": self.blocks, "bytes": self.blocks * BLOCK}
+
+    def set_sketch_ctas(self, ctas: int) -> None:
+        """The receipts grid's CTAs from the next pass on, the gate store's too: `rs_pass` takes the count at each
+        call, and no ring is sized by it."""
+        self.shape["sketch_ctas"] = self.store.sketch_ctas = ctas
 
     def read_ms(self, segments: list[int], tries: int = 6) -> float:
         """The read alone (`rb_read`) of `segments` at once, each on its GPU, a host segment on the GPU's host stream
@@ -1313,7 +1423,7 @@ class GpuBackend:
                 "slow_passes": self.calibration_trace["slow"],
                 "max_over_median": intervals[-1] / intervals[len(intervals) // 2],
                 "warm_openings": len(draws), "warm_open_ns": open_ns,
-                "shape": {**self.shape, "h0": s.h0, "hc": s.hc, "gpus": len(self.gpus), "segment_blocks": s.n,
+                "shape": {**self.shape, "rows": s.rows, "h0": s.h0, "hc": s.hc, "gpus": len(self.gpus), "segment_blocks": s.n,
                           "segment_gpu": s.seg_gpu, "hbm_blocks": s.hbm_blocks, "host_blocks": s.blocks - s.hbm_blocks,
                           "host_ctas": s.host_ctas, "host_consumers": s.host_consumers, "pads": s.pads,
                           "leaf_ctas": s.leaf_ctas},
@@ -1366,7 +1476,7 @@ class GpuBackend:
                             kept_from=self.shape["kept_from"], sketch_ctas=self.shape["sketch_ctas"],
                             payload_kept_from=self.shape["payload_kept_from"],
                             host_blocks=len(self.gpus) * self.gate_chunk if self.store.hbm_blocks < self.blocks else 0,
-                            **self.host)
+                            rows=registration.rows, **self.host)
         out["segments"] = {"blocks": small.blocks, "hbm_blocks": small.hbm_blocks, "segment_blocks": small.n,
                            "h0": small.h0, "hc": small.hc, "pads": small.pads}
         payloads = small.blocks_at(0, small.blocks)
@@ -1382,15 +1492,38 @@ class GpuBackend:
         reg = audit.Registration(registration.node, small.blocks, root, registration.codec_seed, registration.codec,
                                  registration.receipt, registration.bind, registration.layout, registration.rows)
         seed = rb.seed(self.rng.bytes(32), 0, reg.digest)
-        got, handle = small.run_pass(seed)
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
         ref = rb.tree(seed, small.plan, ys, [store_salt(self.salt_key, seed, c) for c in range(small.blocks // PER_LEAF)])
-        out["pass_root"] = got == ref.commitment.root
+        # From here every pass and opening of the gate store writes into poisoned buffers.
+        small.poison = True
+        got, handle = small.run_pass(seed)
+        out["rows"] = small.rows
+        out["pass_receipts"], out["pass_root"] = small.receipts() == ys, got == ref.commitment.root
+        # The control: the same pass launching nothing, after the pass that wrote this seed's receipts where it reads
+        # them. What the same comparisons see is what the poison left of those, and they must refuse it.
+        control, _ = small.wait(small.launch(0, None, seed=seed, write=False))
+        out["no_write"] = {"receipts": small.receipts() == ys, "root": control == ref.commitment.root}
+        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
+                     and out["pass_receipts"] and out["pass_root"])
+        if small.rows == skr.ROWS64 and small.h0 <= 8:
+            # A consumer warp (there are none above h0 = 8) computes a tile itself only where it is on an SM before any
+            # receipt CTA (`help64_tile`), which no pass can be counted on to do. With no receipt grid every tile is a
+            # consumer's.
+            ctas, small.sketch_ctas = small.sketch_ctas, -1
+            try:
+                tiles, _ = small.run_pass(seed)
+            finally:
+                small.sketch_ctas = ctas
+            out["consumer_tiles"] = {"receipts": small.receipts() == ys, "root": tiles == ref.commitment.root,
+                                     "receipt_ctas_started": sum(int(x["ctr"][-1]) for q, x in enumerate(small.seg_ring)
+                                                                 if not small.on_host[q])}
+            out["ok"] = out["ok"] and out["consumer_tiles"] == {"receipts": True, "root": True,
+                                                                "receipt_ctas_started": 0}
         out["session_honest"] = self.gate_session(small, reg, set())
         out["session_skip_sixteenth"] = self.gate_session(small, reg, set(range(0, small.blocks, 16)))
-        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and out["pass_root"]
-                     and out["session_honest"]["accepted"] and out["session_skip_sixteenth"]["failure"] == "receipt")
+        out["ok"] = (out["ok"] and out["session_honest"]["accepted"]
+                     and out["session_skip_sixteenth"]["failure"] == "receipt")
         if small.hbm_blocks < small.blocks:
             out["session_skip_host"] = self.gate_session(small, reg, set(range(small.hbm_blocks, small.blocks, 4)))
             out["ok"] = out["ok"] and out["session_skip_host"]["failure"] == "receipt"
