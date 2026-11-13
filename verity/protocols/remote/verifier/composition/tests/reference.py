@@ -552,7 +552,7 @@ def policy_record(commitment: bytes, evidence: bytes) -> list[bytes] | Exception
 
 
 def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_check.Refused | None:
-    """`Core.Remote.windowRecords`: the digests of each window's Commit record (`credit.commit_of`) in a period's
+    """`Core.Remote.executionPhaseRecords`: the digests of each window's Commit record (`credit.commit_of`) in a period's
     evidence, in the close's order; else the period's refusal of the evidence, or None when a window names no Commit
     record (which the period refuses), either of which reads as no value."""
     try:
