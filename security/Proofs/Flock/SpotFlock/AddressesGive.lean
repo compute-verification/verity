@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.EntryRoots
 public import Proofs.Flock.SpotFlock.PortsMember
 public import Proofs.Flock.SpotFlock.AddressFactsGive
-public import Proofs.Flock.SpotFlock.InsideOf
+public import Proofs.Flock.SpotFlock.BitsInUnitsOf
 
 /-!
 # The addresses premise, from the facts of an accepted run
@@ -23,7 +23,9 @@ evaluates only where the registered wiring passes its check (`CheckedRun.wiring_
 
 Each of those facts is stated over accepted runs, so its own proof may read the design's conditions the same way.
 `Inside` is one of them proved (`inside_of`), from the members' proof blocks standing side by side (`SideBySide`) and
-each bit being a gate of its unit's proof block (`BitsInUnits`): `addressesConnected_of_blocks`.
+each bit being a gate of its unit's proof block (`BitsInUnits`): `addressesConnected_of_blocks`. Both of those hold at
+every held code (`sideBySide_of_held`, `bitsInUnits`), and `NeededBits` where every member's bits are rowed
+(`MembersRowed`): `addressesConnected_of_rowed`.
 -/
 
 @[expose] public section
@@ -73,5 +75,14 @@ theorem addressesConnected_of_blocks (hN : NeededBits h) (hcl : SideBySide h) (h
     (hC : CopyFact h (addressOf h)) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) :
     AddressesConnected h :=
   addressesConnected_of_runs h hN (inside_of hN hcl hU hO) hO hR hOwn hW hC hRow
+
+variable (h) in
+/-- **The addresses premise, where every member's bits are rowed**: `addressesConnected_of_blocks`, with every needed
+gate one of its unit's bits from the members' bits being rowed (`neededBits_of_rowed`), and the members' proof blocks
+side by side and each bit a gate of its unit's proof block at every held code. -/
+theorem addressesConnected_of_rowed (hM : MembersRowed h) (hO : WrittenOnce h) (hR : RowsArePorts h)
+    (hOwn : OwnReads h) (hW : WidthFact h (addressOf h)) (hC : CopyFact h (addressOf h))
+    (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) : AddressesConnected h :=
+  addressesConnected_of_blocks h (neededBits_of_rowed hM) (sideBySide_of_held h) (bitsInUnits h) hO hR hOwn hW hC hRow
 
 end SpotFlock
