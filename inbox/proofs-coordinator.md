@@ -136029,3 +136029,270 @@ Mailbox read through 10:39Z. Pushed: `cursor/proofs-members-switch-34fd` at `bac
 **Runs.** `r20261113-102817-3950` at `587cd9f4fc`, rc 1 (`inputOf_first` not imported; `Reg.program` not unfolded). `r20261113-103826-a3a7` at `f3462236a6`, rc 0. Nothing out.
 
 **Machine** [run]: the VM rebooted again before 10:21Z. I took the pen again (10:21:13Z) and rebuilt both worktrees from the pushed branches; nothing was lost. No `main` merged.
+
+## STOPDRIVER, Fri 13 Nov 10:46Z: NET-403's three questions
+
+**STOP RULE, for one command of the three.** "Stopped before any challenge was sent: no record, as our writer
+has it" is true of the stop audit's command and false of the second stage's.
+
+- [run] Our writer on `main` writes a record, with the word `refuse`, from the `summary.json` the second stage's
+  command leaves where it stopped with an error after its stream registered again. Four cases, each written: the
+  first stage sampled no span (exit 0); its challenger session did not open; its session opened and the capture
+  was not the sampled spans'; its session opened and the stream refused the interior's registration. The first two
+  are before any challenge of that stage was sent.
+- [run] From each of the stop audit's three error summaries the writer writes no record.
+- [run] The ruled shape's reader (#9501 at `f4d2e20e290d`, today's head) reads none of these: `class_charge.lacks`
+  answers "its `verdict` is no object", and `out/verdicts.jsonl` is not matched by `out/*-verdicts.jsonl`. So no
+  line is misprinted today.
+- [run] Put in the ruled shape by the lines I gave for row 8 and nothing more, the same stopped second stage is
+  `accepted` false, `withheld` null, `codes` empty, and the reader's line says "refused". With `stopped` it says
+  "stopped with `WORD`". My row 8 text named the stopped command for the stop audit and not for the second stage.
+- So the writer's follow-up has one thing more than a new field: it must stop writing `refuse` for a second stage
+  that reached no verdict.
+
+**The three answers, each resting on the section of its number.**
+
+1. Yes for the stop audit's and the second stage's commands, as a change in each command and in the writer (about
+   60 lines, 8 tests); the writer alone cannot, since no error summary says whether a session opened. No for the
+   first stage's command, which has no piece in the writer and is where two of the three streams' challenges are sent.
+2. Under `gate:`, yes for the two challenger sessions, at the auditor's ledger. Under `--challenger local`, no.
+   For the stop audit's proof session, no under either.
+3. No day for a served class. The code, on a head a test signs: the pull request after the writer's follow-up.
+
+Read only: no file of the tree is changed, no run was sent, no branch moved. `main` is `053b8e50fe8a` (chain 1 of
+the moves is on it, chain 2 is not). What ran, ran on the VM in seconds: the scripts and all they printed are in
+the notes, `lanes/proofs/20261113T1041Z-report-stopdriver.md`. The summaries the writer was run on are written by
+hand from the commands' lines; no command of ours ran.
+
+### 1. The `stopped` record on the error path
+
+**Which commands** [read; run: `rg` at `main` and at my four branches].
+
+- The stop audit: `benchmarks/one_stage/stop_audit.py`, the writer's piece `stop_record`.
+- The compute audit is two commands. Its second stage is `benchmarks/one_stage/two_stage.py second`, the piece
+  `second_stage`: your "the second stage's" and "the compute audit's" are this one command. Its first stage is
+  `two_stage.py first`, and the writer has no piece for it.
+- The writer, `benchmarks/one_stage/verdict_record.py`, has no caller but its own tests. No script or command in
+  the tree runs it, on `main` or on a branch of mine. (`verity_vllm.pipeline.verdict_record` is another module.)
+
+**Where each stream's session opens** [read].
+
+- The second stage: `AC.start` at `two_stage.py` 1033, a challenger session of its own on the root
+  `interior_run(boundary registration's digest, replay sample)` (1032). It is open once `coins.plan` returns (1038),
+  and by then its client has sent the root and read one challenge (`a5_coins.py` 231 to 233). So for this command
+  "the session opened" and "a challenge was sent" are one moment, as the command sees it.
+- The stop audit opens no challenger session and sends no sampling challenge. The stop record is registered and
+  sampled in the first stage's command (`two_stage.py first --stop`, 902: the window's one session, each class a
+  rank and each stop class's stop blocks a rank more). What `stop_audit.py` opens is one proof session (529:
+  `flock-circuit serve` and `prove`, then Lean's verdict) on the sample its hand-off fixes. Every run of it comes
+  after its stream's sampling challenge, and a second run proves the same blocks in a second proof session.
+  Under `FLOCK_CHALLENGER=1` that session's challenges come from a challenger the command starts itself under its
+  own `OUT/session/challenger` (`a0.py` 213 to 216, 230 to 233), which is no device of the auditor's.
+
+**The stop audit's command, `main` lines 512 to 546.** "In hand" is the class and both digests (`r.boundary`,
+`r.registration.digest`, `r.layout`), which `resume` returns at 517.
+
+| where it stops | today [read] | writer today [run] | in hand | word |
+|---|---|---|---|---|
+| `template_fn` (513): `LookupError` | caught by nothing: a traceback, no summary | nothing to read | no | none |
+| `resume` (517): `ValueError` | summary with `error`, no `registration` | no record | no | none |
+| `resume`: `Unlogged`, `service.Refused` | summary with codes, no `registration` | no record | no | not a stop: below |
+| 518 to 528: its files, the prover's files | summary with `error` | no record | yes | none, or `staging` (point 1) |
+| `session` (529): `OSError`, `ValueError` | summary with `error` | no record | yes | `session` |
+| `session`: `subprocess.TimeoutExpired` | caught by nothing (`a0.py` 62 to 66) | nothing to read | yes | `session` |
+| `decide` (531): not `Refused`, `Pending` | as its type: caught or not | no record, or nothing | yes | `outcome` |
+| 542 to 546: `audit.json`, `summary_of` | outside the `try`: a traceback | nothing to read | yes | `record` |
+
+- [read] `TimeoutExpired` is the prover's time limit passing (`--session-timeout`).
+- [read] Not stops, and right today: `decide` catches `Refused` and `Pending` itself and the summary names
+  `registration`, so the writer writes `refuse`. A prover that dies or sends no proof raises nothing: Lean refuses,
+  or no session is recorded, and the audit record refuses.
+- [read] Beside the question: `Unlogged` (the code `cross-stream-order`) and `service.Refused` out of `resume` are
+  the verifier's own refusals, with codes, and leave no record today because their summary names no `registration`.
+  They read as missing, which charges the whole schedule, and a later run could fill the verdict. The hand-off
+  names both digests, so the same change can give them a refused record with their codes.
+
+**The second stage's command, `main` lines 995 to 1069.** The boundary registration's digest is in hand from 1027,
+the interior registration's from 1048 only; before 1048 the record's `stream_registration` is null.
+
+| where it stops | today [read] | writer today [run] | word |
+|---|---|---|---|
+| 1018: the first stage sampled nothing | summary `refused`, no `first_stage` | no record | none |
+| 1020 to 1025: `resume` and before | the same | no record | none |
+| 1030: no span sampled, exit 0 | `refused`, `first_stage` named | `refuse` | none: no session, nothing tried |
+| 1038: `coins.plan`, the session not opened | `refused: "CoinError: ..."` | `refuse` | none |
+| 1038: "the challenger's session opened, and its client failed" | the same | `refuse` | `session` |
+| 1040: `replayed`, `ValueError` or `OSError` | `refused: "ValueError: ..."` | `refuse` | `interior` |
+| 1040: `replayed`, `service.Refused` | `refused`: the stream's verdict | `refuse` | not a stop: refused, its codes |
+| 1055: `prove`, any exception | caught by nothing: a traceback, no summary | nothing to read | `prove` |
+| 1057 to 1061: the evidence, `coins.json` | caught by nothing | nothing to read | `evidence` |
+| 1063: `outcome_of`, anything but `Refused`, `Pending` | caught by nothing | nothing to read | `outcome` |
+
+- [read] The error return at 1043 does not say whether a session opened: the session's id (`challenger.plan.session`)
+  enters the summary at 1058 only. So today nothing the writer reads tells the fourth row from the fifth.
+- [read] `a5_coins.py` gives three refusals to tell them by: "the root's one session was not opened" (788),
+  "opening the challenger's session failed" (794), and "the challenger's session opened, and its client failed"
+  (240).
+- [run, at `f4d2e20e290d`] A word is any text that is not empty: `session` and `prove` read; the empty word does
+  not. A stopped verdict that states a code does not read ("states `withheld` null and `codes` empty"), so the
+  exception's type and text stay in the summary's `error` and never in `codes`. A stopped control whose `reason` is
+  null does not read ("its `reason` is no text"); with a text it reads and is no refusal.
+
+**The size** [derived, nothing written].
+
+- `stop_audit.py`, about 15 lines: a step mark, the last `except` widened to every exception, the last five lines
+  moved under the `try`, and an error summary that names `registration` and `stopped` once `resume` has returned.
+- `two_stage.py`, about 20 lines: the error return keeps the challenger's plan; `service.Refused` is told from the
+  other errors; one `except` around 1055 to 1065 that writes `stopped`.
+- `verdict_record.py`, about 25 lines: a branch for `stopped` in each piece; no record for a second stage whose
+  session did not open; the stream's refusal in `resume` as a refused record.
+- Tests, 8, about 120 lines: four of the writer, two of each command.
+- No Lean, no circuit, nothing under `verity/`. The files are the ones #9458 and #9699 change, so it goes into
+  the writer's follow-up, after the carry.
+
+**What it cannot cover.**
+
+- [read] A killed command (a kill signal, memory, a replaced machine, a run's time limit) writes nothing.
+- [run: `rg`] The writer is a second command, and nothing in the tree calls it. A launcher that stops at the
+  command's exit 1 never reaches it.
+- [read] The first stage's command. A stop class's boundary and stop challenges are sent there; where it stops, or
+  refuses the window after its samples (`cross-stream-order`, `stop-stage`), it leaves refusal files and no record.
+- [read] A session the gate opened whose answer never reached the command: the command believes none opened.
+- [read] A failure to write `summary.json` itself.
+
+### 2. A record of the sessions opened
+
+**Under `gate:USER@HOST`: yes, for the two challenger sessions.**
+
+- [read] At `/var/lib/vy-challenger/windows.jsonl` on the auditor's challenger device
+  (`verity/composite/device/live_challenger/auditor.py` 478 to 490), written by the gate. The command's copy of the
+  whole ledger is `OUT/challenger/windows.jsonl`, written by `GateClient.finish` (`a5_coins.py` 700) from the
+  gate's `ledger` verb. A copy is also inside each class's `stage1.json` and the second stage's `coins.json`.
+- [read] It holds three signed entries a session, chained by `prev`: `reserve` (who, the peer, the layout, the
+  times), `open` (the session, `window.root`, `opened_by`) and the end. `auditor.py` 44 to 63.
+- [read] It names a session by the root it opened on, never by a registration's digest. The first stage's root is
+  the window's run (`two_stage.py` 900, 989 to 992), on which the boundary record and the stop record are both
+  registered and sampled. The second stage's is `interior_run` of the boundary registration's digest and the
+  replay sample (`interior_rows.py` 308 to 311), which is also the interior window's run (357).
+- [read; run: its test passes at `main`] The gate itself refuses a second open of a root: "already has its session
+  (S) in the ledger: one session a root, ever" (`auditor.py` 1156 to 1157). The test is
+  `test_a_window_is_reserved_then_opened_and_its_open_binds_session_and_root_before_it_serves`.
+  So two sessions on one of these two roots cannot both open. What the ledger gives the reader beyond that is the
+  session that opened and left no verdict record: the killed command.
+- [read] A copy in `OUT/` is written by the command at its end, so a killed command leaves none. The gate prints
+  its whole ledger at any time (its `ledger` verb, `auditor.py` 1970).
+
+**Under `--challenger local`: no, nothing kept names a second session on one stream.**
+
+- [read] Each run of a command makes a new auditor root in scratch with a key of its own
+  (`a5_coins.py` 764: `tempfile.mkdtemp`), and its `OUT/challenger/windows.jsonl` is that root's ledger (628 to 638).
+- [run] Two runs opening on one root: neither refused, two sessions (`s20261113T103727Z-b863`,
+  `s20261113T103728Z-2d04`), each run's ledger holding its own open and no other, two auditor roots in scratch.
+- [read] So under `local` a second first stage on one window samples again, on new challenges, and nothing kept
+  shows it. Both rehearsal scripts in the tree use `local` (`two_stage_small.sh` 58 and 63,
+  `stop_audit_small.sh` 57 to 58); `gate:` is an option they document (`two_stage_small.sh` 16 to 17).
+
+**The stop audit's proof session: no, under either.**
+
+- [read] Its records are `OUT/session/sessions/<id>/session.json`, written by the command's own
+  `flock-circuit serve`, and under `FLOCK_CHALLENGER=1` the files of the challenger the command starts itself.
+  No device of the auditor writes a line for it, and the command can be run again on the same hand-off any number
+  of times. What that challenger of the command's own keeps, I did not read.
+- [read] The second stage's proof sessions are not in the ledger either (`two_stage.py` 796 hands `a5.audit` no
+  challenger session). There the gate closes it another way: a second run cannot open the interior's root again.
+- The smallest thing that would be the record, since there is none: the stop audit opens one challenger session
+  on a root that is a function of the stop record's registration digest before its proof session, as the second
+  stage does on `interior_run`, so the gate's ledger names it and refuses a second.
+
+**What a run's `out/` holds** [read].
+
+- The first stage's: `challenger/` (the session's files, `windows.jsonl`, `pins.jsonl`) and each class's
+  `stage1.json`, whose `evidence` holds the ledger's lines as the session's end left them (`a5_coins.py` 817, 846).
+- The second stage's: `challenger/` likewise, `coins.json` with both stages' evidence, and `summary.json`, which
+  names its session's id only where the command reached line 1058.
+- The stop audit's: `session/sessions/<id>/session.json` and `summary.json`. No ledger and no session's id.
+- The rehearsal scripts keep a ledger only under 63 MiB (`two_stage_small.sh` 9 to 10).
+
+**The service's record of a stream: nothing kept.**
+
+- [read] `Stream.log` and `records` are in memory. `two_stage.py` 44 to 46: "A `Stream` holds code and doesn't
+  persist, so `resume` builds the class's stream again". Its own once-only rules (`select` once a registration,
+  `service.py` 2125 to 2133; `outcome` once, 2276 to 2300) hold inside one process and not across two runs.
+- [read] The loopback challenger (`challenger_party.py`) keeps its opened roots in a set in memory, for the life of
+  its process.
+
+### 3. The day the two commands are handed the head
+
+**No day for a served class, because no serve I know of has both.** The code alone has a day relative to the
+carries, below.
+
+**What exists** [read; run: `rg`].
+
+- The registration of connection rows is `connection_rows.registration(head, certificate, params)`
+  (`verity/protocols/certifier/verifier/connection_rows.py` 498 to 507, on `main`). The network certifier's process
+  writes it into its `rows.jsonl` (`benchmarks/network_traces/connection_rows_run.py` 186, `warden_serve.py` 535).
+- `out/registrations.jsonl` has no writer in the tree, on `main` or on #9501: the reader and its tests name it.
+- The registered schedule is a `WardenParams`, read from a deployment file's `params`; its digest is
+  `WardenParams.digest` (`warden.py` 349), and its classes are `content_rows.classes(params)`, each (P, O) under
+  form 2 and (P, O, rows) under form 1 (`content_rows.py` 236 to 262).
+- The reader's own head check, `stop_verdicts.head_of`, is on #9501 only, which is open. Our commands need
+  nothing of it: `Head`, `Entry` and `check_registration` are on `main`.
+- A command of `benchmarks/one_stage` already imports the certifier's verifier (`a5_warden.py` 82 to 86).
+
+**Which commands, which files, what each checks** [derived, nothing written].
+
+- `stop_audit.py` and `two_stage.py second` each take two files more: the registration and the schedule. Each
+  refuses, before its session and with no record, unless:
+  1. the head the registration lists has the digest its certificate names;
+  2. the head's `parameters` is the schedule's digest;
+  3. exactly one index i of the schedule's classes has the class's (P, O), `layout.prompt` and `layout.outputs`.
+  Its summary then names the head: `link`, `window`, the digest and i.
+- `verdict_record.py` copies those four into the ruled object and writes the record in the ruled shape only where
+  the summary names them. It also adds the boundary record and the stream's record to
+  `out/serve-registrations.jsonl`.
+- One function of about 45 lines holds the three checks, for both commands. About 90 lines in all, and about
+  160 of tests: a head a test signs over a schedule of two classes, then one test a refusal.
+- `two_stage.py first` changes in nothing, unless the head must be handed before the sample (open point 7).
+
+**What it waits on.**
+
+- [read] Chain 2 of the moves, which is not on `main`, then the carries on your word. #9458 changes both commands
+  (`stop_audit.py` by 26 lines, `two_stage.py` by 15) and #9699 the stop audit.
+- [derived] The writer's follow-up, which writes the ruled object these four fields go into.
+- [read] The launcher's copy, `out/registrations.jsonl`, which nobody writes yet. That is network's or serving's.
+- Not known: a serve whose network certifier registered content classes that list a served stop class's (P, O).
+  `warden_serve.py serve` takes `--content P,O` (its docstring, 110); whether Friday's serve is launched so, I did
+  not find.
+
+**The earliest day** [derived]. In review as the pull request after the writer's follow-up: Sat 14 Nov if chain 2
+is on `main` and my carries are done on Fri 13 Nov, and a day later for each day those slip. On a served class:
+no day, because of the last two lines above.
+
+### Not established
+
+1. Which clause rules a stop between a session's opening and its first challenge, and what "its stream's
+   session" is for the stop audit. By the letter every run of the stop audit is after its stream's session, so a
+   wrong path given to `--boundary` would be final. I would take the command's own proof session as the line
+   (529), and the second stage's from the moment `coins.plan` returns. That is yours and network's to rule.
+2. Whether a served class's launcher runs the writer after a command that exits 1. No launcher is in the tree.
+3. Which challenger a served stop class's run uses. Under `local`, question 2's answer is no.
+4. Whether the reader can hold the ledger's signatures (it needs the challenger's key record), and who fetches it.
+5. Whether the boundary record's own `window.run` is the root its session opened on: not checked. It decides
+   whether the reader can find a stream's session in the ledger from the records it is handed.
+6. Whether "handed the head" includes the certificate's signature. NET-403's three checks need no key. #9501's
+   reader says "a verdict's own verifier checks the certificate before it accepts", which needs the network
+   certifier's key and session as two inputs more (`check_registration` on `main` does all of it).
+7. Whether the head must be handed before the stream's sampling challenge. Then the first stage's command takes
+   it and the hand-off carries it; by NET-403's text it is the verifier's command that takes it.
+8. Whether the boundary record's `window` is the head's number. NET-403 leaves it open too.
+9. Which errors `a5.audit` catches itself inside `prove`: not read.
+10. Whether chain 2's maps move the certifier's verifier modules these checks import: not read.
+11. [read, not run] `a5_coins.start` opens with `withhold=True` (792), and `Loopback.open` takes no such argument
+    (723): the loopback challenger may not start through it.
+12. No command of ours was run for this entry. Every "today" above is the code read, and the writer run on
+    summaries written from it.
+
+### Branches
+
+Unchanged, nothing pushed but this entry and the note: #9699 `725720f8a4a0`, #9624 `64364792ed70`, the cards
+branch `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is out and no timer is set.
