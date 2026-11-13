@@ -125426,3 +125426,48 @@ In plain words: this is the first audit that has read my three files, and it fou
 **STOP RULE.** None. **NEEDS.** None. **To post.** Nothing.
 
 **Not established.** Whether my files still compile on the new base; the kernel replay of my three files. Pushed head: `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`; nothing is left unpushed.
+
+## RUNCOINS, Fri 13 Nov 06:38Z: head `0210e36675`: `Parsed.lean` and `OfCheck.lean` read NO private name of `VStarRecursive.SampledTwo` (now public imports, nothing for TWOLEG to expose); `Spot.Run` exposes `audit`, `interiorSteps`, `secondStage`, `interiorAudit` (commit `10757cc241`, NO record changes, no pin moves); `Within.lean` deleted; try `r20261113-063319-143e`
+
+**Compiled** [run]: nothing new since 05:11Z. `Within.lean`'s last try printed a clean probe before I deleted it (below). Not compiled: everything at `0210e36675` (in `143e`).
+
+**In plain words.** Three of the five `import all` lines on the join were mine. Two of them, in `Parsed.lean` and `OfCheck.lean`, named nothing private in the form's file, so they are now ordinary public imports and TWOLEG has nothing to expose for them. `Steps.lean` names four of `Spot.Run`'s private steps by name. I made those four public in the verifier's file, in one commit that changes only the word `private` on four lines, and `Steps.lean` now imports `Spot.Run` and `Spot.Record` publicly. No lock record names any of the four, so no record changes. `Within.lean` is gone; ACCEPTS's `readsWithin` is the one proof of `ReadsWithin`. My files are now in the lock's roots, each under a lakefile root. One try builds all of them.
+
+**1. `import all`** [run: `git grep`; read].
+- Names each file reads, checked against every `private` declaration of the module it imported with `all`:
+  - `Steps.lean`, from `Spot.Run`: `audit`, `interiorSteps`, `secondStage`, `interiorAudit`. From `Spot.Record` (`record`, `sessionRegistered`, `Input`): none private.
+  - `Parsed.lean` and `OfCheck.lean`, from `VStarRecursive.SampledTwo`: none. The file's only private declarations are `keysAre` and `without`, and neither file names them. They are reached only by unfolding public definitions, under the file's `@[expose] public section` with `backward.privateInPublic`.
+- STAGECOINS's `FirstCoins.lean` at `41720dd161` names `Spot.Run.interiorAudit` and `Spot.Run.secondStage` (plus the public `run`, `coinsCode`, `Input`, `Interior`) [read]. Its title has not given names yet; both are among the four, so the same commit covers it. STAGECOINS can now make its line `public import Spot.Run`.
+- Commit `10757cc241` touches only `verity/protocols/spot/verifier/lean/Spot/Run.lean`, 4 lines: `private def X (` becomes `def X (` for the four, and no body changes.
+- Commit `9f12b631b4` makes the import lines public: `public import Spot.Run`, `public import Spot.Record` in `Steps.lean`, and `public import VStarRecursive.SampledTwo` in `Parsed.lean` and `OfCheck.lean`.
+- `pytest tests/test_lean_packages.py -k import_all` on the VM at `0210e36675`: `2 passed, 33 deselected` [run].
+
+**STOP RULE** [run: `grep` over the four locks at my head, at the join `ac8d23dd32` and at `origin/main`, done before the push].
+- No record of `security/Proofs/lean-audit.json`, `security/lean-audit.json`, `security/Properties/lean-audit.json` or `verity/protocols/spot/verifier/lean/lean-audit.json` names `audit`, `interiorSteps`, `secondStage` or `interiorAudit`, privately (`_private.…`) or not: 0 matches on all three trees.
+- The only private name of `Spot.Run` in any lock is `_private.Spot.Run.0.Spot.Run.hexDigit` (`security/Properties`, read through `Spot.Run.digest?`), which I did not touch. So no record changes [derived].
+- Pins of `Spot/Run.lean` [run: `git grep`]: only `tests/lint/allowlists/lean_bar.json` (`module-doc`, 1) and `repo_retired_terms.json` (54). Dropping `private` changes neither count, so no pin moves [derived].
+- Before: no guarantee's statement or named assumption touched, and the verifier accepts what it did. After: the same; visibility does not change what `run` computes.
+
+**2. Lock roots** [run: `python3` over `lean-audit.json` and `lakefile.toml`].
+- The join at `ac8d23dd32` has my `RunsAs`, `Coins` and `Played` (and RUNSAS's `Round2`, `RoundTwoOf`) and `Within`.
+- My lock had no `RunsAs` name. Commit `0f7ea94d61` appends `RunsAs`, `.Coins`, `.Played`, `.Proved`, `.Released`, `.Top`, `.Steps`, `.Outcome`, `.FirstSample`, `.OfCheck`, `.Parsed`.
+- Each is under a lakefile root: `RunsAs`, `OfCheck`, `Parsed`, `Played` and `FirstSample` are roots, and the rest are imported by the `RunsAs` aggregator. Commit `0210e36675` makes the aggregator import `OfCheck` and `Parsed` too, so one build holds every file.
+- My script's closure check found two lock roots of other lanes with no lakefile root reaching them: `Proofs.Pouw.PeriodJ10R.Binding` and `Proofs.Properties.Verity.Recursive.Audit` [run; not mine, not touched]. This may be my script missing a root form [guess].
+
+**3. `Within.lean`** [run: `research fetch --all`, the run's `stdout.log`].
+- `r20261113-050956-1859` (rc 0) printed: `lean-try: security/Proofs/Flock/SpotFlock/RunsAs/Within.lean: lean exit 0 in 671 s`, and `lean-try: security/Proofs/Flock/SpotFlock/RunsAs/Within.lean: axiom probe: none of its 13 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. Twelve theorems were listed, `reads_within` among them, and `'SpotFlock.RunsAs.reads_within' depends on axioms: [propext, Classical.choice, Quot.sound]`.
+- Deleted in `919ee60100`, whose message names `49aa` and `1859`, along with the aggregator's import and the lakefile root.
+
+**Trial merge** [run: a scratch worktree, `git merge --no-commit` of my head into the join `ac8d23dd32`, then aborted].
+- No conflicts, and `Spot/Run.lean` merges with the four lines public.
+- One fault ASSEMBLY must fix at that merge: the join's lock keeps `"Proofs.Flock.SpotFlock.RunsAs.Within"` (its line 258 after the merge), and that module no longer exists, so the records audit would stop on "unknown module". The merge must drop that root.
+
+**Merged in.** My head merges `cursor/proofs-runcoins-accepted-5c1e` (`f079d353a5`) at `455e11b4a8`, so `Parsed` and `OfCheck` sit on this tree; that line is closed.
+
+**Running** [run]: `r20261113-063319-143e` on vy-nebius-2, try of `RunsAs.lean` at `0210e36675`. It builds `Steps`, `OfCheck`, `Parsed` and the rest. Expected end about 06:55Z [guess; a try's end waits in the node's indexing line]. The aggregator's probe covers no theorems, so this try shows compiles, not axiom lines; the axioms cannot change with an import's visibility [derived].
+
+**NEEDS.** ASSEMBLY: drop `Proofs.Flock.SpotFlock.RunsAs.Within` from the join's lock roots when merging `0210e36675`. STAGECOINS: `public import Spot.Run` in `FirstCoins.lean`.
+
+**To post.** Nothing.
+
+**Not established.** That `0210e36675` compiles. Axiom lines for `Steps`, `Coins`, `Proved`, `Top` and `Played` (your 05:12Z ask): not sent this turn; the next try sends `Top.lean`, whose probe lists `spotRunAcceptsPlay`'s axioms.
