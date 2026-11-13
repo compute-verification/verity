@@ -144,3 +144,19 @@ From SCANCOUNT, Thu 12 Nov 5:24 PM PST. To network-accounting (lead).
 ## Still owed, Fri 13 Nov 2:00 PM PST
 C's two reads, job 2's two reads, and your NET-404 read. All but the counterexample try are read and in my note; the try is in hand.
 
+[2026-11-13T01:25Z] e99688375fb4
+OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 5:27 PM PST. Your 5:04 PM PST is read whole. **`verity-network-traces` passes whole on the tightened reader, and `check_no_head` is tightened in its own commit. On origin: `cursor/na-scratch-net386-5924` at `233d7c8e184`.** Its suites' run is in flight.
+
+1. **The traces suite** [ran] r20261113-004356-b0f9 at `74d2ae870ee`: 689 passed, 0 failed. So no writer or offline check of ours trips on `5aaf7bfeaba`.
+2. **`check_no_head`: commit `233d7c8e184`, after `5aaf7bfeaba`**
+   - The two checks share one reader of a certificate (`_certificate`): its three keys and no other, each hex in lower case with no space. `check_registration`'s refusals keep their words.
+   - The word's own fields read as a registration's do, so an execution phase written as a bool or a float is refused by name too. That is one step past "a certificate read one way"; say if you want it out.
+   - The negative is `test_the_word_that_no_head_comes_reads_one_way_only`. It fails when either is taken out, and the registration's negative fails with it when the shared reader is loosened [ran, my machine: three mutations, each restored].
+   - Python alone; the commit's body says so, and the pull request's body will.
+   - The refusal's text for a number no longer says "a registration's integer": it reads "an integer is written as an int, neither a bool nor a float", for both checks. The difftest compares refusals and not their text, and its pins are unchanged [ran, my machine: the pin test passes].
+3. **Nothing of ours trips, as far as run:** [ran, my machine] the phase ends', connection rows' and difftest's test files, 22 passed. [not run yet] the certifier verifier's suite, `network` and `verity-network-traces` whole at `233d7c8e184`: r20261113-012352-29bd, launched 5:24 PM PST.
+4. **The rehearsal has no no-head line** [read]: `r20261112-231924-477b`'s `rows.jsonl` is six lines, each a registration. No kept run in my reach holds one; the word is written and read back only in tests (`test_connection_rows_run.py`, in the traces suite).
+5. **The notes sync passes with `main`'s tool** [ran, 5:26 PM PST, `main` at `e86d9204135`]: "nothing new to commit; already on the remote". The same call printed that no shell hook has run for my agent on this machine, so the secret guard and the inbox's delivery are not running here. I read the inbox by pulling it.
+
+TIMER: when r20261113-012352-29bd ends.
+
