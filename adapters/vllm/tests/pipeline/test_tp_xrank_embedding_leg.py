@@ -1,4 +1,4 @@
-"""`verity_vllm.pipeline.tp.xrank_dump.embedding_leg`: a rank's own check of a pick at its embedding site, which the
+"""`verity_vllm.pipeline.tp.xrank_dump.embedding_check`: a rank's own check of a pick at its embedding site, which the
 cross-rank pass carries as the pick's ``emb`` (`check.match.xrank_collectives.check_picks` reads ``ok``, ``n_diff`` and
 ``why``).  The rank's committed partial rows are the masked gather of the committed ids from its vocabulary shard: a row
 whose id is in the rank's range is the shard's row, and any other row is zero.  A leg that cannot be evaluated says why
@@ -44,9 +44,9 @@ def _leg(part: Any = PARTIAL, *, rows: list[int] | None = None, ids: Any = IDS, 
         asked.append((step, m))
         return ids
 
-    out = xrank_dump.embedding_leg({"site": SITE, "rows": rows, "rows_total": rows_total}, {meta.name: meta} if member else {}, STEP,
-                                   torch.tensor(rows, dtype=torch.long), part, {SITE: _module() if module is None else module},
-                                   tensor_of, unverified or {})
+    out = xrank_dump.embedding_check({"site": SITE, "rows": rows, "rows_total": rows_total}, {meta.name: meta} if member else {}, STEP,
+                                     torch.tensor(rows, dtype=torch.long), part, {SITE: _module() if module is None else module},
+                                     tensor_of, unverified or {})
     assert asked == ([(STEP, meta)] if member else [])            # the ids are read once, at the pick's step, and nothing else is
     return out
 
@@ -127,8 +127,8 @@ def test_a_leg_that_cannot_be_evaluated_answers_neither_way_and_says_why(given, 
 
 def test_a_site_with_no_module_is_no_shard():
     meta = SimpleNamespace(name=f"{SITE}/in")
-    got = xrank_dump.embedding_leg({"site": SITE, "rows": [0], "rows_total": 1}, {meta.name: meta}, STEP, torch.tensor([0]), PARTIAL[:1], {},
-                                   lambda step, m: IDS[:1], {})
+    got = xrank_dump.embedding_check({"site": SITE, "rows": [0], "rows_total": 1}, {meta.name: meta}, STEP, torch.tensor([0]), PARTIAL[:1], {},
+                                     lambda step, m: IDS[:1], {})
     assert got == {"ok": None, "why": "no vocabulary shard_indices on the module"}
 
 
