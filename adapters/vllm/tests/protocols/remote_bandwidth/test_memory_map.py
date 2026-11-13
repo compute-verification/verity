@@ -15,7 +15,7 @@ import struct
 
 import numpy as np
 import pytest
-from verity.definitions.circuits import requirement
+from verity.circuits import requirement
 from verity.protocols.poub.verifier import audit, codec, memory_map
 from verity.protocols.poub.verifier.memory_map import MemoryMapError, Replay
 

@@ -1,7 +1,7 @@
-# verity.definitions.circuits.targets
+# verity.circuits.targets
 
 The subcircuits a proof system is asked to prove (a subcircuit binds every parameter of a subcircuit template:
-[`GLOSSARY.md`](../../../../GLOSSARY.md), "Subcircuit template and subcircuit"). `target.Target` is one of them: its gate
+[`GLOSSARY.md`](../../../GLOSSARY.md), "Subcircuit template and subcircuit"). `target.Target` is one of them: its gate
 family and that family's digest, the pipeline its steps are computed on (a `verity.circuits.silicon` model), its program,
 domain and epilogue, the device its relation was pinned on, the instruction class it is a relation over
 (`verity.circuits.silicon.instructions.INSTRUCTIONS`), and its status, `frozen` (every proof system proves it) or

@@ -361,7 +361,7 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
     its step's reads from complete blocks, 14 weights of 8,192 bits and a row of 4,096, 118,784 bits of the plan's
     262,144; the KV reads `Requirement.read_bits` adds from step 1 on are not the link's (`read_bits` is
     `creditedReadBits`)."""
-    from verity.definitions.circuits import requirement as RQ
+    from verity.circuits import requirement as RQ
 
     steps, weights, rows, tokens = 5, range(14), range(100, 116), (3, 3, 10, 12, 0)
     kv = {200 + t: t for t in range(steps)}
