@@ -60,6 +60,7 @@ placed at, is `Compiled.floor`.
 from __future__ import annotations
 
 import bisect
+import importlib
 import re
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -301,8 +302,6 @@ BUILTIN = ("h1tile",)
 
 def _scheme(name: str) -> Scheme:
     if name not in SCHEMES:
-        import importlib
-
         for m in BUILTIN:
             importlib.import_module(f"{__package__}.{m}")
     if name not in SCHEMES:
