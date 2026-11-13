@@ -109,6 +109,11 @@
    "digest": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
    "why": "The statements the two-stage bound speaks of: a well-formed two-stage design over a topological program its partitions partition."
   },
+  "Claims.SamplingGeneric.Compiled.Scope": {
+   "owner": "@network-accounting",
+   "digest": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
+   "why": "The statements the scan's scope is stated of: those in the compiled sampled verifier's sampling scope."
+  },
   "Core.Protocol.Accepts": {
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
