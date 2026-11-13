@@ -278,7 +278,7 @@ def STAGE_PAST (stage : String) : String :=
   s!"the {stage} stage's bytes run past one coin's {STAGE_BYTES} bytes: a stage's sample reads one coin's bytes"
 
 /-- **Neither stage's bytes run past one coin's** (check, 3): the first stage's bytes `ξ` and the second stage's `ξ₂`
-are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes draws fresh ones, and the coins'
+are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes samples fresh ones, and the coins'
 check takes a read over any number of whole coins, so nothing else bounds them. -/
 def stagesFit (ξ ξ₂ : ByteArray) : V Unit :=
   if STAGE_BYTES < ξ.size then .error (STAGE_PAST "first")

@@ -312,7 +312,7 @@ def theta_item(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[s
 
 
 def theta_roots(theta: Iterable[Mapping[str, Any]], prefix: str) -> dict[int, bytes]:
-    """Each K's root among θ's registered values (a registration view's `theta`, or a window's entries that reference
+    """Each K's root among θ's registered values (a registration view's `theta`, or an execution phase's entries that reference
     them): the root of the value named ``<prefix>b/<K>``, K a canonical decimal. Every other value is not PoUW's."""
     head, out = f"{prefix}b/", {}
     for t in theta:
@@ -324,7 +324,7 @@ def theta_roots(theta: Iterable[Mapping[str, Any]], prefix: str) -> dict[int, by
 
 def theta_root(theta: Iterable[Mapping[str, Any]], prefix: str) -> bytes:
     """PoUW's view of θ: `weights_root` of the ``<prefix>b/<K>`` roots θ registers, the weights' root a period-open
-    signs and a window's open root binds."""
+    signs and an execution phase's open root binds."""
     return weights_root(theta_roots(theta, prefix))
 
 
