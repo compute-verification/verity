@@ -49,6 +49,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -5637,6 +5638,101 @@ def test_serve_openai_declares_the_day_only_under_day(tmp_path, env, flags):
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
     assert rc == 10 and [x for x in argv if x.startswith("--day")] == flags[::2], (rc, argv)
     assert all(argv[argv.index(f) + 1] == v for f, v in zip(flags[::2], flags[1::2]))
+
+
+def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh serve` in a toy tree whose venv python stands in for every command the runner issues through
+    it: serve-openai listens with one window closed and sealed and holds until the runner stops it, the load answers
+    each of its 4 requests, the weights' registration refuses and every other command exits 0. The exit status, each
+    command issued through that python in order and the lines the runner published, ``TMP`` for ``tmp_path`` in both.
+    The runner's `sleep` returns once the endpoint listens, so nothing here waits on a clock."""
+    tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    for d in (tree / "adapters" / "vllm", bin_, venv):
+        d.mkdir(parents=True)
+    for fifo in ("ready", "hold"):
+        os.mkfifo(tmp_path / fifo)
+    python = (f"printf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
+              "case \"$*\" in\n"
+              f"  '-c '*) echo {RELEASE_RUN}; exit 0 ;;\n"
+              "  *'verity_vllm.pipeline.cli serve-openai'*)\n"
+              f"    echo $$ > {tmp_path}/pid\n"
+              "    while [ $# -gt 0 ]; do [ \"$1\" = --out ] && d=$2; shift; done\n"
+              "    echo '{}' > \"$d/windows.jsonl\"; echo '{}' > \"$d/seals.jsonl\"\n"
+              "    echo 'SERVE-OPENAI listening'\n"
+              f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
+              "  *serve_load.py*) echo '4/4 ok'; exit 0 ;;\n"
+              "  *weights-registration*) exit 1 ;;\n"
+              "  *) exit 0 ;;\n"
+              "esac")
+    for path, body in ((venv / "python", python), (bin_ / "sleep", f"[ -e {tmp_path}/up ] || read _ < {tmp_path}/ready")):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
+    try:
+        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                            capture_output=True).returncode
+    finally:  # an endpoint the runner left up is ended here, by its own pid and only while it is still that stand-in
+        pid = int((tmp_path / "pid").read_text()) if (tmp_path / "pid").is_file() else None
+        with contextlib.suppress(OSError):
+            if pid and str(venv / "python").encode() in Path("/proc", str(pid), "cmdline").read_bytes():
+                os.kill(pid, signal.SIGKILL)
+    said = tmp_path / "out" / "verdicts.txt"
+    return rc, *(f.read_text().replace(str(tmp_path), "TMP").splitlines() if f.is_file() else []
+                 for f in (tmp_path / "calls", said))
+
+
+RELEASE_RUN = "5e" * 16
+#: what `served_verdicts.sh serve` issues through the venv's python at its defaults with H1 off, in order: the endpoint,
+#: the weights' registration, the load's release run and the load; a front's call and its line come before the load
+SERVE_OPENAI = (
+    "-m verity_vllm.pipeline.cli serve-openai --model verity-int8/Llama-3.2-1B-INT8 --revision "
+    "15b0976d400d796ee589e7737d03a919526bf800 --out TMP/serve --port 18190 --precision verity_int8 --run-id local "
+    "--scheme rows-sha512 --seal --max-num-batched-tokens 512 --window-steps 256 --required-manifest "
+    "TMP/serve/predicted/manifest.json --hidden-so "
+    "/workspace/research/vllm-composed-h200int8/fa2/build/fa3_matReqG/verity_fa3_matReqG.so --norm-tap-so "
+    "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_norm_tap.so --tap-cap-mb 2048 --admit "
+    "release-order --window-requests 4 --max-model-len 512 --window-gb 32 --disk-floor-gb 100 --seal-hold-gb 32 "
+    "--seal-warm-gb 0")
+WEIGHTS_REGISTRATION = (
+    "benchmarks/prove_path/prove_path.py weights-registration --serve-run TMP/serve --checkpoint-dir "
+    "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
+    "--key TMP/serve/private/weights.key --out TMP/serve/weights_registration.json --deployment-record "
+    "TMP/serve/deployment-registration.json")
+NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
+SERVE_LOAD = ("TMP/tree/demos/vllm/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 {load} "
+              f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
+VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
+FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")
+REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --gate local'
+FRONT_CALL = "benchmarks/network_traces/certifier_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
+FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
+SAID_UP = ["SERVE SERVE-OPENAI listening",
+           "NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free "
+           "(weights-registration exit 1: )"]
+SAID_FRONT = ["CERTIFIER-FRONT (exit 0): "]
+SAID_LOAD = [f"REQUESTS (exit 0, release run {RELEASE_RUN}): every request answered",
+             "TIMINGS: no TMP/serve/load.timings.json"]
+SAID_STOPPED = ["SERVE stopped (exit 143): every closed window sealed"]
+
+
+@pytest.mark.parametrize("env, issued, said", [
+    ({}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
+    ({"LOAD": "varied"}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
+    ({"LOAD": "fixed"}, [NEW_RELEASE_RUN, FIXED_LOAD], SAID_LOAD),
+    ({"LOAD": "front", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE], SAID_FRONT),
+    ({"CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, VARIED_LOAD], SAID_FRONT + SAID_LOAD),
+    ({"LOAD": "fixed", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, FIXED_LOAD],
+     SAID_FRONT + SAID_LOAD),
+], ids=["default", "varied", "fixed", "front", "varied behind a rehearsal's front", "fixed behind a rehearsal's front"])
+def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path, env, issued, said):
+    """Under LOAD varied (the default), fixed and front, with and without a rehearsal's front, the serve step issues
+    through the venv's python exactly these commands in this order and publishes exactly these lines: the endpoint, the
+    weights' registration, the front's call and its line where one is set, the load's release run and the load. A change
+    to the runner that alters one of them under these loads fails here."""
+    rc, calls, lines = _serve_calls(tmp_path, env)
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert lines == SAID_UP + said + SAID_STOPPED
 
 
 class _Response:
