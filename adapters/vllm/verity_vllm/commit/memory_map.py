@@ -23,18 +23,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.definitions.circuits.census import census, step_ends
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Coll, runs
-from verity.definitions.circuits.requirement import from_census
 from verity.circuits.types import Array
+from verity.definitions.circuits.census import census, step_ends
+from verity.definitions.circuits.requirement import from_census
+
 from verity_vllm.query.required import SAMPLING_EVENTS
+
+__all__ = ["census_of", "rows", "rows_doc"]
 
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")
 #: the Definitions, by name, whose cached parameter is one plane of MLA latent rows (FA3's sparse MLA, each version)
-LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
+LATENT: dict[str, tuple[str, ...]] = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
 #: the Definitions, by name, through which a row past INDEX_TOPK reads its layer's latent rows, and the parameter holding
 #: those: the concentrators (`DsaButterflyRowsPad`'s pad is no row), and under table reads the history table's reads
 #: (`program.dsa_table`), whose table is the block's history
@@ -109,7 +112,7 @@ def _history(nodes, a: Coll) -> Coll:
     if not rs or rs[0][0] != "n" or any((s, j) != rs[0][:2] for s, j, _, _ in rs):
         return a
     src = nodes[rs[0][1]]
-    p = ROUTED.get(getattr(src.fn, "name", None))
+    p = ROUTED.get(getattr(src.fn, "name", ""))
     if p is None:
         return a
     m = rs[0][2] // (src.out.leaves // src.n) if src.form == "batch" else 0
@@ -155,7 +158,7 @@ def rows(program: Program, c: Mapping | None = None, prefix: Mapping | None = No
         if is_input(nd.fn) or isinstance(nd.fn, PrimitiveDefinition):
             continue
         names = [n for n, _ in nd.fn.signature()[0]]
-        cached = LATENT.get(getattr(nd.fn, "name", None), KV)
+        cached = LATENT.get(getattr(nd.fn, "name", ""), KV)
         if not set(cached) <= set(names):
             continue
         if nd.form not in ("call", "batch"):
@@ -200,7 +203,7 @@ def _cached(nodes, layers: list[list[tuple[Slice, ...]]], pair: Mapping, planes:
     if prefix is None:
         return 0
     C, rl, L = int(prefix["C"]), int(prefix["row_leaves"]), len(prefix["layers"])
-    if planes != 2 or rl != leaves or L != len(layers) or any(len(ks) <= C for ks in layers):
+    if planes != 2 or rl != leaves or len(layers) != L or any(len(ks) <= C for ks in layers):
         raise ValueError(f"a cached prefix of {C} rows of {rl} leaves of K and V in {L} layers, where the Program's KV is "
                          f"{len(layers)} layers of {planes} plane(s) of {sorted({len(ks) for ks in layers})} rows of {leaves} leaves")
     k = layers[0][0][0][1]
@@ -225,5 +228,5 @@ def rows_doc(rs: Rows) -> dict[str, Any]:
 
 def rows_of(doc: Mapping[str, Any]) -> Rows:
     """The `Rows` `rows_doc` wrote."""
-    return Rows(tuple(tuple(tuple(Row(tuple(("n", *s) if len(s) == 3 else tuple(s) for s in g), b, l) for b, l, g in plane) for plane in kv)
+    return Rows(tuple(tuple(tuple(Row(tuple(("n", *s) if len(s) == 3 else tuple(s) for s in g), born, last) for born, last, g in plane) for plane in kv)
                       for kv in doc["layers"]), int(doc["row_bytes"]), int(doc["word_bytes"]), int(doc["steps"]), int(doc.get("cached", 0)))

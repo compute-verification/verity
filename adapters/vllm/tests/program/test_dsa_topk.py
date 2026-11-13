@@ -11,7 +11,6 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
@@ -131,10 +130,10 @@ def test_every_order_has_settings_that_route_it() -> None:
             for o in itertools.permutations(range(N), K):
                 assert T.waksman_apply(T.waksman_settings(o, N), list(range(N)), K) == list(o), (N, o)
     rng = random.Random(0)
-    for N, K in [(rng.randrange(8, 300), None) for _ in range(40)] + [(2049, 2048), (2080, 2048)]:
-        K = K or rng.randrange(1, N + 1)
-        o = rng.sample(range(N), K)
-        assert T.waksman_apply(T.waksman_settings(o, N), list(range(N)), K) == o, (N, K)
+    for N, k in [(rng.randrange(8, 300), None) for _ in range(40)] + [(2049, 2048), (2080, 2048)]:
+        K = k or rng.randrange(1, N + 1)
+        order = rng.sample(range(N), K)
+        assert T.waksman_apply(T.waksman_settings(order, N), list(range(N)), K) == order, (N, K)
 
 
 def test_the_switch_count_is_the_arbitrary_size_waksman_networks() -> None:

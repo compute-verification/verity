@@ -1,4 +1,4 @@
-"""The graph/reference correspondence test across codec transitions (`verity_vllm.program.descriptor_equivalence`,
+"""The graph/reference correspondence test across codec transitions (`tests.program.descriptor_equivalence`,
 descriptor-codec.md §C): representation-independent reference runs, an exhaustive definition comparison, and
 sampled gates / calls / boundaries / evaluation. It must accept the same program under different encodings and
 reject programs that differ in gates, producers or reference order."""
@@ -9,13 +9,26 @@ import json
 import random
 
 import pytest
-
-from verity.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, REGISTRY
+from verity.circuits import (
+    REGISTRY,
+    Array,
+    Program,
+    Value,
+    bind,
+    composite,
+    decode_program,
+    encode_program,
+)
 from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
-from verity_vllm.program.descriptor_equivalence import Mismatch, canonical_runs, canonical_runs_by_leaf, compare
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, concat
 from verity.definitions.registry import b1
 
+from tests.program.descriptor_equivalence import (
+    Mismatch,
+    canonical_runs,
+    canonical_runs_by_leaf,
+    compare,
+)
 from tests.program.test_running_example import Add16, Id16, Mul16, make_program
 
 V16 = Value(16)
@@ -80,7 +93,7 @@ def _explode_broadcasts(desc: dict) -> dict:
     single-leaf `affine` parts (the same ordered references, one produced value)."""
     def fix(r):
         if "concat" in r:
-            out = []
+            out: list = []
             for p in r["concat"]:
                 if "strided" in p and p["strided"][4] == 0 and p["strided"][5] == 0:
                     s, i, b, _, _, _, c = p["strided"]

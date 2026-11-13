@@ -1,0 +1,60 @@
+# The slowdown calculator's names that its move leaves: what `tools/move/rename.py --map
+# tools/move/slowdown_calculator_names_map.toml` renames, on a tree `slowdown_calculator_map.toml`'s move has run on (its
+# files are named where that move puts them). They rename no path, module or Lean declaration, so the change they make is
+# an ordinary one, reviewed as such.
+# - Its outputs and their keys: `rho.md` and `rho.json` are `slowdown.md` and `slowdown.json`, and the keys `"rho"` and
+#   `"declared_rho"` of the record and of the figures' data are `"slowdown"` and `"declared_slowdown"`. Nothing outside
+#   the package reads either file or key.
+# - The references the move's tools don't follow and no check reads: `rho/params.py` in a comment of the circuit
+#   properties' suite, a path from the calculator's directory that its move keeps there ([rewrite] keep_in), and its
+#   modules where a docstring or a comment names one (`rho.theorem.multiple_bound`, `rho.instances`). The one a check
+#   reads went with the move (its [tokens] row).
+# - The calculator named "rho" in the benchmarks' prose: "rho's" is "the slowdown calculator's".
+# What stays: the board's key `"rho"` (`nci.search`'s, which the calculator's `tests/test_attacks.py` reads and no row
+# here names), every `rho` that is a Python name (`slowdown_python_map.toml`), the symbol ρ, the red team's codec, whose
+# `rho` is a function of its own, and the training red team's harness under `benchmarks/training_slowdown/`, whose two
+# quantities get a map of their own ([keep_in]).
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/inference_only/slowdown/**"]
+words = { "rho.md" = "slowdown.md", "rho.json" = "slowdown.json", "declared_rho" = "declared_slowdown" }
+
+# The keys, in the files that write or read the calculator's own record and figures.
+[[words_in]]
+files = ["verity/protocols/inference_only/slowdown/run.py", "verity/protocols/inference_only/slowdown/slowdown/figures.py",
+         "verity/protocols/inference_only/slowdown/tests/test_analysis.py"]
+words = { '"rho"' = '"slowdown"', "'rho'" = "'slowdown'" }
+
+[[words_in]]
+files = ["benchmarks/circuit_properties/pyproject.toml"]
+words = { "rho/params.py" = "slowdown/params.py", "imports rho by path" = "imports the slowdown calculator by path" }
+
+# The package's modules, where a docstring or a comment names one.
+[[words_in]]
+files = ["benchmarks/circuit_properties/**", "benchmarks/inference_only/**", "verity/protocols/inference_only/nci/**",
+         "verity/protocols/inference_only/slowdown/**"]
+words = { "rho.theorem" = "slowdown.theorem", "rho.instances" = "slowdown.instances", "rho.min_cut" = "slowdown.min_cut", "rho.lean" = "slowdown.lean", "rho.params" = "slowdown.params", "rho.classes" = "slowdown.classes" }
+
+# where "rho's" opens a sentence, the calculator's name does too
+[[words_in]]
+files = ["benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/tests/test_figure1.py"]
+words = { "\"\"\"rho's" = "\"\"\"The slowdown calculator's", "rho's references are" = "The slowdown calculator's references are" }
+
+[[words_in]]
+files = ["benchmarks/**", "verity/protocols/inference_only/nci/**", "verity/protocols/inference_only/slowdown/**"]
+words = { "rho's" = "the slowdown calculator's", "`rho`'s" = "the slowdown calculator's" }
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps, lock files, and the cards a digest names.
+exclude = ["tools/move/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/cards/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+strings = []
+
+[keep_in]
+"benchmarks/property_redteam/**" = ["rho's"]
+"benchmarks/training_slowdown/**" = ["rho's"]

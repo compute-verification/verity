@@ -23,7 +23,6 @@ import os
 
 import numpy as np
 import pytest
-
 from verity.definitions.registry import topp_split as TS
 
 f32 = np.float32
@@ -35,7 +34,8 @@ INTER = os.path.join(FIX, "fstoch01_s16_intermediates.npz")
 
 def _record():
     z = np.load(RECORD)
-    meta = json.load(open(RECORD + ".json"))
+    with open(RECORD + ".json") as fh:
+        meta = json.load(fh)
     return z, meta
 
 
@@ -99,7 +99,8 @@ def test_zgroup_matches_kernel_observed_lane_Z_at_s16_and_old_grouping_does_not(
         M, Zh, mn, nf = TS.row_stats(stats, S, cfg)
         Zw = np.asarray(Zh, f32).view(np.uint32)
         assert Zw[0] != Zw[1], "the two per-thread Z values differ by 1 ulp on these rows (z_nunique == 2 in the probe)"
-        lanes = pr[key + "_tie_lanes"]; zobs = pr[key + "_tie_zlane"]
+        lanes = pr[key + "_tie_lanes"]
+        zobs = pr[key + "_tie_zlane"]
         th = np.array([thread_lane(int(v), V, S, cfg.spt_x) for v in lanes])
         assert np.array_equal(Zw[TS.z_group(th, S)], zobs), key
         any_old_wrong |= not np.array_equal(Zw[(th >= 16).astype(int)], zobs)
@@ -117,7 +118,8 @@ def test_gpu_fixture_every_split_geometry_bit_exact():
     assert rep["n"] >= 180 and rep["mask_ok"] == rep["n"] and rep["stats_ok"] == rep["n"]
     assert rep["ties_cases"] >= 150 and rep["boundary_tie_cases"] >= 60           # the duplicate budget is what the S = 32 grouping breaks
     assert rep["zgroup_checked"] >= 8 and rep["zgroup_ok"] == rep["zgroup_checked"]
-    man = json.load(open(os.path.join(FIX, "manifest.json")))
+    with open(os.path.join(FIX, "manifest.json")) as fh:
+        man = json.load(fh)
     assert sorted({c["S"] for c in man["cases"] if c["kind"] != "drain"}) == [1, 2, 4, 8, 16, 32]
     drain = {d["B"]: d for d in rep["drain"]}
     assert {drain[B]["S"] for B in (5, 6, 7, 8)} == {16} and {drain[B]["S"] for B in (1, 2, 3, 4)} == {32}   # the B8 workload's flip
@@ -129,7 +131,8 @@ def test_multi_block_slice_stats_are_fma_accumulated():
     """S <= 8 at V = 128256 spans > 1 BLOCK per slice: `exp_sum * rescale + tl.sum(e)` is fma-contracted (7/7 fixture rows);
     the single-block case (S = 16 / 32) is unaffected -- fma(0, 0, se) == se."""
     z, meta = _record()
-    man = json.load(open(os.path.join(FIX, "manifest.json")))
+    with open(os.path.join(FIX, "manifest.json")) as fh:
+        man = json.load(fh)
     fx = np.load(os.path.join(FIX, "fixture.npz"))
     checked = 0
     for c in man["cases"]:
@@ -138,7 +141,8 @@ def test_multi_block_slice_stats_are_fma_accumulated():
         key = list(meta)[c["row"]]
         x_in, p, _, V = _x_in(z, meta, key)
         for fma, want in ((True, True), (False, False)):
-            cfg = TS.Cfg.for_vocab(V, c["S"]); cfg.fma_exp_sum = fma
+            cfg = TS.Cfg.for_vocab(V, c["S"])
+            cfg.fma_exp_sum = fma
             st = TS.stats_kernel(x_in, p, c["S"], TS.STATS_BLOCK, cfg)
             eq = np.array_equal(st.view(np.uint32), fx[f"c{c['id']}_stats"].view(np.uint32))
             if fma:

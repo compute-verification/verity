@@ -24,24 +24,24 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-from verity.commitments.windows import wiring as WI
-from verity_vllm.check.replay.index import SAMPLER_OP
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline import stage_rows as ST
-from verity_vllm.query.program_view import spec_base, spec_statics
-
-from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.windows import wiring as WI
 from verity.definitions import boolean as BB
 from verity.definitions.registry import boolean_topp_stages as BT
 from verity.definitions.registry import sampling as SA
 from verity.definitions.registry import sampling_rows as SR
 from verity.definitions.registry import topp_keep_builder as K
 from verity.definitions.registry import topp_stages as T
+from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity_flock.class_statement import UnitStager
+
+from verity_vllm.check.replay.index import SAMPLER_OP
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import stage_rows as ST
+from verity_vllm.query.program_view import spec_base, spec_statics
 
 V = 16
 SERVED_V = 154880
@@ -172,6 +172,7 @@ def test_each_carried_parameter_is_wired_to_the_unit_that_wrote_it():
             assert {(q, o, ws[i]) for q, o, ws in m.wired} == want, (m.key, key)
 
 
+@pytest.mark.slow
 def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
     """Every wired row is its writer's output row, each unit reads its logits lanes and the row's operands, the select's last
     chunk returns the served token, and each unit's Definition on its rows (as Flock's stager parses them) computes its

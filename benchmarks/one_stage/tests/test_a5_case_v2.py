@@ -218,7 +218,7 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
 
 #: a sample's coin evidence in `a5_coins.evidence`'s form: the challenger's key and what its session published
 COINS = {"key": {"H": 20, "W": 1, "public": "ab" * 80}, "ledger": ["opened"], "main": ["c0"], "pins": ["pin"],
-         "segment": {"label": "draw", "openings": []}, "session": {"log": ["head"]}}
+         "segment": {"label": a5.AC.FAMILY, "openings": []}, "session": {"log": ["head"]}}
 WINDOW_ROOT = "ee" * 64
 
 
@@ -234,10 +234,11 @@ def zk(monkeypatch, stub_case):
 def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carries_its_coins(tmp_path, zk, stub_case):
     """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
     coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, and
-    its sampled-proofs form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
-    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT)
+    its SPOT form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
+    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY)
     got = json.loads((tmp_path / "case-v2.json").read_text())
-    assert got["params"] == {**zk["params"], "challenger": {"key": COINS["key"], "label": "draw"}, "window_root": WINDOW_ROOT}
+    named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
+    assert got["params"] == {**zk["params"], **named}
     evidence = {"coins": {k: v for k, v in COINS.items() if k != "key"}, "proofs": {}}
     assert sorted(evidence["coins"]) == ["ledger", "main", "pins", "segment", "session"]
     assert got["evidence"] == stub_case.DT.canonical(evidence).encode().hex()
@@ -250,7 +251,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
 def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tmp_path, zk):
     """v2 reads the challenger's session as the one its ledger opens on the window's root: with no root to name, no
     case is written, the error file says why, and the v1 case stays."""
-    write(tmp_path, {}, coins=COINS, window_root=None)
+    write(tmp_path, {}, coins=COINS, window_root=None, family=a5.AC.FAMILY)
     assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
     assert "no window root" in (tmp_path / "case-v2-error.txt").read_text()
     assert (tmp_path / "case.json").exists()
@@ -264,8 +265,8 @@ def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on
     where they ran there."""
     pm = {**zk, "params": {"proofs": {"members": []}}}
     monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
-    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, member_trees=trees)
-    named = {"challenger": {"key": COINS["key"], "label": "draw"}, "window_root": WINDOW_ROOT}
+    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees)
+    named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
     assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
 
@@ -274,7 +275,7 @@ def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on
 def test_a_case_that_names_a_challenger_already_is_not_named_again(stub_case, params, evidence):
     case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical(evidence).encode().hex(), "params": params}
     with pytest.raises(ValueError, match="already"):
-        a5.case_coins(case, COINS, "draw", WINDOW_ROOT)
+        a5.case_coins(case, COINS, a5.AC.FAMILY, WINDOW_ROOT)
 
 
 def test_the_case_is_named_where_replay_names_another_module(monkeypatch, stub_case):
@@ -282,7 +283,7 @@ def test_the_case_is_named_where_replay_names_another_module(monkeypatch, stub_c
     `replay.py` beside a5 all the same."""
     monkeypatch.setitem(sys.modules, "replay", types.ModuleType("replay"))
     case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({}).encode().hex(), "params": {}}
-    got = a5.case_coins(case, COINS, "draw", WINDOW_ROOT)
+    got = a5.case_coins(case, COINS, a5.AC.FAMILY, WINDOW_ROOT)
     assert got["params"]["window_root"] == WINDOW_ROOT and "coins" in json.loads(bytes.fromhex(got["evidence"]))
 
 
@@ -348,7 +349,8 @@ def staged(tmp_path: Path, k: int, key: str, base: int, n: int, *, lookups: str 
     if reads is not None:
         st["registered_file"] = d / "registered.json"
         st["registered_file"].write_text(json.dumps(reads))
-    return {"k": k, "m": types.SimpleNamespace(n=n, base=base, key=key), "st": st, "pin": f"{k:02x}" * 64}
+    return {"k": k, "m": types.SimpleNamespace(n=n, base=base, key=key), "st": st, "pin": f"{k:02x}" * 64,
+            "circuit": d / "circuit.txt"}
 
 
 def session(tmp_path: Path, mm: dict, *names: str) -> dict:
@@ -419,6 +421,28 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
         tmp_path / "m0" / "circuit.txt", tmp_path / "m0" / "pub-3.bin", s0 / "session.json", s0 / "rep-0.bin",
         tmp_path / "m2" / "circuit.txt", tmp_path / "m2" / "pub-4.bin", s2 / "session.json", s2 / "rep-0.bin",
         tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-2.bin")]
+
+
+def test_a_templates_members_name_its_one_circuit_file_and_the_case_lists_it_once(tmp_path, RP):
+    """a5 composes a template's circuit once, in its first member's directory, and a later member that is not sampled
+    has none of its own: each member names its template's file, and the case lists each path once."""
+    mms = [staged(tmp_path, 0, "t/c0", 0, 3), staged(tmp_path, 1, "t/c1", 3, 2), staged(tmp_path, 2, "t/c2", 5, 4),
+           staged(tmp_path, 3, "u/c0", 9, 1)]
+    for mm in mms[1:3]:
+        (mm["st"]["dir"] / "circuit.txt").unlink()
+        mm["circuit"] = mms[0]["circuit"]
+    done = [session(tmp_path, mms[3], "a")]
+    names = [sha(done[0]["sdir"] / "sessions" / "a" / "session.json")]
+    evidence = {"proved_units": [9], "sessions": names, "verdicts": {}}
+    case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {}}
+    proof = a5.members_proof(mms, done, zk=True)
+    assert [m.proof.circuit for m in proof["members"]] == [tmp_path / "m0" / "circuit.txt"] * 3 + [
+        tmp_path / "m3" / "circuit.txt"]
+    blobs = a5.case_members(case, **proof)["blobs"]
+    assert len(blobs) == len(set(blobs)) and all(Path(b).is_file() for b in blobs)
+    assert blobs.count(str(tmp_path / "m0" / "circuit.txt")) == 1
+    assert [b for b in blobs if b.endswith(".bin") and "/pub-" in b] == [
+        str(tmp_path / f"m{k}" / f"pub-{n}.bin") for k, n in ((3, 1), (0, 3), (1, 2), (2, 4))]
 
 
 def test_case_members_refuses_sessions_out_of_the_members_order(tmp_path, RP):

@@ -35,6 +35,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm.query.manifest.format import IDENTITY_KEY
+
 from .. import resolver
 
 NAME = "manifest_digest"
@@ -53,7 +55,6 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _identity_key(r: dict) -> str:
-    from verity_vllm.query.manifest.format import IDENTITY_KEY
     return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
 
 
@@ -143,7 +144,7 @@ def _flags(row: resolver.Row) -> list[str]:
 
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
     wl = row.workload()
-    fx = json.load(open(wl))
+    fx = resolver.read_json(wl)
     b = len(fx.get("requests") or [])
     base = [sys.executable, "-m", BUILDER, "manifest"]
     if b > 1:
@@ -159,8 +160,7 @@ def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("manifest.json")
     if cand is not None:                                   # candidate mode: the v2 implementation's manifest.json IS the thing under test
-        with open(cand) as f:
-            man = json.load(f)
+        man = resolver.read_json(cand)
         return dict(_summary(man, with_rows=True), **_promotion(row, man), source="candidate")
     root = row.programs_root()
     if root is None:
@@ -172,7 +172,7 @@ def actual(row: resolver.Row) -> dict:
     (scratch / "manifest.rebuilt.log").write_text(p.stdout[-20000:] + "\n--- stderr ---\n" + p.stderr[-20000:])
     if p.returncode != 0 or not out.is_file():
         return {"rebuild_rc": p.returncode, "rebuild_argv": argv, "rebuild_tail": (p.stdout + p.stderr).strip()[-1500:], "source": "rebuild"}
-    man = json.load(open(out))
+    man = resolver.read_json(out)
     res = dict(_summary(man, with_rows=True), **_promotion(row, man), source="rebuild", rebuild_rc=0,
                rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine") or (man.get("query") or {}).get("engine") or resolver.ENGINE))
     return res
