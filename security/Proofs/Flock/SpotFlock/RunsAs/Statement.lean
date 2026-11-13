@@ -4,6 +4,7 @@ public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.SpotFlock.Honest
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Properties.Challenger
+public import Proofs.Flock.SpotFlock.RunsAs.Statements
 
 /-!
 # A two-stage run the running verifier accepts is a play SPOT[Flock]'s two-stage verifier accepts
@@ -15,10 +16,9 @@ verifier that runs is `Spot.Run.run`. This module states, as `Prop`s, what ties 
 `SpotRunAcceptsPlay`), and the play's coins are the
 challenger's bytes the run read, in the order the guarantee assumes (`PlayCoins`).
 
-`Run.run` reads the form's switch (`SecondStage.FORM`), which is off, so no two-stage run is accepted today and
-`AcceptedTwo` has no instance: every statement here holds of nothing until it is stated at the switch on. Its proof
-reads round 2's check only through `SecondStage.check b own ss` having no codes, which at every `b` gives the check with
-the form allowed having none.
+`AcceptedTwo` is stated of `Run.run` at `form := true`, the two-stage form allowed, as a caller that decides last by
+the switch (`SecondStage.FORM`) runs it; at the default the switch is off and the second stage's check refuses every
+two-stage run.
 
 What the run does not decide, each a named premise of `SpotRunAcceptsPlay`:
 
@@ -32,6 +32,8 @@ What the run does not decide, each a named premise of `SpotRunAcceptsPlay`:
   `templateOk`), which `Run.run` does not check;
 * `NamesDistinct`, `RecordsHeld` and `RegistersNone`: the templates' names are distinct, the run's records name their
   registrations' names, and round 1's record registers no value.
+
+These and the session clauses are `RunsAs.Round2`'s definitions (`Statements`), opened here.
 -/
 
 @[expose] public section
@@ -40,13 +42,14 @@ namespace SpotFlock.RunsAs
 
 open Claims
 open Lean (Json)
+open Round2 (core OwnAgrees NamesDistinct StmtsAre TwoHolds RecordsHeld RegistersNone RoundsHeld ScopeHeld PinHeld)
 
 /-! ## The run -/
 
-/-- **A two-stage run `Run.run` accepted**: it decided `j` with the symbol `accept`, under a two-stage rule, with the
-interior registration `it`. -/
+/-- **A two-stage run `Run.run` accepted**: with the two-stage form allowed (`form := true`), it decided `j` with the
+symbol `accept`, under a two-stage rule, with the interior registration `it`. -/
 structure AcceptedTwo (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) : Prop where
-  run : Spot.Run.run i = .ok j
+  run : Spot.Run.run i true = .ok j
   accept : Spot.getD j "symbol" = .str "accept"
   two : ∃ grain replay k, i.rule = .twoStage grain replay k
   interior : i.interior = some it
@@ -56,7 +59,8 @@ structure AcceptedTwo (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) :
 /-- **The held copies agree with what the run reads**: the registration the first stage samples is the one `Run.run`
 passes `Select.select` (the verifier's copies with the law and work table it expanded, the resolved rule, the closure
 map); the second stage's cells and counts are those `Run.run` computes; the design's links, wires and rows are the
-ones round 2 derives from the replay block's Definition; the templates' parts are those round 2 reads; the reference
+ones round 2 derives from the replay block's Definition; the templates' parts, at the replay sample the first stage
+selects on the run's bytes, are those the second stage's check reads; the reference
 headers and reads are the auditor's params'; and the second stage reads at most `stage` coins' bytes. Every other field
 of `h` (the descriptor, the members' units, the reference statements, the frame) is the auditor's registered copy,
 which the run does not read. -/
@@ -75,69 +79,18 @@ structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) :
     Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
   wires : h.wires = Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn
   rows : h.rows = Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn
-  parts : ∀ strata q, Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata →
-    Spot.SecondStage.parts q strata = some (partsAt h q)
+  parts : ∀ draw rest read strata, Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query
+      h.reg.first.table h.reg.first.closure i.source = .ok (draw, rest, read) →
+    Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata →
+    Spot.SecondStage.parts rest.size strata = some (partsAt h rest.size)
   refs : refsOf h = it.circuits.map fun (t, _, hd, _) => (t, hd)
   refReads : refRegisteredOf h = it.circuits.map fun (t, _, _, r) => (t, r)
 
 
-/-! ## Round 2: the hand-off
+/-! ## The second stage's check: the hand-off
 
-These are `RunsAs.Round2`'s statements, word for word, so its `stmtOk_of_check` is `RoundTwo` at every `h`. -/
-
-/-- **The running verifier's `Own` on what the model reads**: the fields the model's (`ownOf`) leaves at their defaults
-set to them. -/
-def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
-  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
-
-/-- **What the verifier holds of the run is the model's** (`OwnAgrees`): `own` is `ownOf h st rec draw c₀` in every
-field `ownOf` sets (`core`). -/
-def OwnAgrees (h : Held) (own : Spot.SecondStage.Own) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) :
-    Prop :=
-  core own = ownOf h st rec draw c₀
-
-/-- **The templates' names are distinct**, as the members' order names them. Round 2 takes the statements by position
-and finds a statement's part by its template's name, so with two parts of one name it passes a run with fewer
-statements than parts. -/
-def NamesDistinct (h : Held) : Prop :=
-  ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup
-
-/-- **The session statements' message states `ss`**: `m₂` states as many session statements as `ss` has, and the
-`t`-th decodes and reads as round 2 reads a statement (`stmtJsonOf`) as the `t`-th of `ss`. -/
-def StmtsAre (h : Held) (m₂ : Msg) (ss : Array Json) : Prop :=
-  ∃ xs, stmtsOf m₂ = some xs ∧ xs.length = ss.size ∧ ∀ t < xs.length, ∃ w,
-    FlockDeploy.decode (xs.getD t (h.xS₀ t)) = some w ∧
-      stmtJsonOf h t w = Spot.SecondStage.Stmt.ofJson? (ss.toList.getD t .null)
-
-/-- **The design evaluates** (`two`), at every statement: it reads only the auditor's copies (`scopeOk`, `filesOk`,
-`templateOk`), which `Run.run` does not hold. -/
-def TwoHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
-
-/-- **The run's records name their registrations' names** (`recordsOk`). Round 2 does not make it: `Run.run`'s
-registration step (`Registration.check`) does. -/
-def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
-
-/-- **Round 1's record registers no value**: no entry under its `registered` names a string `value`. The model refuses
-every registered value (`SecondStage.inputsFailure` at `ownOf`, with no value of the verifier's own and no read);
-round 2 passes a value the verifier pinned, fills or opens as a read's row. A premise on the run, decided on its
-interior record, that round 2's passing check does not give. It holds at a design whose interior registration
-registers no value, as the second two-stage try's does; the first try's registers one (`logits`), and there it is
-false. -/
-def RegistersNone (rec : Json) : Prop :=
-  ∀ es, Spot.getD rec "registered" = .arr es → ∀ e ∈ es, ∀ v, Spot.getD e "value" ≠ .str v
-
-/-- **Each session statement has its template's reference statement's rounds.** No check of round 2 makes it. -/
-def RoundsHeld (h : Held) (m₂ : Msg) : Prop :=
-  ∀ t < h.ms.length, (FlockDeploy.V true).k (stmtAt h m₂ t) = k₀ h t
-
-/-- **Each session statement is in scope** (`sessionOk`). No check of round 2 makes it. -/
-def ScopeHeld (h : Held) (m₂ : Msg) : Prop :=
-  ∀ t < h.ms.length, sessionOk h t (stmtAt h m₂ t) = true
-
-/-- **Each session statement is its template's reference statement** but for its sample, registered reads and public
-file (`pinOk`). No check of round 2 makes it. -/
-def PinHeld (h : Held) (m₂ : Msg) : Prop :=
-  ∀ t < h.ms.length, ∀ w, FlockDeploy.decode (stmtAt h m₂ t) = some w → pinOk h t w = true
+`RoundTwo` is `RunsAs.Round2.StmtOkOfCheck` at `h` with `RegistersNone` for its inputs premise, so `RunsAs.RoundTwoOf`'s
+`stmtOk_of_check` proves it at every `h`. -/
 
 /-- **Round 2's check gives the model's statement check** (part 3, `Round2.StmtOkOfCheck` at `h`): where what the
 verifier holds of the run is the model's and the statements round 2 checked are the session statements', round 2's
@@ -192,16 +145,22 @@ def drawEvidence : Json → Json
   | .obj kvs => .obj (kvs.erase "key")
   | j => j
 
-/-- **The run's coin check reads the challenger's draw under the verifier's key `key`** (the hypothesis the verifier's
-key in `Challenger.coinsReason` discharges): where `coinsReason` finds no reason against the evidence `coins` for the
-window `w` and the bytes `read` released after `after`, `drawCoins` under `key` reads, from the evidence without its
-key, coins of some family that `read` starts. Today `coinsReason` takes the key from the evidence, so this holds only
-at the key the evidence carries. The family is `∃ label` because the base's `coinsReason` lets the evidence name it;
+/-- **The evidence's key is the parameters' key `key`**: the key `Challenger.coinsReason` reads from the evidence
+(`coins`'s `key`) decodes to `key`. A named hypothesis: the base's coin check takes the key from the evidence; where it
+takes the verifier's key, the two are one. -/
+def EvidenceKeyIs (key : Spot.Challenger.ChallengerKey) (coins : Json) : Prop :=
+  Spot.Challenger.ChallengerKey.ofJson (Spot.getD coins "key") = .ok key
+
+/-- **The run's coin check reads the challenger's draw under the parameters' key `key`**: where the evidence's key is
+`key` (`EvidenceKeyIs`) and `coinsReason` finds no reason against the evidence `coins` for the window `w` and the bytes
+`read` released after `after`, `drawCoins` under `key` reads, from the evidence without its key, coins of some family
+that `read` starts. The family is `∃ label` because the base's `coinsReason` lets the evidence name it;
 where `coinsReason` takes each stage's family as an argument, it is that stage's own. It is stated at one key for the
 run; under `--challenger local` today's driver makes a second key and ledger for the second stage, where the
 statement at one key does not describe the run. -/
 def CheckReadsDraw (key : Spot.Challenger.ChallengerKey) : Prop :=
-  ∀ (coins : Json) (w : String) (after read : ByteArray), Spot.Challenger.coinsReason coins w after read = none →
+  ∀ (coins : Json) (w : String) (after read : ByteArray), EvidenceKeyIs key coins →
+    Spot.Challenger.coinsReason coins w after read = none →
     ∃ label ξ, Spot.Challenger.drawCoins key w label after (drawEvidence coins) = .ok ξ ∧ Starts read ξ
 
 /-- **A stage's bytes are the device's coins, or a break**: `read` starts the coins of some family (`∃ label`, the
@@ -218,12 +177,13 @@ def FromDevice (dev : Properties.Challenger.History) (key : Spot.Challenger.Chal
 /-- **The run's coins come from the device, in the order the two-stage guarantee assumes**: at an accepted two-stage
 run, where the coin check reads the challenger's draw under the verifier's key (`CheckReadsDraw`), the bytes the first
 stage read are the device's coins released after the boundary record's digest, and those the second stage read the
-device's coins released after the interior record's digest, each on the window its verifier holds; or a break. A stage
+device's coins released after the interior record's digest, each on the window its verifier holds; or a break. Each
+stage's evidence carries the parameters' key (`EvidenceKeyIs`). A stage
 that read no byte carries no evidence. The sessions' coins are not read by `Run.run`. Both stages are under the one
 key `key`; today's driver under `--challenger local` uses a second key for the second stage. -/
 def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (dev : Properties.Challenger.History),
-    AcceptedTwo i it j → CheckReadsDraw key →
+    AcceptedTwo i it j → CheckReadsDraw key → EvidenceKeyIs key i.coins → EvidenceKeyIs key it.coins →
     ∃ (read₁ read₂ : ℕ),
       (∃ resolved workTable draw rest, Spot.Select.select resolved i.params.verifier.program
         i.params.verifier.query workTable i.closure i.source = .ok (draw, rest, read₁)) ∧
@@ -249,8 +209,7 @@ distinct (`NamesDistinct`), the run's records name their registrations' names (`
 registration step checks and this statement does not yet derive from it), and round 1's record registers no value
 (`RegistersNone`, a premise on the run).
 
-`Run.run` reads the form's switch (`SecondStage.FORM`), which is off, so `AcceptedTwo` has no instance today and this
-statement holds of nothing until it is stated at the switch on. -/
+`AcceptedTwo` is at `form := true`: the run with the two-stage form allowed. -/
 def SpotRunAcceptsPlay : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (h : Held) (H : Msg → Msg) (x m₁ m₂ : Msg)
     (P' : ℕ → Prover Unit) (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
