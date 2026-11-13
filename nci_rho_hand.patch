@@ -1,23 +1,24 @@
-From 695a346399c1a59d3c9ad893c8942dbd91a2dd72 Mon Sep 17 00:00:00 2001
+From f2e5fd524e9815cac8e2a3aeb1eb16b5adb4d3db Mon Sep 17 00:00:00 2001
 From: Cursor Agent <cursoragent@cursor.com>
-Date: Fri, 13 Nov 2026 00:48:15 +0000
+Date: Fri, 13 Nov 2026 01:01:03 +0000
 Subject: [PATCH] benchmarks: the index's rows for nci/ and rho/, and the
  one-calculator test at the calculator's new place
 
-By hand, after the move of verity/protocols/inference_only/nci/ and rho/ to benchmarks/ (tools/move/nci_rho_map.toml),
-which leaves both out:
+By hand, the second commit of the move of verity/protocols/inference_only/nci/ and rho/ to benchmarks/
+(tools/move/nci_rho_map.toml), which leaves both out:
 
 - benchmarks/README.md lists every directory of benchmarks/: a row each for rho/ and nci/, as before they left.
 - benchmarks/training_slowdown/tests/test_one_calculator.py found a reach of the calculator by the path part
   inference_only, which benchmarks/rho lacks. It now finds the directory's name, rho, as a part of a path: one of the
-  parts of a path written whole, or the name alone where / joins it. The name alone anywhere else is the benchmark's
-  own key and is not found. Its toy sources name the new path, and show the key and a docstring are not found.
+  parts of a path written whole, or the name alone as an operand of /. The name alone anywhere else, a dictionary's
+  key or a subscript's, is the benchmark's own and is not found. Its toy sources name the new path, with a case for
+  each of the four. config.py's message stays found, so NAMED_ONLY keeps its entry.
 
 Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
 ---
- benchmarks/README.md                          |  2 ++
- .../tests/test_one_calculator.py              | 34 +++++++++++--------
- 2 files changed, 22 insertions(+), 14 deletions(-)
+ benchmarks/README.md                          |  2 +
+ .../tests/test_one_calculator.py              | 38 +++++++++++--------
+ 2 files changed, 25 insertions(+), 15 deletions(-)
 
 diff --git a/benchmarks/README.md b/benchmarks/README.md
 index eb08c866bb6..b047ad9030f 100644
@@ -33,7 +34,7 @@ index eb08c866bb6..b047ad9030f 100644
  
  ### Kernels
 diff --git a/benchmarks/training_slowdown/tests/test_one_calculator.py b/benchmarks/training_slowdown/tests/test_one_calculator.py
-index db037b16281..ad110f969fd 100644
+index db037b16281..490cea87cc9 100644
 --- a/benchmarks/training_slowdown/tests/test_one_calculator.py
 +++ b/benchmarks/training_slowdown/tests/test_one_calculator.py
 @@ -1,4 +1,4 @@
@@ -81,14 +82,17 @@ index db037b16281..ad110f969fd 100644
              out.append((n.lineno, repr(n.value[:60])))
      return [f"{line}: {what}" for line, what in sorted(out)]
  
-@@ -64,15 +68,17 @@ def test_only_the_one_module_reaches_the_calculator():
+@@ -63,16 +67,20 @@ def test_only_the_one_module_reaches_the_calculator():
+ 
  
  def test_a_reach_is_found():
-     """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
+-    """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
 -    from its file and a path in parts are each found, and a docstring or a relative import of this package is not."""
 -    assert reaches("import sys\nsys.path.insert(0, 'verity/protocols/inference_only/rho')\nimport periods\n"
-+    from its file and a path in parts (its directory, then its package) are each found, and a docstring, a relative
-+    import of this package or the benchmark's own `rho` key is not."""
++    """The check above isn't vacuous: an import by name, one behind a path put on the import path (a path written
++    whole), a module loaded from its file and a path in parts (its directory, then its package, each an operand of
++    `/`) are each found, and a docstring, a relative import of this package, a dictionary's `rho` key or a
++    subscript's is not."""
 +    assert reaches("import sys\nsys.path.insert(0, 'benchmarks/rho')\nimport periods\n"
                     "from rho import min_cut\nimport rho.params\n") == [
 -        "2: 'verity/protocols/inference_only/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
@@ -101,8 +105,9 @@ index db037b16281..ad110f969fd 100644
 +                   "P = Path('benchmarks') / 'rho' / 'rho' / 'min_cut.py'\n"
 +                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'rho'", "3: 'rho'"]
 +    assert reaches('"""Reads benchmarks/rho/data through calculator."""\nfrom . import calculator\n'
-+                   'from .rho import x\n\ndef f():\n    """As benchmarks/rho/data says."""\n    rho = 1\n'
-+                   '    return {"rho": rho}["rho"] / 2\n') == []
++                   'from .rho import x\n\ndef f():\n    """As benchmarks/rho/data says."""\n    rho = 1\n') == []
++    assert reaches('got = {"rho": 1.0}\n') == []
++    assert reaches('half = got["rho"] / 2\n') == []
  
  
  def test_the_products_term_is_the_calculators(monkeypatch):
