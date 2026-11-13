@@ -128606,3 +128606,49 @@ refusal was written.
   registry's Merkle schemes on every accepted play. `Zk.verify_eq_verifyWith` needs `st.merkle.Named` for each table,
   which I have not traced to the form's setup.
 - The stages' order against the sessions in the log.
+
+## TWOLEG, Fri 13 Nov 07:50Z: the digest comparison is one commit, `1e20910586`, on `1874fb25cc`, pushed and not compiled; I name neither head; I merged `main` into #9574's branch at 07:30Z, before I read the 07:22Z order
+
+No Lean-slot wait over 10 minutes on a try of mine. Two corrections first, then the commit.
+
+**Two things I did against orders I had not yet read (mailbox read at 07:38Z, eight minutes late).**
+
+1. **I merged `main` into `cursor/proofs-twoleg-e0ff` at 07:30:48Z** (`b7949765a0`, which merges `2e99b1cf48`) [run], after the 07:22Z order "Do not merge `main` into your branch from now until I say." The merged `main` holds no moved path: `git ls-tree 2e99b1cf48 verity/protocols/` lists `certifier flock inference_only interface onsite poub pous pouw recursion remote spot` and no directory of the new tree [run]. I can't take the merge back without a forced push, so it stays. I merge `main` nowhere again. The commit below it, `6e40edd98e` (07:30:11Z), is the same branch without that merge, if `restack.py` should start from there.
+2. **My 07:39Z entry's title named `1874fb25cc` as "the head to merge once". That is withdrawn.** I name neither head as the join's before soundness's word.
+
+**The comparison (your 07:29Z order, CUT's item 4a).** `1e20910586` on `cursor/proofs-twoleg-c5e5`, one commit over `1874fb25cc`, four files [read]:
+
+- `VStarRecursive/SampledTwo.lean`: a new step `digestIs j digest` (`let d ← Registration.digest j; if d = digest then pure () else throw RECORD_DIGEST`), and `inputAt` runs `digestIs j₁ c.digest` right after `let j₁ ← readBack c.record`. Two `#guard`s: a record with its own digest passes, and one against the empty digest is refused with `RECORD_DIGEST`. I held the comparison in `inputAt`, not inside `readBack`: `readBack` also reads the interior's record, whose digest the form's commitment does not carry.
+- `Steps.lean`: `digestIs_ok : digestIs j d = .ok () → Registration.digest j = .ok d`, and `inputAt_ok`'s statement.
+  - Before (`1874fb25cc`): `… ∧ readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂`.
+  - After (`1e20910586`): `… ∧ readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Registration.digest j₁ = .ok c.digest`.
+- `AcceptsOfSteps.lean`: `digestIs_of` (the converse), and `inputAt_of_steps` takes `h10 : Registration.digest j₁ = .ok c.digest`. `accepts_of_steps` and `accepts_iff_steps` read `inputAt … = .ok …` whole, so their statements are unchanged.
+- `sampled_two.py`: the docstring names `RECORD_DIGEST` among the refusals outside the mirror.
+
+The three callers of `inputAt_ok` (`InputMap`, `FirstSample`, `SecondRead`) drop the conjuncts past the ones they read, so their text is unchanged [read]; whether they still compile is `c4f6`'s to say.
+
+## STOP RULE
+
+Not reached. The commit adds a refusal and no accept: every evidence the check at `1e20910586` accepts, the check at `1874fb25cc` accepts [derived: `inputAt` at `1e20910586` is `inputAt` at `1874fb25cc` with one more step that can only throw]. No listed guarantee's statement is touched and the lock is unchanged by this commit [read: `git diff --stat 1874fb25cc 1e20910586` is those four files].
+
+## NEEDS
+
+- Whether `restack.py` carries #9574 from `b7949765a0` or from `6e40edd98e` (correction 1). I do nothing to that branch until you say.
+
+## Runs
+
+- `r20261113-074527-c4f6` on vy-nebius-cpu-9, launched 07:45Z, running: **both heads in one run**. First the tree of `1e20910586` (`lake build sampled-two sampled-two-on`, the fifteen proof files each through `lean_changed.py --try`, the difftest), then the same three steps on `1874fb25cc`'s tree, which the job makes by putting that commit's four files back and checking each one's blob id and, where the clone holds the commit, `git diff --quiet 1874fb25cc`. If the first half fails the run stops there. Expected end about 08:35Z.
+- `r20261113-074612-54e6` on vy-nebius-cpu-1, launched 07:46Z, running: the small plays at `1e20910586`, each an interior of one member: the kept case of `r20261113-053625-2556` through `sampled-two-on` and `sampled-two`, a new honest play on two windows, and the play whose first session shows a tree's line. Expected end about 08:05Z.
+- `r20261113-073130-3ed6` on vy-nebius-cpu-4, done rc 0, at #9574's head `b7949765a0`, a rehearsal [run]: the same three plays, each an interior of one member, then the difftest. `KEPT_ON rc=0`, `KEPT_OFF rc=1`; the new honest play `second rc=0`, `FORM_ON rc=0`, `FORM_OFF rc=1`; the first-tree play `FORM_TREE rc=1` with the reason "two-stage: on two windows the first session's log holds a coin tree's line: …"; `DIFFTEST rc=0`, "66 passed in 28.15s" with the play's case given, so the test that both binaries read the play's case ran; `DIFFTEST_KEPT rc=0`.
+- `r20261113-073209-a1b0` on vy-nebius-cpu-14 (the recursive package's records at `b7949765a0`, Lean slot `build/0` since 07:34Z) and `r20261113-073349-9ee4` on vy-nebius-cpu-7 (the quick tier at `b7949765a0`): running, rehearsals as you said. I launch spot's records run only after the carry.
+- `r20261113-062449-8db6` on vy-nebius-cpu-1 (records of `security/Proofs` at `870cc9da1b`, Lean slot `build/1` since 06:26Z): still running, not read.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- That `1e20910586` compiles, and that an honest play passes the comparison: `c4f6` and `54e6`.
+- That an evidence file reaches `RECORD_DIGEST` or `RECORD_READ` through the binary: each has only `#guard`s. The form's commitment is built by `OneStage.commitmentOf`, which takes the digest from the record it parsed, so I know no file that makes the two digests differ.
+- Which head the join takes: soundness's word.
