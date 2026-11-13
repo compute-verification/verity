@@ -13,6 +13,7 @@ import hashlib
 import random
 from dataclasses import replace
 from itertools import product
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -315,12 +316,51 @@ def test_counts_no_row_can_have_are_refused_by_name():
     assert V._replayed(wins, tails, d, record, reg)[3].by_request() == list(served.kept)
     with pytest.raises(V.AdviceCodeError, match="^under a draft, and only then, the string carries each window's kept terms"):
         V.string_of(wins, reg, V.length_tails(record, reg))
-    with pytest.raises(V.AdviceCodeError, match="^under a draft a window's second segment is its kept counts'"):
-        BC.bits_by_class(data, record, reg)
     plain_record, plain, _ = _case(0)
     rp, _, _ = V.replay_record(plain_record, plain, plain.engine, order, lambda i, k: True)
     with pytest.raises(V.AdviceCodeError, match="^under a draft, and only then, each step's outputs are read off the replay"):
         V.charged(plain_record, plain, order, rp, V.windows(plain_record, T), [{} for _ in rp.steps])
+
+
+def test_the_kept_counts_are_a_class_of_their_own_in_the_charge_by_class():
+    """Under a draft each window's charge splits into the fields it had and its second segment's two, the kept counts'
+    bits and what ends them, which are the kept drafts' class: a hand-worked case under the tick, where the length
+    terms are all else a window is charged; then, over drafts, scheduling and the tick, the parts sum to the window's
+    charge and the class is the bits a coder alone spends on the window's counts. Beside the bits, the rows whose
+    counts each window sends, those that kept a draft and the drafts kept. Without a draft there is no such field,
+    class or row."""
+    record, reg, served = _case(3, tick=True)
+    data = SC.encode(served, record, reg)
+    zero = dict.fromkeys(("decisions", "order", "hits", "resumes", "lag", "segment_end"), 0)
+    assert BC.bits_by_class(data, record, reg) == {
+        0: {**zero, "output_len": 8, "finish": 2, "kept": 5, "kept_end": 2},
+        1: {**zero, "output_len": 3, "finish": 1, "kept": 5, "kept_end": 2},
+        2: {**zero, "output_len": 0, "finish": 0, "kept": 2, "kept_end": 2},
+        3: {**zero, "output_len": 0, "finish": 0, "kept": 2, "kept_end": 2}}
+    assert BC.kept_rows(data, record, reg) == {0: (4, 1, 2), 1: (4, 3, 4), 2: (2, 1, 2), 3: (2, 0, 0)}
+    assert BC.fields(reg) == BC.FIELDS + BC.KEPT and BC.classes(reg) == {**BC.CLASSES, "kept drafts": ("kept", "kept_end")}
+    assert not set(BC.KEPT) & set(BC.closed(reg))
+    file, line = BC.where("kept count")
+    assert file == "kept.py" and 'e.bit("kept", c > j' in (Path(BC.__file__).parent / file).read_text().splitlines()[line - 1]
+    for K, asy, tick in product((1, 3, 5), (False, True), (False, True)):
+        record, reg, served = _case(K, asy=asy, tick=tick)
+        data = SC.encode(served, record, reg)
+        parts, terms = BC.bits_by_class(data, record, reg), _terms(data, record, reg)
+        assert all(tuple(p) == BC.fields(reg) and min(p.values()) >= 0 for p in parts.values())
+        assert {w: sum(p.values()) for w, p in parts.items()} == V.bits_by_window(data, record, reg)
+        assert [sum(p[f] for f in BC.KEPT) for p in parts.values()] == _second(reg, terms)
+        assert sorted(f for fs in BC.classes(reg).values() for f in fs) == sorted(BC.fields(reg))
+        rows = BC.kept_rows(data, record, reg)
+        assert [r.rows for r in rows.values()] == [len(w) for w in terms.windows]
+        assert sum(r.rows for r in rows.values()) == sum(map(len, served.kept))
+        assert sum(r.kept for r in rows.values()) == sum(c > 0 for cs in served.kept for c in cs)
+        assert sum(r.rows + r.drafts for r in rows.values()) == sum(len(q.output) for q in record.requests)
+    record, reg, served = _case(0)
+    data = SC.encode(served, record, reg)
+    assert BC.fields(reg) == BC.FIELDS and BC.classes(reg) == BC.CLASSES
+    assert all(tuple(p) == BC.FIELDS for p in BC.bits_by_class(data, record, reg).values())
+    with pytest.raises(V.AdviceCodeError, match="^the registered engine serves with no draft, so no row keeps one$"):
+        BC.kept_rows(data, record, reg)
 
 
 def test_a_request_admitted_before_its_bodys_window_is_carried_where_no_length_is_sent():

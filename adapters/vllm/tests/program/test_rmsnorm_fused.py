@@ -18,18 +18,13 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 
 def _numerics():
-    try:
-        from verity.definitions.numerics import rms_relation, rms_triton_model as RM
-    except Exception as e:  # pragma: no cover
-        pytest.skip(f"verity.definitions.numerics not importable: {e}")
+    from verity.definitions.numerics import rms_relation
+    from verity.definitions.numerics import rms_triton_model as RM
     try:
         RM.build()                                     # into the _jit cache; a no-op when fresh
     except Exception as e:  # noqa: BLE001  -- no compiler / compile failure: skip, do not fail
         pytest.skip(f"librms_triton_model.so not buildable here: {type(e).__name__}: {e}")
-    try:
-        rms_relation.tables("cuda")
-    except Exception as e:  # pragma: no cover
-        pytest.skip(str(e))
+    rms_relation.tables("cuda")
 
 
 def _standalone(spec):
@@ -42,8 +37,8 @@ def test_ir_body_equals_numpy_twin(N, eps):
     _numerics()
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1
     from verity.definitions.numerics import rmsnorm_fused as SW
+    from verity.definitions.registry import b1
     rng = np.random.default_rng(1234 + N)
     for defn, tree in ((b1.RMSNormFusedCuda, SW.variance_v2), (b1.RMSNormFusedCudaV1, SW.variance_v1)):
         prog, call = _standalone(bind(defn, N=N, EPS=eps))

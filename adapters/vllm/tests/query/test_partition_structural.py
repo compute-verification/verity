@@ -4,14 +4,37 @@ Programs with 64-bit gates."""
 from __future__ import annotations
 
 import pytest
-
+import verity.circuits.partition as pm
 from verity.circuits import partition
+from verity.circuits.defs import bind
+from verity.circuits.partition import (
+    CheckedTiling,
+    ReadinessReport,
+    WidthVerdict,
+    gate_width_readiness,
+    readiness_32bit,
+    validate_partition,
+    validate_width,
+)
 from verity.circuits.parts import Limits, Part
-from verity.circuits.partition import (ReadinessReport, WidthVerdict, gate_width_readiness, readiness_32bit,
-                                 validate_partition, validate_width)
-from tests.query.test_partition_stubs import (OracleBoundary, StubFamily, StubGateSet, body_tiling, family_of,
-                                                  gemm_program,                                                   materialise, members_k, ranges_of, synth_program, tiling,
-                                                  twice_program, whole_body, wide_program)
+from verity.circuits.program import Program
+
+from tests.query.test_partition_stubs import (
+    OracleBoundary,
+    StubFamily,
+    StubGateSet,
+    body_tiling,
+    family_of,
+    gemm_program,
+    materialise,
+    members_k,
+    ranges_of,
+    synth_program,
+    tiling,
+    twice_program,
+    whole_body,
+    wide_program,
+)
 
 
 @pytest.fixture
@@ -95,7 +118,7 @@ def test_unassigned_nested_node_is_gap(gemm):
 
 
 def test_double_assignment_is_overlap(gemm):
-    rules = [(0, ("whole",)), (1, ("whole",)), (2, members_k()), (2, ("whole",))]  # node 2 in two entries, full ranges both
+    rules: list | dict = [(0, ("whole",)), (1, ("whole",)), (2, members_k()), (2, ("whole",))]  # node 2 in two entries, full ranges both
     fast, sweep = both_paths(gemm, tiling(body_tiling(gemm.root, rules)))
     assert fast.status == sweep.status == "overlap"
     assert fast.codes == ("tiling-members-overlap",)
@@ -161,7 +184,6 @@ def test_shared_callee_from_two_parents_two_plans():
     assert fast.detail["sets"] == 2 + 2 * 32 * (3 + 1) == sweep.detail["sets"] and fast.detail["bodies"] == 5
     # width: the tiling path must count 64 coordinate activations (2 parents x 32 members) and 64 dot activations
     B = OracleBoundary(P_)
-    import verity.circuits.partition as pm
     saved = pm._BOUNDARY
     pm._BOUNDARY = B
     try:
@@ -189,7 +211,6 @@ def test_scopes_of_enumerates_every_activation():
     coord_t = whole_body(coord, key="coord")
     g = whole_body(gemm_spec, {0: ("descend", coord_t)}, key="gemm")
     t = tiling(whole_body(P_.root, {2: ("descend", g), 3: ("descend", g)}))
-    from verity.circuits.partition import CheckedTiling
     T = CheckedTiling(P_, t)
     assert T.instances == {(t.root,): 1, ("gemm",): 2, ("coord",): 64}
     scopes = list(T.scopes_of(("coord",)))
@@ -406,8 +427,6 @@ def test_readiness_lists_64bit_input_and_primitive():
 
 def test_readiness_gumbel_const64():
     G = pytest.importorskip("verity.definitions.registry.sampling")
-    from verity.circuits.defs import bind
-    from verity.circuits.program import Program
     P_ = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
     r = readiness_32bit(P_)
     assert not r.ok

@@ -37,11 +37,17 @@ def test_the_digest_is_over_configs_and_winners_not_timing(tmp_path: Path) -> No
     c = SA.record(str(_dir(tmp_path / "c", other)), KERNELS)
     d = SA.record(str(tmp_path / "a"), {**KERNELS, "bb22": {**KERNELS["bb22"], "config": {"XBLOCK": 512, "num_warps": 4, "num_stages": 1}}})
     assert len({a["digest"], c["digest"], d["digest"]}) == 3
-    named = lambda diff: [x.split(":")[0] for x in diff]
+    def named(diff: list[str]) -> list[str]:
+        return [x.split(":")[0] for x in diff]
+
     assert named(SA.differences(a, c)) == ["winners pp/9eef.best_config"] and "loaded {'R0_BLOCK': 64" in SA.differences(a, c)[0]
     assert named(SA.differences(a, d)) == ["kernels bb22"]
     absent = SA.differences(a, {})
     assert named(absent) == [f"kernels {k}" for k in KERNELS] + [f"winners {k}" for k in WIN] and all(x.endswith("loaded absent") for x in absent)
+    assert SA.differences(a, {"kernels": None, "winners": {}}) == absent
+    unpinned = SA.differences({}, a)
+    assert named(unpinned) == named(absent) and all(": pinned absent, loaded " in x for x in unpinned)
+    assert SA.differences({"kernels": {}, "winners": None}, a) == unpinned
 
 
 def test_a_seeded_dir_holds_the_pinned_winners_torch_loads(tmp_path: Path) -> None:

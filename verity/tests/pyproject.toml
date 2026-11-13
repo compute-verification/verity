@@ -10,4 +10,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
           "verity/channel.py", "verity/runtime/handshake.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
-          "verity/configuration/__init__.py", "verity/hardware/__init__.py"]
+          "verity/runtime/__init__.py", "verity/hardware/__init__.py"]

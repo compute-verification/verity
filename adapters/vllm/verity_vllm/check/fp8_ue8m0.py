@@ -21,9 +21,12 @@ from __future__ import annotations
 import gzip
 import json
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
+
+__all__ = ["Rewrites", "absorbed", "build_roles", "requant", "served_words"]
 
 REQUANT_ROLES = ("fp8_w_requant_ue8m0", "fp8_ws_requant_ue8m0")
 ABSORB_ROLE = "mla.absorb"
@@ -46,6 +49,12 @@ def build_roles(program_dir: str | None) -> dict[str, dict[str, Any]]:
                         return x["weight_roles"]
                     stack.extend(x.values())
     return {}
+
+
+def _role(roles: dict[str, dict[str, Any]], field: str) -> str | None:
+    """The role the Build gave `field`; None for a field it gave none."""
+    entry = roles.get(field)
+    return entry.get("role") if entry else None
 
 
 def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = None) -> tuple[np.ndarray, str] | None:
@@ -97,12 +106,14 @@ class Rewrites:
     (shard included), `config` the checkpoint's config.json."""
 
     def __init__(self, fields: list[str], roles: dict[str, dict[str, Any]], raw: Callable[[str], tuple[np.ndarray, dict]], config: dict):
-        self.raw, self.config, self._pair = raw, config, {}
-        bs = (config.get("quantization_config") or {}).get("weight_block_size") or [0]
+        self.raw, self.config = raw, config
+        self._pair: dict[str, tuple[np.ndarray, np.ndarray, dict]] = {}
+        quant = config.get("quantization_config")   # config.json of a checkpoint that is not quantized has none: G = 0, no field rewritten
+        bs = (quant.get("weight_block_size") if quant else None) or [0]
         self.G = int(bs[0])
         names = set(fields)
-        self.requant = {f for f in fields if (roles.get(f) or {}).get("role") in REQUANT_ROLES}
-        self.absorb = {f: f.rsplit(".", 1)[0] + ".kv_b_proj.weight" for f in fields if (roles.get(f) or {}).get("role") == ABSORB_ROLE}
+        self.requant = {f for f in fields if _role(roles, f) in REQUANT_ROLES}
+        self.absorb = {f: f.rsplit(".", 1)[0] + ".kv_b_proj.weight" for f in fields if _role(roles, f) == ABSORB_ROLE}
         if self.requant:
             self.requant |= {k + sfx for k in self.absorb.values() for sfx in ("", SCALE[len(".weight"):]) if k + sfx in names}
 
