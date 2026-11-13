@@ -80,6 +80,10 @@ a branch registered to another agent or of `main`, `checked` or `next`, to the r
 It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhere in the command (`flattened` holds what
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)
 whatever its `-C`, and an unplaced push is judged as theirs.
+In a checkout of those repositories a commit carries the machine's configured identity, so it refuses there a git command
+that names an author or committer of its own (`worktree_guard.identity_reason`): `-c user.name=...`, `commit --author`,
+`GIT_AUTHOR_NAME=... git`, a `git config` that writes `user.name` or `user.email`. A scratch repository takes any identity,
+and such a command it can't place passes.
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM

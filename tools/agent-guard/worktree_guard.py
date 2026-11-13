@@ -16,6 +16,10 @@ For every agent, whatever it owns, it also refuses a push that would update `mai
 them), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token.
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
+In a checkout of those repositories a commit carries the machine's configured identity, so for every agent it refuses there a
+git command that names an author or committer of its own (`identity_reason`): `-c user.name=...` and the like, `commit
+--author`, `GIT_AUTHOR_NAME=... git` and the like, and a `git config` that writes the checkout's own `user.name` or
+`user.email`. A scratch repository takes any identity, and a command the guard can't place passes.
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
 after the hook has read it. A push the agent doesn't type (a script's, a tool's) meets the same push rule, `PROTECTED_REASON`
 and `owner_reason`, in git's pre-push hook (pre_push.py), branch by branch.
@@ -414,6 +418,38 @@ def main_or_config_reason(invocations_: list[Git], pushes: dict[int, Push], next
     return None
 
 
+#: the configuration keys and the variables that name a commit's author or committer in place of the machine's configured one
+IDENTITY_KEYS = {f"{who}.{what}" for who in ("user", "author", "committer") for what in ("name", "email")}
+IDENTITY_VARIABLES = {f"GIT_{who}_{what}" for who in ("AUTHOR", "COMMITTER") for what in ("NAME", "EMAIL")}
+#: the words of a `git config` beside which `KEY VALUE` writes the checkout's own configuration
+CONFIG_OWN = {"set", "--local", "--worktree"}
+
+
+def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | None:
+    """Whatever agent runs it: a git command that names an author or committer of its own in a checkout of QUEUE_REPOS, one
+    whose `origin` is theirs (`queue_remote`), as a worktree's is. A commit there carries the machine's configured identity,
+    so refused are git's own `-c` or `--config-env` of one of IDENTITY_KEYS, one of IDENTITY_VARIABLES assigned ahead of the
+    command (`envs`, shell_hook.git_env), `commit --author`, and a `git config KEY VALUE` that writes one of IDENTITY_KEYS to
+    the checkout's own configuration. A read passes (`log --author`, `config KEY`, `config --get KEY`), as does a `git config`
+    with any other option (`--global`, `--file`, `--unset`), a command in any other repository (a scratch one takes any
+    identity) and one the guard can't place (`Git.unknown`)."""
+    for g in indexed:
+        sub, rest, env = g.args[0], g.args[1:], envs[g.i] if g.i < len(envs) else {}
+        keys = [w.removeprefix("--config-env=").partition("=")[0] for w in g.options]
+        written = [a for a in rest if a not in CONFIG_OWN]
+        given = [*(k for k in keys if k.lower() in IDENTITY_KEYS),
+                 *(n for n in sorted(IDENTITY_VARIABLES) if env.get(n, "$") != "$"),
+                 *(a.partition("=")[0] for a in rest if sub == "commit" and a.partition("=")[0] == "--author"),
+                 *(written[:1] if sub == "config" and len(written) == 2 and written[0].lower() in IDENTITY_KEYS else [])]
+        if given and not g.unknown and queue_remote(git(g.d, "remote", "get-url", "origin") or "", PUSH_REMOTES):
+            return (f"this `git` names an author or committer of its own (`{given[0]}`) in a checkout of verity or infra, where a "
+                    f"commit carries the machine's configured identity, so that the history shows who wrote what: commit with the "
+                    f"machine's configured identity; pass no name or address (no `-c user.*`, `--author`, `GIT_AUTHOR_*` or "
+                    f"`GIT_COMMITTER_*`, and no `git config user.name|user.email VALUE`; `git config user.email` reads the one "
+                    f"it has). A scratch repository takes any identity: name it on git itself, `git -C <scratch> ...`.")
+    return None
+
+
 #: what the shell expands after the hook has read the command: a branch or directory named through one can't be judged
 UNEXPANDED = ("$", "`")
 
@@ -441,7 +477,8 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
     under (shell_hook.git_env)."""
     indexed = indexed_invocations(commands, cwd, envs)
     pushes = {g.i: read_push(g, envs[g.i] if envs is not None and g.i < len(envs) else {}) for g in indexed if g.args[0] == "push"}
-    if why := unexpanded_reason(commands, indexed, pushes) or main_or_config_reason(indexed, pushes, next_ok or [], agent):
+    if why := (unexpanded_reason(commands, indexed, pushes) or main_or_config_reason(indexed, pushes, next_ok or [], agent)
+               or identity_reason(indexed, envs or [])):
         return why
     if not agent:
         return None

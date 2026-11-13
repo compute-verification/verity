@@ -1246,8 +1246,85 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
                     "git config --name-only --get-regexp url"):
         out = ask(command)
         assert out["permission"] == "deny" and "url.*.insteadof's name" in out["agent_message"], command
-    for command in ("git config user.name", "git config user.name t", "git config --get remote.origin.fetch"):
+    for command in ("git config user.name", "git config core.abbrev 12", "git config --get remote.origin.fetch"):
         assert ask(command)["permission"] == "allow", command
+
+
+#: git commands that name an author or committer of their own, by each form the rule reads: git's own `-c` and `--config-env`,
+#: a variable assigned ahead of the command, `commit --author`, and a `git config` that writes the checkout's own
+BY_OPTION = [
+    "git -c user.name=a -c user.email=a@a commit -m x", "git -c user.email=a@a commit -m x", "git -c User.Name=a commit -m x",
+    "git -c author.name=a commit -m x", "git -c committer.email=a@a revert --no-edit HEAD",
+    "git --config-env=user.name=NAME commit -m x", "git --config-env user.email=ADDRESS commit -m x",
+    "git add -A && git -c user.name=a -c user.email=a@a commit -m x", "bash -lc 'git -c user.name=a commit -m x'",
+]
+BY_VARIABLE = [
+    "GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a GIT_COMMITTER_NAME=a GIT_COMMITTER_EMAIL=a@a git commit -m x",
+    "GIT_AUTHOR_NAME=a git commit -m x", "GIT_AUTHOR_EMAIL=a@a git commit -m x", "GIT_COMMITTER_NAME=a git commit -m x",
+    "GIT_COMMITTER_EMAIL=a@a git cherry-pick lane/mine", "env GIT_AUTHOR_EMAIL=a@a git commit -m x",
+    "tmux send-keys 'GIT_AUTHOR_NAME=a git commit -m x' C-m",
+]
+BY_AUTHOR = ["git commit --author='A <a@a>' -m x", "git commit -m x --author 'A <a@a>'",
+             "git commit --amend --no-edit --author='A <a@a>'"]
+BY_CONFIG = ["git config user.name a", "git config user.email a@a", "git config --local user.name a",
+             "git config --worktree user.email a@a", "git config set user.email a@a", "git config Author.Name a"]
+OWN_IDENTITY = BY_OPTION + BY_VARIABLE + BY_AUTHOR + BY_CONFIG
+IDENTITY_FIX = "commit with the machine's configured identity; pass no name or address"
+
+
+@pytest.mark.parametrize("form", OWN_IDENTITY)
+def test_a_git_that_names_an_author_or_committer_of_its_own_is_refused_in_a_checkout_of_verity_or_infra(clones, form):
+    """A commit in the queue's repositories carries the machine's configured identity, by which their history shows who wrote
+    what. A commit made under a name and an address passed on the command line shows an author nobody can place, so a git
+    command that passes one there is refused, and the refusal says how to commit."""
+    for clone in ("verity", "infra"):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"], (form, clone, out)
+
+
+@pytest.mark.parametrize("form", OWN_IDENTITY)
+def test_a_scratch_repository_and_any_other_take_any_identity(clones, tmp_path, form):
+    """Tests commit in throwaway repositories under a temporary directory all the time, under any name: a repository with no
+    `origin`, or one that is not the queue's, takes the same commands."""
+    subprocess.run(["/usr/bin/git", "init", "-q", str(tmp_path / "scratch")], check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+    for clone in ("scratch", "notes"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+def test_the_identity_rule_judges_the_repository_the_command_runs_in(clones, tmp_path):
+    """The rule places a command as the push rules do, by the directory it starts in and git's own `-C`: a worktree of a verity
+    checkout is one, and a scratch repository named from inside one is not. A command the guard can't place, as after a `cd`
+    into a scratch repository, passes: the rule refuses only where it can tell."""
+    scratch, env = tmp_path / "scratch", {**os.environ, **GIT_ENV}
+    for args in (["init", "-q", str(scratch)], ["-C", str(tmp_path / "verity"), "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "wt"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env=env)
+    commit = "-c user.name=a -c user.email=a@a commit -m x"
+    for form, clone in ((f"git {commit}", "wt"), (f"git -C {{V}} {commit}", "notes"), (f"git -C {{V}} {commit}", "scratch"),
+                        (f"git -C ../verity {commit}", "scratch"), (f"cd /tmp && git -C {{V}} {commit}", "notes"),
+                        (f"git -C {tmp_path}/wt {commit}", "notes")):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"], (form, clone, out)
+    for form in (f"git -C {scratch} {commit}", f"git -C ../scratch {commit}", f"git -C {{N}} {commit}",
+                 f"cd /tmp && git -C {scratch} {commit}", f"cd {scratch} && git {commit}",
+                 f"cd {scratch} && git init -q . && git {commit}", f"GIT_DIR={scratch}/.git git {commit}",
+                 f"git --git-dir={scratch}/.git {commit}", f"git init -q {tmp_path}/new && git -C {tmp_path}/new {commit}"):
+        assert clones(form, "verity") == {"permission": "allow"}, form
+
+
+@pytest.mark.parametrize("form", [
+    "git log --author=NAME -3", "git shortlog -sn --author NAME", "git rev-list --count --author=a HEAD",
+    "git config --get user.email", "git config user.email", "git config --local user.name", "git var GIT_AUTHOR_IDENT",
+    "git config --unset user.name", "git config core.abbrev 12", "git commit -m x", "git commit -m 'refuse --author on a commit'",
+    "git commit --amend --no-edit --reset-author", "git -c commit.gpgsign=false commit -m x", "git -c user.signingkey=K commit -S -m x",
+    "GIT_AUTHOR_DATE=@1 GIT_COMMITTER_DATE=@1 git commit -m x",
+    "unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL; git commit -m x",
+])
+def test_reading_an_author_or_the_configured_identity_passes_in_a_checkout_of_verity_or_infra(clones, form):
+    """`--author` selects commits in `git log`, `git shortlog` and `git rev-list`; `git config KEY`, `git config --get KEY` and
+    `git var GIT_AUTHOR_IDENT` read the identity; and a commit that passes none carries the machine's."""
+    for clone in ("verity", "infra"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
 
 
 def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):
