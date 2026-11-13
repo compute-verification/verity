@@ -2374,8 +2374,9 @@ signer (`Issuer.sign`: the certifier message for the key, the session and the ex
 record's own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
-(`layout`: T, S, r and the first bucket w·T) and the certificate, as one JSON object. A run keeps it on its private
-side: the auditor's gate publishes its certificate alone, and the wiring is private. `check_registration` is
+(`layout`: T, S, r and the first bucket w·T) and the certificate, as one JSON object. A run keeps it whole on its
+private side: the wiring is private, and the auditor's gate publishes the object less it (the root, a hiding
+commitment; the certificate; and the rest, which the schedule and the execution phase fix). `check_registration` is
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 execution phase give, and the certificate verifies over the head under the network certifier's key in the session.
 

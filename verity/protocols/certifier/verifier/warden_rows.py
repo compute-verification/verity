@@ -47,8 +47,8 @@ and its certificate is `Issuer.sign`'s of the cells digest: the certifier's mess
 session (`certificate.certificate_message`). The wire record's certificate of the same execution phase signs its salted
 record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
-**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
-side (the auditor's gate publishes its certificate alone, and `wiring` is private):
+**The registration** (`registration`) is the head and its certificate as one JSON object, kept whole on a run's
+private side: `wiring` is private, and the auditor's gate publishes the object less it:
 
     {"format": REGISTRATION, "value", "link", "direction", "window", "parameters", "cell_bytes", "rows", "words",
      "word_bits", "row_schema", "domain", "wiring", "root",
@@ -436,7 +436,7 @@ def _layout(params: WardenParams, window: int) -> dict[str, int]:
 
 def registration(head: CellsHead, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
     """The record a proof block's registered port reads: the head, the rows' format and order, and the
-    certificate. A run keeps it on its private side; the auditor's gate publishes the certificate alone."""
+    certificate. A run keeps it whole on its private side; the auditor's gate publishes it less the wiring."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
             "rows": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,

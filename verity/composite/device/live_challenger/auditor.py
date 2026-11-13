@@ -246,8 +246,12 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   all the prover's. Its unit publishes to `out/` only what isn't:
   `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
   alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
-  `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or layout,
-  and no cost) and a `--window-per-group` run's `groups.json`.
+  `ROW_CERTIFICATES`), `cells-registrations.jsonl` (each line of `cells.jsonl` as the witness writes it, key for
+  key in its order, less the registration's `wiring` and the line's cost, `ROW_REGISTRATIONS`: the keys published
+  are the one list `ROW_LINE`, each a hiding commitment, a certificate or the schedule's and the execution phase's
+  own structure, and a line with a key the list doesn't rule fails the rehearsal's end and publishes no
+  registration) and a `--window-per-group` run's `groups.json`. Of the connection rows' registrations and a load's,
+  `out/` and the end hold the certificates and nothing else: no root, domain or layout.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
@@ -443,18 +447,47 @@ WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`);
+#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
+#: and the cells' registrations less their private keys (`ROW_REGISTRATIONS`);
 #: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
 #: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
 #: public counts and the scan's schedule alone. Of a load, `load-relay.json` alone: its registrations (`load.json`,
-#: each value's whole) stay in `witness/`, as the row registrations do
+#: each value's whole) stay in `witness/`, as the connection rows' registrations do
 WARDEN_PUBLIC = ("deployment.json", "groups.json", "load-relay.json")
 #: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
 #: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
-#: registration, or the execution phase it was refused for, and its cost; of a registration `out/` holds the
-#: certificate and nothing else
+#: registration, or the execution phase it was refused for, and its cost; of a connection rows' registration
+#: `out/` holds the certificate and nothing else
 ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
+#: the cells' registrations' file of `witness/` with the file of `out/` that holds its lines as the witness writes
+#: them, line for line, less what `ROW_LINE` leaves out (`row_registration`). The connection rows' registrations
+#: aren't among them: `out/` holds their certificates alone
+ROW_REGISTRATIONS = {"cells.jsonl": "cells-registrations.jsonl"}
+#: how `ROW_LINE` rules a key: its value is published, or left in `witness/` alone
+PUBLIC, WITHHELD = "public", "withheld"
+#: every key of a line of `cells.jsonl` (`warden_serve.Publisher`: a registration, `warden_rows.registration`'s
+#: keys, or the execution phase it was refused for), each ruled, an object by its own keys. It is the one list of
+#: what `out/` publishes of a registration, so a key a writer adds is published only once it is written here:
+#: until then its line fails the gate (`row_registration`). What is public, and why it may be:
+#: - `root`: a hiding commitment, the root over the rows' `hm96` leaves, each row under a fresh salt at the pinned
+#:   key (the named assumption `hash-derived-key`);
+#: - `certificate`: the network certifier's signature over the head's digest, which `cells-certificates.jsonl`
+#:   publishes already;
+#: - every other key: protocol structure. `warden_rows.check_registration` holds each to the one value the
+#:   schedule, the session, the link, the direction and the execution phase give: the format and the rows' schema
+#:   (constants), the value's name, the parameters' digest (the schedule's, in `deployment.json`), the domain and
+#:   the rows' sizes and layout.
+#: What is left out: `wiring`, the salted digest of which connection's which cell each slot of a row holds, opened
+#: to the verifier alone; a line's `cost`, with its two measured times; and a refused line's `withheld`
+ROW_LINE = {
+    "registration": {
+        "format": PUBLIC, "value": PUBLIC, "link": PUBLIC, "direction": PUBLIC, "window": PUBLIC,
+        "parameters": PUBLIC, "cell_bytes": PUBLIC, "rows": PUBLIC, "words": PUBLIC, "word_bits": PUBLIC,
+        "row_schema": PUBLIC, "domain": PUBLIC, "wiring": WITHHELD, "root": PUBLIC,
+        "layout": {"buckets": PUBLIC, "slots": PUBLIC, "connection_slots": PUBLIC, "first_bucket": PUBLIC},
+        "certificate": {"key": PUBLIC, "digest": PUBLIC, "signature": PUBLIC}},
+    "refused": PUBLIC, "withheld": WITHHELD, "cost": WITHHELD}
 #: the direction a connection rows' certificate signs, which its registration doesn't name
 #: (`connection_rows.check_registration`)
 ROWS_DIRECTION = "egress"
@@ -2509,13 +2542,60 @@ def row_certificate(line: dict) -> dict:
                             "window": r["window"], "digest": c["digest"], "signature": c["signature"]}}
 
 
+class Unruled(ValueError):
+    """A line of a row registrations' file that `out/` can't hold as `ROW_LINE` rules it."""
+
+
+def _ruled(doc: dict, keys: dict, at: str) -> dict:
+    """`doc` less the keys `keys` leaves out, in its own order; `Unruled` for a key `keys` doesn't name and for a
+    published value that isn't a string, an integer, a list of them or, where `keys` lists its keys, an object."""
+    out = {}
+    for k, v in doc.items():
+        rule = keys.get(k)
+        if rule is None:
+            raise Unruled(f"{at} holds the key {k!r}, which ROW_LINE names neither as published nor as left out. "
+                          f"Rule whether it is public, and write it there ({Path(__file__).name}) as PUBLIC or WITHHELD")
+        if rule == WITHHELD:
+            continue
+        if isinstance(rule, dict):
+            if not isinstance(v, dict):
+                raise Unruled(f"{at}'s {k} isn't an object of the keys ROW_LINE lists for it")
+            out[k] = _ruled(v, rule, f"{at}'s {k}")
+        elif all(isinstance(x, str) or type(x) is int for x in (v if isinstance(v, list) else [v])):
+            out[k] = v
+        else:
+            raise Unruled(f"{at}'s {k} is neither a string, an integer nor a list of them. A published key holds an "
+                          f"object only by the keys ROW_LINE ({Path(__file__).name}) lists for it: list them there")
+    return out
+
+
+def row_registration(text: str) -> str:
+    """A line of a cells' registrations' file (`ROW_REGISTRATIONS`) as `out/` holds it: the line as the witness
+    writes it, key for key in its order, less what `ROW_LINE` leaves out: the registration's `wiring` and the
+    line's cost, and of a refused line all but the execution phase it was refused for. So every byte of the line
+    in `witness/` that isn't of a left-out key or beside one is a byte of the public line. `Unruled`, with what
+    to change, for a line `ROW_LINE` doesn't rule whole, and for one that isn't `json.dumps`' own writing of
+    itself, which this couldn't cut to the same bytes."""
+    try:
+        line = json.loads(text)
+    except ValueError:
+        raise Unruled("the line isn't JSON") from None
+    if not isinstance(line, dict) or json.dumps(line) != text:
+        raise Unruled("the line isn't one JSON object as json.dumps writes it by default, so its public keys can't "
+                      "be published byte for byte: write the line so, or teach row_registration "
+                      f"({Path(__file__).name}) the writer's form")
+    return json.dumps(_ruled(line, ROW_LINE, "the line"))
+
+
 def warden_outcome(out: Path, witness: Path) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
     (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
+    each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
     the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
     cost), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and the sink's
-    acknowledgements, or why it was refused)."""
+    acknowledgements, or why it was refused). A registrations' file with a line `ROW_LINE` doesn't rule is not
+    published, no line of it, and the outcome says which line and what to change (``unruled``)."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2529,6 +2609,18 @@ def warden_outcome(out: Path, witness: Path) -> dict:
             (out / public).write_text("".join(
                 json.dumps(row_certificate(json.loads(x)), sort_keys=True) + "\n"
                 for x in (witness / name).read_text().splitlines()))
+    unruled = None
+    for name, public in ROW_REGISTRATIONS.items():
+        if unruled is None and (witness / name).is_file():
+            lines = []
+            for i, x in enumerate((witness / name).read_text().splitlines(), 1):
+                try:
+                    lines.append(row_registration(x) + "\n")
+                except Unruled as e:
+                    unruled = f"{name} line {i}: {e}; out/{public} is not written"
+                    break
+            else:
+                (out / public).write_text("".join(lines))
     try:
         check = json.loads((witness / "check.json").read_text())
     except (OSError, ValueError):
@@ -2545,7 +2637,8 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         load = json.loads((out / "load-relay.json").read_text())
     except (OSError, ValueError):
         load = None
-    return {"verdict": verdict, "witness": sizes, **({} if load is None else {"load": load})}
+    return {"verdict": verdict, "witness": sizes, **({} if load is None else {"load": load}),
+            **({} if unruled is None else {"unruled": unruled})}
 
 
 def forward_argv(ssh: list[str], local: int, remote: int) -> list[str]:
@@ -2571,7 +2664,8 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     load"), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) and its tunnels'
-    (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end. A store's write opens
+    (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end; a line of its cells'
+    registrations that `ROW_LINE` doesn't rule ends it nonzero, the end saying the line and the fix. A store's write opens
     no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries the store's record."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
@@ -2620,6 +2714,9 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             tunnel.wait()
     if warden:
         outcome = {"device": "warden", **warden_outcome(out, work)}
+        unruled = outcome.pop("unruled", None)
+        if unruled is not None:
+            rc, why = rc or 2, unruled if why is None else f"{why}; {unruled}"
     else:
         try:
             summary = json.loads((out / "summary.json").read_text())

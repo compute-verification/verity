@@ -53,14 +53,18 @@ def gate_run(d: Path) -> Path:
     return d / "gate"
 
 
-def test_the_gate_publishes_a_row_registrations_certificate_and_the_leak_guard_holds_the_rest_of_it(tmp_path):
+def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_the_wiring(tmp_path):
     """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
-    direction and window the registration names, and no root, wiring or domain; the line whole is in ``witness/``,
-    where the chain reads it. So the record's leak guard, which reads a job's files against the gate run's witness,
-    releases a file of those certificates and the gate's own public files, and holds a file with a registration
-    whole, with its root alone or with its wiring alone."""
+    direction and window the registration names, and the line as `warden_serve.Publisher` writes it less the wiring
+    and the cost: the witness's own bytes but for those two, the root and the domain among them, and no wiring. The
+    line whole is in ``witness/``, where the chain reads it. So the record's leak guard, which reads a job's files
+    against the gate run's witness, holds nothing of a record whose files name a registration's public keys as a
+    verifier's files do (the published line, the registration less its wiring indented, a port with its root and
+    domain, the certificates). The control: the published line with the wiring written into it is held, and so are
+    a registration whole and the wiring alone, each moved out of the record."""
     run = gate_run(tmp_path / "g")
-    lines = [json.loads(x) for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
+    witness = (run / "witness" / "cells.jsonl").read_text().splitlines()
+    lines = [json.loads(x) for x in witness]
     regs = [x["registration"] for x in lines if "registration" in x]
     public = [json.loads(x) for x in (run / "out" / "cells-certificates.jsonl").read_text().splitlines()]
     assert len(regs) == 2 * sz.W63.windows and len(public) == len(lines)
@@ -68,24 +72,48 @@ def test_the_gate_publishes_a_row_registrations_certificate_and_the_leak_guard_h
         {"key_id": r["certificate"]["key"], "link": r["link"], "direction": r["direction"], "window": r["window"],
          "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]} for r in regs]
     assert not (run / "out" / "cells.jsonl").exists()
+    published = (run / "out" / "cells-registrations.jsonl").read_text().splitlines()
+    assert [json.loads(x) for x in published] == [
+        {"registration": {k: v for k, v in x["registration"].items() if k != "wiring"}} for x in lines]
+    assert published == [re.sub(r', "cost": \{[^}]*\}', "", x.replace(f'"wiring": "{r["wiring"]}", ', ""))
+                         for x, r in zip(witness, regs)]
+    assert all(len(p) + len(f'"wiring": "{r["wiring"]}", ') < len(x) for p, x, r in zip(published, witness, regs))
     out = b"".join(p.read_bytes() for p in sorted((run / "out").rglob("*")) if p.is_file())
-    assert not [(r["value"], k) for r in regs for k in ("root", "wiring", "domain") if r[k].encode() in out]
+    assert not [r["value"] for r in regs if r["wiring"].encode() in out] and b"wiring" not in out
+    assert b"commit_ms" not in out and b'"cost"' not in out
+    assert all(r[k].encode() in out for r in regs for k in ("root", "domain"))
     assert WC.WS.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
 
     record = tmp_path / "record"
     shutil.copytree(run / "out", record / "gates" / "out")
-    (record / "certificates.json").write_text(json.dumps({"rows": [x["certificate"] for x in public]}, indent=1,
-                                                         sort_keys=True))
-    (record / "registration.json").write_text(json.dumps(regs[0], indent=1, sort_keys=True))
-    (record / "root.json").write_text(json.dumps({"roots": [{"port": "p", "root": regs[1]["root"]}]}))
-    (record / "wiring.json").write_text(json.dumps({"wiring": regs[1]["wiring"]}))
+    less = [{k: v for k, v in r.items() if k != "wiring"} for r in regs]
+    port = ("value", "root", "rows", "words", "word_bits", "domain", "row_schema")
+    released = {
+        "certificates.json": json.dumps({"rows": [x["certificate"] for x in public]}, indent=1, sort_keys=True),
+        "published.jsonl": "".join(x + "\n" for x in published),
+        "registration.json": json.dumps(less[0], indent=1, sort_keys=True),
+        "registrations.json": json.dumps(less),
+        "registered.json": json.dumps({"ports": {f"o{i}": {k: r[k] for k in port} for i, r in enumerate(regs)}},
+                                      sort_keys=True)}
+    control = published[0].replace('"root": ', f'"wiring": "{regs[0]["wiring"]}", "root": ')
+    assert control != published[0] and control == re.sub(r', "cost": \{[^}]*\}', "", witness[0])
+    held = {"control.jsonl": control + "\n", "whole.json": json.dumps(regs[1], indent=1, sort_keys=True),
+            "wiring.json": json.dumps({"wiring": regs[2]["wiring"]})}
+    for name, text in (released | held).items():
+        (record / name).write_text(text)
+    gate_files = [f"gates/out/{p.name}" for p in sorted((run / "out").iterdir())]
     rc = LG.main([str(record), str(tmp_path / "q"), "--gates", str(tmp_path / "g"), "--report",
                   str(tmp_path / "report.json")])
     assert rc == 3
-    assert sorted(f["path"] for f in json.loads((tmp_path / "report.json").read_text())["found"]) == [
-        "registration.json", "root.json", "wiring.json"]
-    assert sorted(p.relative_to(record).as_posix() for p in record.rglob("*") if p.is_file()) == [
-        "certificates.json", *(f"gates/out/{p.name}" for p in sorted((run / "out").iterdir()))]
+    assert sorted(f["path"] for f in json.loads((tmp_path / "report.json").read_text())["found"]) == sorted(held)
+    assert sorted(p.relative_to(record).as_posix() for p in record.rglob("*") if p.is_file()) == sorted(
+        [*released, *gate_files])
+    rc = LG.main([str(record), str(tmp_path / "q2"), "--gates", str(tmp_path / "g"), "--report",
+                  str(tmp_path / "clean.json")])
+    assert rc == 0 and json.loads((tmp_path / "clean.json").read_text())["found"] == []
+    assert not [p for p in (tmp_path / "q2" / "files").rglob("*") if p.is_file()]
+    assert sorted(p.relative_to(record).as_posix() for p in record.rglob("*") if p.is_file()) == sorted(
+        [*released, *gate_files])
 
 
 def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):

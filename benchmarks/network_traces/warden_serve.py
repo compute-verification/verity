@@ -87,8 +87,9 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
   (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, row bytes, commit and sign
   ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
-  wiring are read off). A line of `cells.jsonl` is the run's private side whole: of a registration the auditor's gate
-  publishes the certificate alone, and its wiring and the cost's two times are private. All of that is done by a
+  wiring are read off). A line of `cells.jsonl` is the run's private side whole: the auditor's gate publishes it as
+  it is written here, key for key, less the registration's wiring and the cost, which are private, and by a list of
+  its own, so a key added to the line fails the gate until the list rules it. All of that is done by a
   spawned process (`PublisherProcess`), which alone holds the key and
   gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
   network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
