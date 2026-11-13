@@ -19,6 +19,13 @@ from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device.challenger import LiveRecord
 
+import verity_vllm.protocols.pouw.h1.challenger as PHC
+import verity_vllm.protocols.pouw.h1.draw as PHD
+import verity_vllm.protocols.pouw.h1.model_key as MK
+import verity_vllm.protocols.pouw.h1.requests as RQ
+import verity_vllm.protocols.pouw.h1.served as SV
+import verity_vllm.protocols.pouw.h1.static as ST
+import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols.test_pouw_h1 import (
     DRAW_RESERVED,
@@ -38,13 +45,6 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import draw as PHD
-from verity_vllm.protocols.pouw.h1 import model_key as MK
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
-from verity_vllm.protocols.pouw.h1 import static as ST
-from verity_vllm.protocols.pouw.h1 import words as W
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
