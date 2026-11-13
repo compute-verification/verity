@@ -109,6 +109,42 @@ def test_chain_refuses_its_own_flags_among_the_stage_flags(tmp_path):
         row.main(ch)
 
 
+def test_main_hands_each_subcommand_to_what_runs_it_and_returns_its_answer(tmp_path, monkeypatch, capsys):
+    """`row stage` and `row shed` are the run store's, each asked for by its entry point, and `row stage` is handed the function that
+    runs a row; `row run` runs the row at the stages its caller named; `row fa-version` prints the number alone, which a row's setup
+    reads from the command's output."""
+    from verity_vllm.pipeline import row
+    env = {"PY": sys.executable}
+    calls: list[tuple] = []
+
+    class Store:
+        def __init__(self, module: str, entry: str):
+            self.asked = (module, entry)
+
+        def stage(self, o, run):
+            calls.append((*self.asked, o, run))
+            return 7
+
+        def shed(self, o):
+            calls.append((*self.asked, o))
+            return 8
+
+    def run_row(o, stages):
+        calls.append((o, stages))
+        return 9
+
+    monkeypatch.setattr(row, "run_store", Store)
+    monkeypatch.setattr(row, "run_row", run_row)
+    monkeypatch.setattr(row, "fa_version", lambda workload, target: {("w.json", None): 2, ("w.json", "{}"): 3}[workload, target])
+    st = cli.parse("row", ["stage", "commit", ROW, "R", "o/r", "rev"], env)
+    sh = cli.parse("row", ["shed", "--force"], env)
+    o = _opts(tmp_path, "--stages", "build,match")
+    assert (row.main(st), row.main(sh), row.main(o)) == (7, 8, 9)
+    assert calls == [(row.RESEARCH, "row stage", st, run_row), (row.RESEARCH, "row shed", sh), (o, "build,match")]
+    assert [row.main(cli.parse("row", ["fa-version", "w.json", *t], env)) for t in ([], ["--target", "{}"])] == [0, 0]
+    assert capsys.readouterr().out == "2\n3\n"
+
+
 def test_a_rows_effective_config_is_its_file_its_stage_configs_and_what_the_caller_moved(tmp_path, monkeypatch):
     """What a run of a row used (`row.effective_config`, written as the row's ``effective_config.json``): the row's file without its
     requests and that file's digest, the run's own words and which of them differ from the file's, each stage's config in full, the
@@ -472,6 +508,8 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
 def test_a_batch_composes_and_builds_its_manifest_without_waiting_for_the_envelope(tmp_path, monkeypatch):
     r, seen = _batch_build(tmp_path, monkeypatch)
     assert (r.LP, r.T) not in R.request_shapes(r.path(r.wl))
+    for marker in ("derives_done", "derives_failed"):                 # an earlier attempt's markers end nothing of this Build's
+        Path(f"{r.d}/build_workload.{marker}").touch()
     r.build()
     assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == ["w" * 64]
     assert seen["derived"] == [f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(r.path(r.wl), r.LP, r.T)]

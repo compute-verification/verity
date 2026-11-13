@@ -1,11 +1,11 @@
 """A single-GPU row's Match stage with every stage command stood in (`verity_vllm.pipeline.row_stages`): the commands it runs, in
 their order, and the small files it writes beside them (``match_shape.json``, the log of a comparison that did not run, the row
-log's line for a manifest that does not read).  CPU only: no stage process starts."""
+log's line for a manifest that does not read), the phase it runs over, the manifest its capture acquires under and a stochastic
+row's sampler value check.  CPU only: no stage process starts."""
 from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 
 import pytest
@@ -51,9 +51,9 @@ def _flag(cmd: list[str], name: str) -> str:
 # ---------------------------------------------------------------------------------------------------------------- the comparison
 
 def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_served_at(tmp_path, monkeypatch):
-    """B=1: the request Program is the Build's when the fold ran every decode step the row asks for, and the one of the served shape
-    (derived when not on disk) when the request stopped early; ``match_shape.json`` holds, in this order, LP, the served T, the row's T
-    and the Program dir either way, under the names its reader looks them up by."""
+    """B=1: the request Program is the Build's when the fold ran every decode step the row asks for or none, and the one of the served
+    shape (derived when not on disk) when the request stopped early; ``match_shape.json`` holds, in this order, LP, the served T, the
+    row's T and the Program dir either way, under the names its reader looks them up by, and the reader says the early shape whole."""
     r, ran = _match_row(tmp_path, monkeypatch, rcs={"match_compare.log": 7})
     d = r.d
     assert r.compare(60) == (7, None, False)
@@ -68,8 +68,9 @@ def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_se
     Path(d, "match", "fold_summary.json").write_text(json.dumps({"n_steps": 3}))      # two decode steps served of the row's three
     assert r.compare(60) == (7, None, False)
     early = f"{d}/build_request_LP8_T2"
-    assert list(json.loads(Path(d, "match_shape.json").read_text()).values()) == [8, 2, 3, early]
-    assert re.findall(r"\d+", R.served_shape(d)) == ["8", "2", "3"]
+    record = json.loads(Path(d, "match_shape.json").read_text())
+    assert list(record.values()) == [8, 2, 3, early]
+    assert R.served_shape(d) == f"LP=8 T_r=2 {list(record)[2]}=3"                     # the row's T under the record's name for it
     (derive, dcmd), (name, cmd) = ran
     assert derive == "build_request_LP8_T2.log" and (_flag(dcmd, "--LP"), _flag(dcmd, "--T"), _flag(dcmd, "--out")) == ("8", "2", early)
     assert name == "match_compare.log" and _flag(cmd, "--a") == early
@@ -79,6 +80,11 @@ def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_se
     os.makedirs(early)
     Path(early, "result.json").write_text("{}")                                       # the served shape's Program is on disk
     assert r.compare(60) == (7, None, False) and [name for name, _ in ran] == ["match_compare.log"]
+
+    ran.clear()
+    Path(d, "match", "fold_summary.json").write_text(json.dumps({"n_steps": 1}))      # no decode step served: the Build's Program
+    assert r.compare(60) == (7, None, False) and [(name, _flag(cmd, "--a")) for name, cmd in ran] == [("match_compare.log", f"{d}/build_request")]
+    assert list(json.loads(Path(d, "match_shape.json").read_text()).values()) == [8, 0, 3, f"{d}/build_request"] and R.served_shape(d) == ""
 
 
 def test_a_batchs_comparison_runs_inside_the_global_match_and_derives_the_shapes_it_names_once(tmp_path, monkeypatch):
@@ -102,6 +108,25 @@ def test_a_batchs_comparison_runs_inside_the_global_match_and_derives_the_shapes
     os.remove(f"{d}/build_workload/workload_program.json")                            # no workload Program: X-09 on its own
     assert r.compare(60) == (0, None, False) and [name for name, _ in ran] == ["match_compare.log"]
     assert ran[0][1][3] == "batch-decomp"
+
+
+def test_a_batchs_decomposition_on_its_own_derives_the_shapes_it_names_and_runs_once_more(tmp_path, monkeypatch):
+    """B>=2 without the Build's workload Program: X-09 runs on its own; a first pass that names missing request shapes (rc 4) derives
+    them and runs once more over them too, and a second pass that still names some is the comparison's answer."""
+    r, ran = _match_row(tmp_path, monkeypatch, B=2, rcs={"match_compare.log": [4, 0, 4, 4]})
+    d = r.d
+    Path(d, "match_decomp.json").write_text(json.dumps({"verdict": "MISSING_DERIVED", "missing_derived": [[16, 2]]}))
+    assert r.compare(60) == (0, None, False)
+    (x1, c1), (derive, dcmd), (x2, c2) = ran
+    assert (x1, derive, x2) == ("match_compare.log", "build_request_LP16_T2.log", "match_compare.log") and c1[3] == c2[3] == "batch-decomp"
+    assert [c1[i + 1] for i, x in enumerate(c1) if x == "--derived"] == [f"{d}/build_request"]
+    assert [c2[i + 1] for i, x in enumerate(c2) if x == "--derived"] == [f"{d}/build_request", f"{d}/build_request_LP16_T2"]
+    assert (_flag(dcmd, "--LP"), _flag(dcmd, "--T"), _flag(dcmd, "--out")) == ("16", "2", f"{d}/build_request_LP16_T2")
+    assert Path(d, "row.log").read_text().splitlines()[-1].endswith("X-09: deriving request Program LP16_T2")
+
+    ran.clear()
+    assert r.compare(60) == (4, None, False)
+    assert [name for name, _ in ran] == ["match_compare.log", "build_request_LP16_T2.log", "match_compare.log"]
 
 
 # ---------------------------------------------------------------------------------------------------------------- the stage
@@ -160,6 +185,97 @@ def test_a_compared_match_without_the_builds_workload_program_has_no_global_matc
     gm = ran[-1][1]
     assert (_flag(gm, "--gprog"), _flag(gm, "--within-step")) == (f"{d}/build_workload/workload_program.json", "dag")
     assert not os.path.exists(f"{d}/global_match.log")
+
+
+def test_the_cpu_phase_runs_over_the_capture_of_an_earlier_gpu_phase_and_is_refused_without_one(tmp_path, monkeypatch):
+    r, ran = _match_row(tmp_path, monkeypatch, "--match-phase", "cpu")
+    asked = _summary(monkeypatch)
+    d = r.d
+    with pytest.raises(Stop) as e:
+        r.match()
+    assert e.value.rc == 12 and ran == [] and asked == [] and not os.path.exists(r.timeline)
+    stage, status, _utc, detail = Path(d, "stages.txt").read_text().rstrip("\n").split(" ", 3)
+    assert (stage, status, detail) == ("match", "FAIL", f"MATCH_PHASE=cpu without {d}/match/capture")
+
+    os.makedirs(f"{d}/match/capture")
+    r.match()
+    (name, cmd), = ran
+    assert (name, _flag(cmd, "--phase"), r.child_env["MATCH_PHASE"]) == ("match.run_config", "cpu", "cpu") and asked == [(0, 99, 99, -1, True)]
+    assert any(ln.endswith("match: MATCH_PHASE=cpu over the existing capture (no GPU stage)") for ln in Path(d, "row.log").read_text().splitlines())
+
+
+def test_the_capture_acquires_under_the_manifest_named_else_the_builds_which_can_widen_its_snapshot_steps(tmp_path, monkeypatch):
+    """The Build's manifest beside the row is the capture's unless the caller names one; either way a Match of every phase asks it for
+    the families form (B) must be complete over, unless the row snapshots every step already or runs its CPU phase alone."""
+    _summary(monkeypatch)
+
+    def matched(name: str, *argv: str, manifest: bool = True, snap: str = "0,1") -> tuple[SingleRow, list[str]]:
+        r, _ran = _match_row(tmp_path / name, monkeypatch, *argv)
+        r.child_env, r.snap_def = {}, snap
+        if manifest:
+            _manifest(r)
+        if "cpu" in argv:
+            os.makedirs(f"{r.d}/match/capture")
+        formed: list[str] = []
+        monkeypatch.setattr(r, "form_b", lambda: formed.append(r.snap_def))
+        r.match()
+        return r, formed
+    r, formed = matched("named", "--acquire-manifest", "/m/own.json")
+    assert r.child_env["ACQUIRE_MANIFEST"] == "/m/own.json" and formed == ["0,1"]
+    assert "acquisition manifest for the capture" not in Path(r.d, "row.log").read_text()
+    r, formed = matched("builds")
+    assert r.child_env["ACQUIRE_MANIFEST"] == f"{r.d}/manifest.json" and formed == ["0,1"]
+    assert f"acquisition manifest for the capture: {r.d}/manifest.json (ACQUIRE_ENGINE=" in Path(r.d, "row.log").read_text()
+    r, formed = matched("none", manifest=False)
+    assert "ACQUIRE_MANIFEST" not in r.child_env and formed == []
+    assert matched("every-step", snap="all")[1] == [] and matched("cpu", "--match-phase", "cpu")[1] == []
+
+
+def _sampled(tmp_path: Path, doc: str) -> str:
+    Path(tmp_path, "workload.json").write_text(doc)
+    return str(tmp_path / "workload.json")
+
+
+def test_a_stochastic_rows_sampler_value_check_runs_over_its_captures_log(tmp_path, monkeypatch):
+    """A workload whose sampling variant has a temperature above 0 is checked by `stoch-recompute` when its capture left a log, and the
+    check's exit is the summary's; a greedy row, or one with no log, counts -1."""
+    r, ran = _match_row(tmp_path, monkeypatch, rcs={"match.stoch_recompute": 6})
+    asked = _summary(monkeypatch)
+    d = r.d
+    r.wl = _sampled(tmp_path, json.dumps({"sampling": {"variant": "warm"}, "variants": {"warm": {"temperature": 0.7}}}))
+    Path(d, "match_stoch.log").write_text("$ stoch-recompute\n3 of 4 sampled rows differ\n")
+    r.match()
+    assert [name for name, _ in ran] == ["match.run_config"] and asked == [(0, 99, 99, -1, False)]       # no capture log
+
+    os.makedirs(f"{d}/match/capture")
+    Path(d, "match", "capture", "log.jsonl.gz").write_bytes(b"")
+    r.match()
+    (name, cmd) = ran[-1]
+    assert name == "match.stoch_recompute" and cmd == r.cli("stoch-recompute", "--run", f"{d}/match", "--workload", r.wl, "--build", d,
+                                                            "--out", f"{d}/match_stoch.json", py=r.py312)
+    assert asked[-1] == (0, 99, 99, 6, False)
+    assert any(ln.endswith("stoch value check rc=6: 3 of 4 sampled rows differ") for ln in Path(d, "row.log").read_text().splitlines())
+
+    r.wl = _sampled(tmp_path, json.dumps({"sampling": {"variant": "cold"}, "variants": {"cold": {"temperature": 0.0}}}))
+    r.match()
+    assert ran[-1][0] == "match.run_config" and asked[-1] == (0, 99, 99, -1, False)
+
+
+@pytest.mark.parametrize("doc, stochastic", [
+    ('{"sampling": {"variant": "warm"}, "variants": {"warm": {"temperature": 0.7}}}', True),
+    ('{"sampling": {"variant": "warm"}, "variants": {"warm": {}}}', False),
+    ('{"sampling": {"variant": "warm"}, "variants": {"cold": {"temperature": 0.7}}}', False),      # a variant the workload does not define
+    ('{"sampling": null, "variants": {"greedy": {"temperature": 0.7}}}', True),                     # no sampling block: the greedy variant's
+    ("{}", False),
+    (None, False), ("{", False), ("[]", False),                                                    # no file, no JSON, no document
+    ('{"sampling": {"variant": "warm"}, "variants": {"warm": {"temperature": "hot"}}}', False),
+    ('{"sampling": {"variant": "warm"}, "variants": {"warm": 0.7}}', False),
+    ('{"sampling": {"variant": "warm"}, "variants": {"warm": {"temperature": null}}}', False),
+])
+def test_a_row_is_stochastic_when_its_sampling_variant_has_a_temperature_above_0_and_not_when_its_file_does_not_read(tmp_path, doc, stochastic):
+    r = _row(tmp_path)
+    r.wl = _sampled(tmp_path, doc) if doc is not None else str(tmp_path / "absent.json")
+    assert r.stochastic() is stochastic
 
 
 # ---------------------------------------------------------------------------------------------------------------- form (B)
