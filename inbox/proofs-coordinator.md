@@ -123645,3 +123645,79 @@ Not established: `ReadsWf` at any real parameters; `OpensOwn` at any device; tha
 - [derived] Serving's check between 06:00:00Z and 06:01:00Z finds nothing of ours: every card and the lease have been free of us since 05:08:46Z.
 
 For the table: node A's eight cards and lease free of the proofs lane since 05:08:46Z; confirmed at 05:57Z.
+
+## MESSAGES, Fri 05:57Z: A STATEMENT THE JOIN READS CANNOT BE PROVED AS IT STANDS: `JoinsAt.msgOpens` with `digestBefore` hold at no digest the device signed, for a strategy that cheats; `MessagesOpen.lean` states the messages' bound in a form that can be proved (9 of its 11 theorems compiled, the other two are fixed and in a try); `SessionMsgs.lean` compiles (9 theorems, probe clean); the partition object is not two lines either way
+
+**Plain words.** The join takes two facts about the messages of the inner blocks' sessions: each message hashes to a digest in the play's log, and that digest was fixed before the round's coin. Both are stated about the message the Lean model of the proof system reads. The device never hashed that message. It hashed the record's raw bytes, and the model's message is those bytes with a tag byte in front, or a different packing of them, or (at the statements' round) nothing the device signed at all. So whichever digest the join is given, one of the two facts is false for a prover that cheats: at the device's digest the first is false, and at "the SHA-512 of the model's message" the second says the message never depends on a later coin, which is what was to be proved. An honest prover satisfies both, so the fields are not empty, but the join could never lose them. I wrote the same bound over three facts that can each be proved from what the check reads; nine of its eleven theorems compiled in the first try and the other two are in a second. I did not prove the three facts at the form, and I will not have all three by Saturday 02:00Z; section 4 says which I can.
+
+**1. Compiled** [run: each run's `stdout.log` as `verity lean try` printed it].
+- `SampledTwo/SessionMsgs.lean`: `r20261113-042643-d2ed` on vy-nebius-cpu-9 at tree `4157c47bf0`: lean exit 0 in 291 s; none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound (`mapM_some`, `stmtsOf_encStmts`, `stmtsOf_stmtsMsg`, `stmtAt_stmtsMsg`, `stmtAtCase_some`, `getLast?_cons_concat`, `sessionMsgs_some`, `linkOf_sessionMsgs`, `finalOf_sessionMsgs`). With `Messages.lean` (`2e09`) and `MessagesShown.lean` (`093c`) the three files of piece F as the brief names it are compiled. It gives `SessionReading.stmts` and `.msg` as the model's messages: the statements as `encStmts`, a session's link as `0 :: linkBody rootB publics`, a rep round as `0 ::` its retained bytes, the last as `Final.encode ⟨x, record, proofs⟩`.
+- `SampledTwo/MessagesOpen.lean` (new, section 3): `r20261113-053854-97ad` on vy-nebius-cpu-3 at `031d745780`: lean exit 1 in 412 s, with errors on two lemmas' own lines only, `openingBy_some` and `openingBy_of` (a missing `classical`). No error on the other nine (`classOf_clsBy`, `miss_le_fork`, `callsLeBy`, `missBoundBy`, `messagesFixedBy`, `breaks_digest`, `opens_digest`, `exists_zip_collide`, `breaks_strings`), and no axiom probe, since lean prints none for a file it refuses. Fixed in `04da8512cc`; `r20261113-054913-954c` on vy-nebius-cpu-3 runs at it, launched 05:49Z, expected end about 06:05Z.
+- Not compiled since the merge of TWOLEG's `b53983fdab` (my head `e91fbdb39e`, no conflict): `SessionMsgs.lean`. By reading the diff of `VStarRecursive/SampledTwo.lean` since `9b300c2d3e`, no field of `Params` or `Evidence` it reads changed: the form gained `familiesApart` in `paramsOfJson`, `secondLawOf`, `secondCheck`, and `prepare`'s last line [read: `git diff`]. Its recompile goes in after `MessagesOpen.lean`'s try, one try at a time.
+
+**2. The finding** [read, derived]. `JoinsAt` (`JoinsAt.lean` on `cursor/proofs-join-42b8` at `7db836c5f0`) has, with `Dg` any function of the play:
+- `msgOpens : Messages.MsgOpens A x (joinReading …) (FormAccepts C) JoinGood Dg`: on an accepted play, at each round `i`, `Dg o i = some (sha512Msg m)` for the message `m` the reading reads there;
+- `digestBefore : ∀ i < k, Messages.DigestBefore (joinFrame …) (joinReading …) (FormAccepts C) JoinGood Dg i`: `Dg o i` is the same at every run coins that agree with the coins the history before round `i` shows.
+
+What the reading reads, against what the device's log holds for the round [read: `SessionMsgs.lean`, `Reading.lean`; `Spot/ChallengerTrees.lean` `sessionTreeReason` and `linkAfter`; `SessionHeld.closes_after` on the join; `Verity/Sampled.lean` `treeStep`]:
+
+| round | the message the reading reads | what the device answered before the round's coin |
+|---|---|---|
+| a session's link | `0 :: linkBody rootB publics` | the SHA-512 of `root_F` and each table's `root_B` (`linkAfter`) |
+| a session's rep round | `0 ::` the round's retained bytes | the SHA-512 of the retained bytes, no tag (`msg_sha512`) |
+| a session's last round | `Final.encode ⟨x, record, proofs⟩` | the session's closing opening, after the SHA-512 of its evidence (`sessionEvidence`) |
+| the statements' round, `stage + 1` | `encStmts` of the members' statements | no release of the device |
+| round 1 | the interior record's canonical bytes | the root the second stage's family is drawn after (`StageDraws`) [guess: that root is the SHA-512 of those bytes; not read] |
+
+So [derived]:
+- At `Dg :=` the device's digests, `msgOpens` asks at a rep round `sha512Msg (0 :: b) = sha512Msg b`, and the like at the link and the last round. Nothing proves that, and at the statements' round there is no digest to name.
+- At `Dg o i := (msg o i).map sha512Msg`, `msgOpens` is true by `rfl` and `digestBefore` then says the model's message at round `i` is fixed by the earlier coins. That is the conclusion of the messages' piece, taken as a premise. It holds of the honest strategy and fails for a strategy whose message follows a later coin.
+- So the two fields have a witness (an honest strategy), and no proof from the check for every strategy at any `Dg`. `joinedForm`'s bound is then a bound for the strategies that satisfy them, which no check enforces. This is a gap in the statement I gave the join at 01:51Z (`MsgOpens`, `DigestBefore`), not in ASSEMBLY's use of it.
+- The one-stage leg does not have this gap: its `Reading` fixes round `j` at the frame the prover sends, with the digest the bytes that frame answers (`Sampled/Messages.lean`) [read: its module docstring only].
+
+**3. What I wrote** (`SampledTwo/MessagesOpen.lean`, namespace `Verity.SampledTwo.Messages`; it imports `MessagesShown` and changes no line of `Messages.lean`, so the join's compiled files are not disturbed).
+- `miss_le_fork`: at a prover that sends, at each history, the most likely value of any function `opn` of the tape, the history and the run's coins, a round's first difference is at most the square root of one history giving `opn` two values. No digest enters.
+- `frameBy`, `finderBy`, `missBoundBy`, `messagesFixedBy`, `callsLeBy`: the frame, the finder and `MessagesFixed` at the sum over the rounds of the square roots of the finders' successes, from three premises:
+  - `Opens`: on an accepted play, the reading reads a message at each round and the play opens (`Opn`, any relation) the value the play fixes for the round (`Fx`: digests and whatever else the log holds);
+  - `FixedBefore`: `Fx o i` is the same at every run coins that agree with what the history before round `i` shows;
+  - `Breaks`: two plays that open one fixed value with two messages give a SHA-512 collision, at the finder's `pair`.
+- `breaks_strings`, `exists_zip_collide`: `Breaks` where the fixed value is a list of digests and a context (`ctx`), the play shows a list of strings whose SHA-512s are the digests (`raw`: the retained bytes, the link's roots, the evidence, the registered files), and on accepted plays the message is a function of the strings and the context (`Explains`). The finder outputs two strings at one place that differ.
+- `opens_digest`, `breaks_digest`: the old premises are the case where the fixed value is the message's own SHA-512, so nothing proved before is lost.
+
+If the join takes it, a statement the join reads changes: `joinFrame` becomes `Messages.frameBy …`, `joinMiss` sums `finderBy`'s successes (still one finder a round, cost `q` declared), and `msgOpens` and `digestBefore` become `Opens`, `FixedBefore` and `Explains`. I have not edited the join; that is ASSEMBLY's with your ruling.
+
+**4. My word on the rest** (owed by 15:00Z).
+- Done and compiled: the frame's prover and that it makes no SHA-512 call (`callsLe_of`, which leaves `VerifierCallsLe`, the verifier's calls within `V.cost`, a fact about the instance's declared cost); `MessagesFixed` from `MsgOpens` and `DigestBefore` (`messagesFixed`, `runShown`); `SessionReading.stmts` and `.msg`.
+- Not established, and what each needs:
+  - `Opens` at the form: `Fx`, `raw` and `ctx` defined for each kind of round, and that the device's digest is the SHA-512 of the string the check read. The facts exist piecewise: `sessionTreeReason`'s link check, `msg_sha512` (`DigestTie`), `closes_after` [read]. Not written. Mine, with SESSIONCOINS's `closes_after`.
+  - `Explains` at the form: that the check reads each round's message off those strings and what was fixed before (the link's `publics` come from the statement, so the statements are context there). Not written. Mine.
+  - `FixedBefore` at the form, which `digestBefore` needs just as much: (a) that the play's log before the release placed at round `n` is the same at two run coins that agree at the rounds placed before it. No lemma of `CoinMap*.lean` says it [run: `git grep` over the join's files]; `placeK_congr` is the other direction (coins that agree on what the releases after `pre` read give one placement from `pre` on). COINMAP's, or mine over COINMAP's `place`. (b) The log's order. Sessions one after another is checked (`membersOrder`; `MembersHeld.before` on the join) [read]. Inside one session's tree the link is first and the closing round last: `membersOrderFrom` takes a session-stream opening that is not its tree's first as the tree's closing, and `memberTreeReason` asks the tree's last opening to close the evidence [read]. Between them I found no check that the two reps' rounds alternate as `slotStream` numbers them (round `2k + r + 1`): `coinTreesOf` holds each stream's own rounds in order and no more, and the one-stage leg's `LinkFirst.lean` says of the device that it "releases in the order the prover sends, holding only each stream's rounds to their order" [read: `ChallengerTrees.lean` `coinTreesOf`, `sessionTreeReason`; `LinkFirst.lean`'s docstring]. A strategy that opens all of rep 0's rounds and then rep 1's is then accepted, its message at the run's round 2 (rep 1's first) can follow the coin of the run's round 3 (rep 0's second), and `FixedBefore`, like `digestBefore`, is false at it. The one-stage leg does not meet this, since its live audit is a game the strategy orders; the two-stage leg's target is a run of `A.L.V` in one fixed order. [derived; I have not read `MovesLayout.lean` or RUNCOINS's files for an answer]
+- By Sat 02:00Z I can have: `MessagesOpen.lean` compiled with a clean probe; `Fx`, `raw`, `ctx` at the form and `Explains` for the rounds where the message is a re-packing of the shown strings (the rep rounds, the constant rounds, round 1); `Opens` stated at them. I will not have `FixedBefore`, nor `Explains` at the last round (it needs the evidence's bytes read back into `Final.encode`'s three parts).
+
+**5. The partition object** (your 04:24Z; I said at 04:30Z I would say whether it is two lines). It is not, either way [read].
+- The lemma way: `Claims.Json.Same.jsonEquiv` and `canon_jsonEquiv` are on the tree (`Proofs/Flock/Claims/CanonEq.lean`, `Complete/Json/Spec.lean`), so two `Same` values have one canonical text. But Flock's setup reads the partition by object lookups (`getD partition "query"`, `"program"`, `Registered.checkCover`, `FilePart.check`), and each needs its own congruence under `JsonEquiv`. I found none.
+- The form way: the per-member form hands Flock the re-parsed value at about three places of `Spot/OneStageZk.lean` (`inputsOf`'s partition, the draw, `registered`). That changes a deployed verifier's term that every compiled one-stage proof unfolds. It is TWOLEG's and yours to decide, not mine.
+- Until one is done, SESSIONOF's `SessionMatch.partition` stays a named hypothesis. I hand the question back.
+
+**6. Your 05:49Z.** My tries are `verity lean try` on vy-nebius-cpu-3 by `--on auto`, at its default 16 GB; I launch neither `walk_ab.sh` nor `walk_cut.sh`. Roots: `e7ffc11314` appends four roots to `security/Proofs/lean-audit.json` (`Messages`, `MessagesShown`, `SessionMsgs`, `MessagesOpen`), roots only, as the roots rule asks; the first three are already in the join's lock from your 05:29Z commit, so the lock's merge driver sees them twice. Every statement of mine over the form's accept is listed nowhere and says nothing about a deployed run: the form is refused with its switch off.
+
+### STOP RULE
+Kept. No listed guarantee, record or named assumption is touched; the lock gains four roots and nothing else; nothing is wired into `Sampled.lean`; nothing rests on the switch being off; I did not edit the form or the join.
+
+### NEEDS
+1. Coordinator, with ASSEMBLY: a ruling on section 3. Either the join takes `Opens`, `FixedBefore` and `Explains` in place of `msgOpens` and `digestBefore` (the miss term's finder changes), or it keeps the two fields and their docstrings say they hold only of a strategy whose messages are fixed before each round's coin. I think the first; the second leaves a premise no check gives.
+2. COINMAP: is there, or can there be, a lemma that the log before the release `place` puts round `n` on does not depend on the run's coins at rounds placed at or after it?
+3. TWOLEG, RUNCOINS or soundness: does anything refuse a session whose two reps' rounds are opened out of the run's order (rep 0's round `k`, then rep 1's round `k`)? If nothing does, either the per-member check gains that refusal or the leg takes it as a named premise; the frame's run cannot follow a strategy that opens one rep after the other. If a file already answers it, its name is enough.
+
+### To post
+Nothing.
+
+### Not established
+- `Opens`, `FixedBefore` and `Explains` at the two-stage form (section 4); so `MessagesFixed` at the form's frame is proved from premises, not from the check.
+- `msgOpens` and `digestBefore` at any `Dg`, for every strategy (section 2).
+- That round 1's root is the SHA-512 of the interior record's canonical bytes.
+- `VerifierCallsLe` at the instance.
+- `SessionMsgs.lean` at the merged head `e7ffc11314`.
+- `MessagesOpen.lean` whole, and its axiom probe (`r20261113-054913-954c`).
+
+Branch `cursor/proofs-messages-f55d`, pushed head `e7ffc11314`; nothing unpushed.
