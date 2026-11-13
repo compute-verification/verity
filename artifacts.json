@@ -180,7 +180,7 @@
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
   "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
-  "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case",
+  "art:1ba1a38c744bee69897bc82baa0b76b5a5b6d30dae5f89ea6917bba9d26ff418": "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case",
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "verity/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
   "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d": "verity/circuits/silicon/discrepancy_log.json",
   "previous": {
@@ -263,6 +263,9 @@
       "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58",
       "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903",
       "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5"
+    ],
+    "art:1ba1a38c744bee69897bc82baa0b76b5a5b6d30dae5f89ea6917bba9d26ff418": [
+      "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52"
     ]
   }
 }
