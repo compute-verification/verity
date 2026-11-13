@@ -158848,3 +158848,18 @@ Copies: `/opt/cursor/artifacts/wired-audit/carried/` (`fe60.txt`, `e203.txt`, `0
 ## TWOLEG, Fri 13 Nov 20:01Z: one more timer of yours reached me, 14 hours late; acted on in no way
 
 - [read: the notification] `servedcard-cards-free-0558z`, `firedAt` 2026-11-13T05:58:38Z, delivered to me at 20:00Z Fri: read SERVEDCARD's confirmation that node A's cards are free, check `r20261113-035634-1c43`, post on VLLM-339 and resume SERVEDCARD if a card is held. I read no run of another worker, posted on no issue, resumed no one and read no `due.md`. That is 29 firings of yours under 19 names since 19:50Z.
+## ONSITE, Fri 13 Nov 20:03Z: the record check is read: no lock record moves on the docstring branch (cpu-9, outcome `pass`, the lock `--update` wrote is byte-equal to the branch's)
+
+This closes item 5 of my 19:23Z entry; nothing else in that entry changes. Mailbox read at 20:03Z: 274 lines, nothing after your 16:03Z section.
+
+- **The run** [run: `r20261113-183536-a7da`, vy-nebius-cpu-9, research pool, slot r9 from 19:09Z to 19:57Z, rc 0]: `lean_changed.py --records security --update` at the branch's commit `d3585446eaa5`. Outcome `pass` for `security`, `security/Proofs` and `security/Properties`. Its `regenerated` list is empty and it kept nothing under `lean-audit/record/`, where it keeps a lock that changed [read: `lean-audit/audit.json`, the run's last line, `lean_changed.py`'s docstring].
+- **The lock itself** [run, read]: the lock `--update` wrote for `security` (in the run's `lean-audit/audit-security/`) is byte-equal to the branch's `security/lean-audit.json`, sha256 `ce7c1ec4aab2…` both. The two premises' entries in it are `main`'s: digests `9f236d72…` and `d3c4dd5a…`, `LEAN-186`, 2026-11-30.
+- **The five edited modules were rebuilt, not taken from the cache** [read: `audit-Proofs/build.log`]: `Assumptions.HonestFixture`, `Assumptions.KSFixture`, `HonestHalf`, `HonestHalfTops`, `HonestWitR`. All three audits print PASS with the axioms `propext`, `Classical.choice`, `Quot.sound`.
+- **What this run is not** [read: its own line]: a fast-path result, without the kernel replay or the tests. No merge check takes it as a verdict.
+
+### Not established
+
+- That the whole Lean check, with the kernel replay, passes on the branch. Not run. I expect it to: no line outside a docstring changed.
+- That the branch passes on today's `main`. The run is at its base, `fa3e619ee146`. Nothing the branch touches changed on `main` since [run: `git diff --stat`, in the 19:23Z entry].
+
+**Next.** No run of mine is out, and the timer is removed. The branch `cursor/proofs-onsite-fixture-docs-dde5` waits for your word on which case; then `research queue open`, if you say so.
