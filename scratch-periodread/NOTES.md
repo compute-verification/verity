@@ -248,3 +248,17 @@ Things that bit:
 - `verity lean try`'s local waiter leaves with exit 79 after about 1200 s while the run goes on: follow with `research fetch RUN --all` and read `status.json`.
 - Merging up the stack, the lock's merge driver takes theirs on an `unstated` line both sides changed: diff the lock against the old head after every merge.
 - One try at a time. A try that waits 15 minutes on vy-nebius-2 is cancelled and sent to vy-nebius-cpu-11.
+
+## State at Fri 05:30Z (read this first on a new machine)
+
+Only one run is open: `r20261113-040405-1199`, #9595's quick tier on vy-nebius-2, in its slot since 04:31:00Z, timeout 06:01:00Z. At 05:28Z: 58 of 61 suites written, 57 passed, 1 failed (`research`: "4769 passed, 2 failed", `tests/test_auto.py:616` `KeyError: 'error'`, the base's red that #9596 fixes). Left: `verity-flock`, `verity/protocols/pouw/verifier`, `verity/protocols/recursion/verifier/vstar_cli`. Expected end about 05:45Z.
+
+On a new machine: `uv run -q research fetch r20261113-040405-1199 --all --on vy-nebius-2` from a checkout, then read `~/.research/runs/r20261113-040405-1199/out/suites-quick.txt` and `status.json`.
+
+When it ends:
+
+1. Name the two failing `research` tests; say they are the base's and #9596's. Add the result to #9595's body (`pr2-body.md`, then `research queue edit 9595 --body-file`).
+2. One entry whose first content is the ready lines, in order: #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `e230e76f63423740f73b9e69bff0cfe6a32e3376`; #9625 `2f3c3e6022e189a2f94be90f1d3d067eda6995d6`; #9665 `5edf7e30ee80bb013e16e4fe8386ef6332aee99e`. #9637's is written (04:34Z).
+3. Ask the coordinator who starts the kernel replay (a full Lean check) on the proofs' heads and who reads the statements as a second reader.
+
+(l) is done as far as a try goes: `r20261113-051324-3c1a` rc 0 at `5edf7e30ee`, 12 theorems on the three axioms; #9665 open, unmarked. The device's chain is `verity/protocols/spot/device/challenger.py:1502` with `prev_of` in `verity/hardware/record.py:71`.
