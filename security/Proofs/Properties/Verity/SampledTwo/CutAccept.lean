@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CutOrder
 public import Proofs.Properties.Verity.SampledTwo.CutFirst
-public import Proofs.Properties.Verity.SampledTwo.Shown
+public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 
 /-!
@@ -14,11 +14,12 @@ in order (`OrderShown`). The two-stage form refuses a play without them, so both
 
 * **The first stage's coin evidence** (`firstShown`): the case's evidence is the form's parse of the bytes sent
   (`evidence_of_caseOf`), and the form's evidence parses only with the first stage's coin evidence not `null`
-  (`evidenceOf_coins`). So the first stage's coins are read under the parameters' key on every accepted play
-  (`firstReads`, by `CutFirst.firstReads_of_shown`).
+  (`evidence_coins`, over `evidenceOf`'s steps). So the first stage's coins are read under the parameters' key on
+  every accepted play (`firstReads`, by `CutFirst.firstReads_of_shown`).
 * **The two sessions' order** (`orderShown`): an accepted check on two windows read the second stage's ledger under the
   parameters' key (`Spot.Challenger.checked`) and found on it the first window's session ended at a `seq` below the
-  `reserve` of the second window's session (`accepted_order`). `checked` runs `verifyLedger` on the entries the
+  `reserve` of the second window's session (`Steps.accepted_ordered`, read by `ordered_order` over `stagesOrdered`'s
+  steps). `checked` runs `verifyLedger` on the entries the
   ledger's lines read as (`Ledger.checked_ok`), and each window `verifyLedger` returns is an `open` among those
   entries, named by its root, whose `end`, where it has one, is an `end` among them of the open's session
   (`Ledger.verifyLedger_inv`; `win_lines`). The reserve is the one the form finds among the same entries
@@ -65,19 +66,101 @@ theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
       | (cases hce; done)
       | (simp [throw, throwThe, MonadExceptOf.throw] at hce; done)
 
+/-- The form's evidence parses only with the first stage's coin evidence not `null`: `evidenceOf` refuses it. -/
+private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence}
+    (h : VStar.Recursive.SampledTwo.evidenceOf b = .ok e) : e.coins ≠ Json.null := by
+  first
+    | (unfold VStar.Recursive.SampledTwo.evidenceOf at h
+       obtain ⟨j₀, -, h⟩ := bind_ok h
+       obtain ⟨j, -, h⟩ := bind_ok h
+       obtain ⟨_, -, h⟩ := bind_ok h
+       dsimp only at h
+       generalize Spot.getD j "coins" = cj at h
+       cases cj
+       case null =>
+         simp only [↓reduceIte] at h
+         obtain ⟨_, ht, -⟩ := bind_ok h
+         cases ht
+       all_goals
+         simp only [Bool.false_eq_true, ↓reduceIte] at h
+         split at h
+         · split at h
+           · obtain ⟨src, -, h⟩ := bind_ok h
+             split at h
+             · split at h
+               · obtain ⟨_, -, h⟩ := bind_ok h
+                 obtain ⟨it, -, h⟩ := bind_ok h
+                 split at h
+                 · have he := Except.ok.inj h
+                   rw [← he]
+                   intro hx
+                   cases hx
+                 · cases h
+               · cases h
+             · cases h
+           · cases h
+         · cases h)
+    | (unfold VStar.Recursive.SampledTwo.evidenceOf at h
+       simp only [bind, Except.bind] at h
+       repeat' split at h
+       all_goals try contradiction
+       all_goals try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
+       all_goals (simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; intro hc; simp_all))
+
 /-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstShown`): the form's evidence
 parses only so. -/
 theorem firstShown (θ : ByteArray) : FirstShown θ := by
   unfold FirstShown
   intro s _ _ p c e h1
   obtain ⟨b, hb⟩ := evidence_of_caseOf h1
-  exact VStar.Recursive.SampledTwo.evidenceOf_coins hb
+  exact evidence_coins hb
 
 /-- **The first stage's coins are read under the parameters' key on every accepted play** (`FirstReads`). -/
 theorem firstReads (θ : ByteArray) : FirstReads θ :=
   firstReads_of_shown θ (firstShown θ)
 
 /-! ## The two sessions' order -/
+
+/-- **Where `stagesOrdered` passed on two windows**, the two stages' copies of the ledger are lists of lines, the
+first a prefix of the second; the second passes `Spot.Challenger.checked` under the parameters' key; and on it the
+window opened at the first root has an `end` whose `seq` is below the `reserve` found for the session of the window
+opened at the second root. -/
+private theorem ordered_order {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
+    (h : VStar.Recursive.SampledTwo.stagesOrdered p e = .ok ())
+    {k : Spot.Challenger.ChallengerKey} {label w₁ w₂ : String} (hk : p.audit.base.challenger = some (k, label))
+    (h1 : p.boundary.verifier.windowRoot = some w₁) (h2 : p.audit.base.verifier.windowRoot = some w₂)
+    (hne : w₁ ≠ w₂) :
+    ∃ first second, Spot.getD e.coins "ledger" = .arr first ∧
+      Spot.getD e.interior.base.coins "ledger" = .arr second ∧ Spot.Challenger.extendsHead first second = true ∧
+      ∃ wins ms, Spot.Challenger.checked (.arr second) k = .ok (wins, ms) ∧
+        ∃ en r, (wins.find? (·.root == w₁)).bind (·.ended) = some en ∧
+          ((wins.find? (·.root == w₂)).bind fun w => (second.filterMap Spot.Challenger.ledgerEntry?).find? fun l =>
+            l.kind == "reserve" && l.session == w.opened.session) = some r ∧ en.seq < r.seq := by
+  have hb : (w₁ == w₂) = false := by simpa using hne
+  unfold VStar.Recursive.SampledTwo.stagesOrdered at h
+  rw [hk, h1, h2] at h
+  simp only [hb, Bool.false_eq_true, ↓reduceIte] at h
+  generalize hf : Spot.getD e.coins "ledger" = f at h
+  generalize hs : Spot.getD e.interior.base.coins "ledger" = s at h
+  cases f <;> cases s <;> first | (cases h; done) | skip
+  case arr.arr first second =>
+    dsimp only at h
+    cases hx : Spot.Challenger.extendsHead first second
+    · rw [hx] at h
+      simp only [Bool.not_false, ↓reduceIte] at h
+      obtain ⟨_, hthrow, -⟩ := bind_ok h
+      cases hthrow
+    · rw [hx] at h
+      simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+      obtain ⟨⟨wins, ms⟩, hc, h⟩ := bind_ok h
+      dsimp only at h
+      split at h
+      · cases h
+      · rename_i heq
+        obtain ⟨en, r, he, hr, hlt⟩ := VStar.Recursive.SampledTwo.orderReason_none heq
+        first
+          | exact ⟨first, second, rfl, rfl, hx, wins, ms, hc, en, r, he, hr, hlt⟩
+          | exact ⟨first, second, hf, hs, hx, wins, ms, hc, en, r, he, hr, hlt⟩
 
 theorem option_bind_ok {α β : Type} {o : Option α} {f : α → Option β} {b : β} (h : o.bind f = some b) :
     ∃ a, o = some a ∧ f a = some b := by
@@ -169,7 +252,7 @@ theorem orderShown (θ : ByteArray) : OrderShown θ := by
   obtain ⟨hw₁, hw₂⟩ := windowsOf_some hpθ hw
   obtain ⟨k, label, hk, -⟩ := keyOf_some hpθ
   obtain ⟨first, second, -, hsec, -, wins, ms, hch, en, r, hen, hr, hlt⟩ :=
-    VStar.Recursive.SampledTwo.accepted_order hacc hk hw₁ hw₂ hne
+    ordered_order (VStar.Recursive.SampledTwo.accepted_ordered hacc) hk hw₁ hw₂ hne
   obtain ⟨es, hes, hvl⟩ := Properties.Pouw.LiveSalt.Ledger.checked_ok hch
   obtain ⟨W₁, hf₁, he₁⟩ := option_bind_ok hen
   obtain ⟨W₂, hf₂, hr₂⟩ := option_bind_ok hr
