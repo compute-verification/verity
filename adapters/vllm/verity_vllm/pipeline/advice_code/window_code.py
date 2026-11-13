@@ -42,6 +42,9 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
   the bits read past it decide nothing in an accepted string.
 - Delimiting costs the termination's 2 bits per window that codes anything (`Encoded.lens`). A window whose message is
   the only one possible costs nothing.
+- A window's charge is under 2^20 bits, its tail and its second segment counted: the certifier counts it in
+  `arith_encode.CW` bits, and `Encoder` and `Decoder` refuse a charge that count does not hold, where they sum it
+  (`_charge`).
 - A window may carry a tail after its segment: plain fixed-width fields whose widths the reader knows before it reads
   them (`encode`'s ``tails``, `decode_tailed`), charged to the window. Every value of a width is a distinct string of
   it, so the string stays prefix-free; a window with no tail codes as before, bit for bit.
@@ -64,13 +67,15 @@ import hashlib
 import json
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
+from itertools import accumulate
 from typing import Any, NamedTuple
 
 from verity.protocols.certifier.prover.window_charge import Advice as Window
+from verity.protocols.certifier.verifier.arith_encode import CW
 from verity_vllm.pipeline.advice_code import arith as C
 
-__all__ = ["Book", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows", "Decoder",
-    "DEFAULT_CAPS", "encode", "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
+__all__ = ["Book", "capped", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows",
+    "Decoder", "DEFAULT_CAPS", "encode", "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
 
 
 @dataclass(frozen=True)
@@ -182,7 +187,32 @@ def unpack(data: bytes, nbits: int) -> list[int]:
     return list(C.BitReader.from_bytes(data, nbits).bits)
 
 
+def capped(bits: Sequence[int], lens: Sequence[int], most: int) -> bytes:
+    """`pack`'s bytes of a string whose windows are charged `lens`, for a reader that refuses unread a string of more
+    than `most` bits (the registered ℓ): refuses (ValueError) to write one that reader would not read, and says how
+    many of its windows' charges fit."""
+    data, n = pack(bits)
+    if 8 * len(data) > most:
+        fit = [c for c in accumulate(lens) if (c + 7) // 8 * 8 <= most]
+        raise ValueError(f"the string is {8 * len(data)} bits, over the registered ℓ = {most}: its {len(lens)} windows are "
+                         f"charged {n} bits, and the first {len(fit)} of them {fit[-1] if fit else 0}, the most that fit under "
+                         f"ℓ; end the session by then, or register a larger ℓ")
+    return data
+
+
 # ------------------------------------------------------------------------------------------------------- the coder
+
+
+def _charge(lens: list[int], w: int | None, n: int) -> None:
+    """Adds n bits to window w's charge, a new window's where w is None. Refuses (ValueError) a charge the certifier's
+    count of it, `CW` bits wide, does not hold."""
+    if w is None:
+        w = len(lens)
+        lens.append(0)
+    lens[w] += n
+    if lens[w] >> CW:
+        raise ValueError(f"window {w}: its charge is {lens[w]} bits, and the certifier counts a window's charge in {CW} bits, "
+                         f"so it is under {1 << CW}; register a shorter window, so that less is charged to one")
 
 
 class Encoder:
@@ -209,11 +239,7 @@ class Encoder:
 
     def _close(self) -> None:
         if self.seg is not None:
-            n = self.seg.finish()
-            if self.at is None:
-                self.lens.append(n)
-            else:
-                self.lens[self.at] += n
+            _charge(self.lens, self.at, self.seg.finish())
             self.at, self.seg = None, None
 
     def _open(self) -> C.ArithEncoder:
@@ -239,7 +265,7 @@ class Encoder:
         if not self.lens:
             raise ValueError("a plain field outside any window: call window() first")
         self.w.uint(v, width)
-        self.lens[-1] += width
+        _charge(self.lens, len(self.lens) - 1, width)
 
     def finish(self) -> Encoded:
         self._close()
@@ -282,10 +308,7 @@ class Decoder:
             n = self.seg.finish()
         except ValueError as e:
             raise ValueError(f"window {len(self.lens) if self.at is None else self.at}: {e}") from None
-        if self.at is None:
-            self.lens.append(n)
-        else:
-            self.lens[self.at] += n
+        _charge(self.lens, self.at, n)
         self.at, self.seg = None, None
 
     def _open(self) -> C.ArithDecoder:
@@ -309,7 +332,7 @@ class Decoder:
         if not self.lens:
             raise ValueError("a plain field outside any window: call window() first")
         v = self.r.uint(width)
-        self.lens[-1] += width
+        _charge(self.lens, len(self.lens) - 1, width)
         return v
 
     def finish(self, padded: bool = False) -> None:
