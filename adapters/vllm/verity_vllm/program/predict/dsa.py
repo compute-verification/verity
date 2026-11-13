@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any, NamedTuple, NoReturn
+from typing import Any, NamedTuple, NoReturn, Protocol
 
 from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
@@ -306,20 +306,33 @@ class DensePlan(NamedTuple):
     empty: tuple | None = None
 
 
-class _Model:
-    """The forward over one call's rows, emitted into `B`, each layer's latent and index-K histories carried across calls as
-    `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`).
-    `topk` is the last indexer layer's selection by position, which an IndexShare layer reads.  `batched`: class G's batched form
-    (`build.build_program`'s `batched`), whose latent rows are one Definition each and whose rows past INDEX_TOPK go in blocks
-    (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them.  `table_reads`:
-    in that form, those rows by table reads (`build.build_program`'s `table_reads`): `topk` holds a long row's `DsaTopKIndex`
-    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network."""
+class _CallsNet(Protocol):
+    """What the calls both decoders write with (`_Calls`) read off a rank's net, which `Net` and `dsv4.Net` each state."""
+
+    C: dict[str, Any]
+    _leaves: list[tuple[str, Type, object]]
+    settings: Any
+    world: int
+    dot: Any
+    tp: Any
+
+    @property
+    def capture_sizes(self) -> tuple[int, ...]: ...
+
+    @property
+    def max_num_seqs(self) -> int | None: ...
+
+
+class _Calls:
+    """The calls a decoder's forward is written with, emitted into `B` over one rank's net: the kinds, the collectives, the
+    GEMMs and the sampler; every token-count-dependent selection reads the call's launch (`launch`).  `_Model` here and
+    `dsv4._Model` are each one decoder's forward over them; `batched` and `table_reads` are `_Model`'s forms, off in any other."""
 
     reads_launch = True
     batched = False
     table_reads = False
 
-    def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
+    def __init__(self, net: _CallsNet, B: Builder, W: Coll, peers: _Peers) -> None:
         self.net, self.C, self.B, self.peers = net, net.C, B, peers
         self.launch = _Launch(capture_sizes=net.capture_sizes, max_num_seqs=net.max_num_seqs or 0)
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
@@ -344,45 +357,6 @@ class _Model:
         if (w, bits) not in self._pads:
             self._pads[(w, bits)] = self.B.batch(self.k("const", W=w, BITS=bits), axes=(), n=words).refs
         return self._pads[(w, bits)].slice(0, count)
-
-    def open_with(self, prefix: list[Coll], C: int) -> None:
-        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
-        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
-        latent, ik, iks = prefix
-        for L in range(self.net.NL):
-            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
-            if len(logs["latent"]):
-                raise AssertionError(f"layer {L}'s history opens once, before its first call")
-            for j in range(C):
-                logs["latent"].append(latent[L][j].refs)
-        for n, L in enumerate(sorted(self.net.indexers)):
-            for j in range(C):
-                self.logs[L]["ik"].append(ik[n][j].refs)
-                self.logs[L]["iks"].append(iks[n][j].refs)
-
-    def edge_rows(self, groups: tuple[str, ...]) -> list[Coll]:
-        """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
-        `Net.prefix_params` lays out a history of them: wires and no gates."""
-        E, net = len(self.logs[0]["latent"]), self.net
-        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
-                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
-        if any(len(log) != E for g in groups for log in logs[g]):
-            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
-        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in groups]
-
-    def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
-        """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
-        C, net, M = self.C, self.net, len(toks)
-        V = int(C["V"])
-        emb = self.k("embedding_shard", VS=V, H=self.H, START=net.rank * V)
-        res = self.all_reduce([self.call(emb, t.refs, self.w["embed"].refs).refs for t in toks])
-        norm = self.k("rmsnorm", N=self.H, EPS=self.EPS, TARGET=net.tp, M=self.launch.tokens(M))
-        x = [self.call(norm, r, self.w[(0, "ln1")].refs).refs for r in res]
-        for L in range(net.NL):
-            x, res = self.reduce_norm(self.attention(L, x, pos0), res, self.w[(L, "ln2")])
-            nxt = self.w[(L + 1, "ln1")] if L + 1 < net.NL else self.w["norm"]
-            x, res = self.reduce_norm(self.moe(L, x) if int(C["FIRST_DENSE"]) <= L else self.mlp(L, x), res, nxt)
-        return x
 
     def sample(self, row: Refs, event: int, pos: int, policy: _Stochastic | None = None) -> Coll:
         """The token of the row's logits (`common.select_token`): this rank's vocabulary slice, gathered across the ranks."""
@@ -487,6 +461,57 @@ class _Model:
     def silu(self, rows: list[Refs]) -> list[Refs]:
         fn = self.k("silu_mul", I=rows[0].count // 2)
         return [self.call(fn, r).refs for r in rows]
+
+
+class _Model(_Calls):
+    """The forward over one call's rows, emitted into `B`, each layer's latent and index-K histories carried across calls as
+    `vllm_dsa` keeps them (one `PartLog` per history); every token-count-dependent selection reads the call's launch (`launch`).
+    `topk` is the last indexer layer's selection by position, which an IndexShare layer reads.  `batched`: class G's batched form
+    (`build.build_program`'s `batched`), whose latent rows are one Definition each and whose rows past INDEX_TOPK go in blocks
+    (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them.  `table_reads`:
+    in that form, those rows by table reads (`build.build_program`'s `table_reads`): `topk` holds a long row's `DsaTopKIndex`
+    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network."""
+
+    net: Net
+
+    def open_with(self, prefix: list[Coll], C: int) -> None:
+        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
+        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
+        latent, ik, iks = prefix
+        for L in range(self.net.NL):
+            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+            if len(logs["latent"]):
+                raise AssertionError(f"layer {L}'s history opens once, before its first call")
+            for j in range(C):
+                logs["latent"].append(latent[L][j].refs)
+        for n, L in enumerate(sorted(self.net.indexers)):
+            for j in range(C):
+                self.logs[L]["ik"].append(ik[n][j].refs)
+                self.logs[L]["iks"].append(iks[n][j].refs)
+
+    def edge_rows(self, groups: tuple[str, ...]) -> list[Coll]:
+        """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
+        `Net.prefix_params` lays out a history of them: wires and no gates."""
+        E, net = len(self.logs[0]["latent"]), self.net
+        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
+        if any(len(log) != E for g in groups for log in logs[g]):
+            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
+        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in groups]
+
+    def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
+        """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
+        C, net, M = self.C, self.net, len(toks)
+        V = int(C["V"])
+        emb = self.k("embedding_shard", VS=V, H=self.H, START=net.rank * V)
+        res = self.all_reduce([self.call(emb, t.refs, self.w["embed"].refs).refs for t in toks])
+        norm = self.k("rmsnorm", N=self.H, EPS=self.EPS, TARGET=net.tp, M=self.launch.tokens(M))
+        x = [self.call(norm, r, self.w[(0, "ln1")].refs).refs for r in res]
+        for L in range(net.NL):
+            x, res = self.reduce_norm(self.attention(L, x, pos0), res, self.w[(L, "ln2")])
+            nxt = self.w[(L + 1, "ln1")] if L + 1 < net.NL else self.w["norm"]
+            x, res = self.reduce_norm(self.moe(L, x) if int(C["FIRST_DENSE"]) <= L else self.mlp(L, x), res, nxt)
+        return x
 
     # -- the layer
 
