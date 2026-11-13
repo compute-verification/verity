@@ -60,10 +60,9 @@ incorrect set of the trace the extractor recovers.
      `UniformRandomBytesTest`.
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
      `FillRoundEq`; and `OuterViewZK`.
-4. **Composed soundness.** `Verity.SoundnessOf` (`Properties/Verity/Soundness.lean`), proved as
-   `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`) at every composite, a list of
-   subprotocols' ids; `Verity.Soundness` and `Verity.RemoteSoundness` are it at onsite's list and remote's: if each
-   of the composite's subprotocols meets its target, then
+4. **Composed soundness.** `Verity.SoundnessOf` (`Properties/Verity/Soundness.lean`) at any list of ids, proved
+   as `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`); `Verity.Soundness` and
+   `Verity.RemoteSoundness` are it at onsite's and remote's: if each subprotocol meets its target, then
    Pr[the composite's verifier accepts files that passed the commit phase's check ∧ some subprotocol's claim fails]
    ≤ Σ_a error_a, where error_a is a's δ plus ε_forge plus its loss at the probability that a's finder outputs a
    SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
