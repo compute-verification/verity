@@ -73,13 +73,14 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
 
 [rewrite.keep_in]
-# Kept in two documents of Flock's prover: three paths each writes in backticks from a directory above the moved one
+# Kept in two documents of Flock's prover: four paths they write in backticks from a directory above the moved one
 # (`../pod/74-gemm-hill.sh`). Based again they would lose their leading dots (`pod/74-gemm-hill.sh`), a form
 # `move_check.py` credits in a script or a manifest and not in Markdown, where it reads a path in backticks as one
-# from the root. The three keep their text, and the change after the move writes them from the root.
+# from the root. The four keep their text, and the change after the move writes them from the root.
 "verity/protocols/flock/prover/README.md" = ["verity/protocols/flock/pod/74-gemm-hill.sh",
                                             "verity/protocols/flock/pod/gemm_hill.py"]
-"verity/protocols/flock/prover/live/PROTOCOL.md" = ["verity/protocols/flock/agreement/firewall_finish_agree.py"]
+"verity/protocols/flock/prover/live/PROTOCOL.md" = ["verity/protocols/flock/agreement/firewall_finish_agree.py",
+                                                   "verity/protocols/flock/agreement/firewall_controls.sh"]
 
 [modules]
 # the renames [paths] implies (`layout.py --modules`). `verity.protocols.flock.prover.tool` and the four of
