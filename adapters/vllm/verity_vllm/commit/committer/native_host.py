@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import ctypes
 import gc
-import hashlib
 import json
 import math
 import os
@@ -505,7 +504,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self.hash_threads = int(hash_threads)
         self.retain_values = retain_values
         self.run_id = run_id
-        self.program_digest = program_digest
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
         self.spans = Spans(step_rows.NAME)
         self.gc_pauses = GcPauses()
@@ -557,8 +555,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         if gpu_tree:
             self.name = f"{self.name}_gputree"
         self.name = f"{self.name}+{step_rows.NAME}"
-        self.program_digest = program_digest or (step_rows.run_program_digest(run_id) if self.rows else
-                                                 hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest())
+        self.program_digest = program_digest or step_rows.run_program_digest(run_id)
         # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none", and the offline core
         # (no engine, no device) keeps them on host.  Host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable
         # D2H is ~1 GB/s and synchronous)
@@ -601,8 +598,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             if self.arena is not None and self.arena_explicit:
                 self.arena.prealloc()               # auto mode preallocates in size_arena() once the envelope is known
         else:
-            self._geo_digest = geo_digest or (step_rows.offline_geo_digest(run_id) if self.rows else
-                                              hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest())
+            self._geo_digest = geo_digest or step_rows.offline_geo_digest(run_id)
             self._modules = []
 
     def size_arena(self, envelope: dict[str, Any], *, hidden_m1: bool | None = None, margin_bytes: int = 1 << 30) -> dict[str, Any]:
@@ -739,14 +735,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         doc["repo"] = self.engine.cp.get("repo")
         doc["revision"] = self.engine.cp.get("revision")
         doc["chunk"] = self.chunk
-        if self.rows:
-            return step_rows.geo_digest(doc)
-        return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
+        return step_rows.geo_digest(doc)
 
     def _ctx_digest(self, step: int) -> bytes:
-        if self.rows:
-            return step_rows.ctx_digest(self.run_id, step)
-        return hashlib.sha256(f"{self.run_id}/step={step}".encode()).digest()
+        return step_rows.ctx_digest(self.run_id, step)
 
     def _select_modules(self) -> list[tuple[str, Any]]:
         out = []
@@ -824,11 +816,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:
-        # NOTE: packed mode adds stream_off (>= 0); per-tensor mode leaves it at -1 -> the two layouts never collide
-        if self.rows:
-            return step_rows.layout_digest(metas)
-        doc = [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off] for m in metas]
-        return hashlib.sha256(json.dumps(doc, separators=(",", ":")).encode()).digest()
+        return step_rows.layout_digest(metas)
 
     # ------------------------------------------------------------------ lifecycle
 
