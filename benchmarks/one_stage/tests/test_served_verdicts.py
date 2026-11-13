@@ -3836,8 +3836,8 @@ def test_a_served_nodes_audit_runs_one_lean_check_at_a_time_within_v3c_audit_mem
     ({"V3C_AUDIT_MEM_GB": "650"}, {"--lean-workers": None, "--audit-mem-gb": "650"}),
 ])
 def test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_its_command_sets_it(tmp_path, given, want):
-    """A follow-on's audit has its node: a5's own count of Lean checks at once, within what the node has free as its
-    sessions start, unless its command says otherwise. V3C_AUDIT_MEM_GB set on the follow-on's command reaches the
+    """A follow-on's audit has its node: a5's own default of one Lean check at a time, within what the node has free as
+    its sessions start, unless its command says otherwise. V3C_AUDIT_MEM_GB set on the follow-on's command reaches the
     audit as its memory, which its Lean checks and its negatives' workers then start within; left unset, its default
     is only what the node must have, and the audit is given no figure."""
     assert _deferred(tmp_path).returncode == 0

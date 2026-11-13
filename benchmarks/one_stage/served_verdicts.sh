@@ -108,9 +108,10 @@
 #     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on V3C_CHALLENGER's coins (below,
 #     Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's) and
 #     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`), its sessions one at a time and
-#     Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a time: on a node it shares default 1, within
-#     V3C_AUDIT_MEM_GB beside the running session's estimate (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`), a follow-on's
-#     default a5's LEAN_WORKERS, 3, within the V3C_AUDIT_MEM_GB its command sets, else what its node has free, beside
+#     Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a time, default 1 on every path: on a node it
+#     shares within V3C_AUDIT_MEM_GB beside the running session's estimate (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`); in a
+#     follow-on, which passes the flag only where V3C_LEAN_WORKERS is set and else leaves a5's own default
+#     (`a5.LEAN_WORKERS`, 1), within the V3C_AUDIT_MEM_GB its command sets, else what its node has free, beside
 #     that estimate (`a5.LeanPool`); its negatives after the audit record one after another, or with
 #     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only
 #     while its memory estimate, read then, fits that memory (`a5.NegativeWorkers`); then

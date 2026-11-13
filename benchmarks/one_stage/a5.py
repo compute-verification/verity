@@ -1590,9 +1590,10 @@ def one_session(s: str) -> int:
     return 1
 
 
-#: Lean checks of finished members at once (`LeanPool`): they read a session's archive outside the ZK server, which
-#: `ONE_AT_A_TIME` doesn't cover
-LEAN_WORKERS = 3
+#: Lean checks of finished members at once (`LeanPool`) where ``--lean-workers`` says nothing: one, on every path, so
+#: an audit runs its checks one after another unless its command asks for more. They read a session's archive outside
+#: the ZK server, which `ONE_AT_A_TIME` doesn't cover, so more at once is the flag's to give
+LEAN_WORKERS = 1
 #: a Lean check's memory estimate per byte of its member's circuit file, which Lean's verify (`a0.lean_verify`) reads,
 #: hashes and parses whole
 LEAN_BYTES_PER_CIRCUIT_BYTE = 5
@@ -1930,7 +1931,8 @@ def positive(s: str) -> int:
 def lean_options(p: argparse.ArgumentParser) -> None:
     """The Lean checks' flags (`LeanPool`), on a5's parser and its callers'."""
     p.add_argument("--lean-workers", type=positive, default=LEAN_WORKERS,
-                   help="Lean checks of finished members at once, beside the next member's session (sessions stay one at a time)")
+                   help=f"Lean checks of finished members at once, beside the next member's session (sessions stay one at a "
+                        f"time); default {LEAN_WORKERS}, one check at a time")
     p.add_argument("--audit-mem-gb", type=float,
                    help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
                         f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "

@@ -1463,11 +1463,11 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
                                              "bound": "vacuous", "window": figure}]
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
     assert summary["leak"] == RA.declared_count(doc, 0) and summary["leak"]["window"] == figure
-    assert workers == {"lean_workers": A5.LEAN_WORKERS, "audit_mem_gb": None, "negative_workers": 1}
+    assert workers == {"lean_workers": 1, "audit_mem_gb": None, "negative_workers": 1}
     assert summary["negative_workers"] == {"workers": 1}
-    assert RA.main([*argv, "--out", str(tmp_path / "several"), "--lean-workers", "1", "--audit-mem-gb", "290",
+    assert RA.main([*argv, "--out", str(tmp_path / "several"), "--lean-workers", "2", "--audit-mem-gb", "290",
                     "--negative-workers", "5"]) == 1
-    assert workers == {"lean_workers": 1, "audit_mem_gb": 290.0, "negative_workers": 5}
+    assert workers == {"lean_workers": 2, "audit_mem_gb": 290.0, "negative_workers": 5}
     assert json.loads((tmp_path / "several" / "summary.json").read_text())["negative_workers"] == {"workers": 5}
 
 

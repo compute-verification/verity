@@ -183,9 +183,12 @@ def test_the_estimates_are_the_circuit_files_bytes_times_their_factors(tmp_path)
 
 
 def test_the_flags_reach_the_audit():
+    """With no flag an audit runs one Lean check at a time and its negatives one after another; more of either is its
+    command's to ask for."""
     ap = argparse.ArgumentParser()
     a5.lean_options(ap)
-    assert vars(ap.parse_args([])) == {"lean_workers": a5.LEAN_WORKERS, "audit_mem_gb": None, "negative_workers": 1}
+    assert a5.LEAN_WORKERS == 1
+    assert vars(ap.parse_args([])) == {"lean_workers": 1, "audit_mem_gb": None, "negative_workers": 1}
     assert vars(ap.parse_args(["--lean-workers", "2", "--audit-mem-gb", "290"])) == {
         "lean_workers": 2, "audit_mem_gb": 290.0, "negative_workers": 1}
     with pytest.raises(SystemExit):
