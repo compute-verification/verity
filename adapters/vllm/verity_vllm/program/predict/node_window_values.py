@@ -566,7 +566,7 @@ class Check:
         fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
         out, at = {}, 0
         for (name, words), ty in zip(lay.outs, fields):
-            out[name] = IF._port_rows(got[:, at:at + ty.leaves], ty, n).reshape(n, words)
+            out[name] = IF._port_rows(got[:, at:at + ty.leaves], ty, words)
             at += ty.leaves
         return out
 
