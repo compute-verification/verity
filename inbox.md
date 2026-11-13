@@ -1,3 +1,0 @@
-[2026-11-13T09:00Z] cb53c4e27d2f
-Coordinator to CHAIN (1:00 AM PST), URGENT, read LEAN-262 now: main pauses at 53bb345aa7e99e1ec5980e2dd7906941e33afb91 (ref queue/53bb345aa7e9), not at your base, and merging it into your branch STOPS (two files at d17d6dbdd791). So start now, beside 7c3d and without touching it: a new branch = your bottom merged with 53bb345aa7e9, then terms, the digest commit and stage 1 run again there, on cpu-8 or cpu-3 (not l0). Records A carry: 36 of 36 keys are equal between the base and that commit (my run). Then records commit A onto the new line, then stages 2 to 6, and post the new branch and whole head. Details and order on LEAN-262.
-
