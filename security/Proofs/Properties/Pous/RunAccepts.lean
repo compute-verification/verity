@@ -299,13 +299,13 @@ theorem checkAt_of {schemes : Schemes} {pt : PousCheck.Run.Point} {trusted : Lis
 `digests` (the setup-side checks of `Run.checkAt`), at P2's deployed point under S1's LMS: a complete session of 105
 rounds at block 0 with `digests`' row 0, each coin opened in its tree, bound to `pub.root` and signed at leaf 0 of a
 key `Lms.key` derives at `Lms.deployed`, which is the verifier's one trusted key. -/
-theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
+theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
     (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
     (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
     (hr : (PousCheck.Merkle.root (PousCheck.Run.rowLeaves PousCheck.P2.Params.deployed pub.salt digests) ==
       some pub.root) = true) :
-    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
-      PousCheck.Run.check trusted pub digests r sid = .ok () := by
+    ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
+      PousCheck.Run.check [key] pub digests r honestSid = .ok () := by
   obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed (I := PousCheck.Prim.zeros 16) rfl
     (PousCheck.Prim.zeros 64)
   obtain ⟨hIs, hps, hpI⟩ := pub_spec hk
@@ -318,16 +318,26 @@ theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : Byt
     unfold lmsVerify memoryChallengerMessage
     simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
     exact hσv
-  refine ⟨[k.publicKey],
+  refine ⟨k.publicKey,
     ⟨⟨honestCommitment pub.root, COMPLETE, honestRounds digests, LMS, k.publicKey, σ.encode⟩,
-      honestCommitment pub.root, honestOpenings⟩,
-    honestSid, ?_⟩
+      honestCommitment pub.root, honestOpenings⟩, ?_⟩
   unfold PousCheck.Run.check
   refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
     (by simp [hd, PousCheck.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
     (by simp [honestCommitment]) (beq_self_eq_true _) (beq_self_eq_true _) (beq_self_eq_true _) ?_
   exact verdict_accepted_of (p := Lms.deployed) (m := m) (by simp [SCHEMES]) (by simp) hm hv
     (commitment_beq_self _) rfl (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
+
+/-- `runCheck_acceptsSid`, its trusted list, record and session id unnamed. -/
+theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
+    (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
+    (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
+    (hr : (PousCheck.Merkle.root (PousCheck.Run.rowLeaves PousCheck.P2.Params.deployed pub.salt digests) ==
+      some pub.root) = true) :
+    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
+      PousCheck.Run.check trusted pub digests r sid = .ok () := by
+  obtain ⟨key, r, h⟩ := runCheck_acceptsSid pub digests hb hs hd hr
+  exact ⟨[key], r, honestSid, h⟩
 
 /-- **The composed check accepts a run**, on the table of zero digests and the setup whose root is its leaves'
 (`runCheck_acceptsAt`). -/

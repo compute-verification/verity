@@ -1054,20 +1054,26 @@ theorem root_setup (salt : ByteArray) :
 theorem runCheck_accepts_setup' {salt : ByteArray} (h24 : salt.size = 24) (w R : ByteArray)
     (hr : Merkle.root ((List.range' 0 8).foldl
       (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) = some R) :
-    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
-      PousCheck.Run.check trusted ⟨P2.Params.deployed.blocks, w, R, salt⟩ (setupDigests salt) r sid = .ok () :=
-  runCheck_accepts_setup h24 ⟨P2.Params.deployed.blocks, w, R, salt⟩ rfl rfl hr
+    ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
+      PousCheck.Run.check [key] ⟨P2.Params.deployed.blocks, w, R, salt⟩ (setupDigests salt) r
+        Pous.EndToEnd.SecurityProofs.Honest.honestSid = .ok () := by
+  refine Pous.EndToEnd.SecurityProofs.Honest.runCheck_acceptsSid _ _ rfl (by simp [h24, PousCheck.Run.SALT])
+    (by rw [setupDigests]; exact digestTable_size (fun _ => rowDigest_size _) _) ?_
+  show (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt)) == some R) = true
+  rw [rowLeaves_setup, hr]
+  exact beq_self_eq_true _
 
 /-- **Setup accepts, and the composed check accepts a run on what it published, or SHA-512 has a collision**: under
 `PrimeP16448`, for every 24-byte salt, the setup check accepts the honest `C*` (`check_honest`) and `Run.check`
 accepts a run against the honest blocks' row digests on its public output (`runCheck_accepts_setup`), or a first `t`
 candidate at or above `p` gives two different inputs with one digest (`keysOk_or_collision`). -/
-theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
+theorem setup_run_accept_sid_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
     (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
-        c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
-        ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
-          PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok ()) ∨
+        c.salt = salt ∧ C.size = 8 ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
+        ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
+          PousCheck.Run.check [key] pub (setupDigests salt) r Pous.EndToEnd.SecurityProofs.Honest.honestSid =
+            .ok ()) ∨
       ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
   obtain ⟨st0, hst⟩ := commitState_deployed
   rcases keysOk_or_collision (keyPrefix salt) (pad128_size _) with hk | hcol
@@ -1080,7 +1086,19 @@ theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {sa
     exact Or.inl ⟨⟨honestW salt st0, salt⟩, honestEncoding (keyPrefix salt),
       ⟨P2.Params.deployed.blocks, honestW salt st0, (Merkle.root (vkRun salt st0 (honestSegment (keyPrefix salt))
         (fun _ => segPayload) P2.Params.deployed.segments).2).getD .empty, salt⟩, rfl,
-      check_honest hP h24 hk hst, runCheck_accepts_setup' h24 _ _ hr⟩
+      honestEncoding_size _, check_honest hP h24 hk hst, runCheck_accepts_setup' h24 _ _ hr⟩
+  · exact Or.inr hcol
+
+/-- `setup_run_accept_sid_or_collision`, the store's size, the trusted list and the session id unnamed. -/
+theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
+    (h24 : salt.size = 24) :
+    (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
+        c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
+        ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
+          PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok ()) ∨
+      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+  rcases setup_run_accept_sid_or_collision hP h24 with ⟨c, C, pub, hc, -, hs, key, r, h⟩ | hcol
+  · exact Or.inl ⟨c, C, pub, hc, hs, [key], r, _, h⟩
   · exact Or.inr hcol
 
 end PousCheck.Properties.SecurityProofs.Accepts
