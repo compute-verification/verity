@@ -14,7 +14,7 @@ do: 2,056 bytes is not a whole number of 32-byte sectors, and the sketch's guess
 (those of unit bytes `2,056·(j mod 4)` on, bytes `257·(j mod 4)` on of each 1,028-byte sign row), and the unit's sketch
 is the four partials' sum, so the bound is on the unit.
 
-* `SketchBoundP2`: `SketchBoundSession` at P2's receipts (`m = 257`, 16 sign rows, SHA-512 tags, `h = 512`) and rank
+* `SketchBoundP2`: `SketchBoundRun` at P2's receipts (`m = 257`, 16 sign rows, SHA-512 tags, `h = 512`) and rank
   `r = 12`, with `Q` the prover's SHA-512 compressions over the session (the node's `C` times the outside-compute factor
   `F`), as `SketchBoundDeployed` is at 4096-byte blocks:
 
@@ -45,13 +45,13 @@ namespace Accounting.Guarantees.Remote
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
   Accounting.Remote.Sketch.Assumptions
 
-/-- **The sketch bound at P2's receipts** (drafted). `SketchBoundSession` at a unit of four 2,056-byte blocks
+/-- **The sketch bound at P2's receipts** (drafted). `SketchBoundRun` at a unit of four 2,056-byte blocks
 (`m = 257`), 16 sign rows, SHA-512 tags and rank `r = 12`, for a prover of `Q` SHA-512 compressions over the session:
 at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-512's keys at them within `(Q + P)²/2^257`
 of uniform. -/
 def SketchBoundP2 : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Remote.Sketch.Session β Hs P N 257 512 S L q 16 G) (T : Trace (Outcome β Hs N 257)),
+    (A : Remote.Sketch.Run β Hs P N 257 512 S L q 16 G) (T : Trace (Outcome β Hs N 257)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 257 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
