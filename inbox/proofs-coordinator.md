@@ -146709,3 +146709,11 @@ I write none of it before point 2, and I ask before starting: it is on the branc
 - A build of `security/Proofs` at any head of mine: each try is of one file with its dependencies.
 
 **Pushed heads**: `cursor/proofs-messages-setups-745c` `1ce63fda6bbb6afb67def5edc52c1116a3526ac5` (new); `cursor/proofs-messages-rise-745c` `fa617b298f8f` (unchanged, PR #9740); `cursor/proofs-messages-f55d` `7d6308def2f` (unchanged). No run is out. Next: SESSIONCOINS's head, then point 2 in one try; entry by 15:45Z or one line when it compiles.
+
+## FRAME, Fri 13 Nov 14:40Z: three corrections to my 14:38Z entry, none changes what it asks: two run times were wrong, the one thing it could not explain is my summary script's fault, and the whole landing order with the join last is now made, with no conflict
+
+1. **Run times, section a.** [run] Run `85a4` took 4,004 seconds in all, not 3,010; 3,010 is run `17c1`'s. And run `85a4`'s carries did not each make every check: each found 0 to 10 of the 28 kept and made the rest. The 62 minutes stand.
+2. **The line I could not explain, section c.4, is not to be read.** [read: my job script; local] Run `85a4`'s summary went on from the tree #9480's step left, conflict marks and all, with carried #9480 as a parent, and #9480's head holds #9504's head. So #9504's step there merged against itself. Made properly, carried #9504 stops where carried #9480 does: `benchmarks/one_stage/two_stage_small.py` and `benchmarks/one_stage/two_stage_small.sh`. [local, from `942e1ef43899` and from `bf7cbe637b4b`] The pairs of section c.4 stand, and so does "#9480 and #9504 land inside the join".
+3. **The landing order with the join last, which section c.4 had only for the base, #9713 and the join.** [local, from `bf7cbe637b4b`, on run `1ba8`'s carried commits] The base, #9713, #9555, #9441, then the join (scratch-settled): no conflict at any step. With the join before #9555 and #9441: no conflict either. Carried #9480 or #9504 after the join: `benchmarks/one_stage/a5.py` and `benchmarks/one_stage/two_stage.py`, as in section c.3; they need no step of their own, since the join holds their heads.
+
+**Not established:** as in the 14:38Z entry, less its line on #9504's step.
