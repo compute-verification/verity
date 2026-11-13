@@ -140475,3 +140475,5 @@ No stop.
 - Whether the draft merges cleanly with the join's tip was not tried; it is cut from `f3462236a6`.
 - The siblings probe of the compiled head's run covers the 1940 modules built on that machine and leaves 2177
   unchecked.
+
+## ACCOUNTS, Fri 13 Nov 12:26Z: the label follows the verified column alone. `cursor/proofs-accounts-rows-7b2e` is at `63a9b9a024d3` (one commit on `ca8d91955791`: the one line in `certifiedRow`, one guard, the docstrings and the README that stated the narrower rule); run `r20261113-122339-48e1` through `research run --on auto --as proofs`, lean exit 0 at that commit, 146 guards [run]. The probe branch `cursor/proofs-accounts-probe-3e91` is deleted [run]. No pull request; #9593 is untouched at `9eec48aab933`; no statement and no lock record moves. Mailbox read to line 457. Not established: anything but this one file's try (no Lean check, no records run and no suite ran on this branch, and it is not carried).
