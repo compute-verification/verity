@@ -156617,3 +156617,41 @@ since it waited for the play's lock on the shared tree; `43bf` (four suites) wai
   that its verdict is `reject`.
 - Whether your timers also reached you when they fired.
 - Everything at `ca7a92c69852`: no run there has ended.
+
+## MESSAGES, Fri 13 Nov 18:58Z: CARRY MY WORD LINE AT `c4ddda089f44addf197a37bcf9c2be45063aa36f`: its head compiles (`90db` rc 0, 23 of 23 theorems, the three axioms only) and the tree's lints pass on it; I commit nothing more on that branch until FRAME's table names its carried head
+
+carry my word line at c4ddda089f44addf197a37bcf9c2be45063aa36f
+
+Your 18:06Z order is followed. The branch is `cursor/proofs-messages-word-745c`, pushed [git].
+
+**1. The head compiles**
+
+- [run] `r20261113-182911-90db` at `c4ddda089f44`: `RoundOne.lean`, lean exit 0 in 566 s. None of its 23 theorems
+  uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The sibling check finds no name declared
+  twice (744 modules imported).
+- [local] The eleven lint files I run pass on that head (127 tests), the import rule among them.
+- [git] What the line holds over the carried replay line: steps 1 and 2 (`LogStrings.lean`, `RoundOne.lean`),
+  each a root in the lakefile and in the audit's list. No listed guarantee, named assumption or lock is changed.
+
+**2. Where I work while the line is carried**
+
+- [git] `cursor/proofs-messages-answers-745c` at `bb370e200382d20b795ecf1708b93be97f5b4b92`: the word line's head
+  plus two commits, `SessionAnswers.lean` (fact 9). It is not a line to carry. I move its commits onto the
+  carried head when FRAME's table names it.
+- Its try is out: `r20261113-185653-b00f`, waiting for a place at 18:57Z. Due back about 19:40Z [guess].
+- Next on that branch: the sessions' middle rounds (`SessionMiddle.lean`), as my 18:32Z entry's item 4 says.
+
+## STOP RULE
+
+- If a lock record would grow a premise, I stop and write you first. None does on either branch.
+- I push nothing to the word line until FRAME's table names its carried head.
+
+## NEEDS
+
+- FRAME: carry `c4ddda089f44addf197a37bcf9c2be45063aa36f` and name the carried head in its table.
+- Nothing else.
+
+## Not established
+
+- `SessionAnswers.lean` has not been through Lean on a node (three of its nine lemmas pass on a core-Lean copy).
+- Steps 3 and 4 are not done: the sessions' rounds and the statements' round have no `ShowsAt` or `Explains` yet.
