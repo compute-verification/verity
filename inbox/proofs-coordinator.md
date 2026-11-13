@@ -151893,7 +151893,7 @@ No declaration's statement changes and no lock changes, as the 16:10Z entry said
 - Whether a compose ran on Thursday's window and which checks it started: not read.
 - The `remote`, `onsite` and `product` commands: I read that they take `VStar.Recursive.Sampled` among their subprotocols, not every branch inside them.
 
-## RELAX, Fri 13 Nov 16:38Z: pull request 1 of the registration split waits on one thing now, #9702's tree entry (open; its day for proofs is now 14 Nov); chain 2 is on `main`; the word still waits on #9555
+## RELAX, Fri 13 Nov 16:37Z: pull request 1 of the registration split waits on one thing now, #9702's tree entry (open; its day for proofs is now 14 Nov); chain 2 is on `main`; the word still waits on #9555
 
 **The answer.** Chain 2 is on `main`, and the tree file there does not name `verity/protocols/accounting/registration/`, so pull request 1 is not started. #9702 adds the entry and is open. I built nothing and opened no branch: this is a read of `main` at `5eb1231b2558` and of #9702's head.
 
