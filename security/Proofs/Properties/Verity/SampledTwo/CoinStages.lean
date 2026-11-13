@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
+public import Proofs.Properties.Verity.SampledTwo.CoinMapLaw
 public import Proofs.Properties.Verity.SampledDraw
 
 /-!
@@ -519,6 +520,92 @@ theorem devSecond_of (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : L
     rw [if_neg hu] at hd
     cases hd
   | some d => exact ⟨d, rfl, src_extract hd b _ _ hwid.1 hwid.2 hbits⟩
+
+/-! ## How many elements each stage's coin reads -/
+
+/-- **Where every release a round takes has 4 elements, the elements that fit are all, up to the coin's 65536.** -/
+theorem fitOf_ge (L : Locate) (i : ℕ) (hW : ∀ pre fr b, locAt L pre fr b = some i → widthOf fr = 4) :
+    ∀ (log pre : List Verity.Release), 4 ∣ usedOf L i [] pre →
+      min (usedOf L i pre log) (65536 - usedOf L i [] pre) ≤ fitOf L i pre log
+  | [], _, _ => by simp [usedOf, fitOf]
+  | rl :: log, pre, hd => by
+    have hs := usedOf_snoc L i pre rl
+    simp only [usedOf, fitOf]
+    by_cases hl : locAt L pre rl.frame rl.answers = some i
+    · have hw := hW _ _ _ hl
+      rw [if_pos hl, hw] at hs
+      have ih := fitOf_ge L i hW log (pre ++ [rl]) (by rw [hs]; omega)
+      rw [hs] at ih
+      rw [if_pos hl, hw]
+      by_cases hf : usedOf L i [] pre + 4 ≤ 65536
+      · rw [if_pos ⟨hl, hf⟩]
+        omega
+      · rw [if_neg (fun h => hf h.2)]
+        omega
+    · rw [if_neg hl, Nat.add_zero] at hs
+      have ih := fitOf_ge L i hW log (pre ++ [rl]) (by rw [hs]; exact hd)
+      rw [hs] at ih
+      rw [if_neg hl, if_neg (fun h => hl h.1)]
+      omega
+
+theorem widthOf_stage (ℓ₁ ℓ₂ : String) (i : ℕ) :
+    ∀ pre fr b, locAt (stageLocate ℓ₁ ℓ₂) pre fr b = some i → widthOf fr = 4 := by
+  intro pre fr b h
+  obtain ⟨l, rfl⟩ := locAt_fresh h
+  rfl
+
+/-- **The bits a stage collects are 128 a element**, where each fresh coin carries its 512 bits. -/
+theorem length_devBits (ℓ₁ ℓ₂ : String) (i : ℕ) :
+    ∀ (log : List Verity.Release), FreshWide log → ∀ pre,
+      (devBits (stageLocate ℓ₁ ℓ₂) i pre log).length = 128 * usedOf (stageLocate ℓ₁ ℓ₂) i pre log
+  | [], _, _ => by simp [devBits, usedOf]
+  | rl :: log, hw, pre => by
+    simp only [devBits, usedOf, List.length_append]
+    rw [length_devBits ℓ₁ ℓ₂ i log (fun r hr => hw r (List.mem_cons_of_mem _ hr)) (pre ++ [rl])]
+    by_cases hl : locAt (stageLocate ℓ₁ ℓ₂) pre rl.frame rl.answers = some i
+    · obtain ⟨l, hf⟩ := locAt_fresh hl
+      rw [if_pos hl, if_pos hl, hw rl List.mem_cons_self l hf, hf]
+      simp only [widthOf]
+      omega
+    · rw [if_neg hl, if_neg hl]
+      simp
+
+/-- **The first stage's bytes fit in what its coin reads**: bytes whose bits start the first stage's family's
+released coins, at most a coin's, are at most 16 bytes an element that fits. -/
+theorem size_le_fit_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after : ByteArray}
+    (hone : OneRoot ℓ₁ after log) (hw : FreshWide log) {b : ByteArray}
+    (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₁ after log).flatten)
+    (hL : b.size ≤ SpotFlock.L) : b.size ≤ 16 * fitOf (stageLocate ℓ₁ ℓ₂) 0 [] log := by
+  have hf := fitOf_ge (stageLocate ℓ₁ ℓ₂) 0 (widthOf_stage ℓ₁ ℓ₂ 0) log [] (by simp [usedOf])
+  have hl := length_devBits ℓ₁ ℓ₂ 0 log hw []
+  rw [devBits_first ℓ₁ ℓ₂ after log [] hone] at hl
+  have hpre := hb.length_le
+  have hlen := length_bitsOf b
+  simp only [usedOf, Nat.sub_zero] at hf
+  simp only [SpotFlock.L] at hL
+  omega
+
+/-- **Each second stage's slice fits in what its coin reads**: stage `j + 1`'s bytes (`stageWidth`) are at most 16
+bytes an element that fits. -/
+theorem stageWidth_le_fit_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : List Verity.Release} {after : ByteArray}
+    (hone : OneRoot ℓ₂ after log) (hw : FreshWide log) {b : ByteArray}
+    (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₂ after log).flatten) (j : ℕ) :
+    stageWidth b j ≤ 16 * fitOf (stageLocate ℓ₁ ℓ₂) (j + 1) [] log := by
+  have hf := fitOf_ge (stageLocate ℓ₁ ℓ₂) (j + 1) (widthOf_stage ℓ₁ ℓ₂ (j + 1)) log [] (by simp [usedOf])
+  have hl := length_devBits ℓ₁ ℓ₂ (j + 1) log hw []
+  rw [devBits_second ℓ₁ ℓ₂ hne after j log [] hone] at hl
+  simp only [List.countP_nil, Nat.sub_zero] at hl
+  have hcs := freshCoins_length (ℓ := ℓ₂) (after := after) hw
+  generalize Verity.Sampled.freshCoins ℓ₂ after log = cs at hl hb hcs
+  rw [length_flatten_const _ (fun c hc => hcs c (List.mem_of_mem_take (List.mem_of_mem_drop hc))),
+    List.length_drop, List.length_take] at hl
+  have hflat := length_flatten_const cs hcs
+  have hpre := hb.length_le
+  have hlen := length_bitsOf b
+  unfold stageWidth
+  simp only [usedOf, Nat.sub_zero] at hf
+  simp only [SpotFlock.L]
+  omega
 
 /-- **`DevFirst` at the locator** (STAGECOINS's, at `draw` the first stage's draw): where the first stage's draw is the
 locator's family after one root (`StageDraws`). -/
