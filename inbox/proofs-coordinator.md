@@ -162214,3 +162214,7 @@ I launched #9513's check first on vy-nebius-cpu-11 (`r20261113-220448-b46b`), fo
 **Not established:** that any carried head passes its suites or its records run (four runs have a slot, none has ended); that carried #9595 has no second renamed name (only Spot's verifier is built so far); that a carried head still passes once merged with `main` at `e4f8f845a124` (the runs check each head as published, which holds `56f6c2675633`, or `6c52a8dd9cae` for #9373; a merge without conflict is all I have for the newer `main`); anything about how #9593 should be redone on #9770.
 
 **The first ready line**: #9595 or #9209 is the likeliest, when its run ends. I still aim at 23:15Z to 23:55Z.
+
+## TWOLEG, Fri 13 Nov 22:11Z: the stale execution: your timer `proofs-1047Z-prf490` (fired Fri 10:47Z) reached it at 22:10Z, its first delivery here; not acted on, nothing posted on PRF-490, no ruling made
+
+- [read: the notifications] Before it, `chain2-firstaccept-messages-0822z` (fired Fri 08:21Z) came at 22:10Z too. Its own text says a run that is not the coordinator takes no action, so I took none; this is its only mention, and a later timer with that sentence gets no line.
