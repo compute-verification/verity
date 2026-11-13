@@ -6,12 +6,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
-import types
 from pathlib import Path
 
 import pytest
 
+from tests.pipeline import tokenizers_stand_in
 from verity_vllm.config import (
     ROOT,
     TARGETS,
@@ -483,26 +482,6 @@ def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_
     assert said() == [("WARNING", "§12 self-check: " + "; ".join(bad)), note]
 
 
-class _Tokenizer:
-    """A stand-in for the `tokenizers` library's `Tokenizer`: an id a character, and what each call was asked for."""
-    asked: set[tuple[str, bool]] = set()
-
-    def __init__(self, path: str) -> None:
-        self.path = path
-
-    @classmethod
-    def from_file(cls, path: str) -> _Tokenizer:
-        return cls(path)
-
-    def encode(self, text: str, add_special_tokens: bool) -> types.SimpleNamespace:
-        self.asked.add(("encode", add_special_tokens))
-        return types.SimpleNamespace(ids=[ord(c) for c in text])
-
-    def decode(self, ids: list[int], skip_special_tokens: bool) -> str:
-        self.asked.add(("decode", skip_special_tokens))
-        return "".join(map(chr, ids))
-
-
 REV = "ab" * 20
 
 
@@ -556,8 +535,7 @@ def test_a_models_case_is_the_one_named_then_the_adapters_own_for_its_repository
 def test_the_generator_writes_each_prompt_in_the_ids_of_the_models_tokenizer_and_says_which_file_it_read(tmp_path, monkeypatch):
     """`workload.main` with a tokenizer: `tokenizer.json` of the revision's snapshot under `$HF_HOME`, or the snapshot or file
     `--tokenizer` names; read with the `tokenizers` library (a stand-in here), no special token added or dropped."""
-    monkeypatch.setitem(sys.modules, "tokenizers", types.SimpleNamespace(Tokenizer=_Tokenizer))
-    monkeypatch.setattr(_Tokenizer, "asked", set())
+    tokenizer = tokenizers_stand_in.install(monkeypatch)
     snap = _snapshot(tmp_path)
     monkeypatch.setenv("HF_HOME", str(tmp_path))
     out = tmp_path / "rows" / "of" / "w.json"                                                  # in a directory that is made for it
@@ -569,7 +547,7 @@ def test_the_generator_writes_each_prompt_in_the_ids_of_the_models_tokenizer_and
     reqs = doc["requests"]
     assert [len(r["prompt_token_ids"]) for r in reqs] == [r["prompt_len"] for r in reqs] == doc["sweep"]["input_lengths"]
     assert all(r["prompt_text"] == "".join(map(chr, r["prompt_token_ids"])) for r in reqs) and len({r["prompt_text"] for r in reqs}) == 8
-    assert _Tokenizer.asked == {("encode", False), ("decode", False)}
+    assert tokenizer.asked == {("encode", False), ("decode", False)}
     sha = hashlib.sha256(b'{"model": "chars"}').hexdigest()
     assert doc["tokenizer_note"].startswith(f"prompt_token_ids from tokenizer.json sha256 {sha[:16]} (") and doc["sweep"]["lengths_only"] is False
     monkeypatch.setenv("HF_HOME", str(tmp_path / "elsewhere"))
