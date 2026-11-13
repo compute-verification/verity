@@ -168,6 +168,9 @@ def test_the_number_is_the_session_harnesss_gamma_spec_of_the_same_records(tmp_p
     (a_record(), "the verifier recorded no session"),
     (a_record(a_session(gamma=None)), "session 0 was accepted and its ledger holds no γ"),
     (a_record(a_session(gamma=True)), "session 0 was accepted and its ledger holds no γ"),
+    (a_record(a_session(verdict=None)), "session 0 is recorded accepted, but its record names no Lean verdict (None)"),
+    (a_record(a_session(verdict="python")),
+     "session 0 is recorded accepted, but its record names no Lean verdict ('python')"),
     ({"sessions": "none"}, "the verifier's record doesn't read as one"),
     ("not json", "the verifier's record doesn't read as one"),
 ])
@@ -219,12 +222,12 @@ def test_a_gate_runs_number_is_read_from_the_host_run_its_fire_run_names(store, 
     assert text[2].endswith("bound to SOME_ROLE's pinned checkpoint")
 
 
-def test_a_binding_that_did_not_bind_and_a_record_with_no_lean_verdict_are_said(store, capsys):
-    record = a_record(a_session(verdict=None), binding={"name": "SOME_ROLE", "bound": False})
+def test_a_binding_that_did_not_bind_is_said(store, capsys):
+    record = a_record(a_session(), binding={"name": "SOME_ROLE", "bound": False})
     store.add(RUN, {"out/verifier.json": record}, dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted (its record names no Lean verdict)")
+    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted by the Lean verifier")
     assert text[2].endswith(f"; {M.UNBOUND}") and doc["model"] is None and doc["bound"] is False
     assert doc["commit"] == f"{COMMIT}-dirty"
 

@@ -1,6 +1,7 @@
 """`verity bench memory`: the share of a node's memory read rate that one accepted PoUB session leaves uncertified, at
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
-one line of JSON (`value`, `unit`, `commit`, `run`). A session that wasn't accepted prints no number and exits 1.
+one line of JSON (`value`, `unit`, `commit`, `run`). A session that the Lean verifier didn't accept (its record's
+`verdict` is not `lean`) prints no number and exits 1.
 The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for that γ, and the term no δ holds.
 
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
@@ -166,7 +167,8 @@ def commit_of(attempt: dict) -> str | None:
 
 def session(record: Path, k: int | None) -> dict:
     """Session `k` (the only one when `k` is None) of the verifier's record at `record`, as the printer reads it:
-    `NoNumber` unless the verifier accepted it and its ledger holds γ at the specification's rate, which is
+    `NoNumber` unless the Lean verifier accepted it (`accepted`, with `verdict` `lean`) and its ledger holds γ at the
+    specification's rate, which is
     `remote_session/summary.py`'s `gamma_spec` of the session."""
     try:
         v = json.loads(record.read_text())
@@ -186,6 +188,9 @@ def session(record: Path, k: int | None) -> dict:
     if vs.get("accepted") is not True:
         why = (vs.get("failure") or {}).get("failure") or "no reason recorded"
         raise NoNumber(f"session {vs['k']} was not accepted ({why})")
+    if vs.get("verdict") != "lean":
+        raise NoNumber(f"session {vs['k']} is recorded accepted, but its record names no Lean verdict "
+                       f"({vs.get('verdict')!r}): only the Lean verifier's accept has a number")
     ledger = vs.get("ledger") or {}
     gamma = (ledger.get("spec") or {}).get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
@@ -470,12 +475,10 @@ def text(doc: dict) -> str:
         lines.append(f"  {LOOPBACK}")
     elif doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
-    verdict = ("accepted by the Lean verifier" if doc.get("verdict") == "lean"
-               else "accepted (its record names no Lean verdict)")
     where = ("" if doc["loopback"] else f", on the auditor's verifier host (its run {doc['host_run']})" if doc.get("host_run")
              else ", its verifier not on the auditor's verifier host")
     lines.append(f"  session {doc['session']} of {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: "
-                 f"{verdict}{where}")
+                 f"accepted by the Lean verifier{where}")
     whole = None if doc["loopback"] else doc.get("node_gpu_bytes")
     lines.append("  store: " + (f"{doc['store_bytes']:,} bytes, a test store" if doc["loopback"] else _gb(doc["store_bytes"]))
                  + (f", {doc['store_bytes'] / whole:.3f} of the node's {_gb(whole)} of GPU memory" if whole else "")
