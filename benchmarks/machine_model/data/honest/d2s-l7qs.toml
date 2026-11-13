@@ -5,7 +5,7 @@
 # d2wedit) are separate launches and not in these counts.
 name = "d2s-l7qs"
 status = "measured"
-source = "D2S-KERNEL's d_l7qs at 8192^3, `eps_profile.py OUT --mm benchmarks/pouw/machine_model --toml`, census VF3n-16's classes"
+source = "D2S-KERNEL's d_l7qs at 8192^3, `eps_profile.py OUT --mm benchmarks/machine_model --toml`, census VF3n-16's classes"
 L = 32
 
 [mma]
