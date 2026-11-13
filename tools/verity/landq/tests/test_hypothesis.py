@@ -1,4 +1,4 @@
-"""Soundness and liveness again, over scenarios Hypothesis draws field by field, so a counterexample shrinks to a few PRs and
+"""Soundness and liveness again, over scenarios Hypothesis samples field by field, so a counterexample shrinks to a few PRs and
 tasks.  Derandomized and without a database: the same examples every run, and nothing written to the tree."""
 from __future__ import annotations
 
