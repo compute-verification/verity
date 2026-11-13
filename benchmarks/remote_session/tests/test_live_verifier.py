@@ -147,6 +147,7 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
     assert line["registration"] == v["registration"]["digest"]
     (row,) = line["sessions"]
+    # back to the whole string once auditor_line.py's reason for a session with no challenger log drops its retired term
     assert (row["k"], row["accepted"]) == (0, True) and row["skipped"].startswith("no challenger log: coins ")
 
     rc, shipped = call(svc, ["fetch", RUN], units, key="-")

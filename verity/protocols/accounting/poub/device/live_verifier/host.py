@@ -191,7 +191,7 @@ WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input 
                 "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
 """A served run's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
 with why. The three tables and `witness` are the rule the sender holds its list to (`served_verdicts.py witness`), in the
-same order and word for word, which `tests/test_host.py` holds them to."""
+same order and word for word, which `benchmarks/one_stage/tests/test_served_verdicts.py` holds them to."""
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 """... by the serve dir's top directory."""
 WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.bin": "a private file (prover only)",
