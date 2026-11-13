@@ -110680,3 +110680,52 @@ NEEDS:
 To post: nothing.
 
 Not established: that the file elaborates (no run has checked it). The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs. The key pins replace that step on Tue 17 Nov.
+
+## STOPDRIVER, Fri 13 Nov 00:40Z: at the served vocabulary both statements prove on one card (`k_log` 24 and 25, card memory 2.6 and 4.4 GB, every session accepted); Lean's verdict is still in line; #9458's merge is pushed but its ready line waits on a fix I owe
+
+In plain words. The audit's second stage proves small pieces of the served computation (inner blocks) on graphics cards. Until tonight no card had proved one at the size of the served vocabulary (154,880 tokens). I staged the two kinds of statement the audit makes at that size, on CPUs, and proved each on one card: both were accepted, and the larger one used 4.4 GB of a card's memory, so size is no obstacle for Friday's second try. The verdict of the Lean verifier on those same proofs is not in: its job waits for a place.
+
+**1. The card job at V = 154,880** [run `r20261112-234712-4ed2`, done, exit 0; vy-nebius-2, pool `gpu`, one RTX PRO 6000; the kernels lane's `prove_time.sh`, a lease of at most 10 minutes around the sessions only]
+
+| | chunk `GreedyChunk_v2{N=7744,OFF=0}` | combine `GreedyCombine_v2{V=154880,N=7744}` |
+|---|---|---|
+| `k_log` (the prover's `statement` line) | 24 (`m` 27, 2 regions) | 25 (`m` 28, 21 regions) |
+| inner blocks proved a session | 2 of 4, 951,941 ANDs each | 2 of 4, 954,687 ANDs each |
+| verdict of the job's verifier (`flock-circuit serve --zk`) | accepted, both sessions | accepted, both sessions |
+| the prover's own timer (`prove_total_s`), first session | 2.25 s, of which 1.83 s is the device's setup | 2.50 s, of which 1.87 s is setup |
+| the same, second session (device warm) | 0.15 s | 0.41 s |
+| the card's peak memory (`nvidia-smi`, a sample about every 0.3 s) | 2,619 MiB | 4,381 MiB |
+| the whole `prove` command, both sessions | 8.4 s, 2.9 GB resident on the host | 10.1 s, 4.8 GB |
+
+- [read] No refusal: `prover` is `flock-cuda-circuit`, `gpu` true, `device_witness` true in every record, and the prover's stderr holds no line of refusal, panic or memory.
+- [read] Each session is two repetitions of the proof (838,794 bytes each for the chunk, 852,442 for the combine).
+- [derived] The setup of about 1.8 to 2.1 s does not grow with the statement (2.09 s at `k_log` 22 in the dry run, 1.83 s at 24, 1.87 s at 25), so I read it as paid once a prover process, not once a statement. [guess] So Friday's sessions after a card's first would look like the second column of timers, not the first.
+- [read, my 22:58Z entry] On CPUs the same two statements took 49.2 s and 29.6 s by the same timer (`r20261112-191841-86b4`). I give no ratio: the machines differ, the CPU sessions were the audit's own through the proof server, and the timer leaves out the statement's build on the host (2.4 s and 3.8 s here).
+
+**2. The staging on CPUs at V = 154,880** [run `r20261112-231149-d852`, done, exit 0; vy-nebius-2, pool `proofs`; waited 13 minutes for its place, ran 32]
+- [read] `staging.before_draw_s` 339.1 s for the 20 members' public files, `drawn_s` 7.8 s for the sampled members' prover files, `gpus` 0.
+- [read] Peak resident memory of the whole job 8.2 GB (summed every 5 s). The statements are 339 MB, kept in the run and on the node.
+- [derived] So at this size a driver given `--devices` stages for about six minutes before its first session, and holds no process on a card in that time (a card's prover starts at its first statement: read, my 22:58Z entry). My earlier answer stands: Friday's second try does not need the driver to take its cards late.
+
+**3. Lean's verdict: not in.** [run `r20261113-002435-08a7`, launched 00:24:45Z on vy-nebius-2, pool `proofs`, 32 GB asked] It was 19th in line at 00:31Z, with all 16 places held [read, the pool's status]. The same job on the dry run's four sessions, `r20261112-233759-ce6a`, has waited since 23:38Z and was 4th. Both read the sessions on vy-nebius-2's disk, so neither moves to another machine as it is; I say in section 7 what a move would take.
+
+**4. What is not established.**
+- The sessions are the kernels job's, not the audit's: its verifier sampled inner blocks [2, 3] and [0, 3] of the chunk and [2, 3] and [0, 1] of the combine, where the audit's own sample was [1, 3] and [0, 3]. Same statement and pin, same number of blocks, other blocks.
+- The card is an RTX PRO 6000 on vy-nebius-2, not an H200 of node A.
+- `second --devices` itself has not run at this size: 20 statements through the proof server on seven cards. [derived] If a card's prover kept every statement's state, one card would hold 19 × 2.6 + 4.4 = 54 GB at worst; whether it keeps them I have not read.
+- A peak between two `nvidia-smi` samples is not seen.
+
+**5. The cards branch** `cursor/proofs-stopdriver-prove-on-cards-ffc6` is at `2c5806b33e8c`, pushed, nothing unpushed. No ready line yet.
+- [run `r20261112-231207-5ddb`, at `ddcd46b4919c`, before the merge] ended failed: of 58 suites 57 passed and one failed, `research`, on two tests of `tools/research/tests/test_auto.py` (`test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool`, `test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen`).
+- [read] The cause is the machine, not the branch: the probe those tests run reads `/etc/vy/auto-hold` (`tools/research/src/research/auto.py:89` and `:162`), the two tests do not point `auto.HOLD_FILE` elsewhere (the tests at `test_auto.py:630` and `:943` do), and vy-nebius-2 carries that file since 22:56Z. [run, this VM] Both pass at the merged head off the node. [read] The branch touches no file under `tools/research`.
+- [run `r20261112-234519-8cc3`, at the merged head] still in line, 9th at 00:31Z after 46 minutes. [derived] There it will fail the same two tests. Your 00:23Z rule would send it to cpu-11 after 15 minutes in line. I have not moved it: it is no Lean try but an hour of up to 14 test processes (`5ddb` ran 63 minutes in its place, nothing cached), and cpu-11's places are the proof's workers'. The ready line is due Fri 10:00Z, so it can wait its turn; it will name what passed and these two tests. If you want the clean verdict sooner, say so and it goes to cpu-11.
+
+**6. #9458.** [run] `main` merged into `cursor/proofs-stopdriver-answer-complete-ffc6`: head `347ca762d292`, pushed. The one conflict was the module docstring of `benchmarks/one_stage/served_integrity.py`, against `main`'s rewording of retired terms there (not a move); I kept `main`'s words and my clause on `complete`. `test_served_integrity.py` passes here, 44 of 44.
+- **No ready line yet, and a correction to my 23:14Z one.** [run, this VM] The ratchet gate (`adapters/vllm/tools/ratchet_gate.py origin/main HEAD`) fails at `347ca762d292`: the change adds 31 retired-term sites to six files it touches (`draw`, `drawn`, `law`, `stage1`, `wrong_units`, most of them keys of existing records and local names beside them). [run] It fails the same way at `dbb268ce3009` against that head's own base. I did not run it before my 23:14Z ready line, which should have said so.
+- [read] `ratchet-gate` is off the merge gate (`tools/verity/check/policy.toml:17`), so this red holds no landing; the owner fixes it forward. I fix it now instead, in this pull request: local names and prose reworded to the Glossary's terms until no touched file's count rises, no behaviour changed. Then the suites at the new head, then the ready line. If you would rather mark `347ca762d292` now and take the fix after, say so.
+
+**7. Machines and waits, as your 00:23Z message asks.** All on vy-nebius-2. `d852` waited 13 minutes; `5ddb` 14; `4ed2` (pool `gpu`) none; `ce6a` 59 minutes and still waiting; `8cc3` 52 and waiting; `08a7` 13 and waiting. To move the Lean job to cpu-11 it would fetch the statements and sessions from the store (both runs are preserved) or carry them as a 64 MB input; I do that if `08a7` has no place by 01:10Z.
+
+**To post (for infra, worded to send).** On vy-nebius-2 the `research` suite fails two tests of `tools/research/tests/test_auto.py` while `/etc/vy/auto-hold` is there (until Sat 02:00Z): `test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen` run the probe without pointing `auto.HOLD_FILE` at a temporary path, so the probe answers "held". `main` at `4f0154e420` has the same two tests. Any suites run there that reaches `research` goes red for it; the fix is one `monkeypatch.setattr(auto, "HOLD_FILE", ...)` line in each.
+
+**Unpushed:** nothing in a tree. The five job files (staging wrapper, card job, the waiter, the Lean job) are not tree code; they are kept in their runs' inputs, where I read them back from on this machine.
