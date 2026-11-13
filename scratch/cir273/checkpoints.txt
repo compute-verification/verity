@@ -7,3 +7,4 @@ launched r20261113-212217-c645 (checks) at 9eee018145
 launched r20261113-212255-cd19 (circuit-check) at 9eee018145
 launched r20261113-212343-3511 (replay) at 9eee018145
 22:44Z head e57b2921aa (sidecar helpers out of _model_roots); checks job under uv run
+launched r20261113-224512-e9e5 (checks) at e57b2921aa
