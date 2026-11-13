@@ -97,7 +97,7 @@ more than O, is refused, never cut short.
   table's row r. A release filed in a class whose request `request_words` doesn't read is refused, naming the
   release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is
   past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same way.
-  These are the builder's own checks of what the device already holds: in every table laid, a words row's
+  These are `tables`' own checks of what the device already holds: in every table laid, a words row's
   `max_tokens` is at most the schedule's and at least its response row's count, and its count of prompt ids is at
   most its class's P.
 
