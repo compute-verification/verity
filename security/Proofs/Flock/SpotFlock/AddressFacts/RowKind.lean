@@ -176,8 +176,6 @@ theorem kindFact : KindFact h := by
       Spot.SecondStage.wireOf (heldOwn h) (h.names.getD t "") port := rfl
   have hi : (ownOf h st rec draw r.c₀).interior = rec := rfl
   simp only [kindAt, hst, hrec, hdraw, kindOf, kindHeld, hl, hw, hi, hp, hv]
-  cases Spot.SecondStage.linkOf (heldOwn h) (h.names.getD t "") port <;>
-    cases Spot.SecondStage.wireOf (heldOwn h) (h.names.getD t "") port <;> rfl
 
 end AddressRow
 
