@@ -5,6 +5,15 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def call(**statics: Any) -> Any:
+    """`SampledAccept_v1` bound at these statics, with `sampled_accept` registered as its reference (`accept_kernel`)."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import sampled_accept as A
+
+    A.register_kernels()
+    return bind(A.SampledAccept, **statics)
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The exponential lane and the uniform, each lowered whole; each unit of the Call at small statics (a head in its three
     places and one that carries its tile's maximum, a tile's part of two threads, one that finishes a tile from carried
@@ -13,10 +22,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     logits with a last tile of 16, held to the block by its cut, whose reference is `sampled_accept` (`accept_kernel`)."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import sampled_accept as A
-
-    def call(**statics):
-        A.register_kernels()
-        return bind(A.SampledAccept, **statics)
 
     return [
         ("AcceptExpLane_v1", lambda: A.AcceptExpLane),

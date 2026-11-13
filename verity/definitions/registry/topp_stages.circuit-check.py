@@ -5,6 +5,16 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def mask(**statics: Any) -> Any:
+    """`TopPMaskChunk_v1` bound at these statics, with the twin registered as its reference (`topp_stage_twins.mask_chunk`)."""
+    from verity.circuits.defs import bind
+    from verity.definitions.numerics import topp_stage_twins as TW
+    from verity.definitions.registry import topp_stages as T
+
+    TW.register_kernels()
+    return bind(T.TopPMaskChunk, **statics)
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Units of `GumbelTopPTokenSelect_v1{V=64}`'s cut (`sampling.CUTS`) at S = 4, and the carried forms (a slice's later stats
     block, a later step block, a middle select chunk) that its slices of one block reach only at a larger V; the mask chunk of
@@ -13,12 +23,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     every split count (its sampler)."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import topp_stages as T
-
-    def mask(**statics):
-        from verity.definitions.numerics import topp_stage_twins as TW
-
-        TW.register_kernels()
-        return bind(T.TopPMaskChunk, **statics)
 
     return [
         ("TopPStatsHead_v1", lambda: bind(T.TopPStatsHead, N=8, FIRST=False)),
