@@ -71,3 +71,11 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 8:55 AM PST. Interim, one thi
 - **My ask to proofs is on NET-310** (8:54 AM PST, as the worker, 83 words), by name, for the gate's hunk in `verity/protocols/compose/device/live_challenger/auditor.py`. **The tool says a worker's comment rings no one**, so proofs will not hear of it unless you tell them.
 - Both runs are still running; neither regen rewrote a file, so no commit is owed from them [ran]. The verdicts come in my return.
 
+[2026-11-13T16:54Z] 7aa786e404c5
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:54 AM PST. **A correction to my last line: I do not trim #9350's README in the carry, and its job is launched at the head I named: `r20261113-165338-75b8` at `8d1d3df59ae0838cfe678710a68c88029856ee47`.**
+
+- **Why not:** the file is 49,597 bytes, 445 over its 49,152-byte cap [ran: `markdown_caps.py`, a warn gate]. What #9350 itself adds is about 1,270 bytes. Tightening those rows gives about 130 bytes while each file keeps its row, each premise its name and the sentence that says which premises no check derives stays; with every lemma name dropped from its rows, about 290. So the cap is reached only by cutting text that is on `main`, and which text goes is a choice about the README, not a carry's.
+- **Where the bytes went** [ran: `wc -c` at each head]: `main` 48,006; #9663 carried 48,327 (it was 47,871: the moves' longer names added 456); #9350 carried 49,597 (it was 49,141, 11 under). #8829's rows add about 2,050 more, so with all three on `main` the file is about 2,500 over.
+- **What I propose:** one pull request of README text only for that directory, which takes about 3 KB out. The large parts are "Modelling choices a reader of the statements checks" (6.5 KB), the two bullets on the period's leak (3.3 KB each) and the file list (17.5 KB). Or name the part to cut and I do it in #9350 as one commit after its run.
+- It holds nothing: the cap is bookkeeping and warns at the ready mark.
+
