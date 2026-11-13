@@ -44,7 +44,7 @@ open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm p
   toNat!_repr parseDesign_count parseDesign_bernoulli)
 open private split1 digits from Spot.Select
 
-theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
+theorem strataSizes_slotPartition (l : _root_.Spot.Slots.SlotOrder) :
     strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) =
       (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold _root_.Properties.Spot.slotPartition strataSizes
@@ -53,7 +53,7 @@ theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
 
 /-- **v2's slots are two classes**: the population in the registration's strata, whose sizes are those of the first
 class of the registration's layout `l`, and the input class, at most one stratum. -/
-theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.Layout}
+theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.SlotOrder}
     (hp : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p A.qr = .ok l) :
     ∃ pop ins, (partSlots A).classes = [pop, ins] ∧ ins.length ≤ 1 ∧
@@ -81,7 +81,7 @@ theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α :
 /-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
 `l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
 theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
-    {l : _root_.Spot.Slots.Layout} (h : Flock.Bridge.PopMatches desc q n)
+    {l : _root_.Spot.Slots.SlotOrder} (h : Flock.Bridge.PopMatches desc q n)
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p q = .ok l) : _root_.Spot.Partition.units p q = .ok n := by
   obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok p q _ hl

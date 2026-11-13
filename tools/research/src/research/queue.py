@@ -77,7 +77,9 @@ candidate and those above it are built again without them in the same tick.
                                                    than the queue's branch holds (pushed since)
     research queue delegate AGENT --by LANE [--days N]
                                                    as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
-                                                   land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
+                                                   land verdicts as LANE for N days (default 7, at most 14); LANE is also a
+                                                   name the caller's handle staffs in the registry (a PR reader's, as
+                                                   `review-36`), which registers AGENT as that reader: see Signed verdicts
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
@@ -172,7 +174,9 @@ publishes what it builds for the candidate's audit), from a clean checkout, eith
 failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and its candidate's check is the head's first full check.  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label.  Ready marks are read after
+`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label, and may name the author
+and committer of the queue's commits (`author = { name = "NAME", email = "ADDRESS" }`, `Rules.identity`): `IDENTITY` where it
+names none.  Ready marks are read after
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
 that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.  A head with no
 ready mark (or land verdict) of its own that counts takes those of each other head of its PR whose own change is the same: the
@@ -265,13 +269,19 @@ Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
 Cursor identity token over the label's SHA-512 nonce, minted when the label was written by the agent that holds its `by` in
 `main`'s registry, or by a worker that holder delegated to (`research queue delegate`); `ready = false` (an ejection) and holds
-count unsigned.  `ready`, `judge` and `review` sign each ready mark and land verdict they write whenever this agent can mint a
+count unsigned.  A PR reader's name (`review-36`) is no handle: it counts only under a delegation by the holder of the handle
+whose `staffs` in the registry names it (`staffs_at`), which is how a reader is registered.  `ready`, `judge` and `review` sign
+each ready mark and land verdict they write whenever this agent can mint a
 token, and with the flag on refuse to write one they can't sign, or one an agent that neither holds the handle nor has its
 delegation would sign; the
 `review` listing names each land verdict that doesn't count and why.  A tick of the loop that can't read the registry or the
 issuer's keys (the last set fetched, kept in the loop's cache, covers an outage of the issuer) stops before it decides
 anything (`label_verifier`), since judging every mark absent would take every PR out of the queue, and the flag is refused
-unless the low-risk lane can't land a change to the registry or the code that judges a label (`SIGNED_GUARDS`).
+unless the low-risk lane can't land a change to the registry or the code that judges a label (`SIGNED_GUARDS`).  With
+`signed_verdicts = "shadow"` the loop judges each mark and verdict the same way and counts it either way: it logs each one it
+counted that doesn't authenticate, once, as an `unauthenticated` line of its decisions (the PR, the head the label is on, its
+key as `label`, its author as `by`, its time as `written`, and why), a tick that can't read the registry or the keys says so
+and judges none, and the commands write as with the flag off.
 
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to the owner's handle, else `CI`: the verified
 queue tells each conflict with `main` once a head (`Loop._conflicts`) and each PR it ejects, and `eject` posts as its ejector to
@@ -326,7 +336,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, waitcap
-from .gates import git_env
+from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -349,6 +359,7 @@ PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.jso
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
 AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
+#: the author and committer of the queue's commits where the repository's rules name none (`Rules.identity`)
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
@@ -444,10 +455,12 @@ class Restacking(Exception):
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     full = git_env(GIT_TERMINAL_PROMPT="0", **(env or {}))
-    if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
+    # an identity and nothing else (`IDENTITY`, or a repository's own: `Rules.identity`): the queue's commits carry the time
+    # they're made, since a date a caller pins stops `log --since`; an identity given with its dates keeps them
+    if env is not None and env.keys() == IDENTITY.keys():
         for k in DATES:
             full.pop(k, None)
-    with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
+    with worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
         r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
                            errors="surrogateescape", env=full)
     if check and r.returncode:
@@ -461,24 +474,6 @@ def _subcommand(args: tuple[str, ...]) -> str:
     while args[i:i + 1] == ("-c",):
         i += 2
     return args[i] if i < len(args) else ""
-
-
-#: the clone's worktree lock, in its git directory: `tools/move/restack.py` adds and forgets each scratch worktree holding it
-#: alone, because `git worktree add` writes a placeholder HEAD before the real one, and a fetch, whose connectivity check
-#: reads every worktree's HEAD, holds it shared
-WORKTREES_LOCK = "research-worktrees.lock"
-
-
-@contextlib.contextmanager
-def _worktrees_shared(repo: Path, env: dict[str, str]):
-    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
-                            env=env).stdout.strip()
-    if not common:
-        yield
-        return
-    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
-        fcntl.flock(f, fcntl.LOCK_SH)
-        yield
 
 
 def _out(repo: Path, *args: str) -> str:
@@ -697,17 +692,58 @@ class Rules:
     source: str = RULES
     #: ready marks older than this don't count (`--marked-after` overrides it), so every VM's queue admits what drive admits
     marked_after: str | None = None
+    #: the (name, address) the queue's commits in this repository carry as author and committer (`identity`), which a
+    #: repository names when what builds its branches refuses a commit by no account of its host; None: `IDENTITY`
+    author: tuple[str, str] | None = None
 
     @classmethod
     def parse(cls, text: str, source: str = RULES) -> "Rules":
         doc = tomllib.loads(text)
-        unknown = set(doc) - {"hold_label", "marked_after"}
+        unknown = set(doc) - {"hold_label", "marked_after", "author"}
         if unknown:
             raise QueueError(f"{source}: unknown keys {sorted(unknown)}")
         cut = doc.get("marked_after")
         if cut is not None and not (isinstance(cut, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cut)):
             raise QueueError(f"{source}: marked_after {cut!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-        return cls(doc.get("hold_label", "hold"), source, cut)
+        author = doc.get("author")
+        if author is not None:
+            if why := _author_why(author):
+                raise QueueError(f'{source}: author {why}: write `author = {{ name = "NAME", email = "ADDRESS" }}`, the two '
+                                 "the queue's commits carry as author and committer, or leave `author` out and they carry "
+                                 f"{IDENTITY['GIT_AUTHOR_NAME']} <{IDENTITY['GIT_AUTHOR_EMAIL']}>")
+            author = (author["name"], author["email"])
+        return cls(doc.get("hold_label", "hold"), source, cut, author)
+
+    @property
+    def identity(self) -> dict[str, str]:
+        """The author and committer of the commits the queue makes under these rules, as git's environment: `author`'s, else
+        `IDENTITY` itself.  What reads a queue's commit reads its message, its parents and its tree, never who made it, so one
+        made as `IDENTITY` before the rules named an author is read as one made since."""
+        if self.author is None:
+            return IDENTITY
+        name, email = self.author
+        return {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
+
+
+def _author_why(author: object) -> str | None:
+    """Why the rules' ``author`` names no author and committer: both a name and an address, each a non-empty string holding
+    nothing git drops from inside one without a word (a newline, `<`, `>`) or can't be given at all (a NUL, which no
+    environment holds); None when it names them."""
+    if not isinstance(author, dict):
+        return f"is {author!r}, not a table"
+    if unknown := sorted(set(author) - {"name", "email"}):
+        return f"has unknown keys {unknown}"
+    for key in ("name", "email"):
+        if key not in author:
+            return f"names no {key}"
+        value = author[key]
+        if not isinstance(value, str):
+            return f"names {key} {value!r}, not a string"
+        if not value.strip():
+            return f"names an empty {key}"
+        if bad := sorted(set(value) & set("\0\n<>")):
+            return f"names {key} {value!r}, which holds {' and '.join(repr(c) for c in bad)}"
+    return None
 
 
 #: drive's ways of landing (`DriveFlags.land`): `check`, which landed trains on their own check, was deleted with
@@ -737,9 +773,19 @@ DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
 #: what every command says to a `--first`, refusing it: the landing order is the priority file's alone
 FIRST_RETIRED = ("--first is retired: the verified queue's priority file (`research queue vqueue --priority-file`) holds the "
                  "landing order; list the PRs there, first to land first")
-#: what `DriveFlags.signed_verdicts` keeps off the low-risk lane: who holds each handle, and the code that judges a label
+#: what `DriveFlags.signed_verdicts` "on" keeps off the low-risk lane: who holds each handle, and the code that judges a label
 SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
                  "tools/research/src/research/landing.py")
+#: a glob of a handle's `staffs` in the registry (`staffs_at`): names in a handle's alphabet, with `*` and `?`
+STAFFS_RE = re.compile(r"[a-z0-9*?][a-z0-9._*?-]*")
+
+
+def signed_mode(value: object) -> str | None:
+    """drive.toml's `signed_verdicts` as its mode, of `MODES`: false is "off", "shadow" itself and true "on"; None for any
+    other value."""
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    return "shadow" if value == "shadow" else None
 
 
 @dataclass(frozen=True)
@@ -806,10 +852,13 @@ class DriveFlags:
     #: (`drive.Driver._bottom`), and the minutes it waits before each ring
     bottom_ring: tuple[str, ...] = ("@ci", "@top")
     bottom_wait_min: int = 30
-    #: count a ready mark or land verdict only when its `label_auth` companion authenticates it as its author's, or as an agent's
-    #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
-    #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)
-    signed_verdicts: bool = False
+    #: whether a ready mark or land verdict counts only when its `label_auth` companion authenticates it as its author's, or as
+    #: an agent's its name is delegated to (`research.labelauth`, `StoreLabels`), a mode of `MODES` (`signed_mode`): "off"
+    #: (written false), none is judged; "shadow", each counts as written and the verified queue's loop logs each it counted
+    #: that doesn't authenticate (`Loop._unauthenticated`); "on" (written true), only an authenticated one counts, and `ready`,
+    #: `judge` and `review` refuse to write one they can't sign.  "on" only while the low-risk lane can't change who holds a
+    #: handle or how a label is judged (`SIGNED_GUARDS`)
+    signed_verdicts: str = "off"
     #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
 
@@ -892,11 +941,16 @@ class DriveFlags:
             if type(doc["bottom_wait_min"]) is not int or doc["bottom_wait_min"] < 1:
                 raise bad("bottom_wait_min", "a whole number of minutes, 1 or more")
             got["bottom_wait_min"] = doc["bottom_wait_min"]
-        for k in ("regenerate_locks", "verdict_first", "lowrisk_lane", "signed_verdicts"):
+        for k in ("regenerate_locks", "verdict_first", "lowrisk_lane"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
                 got[k] = doc[k]
+        if "signed_verdicts" in doc:
+            if (mode := signed_mode(doc["signed_verdicts"])) is None:
+                raise bad("signed_verdicts", "false, \"shadow\" (count every mark and verdict, and log each that doesn't "
+                                             "authenticate) or true")
+            got["signed_verdicts"] = mode
         if "land" in doc:
             if doc["land"] == "check":
                 raise bad("land", "train landing was deleted with its code: drive lands on review only; set "
@@ -942,7 +996,7 @@ class DriveFlags:
             got["command_line"] = tuple(v)
         if got.get("stale_close_days") and not 0 < got.get("stale_days", 0) <= got["stale_close_days"]:
             raise bad("stale_close_days", "0, or at least stale_days, which must be on: drive closes only a stale PR")
-        if got.get("signed_verdicts") and got.get("lowrisk_lane", cls.lowrisk_lane) and \
+        if got.get("signed_verdicts") == "on" and got.get("lowrisk_lane", cls.lowrisk_lane) and \
                 (open_ := [p for p in SIGNED_GUARDS if lowrisk([p], got.get("lowrisk_excludes", cls.lowrisk_excludes))]):
             raise bad("signed_verdicts", f"true lets a change to {' or '.join(open_)} land on its ready mark alone, so a lane "
                                          "could make itself another handle's holder or loosen the check: add each to "
@@ -1058,31 +1112,63 @@ def into_at(repo: Path, ref: str) -> str:
     return land_into_key(repo, ref) or "main"
 
 
-def signed_at(repo: Path, ref: str) -> bool:
-    """drive.toml's `signed_verdicts` at ``ref``, false when it has none.  Only that key is read, as `into_at` reads its own (its
-    guard reads two others, which drive's strict parse of `main` checks)."""
+def signed_at(repo: Path, ref: str) -> str:
+    """drive.toml's `signed_verdicts` at ``ref`` as its mode (`signed_mode`), "off" when it has none.  Only that key is read, as
+    `into_at` reads its own (its guard reads two others, which drive's strict parse of `main` checks)."""
     r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
     if r.returncode:
-        return False
+        return "off"
     source = f"{DRIVE_FLAGS} at {ref}"
     try:
-        on = tomllib.loads(r.stdout).get("signed_verdicts", False)
+        value = tomllib.loads(r.stdout).get("signed_verdicts", False)
     except tomllib.TOMLDecodeError as e:
         raise QueueError(f"{source}: not TOML: {e}") from None
-    if not isinstance(on, bool):
-        raise QueueError(f"{source}: signed_verdicts = {on!r}: true or false")
-    return on
+    if (mode := signed_mode(value)) is None:
+        raise QueueError(f"{source}: signed_verdicts = {value!r}: false, \"shadow\" or true")
+    return mode
 
 
-def holders_at(repo: Path, ref: str) -> dict[str, str]:
-    """{agent id: handle} of the registry at ``ref``: each agent id a handle's `holder` names holds that handle; none when ``ref``
-    has no registry.  QueueError when it can't be parsed, as then no one's handle is known."""
+def _handles_at(repo: Path, ref: str) -> list[dict]:
+    """The registry's handles at ``ref``, each with its name; none when ``ref`` has no registry.  QueueError when it can't be
+    parsed, as then no one's handle is known."""
     r = _git(repo, "show", f"{ref}:{REGISTRY}", check=False)
     try:
         reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
     except (ValueError, AttributeError) as e:
         raise QueueError(f"{REGISTRY} at {ref} can't be parsed ({e}), so who holds each handle is unknown: fix it") from None
-    return {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h for a in AGENT_RE.findall(str(h.get("holder", "")))}
+    return [h for h in reg if isinstance(h, dict) and "handle" in h]
+
+
+def holders_at(repo: Path, ref: str) -> dict[str, str]:
+    """{agent id: handle} of the registry at ``ref``: each agent id a handle's `holder` names holds that handle; none when ``ref``
+    has no registry.  QueueError when it can't be parsed."""
+    return {a: h["handle"] for h in _handles_at(repo, ref) for a in AGENT_RE.findall(str(h.get("holder", "")))}
+
+
+def staffs_of(handles: list[dict], source: str) -> dict[str, tuple[str, ...]]:
+    """{handle: the globs of the names it staffs} of a registry's ``handles``, from each one's `staffs`: names that are no
+    handle's, a PR reader's, which that handle's holder delegates to an agent as it does its own (`labelauth.speaks_for`).
+    QueueError, naming ``source``, when a `staffs` is anything but a list of such globs (`STAFFS_RE`) matching no handle: one
+    that did would let its holder sign as another handle."""
+    names = [_who(str(h["handle"])) for h in handles]
+    out: dict[str, tuple[str, ...]] = {}
+    for h in handles:
+        if (globs := h.get("staffs")) is None:
+            continue
+        bad = None
+        if not (isinstance(globs, list) and all(isinstance(g, str) and STAFFS_RE.fullmatch(g) for g in globs)):
+            bad = "it is a list of names or globs of names, lower-case, as [\"review-*\"]"
+        elif taken := sorted({n for g in globs for n in names if fnmatch.fnmatchcase(n, g)}):
+            bad = f"it matches {', '.join(taken)}, and a handle is delegated only by its own holder"
+        if bad:
+            raise QueueError(f"{source}: {h['handle']}'s staffs = {globs!r}: {bad}: fix it")
+        out[_who(str(h["handle"]))] = tuple(globs)
+    return out
+
+
+def staffs_at(repo: Path, ref: str) -> dict[str, tuple[str, ...]]:
+    """`staffs_of` the registry at ``ref``; none when ``ref`` has no registry.  QueueError when it can't be parsed."""
+    return staffs_of(_handles_at(repo, ref), f"{REGISTRY} at {ref}")
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
@@ -1287,6 +1373,8 @@ class StoreLabels:
     raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled.
     With ``verify`` (a `labelauth.Verifier`: drive.toml's `signed_verdicts`), a ready mark or land verdict its `label_auth`
     companion doesn't authenticate is read as absent (`refusals` says why); `ready = false` and holds count as written.
+    With ``shadow`` too (`signed_verdicts = "shadow"`) each such mark and verdict counts as written, and `unauthenticated`
+    keeps why it wouldn't.
     With ``change`` (`Queue.own_change`), a head with no `ready` (or `reviewed`) label of its own that counts takes those of
     each other head of its PR whose own change is the same, logging which (`_counted`): so a merge of `main` costs no new mark
     and no new review, while a head whose own diff differs takes none.  With ``moved`` too (`Queue.mapped_change`: an old
@@ -1300,6 +1388,10 @@ class StoreLabels:
                  owners: Callable[[int], Iterable[str | None]] | None = None):
         self.store, self.log, self.since, self.verify, self.change, self.moved = store, log, since, verify, change, moved
         self.owners = owners
+        self.shadow = False
+        #: under ``shadow``, why ``verify`` wouldn't count each mark and verdict read as counting, by (PR, the head it is on,
+        #: its key, its author, its time)
+        self.unauthenticated: dict[tuple[int, str, str, str, str], str] = {}
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
@@ -1384,7 +1476,8 @@ class StoreLabels:
         return counted, refused
 
     def _verified(self, pr: int, head: str, labs: list) -> tuple[list, list[str]]:
-        """``labs``, labels on `pr:{n}@{head}`, that ``verify`` counts (each without it), and why each other one doesn't."""
+        """``labs``, labels on `pr:{n}@{head}`, that ``verify`` counts (each without it), and why each other one doesn't.  Under
+        ``shadow`` each counts, one that can't be judged too, and `unauthenticated` keeps why ``verify`` wouldn't count it."""
         if self.verify is None:
             return labs, []
         from .labelauth import landing
@@ -1392,9 +1485,20 @@ class StoreLabels:
         beside = self.store.labels(label_target(pr, head), key=vocab.LABEL_AUTH)
         counted, refused = [], []
         for lab in labs:
-            if landing(lab) and (why := self.verify.why(lab, beside)):
-                refused.append(f"{lab.key} = {lab.value} by {lab.by} at {lab.ts}: {why}")
+            if not landing(lab):
+                counted.append(lab)
+            elif not self.shadow:
+                if why := self.verify.why(lab, beside):
+                    refused.append(f"{lab.key} = {lab.value} by {lab.by} at {lab.ts}: {why}")
+                else:
+                    counted.append(lab)
             else:
+                try:
+                    why = self.verify.why(lab, beside)
+                except Exception as e:  # noqa: BLE001 -- the shadow changes nothing the queue lands
+                    why = f"it can't be judged: {type(e).__name__}: {e}"
+                if why:
+                    self.unauthenticated[(pr, head, lab.key, lab.by, lab.ts)] = why
                 counted.append(lab)
         return counted, refused
 
@@ -1845,6 +1949,13 @@ class Queue:
             if self._rules is None:
                 raise QueueError(f"`main` has no {RULES}: pass --rules FILE")
         return self._rules
+
+    @property
+    def identity(self) -> dict[str, str]:
+        """The author and committer of the commits this queue puts on its branches (a member's merge, a regenerated move, a
+        records commit and its carry): the rules' as last read (`Rules.identity`), which a sync reads before its first merge
+        (`entries`) and the loop each tick (`World.at_main`); `IDENTITY` where none are read."""
+        return IDENTITY if self._rules is None else self._rules.identity
 
     @property
     def into(self) -> str:
@@ -2328,7 +2439,7 @@ class Queue:
             self.log(f"research queue: #{pr.number}'s merged tree holds Lean made before the module system: {', '.join(files)} "
                      f"ported by `{MODULES}`" + (f", and the pins {', '.join(pins)} rebuilt" if pins else ""))
         commit = _git(self.workdir, "commit-tree", rec["tree"], "-p", tip, "-p", head, "-m", _message(pr),
-                      env=IDENTITY).stdout.strip()
+                      env=self.identity).stdout.strip()
         self._merged_from[commit] = (self._merge_key(tip, head), head)
         return commit, ""
 
@@ -2457,8 +2568,8 @@ class Queue:
         are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
         holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
         fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None).  Its
-        worktree is added and removed under the clone's worktree lock (`worktrees_locked`), which train.sh's launches in the
-        same clone hold for theirs: a prune beside a worktree half made deletes it."""
+        worktree is added and removed under `worktrees_locked`: train.sh's launches in the same clone add and prune theirs
+        under train.lock, and a fetch there reads every worktree's HEAD, which a worktree half added has as a placeholder."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
@@ -2490,7 +2601,7 @@ class Queue:
                     return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
                                   "its map moves nothing there"), None
                 commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
-                              env=IDENTITY).stdout.strip()
+                              env=self.identity).stdout.strip()
                 # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
                 check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
                 c = subprocess.run([sys.executable, str(check), tip, commit, *(f"--map={o}={n}" for o, n in rows), "--json"],
@@ -2943,13 +3054,14 @@ class Queue:
 
     def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None,
                fetched: Callable[[], Callable[[list[PR]], dict[int, float]] | None] | None = None,
-               loop: bool = False) -> dict[int, Entry]:
+               loop: bool = False, reviews: Callable[[int, str], list] | None = None) -> dict[int, Entry]:
         """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
         PR based on another branch among them.  ``fetched``, called once the clone is fetched and before anything reads it,
         returns ``stale`` instead: the command reads its cutoff and drive.toml at `main` there, so it fetches once.  With
         ``loop``, as the verified queue admits each onto `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on
-        `main` landed, a move PR that conflicts with `main` refused as any PR is, and so is a head whose own change names what a
-        move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
+        `main` landed, one holding a held PR's head waiting for it (`held_below`; a reviewer's hold read from ``reviews``, the
+        `reviewed` labels of a PR's head), a move PR that conflicts with `main` refused as any PR is, and so is a head whose
+        own change names what a move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
         member's place on it, a head on `checked` landed there, and the refusals of the last sync."""
         self._clone()
         state = self.load_state()
@@ -3001,9 +3113,16 @@ class Queue:
                                               and conflicts.get(str(n), {}).get("head") != e.pr.head
                                               and waits.get(str(n), {}).get("head") != e.pr.head])
         maps: dict[tuple[str, str], Retired | None] = {}
+
+        def held(a: int) -> str | None:
+            why = unreviewed(reviews(a, entries[a].pr.head), ()) if reviews else None
+            return why if why and why.startswith("held") else None
+
         for n in contained_first(entries):
             e = entries[n]
-            if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
+            if loop and (e.state == "ready" or e.why.startswith("contains")) and (below := held_below(entries, n, held)):
+                e.state, e.why = "waiting", held_waits(below[0], entries[below[0]].pr.head, below[1])
+            elif e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
                 e.state, e.why = "waiting", f"contains {e.contains(out[0])}, which is {entries[out[0]].state}: {entries[out[0]].why}"
             elif e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
@@ -3541,8 +3660,9 @@ def move_of(repo: Path, commit: str) -> str | None:
 
 
 def _script_env() -> dict[str, str]:
-    """The environment a move's script runs in: the queue's identity for the commits it makes, and no bytecode written into the
-    tree it runs on (`rename.py` refuses a dirty one)."""
+    """The environment a move's script runs in: `IDENTITY` for the commits it makes (a head `restack.py` carries across a
+    move, whatever author the repository's rules name: `Rules.author`), and no bytecode written into the tree it runs on
+    (`rename.py` refuses a dirty one)."""
     env = git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1", **IDENTITY)
     for k in DATES:
         env.pop(k, None)
@@ -3806,8 +3926,9 @@ class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
     lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On the machine the run waits for a
-    free check slot (the shipped tree's `tools/verity/check/slot.py`, as `check.py --record --on` takes one: the run's command is
-    slot.py's, which a machine with /etc/vy/runs-via-slot requires) and runs `quick_tier.py` (sent with the run) in that tree.
+    free check slot (the shipped tree's `tools/verity/check/slot.py`, as `check.py --record --on` takes one, or in a pool the
+    machine's own copy where it has one, as `remote.launch` then names it: the run's command is slot.py's, which a machine with
+    /etc/vy/runs-via-slot requires) and runs `quick_tier.py` (sent with the run) in that tree.
     The caller polls the run's records (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without them, with facts from another run
     or head, or other than `done` with exit 0, is a failure.  A run that waited `wait_s` for a slot and gave up never started
     (`NotStarted`), and neither did one with no machine to run on.  The tier has `timeout_s` from taking its slot (`--run-max`), so
@@ -4187,6 +4308,31 @@ def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
     moves = "; and ".join(f"the move {c[:12]} `main` landed ({m}), {said(ns)}" for c, m, ns in lacked)
     return (f"it lacks {moves}: merge `main` into it and rename them, or cross it with `tools/move/restack.py`, and mark the "
             "new head ready")
+
+
+def held_below(entries: dict[int, Entry], n: int, held: Callable[[int], str | None],
+               seen: frozenset[int] = frozenset()) -> tuple[int, str] | None:
+    """The held PR whose head ``n`` holds, directly or through the PRs between (`Entry.after`), with its hold: a hold label,
+    under which the queue doesn't admit it (`Entry.why`), or ``held``'s word on one it admits (a reviewer's, `unreviewed`);
+    None when ``n`` holds no held PR."""
+    for a in entries[n].after:
+        if a in seen or a not in entries:
+            continue
+        e = entries[a]
+        if hold := e.why if e.why.startswith("held (") else held(a) if e.state == "ready" else None:
+            return a, hold
+        if got := held_below(entries, a, held, seen | {n}):
+            return got
+    return None
+
+
+def held_waits(a: int, head: str, hold: str) -> str:
+    """Why a PR holding held PR #``a`` (`held_below`: at ``head``, under ``hold``) waits, with what releases it."""
+    label = re.match(r"held \(`(.+)` label\)", hold)
+    release = (f"the `{label[1]}` label comes off #{a}" if label else
+               f"#{a}'s holder gives that head a `land` verdict (`research queue review {a} --land`)")
+    return (f"it waits on #{a}'s head {head[:12]}, which is {hold}: it is taken once {release}, or once it no longer holds "
+            f"#{a}'s commits")
 
 
 def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
@@ -4729,11 +4875,15 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
 def worktrees_locked(repo: Path):
     """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
     and train.sh never add, remove or prune a worktree beside another (two at once fail with "Could not write new index
-    file")."""
+    file"), then the worktree lock (`WORKTREES_LOCK`), so no fetch in the clone reads a worktree's placeholder HEAD while it
+    is added (`bad object worktrees/…/HEAD`).  Always in that order: train.lock first, which train.sh takes alone, and
+    `WORKTREES_LOCK` second, which nothing holds while it waits for train.lock."""
     common = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     with open(common / "train.lock", "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
-        yield
+        with open(common / WORKTREES_LOCK, "a") as w:
+            fcntl.flock(w, fcntl.LOCK_EX)
+            yield
 
 
 @contextlib.contextmanager
@@ -6492,11 +6642,14 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
 
 
 def delegate(store, agent: str, lane: str, days: int, holders: dict[str, str] | None,
-             mint: Callable[[str], str] | None = None, now: Callable[[], float] = time.time) -> int:
+             mint: Callable[[str], str] | None = None, now: Callable[[], float] = time.time,
+             staffs: dict[str, tuple[str, ...]] | None = None) -> int:
     """`research queue delegate AGENT --by LANE [--days N]`: as LANE's holder, let the Cursor agent AGENT (a worker) authenticate
     ready marks and land verdicts as LANE for ``days`` (at most `labelauth.DELEGATION_MAX_DAYS`): a `label_delegation` label on
     the agent's delegation target, pushed to the store's remote, which `labelauth.Signer` copies into each companion it writes.
-    Refused, nothing written, when this agent isn't LANE's holder in ``holders`` (the registry: its delegation would never count)."""
+    LANE is also a name the caller's handle staffs (``staffs``, the registry's `staffs_at`), as `review-36`: that registers the
+    agent as that reader.  Refused, nothing written, when this agent neither holds LANE in ``holders`` (the registry) nor
+    holds a handle that staffs it, or when AGENT is this agent: its delegation would never count."""
     from . import labelauth
     from .store.cli import _label_write_through
 
@@ -6510,13 +6663,18 @@ def delegate(store, agent: str, lane: str, days: int, holders: dict[str, str] | 
         me = labelauth.unverified_claims(value["token"]).get("cloud_agent_id")
     except labelauth.AuthError as e:
         raise QueueError(f"delegate: {agent} can't be delegated {lane}: {e}") from None
-    if holders is None or not isinstance(me, str) or _who(holders.get(me, "")) != _who(lane):
-        raise QueueError(f"delegate: this agent ({me}) doesn't hold {lane} in main's registry ({REGISTRY}), so its delegation "
-                         f"would never count: {lane}'s holder runs it")
+    mine = _who(holders.get(me, "")) if holders is not None and isinstance(me, str) else ""
+    if not labelauth.speaks_for(mine, _who(lane), staffs or {}):
+        raise QueueError(f"delegate: this agent ({me}) doesn't hold {lane} in main's registry ({REGISTRY}), nor a handle whose "
+                         f"`staffs` there names it, so its delegation would never count: {lane}'s holder runs it, or the "
+                         "holder of the handle that staffs it")
+    if agent == me:
+        raise QueueError(f"delegate: {agent} is this agent, and an agent's delegation to itself never counts: delegate {lane} "
+                         "to the reader's or the worker's own agent")
     target = labelauth.delegation_target(agent)
-    store.add_label(target, vocab.LABEL_DELEGATION, value, lane)
+    store.add_label(target, vocab.LABEL_DELEGATION, value, mine)
     said, lost = _label_write_through(store, target)
-    print(f"research queue: {agent} signs as {lane} until {until}, while this agent holds {lane} in main's registry "
+    print(f"research queue: {agent} signs as {lane} until {until}, while this agent holds {mine} in main's registry "
           f"({target}); {said}")
     return 1 if lost else 0
 
@@ -6527,21 +6685,21 @@ def label_signer(store, repo: Path | None):
     from . import labelauth
 
     main, holders = "refs/remotes/origin/main", None
-    if on := repo is not None and signed_at(repo, main):
+    if on := repo is not None and signed_at(repo, main) == "on":
         holders = holders_at(repo, main)
     return labelauth.Signer(store, labelauth.cursor_mint, required=on, holders=holders,
                             log=lambda s: print(f"research queue: {s}", file=sys.stderr))
 
 
 def label_verifier(repo: Path, ref: str, keys: Path, log: Callable[[str], None] = print):
-    """The `labelauth.Verifier` of drive.toml's `signed_verdicts`: the registry at ``ref`` in ``repo`` names who holds each handle,
-    and the issuer's keys are fetched (kept at ``keys`` for an outage of the issuer).  QueueError when either can't be had: no
-    mark could be judged, and judging every one absent would take every PR off `next`."""
+    """The `labelauth.Verifier` of drive.toml's `signed_verdicts`: the registry at ``ref`` in ``repo`` names who holds each handle
+    and the names each staffs, and the issuer's keys are fetched (kept at ``keys`` for an outage of the issuer).  QueueError
+    when either can't be had: no mark could be judged, and judging every one absent would take every PR off `next`."""
     from . import labelauth
 
-    holders = holders_at(repo, ref)
+    holders, staffs = holders_at(repo, ref), staffs_at(repo, ref)
     try:
-        return labelauth.Verifier(labelauth.issuer_keys(keys, log=log), holders)
+        return labelauth.Verifier(labelauth.issuer_keys(keys, log=log), holders, staffs)
     except labelauth.AuthError as e:
         raise QueueError(f"no ready mark or land verdict can be authenticated (drive.toml's `signed_verdicts`): {e}") from None
 
@@ -6962,7 +7120,7 @@ def _cross(a: argparse.Namespace) -> int:
     flags = flags_at(top, main)
     labels.since = flags.marked_after or ((rules_at(top, main) or Rules()).marked_after)
     labels.change, labels.owners = change, lambda n: {opened[n].owner, q.handle(opened[n])} if n in opened else set()
-    if flags.signed_verdicts:
+    if flags.signed_verdicts == "on":
         labels.verify = label_verifier(top, main, Path.home() / ".research" / "cache" / "issuer-keys.json", log)
     labels.prefetch([(p.number, p.head) for p in prs])
 
@@ -7228,7 +7386,8 @@ def main(argv: list[str]) -> int:
         here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
         main_ref, keys = "refs/remotes/origin/main", workdir.parent / f"{workdir.name}.issuer-keys.json"
         if a.command == "delegate":
-            return delegate(store, a.pr, a.by, a.days, holders_at(Path(here), main_ref) if here else None)
+            return delegate(store, a.pr, a.by, a.days, holders_at(Path(here), main_ref) if here else None,
+                            staffs=staffs_at(Path(here), main_ref) if here else None)
         if a.command in ("judge", "ready"):
             store = label_signer(store, Path(here) if here else None)
         if a.command == "judge":
@@ -7269,7 +7428,7 @@ def main(argv: list[str]) -> int:
                 return lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep)
 
-            entries = q.status(fetched=at_main, loop=True)
+            entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
             teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
@@ -7283,7 +7442,7 @@ def main(argv: list[str]) -> int:
                 print(_render(entries) + _unnamed(q.listed, teams))
             return 0
         if a.command == "review":
-            if a.pr is None and here and signed_at(Path(here), main_ref):
+            if a.pr is None and here and signed_at(Path(here), main_ref) == "on":
                 labels.verify = label_verifier(Path(here), main_ref, keys, lambda s: print(f"research queue: {s}", file=sys.stderr))
             return review(q, label_signer(store, Path(here) if here else None) if a.pr else store, labels, a.pr,
                           "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
