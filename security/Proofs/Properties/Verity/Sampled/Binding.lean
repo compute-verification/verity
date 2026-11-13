@@ -151,14 +151,22 @@ theorem forall₂_ofV2 : ∀ l : List Release, List.Forall₂ Read.Of (l.map Rea
   | [] => .nil
   | x :: l => .cons (ofV2_of x) (forall₂_ofV2 l)
 
+/-- **`Vocab.Logged` at `.sampled` where the play has no party beside SPOT's challenger**: each log the check read is
+the play's. -/
+theorem logged_sampled_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+    {o : Exchange} (h : V.devices o.params = []) :
+    V.Logged .sampled o ↔ ∀ log ∈ V.coinsRead .sampled o.sent, log = o.log := by
+  simp [Vocab.Logged, AuditorPins.reads, Vocab.logAt, h, spotLog]
+
 /-- **`Vocab.Logged` at v2's read gives `Logged readsV2`**: where the vocabulary's log at `.sampled` is v2's
-(`Deployed.coinsRead`), a run whose whole log the check read is the device's has the log v2 read the device's. -/
+(`Deployed.coinsRead`) and the play has no party beside SPOT's challenger, a run whose whole log the check read is
+the device's has the log v2 read the device's. -/
 theorem logged_v2_of_vocab {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    (hV : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s) {o : Exchange} (h : V.Logged .sampled o) :
-    Logged readsV2 o := by
+    (hV : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s) {o : Exchange} (hD : V.devices o.params = [])
+    (h : V.Logged .sampled o) : Logged readsV2 o := by
   intro log hlog
   obtain ⟨l, hl, rfl⟩ := Option.map_eq_some_iff.1 (Option.mem_def.1 hlog)
-  obtain rfl : l = o.log := h l (by rw [hV]; exact Option.mem_def.2 hl)
+  obtain rfl : l = o.log := (logged_sampled_iff V hD).1 h l (by rw [hV]; exact Option.mem_def.2 hl)
   exact forall₂_ofV2 _
 
 /-! ## v2's records in what the prover sent -/
@@ -249,6 +257,14 @@ theorem find_eq {β : Type} {q : β → Bool} : ∀ {l : List β} {a : β}, a �
       · exact h
 
 /-- The challenger's key is the key of the samples v2's coins are read under. -/
+/-- The parameters v2 reads in `θ` are among the sampled components' that the pins are checked against. -/
+theorem mem_sampledParams {θ : ByteArray} {p : Spot.OneStageZk.Params} (h : ParamsAt θ p) :
+    p ∈ sampledParams θ := by
+  obtain ⟨ps, hps, x, hx, hp⟩ := h
+  have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := beq_iff_eq.1 (List.find?_some hx)
+  simp only [sampledParams, hps]
+  exact List.mem_filterMap.2 ⟨x, List.mem_of_find?_eq_some hx, by simp [sampledAt, hid, hp]⟩
+
 theorem key_of_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws}
     (h : oneStageZkSource p c = some d) : p.base.challenger.map (·.1) = some d.key := by
   unfold oneStageZkSource oneStageSource at h
@@ -264,13 +280,13 @@ the parameters' challenger key (`keyOf`), v2's coins are what `drawCoins` reads 
 coin trees from it and held its sessions' records to them (`treesOf`, `treesHeld`). -/
 theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : Sent}
     {p : Spot.OneStageZk.Params} (hp : ParamsAt s.params p) (hs : SameAccepts k s)
-    (ha : ComponentAccepts k .sampled s) :
+    {pins : AuditorPins} (ha : ComponentAccepts pins k .sampled s) :
     ∃ c e d ξ, caseOf s = .ok (p, c, e) ∧ oneStageZkSource p c = some d ∧ (d, e.base.coins) ∈ records s ∧
       keyOf s.params = some d.key ∧ Spot.OneStageZk.coinsOf p c e = .ok ξ ∧
       drawCoins d.key d.window d.label d.after e.base.coins = .ok ξ ∧
       ∃ ts, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
         Spot.OneStageZk.treesHeld p.own ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok () := by
-  obtain ⟨P, hP, ps, b, ev, ⟨hps, -, hev⟩, x, hx, hx1, hacc⟩ := ha
+  obtain ⟨-, P, hP, ps, b, ev, ⟨hps, -, hev⟩, x, hx, hx1, hacc⟩ := ha
   obtain rfl : P = VStar.Recursive.Sampled.protocol := Option.some.inj (hP.symm.trans hk)
   obtain ⟨ps', b', ev', ⟨hps', -, hev'⟩, -, -, ⟨⟨⟨hpi, hei, -, -⟩, -, -⟩, -⟩, -⟩ := hs
   have e1 : ps' = ps := Except.ok.inj (hps'.symm.trans hps)
@@ -477,16 +493,17 @@ theorem records_of {s : Sent} {p : Spot.OneStageZk.Own} {e : Spot.OneStageZk.Evi
 /-- **An accepted read is `readLog` over a run of the device**: at a composite that reads sampled proofs at v2, on a
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
-challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its
-coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's, on the records the evidence
-names, each of which passes the coin trees the run's log holds (`coinTreesOf`, `sessionTreeReason`); or one of the
-run's v2 records under the parameters' key carries a break. -/
+challenger's key, a run the device's own ledger opens withheld on the sample's window, a session the pins designate,
+whose release log reads as its coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's,
+on the records the evidence names, each of which passes the coin trees the run's log holds (`coinTreesOf`,
+`sessionTreeReason`); or one of the run's v2 records under the parameters' key, the pinned one, carries a break. -/
 theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev : History) {s : Sent}
-    (hs : SameAccepts k s) (ha : ComponentAccepts k .sampled s) {l : List Release}
+    {pins : AuditorPins} (hs : SameAccepts k s) (ha : ComponentAccepts pins k .sampled s) {l : List Release}
     (hl : Verity.Sampled.coinsRead s = some l) :
-    (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ Break dev x.1.key x.1.label x.2) ∨
+    (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ x.1.key.pub.data.toList = pins.spotKey ∧
+      Break dev x.1.key x.1.label x.2) ∨
       ∃ (d : Draws) (e : Spot.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
-        OpensOn dev d.key.pub d.window r.id ∧
+        OpensOn dev d.key.pub d.window r.id ∧ pins.Designated .challenger d.window ∧
         (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
         Verity.Sampled.readLog d.label d.after recs (r.released d.label d.after) r.log = some l ∧
@@ -520,18 +537,28 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
             subst c' e'
             have e3 : ξ' = ξ := Except.ok.inj (hξ'.symm.trans hξ)
             subst ξ'
-            obtain ⟨hdl, hda⟩ : d.label = label ∧ d.after = c.digest := by
+            obtain ⟨hdl, hda, hdk, hdw⟩ : d.label = label ∧ d.after = c.digest ∧ d.key = kk ∧
+                p.base.verifier.windowRoot = some d.window := by
               unfold oneStageZkSource oneStageSource at hd
               rw [hch] at hd
               cases hw : p.base.verifier.windowRoot with
               | none => rw [hw] at hd; cases hd
-              | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl⟩
+              | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl, rfl, rfl⟩
+            obtain ⟨hpk, hpw⟩ := (ha.1 : SpotPinned pins s.params) p (mem_sampledParams (caseOf_params hcase))
+            obtain ⟨q, hq, -, hqk, -⟩ := hpk (kk, label) (Option.mem_def.2 hch)
+            have hspot : d.key.pub.data.toList = pins.spotKey := by
+              rw [hdk]
+              refine hqk.trans ?_
+              unfold AuditorPins.spotKey
+              rw [Option.mem_def.1 hq]
+              rfl
             rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, hcr, ls, hlog, hls⟩ | b
             · have hlr : lines = r.log := Except.ok.inj (hlines.symm.trans (linesOf_eq hlog hls))
-              refine .inr ⟨d, e, recs, r, hr, ho, hcr, hrecs, ?_, ts, trees_of hts hlog hls, records_of hheld hrecs⟩
+              refine .inr ⟨d, e, recs, r, hr, ho, hpw d.window (Option.mem_def.2 hdw), hcr, hrecs, ?_, ts,
+                trees_of hts hlog hls, records_of hheld hrecs⟩
               rw [← hξr, ← hlr, hdl, hda]
               exact hl
-            · exact .inl ⟨(d, e.base.coins), hrec, hkey, b⟩
+            · exact .inl ⟨(d, e.base.coins), hrec, hkey, hspot, b⟩
 
 /-! ## The read finder and the forger -/
 
@@ -713,15 +740,15 @@ theorem readFinder_out (V : Vocab d α) (dev : Exchange → History) (θ : ByteA
   rfl
 
 open Classical in
-/-- **The forger at a strategy**, against the parameters' challenger key (`keyOf`), at the device's history at each
-play `dev`: on a uniform tape of the play, the first forgery `findBreak` finds in one of the play's records under that
-key. The play releases the device's signatures at its close, so on each tape the device signed the messages the play's
-signatures are on, which the forger saw. -/
+/-- **The forger at a strategy**, against SPOT's pinned challenger key (`AuditorPins.spotKey`), at the device's history
+at each play `dev`: on a uniform tape of the play, the first forgery `findBreak` finds in one of the play's records
+under the parameters' key (`keyOf`). It saw every message the device's history at the play signed under the pinned
+key, those of the key's earlier runs included. -/
 noncomputable def forger (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Hash.Assumptions.LmsForger where
   S := Verity.Game.Tape (V.game θ F c) σ
-  key := ((keyOf θ).map fun k => k.pub.data.toList).getD []
-  signed t := (Verity.Game.Tape.out _ σ t).signed.map Prod.fst
+  key := V.pins.spotKey
+  signed t := (signedBy (dev (Verity.Game.Tape.out _ σ t)) ⟨V.pins.spotKey.toArray⟩).map (·.data.toList)
   out t :=
     let o := Verity.Game.Tape.out _ σ t
     ((records o.sent).filterMap fun x =>
@@ -819,59 +846,47 @@ theorem findSome_forgeryOf {key : ChallengerKey} (hk : key.params = Lms.deployed
 /-! ## The reduction -/
 
 /-- A run of the play after `θ`, `F` and `c` ends with them. -/
-theorem play_reaches {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {o : Exchange} (h : Verity.Game.Reaches (play fs D θ F c) o) :
+theorem play_reaches {fs : List (String × ℕ)} {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {o : Exchange} (h : Verity.Game.Reaches (play fs D Ds θ F c) o) :
     o.params = θ ∧ o.files = F ∧ o.commitment = c := by
   obtain ⟨_, ha⟩ := h
   obtain ⟨log, -, b, ρ, e, he⟩ := Verity.Game.reaches_bind ha
   cases he
   exact ⟨rfl, rfl, rfl⟩
 
-/-- A run of the play under the signer `D` ends with `D`'s signatures on what it fixed: its request, its log, the
-bytes its close left to the device and the device's sample. -/
-theorem play_signed {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {o : Exchange} (h : Verity.Game.Reaches (play fs D θ F c) o) :
-    o.signed = D.signatures o.request o.log o.close o.drawn := by
-  obtain ⟨_, ha⟩ := h
-  obtain ⟨log, -, b, ρ, e, he⟩ := Verity.Game.reaches_bind ha
-  cases he
-  rfl
-
-/-- **The forger has at most `Q` of the device's messages signed on each of its tapes** (`Vocab.signs_le`). -/
+/-- **The forger has at most `Q` of the device's messages signed on each of its tapes**, where the device's history at
+each play signed at most `Q` messages under the pinned key over the key's life. -/
 theorem forger_signed_le (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
-    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (t : Verity.Game.Tape (V.game θ F c) σ) :
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (hQ : ∀ o, Verity.Game.Reaches (V.game θ F c) o →
+      (signedBy (dev o) ⟨V.pins.spotKey.toArray⟩).length ≤ V.signatures θ)
+    (t : Verity.Game.Tape (V.game θ F c) σ) :
     ((forger V dev θ F c σ).signed t).length ≤ V.signatures θ := by
-  show ((Verity.Game.Tape.out _ σ t).signed.map Prod.fst).length ≤ _
-  rw [List.length_map, play_signed (Verity.Game.Tape.reaches_out _ σ t), Signer.signatures, List.length_mapIdx]
-  exact V.signs_le θ _ _ _ _
-
-/-- **The device's history at each play signed what the play's signatures are on**: on every run of the period's
-game after `θ`, `F` and `c`, each message the play's signer signed is one the device's history at the run signed
-under the parameters' key (`Properties.Challenger.Signed`). -/
-def SignsPlay (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    Prop :=
-  ∀ o, Verity.Game.Reaches (V.game θ F c) o → ∀ key, keyOf θ = some key →
-    ∀ m ∈ o.signed, Signed (dev o) key.pub ⟨m.1.toArray⟩
+  show ((signedBy (dev (Verity.Game.Tape.out _ σ t)) _).map _).length ≤ _
+  rw [List.length_map]
+  exact hQ _ (Verity.Game.Tape.reaches_out _ σ t)
 
 /-- **The binding at the parameters `θ`, pointwise**: on every run of the period's game after `θ` whose sampled
 verdict at `k` accepts and whose log, as `reads` reads it, isn't the device's, one of its v2 records under the
-parameters' key carries a break at the device's history at the run (`Properties.Challenger.Break`), or v2's read
+parameters' key, the pinned one, carries a break at the device's history at the run (`Properties.Challenger.Break`), or v2's read
 without the sample's coins shows a round opened's coins other than the device's, of one SHA-512 with them
 (`Lines.openCollision`). -/
 def Binds (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent → Option (List Read))
     (dev : Exchange → History) (θ : ByteArray) : Prop :=
   ∀ o : Exchange, o.params = θ → V.Verdict k .sampled o → ¬ Logged reads o →
-    (∃ x ∈ records o.sent, keyOf θ = some x.1.key ∧ Break (dev o) x.1.key x.1.label x.2) ∨
+    (∃ x ∈ records o.sent, keyOf θ = some x.1.key ∧ x.1.key.pub.data.toList = V.pins.spotKey ∧
+      Break (dev o) x.1.key x.1.label x.2) ∨
       ∃ u v, ((Lines.opensRead o.sent).bind fun l => Lines.openCollision l o.log) = some (u, v) ∧ u ≠ v ∧
         Flock.Sha512.hash u = Flock.Sha512.hash v
 
-/-- **A run with a break under the parameters' key in one of its records is one where the read finder or the
-forger succeeds**, the parameters' key being at the deployed LMS parameters (`keyOf_deployed`), where the device's
-history at each play signed what the play's signatures are on (`SignsPlay`). -/
+/-- **A run with a break under the parameters' key, the pinned one, in one of its records is one where the read
+finder or the forger succeeds**, the parameters' key being at the deployed LMS parameters (`keyOf_deployed`): a forged
+message is none the device's history signed under the key. -/
 theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
-    (t : Verity.Game.Tape (V.game θ F c) σ) (hs : SignsPlay V dev θ F c) {x : Draws × Json}
+    (t : Verity.Game.Tape (V.game θ F c) σ) {x : Draws × Json}
     (hx : x ∈ records (Verity.Game.Tape.out _ σ t).sent) (hk : keyOf θ = some x.1.key)
+    (hpin : x.1.key.pub.data.toList = V.pins.spotKey)
     (hb : Break (dev (Verity.Game.Tape.out _ σ t)) x.1.key x.1.label x.2) :
     (∃ u v, (readFinder V dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) ∨
       (forger V dev θ F c σ).Forges Verity.lmsVerify t := by
@@ -909,13 +924,12 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
         cases hx''
     obtain ⟨_, v, hf, hv, m', sig', hm', rfl⟩ := findSome_forgeryOf hd (fun m' sig' h => (hl m' sig' h).1) hmem
     refine ⟨_, v, hf, fun hu => ?_, ?_⟩
-    · have hu' : m'.data.toList ∈ o.signed.map Prod.fst := hu
-      obtain ⟨p, hp, hpu⟩ := List.mem_map.1 hu'
-      have hsg := hs o (Verity.Game.Tape.reaches_out _ σ t) x.1.key hk p hp
-      rw [hpu, bytes_ofList] at hsg
-      exact (hl m' sig' hm').2 hsg
-    · show Verity.lmsVerify (((keyOf θ).map fun k => k.pub.data.toList).getD []) m'.data.toList v = true
-      rw [hk]
+    · have hu' : m'.data.toList ∈ (signedBy (dev o) ⟨V.pins.spotKey.toArray⟩).map (·.data.toList) := hu
+      obtain ⟨b, hb', hbu⟩ := List.mem_map.1 hu'
+      rw [← hpin, bytes_ofList, ByteArray.ext (Array.ext' hbu)] at hb'
+      exact (hl m' sig' hm').2 hb'
+    · show Verity.lmsVerify V.pins.spotKey m'.data.toList v = true
+      rw [← hpin]
       exact hv
 
 /-- What `tableCollision` outputs is a collision of `sha512Msg`. -/
@@ -985,13 +999,12 @@ theorem finder_of_tables (V : Vocab d α) (dev : Exchange → History) (θ : Byt
 /-- **(a): an accepted play whose log the check read isn't the device's is at most as likely as the read finder's
 collision plus the forger's forgery**, where each accepted run that isn't `Logged` carries a break under the
 parameters' key in one of its records, or shows a round opened's coins other than the device's of one SHA-512 with
-them (`Binds`), and the device's history at each play signed what the play's signatures are on (`SignsPlay`). That
-key is at the deployed LMS parameters (`keyOf_deployed`), and each finder spends on a play the strategy's calls and at
+them (`Binds`). That key is at the deployed LMS parameters (`keyOf_deployed`), and each finder spends on a play the strategy's calls and at
 most `recordCalls` per record beside the strings the device hashes (`breakCalls_le`), the read finder one more per blob
 sent. -/
 theorem logged_le (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent → Option (List Read))
     (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) (hs : SignsPlay V dev θ F c) :
+    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Logged reads o) (V.game θ F c) σ ≤
       ENNReal.ofReal ((readFinder V dev θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal ((forger V dev θ F c σ).Pr Verity.lmsVerify) := by
@@ -1003,8 +1016,8 @@ theorem logged_le (V : Vocab d α) (k : Verity.Registration.Composite) (reads : 
             (forger V dev θ F c σ).Forges Verity.lmsVerify t) := by
         refine Verity.Game.prCoin_mono fun t ⟨hv, hl⟩ => ?_
         have hθ := (play_reaches (Verity.Game.Tape.reaches_out _ σ t)).1
-        rcases hb _ hθ hv hl with ⟨x, hx, hk, hbr⟩ | ⟨u, v, huv, hne, hh⟩
-        · exact finders_of_break V dev θ F c σ t hs hx hk hbr
+        rcases hb _ hθ hv hl with ⟨x, hx, hk, hpin, hbr⟩ | ⟨u, v, huv, hne, hh⟩
+        · exact finders_of_break V dev θ F c σ t hx hk hpin hbr
         · exact .inl (finder_of_open V dev θ F c σ t huv ⟨hne, hh⟩)
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
@@ -1015,7 +1028,7 @@ plus the forger's forgery**, under `logged_le`'s premises: the second is a SHA-5
 (`finder_of_tables`). -/
 theorem logged_tables_le (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent → Option (List Read))
     (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) (hs : SignsPlay V dev θ F c) :
+    (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ (Logged reads o ∧ TablesSent o.sent)) (V.game θ F c) σ ≤
       ENNReal.ofReal ((readFinder V dev θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal ((forger V dev θ F c σ).Pr Verity.lmsVerify) := by
@@ -1029,8 +1042,8 @@ theorem logged_tables_le (V : Vocab d α) (k : Verity.Registration.Composite) (r
         by_cases hl : Logged reads (Verity.Game.Tape.out _ σ t)
         · exact .inl (finder_of_tables V dev θ F c σ t fun ht => hn ⟨hl, ht⟩)
         have hθ := (play_reaches (Verity.Game.Tape.reaches_out _ σ t)).1
-        rcases hb _ hθ hv hl with ⟨x, hx, hk, hbr⟩ | ⟨u, v, huv, hne, hh⟩
-        · exact finders_of_break V dev θ F c σ t hs hx hk hbr
+        rcases hb _ hθ hv hl with ⟨x, hx, hk, hpin, hbr⟩ | ⟨u, v, huv, hne, hh⟩
+        · exact finders_of_break V dev θ F c σ t hx hk hpin hbr
         · exact .inl (finder_of_open V dev θ F c σ t huv ⟨hne, hh⟩)
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
@@ -1038,12 +1051,11 @@ theorem logged_tables_le (V : Vocab d α) (k : Verity.Registration.Composite) (r
 /-- **(a) at the leg's constructions with this read finder and forger** (`withBinding`). -/
 theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (k : Verity.Registration.Composite)
     (reads : Sent → Option (List Read)) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
-    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ)
-    (hs : SignsPlay V dev θ F c) :
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Logged reads o) (V.game θ F c) σ ≤
       ENNReal.ofReal (((withBinding K dev).readFinder θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal (((withBinding K dev).forger θ F c σ).Pr Verity.lmsVerify) :=
-  logged_le V k reads dev θ F c σ hb hs
+  logged_le V k reads dev θ F c σ hb
 
 /-! ## The binding where the device printed its log -/
 
@@ -1067,23 +1079,25 @@ theorem logged_of_reads {l log : List Release} (h : List.Forall₂ Lines.ReadOf 
         obtain rfl := Option.some.inj (Option.mem_def.1 hcs')
         exact hc fun e => hne (by simp [e])
 
-/-- **`Binds` at v2's read where the device printed each play's log** (`Lines.PrintsLog`): an accepted run whose log
-v2 read isn't the device's carries a break under the parameters' key in one of its records (`accepted_run`), or v2
-read its log from the lines of a run that printed the play's log (`Lines.read_run`), so the first round opened whose
+/-- **`Binds` at v2's read where the device printed each play's log on the sessions the pins designate**
+(`Lines.PrintsLog`): an accepted run whose log v2 read isn't the device's carries a break under the parameters' key,
+the pinned one, in one of its records (`accepted_run`), or v2 read its log from the lines of a run that printed the
+play's log (`Lines.read_run`), so the first round opened whose
 coins v2's read without the sample's coins shows other than the device's is a SHA-512 collision (`Lines.opens_read`,
 `Lines.open_collision`). -/
 theorem binds_of_prints (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
-    (θ : ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log) :
+    (θ : ByteArray)
+    (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (V.pins.Designated .challenger) (dev o) o.log) :
     Binds V k readsV2 dev θ := by
   intro o hθ hv hl
   obtain ⟨-, hs, ha⟩ := hv
   cases hc : Verity.Sampled.coinsRead o.sent with
   | none => exact (hl fun log hlog => by simp [readsV2, hc] at hlog).elim
   | some l =>
-    rcases accepted_run (composite_readsV2 k) (dev o) hs ha hc with ⟨x, hx, hk, hb⟩ |
-      ⟨dr, e, recs, r, hr, ho, hcr, -, h, ts, hts, hrecs⟩
-    · exact .inl ⟨x, hx, by rw [← hθ]; exact hk, hb⟩
-    · have hread := Lines.read_run (hP o hθ) hr ho hcr hts hrecs h
+    rcases accepted_run (composite_readsV2 k) (dev o) hs ha hc with ⟨x, hx, hk, hpin, hb⟩ |
+      ⟨dr, e, recs, r, hr, ho, hw, hcr, -, h, ts, hts, hrecs⟩
+    · exact .inl ⟨x, hx, by rw [← hθ]; exact hk, hpin, hb⟩
+    · have hread := Lines.read_run (hP o hθ) hw hr ho hcr hts hrecs h
       obtain ⟨out', hout, hag⟩ := Lines.opens_read hc
       have hcoins : ¬ List.Forall₂ (fun y x => y.coins ≠ [] → y.coins = x.coins) l o.log := fun hc' =>
         hl fun log hlog => by

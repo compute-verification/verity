@@ -290,8 +290,8 @@ theorem cons_close {f : List Release → Game β} {pre : List Release} (hf : ∀
   rw [hf, List.append_assoc, List.singleton_append]
 
 /-- **The close after the device's log goes on past the prover's next message.** -/
-theorem goesOn_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
-    GoesOn (finish D θ F c a log) :=
+theorem goesOn_finish (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
+    GoesOn (finish D Ds θ F c a log) :=
   ⟨ByteArray, _, ByteArray.empty, rfl, fun _ h => by cases h⟩
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
@@ -383,7 +383,7 @@ theorem avg_pathCharge_relK_le {lg : β → List Release} (hE : RecordsLog lg E)
 next message. -/
 theorem avg_pathCharge_finish_le {E : List Release → Game Exchange} (hE' : ∀ log, GoesOn (E log)) (D : Signer)
     (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
-    ∀ s, avg (pathCharge (openErr e E) (finish D θ F c a log) s) ≤ 0 := by
+    ∀ s, avg (pathCharge (openErr e E) (finish D Ds θ F c a log) s) ≤ 0 := by
   refine avg_pathCharge_send_le _ (openErr_none e openingOf_send) fun _ => ?_
   refine avg_pathCharge_coin_le _ (fun _ => 0)
     (le_of_eq (openErr_none e (openingOf_coin_send hE' fun _ => ⟨_, _, rfl, fun _ => ⟨_, rfl⟩⟩)))
@@ -398,16 +398,16 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 /-- **The class errors along a play of the period's game within the potential from no tree open**: over a uniform
 tape, the class errors of the nodes a play of `σ` passes, at its close. -/
 theorem avg_pathCharge_game_le (σ : Strategy (V.game θ F c)) :
-    avg (pathCharge (openErr e (finish (V.signer θ) θ F c σ.1)) (V.game θ F c) σ) ≤ treePotential e [] := by
-  have h := avg_pathCharge_send (openErr e (finish (V.signer θ) θ F c σ.1))
-    (k := fun a => (releases (frames (V.families θ)) (V.families θ) []).bind (finish (V.signer θ) θ F c a)) σ
+    avg (pathCharge (openErr e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (V.game θ F c) σ) ≤ treePotential e [] := by
+  have h := avg_pathCharge_send (openErr e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (k := fun a => (releases (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) []).bind (finish (V.signer θ) (V.devices θ) θ F c a)) σ
   refine h.trans_le ?_
   rw [openErr_none e openingOf_send, zero_add]
   exact avg_pathCharge_le_of_eq _
-    (releases_bind (frames (V.families θ)) (V.families θ) [] (finish (V.signer θ) θ F c σ.1))
-    (avg_pathCharge_relK_le e (finish_recordsLog (V.signer θ) θ F c σ.1)
-      (fun log => avg_pathCharge_finish_le e (fun log' => goesOn_finish (V.signer θ) θ F c σ.1 log')
-        (V.signer θ) θ F c σ.1 log) _ _ [] _ [] fun _ => rfl) σ.2
+    (releases_bind (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) [] (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (avg_pathCharge_relK_le e (finish_recordsLog (V.signer θ) (V.devices θ) θ F c σ.1)
+      (fun log => avg_pathCharge_finish_le e (fun log' => goesOn_finish (V.signer θ) (V.devices θ) θ F c σ.1 log')
+        (V.signer θ) (V.devices θ) θ F c σ.1 log) _ _ [] _ [] fun _ => rfl) σ.2
 
 /-! ## The empty class at a count -/
 
@@ -494,14 +494,14 @@ def RoundCounts (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c
   ∀ q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds), Pos.Reached (roundCuts V θ F c rd) q →
     ∀ (dr : Finset (Fin A.n)) (s : SubmitJ (A.J dr (regOf V θ F c A rd σ D))),
       D.sub (A.J dr (regOf V θ F c A rd σ D)) q.modes = some s →
-        ∀ o, openingOf (finish (V.signer θ) θ F c σ.1) q.g' = some o → o.n = s.n
+        ∀ o, openingOf (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' = some o → o.n = s.n
 
 /-- **The first stop's opening asks for the link's count**: at the first stop of every tape, the opening frame at its
 node asks for both link points' coins. -/
 def LinkCounts (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) : Prop :=
   ∀ (x : CoinTape (V.game θ F c) σ)
-    (o : OpeningAt (finish (V.signer θ) θ F c σ.1) (Pos.root (roundCuts V θ F c rd) x).toStop.g'),
-    openingOf (finish (V.signer θ) θ F c σ.1) (Pos.root (roundCuts V θ F c rd) x).toStop.g' = some o →
+    (o : OpeningAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) (Pos.root (roundCuts V θ F c rd) x).toStop.g'),
+    openingOf (finish (V.signer θ) (V.devices θ) θ F c σ.1) (Pos.root (roundCuts V θ F c rd) x).toStop.g' = some o →
       o.n = A.mP + A.mP
 
 /-- **The stops' term within the charge along a play**: where `γL` at the first stop and `γ` at each later one the
@@ -563,12 +563,12 @@ theorem couplesErr_sampleMap_le (A : Live) (rd : Reading A.rounds) (σ : Strateg
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H)
     (hR : RoundCounts V θ F c A rd σ D) (hL : LinkCounts V θ F c A rd σ) :
     couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+      (fun q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
       A.hidingTerm :=
-  couplesErr_le_of_charge V θ F c A rd σ D _ (openErr e (finish (V.signer θ) θ F c σ.1))
+  couplesErr_le_of_charge V θ F c A rd σ D _ (openErr e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
     (fun _ => openErr_none e openingOf_ret) (sampleMap_fresh e V θ F c A rd σ label after κ)
     (avg_sampleMap_start e V θ F c A rd σ label after κ hκ)
     (fun dr q hq s hs => openGap_add_openEmpty_le_openErr e (hR q hq dr s hs))
@@ -584,13 +584,13 @@ theorem couplesErr_sampleMap_le_at (A : Live) (rd : Reading A.rounds) (σ : Stra
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-        openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' (A.mP + A.mP)
+      (fun q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (A.mP + A.mP)
           (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
       A.hidingTerm :=
-  couplesErr_le_of_charge V θ F c A rd σ D _ (openErr e (finish (V.signer θ) θ F c σ.1))
+  couplesErr_le_of_charge V θ F c A rd σ D _ (openErr e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
     (fun _ => openErr_none e openingOf_ret) (sampleMap_fresh e V θ F c A rd σ label after κ)
     (avg_sampleMap_start e V θ F c A rd σ label after κ hκ)
     (fun _ _ _ s _ => openGap_add_openEmptyAt_le_openErr e s.n)

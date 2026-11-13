@@ -132,8 +132,8 @@ theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e 
 theorem play_commitment (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ) :
     (CoinTape.run (V.game θ F c) σ x).commitment = c := by
-  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
-    (releases (frames (V.families θ)) (V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
+  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) (V.devices θ) θ F c σ.1)
+    (releases (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
   obtain ⟨ρ, ho⟩ : ∃ ρ : Fin (V.signer θ).draws → Bool, CoinTape.run (V.game θ F c) σ x =
       ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ, (V.signer θ).signatures σ.1 log s.1 (List.ofFn ρ), (s.2 ρ).1.1,
         (s.2 ρ).1.2⟩ := h

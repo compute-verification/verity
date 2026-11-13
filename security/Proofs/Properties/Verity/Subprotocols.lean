@@ -50,7 +50,7 @@ theorem target_eq (k : Verity.Registration.Composite) (a : Subprotocol) :
 theorem sound_of (k : Verity.Registration.Composite) (a : Subprotocol) (h : V.ComponentBound k a) : V.Target k a :=
   fun θ F c σ =>
     le_trans (Game.prob_mono (p := fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o)
-      (q := fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c σ a o)
+      (q := fun o => ComponentAccepts V.pins k a o.sent ∧ ¬ V.Holds k θ F c σ a o)
       (fun _ ⟨⟨_, _, hc⟩, hh⟩ => ⟨hc, hh⟩) _ σ) (h θ F c σ)
 
 /-- **At the honest deployment**: at registered files, where subprotocol `a`'s honest lemma at composite `k` holds, the
@@ -58,15 +58,15 @@ deployment's honest prover meets `ComponentBound`'s event with probability `0`, 
 event with probability `0`. -/
 theorem sound_of_honest (k : Verity.Registration.Composite) (a : Subprotocol) (h : V.HonestHolds k a)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (hreg : V.Registered θ F) :
-    Game.prob (fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c)
+    Game.prob (fun o => ComponentAccepts V.pins k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c)
         (V.honest θ F c) ≤ V.error a θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c)
         (V.honest θ F c) = 0 := by
   have h0 := h θ F c hreg
-  have hc : Game.prob (fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
+  have hc : Game.prob (fun o => ComponentAccepts V.pins k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
       (V.game θ F c) (V.honest θ F c) = 0 :=
     le_antisymm (le_trans (Game.prob_mono
-      (p := fun o => ComponentAccepts k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
+      (p := fun o => ComponentAccepts V.pins k a o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
       (q := fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (fun _ ho => ho.2) _ _) h0.le) zero_le
   refine ⟨hc.le.trans zero_le, le_antisymm (le_trans (Game.prob_mono
     (p := fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
@@ -101,7 +101,7 @@ theorem inferenceOnlySound_of (h : V.ComponentBound k .inferenceOnly) : V.Infere
 /-- **At the honest deployment, sampled proofs**: `sound_of_honest` at `.sampled`. -/
 theorem spotSound_of_honest (h : V.HonestHolds k .sampled) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (hreg : V.Registered θ F) :
-    Game.prob (fun o => ComponentAccepts k .sampled o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .sampled o)
+    Game.prob (fun o => ComponentAccepts V.pins k .sampled o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .sampled o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .sampled θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .sampled o) (V.game θ F c)
         (V.honest θ F c) = 0 :=
@@ -110,7 +110,7 @@ theorem spotSound_of_honest (h : V.HonestHolds k .sampled) (θ : ByteArray) (F :
 /-- **At the honest deployment, PoUW**: `sound_of_honest` at `.pouw`. -/
 theorem pouwSound_of_honest (h : V.HonestHolds k .pouw) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (hreg : V.Registered θ F) :
-    Game.prob (fun o => ComponentAccepts k .pouw o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pouw o)
+    Game.prob (fun o => ComponentAccepts V.pins k .pouw o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pouw o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .pouw θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .pouw o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .pouw o) (V.game θ F c)
         (V.honest θ F c) = 0 :=
@@ -119,7 +119,7 @@ theorem pouwSound_of_honest (h : V.HonestHolds k .pouw) (θ : ByteArray) (F : Ar
 /-- **At the honest deployment, the inference-only policy**: `sound_of_honest` at `.inferenceOnly`. -/
 theorem inferenceOnlySound_of_honest (h : V.HonestHolds k .inferenceOnly) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (hreg : V.Registered θ F) :
-    Game.prob (fun o => ComponentAccepts k .inferenceOnly o.sent ∧
+    Game.prob (fun o => ComponentAccepts V.pins k .inferenceOnly o.sent ∧
           ¬ V.Holds k θ F c (V.honest θ F c) .inferenceOnly o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .inferenceOnly θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .inferenceOnly o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .inferenceOnly o)

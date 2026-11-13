@@ -254,16 +254,16 @@ theorem reaches_relK_nil {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ))
   | _ + 1, _, _, _, _, ⟨s, h⟩ => ⟨⟨none, s⟩, h⟩
 
 /-- **An output the close reaches** is at the parameters and the log it closes. -/
-theorem reaches_finish {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c a : ByteArray} {L : List Release}
-    {o : Exchange} (h : ∃ s, PlayReaches (finish D θ F c a L) s o) : o.params = θ ∧ o.log = L := by
+theorem reaches_finish {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c a : ByteArray} {L : List Release}
+    {o : Exchange} (h : ∃ s, PlayReaches (finish D Ds θ F c a L) s o) : o.params = θ ∧ o.log = L := by
   obtain ⟨s, h⟩ := h
   obtain ⟨ρ, ho⟩ : ∃ ρ : Fin D.draws → Bool,
       o = ⟨θ, F, c, a, L, s.1, List.ofFn ρ, D.signatures a L s.1 (List.ofFn ρ), (s.2 ρ).1.1, (s.2 ρ).1.2⟩ := h
   rw [ho]
   exact ⟨rfl, rfl⟩
 
-theorem exists_reaches_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
-    (L : List Release) : ∃ o, (∃ s, PlayReaches (finish D θ F c a L) s o) ∧ o.log = L :=
+theorem exists_reaches_finish (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
+    (L : List Release) : ∃ o, (∃ s, PlayReaches (finish D Ds θ F c a L) s o) ∧ o.log = L :=
   ⟨⟨θ, F, c, a, L, .empty, List.ofFn fun _ => false, D.signatures a L .empty (List.ofFn fun _ => false), .empty, #[]⟩,
     ⟨⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩, fun _ => false, rfl⟩, rfl⟩
 
@@ -272,13 +272,13 @@ def LogsAt (g : Game Exchange) (pre : List Release) (r : Release) : Prop :=
   (∀ o, (∃ s, PlayReaches g s o) → ∃ log, o.log = pre ++ r :: log) ∧
     ∃ o, (∃ s, PlayReaches g s o) ∧ o.log = pre ++ [r]
 
-theorem logsAt_relK (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (k : ℕ)
+theorem logsAt_relK (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (r : Release) :
-    LogsAt (relK k fs ts fun log => finish D θ F c a (pre ++ r :: log)) pre r := by
+    LogsAt (relK k fs ts fun log => finish D Ds θ F c a (pre ++ r :: log)) pre r := by
   refine ⟨fun o h => ?_, ?_⟩
   · obtain ⟨log, h⟩ := reaches_relK k fs ts _ o h
     exact ⟨log, (reaches_finish h).2⟩
-  · obtain ⟨o, ho, hl⟩ := exists_reaches_finish D θ F c a (pre ++ [r])
+  · obtain ⟨o, ho, hl⟩ := exists_reaches_finish D Ds θ F c a (pre ++ [r])
     exact ⟨o, reaches_relK_nil k fs ts _ o ho, hl⟩
 
 theorem LogsAt.unique {g : Game Exchange} {pre pre' : List Release} {r r' : Release} (h : LogsAt g pre r)
@@ -298,12 +298,12 @@ theorem LogsAt.unique {g : Game Exchange} {pre pre' : List Release} {r r' : Rele
   exact ⟨hp, (List.cons.inj hr).1⟩
 
 /-- **Only a fresh frame of the family answering the digest is `FreshAt`**: a coin node whose every coin's
-continuation logs `pre`, then a release (`LogsAt`), is `FreshAt` the close `finish D θ F c a` only where that release
+continuation logs `pre`, then a release (`LogsAt`), is `FreshAt` the close `finish D Ds θ F c a` only where that release
 is a fresh frame of `label` answering `after`. -/
-theorem FreshAt.release {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c a : ByteArray} {label : String}
+theorem FreshAt.release {D : Signer} {Ds : List Signer} {θ : ByteArray} {F : Array ByteArray} {c a : ByteArray} {label : String}
     {after : ByteArray} {C : Type} {iF : Fintype C} {iN : Nonempty C} {k' : C → Game Exchange}
     {pre : List Release} {r : C → Release} (hk : ∀ x, LogsAt (k' x) pre (r x))
-    (h : FreshAt (finish D θ F c a) label after (@Game.coin _ C iF iN k')) (x : C) :
+    (h : FreshAt (finish D Ds θ F c a) label after (@Game.coin _ C iF iN k')) (x : C) :
     (r x).frame = .fresh label ∧ (r x).answers = after := by
   obtain ⟨k, fs, ts, pre', iF', iN', heq⟩ := h
   injection heq with hC _ hk'
@@ -311,7 +311,7 @@ theorem FreshAt.release {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c a
   have hk'' := eq_of_heq hk'
   have h2 : LogsAt (k' x) pre' ⟨.fresh label, after, List.ofFn x⟩ := by
     rw [hk'']
-    exact logsAt_relK D θ F c a k fs ts pre' _
+    exact logsAt_relK D Ds θ F c a k fs ts pre' _
   obtain ⟨-, hr⟩ := (hk x).unique h2
   rw [hr]
   exact ⟨rfl, rfl⟩
@@ -383,28 +383,28 @@ theorem frameCut_succ {β : Type} (P : List Release → Frame → Prop) (rv : β
 
 section WalkFill
 
-variable {g : Game Exchange} {σ : Strategy g} (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
+variable {g : Game Exchange} {σ : Strategy g} (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
   (label : String) (after : ByteArray) {R : ℕ} (rd : Reading R)
 
 /-- **What the sample's fill and the walk keep, at `k` frames more**: from a node of the device's releases after the
-log `pre`, closing in `finish D θ F c a`, at cuts each past or round `j`'s at `rd`, the walk from the tape the fill
+log `pre`, closing in `finish D Ds θ F c a`, at cuts each past or round `j`'s at `rd`, the walk from the tape the fill
 writes stops at an output whose log is `pre`, then releases `L`, then nothing or an opening (`StopTail`); and `L`'s
 coins of the family `label` answering `after` and the written coins `κ` agree. -/
 def WalkFill (k : ℕ) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (f : List Release → Game Exchange),
-    (∀ log, f log = finish D θ F c a (pre ++ log)) → ∀ (g' : Game Exchange), g' = relK k fs ts f →
+    (∀ log, f log = finish D Ds θ F c a (pre ++ log)) → ∀ (g' : Game Exchange), g' = relK k fs ts f →
     ∀ (s' : Strategy g') (Ks : Fin R → DigestCut Claims.Msg g'),
     (∀ j, Ks j = .skip ∨ HEq (Ks j) (frameCut (rd.round j) (rd.reveal j) k fs ts f pre).cut) →
     ∀ (m : ℕ) (κ : Fin m → Fin 512 → Bool) (z : CoinTape g' s') (back : CoinTape g' s' → CoinTape g σ),
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ) ∧
-      ∀ o, PlayReaches (Pos.walk g' s' Ks (fill (freshSel (finish D θ F c a) label after) g' s' Ks m κ z) back).g'
-        (Pos.walk g' s' Ks (fill (freshSel (finish D θ F c a) label after) g' s' Ks m κ z) back).s' o →
+      ∀ o, PlayReaches (Pos.walk g' s' Ks (fill (freshSel (finish D Ds θ F c a) label after) g' s' Ks m κ z) back).g'
+        (Pos.walk g' s' Ks (fill (freshSel (finish D Ds θ F c a) label after) g' s' Ks m κ z) back).s' o →
         ∃ log', o.log = pre ++ L ++ log' ∧ StopTail log'
 
 variable {D θ F c a label after rd}
 
 theorem walkFill_nil {pre : List Release} {f : List Release → Game Exchange}
-    (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) {g'' : Game Exchange} (hn : g'' = f [])
+    (hf : ∀ log, f log = finish D Ds θ F c a (pre ++ log)) {g'' : Game Exchange} (hn : g'' = f [])
     (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'') (x : CoinTape g'' s'')
     (back : CoinTape g'' s'' → CoinTape g σ) (o : Exchange)
     (h : PlayReaches (Pos.walk g'' s'' Ks x back).g' (Pos.walk g'' s'' Ks x back).s' o) :
@@ -414,7 +414,7 @@ theorem walkFill_nil {pre : List Release} {f : List Release → Game Exchange}
   exact ⟨[], by simp [(reaches_finish h1).2], .inl rfl⟩
 
 theorem walkFill_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {pre : List Release}
-    {f : List Release → Game Exchange} (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) {i s n : ℕ}
+    {f : List Release → Game Exchange} (hf : ∀ log, f log = finish D Ds θ F c a (pre ++ log)) {i s n : ℕ}
     {b : ByteArray} {g'' : Game Exchange} (hn : g'' = relKNext k fs ts f (some (.opening i s n, b)))
     (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'') (x : CoinTape g'' s'')
     (back : CoinTape g'' s'' → CoinTape g σ) (o : Exchange)
@@ -447,9 +447,9 @@ theorem walkFill_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTr
 open Classical in
 /-- **One coin of the releases**: at a coin node of the releases, whose coin `x` releases `r x`, where the fill writes
 the coin `c₀` and fills on with `κ'`, the walk goes on to `c₀`'s continuation. -/
-theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a label after rd k) {C : Type}
+theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D Ds θ F c a label after rd k) {C : Type}
     {iF : Fintype C} {iN : Nonempty C} (fs' : C → List (String × ℕ)) (ts' : C → List OpenTree) (pre : List Release)
-    (f : List Release → Game Exchange) (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) (r : C → Release)
+    (f : List Release → Game Exchange) (hf : ∀ log, f log = finish D Ds θ F c a (pre ++ log)) (r : C → Release)
     (s'' : Strategy (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)))
     (Ks : Fin R → DigestCut Claims.Msg
       (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)))
@@ -460,17 +460,17 @@ theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a la
     (back : CoinTape (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)) s'' →
       CoinTape g σ)
     (c₀ : C) (m' : ℕ) (κ' : Fin m' → Fin 512 → Bool)
-    (hfill : fill (freshSel (finish D θ F c a) label after) _ s'' Ks m κ z =
-      (c₀, Function.update z.2 c₀ (fill (freshSel (finish D θ F c a) label after) _ (s'' c₀)
+    (hfill : fill (freshSel (finish D Ds θ F c a) label after) _ s'' Ks m κ z =
+      (c₀, Function.update z.2 c₀ (fill (freshSel (finish D Ds θ F c a) label after) _ (s'' c₀)
         (fun j => (Ks j).atCoin c₀) m' κ' (z.2 c₀)))) :
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ') ∧
-      ∀ o, PlayReaches (Pos.walk _ s'' Ks (fill (freshSel (finish D θ F c a) label after) _ s'' Ks m κ z) back).g'
-        (Pos.walk _ s'' Ks (fill (freshSel (finish D θ F c a) label after) _ s'' Ks m κ z) back).s' o →
+      ∀ o, PlayReaches (Pos.walk _ s'' Ks (fill (freshSel (finish D Ds θ F c a) label after) _ s'' Ks m κ z) back).g'
+        (Pos.walk _ s'' Ks (fill (freshSel (finish D Ds θ F c a) label after) _ s'' Ks m κ z) back).s' o →
         ∃ log', o.log = pre ++ (r c₀ :: L) ++ log' ∧ StopTail log' := by
   have hH : ∀ j, (Ks j).isHere = false := fun j => by
     rcases hK j with h | h <;> rw [h] <;> rfl
   rw [walk_coin_of hH]
-  generalize hX : fill (freshSel (finish D θ F c a) label after)
+  generalize hX : fill (freshSel (finish D Ds θ F c a) label after)
     (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)) s'' Ks m κ z = zf
   rw [hfill] at hX
   subst hX
@@ -510,16 +510,16 @@ theorem frameNext_hello {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : �
   exact ite_eq_right (not_picks_hello hrd j pre spec)
 
 /-- **After the prover's frame**: `WalkFill` at `k` frames gives it at the node after any frame the prover sends. -/
-theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a label after rd k)
+theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D Ds θ F c a label after rd k)
     (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (f : List Release → Game Exchange)
-    (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) (msg : Option (Frame × ByteArray)) (g'' : Game Exchange)
+    (hf : ∀ log, f log = finish D Ds θ F c a (pre ++ log)) (msg : Option (Frame × ByteArray)) (g'' : Game Exchange)
     (hn : g'' = relKNext k fs ts f msg) (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'')
     (hK : ∀ j, Ks j = .skip ∨ HEq (Ks j) (frameNext (rd.round j) (rd.reveal j) k fs ts f pre msg).cut)
     (m : ℕ) (κ : Fin m → Fin 512 → Bool) (z : CoinTape g'' s'') (back : CoinTape g'' s'' → CoinTape g σ) :
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ) ∧
       ∀ o, PlayReaches
-        (Pos.walk g'' s'' Ks (fill (freshSel (finish D θ F c a) label after) g'' s'' Ks m κ z) back).g'
-        (Pos.walk g'' s'' Ks (fill (freshSel (finish D θ F c a) label after) g'' s'' Ks m κ z) back).s' o →
+        (Pos.walk g'' s'' Ks (fill (freshSel (finish D Ds θ F c a) label after) g'' s'' Ks m κ z) back).g'
+        (Pos.walk g'' s'' Ks (fill (freshSel (finish D Ds θ F c a) label after) g'' s'' Ks m κ z) back).s' o →
         ∃ log', o.log = pre ++ L ++ log' ∧ StopTail log' := by
   rcases msg with _ | ⟨l | spec | ⟨i, s, n⟩, b⟩
   · exact ⟨[], .inl List.nil_prefix, walkFill_nil hf hn s'' Ks _ back⟩
@@ -547,7 +547,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
         rcases hK2 j with h | h <;> rw [h] <;> rfl
       by_cases hs : l = label ∧ b = after
       · obtain ⟨rfl, rfl⟩ := hs
-        have hF : FreshAt (finish D θ F c a) l b (Game.coin (Fin 512 → Bool) fun x =>
+        have hF : FreshAt (finish D Ds θ F c a) l b (Game.coin (Fin 512 → Bool) fun x =>
             relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) :=
           ⟨k, fs', ts, pre, inferInstance, inferInstance, by simp only [hf]⟩
         have hsel := freshSel_refl hF
@@ -567,7 +567,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
       · have hns : ¬ ((⟨.fresh l, b, List.ofFn z.1⟩ : Release).frame = .fresh label ∧
             (⟨.fresh l, b, List.ofFn z.1⟩ : Release).answers = after) := fun ⟨h1, h2⟩ =>
           hs ⟨Frame.fresh.inj h1, h2⟩
-        have hnone := freshSel_none (E := finish D θ F c a) (label := label) (after := after)
+        have hnone := freshSel_none (E := finish D Ds θ F c a) (label := label) (after := after)
           (k' := fun x : Fin 512 → Bool => relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log))
           (iF := inferInstance) (iN := inferInstance) fun h => by
             obtain ⟨h1, h2⟩ := FreshAt.release (r := fun x => (⟨.fresh l, b, List.ofFn x⟩ : Release))
@@ -575,7 +575,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
               (fun x => by
                 show LogsAt (relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) pre _
                 simp only [hf]
-                exact logsAt_relK D θ F c a k fs' ts pre _) h z.1
+                exact logsAt_relK D Ds θ F c a k fs' ts pre _) h z.1
             exact hns ⟨h1, h2⟩
         obtain ⟨L, hA, hO⟩ := walkFill_coin IH (fun _ => fs') (fun _ => ts) pre f hf
           (fun x => ⟨.fresh l, b, List.ofFn x⟩) s'' Ks hK2 m κ z back z.1 m κ
@@ -603,7 +603,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
           ¬ ((⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩ : Release).frame = .fresh label ∧
             (⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩ : Release).answers = after) :=
         fun _ ⟨h1, _⟩ => Frame.noConfusion h1
-      have hnone := freshSel_none (E := finish D θ F c a) (label := label) (after := after)
+      have hnone := freshSel_none (E := finish D Ds θ F c a) (label := label) (after := after)
         (k' := fun t : TreeSample spec => relK k fs (ts ++ [⟨b, spec, t, fun _ => 0⟩]) fun log =>
           f (⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩ :: log))
         (iF := inferInstance) (iN := inferInstance) fun h => by
@@ -614,7 +614,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
               show LogsAt (relK k fs (ts ++ [⟨b, spec, t, fun _ => 0⟩]) fun log =>
                 f (⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩ :: log)) pre _
               simp only [hf]
-              exact logsAt_relK D θ F c a k _ _ pre _) h z.1
+              exact logsAt_relK D Ds θ F c a k _ _ pre _) h z.1
           exact hns z.1 ⟨h1, h2⟩
       obtain ⟨L, hA, hO⟩ := walkFill_coin IH (fun _ => fs) (fun t => ts ++ [⟨b, spec, t, fun _ => 0⟩]) pre f hf
         (fun t => ⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩) s'' Ks hK2 m κ z back z.1 m κ
@@ -627,7 +627,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
   · exact ⟨[], .inl List.nil_prefix, walkFill_opening hf hn s'' Ks _ back⟩
 
 /-- **`WalkFill` at every number of frames**, at readings that pick only openings. -/
-theorem walkFill (hrd : PicksOpenings rd) : ∀ k, WalkFill (g := g) (σ := σ) D θ F c a label after rd k
+theorem walkFill (hrd : PicksOpenings rd) : ∀ k, WalkFill (g := g) (σ := σ) D Ds θ F c a label after rd k
   | 0 => fun _ _ _ _ hf _ hg s' Ks _ _ _ _ back => ⟨[], .inl List.nil_prefix, walkFill_nil hf hg s' Ks _ back⟩
   | k + 1 => fun fs ts pre f hf g' hg s' Ks hK m κ z back => by
     rw [relK_succ] at hg
@@ -651,25 +651,25 @@ it), at cuts each round `j`'s frame's cut after the request, the walk from the t
 of the family `label` answering `after` stops where every output's log is releases `L`, then nothing or an opening
 (`StopTail`), and `L`'s coins of the family agree with the written coins. -/
 theorem walkFill_req {g : Game Exchange} {σ : Strategy g} {label : String} {after : ByteArray} {R : ℕ}
-    {rd : Reading R} (hrd : PicksOpenings rd) (K : ℕ) (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray)
+    {rd : Reading R} (hrd : PicksOpenings rd) (K : ℕ) (fs : List (String × ℕ)) (D : Signer) (Ds : List Signer) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (G : ByteArray → Game Exchange)
-    (hG : ∀ a, G a = relK K fs [] (finish D θ F c a)) (s' : Strategy (.send ByteArray G))
+    (hG : ∀ a, G a = relK K fs [] (finish D Ds θ F c a)) (s' : Strategy (.send ByteArray G))
     (Ks : Fin R → DigestCut Claims.Msg (.send ByteArray G))
     (hK : ∀ j, HEq (Ks j)
-      (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D θ F c a) []).cut))
+      (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D Ds θ F c a) []).cut))
     (m : ℕ) (κ : Fin m → Fin 512 → Bool) (z : CoinTape (.send ByteArray G) s')
     (back : CoinTape (.send ByteArray G) s' → CoinTape g σ) :
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ) ∧
-      ∀ o, PlayReaches (Pos.walk _ s' Ks (fill (freshSel (finish D θ F c s'.1) label after) _ s' Ks m κ z) back).g'
-        (Pos.walk _ s' Ks (fill (freshSel (finish D θ F c s'.1) label after) _ s' Ks m κ z) back).s' o →
+      ∀ o, PlayReaches (Pos.walk _ s' Ks (fill (freshSel (finish D Ds θ F c s'.1) label after) _ s' Ks m κ z) back).g'
+        (Pos.walk _ s' Ks (fill (freshSel (finish D Ds θ F c s'.1) label after) _ s' Ks m κ z) back).s' o →
         ∃ log', o.log = L ++ log' ∧ StopTail log' := by
   obtain rfl := funext hG
   have hK' : ∀ j, Ks j = DigestCut.send fun a =>
-      (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D θ F c a) []).cut := fun j => eq_of_heq (hK j)
+      (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D Ds θ F c a) []).cut := fun j => eq_of_heq (hK j)
   have hH : ∀ j, (Ks j).isHere = false := fun j => by rw [hK' j]; rfl
   rw [walk_send_of hH, fill_send_of _ hH]
   obtain ⟨L, hA, hO⟩ := walkFill (g := g) (σ := σ) (D := D) (θ := θ) (F := F) (c := c) (a := s'.1) (label := label)
-    (after := after) hrd K fs [] [] (finish D θ F c s'.1) (fun _ => rfl) _ rfl s'.2
+    (after := after) hrd K fs [] [] (finish D Ds θ F c s'.1) (fun _ => rfl) _ rfl s'.2
     (fun j => (Ks j).atSend s'.1) (fun j => .inr (by rw [hK' j]; rfl)) m κ z back
   exact ⟨L, hA, fun o ho => by
     obtain ⟨log', h1, h2⟩ := hO o ho
@@ -923,8 +923,8 @@ request, the releases, then the close (`game_eq_relK`). -/
 theorem roundCuts_heq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) {R : ℕ} (rd : Reading R)
     (j : Fin R) :
     HEq (roundCuts V θ F c rd j)
-      (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
-        (V.families θ) [] (finish (V.signer θ) θ F c a) []).cut) := by
+      (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) (frames (Parties.families (V.devices θ) ++ V.families θ))
+        (Parties.families (V.devices θ) ++ V.families θ) [] (finish (V.signer θ) (V.devices θ) θ F c a) []).cut) := by
   have key : ∀ {g g' : Game Exchange} (h : g = g') (K : DigestCut.AgreeCut sha512Msg g),
       HEq (K.cast h).cut K.cut := by
     intro g g' h K
@@ -957,11 +957,11 @@ theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} 
   rw [firstStop_sampleMap e V θ F c A rd σ label after κ ω] at hreach
   have hθ : x.params = θ := by
     have h0 : PlayReaches (V.game θ F c) σ x := playReaches_walk _ _ _ _ _ x hreach
-    obtain ⟨log, s, h⟩ := PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
-      (releases (frames (V.families θ)) (V.families θ) []) σ.2 h0
+    obtain ⟨log, s, h⟩ := PlayReaches.of_bind (f := finish (V.signer θ) (V.devices θ) θ F c σ.1)
+      (releases (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) []) σ.2 h0
     exact (reaches_finish ⟨s, h⟩).1
-  obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (V.families θ)) (V.families θ)
-    (V.signer θ) θ F c _ (fun a => releases_bind _ _ _ _) σ (roundCuts V θ F c rd) (roundCuts_heq V θ F c rd) m
+  obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ)
+    (V.signer θ) (V.devices θ) θ F c _ (fun a => releases_bind _ _ _ _) σ (roundCuts V θ F c rd) (roundCuts_heq V θ F c rd) m
     (κ ω.1) ω.2 id
   obtain ⟨log', hlog, htail⟩ := hO x hreach
   have hc' : CoinsAgree (freshCoins label after x.log) (fillCoins (κ ω.1)) := by

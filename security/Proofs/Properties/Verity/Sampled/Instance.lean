@@ -154,7 +154,10 @@ def CostsRead (V : Vocab d α) (dev : Exchange → Properties.Challenger.History
 /-- **The deployment, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), whose reading of the committed files and
 digests are v2's (`read`, `programDigest`, `publicDigest`), whose place for each gate is the committed files' (`place`,
-`placeOfRead`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and
+`placeOfRead`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`);
+the pins registered for the period (`registeredPins`), which are the base's (`pins_eq`), SPOT's live challenger the
+deployment's pin, first (`spot_first`), at the sessions the deployment designates (`sessions_eq`), whose `Q` covers the
+pinned key's lifetime signatures (`signatures`); and
 the session the deployment runs at each parameters (`session`), whose bound's parameters `θ` fixes; each coin family
 the base names samples the deployed device's `MAX_COINS` coins (`coins`, its one-stage rounds). A deployed instance fills
 `signer`, `place` and `coins` at its construction, by `rfl` or a lemma, as the honest instance does; no theorem takes
@@ -164,11 +167,16 @@ structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
+  registeredPins : AuditorPins
+  pins_eq : base.pins = registeredPins
+  spot_first : registeredPins.keys.head? = some deployment.pin
+  sessions_eq : registeredPins.sessions .challenger = deployment.sessions
+  signatures : ∀ θ, deployment.signatures θ ≤ base.signatures θ
   read : ∀ θ F, base.read θ F = readOf θ F
   programDigest : ∀ θ, base.programDigest θ = programDigestOf θ
   publicDigest : ∀ θ, base.publicDigest θ = publicDigestOf θ
   place : ∀ θ F c g, base.place θ F c g = placeOfRead (base.read θ F) g
-  costs : CostsRead base (Device.dev (deployment.setupOf base.families))
+  costs : CostsRead base (deployment.dev base.families)
   coins : ∀ θ l m, (l, m) ∈ base.families θ → m = _root_.Spot.Challenger.MAX_COINS
   session : ByteArray → Option Live
 
@@ -177,8 +185,28 @@ namespace Instance
 variable (I : Instance d α)
 
 /-- **The deployed device's history at each play** (`Device.dev`), at the base's layouts. -/
-noncomputable abbrev dev : Exchange → Properties.Challenger.History :=
-  Device.dev (I.deployment.setupOf I.base.families)
+noncomputable abbrev dev : Exchange → Properties.Challenger.History := I.deployment.dev I.base.families
+
+/-- SPOT's pinned key is the deployment's. -/
+theorem spotKey_eq : I.base.pins.spotKey = I.deployment.pin.key := by
+  unfold AuditorPins.spotKey
+  rw [I.pins_eq, I.spot_first]
+  rfl
+
+/-- The base's pins designate the deployment's sessions for the challenger. -/
+theorem designated : I.base.pins.sessions .challenger = I.deployment.sessions := by
+  rw [I.pins_eq, I.sessions_eq]
+
+/-- **The deployed device's history at each play signed at most `Q` messages under SPOT's pinned key**, over its
+life (`Device.Deployment.signedBy_le`). -/
+theorem signedBy_le (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (o : Exchange)
+    (ho : Verity.Game.Reaches (I.base.game θ F c) o) :
+    (Properties.Challenger.signedBy (I.dev o) ⟨I.base.pins.spotKey.toArray⟩).length ≤ I.base.signatures θ := by
+  obtain ⟨hθ, -, -⟩ := Binding.play_reaches ho
+  rw [I.spotKey_eq]
+  refine (I.deployment.signedBy_le I.base.families o).trans ?_
+  rw [hθ]
+  exact I.signatures θ
 
 /-- **SPOT's further finders as deployed**: the circuit file's and the public file's (`Vocab.fileFinder`,
 `Vocab.publicFinder`) at two calls each. -/
@@ -196,9 +224,9 @@ noncomputable def finderOf : Subprotocol → (θ : ByteArray) → (F : Array Byt
   | .sampled => Binding.readFinder I.base I.dev
   | a => I.base.finder a
 
-noncomputable def forgerOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+noncomputable def forgerOf : Subprotocol → ℕ → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (I.base.game θ F c) → Hash.Assumptions.LmsForger
-  | .sampled => Binding.forger I.base I.dev
+  | .sampled => fun _ => Binding.forger I.base I.dev
   | a => I.base.forger a
 
 def callsMulOf (θ : ByteArray) : Subprotocol → ℕ
@@ -337,31 +365,45 @@ theorem finderOf_calls : ∀ a θ F c σ (x : (I.finderOf a θ F c σ).S),
   | .network, θ, F, c, σ, x => I.base.finder_calls .network θ F c σ x
   | .wipe, θ, F, c, σ, x => I.base.finder_calls .wipe θ F c σ x
 
-theorem forgerOf_calls : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
-    (I.forgerOf a θ F c σ).cost x ≤ I.callsMulOf θ a * I.base.cost θ F c σ + I.callsAddOf θ a
-  | .sampled, θ, F, c, σ, x =>
-    calc (I.forgerOf .sampled θ F c σ).cost x
+theorem forgerOf_pinned : ∀ a i θ F c σ, i ∈ I.base.pins.reads a →
+    (I.forgerOf a i θ F c σ).key = ((I.base.pins.keys[i]?).map (·.key)).getD []
+  | .sampled, i, _, _, _, _, hi => by
+    obtain rfl : i = 0 := List.mem_singleton.1 hi
+    show I.base.pins.spotKey = _
+    unfold AuditorPins.spotKey
+    rw [List.head?_eq_getElem?]
+  | .pouw, i, θ, F, c, σ, hi => I.base.forger_pinned .pouw i θ F c σ hi
+  | .inferenceOnly, i, θ, F, c, σ, hi => I.base.forger_pinned .inferenceOnly i θ F c σ hi
+  | .pous, i, θ, F, c, σ, hi => I.base.forger_pinned .pous i θ F c σ hi
+  | .poub, i, θ, F, c, σ, hi => I.base.forger_pinned .poub i θ F c σ hi
+  | .network, i, θ, F, c, σ, hi => I.base.forger_pinned .network i θ F c σ hi
+  | .wipe, i, θ, F, c, σ, hi => I.base.forger_pinned .wipe i θ F c σ hi
+
+theorem forgerOf_calls : ∀ a i θ F c σ (x : (I.forgerOf a i θ F c σ).S),
+    (I.forgerOf a i θ F c σ).cost x ≤ I.callsMulOf θ a * I.base.cost θ F c σ + I.callsAddOf θ a
+  | .sampled, i, θ, F, c, σ, x =>
+    calc (I.forgerOf .sampled i θ F c σ).cost x
         = I.base.cost θ F c σ + Binding.breakCalls (I.dev (Verity.Game.Tape.out _ σ x))
             (Verity.Game.Tape.out _ σ x).sent := rfl
       _ ≤ I.base.cost θ F c σ + I.base.cost θ F c σ :=
           Nat.add_le_add_left ((Nat.le_add_right _ _).trans (I.costs θ F c σ x)) _
       _ = 2 * I.base.cost θ F c σ + 0 := by omega
-  | .pouw, θ, F, c, σ, x => I.base.forger_calls .pouw θ F c σ x
-  | .inferenceOnly, θ, F, c, σ, x => I.base.forger_calls .inferenceOnly θ F c σ x
-  | .pous, θ, F, c, σ, x => I.base.forger_calls .pous θ F c σ x
-  | .poub, θ, F, c, σ, x => I.base.forger_calls .poub θ F c σ x
-  | .network, θ, F, c, σ, x => I.base.forger_calls .network θ F c σ x
-  | .wipe, θ, F, c, σ, x => I.base.forger_calls .wipe θ F c σ x
+  | .pouw, i, θ, F, c, σ, x => I.base.forger_calls .pouw i θ F c σ x
+  | .inferenceOnly, i, θ, F, c, σ, x => I.base.forger_calls .inferenceOnly i θ F c σ x
+  | .pous, i, θ, F, c, σ, x => I.base.forger_calls .pous i θ F c σ x
+  | .poub, i, θ, F, c, σ, x => I.base.forger_calls .poub i θ F c σ x
+  | .network, i, θ, F, c, σ, x => I.base.forger_calls .network i θ F c σ x
+  | .wipe, i, θ, F, c, σ, x => I.base.forger_calls .wipe i θ F c σ x
 
-theorem forgerOf_signed : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
-    ((I.forgerOf a θ F c σ).signed x).length ≤ I.base.signatures θ
-  | .sampled, θ, F, c, σ, x => Binding.forger_signed_le I.base I.dev θ F c σ x
-  | .pouw, θ, F, c, σ, x => I.base.forger_signed .pouw θ F c σ x
-  | .inferenceOnly, θ, F, c, σ, x => I.base.forger_signed .inferenceOnly θ F c σ x
-  | .pous, θ, F, c, σ, x => I.base.forger_signed .pous θ F c σ x
-  | .poub, θ, F, c, σ, x => I.base.forger_signed .poub θ F c σ x
-  | .network, θ, F, c, σ, x => I.base.forger_signed .network θ F c σ x
-  | .wipe, θ, F, c, σ, x => I.base.forger_signed .wipe θ F c σ x
+theorem forgerOf_signed : ∀ a i θ F c σ (x : (I.forgerOf a i θ F c σ).S),
+    ((I.forgerOf a i θ F c σ).signed x).length ≤ I.base.signatures θ
+  | .sampled, _, θ, F, c, σ, x => Binding.forger_signed_le I.base I.dev θ F c σ (I.signedBy_le θ F c) x
+  | .pouw, i, θ, F, c, σ, x => I.base.forger_signed .pouw i θ F c σ x
+  | .inferenceOnly, i, θ, F, c, σ, x => I.base.forger_signed .inferenceOnly i θ F c σ x
+  | .pous, i, θ, F, c, σ, x => I.base.forger_signed .pous i θ F c σ x
+  | .poub, i, θ, F, c, σ, x => I.base.forger_signed .poub i θ F c σ x
+  | .network, i, θ, F, c, σ, x => I.base.forger_signed .network i θ F c σ x
+  | .wipe, i, θ, F, c, σ, x => I.base.forger_signed .wipe i θ F c σ x
 
 /-- **The deployed vocabulary but for the extractor**: the base with SPOT's names (v2's log, the binding's
 read finder and forger, the further finders and the session's premises at `K`'s finders and projection, the session's
@@ -376,6 +418,7 @@ noncomputable def stage : Vocab d α :=
     finders := I.findersOf K
     premises := I.premisesOf K
     forger := I.forgerOf
+    forger_pinned := I.forgerOf_pinned
     forger_calls := I.forgerOf_calls
     forger_signed := I.forgerOf_signed
     delta := I.deltaOf
@@ -632,7 +675,7 @@ def LogOpensRecorded (k : Verity.Registration.Composite) : Prop :=
       OpenedRecorded Jr (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).log
 
 /-- **The coupling at each of the deployment's sessions** (`couplingTargetAt_counts`, at the stage): at the
-constructions `constructionsAt` assembles, the deployed device's signer is the vocabulary's (`Instance.signer`), the
+constructions `constructionsAt` assembles, the vocabulary's pins designate the deployment's sessions (`designated`), the
 session is one v2 sets up (`sessions_some`), v2's parameters name the vocabulary's digests (`digestsAt_of`) and the
 session reads `MAX_COINS` frames' bytes (`lb_of_sessions`), so what is left is the device's log opening only the
 record's rounds (`LogOpensRecorded`). -/
@@ -646,7 +689,7 @@ theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration
         (I.liftStage (I.constructionsAt K₀ k reg record recordDigest)) A θ F := fun θ F A h =>
   couplingTargetAt_counts (V := I.stage (I.constructionsAt K₀ k reg record recordDigest))
     (I.stageOf (I.constructionsAt K₀ k reg record recordDigest) K₀) I.deployment reg record recordDigest
-    (I.signer θ) (setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2)
+    I.designated (setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2)
     (digestsAt_of (I.stage (I.constructionsAt K₀ k reg record recordDigest)) I.programDigest I.publicDigest I.read θ)
     (I.lb_of_sessions h) (hO θ F A h)
 
@@ -721,9 +764,11 @@ def ofRun (C : Verity.Circuit) {O : Type} (G : Verity.Game O) : (wipe C).OfRun G
   keep _ _ _ i := i.elim0
   view _ := (fun i => i.elim0, (), ())
 
-/-- **The idle deployment**: a run with no key, coins or ledger, which opens and closes no ledger line, samples nothing
-and signs every message with the empty signature. -/
+/-- **The idle deployment**: `Idle.pin`'s, designating no session and with no earlier run, a run with no key, coins or
+ledger, which opens and closes no ledger line, samples nothing and signs every message with the empty signature. -/
 def deployment : Device.Deployment where
+  pin := Verity.Idle.pin
+  sessions := []
   run _ _ _ _ _ := ⟨ByteArray.empty, "", "", "", 0, [], fun _ => ByteArray.empty, fun _ => ByteArray.empty, none,
     fun _ => 0, []⟩
   opens _ _ := []
@@ -732,18 +777,22 @@ def deployment : Device.Deployment where
   ledger_le _ _ _ _ _ := Nat.le_refl 0
   draws _ := 0
   sign _ _ _ := []
+  numbered _ _ _ _ _ := List.nodup_nil
+  earlier_closed _ _ _ h := absurd h List.not_mem_nil
+  opens_run _ _ _ _ _ _ _ h := absurd h List.not_mem_nil
+  fresh_id _ _ _ _ _ _ _ h := absurd h List.not_mem_nil
 
 /-- The idle deployment's signer, at no coin family. -/
 def signer (θ : ByteArray) : Signer := deployment.signer (fun _ => []) θ
 
 /-- The idle deployment's history at each play (`Device.dev`). -/
-noncomputable abbrev dev : Exchange → Properties.Challenger.History := Device.dev (deployment.setupOf fun _ => [])
+noncomputable abbrev dev : Exchange → Properties.Challenger.History := deployment.dev fun _ => []
 
 /-- **The declared calls**: the most, over the play's tapes, of what the device's reading of what the prover sent
 hashes (`Binding.breakCalls`) and one per blob it sent. -/
 noncomputable def cost (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (Verity.play [] (signer θ) θ F c)) : ℕ :=
-  Finset.univ.sup fun t : Verity.Game.Tape (Verity.play [] (signer θ) θ F c) σ =>
+    (σ : Verity.Game.Strategy (Verity.play [] (signer θ) [] θ F c)) : ℕ :=
+  Finset.univ.sup fun t : Verity.Game.Tape (Verity.play [] (signer θ) [] θ F c) σ =>
     Binding.breakCalls (dev (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size
 
@@ -765,11 +814,14 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     finder_calls := fun _ _ _ _ _ _ => Nat.zero_le _
     finders := fun _ _ _ _ => []
     premises := fun _ _ _ _ _ => True
-    forger := fun _ _ _ _ _ => Verity.Idle.forger
-    forger_calls := fun _ _ _ _ _ _ => Nat.zero_le _
+    forger := fun _ _ _ _ _ _ => Verity.Idle.forger
+    forger_calls := fun _ _ _ _ _ _ _ => Nat.zero_le _
     signatures := deployment.signatures
-    signs_le := deployment.signs_le fun _ => []
-    forger_signed := fun _ _ _ _ _ _ => Nat.zero_le _
+    signs_le := fun θ P hP a log b ρ => by
+      rcases List.mem_cons.1 hP with rfl | h
+      · exact deployment.signs_le (fun _ => []) θ a log b ρ
+      · exact absurd h List.not_mem_nil
+    forger_signed := fun _ _ _ _ _ _ _ => Nat.zero_le _
     computed := fun _ _ _ _ _ => ∅
     macs := fun _ _ _ _ _ => 0
     world := fun _ _ _ _ _ => Verity.Idle.world
@@ -779,12 +831,12 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
     schedule := fun θ F => blocks (readOf θ F).circuit
     wipe := fun θ F => wipe (readOf θ F).circuit
-    wipeRun := fun θ F c _ => ofRun (readOf θ F).circuit (Verity.play [] (signer θ) θ F c)
+    wipeRun := fun θ F c _ => ofRun (readOf θ F).circuit (Verity.play [] (signer θ) [] θ F c)
     honest := fun θ F c =>
-      Verity.requestThen [] (signer θ) θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
+      Verity.requestThen [] (signer θ) [] θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
 
 theorem costs (δ : ℝ≥0∞) : CostsRead (base δ) dev := fun θ F c σ t =>
-  Finset.le_sup (f := fun t : Verity.Game.Tape (Verity.play [] (signer θ) θ F c) σ =>
+  Finset.le_sup (f := fun t : Verity.Game.Tape (Verity.play [] (signer θ) [] θ F c) σ =>
     Binding.breakCalls (dev (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
 
@@ -794,6 +846,11 @@ noncomputable def inst (δ : ℝ≥0∞) (session : ByteArray → Option Live) :
   base := base δ
   deployment := deployment
   signer _ := rfl
+  registeredPins := Verity.Idle.pins
+  pins_eq := rfl
+  spot_first := rfl
+  sessions_eq := rfl
+  signatures _ := le_rfl
   read _ _ := rfl
   programDigest _ := rfl
   publicDigest _ := rfl

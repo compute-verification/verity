@@ -83,8 +83,15 @@ def finder : Claims.Finder where
   out _ := none
   cost _ := 0
 
-/-- **The device's signer**: it signs nothing and samples nothing at the close. -/
-def signer : Signer := ⟨fun _ => [], 0, fun _ _ _ _ => [], fun _ _ => []⟩
+/-- **The challenger's pin**: the empty key, under no LMS parameters, with no marks. -/
+def pin : AuditorPin := ⟨.challenger, [], (0, 0, 0), none⟩
+
+/-- **The deployment's pins**: the challenger's alone, with no designated session. -/
+def pins : AuditorPins := ⟨[pin], fun _ => []⟩
+
+/-- **The device's signer**: the pinned challenger, releasing from no family; it signs nothing and samples nothing
+at the close. -/
+def signer : Signer := ⟨pin, [], 0, fun _ => [], fun _ _ _ _ => [], fun _ _ => []⟩
 
 /-- The forger that saw no signature and outputs nothing, on one coin, with no SHA-512 call. -/
 def forger : Hash.Assumptions.LmsForger where
@@ -103,6 +110,10 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   registered θ := #[θ]
   families _ := []
   signer _ := signer
+  pins := pins
+  pinned _ := rfl
+  disjoint _ _ h := by simp [Parties.families] at h
+  signer_families _ := rfl
   coinsRead _ _ := none
   extract _ _ _ _ _ := 0
   finder _ _ _ _ _ := finder
@@ -111,15 +122,19 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   callsAdd _ _ := 0
   finder_calls _ _ _ _ _ _ := Nat.zero_le _
   finders _ _ _ _ := []
-  forger _ _ _ _ _ := forger
-  forger_calls _ _ _ _ _ _ := Nat.zero_le _
+  forger _ _ _ _ _ _ := forger
+  forger_pinned _ i _ _ _ _ _ := by rcases i with _ | _ <;> rfl
+  forger_calls _ _ _ _ _ _ _ := Nat.zero_le _
   signatures _ := 0
-  signs_le _ _ _ _ _ := Nat.le_refl 0
-  forger_signed _ _ _ _ _ _ := Nat.zero_le _
+  signs_le _ P hP _ _ _ _ := by
+    rw [List.mem_singleton] at hP
+    subst hP
+    exact Nat.le_refl 0
+  forger_signed _ _ _ _ _ _ _ := Nat.zero_le _
   computed _ _ _ _ _ := ∅
   macs _ _ _ _ _ := 0
   world _ _ _ _ _ := world
-  window _ := ⟨0, 0⟩
+  window := ⟨0, 0⟩
   capacity _ := ()
   world_window _ _ _ _ _ := rfl
   world_capacity _ _ _ _ _ := rfl
@@ -133,9 +148,9 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   Seed := Unit
   Spots := Unit
   wipe _ _ := wipe
-  wipeRun θ F c _ := ofRun (play [] signer θ F c)
+  wipeRun θ F c _ := ofRun (play [] signer [] θ F c)
   foreignBits _ := 0
-  honest θ F c := requestThen [] signer θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩
+  honest θ F c := requestThen [] signer [] θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩
   certOf _ := ⟨0, W, 0, 0, 0⟩
   delta _ _ _ := δ
   epsForge _ _ _ := 0

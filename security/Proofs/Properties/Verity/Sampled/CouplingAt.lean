@@ -53,18 +53,18 @@ theorem sampleMap_couples_at (A : Live) (rd : Reading A.rounds) (σ : Strategy (
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     CouplesWithin V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-      (linkEmptyAt e (finish (V.signer θ) θ F c σ.1)) (roundEmptyAt e (finish (V.signer θ) θ F c σ.1))
+      (linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
       (couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
-        (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-          openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
-        (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-          openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' (A.mP + A.mP)
+        (fun q _ s => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+          openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
+        (fun q => openGap (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+          openEmptyAt (finish (V.signer θ) (V.devices θ) θ F c σ.1) q.g' (A.mP + A.mP)
             (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool))) := by
-  have h := couples_of_close V θ F c A rd σ D _ (linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-    (roundEmptyAt e (finish (V.signer θ) θ F c σ.1))
-    (openMap_roundClose e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+  have h := couples_of_close V θ F c A rd σ D _ (linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (openMap_roundClose e (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
       (sampleStart V θ F c rd σ label after κ))
-    (openMap_linkClose e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
+    (openMap_linkClose e (finish (V.signer θ) (V.devices θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
       (sampleStart V θ F c rd σ label after κ))
     (sampleMap_fresh e V θ F c A rd σ label after κ) (sampleMap_start e V θ F c A rd σ label after κ hκ)
   rwa [zero_add] at h
@@ -87,12 +87,12 @@ theorem couplingTarget_withProject_of_sample_at (rd : Readings) (K : Constructio
     (ha : LoggedBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) P θ F)
     (hq : DigestBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) A θ F Q)
     (hD : ∀ c σ, Decodes V θ F c k (fun o => P o ∧ Q c σ o) A (rd A θ F c) σ (D A θ F c σ)
-      (sampleMaps e V rd label after κ A θ F c σ) (linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-      (roundEmptyAt e (finish (V.signer θ) θ F c σ.1))) :
+      (sampleMaps e V rd label after κ A θ F c σ) (linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))) :
     CouplingTarget V k ((K.withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd) A θ F :=
   couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F Q
-    (fun c σ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-    (fun c σ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) ha hq
+    (fun c σ => linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+    (fun c σ => roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) ha hq
     (fun c σ => couples_of_within V θ F c (sampleMap_couples_at e V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (label θ F c σ) (after θ F c σ) (κ A) hκ)
       (couplesErr_sampleMap_le_at e V θ F c A (rd A θ F c) σ (D A θ F c σ) (label θ F c σ) (after θ F c σ) (κ A) hκ))
@@ -109,19 +109,18 @@ theorem couplingTarget_assembled_at (K : Constructions V) (dev : Exchange → Pr
       Decoders A.rounds A.Reg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
-    (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ c, Binding.SignsPlay V dev θ F c)
+    (hB : Binding.Binds V k Binding.readsV2 dev θ)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
     (hM : ∀ c σ, MovesReach V θ F c k
       (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ))
       A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) κ A θ F c σ)
-      (linkEmptyAt e (finish (V.signer θ) θ F c σ.1)) (roundEmptyAt e (finish (V.signer θ) θ F c σ.1))) :
+      (linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) (roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))) :
     CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) κ) A θ F :=
   couplingTarget_withProject_of_sample_at e V k rd ((Binding.withBinding K dev).withBind k) D label (afterAt V k) κ A
     (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) θ F
     (fun c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) hκ
-    (fun c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c))
+    (fun c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ hB)
     (digestBound_of V k _ (by rfl) A θ F) (fun c σ => decodes_of_digests hA hDg (fun _ h => h.1.2) hW (hM c σ))
 
 /-! ## The count match on the moves' reach -/
@@ -132,23 +131,23 @@ whose opening asks for another count than the stop releases is not held off; thi
 one whose classes are all empty. -/
 def CountsReach (P : Exchange → Prop) (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
-  ∀ o, ReachesOff V θ F c A rd σ D M (linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-      (roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) o →
+  ∀ o, ReachesOff V θ F c A rd σ D M (linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) o →
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2) ∧ NoMiss V θ F c rd σ o.2 ∧
       P (CoinTape.run (V.game θ F c) σ o.2) →
-    ReachesOff V θ F c A rd σ D M (linkEmpty e (finish (V.signer θ) θ F c σ.1))
-      (roundEmpty e (finish (V.signer θ) θ F c σ.1)) o
+    ReachesOff V θ F c A rd σ D M (linkEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) o
 
 variable {e V θ F c k} in
 /-- **`MovesReach` off the empty classes at their counts**, from `MovesReach` off the empty classes and the count
 match on the moves' reach. -/
 theorem movesReach_at {P : Exchange → Prop} {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
-    (hM : MovesReach V θ F c k P A rd σ D M (linkEmpty e (finish (V.signer θ) θ F c σ.1))
-      (roundEmpty e (finish (V.signer θ) θ F c σ.1)))
+    (hM : MovesReach V θ F c k P A rd σ D M (linkEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmpty e (finish (V.signer θ) (V.devices θ) θ F c σ.1)))
     (hC : CountsReach e V θ F c k P A rd σ D M) :
-    MovesReach V θ F c k P A rd σ D M (linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-      (roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) :=
+    MovesReach V θ F c k P A rd σ D M (linkEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1))
+      (roundEmptyAt e (finish (V.signer θ) (V.devices θ) θ F c σ.1)) :=
   fun o ho hacc => hM o (hC o ho hacc) hacc
 
 end Verity.Sampled

@@ -65,7 +65,9 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
 its components whose record subprotocols committed to one record, at onsite every window of PoUW's period on the
 policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s run on the policy's record. -/
-theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
+theorem accepts_same {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent} (h : Accepts pins k s) :
+    SameAccepts k s := by
+  have h := h.1
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
@@ -80,17 +82,17 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
-/-- **What a composite's verifier accepts, each of its subprotocols' components accepts on its own
-case.** -/
-theorem accepts_components {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) {a : Subprotocol}
-    (ha : a ∈ subprotocols k) : ComponentAccepts k a s := by
+/-- **What a composite's verifier accepts under the pins, each of its subprotocols' components accepts on its own
+case under them.** -/
+theorem accepts_components {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent}
+    (h : Accepts pins k s) {a : Subprotocol} (ha : a ∈ subprotocols k) : ComponentAccepts pins k a s := by
   obtain ⟨ps, c, ev, hdec, pub, prof, ⟨⟨⟨-, -, hfst, -⟩, hcases, -⟩, -⟩, -⟩ := accepts_same h
   obtain ⟨P, hP⟩ : ∃ P, component k a = some P := Option.isSome_iff_exists.1 (Finset.mem_filter.1 ha).2
   have hm : P.onBlobs (Blobs.ofArray s.blobs) ∈ (Properties.Composition.triples (s.components k) ps ev).map (·.1) := by
     rw [hfst]
     exact List.mem_map.2 ⟨P, component_mem hP, rfl⟩
   obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
-  exact ⟨P, hP, ps, c, ev, hdec, x, hx, hx1, hcases x hx⟩
+  exact ⟨h.2 a ha, P, hP, ps, c, ev, hdec, x, hx, hx1, hcases x hx⟩
 
 /-- The union bound over a finite family of events, for one strategy. -/
 theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → Prop) (g : Game β)
@@ -113,7 +115,7 @@ theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → 
 subprotocols, each event inside its target's. -/
 theorem soundness_at_of_targets : SoundnessOf := by
   intro ι α _ d V k hT θ F c σ
-  calc Game.prob (fun o => Accepts k o.sent ∧ V.Registered o.params o.files ∧
+  calc Game.prob (fun o => Accepts V.pins k o.sent ∧ V.Registered o.params o.files ∧
           ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ
       ≤ Game.prob (fun o => ∃ a ∈ subprotocols k, V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ :=
         Game.prob_mono (fun o ⟨hacc, hreg, a, ha, hfail⟩ =>
@@ -141,19 +143,21 @@ theorem remote_soundness_of_subprotocols : RemoteSoundness := by
 open Classical in
 /-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
 the bytes the close leaves to the device and the evidence the strategy sends after each sample. -/
-theorem prob_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release)
-    (p : Exchange → Prop) (t : Game.Strategy (finish D θ F c a log)) :
-    Game.prob p (finish D θ F c a log) t = Game.avg fun ρ : Fin D.draws → Bool =>
-      if p ⟨θ, F, c, a, log, t.1, List.ofFn ρ, D.signatures a log t.1 (List.ofFn ρ), (t.2 ρ).1.1, (t.2 ρ).1.2⟩
+theorem prob_finish (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
+    (log : List Release) (p : Exchange → Prop) (t : Game.Strategy (finish D Ds θ F c a log)) :
+    Game.prob p (finish D Ds θ F c a log) t = Game.avg fun ρ : Fin D.draws → Bool =>
+      if p ⟨θ, F, c, a, log, t.1, List.ofFn ρ, D.signatures a (spotLog Ds log) t.1 (List.ofFn ρ),
+        Ds.map (fun P => P.signatures a (P.logOf log) t.1 []), (t.2 ρ).1.1, (t.2 ρ).1.2⟩
       then 1 else 0 := rfl
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
-theorem prob_play_eq_one (fs : List (String × ℕ)) {D : Signer} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → p o)
-    (σ : Game.Strategy (play fs D θ F c)) : Game.prob p (play fs D θ F c) σ = 1 := by
-  refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
-    (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => True) (fun log t => ?_)
-      (releases (frames fs) fs []) σ.2).trans (Game.prob_true _ _)
+theorem prob_play_eq_one (fs : List (String × ℕ)) {D : Signer} {Ds : List Signer} (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
+    (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → p o)
+    (σ : Game.Strategy (play fs D Ds θ F c)) : Game.prob p (play fs D Ds θ F c) σ = 1 := by
+  refine (Game.prob_send p ByteArray (fun a => (releases _ _ []).bind (finish D Ds θ F c a)) σ).trans <|
+    (Game.prob_bind_of_const (finish D Ds θ F c σ.1) p (fun _ => True) (fun log t => ?_)
+      _ σ.2).trans (Game.prob_true _ _)
   rw [prob_finish]
   refine ((congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)).trans
     (Game.prob_true _ _).symm
@@ -167,7 +171,7 @@ theorem soundness_honest_of {ι α : Type} [Fintype α] {d : Device ι} (V : Voc
     (hreg : V.Registered θ F) :
     (∀ a ∈ subprotocols k, Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error a θ F c (V.honest θ F c)) ∧
-      Game.prob (fun o => Accepts k o.sent ∧ V.Registered o.params o.files ∧
+      Game.prob (fun o => Accepts V.pins k o.sent ∧ V.Registered o.params o.files ∧
           ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c (V.honest θ F c) a o)
         (V.game θ F c) (V.honest θ F c) = 0 := by
   have h0 : ∀ a ∈ subprotocols k,
@@ -178,7 +182,7 @@ theorem soundness_honest_of {ι α : Type} [Fintype α] {d : Device ι} (V : Voc
       (q := fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (fun o ho => ho.2) _ _) ?_
     rw [h0 a ha]
     exact zero_le
-  · calc Game.prob (fun o => Accepts k o.sent ∧ V.Registered o.params o.files ∧
+  · calc Game.prob (fun o => Accepts V.pins k o.sent ∧ V.Registered o.params o.files ∧
             ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
         ≤ Game.prob (fun o => ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c)
             (V.honest θ F c) :=
@@ -203,12 +207,13 @@ theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V :
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
-theorem prob_play_eq_zero (fs : List (String × ℕ)) {D : Signer} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → ¬ p o)
-    (σ : Game.Strategy (play fs D θ F c)) : Game.prob p (play fs D θ F c) σ = 0 := by
-  refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
-    (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => False) (fun log t => ?_)
-      (releases (frames fs) fs []) σ.2).trans (Game.prob_false _ _)
+theorem prob_play_eq_zero (fs : List (String × ℕ)) {D : Signer} {Ds : List Signer} (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
+    (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → ¬ p o)
+    (σ : Game.Strategy (play fs D Ds θ F c)) : Game.prob p (play fs D Ds θ F c) σ = 0 := by
+  refine (Game.prob_send p ByteArray (fun a => (releases _ _ []).bind (finish D Ds θ F c a)) σ).trans <|
+    (Game.prob_bind_of_const (finish D Ds θ F c σ.1) p (fun _ => False) (fun log t => ?_)
+      _ σ.2).trans (Game.prob_false _ _)
   rw [prob_finish]
   refine ((congrArg Game.avg (funext fun ρ => ite_eq_right ?_)).trans (Game.avg_const 0)).trans
     (Game.prob_false _ _).symm
@@ -225,7 +230,7 @@ theorem soundness_nontrivial_of_lt {ι α : Type} [Fintype α] {d : Device ι} (
     ¬ V.SoundnessFor k fun _ => True := by
   intro h
   have hz : Game.prob (fun o => ¬ V.Registered o.params o.files) (V.game θ F c) σ = 0 :=
-    prob_play_eq_zero (V.families θ) (D := V.signer θ) θ F c _ (fun _ h3 hn => hn (h3.1 ▸ h3.2.1 ▸ hreg)) σ
+    prob_play_eq_zero (V.families θ) (D := V.signer θ) (Ds := V.devices θ) θ F c _ (fun _ h3 hn => hn (h3.1 ▸ h3.2.1 ▸ hreg)) σ
   have hle : Game.prob (fun o => ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤
       Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧
         ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ :=
@@ -279,16 +284,16 @@ theorem prob_bind_strategy {β γ : Type} (f : β → Game γ) (p : γ → Prop)
 committed files `F` and commitment `c`, and any evidence `e` and evidence blobs `B`, the strategy that sends an empty
 request, closes the device at once with an empty close and then sends `e` with `B` ends every play with the composite
 reading `⟨θ, c, e, F ++ B⟩`. So the game's event admits every input of that shape the compiled verifier accepts. -/
-theorem sent_reachable (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray)
+theorem sent_reachable (fs : List (String × ℕ)) (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray)
     (B : Array ByteArray) :
-    ∃ σ : Game.Strategy (play fs D θ F c),
-      Game.prob (fun o => o.params = θ ∧ o.files = F ∧ o.sent = ⟨θ, c, e, F ++ B⟩) (play fs D θ F c) σ = 1 := by
-  let t : (log : List Release) → Game.Strategy (finish D θ F c .empty log) :=
+    ∃ σ : Game.Strategy (play fs D Ds θ F c),
+      Game.prob (fun o => o.params = θ ∧ o.files = F ∧ o.sent = ⟨θ, c, e, F ++ B⟩) (play fs D Ds θ F c) σ = 1 := by
+  let t : (log : List Release) → Game.Strategy (finish D Ds θ F c .empty log) :=
     fun _ => ⟨.empty, fun _ => ⟨(e, B), PUnit.unit⟩⟩
-  obtain ⟨s⟩ := releases_nonempty (frames fs) fs []
-  refine ⟨⟨.empty, Game.Strategy.bind (releases (frames fs) fs []) (finish D θ F c .empty) s t⟩, ?_⟩
-  refine (Game.prob_send _ ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) _).trans <|
-    (prob_bind_strategy (finish D θ F c .empty) _ t (fun log => ?_) (releases (frames fs) fs []) s).trans
+  obtain ⟨s⟩ := releases_nonempty (frames (Parties.families Ds ++ fs)) (Parties.families Ds ++ fs) []
+  refine ⟨⟨.empty, Game.Strategy.bind (releases _ _ []) (finish D Ds θ F c .empty) s t⟩, ?_⟩
+  refine (Game.prob_send _ ByteArray (fun a => (releases _ _ []).bind (finish D Ds θ F c a)) _).trans <|
+    (prob_bind_strategy (finish D Ds θ F c .empty) _ t (fun log => ?_) (releases _ _ []) s).trans
       (Game.prob_true _ _)
   rw [prob_finish]
   refine (congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)
@@ -300,10 +305,10 @@ blobs, then in the game after those parameters, files and commitment some strate
 that pass the check hold with probability one. -/
 theorem Vocab.accepts_reachable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c e : ByteArray) (B : Array ByteArray)
-    (hacc : Accepts k ⟨θ, c, e, F ++ B⟩) (hreg : V.Registered θ F) :
+    (hacc : Accepts V.pins k ⟨θ, c, e, F ++ B⟩) (hreg : V.Registered θ F) :
     ∃ σ : Game.Strategy (V.game θ F c),
-      Game.prob (fun o => Accepts k o.sent ∧ V.Registered o.params o.files) (V.game θ F c) σ = 1 := by
-  obtain ⟨σ, hσ⟩ := sent_reachable (V.families θ) (V.signer θ) θ F c e B
+      Game.prob (fun o => Accepts V.pins k o.sent ∧ V.Registered o.params o.files) (V.game θ F c) σ = 1 := by
+  obtain ⟨σ, hσ⟩ := sent_reachable (V.families θ) (V.signer θ) (V.devices θ) θ F c e B
   refine ⟨σ, le_antisymm (Game.prob_le_one _ _ _) (hσ.symm.le.trans (Game.prob_mono ?_ _ σ))⟩
   rintro o ⟨hθ, hF, hs⟩
   refine ⟨?_, ?_⟩

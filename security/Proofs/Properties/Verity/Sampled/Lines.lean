@@ -126,12 +126,12 @@ inductive Holds : ByteArray → List (List Bool) → Prop
   | cons {cb ξ : ByteArray} {css : List (List Bool)} : cb.size = COIN_BYTES → Holds ξ css →
       Holds (cb ++ ξ) (bitsOfBytes cb :: css)
 
-/-- **The device printed its log `log`**, the properties the device's history at a play is to have: each run of the
-device its ledger opens withheld on a window prints `log` after its release log's head (`Prints`), and, where its
-release log reads as its coin commitment's (`releasedRootsOf`), released of each family after each root the coins
-`log` shows released so (`Holds`). -/
-def PrintsLog (dev : History) (log : List Release) : Prop :=
-  ∀ pk w r, r ∈ dev.runs pk → OpensOn dev pk w r.id →
+/-- **The device printed its log `log` on the windows `W`**, the properties the device's history at a play is to have:
+each run of the device its ledger opens withheld on a window of `W` (the sessions the auditor designated) prints `log`
+after its release log's head (`Prints`), and, where its release log reads as its coin commitment's
+(`releasedRootsOf`), released of each family after each root the coins `log` shows released so (`Holds`). -/
+def PrintsLog (W : String → Prop) (dev : History) (log : List Release) : Prop :=
+  ∀ pk w r, W w → r ∈ dev.runs pk → OpensOn dev pk w r.id →
     Prints [] r.log.tail log ∧ ((∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) →
       ∀ label after, Holds (r.released label after) (freshOf label after log))
 
@@ -1038,18 +1038,19 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
             · exact hcb
             · exact hash_of_hex hC
 
-/-- **A run the device printed reads as its log** (`ReadOf`): where the device printed its log `log` (`PrintsLog`), on
-a run its ledger opens withheld on a window, whose release log reads as its coin commitment's (`releasedRootsOf`) and
+/-- **A run the device printed reads as its log** (`ReadOf`): where the device printed its log `log` on the windows
+`W` (`PrintsLog`), on a run its ledger opens withheld on a window of `W`, whose release log reads as its coin
+commitment's (`releasedRootsOf`) and
 whose log `coinTreesOf` reads trees from that each record passes, `readLog` reads the run's log, at the run's released
 coins, as `log`: its head is the commitment's line (`readLog_head`), and the lines after it are what the device
 printed. -/
-theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {pk : ByteArray} {w : String}
-    {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
+theorem read_run {W : String → Prop} {dev : History} {log : List Release} (hP : PrintsLog W dev log) {pk : ByteArray}
+    {w : String} (hw : W w) {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
     (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
     (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
     {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
-  obtain ⟨hp, hξ⟩ := hP pk w r hr ho
+  obtain ⟨hp, hξ⟩ := hP pk w r hw hr ho
   obtain ⟨c, roots, -, hroots⟩ := id hcr
   rw [readLog_head hroots] at h
   have hT := trees_log hts

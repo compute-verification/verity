@@ -834,21 +834,23 @@ off `SetsUp` on the play's parameters. -/
 theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
-    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hD : V.devices o.params = [])
+    (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.n = n →
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.Spot.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hD hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-- `coupled_draw_coins` at the session v2 sets up. -/
 theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
-    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hD : V.devices o.params = [])
+    (hl : V.Logged .sampled o) {m B : ℕ}
     (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
     (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m B (κ ω) 0)) :
@@ -857,7 +859,8 @@ theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Comp
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl κ hsrc
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ :=
+    coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hD hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-! ## The session's population -/
@@ -932,20 +935,22 @@ session's population read off `PopTied`, so the piece asks nothing of the sessio
 theorem coupled_draw_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
-    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hD : V.devices o.params = [])
+    (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T,
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.Spot.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_setsUp K A θ F c σ hA hR hθ hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_setsUp K A θ F c σ hA hR hθ hv hD hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hp => h ω (n_of_popTied ht hv.2.1 hθ hd) hp⟩
 
 /-- `coupled_draw_coins_setsUp` at a session tied to v2's verifier. -/
 theorem coupled_draw_coins_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
-    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hD : V.devices o.params = [])
+    (hl : V.Logged .sampled o) {m B : ℕ}
     (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
     (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m B (κ ω) 0)) :
@@ -953,7 +958,7 @@ theorem coupled_draw_coins_tied {V : Vocab d α} {k : Verity.Registration.Compos
       ∀ ω : A.Ω × (K.coins A θ F c σ).T,
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins_setsUp K A θ F c σ hA hR hθ hv hl κ hsrc
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins_setsUp K A θ F c σ hA hR hθ hv hD hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hp => h ω (n_of_popTied ht hv.2.1 hθ hd) hp⟩
 
 /-! ## The read with v2's own tests -/

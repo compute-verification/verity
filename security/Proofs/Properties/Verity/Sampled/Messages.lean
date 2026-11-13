@@ -294,8 +294,10 @@ theorem releases_bind {β : Type} :
             exact releases_bind k _ _ _
       · rfl
 
-theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    play fs D θ F c = .send ByteArray fun a => relK (frames fs) fs [] (finish D θ F c a) := by
+theorem play_eq (fs : List (String × ℕ)) (D : Signer) (Ds : List Signer) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) :
+    play fs D Ds θ F c = .send ByteArray fun a =>
+      relK (frames (Parties.families Ds ++ fs)) (Parties.families Ds ++ fs) [] (finish D Ds θ F c a) := by
   show Game.send ByteArray _ = _
   congr 1
   funext a
@@ -365,8 +367,9 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **The period's game is the prover's request, the device's releases, then the close**, as one game. -/
 theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     V.game θ F c = .send ByteArray fun a =>
-      relK (frames (V.families θ)) (V.families θ) [] (finish (V.signer θ) θ F c a) :=
-  play_eq _ _ θ F c
+      relK (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ) []
+        (finish (V.signer θ) (V.devices θ) θ F c a) :=
+  play_eq _ _ _ θ F c
 
 /-- **Where a session's messages are fixed, and what the evidence reveals for them**, at `R` rounds. Round `j` is fixed
 at the first frame the prover sends that `round j` picks, after the device's log before it; its digest is the bytes
@@ -389,8 +392,8 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 /-- **Round `j`'s cut**: after the prover's request, at the first frame round `j`'s reading picks, the messages the
 evidence reveals for it that open the bytes the frame answers. -/
 noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
-  (DigestCut.AgreeCut.send fun a : ByteArray => frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
-    (V.families θ) [] (finish (V.signer θ) θ F c a) []).cast (game_eq_relK V θ F c).symm
+  (DigestCut.AgreeCut.send fun a : ByteArray => frameCut (rd.round j) (rd.reveal j) (frames (Parties.families (V.devices θ) ++ V.families θ))
+    (Parties.families (V.devices θ) ++ V.families θ) [] (finish (V.signer θ) (V.devices θ) θ F c a) []).cast (game_eq_relK V θ F c).symm
 
 /-- **The record's cut**: at the play's start, the records the evidence reveals that open the record's digest. -/
 noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
