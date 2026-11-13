@@ -109,6 +109,20 @@ def test_a_program_dir_with_no_descriptor_or_no_record_in_it(tmp_path):
     assert problem == f"{bare}: result.json records a correspondence_digest but the descriptor carries no {RC.NAMESPACE!r} annotation"
 
 
+@pytest.mark.parametrize("annotation", [{}, {"schema": "runtime-correspondence/v0", "calls": []}, [1, 2], "x", 7, True, {"annotations": {}}],
+                         ids=["empty", "another-schema", "list", "string", "number", "true", "annotations-without-a-record"])
+@pytest.mark.parametrize("recorded", ["0" * 64, 5], ids=["digest", "number"])
+def test_a_recorded_digest_beside_an_annotation_that_gives_none_is_not_read(tmp_path, annotation, recorded):
+    """The descriptor's `correspondence` annotation is no record, so it has no digest, and the result records one: the sentence
+    of the mismatch cuts the annotation's digest, which is None.  Neither reader returns."""
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "d", "correspondence_digest": recorded}}))
+    (tmp_path / "descriptor.json").write_text(json.dumps({"schema": "x", "annotations": {RC.NAMESPACE: annotation}}))
+    assert RC.correspondence_digest(annotation) is None
+    for read in (RC.read_program_document, RC.read_program_dir):
+        with pytest.raises(TypeError, match="'NoneType' object is not subscriptable"):
+            read(str(tmp_path))
+
+
 def test_a_result_that_cannot_be_read_is_a_problem(tmp_path):
     (tmp_path / "result.json").write_text("{not json")
     doc, digest, problem = RC.read_program_document(str(tmp_path))
