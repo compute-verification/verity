@@ -527,7 +527,6 @@
     {"file": "verity_vllm/pipeline/serve_pearl.py", "kind": "T201", "symbol": "live.coins", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serve_release.py", "kind": "I001", "symbol": "retention_refusal", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serving_templates.py", "kind": "I001", "symbol": "chain_ways", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/program/predict/weights_tie.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/weights_tie.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 4},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "ISC004", "symbol": "_uncut", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "verity_vllm/protocols/pouw/h1/answers.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
