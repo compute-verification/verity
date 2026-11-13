@@ -130,9 +130,8 @@ theorem inputOf_interior_params (p : VStar.Recursive.SampledTwo.Params) (c : Spo
     {it : Spot.Run.Interior} (h : (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).interior = some it) :
     it.params = p.interior := by
   unfold VStar.Recursive.SampledTwo.inputOf at h
-  first
-    | (cases h; rfl)
-    | (split at h; cases h; rfl)
+  cases h
+  rfl
 
 /-- **At the form's accept, each read the interior record's checks leave out is one the second-stage statement check
 held**, where the form's interior parameters list each port once: `leftOut_of_check` without the port whose root
