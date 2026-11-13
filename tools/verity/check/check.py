@@ -55,9 +55,10 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
-                                                            refuses when no machine's slots can be read; with no slot free on
-                                                            any, twins: the check on each machine it can run on (`twins`),
-                                                            the first to take a slot runs; exit 75 when none ran: rerun
+                                                            refuses when no machine's slots can be read; and twins: the check
+                                                            on each machine it can run on (`twins`), the first to take a slot
+                                                            runs, those off M joining their lines after TWIN_AFTER_S when M
+                                                            had a slot free; exit 75 when none ran: rerun
     uv run python tools/verity/check/check.py --record --on auto|M --pool NAME [--deferred STEP,...]
                                                             the same in a slot of M's NAME pool (`research run --pool`'s pools),
                                                             not its merge-check slots, which on the CPU nodes take train checks
@@ -457,21 +458,29 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
 
 
-def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
+def slot_wrap(priority: bool = False, twin: str | None = None, after: int = 0) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
     with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
-    they take the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
+    they take the next slot ahead of unranked priority checks), --twin for one of a check's twins and --twin-after ``after``
+    for a twin off its home that waits that long before joining its line."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
             *(["--rank", rank] if priority and re.fullmatch(r"\d{1,6}", rank) else []), *(["--by", by] if by else []),
-            *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
+            *(["--twin", twin] if twin else []), *(["--twin-after", str(after)] if twin and after else []), SLOT_WRAP[-1]]
+
+
+#: how long the twins off a check's home wait before joining their machines' lines when home had a slot free for it at the
+#: launch (`slot.py --twin-after`): a check that took that slot costs no other line a waiter, and one that lost it to a check or
+#: to memory taken after the launch joins every line then
+TWIN_AFTER_S = 600
 
 
 def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False,
-          min_mem: int | None = None) -> list[str]:
-    """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home`` first: every one a check can run
-    on (`placement` refuses none) when ``home``, `choose`'s pick, has no slot free for it; else none, and it runs on ``home``."""
+          min_mem: int | None = None) -> tuple[list[str], int]:
+    """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home``, `choose`'s pick, first: every
+    one a check can run on (`placement` refuses none), none when that is ``home`` alone (it runs there); and the seconds the
+    twins off ``home`` wait before joining their lines: `TWIN_AFTER_S` when ``home`` has a slot free for it, else 0."""
     def runs(name: str) -> bool:
         try:
             placement(docs[name], priority, min_mem)
@@ -479,10 +488,10 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
             return False
         return True
 
-    if placement(docs[home], priority, min_mem)[0]:
-        return []
     out = [home, *(n for n in names if n != home and runs(n))]
-    return out if len(out) > 1 else []
+    if len(out) < 2:
+        return [], 0
+    return out, TWIN_AFTER_S if placement(docs[home], priority, min_mem)[0] else 0
 
 
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
@@ -1255,9 +1264,10 @@ def record(argv: list[str]) -> int:
     `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the presigned URLs of
     the newest recorded checks' verdict packs (`verdict_url_file`), with --no-cache after both packs of each recorded check of the
     commit (`commit_packs`, the passes its fresh suites are compared with). A commit that can't land on REF as it is
-    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, and
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
-    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
+    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it); when the pick
+    had a slot free, the others join their lines only after TWIN_AFTER_S (`slot.py --twin-after`).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     verdict packs' URLs and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
     the machine `lane_machine` picks) waits for a slot of that machine's NAME pool instead of its merge-check slots (`pool_env`);
@@ -1319,7 +1329,7 @@ def record(argv: list[str]) -> int:
         print(f"check: {e}", file=sys.stderr)
         return 2
     min_mem = train_gb(priority, pool, parts, combining)
-    pair, both = None, []
+    pair, both, after = None, [], 0
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
@@ -1331,10 +1341,13 @@ def record(argv: list[str]) -> int:
             return 2
         print(f"check: --on {on}: {got}: {why}", flush=True)
         on = got
-        if both := twins(names, docs, got, priority, min_mem):
+        both, after = twins(names, docs, got, priority, min_mem)
+        if both:
             pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
             print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
-                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
+                  f"their line (exit {SLOT.NOT_STARTED}, not started)" + (
+                      f"; {got} has a slot free, so the others join their lines after {after} s, and only if none has "
+                      "started by then" if after else ""), flush=True)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
@@ -1420,7 +1433,8 @@ def record(argv: list[str]) -> int:
             for m in both:
                 c = list(cmd)
                 c[c.index("--on") + 1] = m
-                procs.append(subprocess.Popen([*c, "--", *slot_wrap(priority, pair if m == on else f"{pair}@{on}"),
+                procs.append(subprocess.Popen([*c, "--", *(slot_wrap(priority, pair) if m == on else
+                                                           slot_wrap(priority, f"{pair}@{on}", after)),
                                                *tool.CHECK.command, *rest], cwd=ROOT, env=env))
             rcs = [p.wait() for p in procs]
             return 0 if 0 in rcs else next((rc for rc in rcs if rc != SLOT.NOT_STARTED), rcs[0])
