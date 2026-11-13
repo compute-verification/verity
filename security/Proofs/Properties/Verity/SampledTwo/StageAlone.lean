@@ -228,10 +228,10 @@ theorem secondDraws_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Rec
     simp [Except.toOption] at h
   | ok c₂ =>
     have h' := secondDraws_eq hi h
-    unfold oneStageZkSource oneStageSource at h'
+    unfold Properties.Challenger.oneStageZkSource Properties.Challenger.oneStageSource at h'
     rcases hch : p.audit.base.challenger with _ | ⟨key, label⟩ <;>
       rcases hw : p.audit.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h' <;> cases h'
-    exact ⟨c₂, by first | rfl | exact hi, rfl, rfl, rfl⟩
+    refine ⟨c₂, ?_, ?_, ?_, rfl⟩ <;> first | rfl | assumption
 
 /-- **The check's first session is the cut's**: on a play the form accepts, the evidence's `coins` name the ledger,
 pins, main and session `firstCoins` names, and the interior record's digest is the interior commitment's. -/
