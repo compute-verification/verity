@@ -399,9 +399,9 @@ def serving_rows(s: ReplaySources) -> None:
 def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
-    from verity_vllm.commit import executed_prefix as EPX
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
