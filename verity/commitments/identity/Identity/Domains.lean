@@ -22,7 +22,7 @@ public import Identity.Domains.Shared
 
 namespace Domains
 
--- The network certifier's mark certificate (`verity.protocols.certifier.verifier.certificate`)
+-- The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
 abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
 
 -- Not yet read from here: the commitments' own (`verity.ml.commitments`)
