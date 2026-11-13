@@ -48,9 +48,9 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.evaluation import register_kernel
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.kernels import tc as K
-from verity.definitions.ops.fp32 import F32MulV2
-from verity.definitions.ops.prims import E4m3ToF32, F2fpBf16
+from verity.circuits.kernels import tc as K
+from verity.circuits.ops.fp32 import F32MulV2
+from verity.circuits.ops.prims import E4m3ToF32, F2fpBf16
 from verity.definitions.registry.fp8 import E4M3
 from verity.definitions.registry.prims import BF16, F32
 
@@ -98,7 +98,7 @@ FP8_DS_MLA_UPCONVERT_COMPOSITES = [Fp8DsMlaUpconvertRow]
 # ---- the same function over numpy rows -------------------------------------------------------------------------------------
 
 def _e4m3_f32() -> np.ndarray:
-    from verity.definitions.silicon.cast import e4m3_to_f32_word
+    from verity.circuits.silicon.cast import e4m3_to_f32_word
 
     return np.array([e4m3_to_f32_word(b) for b in range(256)], dtype=np.uint32)
 

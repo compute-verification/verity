@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from verity.definitions.kernels import ROW_COMMIT
+from verity.circuits.kernels import ROW_COMMIT
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_jit import CUDA_CFLAGS
 
