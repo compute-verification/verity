@@ -2276,6 +2276,11 @@
       "paths": {
         "fixtures/artifacts.json": "artifacts.json"
       }
+    },
+    {
+      "paths": {
+        "verity/composite/": "verity/protocols/compose/"
+      }
     }
   ]
 }
