@@ -246,7 +246,7 @@
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
-        "verity/protocols/inference_only/nci/",
+        "benchmarks/nci/",
         "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
@@ -717,7 +717,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "verity/protocols/inference_only/rho/",
+        "benchmarks/rho/",
         "benchmarks/circuit_properties/",
         "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
