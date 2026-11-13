@@ -648,4 +648,75 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
   · exact zkLogLenCap_23 _ _ _ (Classical.choice h).hz
   · exact zkLogLenCap_23 _ _ _ y₀.hz
 
+/-! ## The session at an accepted play -/
+
+/-- **The circuit file names no public input port**, under any tags and lookup tables it parses at. -/
+def NoPublicInputs (cf : ByteArray) : Prop :=
+  ∀ tags tables D, Flock.Desc.parse tags cf tables = .ok D → Flock.HmIn.parse D.unroll = .ok {}
+
+/-- **The registration samples by a subset design**: at v2's parameters in `θ`, every descriptor of the verifier's
+program reads a subset sampling design off the verifier's query, law and work table (`designAt`), at every
+population. -/
+def SubsetDesign (θ : ByteArray) : Prop :=
+  ∀ p, ParamsAt θ p → ∀ (desc : Claims.Msg) n,
+    _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program →
+    Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n =
+      .subset (Flock.Bridge.lawK
+        (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n))
+
+/-- **The bound's parameters are in range**: `k`, `Rw` and `M` at least one, a rate below one, and `2^23 ≤ ρ·(e·k)`,
+the count curve `hr_planZHJP` reads at `Zk.schedule`'s cap. -/
+structure SessionBound.Ok (b : SessionBound) : Prop where
+  k : 1 ≤ b.k
+  Rw : 1 ≤ b.Rw
+  M : 1 ≤ b.M
+  ρ : b.ρ < 1
+  kρ : (2 : ℝ) ^ 23 ≤ b.ρ * (Real.exp 1 * b.k)
+
+open FlockSoundness.Discharge.Composed (inputsJ nTab) in
+/-- **Wherever v2 accepts a play, a session `LiveSpec` holds of exists**: on the committed files `F` at the parameters
+`θ` the sampled verdict accepts, the inputs, descriptor, public file and design v2's session reads (`session_parts`),
+the reference setup at the record's sample (`y₀_of_setup`), the public file with no input ports (`pub_of_setup`), the
+deployed sample's bytes (`Live.deployed`) and the bound's parameters make a `Live`, where the circuit names no public
+input port, the registration samples by a subset design and the bound's parameters are in range. -/
+theorem liveSpec_of_accepted {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
+    (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
+    {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
+    (hread : V.read θ F = readOf θ F) (hpi : NoPublicInputs (V.circuitFile θ F)) (hsub : SubsetDesign θ)
+    (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
+    (ht : TablesSent o.sent) : ∃ A, LiveSpec V b θ F A := by
+  obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
+    hTags, hDp, hU, hpubO, hscope, hports, hnO, hdesc, hpop, hlaw, recS, units, st, hrd, hsize, hst, hshape⟩ :=
+    session_parts hD hP hreach hv ht
+  have hpiD : Flock.HmIn.parse D.unroll = .ok {} := hpi _ _ D (by rw [hcirc] at hDp; exact hDp)
+  have hst2 := hst
+  rw [(exec_recordDraw recS).trans hrd.2] at hst2
+  obtain ⟨pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hpiD hst2 hpubO hnO hports
+  obtain ⟨S₀, d₀, hy⟩ := y₀_of_setup n hcount htyp hDp hrd hsize hst hshape
+  have hn1 : nTab I = 1 := by
+    unfold nTab
+    simp [hcount]
+  let A : Live :=
+    { n, I, own := none, ht := htyp, D, hD := hDp, hU, hpi := hpiD, pub, hpub, pubO, hpubO, hscope, hdup, hn, hnO,
+      desc, qr := p.base.verifier.query, hpop, lj := p.base.verifier.law, tb := p.base.verifier.workTable,
+      hsub := hsub p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀, y₀ := Classical.choice hy,
+      Ω := DeployedCoins, fΩ := inferInstance, nΩ := inferInstance, Lb := deployedLb, src := deployedSrc,
+      hA3 := uniformRandomBytes_deployed, hTags, k := b.k, Rw := b.Rw, M := b.M, hk := hb.k, hRw := hb.Rw,
+      hM := hb.M, ρ := b.ρ, hρ := hb.ρ, hr := fun S R j => hr_planZHJP _ _ hb.kρ S R j, ε := (V.certOf θ).ε,
+      v := b.v, w := b.w, h := b.h }
+  refine ⟨A, ⟨⟨p, hpa, hpart, hprog, hlaw, hdesc, rfl⟩, rfl, htags, hcount, hwork, hstrat, hclos, rfl, hcirc, hpubf,
+    hread.trans (readOf_eq V hc hp (A := A) htags hcount hcirc hpubf htab), rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
+
+/-- **The session at the files of an accepted play is set up** (`liveSpec_of_accepted`): `liveOf` is not `none`
+there, so SPOT's published δ there is the session's, not `⊤`. -/
+theorem liveOf_ne_none {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
+    (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
+    {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
+    (hread : V.read θ F = readOf θ F) (hpi : NoPublicInputs (V.circuitFile θ F)) (hsub : SubsetDesign θ)
+    (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
+    (ht : TablesSent o.sent) : liveOf V b θ F ≠ none := by
+  unfold liveOf
+  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hpi hsub hP hreach hv ht)]
+  exact Option.some_ne_none _
+
 end Verity.Sampled
