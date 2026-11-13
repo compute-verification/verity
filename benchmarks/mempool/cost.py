@@ -13,7 +13,7 @@ prices the served loads alone.
 The pricing (ANDs; `window_cost`):
 - the stream: a window's calls run in U slots, U the accesses its operations make (STREAM: each kind's accesses, at
   most; an access a call doesn't need takes no slot, so U is at most this), each slot a PoolSlot_v1 and SHA-512 over its
-  witness (SLOT_WITNESS) at 58,120 ANDs per 1,024 bits: the witness is committed as hm96 rows before the coins are drawn
+  witness (SLOT_WITNESS) at 58,120 ANDs per 1,024 bits: the witness is committed as hm96 rows before the coins are flipped
   and its rows are hashed in-circuit. The window takes the ladder's class of U (`size_class`), so it pays for that.
   With the head-of-line memo ("memo"), U is measured instead: the slots of CacheStep_v3's own stream over the replay
   (`stream_window`), its busiest P steps.

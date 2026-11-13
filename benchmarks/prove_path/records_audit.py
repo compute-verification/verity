@@ -44,8 +44,8 @@ lists its members (a served window's) declares its reads beside them, as a serve
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
 free. A history table (`interface.History`) is pinned at the root the window's registration records for it
-(`history.pins`), which a5's registration check before the draw and its stream's registrations hold to the root the
-verifier of record computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
+(`history.pins`), which a5's registration check before the sample and its stream's registrations hold to the root the
+verifier computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
 reads); a held run's strings it doesn't hold, so a window with one is refused.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
