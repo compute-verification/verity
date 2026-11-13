@@ -25,21 +25,27 @@ recorded partials; TP-12 at Commit from the committed partials).  The checks FAI
 from __future__ import annotations
 
 import json
-
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES
+from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.records.schema_ids import RANK_COMMIT_BINDING_SCHEMA, RANK_MATCH_SCHEMA
+
+__all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record"]
+
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
 LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm")
-MOE_SITES = ("FusedMoE", "SharedFusedMoE", "MoERunner")
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
-PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",), "RowParallelLinear": LINEAR_PRODUCERS,
-                          "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
-                          **{c: ("MoeSum", "MoeExpertSum") for c in MOE_SITES}}
+PRODUCER_BY_SITE_CLASS = {LC.EMBEDDING: ("EmbeddingShard_v1",), LC.ROW_LINEAR: LINEAR_PRODUCERS,
+                          LC.LOGITS: ("Gemm_v1", "Gemm_v2", "batch:Gemm"), LC.LM_HEAD: ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
+                          **{c: ("MoeSum", "MoeExpertSum") for c in MOE_COLLECTIVE_CLASSES}}
 #: what a summed partial may add to a partial of its site's class: at a MoE site, the shared expert's down-proj, which the MoE runner
 #: reduces with the routed sum (GLM-5.3's and DeepSeek-V4's MoE blocks)
-ADDENDS_BY_SITE_CLASS = {c: LINEAR_PRODUCERS for c in MOE_SITES}
+ADDENDS_BY_SITE_CLASS = {c: LINEAR_PRODUCERS for c in MOE_COLLECTIVE_CLASSES}
 #: a row adding two partials of its rank and step is a partial too (the MoE block's routed `MoeSum` plus the shared expert's down-proj),
 #: named `<spec><-<producer>|<producer>` (`_named`) and admitted only when every operand's producer is (`_admitted`)
 SUMMED_PARTIALS = ("ResidualAdd_v1",)
@@ -80,12 +86,15 @@ def _norm_site(s: str | None) -> str:
     return (s or "").split(" (")[0].strip()
 
 
-def _same_site(a: str | None, b: str | None) -> bool:
-    """The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
-    by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
-    spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
-    from verity_vllm.pipeline.build import same_module_path
-    return same_module_path(a, b)
+def same_module_path(a: str | None, b: str | None) -> bool:
+    """Two dotted module paths name the same module when equal, or when one is the other's dotted suffix (the same
+    `named_modules()` path read from a wrapper's root vs the model's root).  Structural: no vocabulary prefix is spelled.
+    Here it holds the derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive
+    wrote by object identity) to the fold's / recorder's site; a v1 tp_links without a recorded root spells the traced wrapper's path."""
+    if a is None or b is None:
+        return False
+    a, b = a.split(" (", 1)[0].strip(), b.split(" (", 1)[0].strip()
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
 
 
 def _own_rows(rs: list, c: dict, spec_of: Any) -> list[str]:
@@ -124,10 +133,11 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
     return out
 
 
-def own_producers_from_record(instances_path: str | Path, program_nodes_spec: dict[int, str] | None = None) -> dict[tuple[int, int], list[str]]:
+def own_producers_from_record(instances_path: str | Path) -> dict[tuple[int, int], list[str]]:
     """The same from a persisted record: `instances.jsonl` rows carrying `collective` + `operand_refs` (node-space runs kept in the file);
     the producer's spec is read from the row whose `node` the own run names."""
-    from verity_vllm.program.compact import runs_from_file_items   # v2 files hold node-space progressions
+    # v2 files hold node-space progressions
+    from verity_vllm.program.compact import runs_from_file_items
     spec_of: dict[int, str] = {}
     step_of: dict[int, Any] = {}
     args_of: dict[int, list] = {}
@@ -140,7 +150,8 @@ def own_producers_from_record(instances_path: str | Path, program_nodes_spec: di
             k = int(o["node"])
             spec_of[k], step_of[k] = o.get("spec"), o.get("step")
             if str(o.get("spec")).startswith(SUMMED_PARTIALS):
-                args_of[k] = [runs_from_file_items(a) for a in o.get("operand_refs") or []]
+                refs = o.get("operand_refs")   # the operands' references of the instance; a row without them names no operand
+                args_of[k] = [runs_from_file_items(a) for a in refs] if refs else []
             if o.get("collective"):
                 rows.append(o)
     out: dict[tuple[int, int], list[str]] = {}
@@ -153,25 +164,34 @@ def own_producers_from_record(instances_path: str | Path, program_nodes_spec: di
     return out
 
 
-def _recorded_as_folded(x: dict) -> tuple[str, list[int]]:
+def _recorded_as_folded(x: dict) -> tuple[str | None, list[int]]:
     """A recorder row's (kind, partial shape) as the fold states that collective.  A `fused_norm.KIND` row's partial is
     ``stack([partial, residual])``: on its fused path the fold's `fused_allreduce_rms_norm` collective, on its unfused path the
     communicator `all_reduce` the call made, each over the [M, N] partial."""
     from verity_vllm.engine.collectives import fused_norm as FN
 
-    shape = [int(v) for v in x.get("shape") or []]
+    dims = x.get("shape")   # the recorder's shape of the partial; a row without it reads as no shape
+    shape = [int(v) for v in dims] if dims else []
     if x.get("kind") != FN.KIND:
         return x.get("kind"), shape
     return (FN.KIND if x.get("path") == FN.FUSED else "all_reduce"), shape[1:]
 
 
 def load_recorder(path: str | Path) -> list[dict]:
-    return [json.loads(l) for l in Path(path).read_text().splitlines() if l.strip()]
+    return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+
+
+def _fields(col: dict) -> list[dict]:
+    """A fold's collective row by request: one field {request, rows, and peer_rank where the fold states it} per request with rows in
+    the collective; none on a row that states no fields."""
+    fields = col.get("fields")
+    return fields if fields else []
 
 
 class _Check:
     def __init__(self, res: dict, name: str, what: str) -> None:
-        self.res, self.name, self.what, self.fails = res, name, what, []
+        self.res, self.name, self.what = res, name, what
+        self.fails: list[str] = []
 
     def fail(self, msg: str) -> None:
         if len(self.fails) < 32:
@@ -184,6 +204,21 @@ class _Check:
         return ok
 
 
+@dataclass(frozen=True)
+class _Folds:
+    """What every named check of `cross_rank_check` reads: the result it writes its check into, the ranks 0..world-1, each rank's
+    other ranks, each rank's collectives by (step, k), and the (step, k) every rank states."""
+    res: dict[str, Any]
+    ranks: list[int]
+    peers_of: dict[int, list[int]]
+    by_key: dict[int, dict[tuple[int, int], dict]]
+    common: list[tuple[int, int]]
+
+    @property
+    def world(self) -> int:
+        return len(self.ranks)
+
+
 def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[tuple[int, int], list[str]]] | None = None,
                      fold_errors: dict[int, int] | None = None, recorder: dict[int, list[dict]] | None = None,
                      links: dict[int, list[dict] | dict[str, list[dict]]] | None = None, provenance: dict | None = None,
@@ -192,7 +227,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
     specs (`own_producers*`); `fold_errors[r]` = the rank fold's error count (a fold with errors never passes: an Unresolved own part is a
     collective input nobody computed); `recorder[r]` = coll.rank<r>.jsonl rows; `links[r]` = tp_links.json `links` of rank r's Program
     (B1) or {request_id: links of that request's Program} (B>1); `provenance` = tp2_match.json's `provenance` (the stored-step value leg)."""
-    res: dict[str, Any] = {"schema": "tp2/rank_match/v1", "ranks": sorted(colls), "checks": [], "verdict": None}
+    res: dict[str, Any] = {"schema": RANK_MATCH_SCHEMA, "ranks": sorted(colls), "checks": [], "verdict": None}
     ranks = sorted(colls)
     world = len(ranks)
     # any world >= 2: the ranks must be exactly 0..world-1; every pairwise check below runs rank r against rank 0 and the
@@ -209,6 +244,32 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
             res["checks"].append({"name": "count", "pass": False, "fails": [f"rank {r}: duplicate (step, k) among its collectives"]})
             res["verdict"] = "FAIL"
             return res
+    folds = _Folds(res, ranks, peers_of, by_key, common=sorted(set.intersection(*(set(by_key[r]) for r in ranks))))
+    _check_count(folds)
+    _check_order(folds)
+    _check_op(folds)
+    _check_segmentation(folds)
+    _check_site(folds)
+    _check_shard_linkage(folds)
+    _check_producer(folds, producers, fold_errors)
+    _check_step(folds)
+    if recorder is not None:
+        _check_recorder(folds, recorder)
+        _check_value(folds, recorder)
+    if provenance is not None:
+        _check_provenance(folds, provenance, recorder_sha256)
+    if links is not None:
+        _check_links(folds, links, producers)
+    if require_all:
+        _check_complete(folds, recorder=recorder, links=links, provenance=provenance)
+    res["verdict"] = "PASS" if all(ch["pass"] for ch in res["checks"]) else "FAIL"
+    res["failed"] = [ch["name"] for ch in res["checks"] if not ch["pass"]]
+    res["n_collectives"] = {r: len(colls[r]) for r in ranks}
+    return res
+
+
+def _check_count(folds: _Folds) -> None:
+    res, ranks, by_key, world = folds.res, folds.ranks, folds.by_key, folds.world
     steps = {r: sorted({s for s, _k in by_key[r]}) for r in ranks}
 
     c = _Check(res, "count", "same steps and same number of collectives per step on every rank")
@@ -225,8 +286,10 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
             if ks != list(range(len(ks))):
                 c.fail(f"rank {r} step {s}: collective ordinals are {ks[:8]}.., not 0..{len(ks) - 1}")
     c.close()
-    common = sorted(set.intersection(*(set(by_key[r]) for r in ranks)))
 
+
+def _check_order(folds: _Folds) -> None:
+    res, ranks, by_key, common = folds.res, folds.ranks, folds.by_key, folds.common
     c = _Check(res, "order", "collective k of step s has the same kind on every rank")
     for key in common:
         for r in ranks[1:]:
@@ -234,6 +297,9 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 c.fail(f"(step {key[0]}, k {key[1]}): rank0 {by_key[0][key]['kind']} vs rank{r} {by_key[r][key]['kind']}")
     c.close()
 
+
+def _check_op(folds: _Folds) -> None:
+    res, ranks, by_key, common, world = folds.res, folds.ranks, folds.by_key, folds.common, folds.world
     c = _Check(res, "op", "same N (AllReduce2_v1{N} / AllGather2_v1{N}; AllReduce_v2{WORLD,N} / AllGather_v1{WORLD,N} beyond world 2) on every rank")
     for key in common:
         for r in ranks[1:]:
@@ -241,20 +307,26 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 c.fail(f"(step {key[0]}, k {key[1]}): N {by_key[0][key]['N']} vs {by_key[r][key]['N']}" + ("" if world == 2 else f" (rank0 vs rank{r})"))
     c.close()
 
+
+def _check_segmentation(folds: _Folds) -> None:
+    res, ranks, by_key, common, world = folds.res, folds.ranks, folds.by_key, folds.common, folds.world
     c = _Check(res, "segmentation", "same rows, over the same requests with the same per-request row counts")
     for key in common:
         a = by_key[0][key]
-        fa = {f["request"]: int(f["rows"]) for f in a.get("fields") or []}
+        fa = {f["request"]: int(f["rows"]) for f in _fields(a)}
         for r in ranks[1:]:
             b = by_key[r][key]
             tag = "" if world == 2 else f" (rank0 vs rank{r})"
             if int(a["rows"]) != int(b["rows"]):
                 c.fail(f"(step {key[0]}, k {key[1]}): rows {a['rows']} vs {b['rows']}{tag}")
-            fb = {f["request"]: int(f["rows"]) for f in b.get("fields") or []}
+            fb = {f["request"]: int(f["rows"]) for f in _fields(b)}
             if fa != fb:
                 c.fail(f"(step {key[0]}, k {key[1]}): rows by request {fa} vs {fb}{tag}")
     c.close()
 
+
+def _check_site(folds: _Folds) -> None:
+    res, ranks, by_key, common, world = folds.res, folds.ranks, folds.by_key, folds.common, folds.world
     c = _Check(res, "site", "issued by the same module on every rank")
     for key in common:
         for r in ranks[1:]:
@@ -262,31 +334,37 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 c.fail(f"(step {key[0]}, k {key[1]}): site {by_key[0][key]['site']!r} vs {by_key[r][key]['site']!r}" + ("" if world == 2 else f" (rank0 vs rank{r})"))
     c.close()
 
+
+def _check_shard_linkage(folds: _Folds) -> None:
+    res, ranks, by_key, common, world, peers_of = folds.res, folds.ranks, folds.by_key, folds.common, folds.world, folds.peers_of
     c = _Check(res, "shard_linkage", "rank r's peers field (s, k, peer p) per request has the shape of rank p's own partial rows of that request, "
                                      "for every other rank p")
     for key in common:
         for r in ranks:
             mine = by_key[r][key]
-            for f in mine.get("fields") or []:
+            for f in _fields(mine):
                 p = int(f.get("peer_rank", peers_of[r][0]))         # world-2 folds before the peer_rank field: the one other rank
                 if p == r or p not in by_key:
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}): peers field for request {f['request']!r} names peer rank {p} (not another rank)")
                     continue
                 other = by_key[p][key]
-                of = next((g for g in (other.get("fields") or []) if g["request"] == f["request"]), None)
+                of = next((g for g in _fields(other) if g["request"] == f["request"]), None)
                 if of is None:
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}): peers field for request {f['request']!r} has no own partial on rank {p}")
                 elif int(of["rows"]) != int(f["rows"]) or int(other["N"]) != int(mine["N"]):
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}) request {f['request']!r}: peers field [{f['rows']}, {mine['N']}] vs rank {p} "
                            f"own partial [{of['rows']}, {other['N']}]")
             if world > 2:
-                want = {(f["request"], int(f["peer_rank"])) for f in mine.get("fields") or [] if "peer_rank" in f}
-                reqs = {f["request"] for f in mine.get("fields") or []}
+                want = {(f["request"], int(f["peer_rank"])) for f in _fields(mine) if "peer_rank" in f}
+                reqs = {f["request"] for f in _fields(mine)}
                 need = {(q, p) for q in reqs for p in peers_of[r]}
                 if want != need:
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}): peers fields cover (request, peer) {sorted(want)[:4]}.., every request x every other rank required")
     c.close()
 
+
+def _check_producer(folds: _Folds, producers: dict[int, dict[tuple[int, int], list[str]]] | None, fold_errors: dict[int, int] | None) -> None:
+    res, ranks, by_key = folds.res, folds.ranks, folds.by_key
     c = _Check(res, "producer", "rank r's own partial at (s, k) is produced in r's log by an admitted partial-producer instance")
     if fold_errors:
         for r in ranks:
@@ -307,6 +385,9 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}): {len(specs)} producer rows for {by_key[r][key]['rows']} collective rows")
     c.close()
 
+
+def _check_step(folds: _Folds) -> None:
+    res, ranks, by_key = folds.res, folds.ranks, folds.by_key
     c = _Check(res, "step", "the collectives filed under step s carry step s on both ranks")
     for r in ranks:
         for key, col in by_key[r].items():
@@ -314,146 +395,158 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 c.fail(f"rank {r}: collective keyed {key} carries step {col.get('step')}")
     c.close()
 
-    if recorder is not None:
-        c = _Check(res, "recorder", "the collective recorder's (rank, step, k) rows agree with the fold in count / kind / module / shape")
+
+def _check_recorder(folds: _Folds, recorder: dict[int, list[dict]]) -> None:
+    res, ranks, by_key = folds.res, folds.ranks, folds.by_key
+    c = _Check(res, "recorder", "the collective recorder's (rank, step, k) rows agree with the fold in count / kind / module / shape")
+    for r in ranks:
+        rows = {(int(x["step"]), int(x["k"])): x for x in recorder.get(r, [])}
+        if len(rows) != len(recorder.get(r, [])):
+            c.fail(f"rank {r}: duplicate (step, k) in the recorder")
+        if set(rows) != set(by_key[r]):
+            only_rec, only_fold = sorted(set(rows) - set(by_key[r]))[:5], sorted(set(by_key[r]) - set(rows))[:5]
+            c.fail(f"rank {r}: recorder has {len(rows)} collectives, fold {len(by_key[r])} (recorder-only {only_rec}, fold-only {only_fold})")
+        for key in sorted(set(rows) & set(by_key[r])):
+            (x, col), (kind, shape) = (rows[key], by_key[r][key]), _recorded_as_folded(rows[key])
+            if kind != col["kind"]:
+                c.fail(f"rank {r} {key}: recorder kind {x['kind']}{'/' + str(x.get('path')) if x.get('path') else ''} (folds as {kind}) vs fold {col['kind']}")
+            if not same_module_path(x.get("module"), col["site"]):
+                c.fail(f"rank {r} {key}: recorder module {x.get('module')!r} vs fold site {col['site']!r}")
+            if shape != [int(col["rows"]), int(col["N"])]:
+                c.fail(f"rank {r} {key}: recorder partial shape {x.get('shape')} vs fold [{col['rows']}, {col['N']}]")
+    c.close()
+
+
+def _check_value(folds: _Folds, recorder: dict[int, list[dict]]) -> None:
+    res, ranks, by_key, common, world, peers_of = folds.res, folds.ranks, folds.by_key, folds.common, folds.world, folds.peers_of
+    # VALUE leg from the recorder's digests (every collective, both ranks; the recorder ran in the observer's engine run): the two ranks
+    # RECEIVED the same bytes at (s, k), the received geometry is the Definition's, and the bytes rank r's peers field (s, k) must bind at
+    # Commit are rank 1-r's PARTIAL at (s, k) -- published per (rank, step, k) as `peer_binding` (part_sha256 of the other rank, received
+    # sha256 of this rank) so the Commit binder is checked against a digest fixed at Match, not trusted by construction.
+    c = _Check(res, "value", "every rank received the same bytes at (s, k) (recorder digests) with the Definition's received geometry")
+    rows_by = {r: {(int(x["step"]), int(x["k"])): x for x in recorder.get(r, [])} for r in ranks}
+    binding: dict[str, dict[str, Any]] = {}
+    for key in common:
+        missing = [r for r in ranks if key not in rows_by[r]]
+        if missing:
+            c.fail(f"{key}: recorder row missing on rank {missing[0]}")
+            continue
+        xs = {r: rows_by[r][key] for r in ranks}
+        x0 = xs[0]
+        for r in ranks[1:]:
+            if not x0.get("out_sha256") or x0.get("out_sha256") != xs[r].get("out_sha256"):
+                c.fail(f"{key}: received sha256 differs across ranks ({str(x0.get('out_sha256'))[:12]} vs {str(xs[r].get('out_sha256'))[:12]})" + ("" if world == 2 else f" (rank0 vs rank{r})"))
+        col = by_key[0][key]
+        want_out = [int(col["rows"]), int(col["N"]) * (world if col["kind"] == "all_gather" else 1)]
         for r in ranks:
-            rows = {(int(x["step"]), int(x["k"])): x for x in recorder.get(r, [])}
-            if len(rows) != len(recorder.get(r, [])):
-                c.fail(f"rank {r}: duplicate (step, k) in the recorder")
-            if set(rows) != set(by_key[r]):
-                only_rec, only_fold = sorted(set(rows) - set(by_key[r]))[:5], sorted(set(by_key[r]) - set(rows))[:5]
-                c.fail(f"rank {r}: recorder has {len(rows)} collectives, fold {len(by_key[r])} (recorder-only {only_rec}, fold-only {only_fold})")
-            for key in sorted(set(rows) & set(by_key[r])):
-                (x, col), (kind, shape) = (rows[key], by_key[r][key]), _recorded_as_folded(rows[key])
-                if kind != col["kind"]:
-                    c.fail(f"rank {r} {key}: recorder kind {x['kind']}{'/' + str(x.get('path')) if x.get('path') else ''} (folds as {kind}) vs fold {col['kind']}")
-                if not _same_site(x.get("module"), col["site"]):
-                    c.fail(f"rank {r} {key}: recorder module {x.get('module')!r} vs fold site {col['site']!r}")
-                if shape != [int(col["rows"]), int(col["N"])]:
-                    c.fail(f"rank {r} {key}: recorder partial shape {x.get('shape')} vs fold [{col['rows']}, {col['N']}]")
-        c.close()
-
-    if recorder is not None:
-        # VALUE leg from the recorder's digests (every collective, both ranks; the recorder ran in the observer's engine run): the two ranks
-        # RECEIVED the same bytes at (s, k), the received geometry is the Definition's, and the bytes rank r's peers field (s, k) must bind at
-        # Commit are rank 1-r's PARTIAL at (s, k) -- published per (rank, step, k) as `peer_binding` (part_sha256 of the other rank, received
-        # sha256 of this rank) so the Commit binder is checked against a digest fixed at Match, not trusted by construction.
-        c = _Check(res, "value", "every rank received the same bytes at (s, k) (recorder digests) with the Definition's received geometry")
-        rows_by = {r: {(int(x["step"]), int(x["k"])): x for x in recorder.get(r, [])} for r in ranks}
-        binding: dict[str, dict[str, Any]] = {}
-        for key in common:
-            xs = {r: rows_by[r].get(key) for r in ranks}
-            missing = [r for r in ranks if xs[r] is None]
-            if missing:
-                c.fail(f"{key}: recorder row missing on rank {missing[0]}")
-                continue
-            x0 = xs[0]
-            for r in ranks[1:]:
-                if not x0.get("out_sha256") or x0.get("out_sha256") != xs[r].get("out_sha256"):
-                    c.fail(f"{key}: received sha256 differs across ranks ({str(x0.get('out_sha256'))[:12]} vs {str(xs[r].get('out_sha256'))[:12]})" + ("" if world == 2 else f" (rank0 vs rank{r})"))
-            col = by_key[0][key]
-            want_out = [int(col["rows"]), int(col["N"]) * (world if col["kind"] == "all_gather" else 1)]
-            for r in ranks:
-                x = xs[r]
-                if list(x.get("out_shape") or []) != want_out:
-                    c.fail(f"rank {r} {key}: received shape {x.get('out_shape')} vs the Definition's {want_out}")
-                if not x.get("part_sha256"):
-                    c.fail(f"rank {r} {key}: recorder row without a partial digest")
-            # one binding per (rank r, peer p, s, k): the digest rank r's peers leaf of collective k from rank p must bind at Commit.  World 2
-            # keeps the two-rank key `rank<r>:s<s>_k<k>` (one peer); beyond, `rank<r>:s<s>_k<k>_r<p>` (the fold's field name per peer)
-            for r in ranks:
-                mine = xs[r]
-                for p in peers_of[r]:
-                    name = f"rank{r}:s{key[0]}_k{key[1]}" if world == 2 else f"rank{r}:s{key[0]}_k{key[1]}_r{p}"
-                    binding[name] = {"rank": r, "step": key[0], "k": key[1], "kind": col["kind"], "site": _norm_site(col["site"]),
-                                     "peer_rank": p, "peer_partial_sha256": xs[p].get("part_sha256"),
-                                     "own_partial_sha256": mine.get("part_sha256"), "received_sha256": mine.get("out_sha256")}
-        c.close()
-        res["peer_binding"] = binding
-
-    if provenance is not None:
-        # the value leg over the STORED steps (tp2_match `check` part 2: received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact,
-        # both ranks) is REQUIRED here: every common (step, k) must have been checked, none mismatching
-        c = _Check(res, "provenance", "tp2_match provenance: received == Def(part_rank0 .. part_rank{world-1}) bit-exact at every (step, k), every rank, "
-                                      "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded")
-        n_checked, n_left, n_mis = int(provenance.get("collectives_checked") or 0), int(provenance.get("fused_norm_unfused_left_to_commit") or 0), int(provenance.get("n_mismatches") or len(provenance.get("mismatches") or []))
-        if not provenance.get("pass"):
-            c.fail(f"provenance FAIL: {n_mis} mismatches, first {json.dumps((provenance.get('mismatches') or [None])[0])[:200]}")
-        if n_checked + n_left != len(common):
-            c.fail(f"provenance checked {n_checked} collectives (+{n_left} unfused fused-norm calls left to the Commit), the folds state {len(common)} (steps stored: {provenance.get('steps_checked')})")
-        # the provenance record must be THIS run's: its recorder-file digests are the digests of the rows loaded here, every
-        # stored tensor was digested against its row (part + out, both ranks = 4 per collective), none mismatching.  A record without
-        # digests (an older record, or hand-written) or from another run is refused by name.
-        psha = provenance.get("recorder_sha256")
-        if not isinstance(psha, dict) or not psha:
-            c.fail("provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or an older tp2_match)")
-        elif recorder_sha256 is None:
-            c.fail("the recorder files' digests were not given to this leg (recorder_sha256=None): the provenance record cannot be bound to the rows loaded")
-        else:
-            for r in ranks:
-                if psha.get(str(r)) != recorder_sha256.get(r):
-                    c.fail(f"rank {r}: provenance recorder_sha256 {str(psha.get(str(r)))[:12]} != the coll.rank{r}.jsonl loaded here {str(recorder_sha256.get(r))[:12]} "
-                           "(provenance from ANOTHER run / other recorder rows)")
-        n_dig, n_dig_mis = int(provenance.get("tensors_digested") or 0), int(provenance.get("n_digest_mismatches") or len(provenance.get("digest_mismatches") or []))
-        if n_dig_mis:
-            c.fail(f"{n_dig_mis} stored tensors do not digest to their recorder rows, first {json.dumps((provenance.get('digest_mismatches') or [None])[0])[:200]}")
-        if n_dig != 2 * world * len(common):
-            c.fail(f"provenance digested {n_dig} stored tensors, {2 * world * len(common)} required (part + out, every rank, every common (step, k))")
-        c.close()
-
-    if links is not None:
-        c = _Check(res, "links", "rank r's Program link k binds its world-1 peer inputs to collective k of every other rank with the fold's kind / shape / site")
+            x = xs[r]
+            out_shape = x.get("out_shape")   # the shape the rank received; a recorder row without it reads as no shape, never the Definition's two
+            if (list(out_shape) if out_shape else []) != want_out:
+                c.fail(f"rank {r} {key}: received shape {x.get('out_shape')} vs the Definition's {want_out}")
+            if not x.get("part_sha256"):
+                c.fail(f"rank {r} {key}: recorder row without a partial digest")
+        # one binding per (rank r, peer p, s, k): the digest rank r's peers leaf of collective k from rank p must bind at Commit.  World 2
+        # keeps the two-rank key `rank<r>:s<s>_k<k>` (one peer); beyond, `rank<r>:s<s>_k<k>_r<p>` (the fold's field name per peer)
         for r in ranks:
-            # B1: one Program, its k = issue order over steps.  B>1: one Program per request (`links[r]` = {request: links}); request q's k
-            # runs over the collectives that carry a peers field of q, in (step, k) order -- the same k the compare's PEER source uses.
-            Lr = links.get(r)
-            per_req: dict[str, list[dict]] = dict(Lr) if isinstance(Lr, dict) else {"*": list(Lr or [])}
-            for q, L in per_req.items():
-                flat = [by_key[r][key] for key in sorted(by_key[r]) if q == "*" or any(f["request"] == q for f in by_key[r][key].get("fields") or [])]
-                tag = f"rank {r}" + (f" request {q!r}" if q != "*" else "")
-                if len(L) != len(flat):
-                    c.fail(f"{tag}: {len(L)} links for {len(flat)} fold collectives")
-                for k, (ln, col) in enumerate(zip(L, flat)):
-                    if int(ln.get("k", k)) != k or int(ln.get("peer_collective_k", -1)) != k:
-                        c.fail(f"{tag} link {k}: binds peer collective {ln.get('peer_collective_k')} (wrong peer)")
-                    # v2 links carry `peers = [{rank, input, operand, collective_k}]` (one per other rank); a v1 link the one `peer_rank`
-                    lps = ln.get("peers") if isinstance(ln.get("peers"), list) else [{"rank": ln.get("peer_rank", -1), "collective_k": ln.get("peer_collective_k", k)}]
-                    got_ranks = sorted(int(x.get("rank", -1)) for x in lps)
-                    if got_ranks != peers_of[r]:
-                        c.fail(f"{tag} link {k}: peer ranks {got_ranks} (must be every other rank {peers_of[r]})")
-                    if any(int(x.get("collective_k", k)) != k for x in lps):
-                        c.fail(f"{tag} link {k}: a peer binds collective {[x.get('collective_k') for x in lps]} (wrong peer collective)")
-                    if ln.get("kind") != col["kind"]:
-                        c.fail(f"{tag} link {k}: kind {ln.get('kind')} vs fold {col['kind']}")
-                    rows_q = int(col["rows"]) if q == "*" else int(next(f["rows"] for f in col["fields"] if f["request"] == q))
-                    if list(ln.get("shape") or []) != [rows_q, int(col["N"])]:
-                        c.fail(f"{tag} link {k}: shape {ln.get('shape')} vs fold [{rows_q}, {col['N']}]")
-                    if not _same_site(ln.get("module", ln.get("module_path")), col["site"]):
-                        c.fail(f"{tag} link {k}: module {ln.get('module', ln.get('module_path'))!r} vs fold site {col['site']!r}")
-                    cls = _site_class(ln.get("module_path"))
-                    want = PRODUCER_BY_SITE_CLASS.get(cls or "")
-                    if want and producers is not None:
-                        key = (int(col["step"]), int(col["k"]))
-                        specs = producers.get(r, {}).get(key) or []
-                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want, ADDENDS_BY_SITE_CLASS.get(cls or "", ()))})
-                        if bad:
-                            c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {want} (wrong producer)")
-        c.close()
-
-    if require_all:
-        # the library itself refuses an incomplete leg set: any second consumer inherits the entry point's rule
-        c = _Check(res, "complete", "every leg present: recorder rows, link tables and the provenance record of the same run (require_all)")
-        for name, val in (("recorder", recorder), ("links", links), ("provenance", provenance)):
-            if val is None:
-                c.fail(f"{name} leg not run (input absent): with peers as a free input a rank-local Match alone is trivially satisfiable")
-        c.close()
-    res["verdict"] = "PASS" if all(ch["pass"] for ch in res["checks"]) else "FAIL"
-    res["failed"] = [ch["name"] for ch in res["checks"] if not ch["pass"]]
-    res["n_collectives"] = {r: len(colls[r]) for r in ranks}
-    return res
+            mine = xs[r]
+            for p in peers_of[r]:
+                name = f"rank{r}:s{key[0]}_k{key[1]}" if world == 2 else f"rank{r}:s{key[0]}_k{key[1]}_r{p}"
+                binding[name] = {"rank": r, "step": key[0], "k": key[1], "kind": col["kind"], "site": _norm_site(col["site"]),
+                                 "peer_rank": p, "peer_partial_sha256": xs[p].get("part_sha256"),
+                                 "own_partial_sha256": mine.get("part_sha256"), "received_sha256": mine.get("out_sha256")}
+    c.close()
+    res["peer_binding"] = binding
 
 
-def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[str, dict] | None = None, require: bool = False) -> dict:
+def _check_provenance(folds: _Folds, provenance: dict, recorder_sha256: dict[int, str] | None) -> None:
+    res, ranks, common, world = folds.res, folds.ranks, folds.common, folds.world
+    # the value leg over the STORED steps (tp2_match `check` part 2: received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact,
+    # both ranks) is REQUIRED here: every common (step, k) must have been checked, none mismatching
+    c = _Check(res, "provenance", "tp2_match provenance: received == Def(part_rank0 .. part_rank{world-1}) bit-exact at every (step, k), every rank, "
+                                  "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded")
+    # the mismatches the provenance lists, of values and of digests; their counts are stated beside them, else the lists' lengths
+    mismatches, digest_mismatches = provenance.get("mismatches"), provenance.get("digest_mismatches")
+    n_checked, n_left = int(provenance.get("collectives_checked") or 0), int(provenance.get("fused_norm_unfused_left_to_commit") or 0)
+    n_mis = int(provenance.get("n_mismatches") or (len(mismatches) if mismatches else 0))
+    if not provenance.get("pass"):
+        c.fail(f"provenance FAIL: {n_mis} mismatches, first {json.dumps(mismatches[0] if mismatches else None)[:200]}")
+    if n_checked + n_left != len(common):
+        c.fail(f"provenance checked {n_checked} collectives (+{n_left} unfused fused-norm calls left to the Commit), the folds state {len(common)} (steps stored: {provenance.get('steps_checked')})")
+    # the provenance record must be THIS run's: its recorder-file digests are the digests of the rows loaded here, every
+    # stored tensor was digested against its row (part + out, both ranks = 4 per collective), none mismatching.  A record without
+    # digests (an older record, or hand-written) or from another run is refused by name.
+    psha = provenance.get("recorder_sha256")
+    if not isinstance(psha, dict) or not psha:
+        c.fail("provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or an older tp2_match)")
+    elif recorder_sha256 is None:
+        c.fail("the recorder files' digests were not given to this leg (recorder_sha256=None): the provenance record cannot be bound to the rows loaded")
+    else:
+        for r in ranks:
+            if psha.get(str(r)) != recorder_sha256.get(r):
+                c.fail(f"rank {r}: provenance recorder_sha256 {str(psha.get(str(r)))[:12]} != the coll.rank{r}.jsonl loaded here {str(recorder_sha256.get(r))[:12]} "
+                       "(provenance from ANOTHER run / other recorder rows)")
+    n_dig, n_dig_mis = int(provenance.get("tensors_digested") or 0), int(provenance.get("n_digest_mismatches") or (len(digest_mismatches) if digest_mismatches else 0))
+    if n_dig_mis:
+        c.fail(f"{n_dig_mis} stored tensors do not digest to their recorder rows, first {json.dumps(digest_mismatches[0] if digest_mismatches else None)[:200]}")
+    if n_dig != 2 * world * len(common):
+        c.fail(f"provenance digested {n_dig} stored tensors, {2 * world * len(common)} required (part + out, every rank, every common (step, k))")
+    c.close()
+
+
+def _check_links(folds: _Folds, links: dict[int, list[dict] | dict[str, list[dict]]], producers: dict[int, dict[tuple[int, int], list[str]]] | None) -> None:
+    res, ranks, by_key, peers_of = folds.res, folds.ranks, folds.by_key, folds.peers_of
+    c = _Check(res, "links", "rank r's Program link k binds its world-1 peer inputs to collective k of every other rank with the fold's kind / shape / site")
+    for r in ranks:
+        # B1: one Program, its k = issue order over steps.  B>1: one Program per request (`links[r]` = {request: links}); request q's k
+        # runs over the collectives that carry a peers field of q, in (step, k) order -- the same k the compare's PEER source uses.
+        Lr = links.get(r)
+        per_req: dict[str, list[dict]] = dict(Lr) if isinstance(Lr, dict) else {"*": list(Lr or [])}
+        for q, L in per_req.items():
+            flat = [by_key[r][key] for key in sorted(by_key[r]) if q == "*" or any(f["request"] == q for f in _fields(by_key[r][key]))]
+            tag = f"rank {r}" + (f" request {q!r}" if q != "*" else "")
+            if len(L) != len(flat):
+                c.fail(f"{tag}: {len(L)} links for {len(flat)} fold collectives")
+            for k, (ln, col) in enumerate(zip(L, flat)):
+                if int(ln.get("k", k)) != k or int(ln.get("peer_collective_k", -1)) != k:
+                    c.fail(f"{tag} link {k}: binds peer collective {ln.get('peer_collective_k')} (wrong peer)")
+                # v2 links carry `peers = [{rank, input, operand, collective_k}]` (one per other rank); a v1 link the one `peer_rank`
+                stated = ln.get("peers")
+                lps = stated if isinstance(stated, list) else [{"rank": ln.get("peer_rank", -1), "collective_k": ln.get("peer_collective_k", k)}]
+                got_ranks = sorted(int(x.get("rank", -1)) for x in lps)
+                if got_ranks != peers_of[r]:
+                    c.fail(f"{tag} link {k}: peer ranks {got_ranks} (must be every other rank {peers_of[r]})")
+                if any(int(x.get("collective_k", k)) != k for x in lps):
+                    c.fail(f"{tag} link {k}: a peer binds collective {[x.get('collective_k') for x in lps]} (wrong peer collective)")
+                if ln.get("kind") != col["kind"]:
+                    c.fail(f"{tag} link {k}: kind {ln.get('kind')} vs fold {col['kind']}")
+                rows_q = int(col["rows"]) if q == "*" else int(next(f["rows"] for f in col["fields"] if f["request"] == q))
+                link_shape = ln.get("shape")   # a link without a shape reads as no shape, never the fold's two
+                if (list(link_shape) if link_shape else []) != [rows_q, int(col["N"])]:
+                    c.fail(f"{tag} link {k}: shape {ln.get('shape')} vs fold [{rows_q}, {col['N']}]")
+                if not same_module_path(ln.get("module", ln.get("module_path")), col["site"]):
+                    c.fail(f"{tag} link {k}: module {ln.get('module', ln.get('module_path'))!r} vs fold site {col['site']!r}")
+                cls = _site_class(ln.get("module_path"))
+                admits = PRODUCER_BY_SITE_CLASS.get(cls or "")
+                if admits and producers is not None:
+                    key = (int(col["step"]), int(col["k"]))
+                    specs = producers.get(r, {}).get(key)   # what produced the rank's own partial there; None where the record names no producer
+                    bad = sorted({str(sp) for sp in specs if not _admitted(sp, admits, ADDENDS_BY_SITE_CLASS.get(cls or "", ()))}) if specs else []
+                    if bad:
+                        c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {admits} (wrong producer)")
+    c.close()
+
+
+def _check_complete(folds: _Folds, recorder: object, links: object, provenance: object) -> None:
+    res = folds.res
+    # the library itself refuses an incomplete leg set: any second consumer inherits the entry point's rule
+    c = _Check(res, "complete", "every leg present: recorder rows, link tables and the provenance record of the same run (require_all)")
+    for name, val in (("recorder", recorder), ("links", links), ("provenance", provenance)):
+        if val is None:
+            c.fail(f"{name} leg not run (input absent): with peers as a free input a rank-local Match alone is trivially satisfiable")
+    c.close()
+
+
+def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: Mapping[Any, dict] | None = None, require: bool = False) -> dict:
     """The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
     digest its `peers_r[s,k]` leaf is bound to (`peer_binding` of tp2_rank_match.json = the recorder's digest of rank 1-r's partial at (s,k));
     the Commit compared every committed rank-local partial against the SAME recorder's stored tensors bit-exact (`match_oracle`, per rank,
@@ -465,7 +558,7 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
     collective-level only, ◐) unless `require`, then a named FAIL.  CPU only, digests only (no tensors re-read)."""
     md = Path(match_dir)
     fm, rm = md / "fold_match" / "tp2_fold_match.json", md / "fold_match" / "tp2_rank_match.json"
-    res: dict[str, Any] = {"schema": "verity/tp2/commit-binding/v1", "fold_match": str(fm), "rank_match": str(rm), "failures": [], "n_bindings": 0, "n_recorder": {}}
+    res: dict[str, Any] = {"schema": RANK_COMMIT_BINDING_SCHEMA, "fold_match": str(fm), "rank_match": str(rm), "failures": [], "n_bindings": 0, "n_recorder": {}}
     if not fm.exists() or not rm.exists():
         res["result"] = False if require else None
         res["why"] = ("fold Match record missing (tp2_fold_match.json / tp2_rank_match.json): the peer leaves have no Match-stage binding" + (" -- REQUIRED" if require else "; Match is collective-level only (◐)"))
@@ -480,16 +573,18 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
         fails.append(f"tp2_fold_match verdict {fmd.get('pass')} (legs {fmd.get('legs')}): a Commit bound to a failed fold Match is not a PASS ingredient")
     if rmd.get("verdict") != "PASS":
         fails.append(f"tp2_rank_match verdict {rmd.get('verdict')} failed={rmd.get('failed')}")
-    binding = rmd.get("peer_binding") or {}
+    binding = rmd.get("peer_binding")
+    if not binding:
+        binding = {}   # a rank Match record that states no peer binding binds nothing
     res["n_bindings"] = len(binding)
     rec: dict[int, dict[tuple[int, int], dict]] = {}
     for r in range(world):
-        p = md / "capture" / f"coll.rank{r}.jsonl"
-        if not p.exists():
-            fails.append(f"rank {r}: recorder rows {p.name} missing from the Match capture (the Commit oracle's source)")
+        rows = md / "capture" / f"coll.rank{r}.jsonl"
+        if not rows.exists():
+            fails.append(f"rank {r}: recorder rows {rows.name} missing from the Match capture (the Commit oracle's source)")
             rec[r] = {}
             continue
-        rec[r] = {(int(x["step"]), int(x["k"])): x for x in load_recorder(p)}
+        rec[r] = {(int(x["step"]), int(x["k"])): x for x in load_recorder(rows)}
         res["n_recorder"][str(r)] = len(rec[r])
     n_bad = 0
     covered: dict[int, set[tuple[int, int]]] = {r: set() for r in range(world)}
@@ -534,9 +629,10 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
                     fails.append(f"rank {r}: {len(missp)} recorder collectives without a fold binding to peer rank {p} (first {missp[:3]})")
     if match_oracle is not None:
         for r in range(world):
-            mo = match_oracle.get(str(r)) or match_oracle.get(r) or {}      # per-rank blocks are keyed int in-process, str after JSON
-            if mo.get("verdict") != "PASS":
-                fails.append(f"rank {r}: Commit match oracle {mo.get('verdict') or 'not run'} (committed partials vs the recorder's stored tensors): the binding has no committed value to bind to")
+            mo = match_oracle.get(str(r)) or match_oracle.get(r)      # per-rank blocks are keyed int in-process, str after JSON
+            verdict = mo.get("verdict") if mo else None             # a rank without a block was not run
+            if verdict != "PASS":
+                fails.append(f"rank {r}: Commit match oracle {verdict or 'not run'} (committed partials vs the recorder's stored tensors): the binding has no committed value to bind to")
     else:
         fails.append("Commit match oracle not run (--no-match-oracle): the binding digests have no committed value to bind to")
     res["result"] = not fails

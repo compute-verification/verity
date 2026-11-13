@@ -19,16 +19,23 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
-from tests.program.predict.test_predict import TINY, _phi
 from verity.circuits import Array, Program, Value
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
-from verity.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import (
+    REGISTRY,
+    Builder,
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+)
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType
 from verity.definitions import boolean as BB
+from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry.catalog import load
 from verity.definitions.replay import replayer
+
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import definitions as DF
 from verity_vllm.pipeline import c2_replay as C2
@@ -156,8 +163,6 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
 def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, program, monkeypatch):
     """The Build is of record, but the row kernel the replay grades its norm rows by is one bit off its Definition: refused by
     name before any row is graded, by the kernel's self-check."""
-    from verity.definitions.numerics import derived_rows as DR
-
     dg = _build(tmp_path / "built", program)
     monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
     assert DF.kernel_refusal(DF.evaluated_specs(_instance_rows(program))) is None

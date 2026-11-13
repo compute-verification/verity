@@ -25,9 +25,11 @@ from typing import Any
 
 import verity_config
 
+from verity_vllm.records.schema_ids import ENGINE_SPEC_SCHEMA
+
 __all__ = ["SCHEMA", "Engine", "EngineSpec", "from_mapping", "load"]
 
-SCHEMA = "verity-vllm/engine-spec/v0"
+SCHEMA = ENGINE_SPEC_SCHEMA
 
 
 @dataclass(frozen=True)

@@ -6,11 +6,11 @@ import re
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.defs import Builder, PrimitiveDefinition, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array, Value
 from verity.definitions.registry import dsa_topk
+
 from verity_vllm.program import inputs as IN
 from verity_vllm.program.frontend.registration import RunInputs
 

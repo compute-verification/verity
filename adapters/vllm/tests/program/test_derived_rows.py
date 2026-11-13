@@ -23,11 +23,8 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 def _derived():
     from verity.definitions.numerics import derived_rows as D
-    try:
-        D._fa2_tables()
-        D._rms_tables()
-    except Exception as e:  # pragma: no cover
-        pytest.skip(f"MUFU tables unavailable: {e}")
+    D._fa2_tables()
+    D._rms_tables()
     return D
 
 
@@ -125,7 +122,7 @@ def test_ex2_every_exponent_class_equals_the_exact_rule():
     tabs = D._fa2_tables()
     mants = np.concatenate([[0, 1, 2, 0x3FFFFF, 0x400000, 0x400001, 0x7FFFFE, 0x7FFFFF],
                             np.random.default_rng(64).integers(0, 1 << 23, 8)]).astype(np.uint32)
-    e = np.arange(256, dtype=np.uint32)
+    e: np.ndarray = np.arange(256, dtype=np.uint32)
     xs = ((np.arange(2, dtype=np.uint32)[:, None, None] << 31) | (e[None, :, None] << 23) | mants[None, None, :]).reshape(-1)
     want = np.array([_ex2_exact(int(w), tabs.ex2) for w in xs], dtype=np.uint32)
     assert np.array_equal(FA.mufu_ex2(xs.view(np.float32), tabs).view(np.uint32), want)
@@ -240,7 +237,7 @@ def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
         check(int(rng.integers(0, 2 ** 32)), [0] * 16, [int(x) for x in _bf16_words_every_encoding(rng, 16)])   # a zero operand lane
 
 
-def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
+def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation(monkeypatch):
     """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`verity.definitions.silicon.total`; no `veritor`, no numpy) and
     follows the total rules of the step by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
     of both signs -> NaN, of one sign -> that infinity (finite terms ignored); finite overflow -> the sticky infinity; an all-zero
@@ -248,20 +245,13 @@ def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
     from verity.definitions.registry import hopper as H
     one, two, z, nz, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon_total", "numpy")}
-    try:
-        for k in saved:
-            sys.modules[k] = None                                                  # any `import veritor...` / `import numpy` now raises
+    with monkeypatch.context() as blocked:
+        for k in ("veritor", "veritor.core", "veritor.core.silicon_total", "numpy"):
+            blocked.setitem(sys.modules, k, None)                                  # any `import veritor...` / `import numpy` now raises
         ev = H.HopperBF16WgmmaDot16.evaluate
         assert ev(0, *ones, *ones) == 0x41800000                                   # evaluates with veritor and numpy unimportable
         pipe, fn = H._hopper_total()                                               # the definition of record is core, stdlib only
         assert pipe.name == "hopper_bf16_wgmma_k16" and fn(pipe, 0, ones, ones) == 0x41800000
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
     assert ev(0, *ones, *ones) == 0x41800000                                       # 16 * 1.0 = 16.0
     assert ev(0x3F800000, *ones, *ones) == 0x41880000                              # + acc 1.0 = 17.0
     assert ev(0, *[two] * 16, *ones) == 0x42000000                                 # 32.0
@@ -339,26 +329,20 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
         check(int(rng.integers(0, 0x800000)), [int(x) for x in rng.integers(1, 0x80, 16)], [int(x) for x in rng.integers(1, 0x80, 16)])
 
 
-def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
+def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation(monkeypatch):
     """Runs on every interpreter (the pods' 3.11 included): the registered AmpereBF16TcDot16 evaluates without `veritor` or
     `verity.definitions.numerics.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
     mixed infinities -> 0x7FFFFFFF; a one-signed infinity -> that infinity; group overflow is a sticky infinity; +0; subnormals."""
     import sys
+
     from verity.definitions.registry import prims as P
     one, two, z, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity.definitions.numerics", "verity.definitions.numerics.mma")}
-    try:
-        for k in saved:
-            sys.modules[k] = None
+    with monkeypatch.context() as blocked:
+        for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity.definitions.numerics", "verity.definitions.numerics.mma"):
+            blocked.setitem(sys.modules, k, None)
         ev = P.AmpereBF16TcDot16.evaluate
         assert ev(0, *ones, *ones) == 0x41800000
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
     assert ev(0x3F800000, *ones, *ones) == 0x41880000                              # 17.0
     assert ev(0, *[two] * 16, *ones) == 0x42000000                                 # 32.0
     assert ev(0, *[nan] + ones[1:], *ones) == 0x7FFFFFFF
@@ -461,7 +445,12 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     NH, Dh, n = 3, 16, 600
     x = words((n, NH, Dh), 90, 150)
     cs = words((n, Dh), 118, 128)
-    x[0, 0, 0] = 0x0001; x[0, 0, 8] = 0x8000; cs[1, 0] = 0x0000; cs[2, 9] = 0x8000; x[3, 1, 5] = 0x0080   # subnormal, -0, +0 cache, -0 sin, min normal
+    # subnormal, -0, +0 cache, -0 sin, min normal
+    x[0, 0, 0] = 0x0001
+    x[0, 0, 8] = 0x8000
+    cs[1, 0] = 0x0000
+    cs[2, 9] = 0x8000
+    x[3, 1, 5] = 0x0080
     out = D.rope_rows(x, cs)
     assert out.shape == (n, NH, Dh) and out.dtype == np.uint16
     R = Dh // 2
@@ -483,7 +472,8 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     one = D.rope_rows(xr[4], csr[4])
     assert one.shape == (12, 128) and np.array_equal(one, outr[4])
     # negative: flip one input word -> exactly its pair's two outputs change (in that head), nothing else
-    x2 = xr[4].copy(); x2[7, 20] ^= 0x0040
+    x2 = xr[4].copy()
+    x2[7, 20] ^= 0x0040
     d = np.flatnonzero(D.rope_rows(x2, csr[4]) != one)
     assert set(d.tolist()) <= {7 * 128 + 20, 7 * 128 + 84} and len(d) >= 1
     with pytest.raises(ValueError, match="RoPE_v1"):
@@ -496,8 +486,8 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
     KV head h // (NH/KVH)), one query over T keys, ceil(T/BN) blocks last -> first, Fa2InvSum epilogue -- on random N(0,1) words."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1
     from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.registry import b1
     NH, KVH, Dh, BN = 4, 2, 64, 128
     rng = np.random.default_rng(7000 + T)
     q = _rand_bf16(rng, (NH, Dh))
@@ -518,12 +508,11 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     the independent C++ model `verity.definitions.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
     capture, hopper-profile.md) on Qwen2.5-1.5B geometry (NH=12, KVH=2, D=128, BN=128) and Llama-3.2-1B's (NH=32, KVH=8, D=64, BN=192
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
-    from verity.definitions.numerics import fa2_relation, fa3_model
-
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1, hopper
     from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.numerics import fa2_relation, fa3_model
+    from verity.definitions.registry import b1, hopper
     from verity.definitions.registry import prims as P
     NH, KVH, Dh, BN = (12, 2, 128, 128) if geometry == "qwen" else (32, 8, 64, 192)
     rng = np.random.default_rng(9000 + T)
@@ -534,9 +523,9 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     assert out.shape == (NH, Dh) and not nf.any()
     # (1) the independent C++ FA3 model: one head per row, per-row KV head, col_limit = T, ceil(T / BN) blocks
     tables = fa2_relation.tables()
-    kvh = (np.arange(NH) // (NH // KVH)).astype(np.int32)
-    col = np.full(NH, T, np.int32)
-    nb = np.full(NH, (T + BN - 1) // BN, np.int32)
+    kvh: np.ndarray = (np.arange(NH) // (NH // KVH)).astype(np.int32)
+    col: np.ndarray = np.full(NH, T, np.int32)
+    nb: np.ndarray = np.full(NH, (T + BN - 1) // BN, np.int32)
     res = fa3_model.attention_rows(q, kc, vc, kvh, col, nb, float(Dh) ** -0.5, tables, kblock_n=BN)
     assert np.array_equal(res.out, out), int((res.out != out).sum())
     # (2) the registered Definition, gate for gate (a small GQA slice keeps the scalar evaluation cheap: 2 q heads over 1 KV head)
@@ -595,7 +584,7 @@ def test_silu_mid_factorises_the_prim():
     from verity.definitions.registry import prims as P
     mid = D.silu_mid_table()
     rng = np.random.default_rng(41)
-    g = np.arange(65536, dtype=np.uint16)
+    g: np.ndarray = np.arange(65536, dtype=np.uint16)
     u = rng.integers(0, 2 ** 16, 65536, dtype=np.int64).astype(np.uint16)
     out = D.bf16_rn_torch(D.mul_rn(D.bf16_to_f32_words(mid[g]), D.bf16_to_f32_words(u)))
     rows = D.silu_mul_rows(np.concatenate([g, u])[None, :])
@@ -626,7 +615,7 @@ def test_rmsnorm_triton_rows_vs_gates(N, eps):
     for scale in (0.02, 1.0, 40.0):
         x = _rand_bf16(rng, N, scale)
         w = _rand_bf16(rng, N)
-        t = {}
+        t: dict = {}
         out = evaluate_call(prog.circuit, call, [int(v) for v in x] + [int(v) for v in w], trace=t)
         got = D.rmsnorm_triton_rows(x[None], w, eps)
         assert np.array_equal(got["out"][0], np.array(out, dtype=np.uint16))
@@ -648,7 +637,7 @@ def test_rmsnorm_fused_v2_rows_vs_gates():
     rng = np.random.default_rng(7)
     for scale in (0.02, 1.0, 40.0):
         x, res, w = (_rand_bf16(rng, N, scale) for _ in range(3))
-        t = {}
+        t: dict = {}
         out = np.array(evaluate_call(prog.circuit, call,
                                      [int(v) for v in x] + [int(v) for v in res] + [int(v) for v in w],
                                      trace=t), dtype=np.uint16)
@@ -679,11 +668,11 @@ def test_attn_block_vs_gates(D_, NVIS, FIRST):
     args = ([int(v) for v in q] + [int(v) for v in kb.ravel()] + [int(v) for v in vb.ravel()]
             + [int(m_prev)] + [int(v) for v in l_prev] + [int(v) for v in o_prev])
     ret = evaluate_call(prog.circuit, call, args)
-    m, l, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
+    m, l_next, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
                                D=D_, NVIS=NVIS, FIRST=FIRST)
     assert not nf[0]
     assert int(m[0]) == ret[0]
-    assert [int(v) for v in l[0]] == list(ret[1:5])
+    assert [int(v) for v in l_next[0]] == list(ret[1:5])
     assert [int(v) for v in o[0]] == list(ret[5:])
 
 
@@ -700,7 +689,7 @@ def test_attention_head_states_vs_gates(T, D_):
     q = _rand_bf16(rng, D_)
     k = _rand_bf16(rng, (T, D_))
     v = _rand_bf16(rng, (T, D_))
-    t = {}
+    t: dict = {}
     out = evaluate_call(prog.circuit, call,
                         [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()],
                         trace=t)
@@ -732,7 +721,7 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     from verity.circuits.evaluation import evaluate_call
     from verity.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)  # the geometry E6 pins for this head dim; here bound explicitly as the declared static
-    assert BN == (128 if D_ <= 64 else 64)
+    assert (128 if D_ <= 64 else 64) == BN
     prog, call = _standalone(bind(b1.AttnBlockV3, D=D_, NVIS=NVIS, FIRST=FIRST, BN=BN))
     rng = np.random.default_rng(7000 + 1000 * D_ + NVIS + FIRST)
     q = _rand_bf16(rng, D_)
@@ -746,11 +735,11 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     args = ([int(v) for v in q] + [int(v) for v in kb.ravel()] + [int(v) for v in vb.ravel()]
             + [int(m_prev)] + [int(v) for v in l_prev] + [int(v) for v in o_prev])
     ret = evaluate_call(prog.circuit, call, args)
-    m, l, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
+    m, l_next, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
                                D=D_, NVIS=NVIS, FIRST=FIRST)
     assert not nf[0]
     assert int(m[0]) == ret[0]
-    assert [int(v) for v in l[0]] == list(ret[1:5])
+    assert [int(v) for v in l_next[0]] == list(ret[1:5])
     assert [int(v) for v in o[0]] == list(ret[5:])
 
 
@@ -769,7 +758,7 @@ def test_attention_head_v3_states_vs_gates(T, D_):
     q = _rand_bf16(rng, D_)
     k = _rand_bf16(rng, (T, D_))
     v = _rand_bf16(rng, (T, D_))
-    t = {}
+    t: dict = {}
     out = evaluate_call(prog.circuit, call,
                         [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()],
                         trace=t)
@@ -828,7 +817,7 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
     words = []
     for defn, extra in ((b1.AttentionHead, {}), (b1.AttentionHeadV3, {"BN": 128})):
         prog, call = _standalone(bind(defn, T=T, D=64, **extra))
-        t = {}
+        t: dict = {}
         out = evaluate_call(prog.circuit, call, args, trace=t)
         words.append((call.hi - call.lo, tuple(out), tuple(t[g] for g in sorted(t))))
     assert words[0][0] == words[1][0]
@@ -851,7 +840,7 @@ def test_attention_head_v3_at_bn_64_is_attention_head_v1_gate_for_gate():
     words = []
     for defn, extra in ((b1.AttentionHead, {}), (b1.AttentionHeadV3, {"BN": 64})):
         prog, call = _standalone(bind(defn, T=T, D=64, **extra))
-        t = {}
+        t: dict = {}
         out = evaluate_call(prog.circuit, call, args, trace=t)
         words.append((call.hi - call.lo, tuple(out), tuple(t[g] for g in sorted(t))))
     assert words[0] == words[1]
