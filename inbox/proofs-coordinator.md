@@ -121144,3 +121144,22 @@ Second try, `SessionOpened.lean --siblings`: it waited for a Lean slot from 04:5
 - `SessionOpened.lean` compiling; the probes of `SessionRecord.lean`, `SessionCoins.lean` and `SessionHeld.lean`. `a226` decides them.
 - `SessionDev.lean` built on the join's branch, with TWOLEG's two commits under it.
 - `SessionHeld.lean` built at TWOLEG's tip.
+
+## PERIODREAD, Fri 05:01Z: `Drawn` elaborates on #9625's proofs (`5c31`, rc 0); the 04:50Z word is in the docstrings, so #9581, #9625 and (l) have new heads; (l)'s first try `499f` is in line
+
+No ready line in this entry: #9595's still waits for its quick tier (`1199`, running), and #9581's and #9625's follow it.
+
+- **Your item 4 is done** `[run]`: `r20261113-043328-5c31`, vy-nebius-2, `security/Proofs/Properties/Challenger/Drawn.lean` at #9625's `73ab10a29a`. It waited 6 min 40 s for a check slot (04:33:28Z to 04:40:34Z) and held a Lean slot from 04:48Z. `lean exit 0 in 594 s`; "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Run state `done`, rc 0. The local waiter of `verity lean try` left with exit 79 after 1206 s while the run went on; I followed it with `research fetch`. Log in my artifacts.
+- **The 04:50Z word, acted on** `[read]`: both docstrings said the fact is "a hypothesis only while `History` does not define the device to write line `i` under number `i`", which is the way soundness ruled out (no law into `History`). `Numbered`'s and `Chained`'s now say: "It is taken as a hypothesis, not proved: it is a lemma of the modelled device once the model builds that device's whole ledger line by line, and no statement takes it then." The two `unstated` lock lines say the same.
+- **What I left out of the tree, and why** `[read]`: "(PRF-490)" and "soundness's device pull request". AGENTS.md ("Where writing goes") has no Linear issue, lane name or pull request in a docstring or a lock's text. The three pull request bodies name PRF-490 and soundness. If you want the id in the docstring anyway, say so and I add it.
+- **New heads, all pushed, none with a changed term** `[read]`:
+  - #9581: `e230e76f63423740f73b9e69bff0cfe6a32e3376`, which is `a441d99476` plus one commit (the docstring sentence, one `unstated` line). `87ae` ran at `a441d99476`; the body says so.
+  - #9625: `2f3c3e6022e189a2f94be90f1d3d067eda6995d6`, which is `73ab10a29a` plus the merge of that commit plus one commit. The lock's merge driver printed "changed on both sides, differently: took theirs" on `LedgerOfDevice`'s `unstated` line and dropped "proved from that hypothesis in security_proofs by `Properties.Spot.Period.ledgerOfDevice`"; I restored it by hand, and the diff from `73ab10a29a` is that one line and the docstring. `tests/test_lean_packages.py` on it: 34 passed `[run on the VM]`.
+  - (l): `ade5505e0edd4a46ae8729cabcc924f1ae623e26` on `cursor/proofs-prf600-period-signed-7d2e`, "not compiled" in the subject.
+- **Bodies**: #9581's and #9625's replaced (the PRF-490 sentence; `Drawn`'s result; which two of the four checks of "proved" hold).
+- **(l)'s first try** `[run]`: `r20261113-050027-499f`, vy-nebius-2, launched 05:00:25Z, in line. One try at a time, so it waited for `5c31` to end. If it has no slot by 05:15Z I cancel it and send it to vy-nebius-cpu-11.
+- **`r20261113-040405-1199`** `[run]`: #9595's quick tier, in its slot since 04:31:00Z, 51 suites written so far and none failed. The earlier tier had 61.
+
+**Not established.** (l) has not elaborated anywhere: its four `mvcgen` lemmas, `prev_of_text` and the main theorem are unchecked. #9595's quick tier has not ended. No Lean check (kernel replay, lock rules) ran on any of these heads, and no second reader read the restated statements. The runs cited for #9581 and #9625 are at the commit before the docstring sentence.
+
+**Pause:** yes, at any time; nothing is unpushed but logs under `/tmp`. Scratch `cursor/proofs-prf600-periodread-scratch-0b7e` holds the bodies. Mailbox read at `7e01000574`.
