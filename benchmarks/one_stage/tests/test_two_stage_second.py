@@ -272,29 +272,36 @@ def test_a_reference_staged_at_the_sampled_count_is_the_whole_one_at_any_sampled
     registered reads the whole one names, and, placed at any ``Q·K`` sampled slots (`second_stage.at_sampled`), its
     header is the whole one's but for the run's fields (`blank_run`) and the bindings, which the second stage computes
     itself for either (`at_run`): so the second stage takes one where it takes the other, and the auditor stages
-    nothing of the member's size. A count that samples every proof block of a cell keeps the whole reference, which
-    the second stage holds the statement to as the part's whole. Slow (about 15 s): it lowers the template for each
-    reference."""
+    nothing of the member's size. That holds of the class of whole instances and of the greedy select in units, whose
+    combine reads its chunks' rows by wires. A count that samples every proof block of a cell keeps the whole
+    reference, which the second stage holds the statement to as the part's whole. Slow (about 20 s): it lowers each
+    class's templates."""
+    def placed(header: dict, slots: list[int], reads: list) -> dict:
+        h = SS.blank_run(SS.at_sampled(header, slots, reads))
+        return {**h, "frame_v3": {**h["frame_v3"], "bindings": None}}
+
     d = TS.design(_layout())
     (whole,), (short,), (every,) = (TS.references(d, Q, tmp_path / name, counts)["templates"]
                                     for name, counts in (("whole", None), ("short", (K,)), ("every", (O,))))
     assert every == whole
-    assert [short[x] for x in ("template", "circuit", "registered")] == [whole[x] for x in ("template", "circuit", "registered")]
     assert (short["header"]["instances"], whole["header"]["instances"]) == (Q * K, Q * O)
     assert short["header"]["shared_rows"] == {"logits": 1, "o0": Q * K}
     assert not (tmp_path / "short" / "m0" / "inst.bin").exists()
-    m, = d.window("00" * 64, range(Q)).members
-    reads = [(port, {"reads": list(range(m.n)), "reads_from": 0}) for port, _words in m.all_rows]
-
-    def placed(header: dict, slots: list[int]) -> dict:
-        h = SS.blank_run(SS.at_sampled(header, slots, reads))
-        return {**h, "frame_v3": {**h["frame_v3"], "bindings": None}}
-
-    for slots in ([1, 6], [0, 4], [3, 7]):
-        assert placed(short["header"], slots) == placed(whole["header"], slots)
-        assert placed(short["header"], slots)["shared_rows"] == {"logits": Q * K, "o0": Q * K}
-    assert placed(short["header"], [1, 6]) != placed(whole["header"], [1, 5, 6])
     assert short["header"]["frame_v3"]["bindings"] != whole["header"]["frame_v3"]["bindings"]
+
+    wired = TS.design(SM.layout(256, O, N, True, units=4))
+    assert len(wired.wires) == 3
+    pairs = [(d, [whole], [short]),
+             (wired, *(TS.references(wired, Q, tmp_path / name, counts)["templates"]
+                       for name, counts in (("wired-whole", None), ("wired-short", (K,) * 4))))]
+    for design, wholes, shorts in pairs:
+        for m, w, s in zip(design.window("00" * 64, range(Q)).members, wholes, shorts, strict=True):
+            assert [s[x] for x in ("template", "circuit", "registered")] == [w[x] for x in ("template", "circuit", "registered")]
+            reads = [(port, {"reads": list(range(m.n)), "reads_from": m.base}) for port, _words in m.all_rows]
+            for slots in ([m.base + 1, m.base + 6], [m.base, m.base + 4], [m.base + 3, m.base + 7]):
+                assert placed(s["header"], slots, reads) == placed(w["header"], slots, reads)
+                assert placed(s["header"], slots, reads)["shared_rows"] == {port: Q * K for port, _words in m.all_rows}
+            assert placed(s["header"], [m.base + 1, m.base + 6], reads) != placed(w["header"], [m.base + 1, m.base + 5, m.base + 6], reads)
 
 
 @pytest.mark.slow
