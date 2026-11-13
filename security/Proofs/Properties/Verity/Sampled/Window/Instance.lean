@@ -543,6 +543,27 @@ theorem uncovered_le (k : Verity.Registration.Composite) (hWa : I.WindowAt k) {�
     rw [I.windows_of hA hs] at hS
     cases hS
 
+/-- The deployed vocabulary's sampled verdict is the base's. -/
+theorem vocab_verdict_le (k : Verity.Registration.Composite) {θ : ByteArray} {F : Array ByteArray}
+    {c : ByteArray} (σ : Verity.Game.Strategy ((I.vocab K).game θ F c)) :
+    Verity.Game.prob (fun o => (I.vocab K).Verdict k .sampled o) ((I.vocab K).game θ F c) σ ≤
+      Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ :=
+  Verity.Game.prob_mono (p := fun o => (I.vocab K).Verdict k .sampled o)
+    (q := fun o => I.base.Verdict k .sampled o) (fun _ ho => ho) _ σ
+
+/-- The deployed vocabulary's sampled finder is the window's read finder, and its bound `sampledBound`. -/
+theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).FinderCR .sampled θ F c σ) :
+    (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
+      I.sampledBound θ ((I.vocab K).cost θ F c σ) :=
+  (I.vocab K).finderPr_le_crBound h
+
+/-- Where the deployment runs a window, the deployed vocabulary's sampled δ is at least `sampledBound`. -/
+theorem vocab_delta_ge {θ : ByteArray} {W : Window} (hA : I.window θ = some W) (t : ℕ) :
+    ENNReal.ofReal (I.sampledBound θ t) ≤ (I.vocab K).delta θ .sampled t := by
+  rw [show (I.vocab K).delta θ .sampled t = I.deltaOf θ .sampled t from rfl, I.deltaOf_some hA]
+  exact W.ofReal_le_delta t _
+
 /-- **`WindowCovers` at the deployed vocabulary**: where the deployment runs no window, the published δ is `⊤`
 (`deltaOf`); where it runs one that the verifier doesn't set up on the committed files, a play the sampled verdict
 accepts there has blobs sent holding a pinned table or a member's file at other bytes than its registered file, as
@@ -554,18 +575,8 @@ theorem covers (k : Verity.Registration.Composite) (hWa : I.WindowAt k) :
   intro θ F hS hP c σ _ hFC
   rcases hA : I.window θ with _ | W
   · exact le_top.trans_eq (I.deltaOf_none hA _).symm
-  have h0 : Verity.Game.prob (fun o => (I.vocab K).Verdict k .sampled o) ((I.vocab K).game θ F c) σ ≤
-      Verity.Game.prob (fun o => I.base.Verdict k .sampled o) ((I.vocab K).game θ F c) σ :=
-    Verity.Game.prob_mono (p := fun o => (I.vocab K).Verdict k .sampled o)
-      (q := fun o => I.base.Verdict k .sampled o) (fun _ ho => ho) _ σ
-  have h1 := I.uncovered_le k hWa hA hP hS c σ
-  have h2 : (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
-      (I.vocab K).crBound θ .sampled ((I.vocab K).cost θ F c σ) :=
-    (I.vocab K).finderPr_le_crBound hFC
-  have h3 : ENNReal.ofReal ((I.vocab K).crBound θ .sampled ((I.vocab K).cost θ F c σ)) ≤
-      (I.vocab K).delta θ .sampled ((I.vocab K).cost θ F c σ) :=
-    (W.ofReal_le_delta _ _).trans_eq (I.deltaOf_some hA _).symm
-  exact h0.trans (h1.trans ((ENNReal.ofReal_le_ofReal h2).trans h3))
+  exact (I.vocab_verdict_le K k σ).trans ((I.uncovered_le k hWa hA hP hS c σ).trans
+    ((ENNReal.ofReal_le_ofReal (I.vocab_finder_le K hFC)).trans (I.vocab_delta_ge K hA _)))
 
 /-- **The deployment's window is the parameters' members on the registered files**, at parameters naming the
 one-stage form: a statement of `I.window θ` and the registered files alone. -/

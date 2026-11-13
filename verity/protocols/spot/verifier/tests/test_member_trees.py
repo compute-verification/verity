@@ -6,7 +6,8 @@ and the same sessions closed after other evidence, left open, interleaved, the n
 round, named in another order or with a table's round opened before the link are refused. `test_challenger` holds
 `member_line`, `members_order` and `links_first` alone. The
 evidence's bytes (`closing.evidence_bytes`, `session_evidence`, `closing_after`) decode to their parts, and a
-directory's digest is its files' evidence's."""
+directory's digest is its files' evidence's. The four are held to Lean's check, on a case's files, by the difftest
+`verity/protocols/spot/verifier/lean/tests/test_members_twin.py`."""
 
 from __future__ import annotations
 
