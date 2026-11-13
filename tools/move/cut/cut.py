@@ -10,18 +10,25 @@ The table (JSON) names:
   a list a test holds the tree to), a new module's text as the cut wrote it among them;
 * ``files``: new files given whole;
 * ``bare``: the directory whose files import each other by a bare name;
+* ``leave``: files whose prose the cut does not rewrite (another owner's), each named in the report's notes;
 * ``own``: for ``allow.py``, the sites of each counted lint the cut may add of its own, with why.
 
 A definition is its statement, its decorators and the comment lines right above it. Nothing in a definition's body
-changes but the name it reads another moved definition by, and what an ``edits`` row names. Every tracked Python file that reads a moved definition,
-by ``alias.NAME`` or ``from module import NAME``, through whatever re-exports, reads it from its new module after;
-the file a definition left imports back the ones it still reads, and loses the imports only they used.
+changes but the name it reads another moved definition by, and what an ``edits`` row names. Every tracked Python file
+that reads a moved definition, by ``alias.NAME`` or ``from module import NAME``, through whatever re-exports, reads it
+from its new module after; the file a definition left imports back the ones it still reads, and loses the imports only
+they used. A new module imports each name from the module that defines it, not from one that only imports it, so it
+loads no more than it reads. A comment, a docstring or a Markdown document that names a moved definition as
+```module.NAME`` names its new module after; other files that do are listed in the report's notes and left. A read
+the cut can't redirect, ``x.NAME`` of a module a function of the file hands back, is refused where the module no longer
+holds the name and noted where it holds it only because it reads it itself.
 
 The script edits ROOT's working tree and commits nothing. It refuses, changing nothing and naming the fix, where a
 name of the table is not a top-level definition of its file, where two definitions of one name meet in a module, where
-a moved definition reads one that stays, where a module under ``verity/`` would import a file of ``bare``, and where
-an edit does not match once. It imports and runs none of the tree's code. ``allow.py``, run after it, moves the
-counted lints' entries with the findings the definitions took along."""
+a moved definition reads one that stays, where a module under ``verity/`` would import a file of ``bare``, where an
+edit does not match once, where a file still names the path of one that moves whole, and where a ``pyproject.toml``
+names a file by its path and not the new file it comes to import. It imports and runs none of the tree's code.
+``allow.py``, run after it, moves the counted lints' entries with the findings the definitions took along."""
 from __future__ import annotations
 
 import ast
@@ -910,6 +917,107 @@ def text_after(rel: str) -> str | None:
         return None
 
 
+# ---- a module a function hands back: `x = f()`, then `x.NAME`, is a read no rule above redirects
+def _top_names(text: str) -> set[str]:
+    """The names a module's own level binds: its definitions, assignments and imports, none of a function's or a class's."""
+    out: set[str] = set()
+
+    def walk(node: ast.AST) -> None:
+        for n in ast.iter_child_nodes(node):
+            if isinstance(n, DEFS):
+                out.add(n.name)
+            elif isinstance(n, ast.Lambda):
+                continue
+            elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+                out.add(n.id)
+            elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                out.update((a.asname or a.name).split(".")[0] for a in n.names)
+            else:
+                walk(n)
+
+    walk(ast.parse(text))
+    return out
+
+
+MOVED_FROM: dict[str, set[str]] = {}
+for (src, name) in where:
+    MOVED_FROM.setdefault(src, set()).add(name)
+HELD = {src: _top_names(text_after(src)) for src in MOVED_FROM}
+for rel, text in sorted(TEXT.items()):
+    if not any(Path(src).stem in text for src in MOVED_FROM):
+        continue
+    tree = ast.parse(text)
+    hands: dict[str, str] = {}  # a function of this file, and the source file whose module it returns
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        local: dict[str, str] = {}
+        for n in ast.walk(fn):
+            if isinstance(n, (ast.Import, ast.ImportFrom)):
+                for a in n.names:
+                    target = alias_target(n, a, rel)
+                    if target and target[1] is None and target[0] in MOVED_FROM:
+                        local[(a.asname or a.name).split(".")[0]] = target[0]
+        for n in ast.walk(fn):
+            if not isinstance(n, ast.Return) or n.value is None:
+                continue
+            v = n.value
+            if isinstance(v, ast.Name) and v.id in local:
+                hands[fn.name] = local[v.id]
+            elif isinstance(v, ast.Call) and (getattr(v.func, "attr", "") == "import_module" or getattr(v.func, "id", "") == "__import__") \
+                    and v.args and isinstance(v.args[0], ast.Constant) and isinstance(v.args[0].value, str) \
+                    and module_file(v.args[0].value, rel) in MOVED_FROM:
+                hands[fn.name] = module_file(v.args[0].value, rel)
+    if not hands:
+        continue
+
+    def _handed(call: ast.AST) -> str | None:
+        return hands.get(getattr(call.func, "id", "")) if isinstance(call, ast.Call) else None
+
+    held_by = {n.targets[0].id: _handed(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign) and len(n.targets) == 1
+               and isinstance(n.targets[0], ast.Name) and _handed(n.value)}
+    through: dict[str, set[str]] = {}
+    for n in ast.walk(tree):
+        if not isinstance(n, ast.Attribute):
+            continue
+        src = held_by.get(n.value.id) if isinstance(n.value, ast.Name) else _handed(n.value)
+        if src is None or n.attr not in MOVED_FROM[src]:
+            continue
+        if n.attr not in HELD[src]:
+            problems.append(f"{rel}:{n.lineno}: reads `{n.attr}` of the module a function of the file hands back, and {src} "
+                            f"no longer holds it (it is in {where[(src, n.attr)]}): import it there, in an `edits` row")
+        else:
+            through.setdefault(src, set()).add(n.attr)
+    for src, names in sorted(through.items()):
+        notes.append(f"{rel}: reads {', '.join(sorted(names))} of the module a function of the file hands back, {src}, which "
+                     f"holds each only because it reads it itself; the cut leaves these reads as they are")
+
+# ---- prose: a comment, a docstring or a document that names a moved definition as `module.NAME` names its new module
+LEAVE: set[str] = set(TABLE.get("leave", []))
+STEMS: dict[tuple[str, str], str] = {}
+for (src, name), dest in where.items():
+    if STEMS.setdefault((Path(src).stem, name), Path(dest).stem) != Path(dest).stem:
+        problems.append(f"`{Path(src).stem}.{name}` is two definitions, of two files of that name, with two destinations: "
+                        f"prose that names it can't be told apart; take one of them in a change of its own")
+PROSE = re.compile("`(" + "|".join(sorted({re.escape(s) for s, _ in STEMS}, key=len, reverse=True)) + r")\.([A-Za-z_]\w*)")
+prose: dict[str, int] = {}
+for rel in sorted({r for r in subprocess.run(["git", "-C", str(ROOT), "grep", "-l", "-z", "-E", "-e", PROSE.pattern.replace(r"\w", "[A-Za-z0-9_]"),
+                                              "--", "."], capture_output=True, text=True).stdout.split("\0") if r}
+                  | set(CHANGED) | set(new_modules)):
+    text = new_modules.get(rel) or text_after(rel)
+    if text is None or rel.startswith(LISTS):
+        continue
+    hits = [m for m in PROSE.finditer(text) if (m.group(1), m.group(2)) in STEMS]
+    if not hits:
+        continue
+    if not rel.endswith((".py", ".md")) or rel in LEAVE:
+        notes.append(f"{rel}: names {', '.join(sorted({m.group(0)[1:] for m in hits}))} in prose, which the cut leaves: "
+                     + ("the table's `leave` names the file" if rel in LEAVE else "only Python and Markdown are rewritten"))
+        continue
+    (new_modules if rel in new_modules else CHANGED)[rel] = PROSE.sub(
+        lambda m: f"`{STEMS[(m.group(1), m.group(2))]}.{m.group(2)}" if (m.group(1), m.group(2)) in STEMS else m.group(0), text)
+    prose[rel] = len(hits)
+
 for old, new in WHOLE.items():
     named = subprocess.run(["git", "-C", str(ROOT), "grep", "-l", "-z", "-F", "-e", old, "--", "."], capture_output=True,
                            text=True).stdout.split("\0")
@@ -995,6 +1103,7 @@ summary = {
                        else None, "lines": text.count("\n")} for dest, text in new_modules.items()},
     "whole": WHOLE,
     "files": {rel: report.get(rel, {}) for rel in sorted(CHANGED)},
+    "prose": prose,
     "notes": sorted(set(notes)),
 }
 if not DRY:
@@ -1010,4 +1119,4 @@ if REPORT:
 print(json.dumps({"definitions": summary["definitions"], "modules": summary["modules"], "files changed": len(CHANGED),
                   "reads redirected": sum(v.get("reads", 0) for v in report.values()),
                   "import statements rewritten": sum(v.get("imports", 0) for v in report.values()),
-                  "notes": summary["notes"]}, indent=1))
+                  "names in prose rewritten": sum(prose.values()), "notes": summary["notes"]}, indent=1))

@@ -144,7 +144,7 @@
     "from pathlib import Path",
     "from verity.protocols.accounting.certifier.verifier.load_check import SHAPES"
    ],
-   "tail": "def main(argv: Sequence[str] | None = None) -> int:\n    ap = argparse.ArgumentParser(prog=\"load_bench.py\", description=__doc__.splitlines()[0])\n    ap.add_argument(\"--out\", required=True)\n    ap.add_argument(\"--shape\", choices=sorted(SHAPES), default=\"h200\")\n    ap.add_argument(\"--bytes\", type=int, default=1 << 31)\n    ap.add_argument(\"--workers\", default=\"1\")\n    ap.add_argument(\"--witness-dir\", help=\"write each run's salts there (default: none)\")\n    a = ap.parse_args(argv)\n    out = Path(a.out)\n    out.mkdir(parents=True, exist_ok=True)\n    host = {\"node\": platform.node(), \"cpus\": os.cpu_count(), \"affinity\": len(os.sched_getaffinity(0)),\n            \"python\": sys.version.split()[0]}\n    res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(\",\")],\n                None if a.witness_dir is None else Path(a.witness_dir)) | {\"host\": host}\n    (out / \"load-relay-bench.json\").write_text(json.dumps(res, indent=1, sort_keys=True))\n    for run in res[\"runs\"]:\n        print(f\"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in \"\n              f\"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s\", flush=True)\n    p = res[\"p2\"]\n    print(f\"LOADRELAY p2 decode {p['decode_block_us']:.0f} µs/block, {p['decode_core_s']:,.0f} core-s; \"\n          + \", \".join(f\"{n} workers {s:,.0f} s\" for n, s in p[\"by_workers\"].items()), flush=True)\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+   "tail": "def main(argv: Sequence[str] | None = None) -> int:\n    ap = argparse.ArgumentParser(prog=\"load_bench.py\", description=__doc__.splitlines()[0])\n    ap.add_argument(\"--out\", required=True)\n    ap.add_argument(\"--shape\", choices=sorted(SHAPES), default=\"h200\")\n    ap.add_argument(\"--bytes\", type=int, default=1 << 31)\n    ap.add_argument(\"--workers\", default=\"1\")\n    ap.add_argument(\"--witness-dir\", help=\"write each run's salts there (default: none)\")\n    a = ap.parse_args(argv)\n    out = Path(a.out)\n    out.mkdir(parents=True, exist_ok=True)\n    host = {\"node\": platform.node(), \"cpus\": os.cpu_count(), \"affinity\": len(os.sched_getaffinity(0)),\n            \"python\": sys.version.split()[0]}\n    res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(\",\")],\n                None if a.witness_dir is None else Path(a.witness_dir)) | {\"host\": host}\n    (out / \"load-relay-bench.json\").write_text(json.dumps(res, indent=1, sort_keys=True))\n    for run in res[\"runs\"]:\n        print(f\"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in \"\n              f\"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s\", flush=True)\n    p = res[\"p2\"]\n    print(f\"LOADRELAY p2 decode {p['decode_block_us']:.0f} \u00b5s/block, {p['decode_core_s']:,.0f} core-s; \"\n          + \", \".join(f\"{n} workers {s:,.0f} s\" for n, s in p[\"by_workers\"].items()), flush=True)\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
   }
  },
  "whole": {
@@ -174,7 +174,7 @@
   },
   {
    "file": "benchmarks/network_traces/load_relay.py",
-   "old": "    if a.cmd == \"bench\":\n        res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(\",\")],\n                    None if a.witness_dir is None else Path(a.witness_dir)) | {\"host\": host}\n        (out / \"load-relay-bench.json\").write_text(json.dumps(res, indent=1, sort_keys=True))\n        for run in res[\"runs\"]:\n            print(f\"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in \"\n                  f\"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s\", flush=True)\n        p = res[\"p2\"]\n        print(f\"LOADRELAY p2 decode {p['decode_block_us']:.0f} µs/block, {p['decode_core_s']:,.0f} core-s; \"\n              + \", \".join(f\"{n} workers {s:,.0f} s\" for n, s in p[\"by_workers\"].items()), flush=True)\n        return 0\n",
+   "old": "    if a.cmd == \"bench\":\n        res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(\",\")],\n                    None if a.witness_dir is None else Path(a.witness_dir)) | {\"host\": host}\n        (out / \"load-relay-bench.json\").write_text(json.dumps(res, indent=1, sort_keys=True))\n        for run in res[\"runs\"]:\n            print(f\"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in \"\n                  f\"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s\", flush=True)\n        p = res[\"p2\"]\n        print(f\"LOADRELAY p2 decode {p['decode_block_us']:.0f} \u00b5s/block, {p['decode_core_s']:,.0f} core-s; \"\n              + \", \".join(f\"{n} workers {s:,.0f} s\" for n, s in p[\"by_workers\"].items()), flush=True)\n        return 0\n",
    "new": ""
   },
   {
@@ -196,10 +196,7 @@
   }
  ],
  "files": {},
- "own": {
-  "repo_retired_terms": {
-   "count": 2,
-   "why": "a split writes an import of the same names into each new module: nine sites on the lines that import `WardenParams`, `warden_rows` and the certifier's module again, seven fewer where an import of the runner is no longer read; no definition's body and no prose adds one"
-  }
- }
+ "leave": [
+  "verity/protocols/compose/device/live_challenger/auditor.py"
+ ]
 }
