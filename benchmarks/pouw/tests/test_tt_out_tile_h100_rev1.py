@@ -313,3 +313,132 @@ def test_dead_pairs_stay_within_the_gap():
         f"dead pairs at {case['shape']}: the program costs {case['cost']:.1f} units a word against a credit of "
         f"{case['credit']:.1f}, under (1 - g0)(1 - rho) of it ({case['bound']:.1f}); the tile's debit is "
         f"{case['debit']:.0f} of a cap of {case['cap']:.0f}")
+
+
+# ---- raised adder: a second class of the same kind, at a fifth of the credit ---------------------------------------------
+#
+# The H100's atom aligns its 32 products and its accumulator to the largest exponent among them and cuts each to that
+# grid. Three products of 448·448 in a group's first atom leave an accumulator of about 602,112, so in the group's other
+# three atoms the grid is 64 wide and every product of two ordinary codes (each under 8) is cut to zero. One planted pair
+# in each of those atoms, a multiple of 64, keeps it from being an identity, which P1's flags would charge. The group's
+# word is then its first atom's, with the three planted products as that atom's accumulator.
+
+#: code values planted in a group's later atoms: each the centre of an E4M3 cell 8 wide on either side
+PLANT_A = {0: (160.0, 160.0, 160.0), 1: (160.0, 160.0, 144.0)}
+PLANT_B = {0: (160.0, 160.0, 160.0), 1: (-160.0, -160.0, -176.0)}
+#: the sum of a group's three planted products, by the group's parity: 3·160² and −(2·160² + 144·176); a pair of groups
+#: then adds 256 and a few multiples of 64 to the running total, so no promotion adds into +0
+PLANT_SUM = {0: 76_800.0, 1: -76_544.0}
+
+
+def _raised_rows(side: str, rows: int, k: int, groups: int, rng: np.random.Generator, fill: str = "gauss") -> np.ndarray:
+    """`rows` rows of FP32 values of one operand of the raised-adder family: a Gaussian background, and in each of the
+    first `groups` promotion groups six planted entries, the same positions in every row of A and of B: positions 1, 2, 3
+    of the group's first atom at the top code (−448 on B in an odd group), and position 1 of each later atom at the codes
+    of `PLANT_A` or `PLANT_B`. With `fill="zero"` every other entry of those later atoms is zero, so its code is noise
+    alone, under 8 for every salt; with `"gauss"` it is the background, and a product of 64 or more has probability about
+    10^-12."""
+    assert groups % 2 == 0 and 6 * groups * 64 <= k, "groups come in pairs; liveness admits k/64 dead entries a row"
+    X = rng.standard_normal((rows, k))
+    if fill == "zero":
+        for g in range(groups):
+            X[:, 128 * g + 32:128 * g + 128] = 0.0
+    rho = np.sqrt((X[:, ::8] ** 2).mean(1))
+    alpha = C.Q_MAX / ((SPIKE + 4.0) * rho)
+    for g in range(groups):
+        sign = -1.0 if side == "B" and g % 2 else 1.0
+        for l in (1, 2, 3):
+            X[:, 128 * g + l] = sign * SPIKE * rho
+        for t, v in zip((1, 2, 3), (PLANT_A if side == "A" else PLANT_B)[g % 2]):
+            X[:, 128 * g + 32 * t + 1] = v / alpha
+    return X.astype(np.float32).astype(np.float64)
+
+
+def _raised_tile(k: int, groups: int, fill: str, rows: int = 64, cols: int = 64, run: int = 1, line_norm: float = 16.0):
+    """One audit tile of the raised-adder family, formed as `_dead_pair_tile` forms its own."""
+    XA = _raised_rows("A", rows, k, groups, C._rng(run, "raised", k, "A"), fill)
+    XB = _raised_rows("B", cols, k, groups, C._rng(run, "raised", k, "B"), fill)
+    FcA = C.enc(C.unit_lines(k, C._rng(run, "FA-lines", k)) * (line_norm / np.sqrt(32)))
+    FcB = C.enc(C.unit_lines(k, C._rng(run, "FB-lines", k)) * (line_norm / np.sqrt(32)))
+    a, _, _, floor_a, live_a = C.form_s5(XA, FcA, 1.0, line_norm, C._rng(run, "raised", k, "unit-A"))
+    b, _, _, floor_b, live_b = C.form_s5(XB, FcB, 1.0, line_norm, C._rng(run, "raised", k, "unit-B"))
+    ok = floor_a and live_a and floor_b and live_b and _scheme_rules(XA) and _scheme_rules(XB)
+    ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
+    return a[ii.ravel()], b[jj.ravel()], XA, ok
+
+
+def _raised_program(A: np.ndarray, B: np.ndarray, groups: int) -> tuple[np.ndarray, int]:
+    """The ticket words of the W1 program, and the E4M3 atoms it runs per word: for each of the first `groups` groups the
+    group's first atom alone, on the reference's own operand rows, its accumulator the constant `PLANT_SUM` of the
+    group's parity; every promotion, and every later group, as the reference runs it."""
+    P, k = A.shape
+    total = np.zeros(P, dtype=np.float32)
+    for g in range(groups):
+        word = C.step(np.full(P, PLANT_SUM[g % 2]), A[:, 128 * g:128 * g + 32], B[:, 128 * g:128 * g + 32])[0]
+        total = (total + word.astype(np.float32)).astype(np.float32)
+    for g0 in range(G * groups, k // 32, G):
+        total = (total + C.group_run(A, B, list(range(g0, g0 + G)))[0].astype(np.float32)).astype(np.float32)
+    return total, groups + k // 32 - G * groups
+
+
+def _raised_cost(s: Shape, atoms: int, units: int) -> Fraction:
+    """An upper bound on the W1 cost, on `W1Device.s8H100Best`, of the raised-adder program on `units` units of shape `s`
+    that share one weight, counted as `_dead_pair_cost` counts: `atoms` E4M3 atoms a word and the reference's promotions;
+    the fused A′·F_B, the peel, the forming of every element and a noise line a row as the reference runs them; and the
+    weight side once, doubled. The program packs nothing: its atoms read the reference's operand rows."""
+    m, k, n = s.m, s.k, s.n
+    fadd, bf = H100.prices.fadd, H100.prices.bf16_mac
+    chain = m * n * (32 * atoms + fadd * (k // 128 - 1))
+    fused = m * PC.R * (k + fadd * (k // 128 - 1))
+    peel = m * n * bf * PC.PEEL_K + m * PC.PEEL_K * CAST
+    forming = m * k * (32 + CAST)
+    rows = m * LINE
+    job = 2 * (n * k * (32 + CAST) + (n + PC.R) * PC.R * (k + fadd * (k // 128)) + n * PC.R * PC.R * fadd
+               + n * PC.PEEL_K * CAST + (n + 2 * k) * LINE)
+    return Fraction(units * (chain + fused + peel + forming + rows) + job)
+
+
+def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: int = 1, fill: str = "gauss") -> dict:
+    """One 64 x 64 audit tile of the raised-adder family at depth `k`, reported as `_dead_pair_case` reports its own."""
+    C.set_atom("hopper")
+    sch = PC.PearlC(forming="v1", device=H100)
+    s = Shape(m, k, n)
+    sch.check(Matmul(0, s, 0))
+    A, B, XA, ok = _raised_tile(k, groups, fill, run=run)
+    P = A.shape[0]
+    group_words, honest = C.group_sums(A, B, G)
+    words, atoms = _raised_program(A, B, groups)
+    flags, _ = C.debit(A, B, G)
+    flagged = int(flags.sum())
+    later_zero = int((_running(group_words)[:, :-1] == 0).sum())
+    dead = _dead_over_count(XA, groups)
+    unread = 32 * int(flags.reshape(64, 64, -1).all(1).sum())
+    debit = ((32 + Fraction(H100.prices.fadd, G)) * flagged + H100.prices.fadd * later_zero
+             + H100.prices.forming_credited * Fraction(64, n) * (dead + unread))
+    per_word = Fraction(sch.credit_of(s), s.m * s.n)
+    cost, credit = _raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
+    return {"class": "raised-adder", "fill": fill, "shape": (m, k, n), "groups": groups, "units": units, "run": run,
+            "rules": bool(ok), "words": P, "equal": int((words == honest).sum()), "atoms": atoms,
+            "reference_atoms": k // 32, "flagged": flagged, "flagged_in_planted_groups": int(flags[:, :G * groups].sum()),
+            "later_zero": later_zero, "dead": dead, "designed_dead": 64 * 6 * groups, "unread": unread,
+            "debit": float(debit), "cap": float(RHO * per_word * P), "cost": float(cost / (units * s.m * s.n)),
+            "credit": float(per_word), "bound": float((1 - G0) * (1 - RHO) * per_word), "fires": _fires(credit, cost)}
+
+
+def test_raised_adder_groups_stay_within_the_gap():
+    """Raised adder: six planted entries in a promotion group, at the same positions in every row of A and of B, make the
+    group's last three atoms add a constant whatever else they hold (`_raised_rows`), so a W1 program runs one atom of
+    the group's four (`_raised_program`). At 8192 deep liveness admits twenty such groups of the 64. The test forms one
+    64 x 64 audit tile under §5 with every unplanted entry of those atoms zero, so the cut to zero holds for every salt,
+    checks the rules on every row, the program's 4,096 ticket words against the reference's, the tile's replayed debit
+    against the cap, prices the program on one unit, and asserts TT_OUT's bound. The bound fails by about a fifth of the
+    credit: a reviewer's falsification of the conjecture as stated, kept failing until the credit or the debit answers
+    it."""
+    case = _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero")
+    assert case["rules"], case
+    assert case["equal"] == case["words"], case
+    assert case["debit"] <= case["cap"], case
+    assert not case["fires"], (
+        f"raised adder at {case['shape']}: the program costs {case['cost']:.1f} units a word against a credit of "
+        f"{case['credit']:.1f}, under (1 - g0)(1 - rho) of it ({case['bound']:.1f}); the tile's debit is "
+        f"{case['debit']:.0f} of a cap of {case['cap']:.0f}")

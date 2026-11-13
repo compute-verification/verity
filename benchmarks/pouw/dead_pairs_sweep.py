@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""A reviewer's sweep of the dead-pair class against TT_OUT rev1 on the H100 (CPU, bit-exact).
+"""A reviewer's sweep of two classes against TT_OUT rev1 on the H100 (CPU, bit-exact): dead pairs and the raised adder.
 
-`tests/test_tt_out_tile_h100_rev1.py` holds the class: its rows, its W1 program and the program's price. This runs it
-over depths and seeds on whole 64 x 64 audit tiles (`--cases`), and checks the mechanism on the scheme's own code
-(`--scheme`): `pearl_c.PearlC` at forming v1 with -h3's SHA-512 lines forms a small tile, admits it, and computes its
-ticket words; the program's words are computed with the device record's own atom and compared.
+`tests/test_tt_out_tile_h100_rev1.py` holds each class: its rows, its W1 program and the program's price. This runs them
+over depths and seeds on whole 64 x 64 audit tiles (`--cases` for dead pairs, `--raised` for the raised adder), and
+checks each mechanism on the scheme's own code (`--scheme`, `--raised-scheme`): `pearl_c.PearlC` at forming v1 with -h3's
+SHA-512 lines forms a small tile, admits it, and computes its ticket words; the program's words are computed with the
+device record's own atom and compared.
 
     python benchmarks/pouw/dead_pairs_sweep.py --cases 8192:8192:1,16384:8192:2 --runs 1,2,3 --out "$OUT/cases.json"
     python benchmarks/pouw/dead_pairs_sweep.py --scheme 8192:1 --salts 3 --tile 4x4 --out "$OUT/scheme.json"
+    python benchmarks/pouw/dead_pairs_sweep.py --raised 8192:8192:20:zero,8192:8192:20:gauss --units 1 --out "$OUT/raised.json"
+    python benchmarks/pouw/dead_pairs_sweep.py --raised-scheme 8192:20:zero --salts 3 --tile 4x4 --out "$OUT/scheme.json"
 """
 from __future__ import annotations
 
@@ -75,12 +78,59 @@ def scheme_check(k: int, groups: int, salt: bytes, rows: int, cols: int) -> dict
             "atoms": atoms + (k - 128 * groups) // 32, "reference_atoms": k // 32}
 
 
+def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, cols: int) -> dict:
+    """The raised adder on the scheme's own code, as `scheme_check`: the planted codes as designed, every other code of the
+    planted groups' later atoms under 8, and the program's words (one atom a planted group, its accumulator the planted
+    sum) against `PearlC.checked`'s."""
+    sch = PC.PearlC(forming="v1", device=H100)
+    s = Shape(8192, k, 8192)
+    ctx = Context(salt, Matmul(0, s, 0), hashlib.sha512(b"root-a" + salt).digest(), hashlib.sha512(b"root-b").digest())
+    XA = T._raised_rows("A", rows, k, groups, C._rng("scheme", "raised", k, "A", salt.hex()), fill)
+    XB = T._raised_rows("B", cols, k, groups, C._rng("scheme", "raised", k, "B"), fill)
+    a_rows = [bytes(r) for r in XA.astype("<f4").view("u1").reshape(rows, 4 * k)]
+    b_rows = [bytes(r) for r in XB.astype("<f4").view("u1").reshape(cols, 4 * k)]
+    ops = sch.encode(ctx, sch.noise(ctx), a_rows, b_rows, Tile(tuple(range(rows)), tuple(range(cols))))
+    assert ops is not None
+    admitted = sch.admissible(ctx, ops)
+    checked = sch.checked(ctx, ops)
+    val = PC.P.fp8_to_f32
+    planted_ok, largest = True, 0.0
+    for side, codes, plant in (("A", ops.a.codes, T.PLANT_A), ("B", ops.b.codes, T.PLANT_B)):
+        for row in codes:
+            for g in range(groups):
+                top = -448.0 if side == "B" and g % 2 else 448.0
+                planted_ok &= all(val(row[128 * g + l]) == top for l in (1, 2, 3))
+                planted_ok &= all(val(row[128 * g + 32 * t + 1]) == v for t, v in zip((1, 2, 3), plant[g % 2]))
+                largest = max([largest] + [abs(val(row[l])) for l in range(128 * g + 32, 128 * g + 128) if l % 32 != 1])
+    equal = 0
+    for i in range(rows):
+        for j in range(cols):
+            a, b = ops.a.codes[i], ops.b.codes[j]
+            total = 0
+            for g in range(k // 128):
+                if g < groups:
+                    local = H100.atom.step(PC.P.f32_bits(T.PLANT_SUM[g % 2]), a[128 * g:128 * g + 32], b[128 * g:128 * g + 32])
+                else:
+                    local = 0
+                    for t in range(128 * g, 128 * g + 128, 32):
+                        local = H100.atom.step(local, a[t:t + 32], b[t:t + 32])
+                total = fp32.add(total, local)
+                total = 0 if total == 0x80000000 else total
+            equal += total == checked.c[i][j]
+    return {"class": "raised-adder", "fill": fill, "k": k, "groups": groups, "salt": salt.hex()[:16], "tile": (rows, cols),
+            "admitted": bool(admitted), "planted_codes_as_designed": bool(planted_ok),
+            "largest_other_code_in_later_atoms": largest, "words": rows * cols, "equal": int(equal),
+            "atoms": k // 32 - 3 * groups, "reference_atoms": k // 32}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cases", default="", help="k:n:groups, comma separated")
     ap.add_argument("--runs", default="1")
     ap.add_argument("--units", type=int, default=256)
     ap.add_argument("--scheme", default="", help="k:groups, comma separated")
+    ap.add_argument("--raised", default="", help="k:n:groups:fill (fill: zero or gauss), comma separated")
+    ap.add_argument("--raised-scheme", default="", help="k:groups:fill, comma separated")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
     ap.add_argument("--out", required=True)
@@ -94,7 +144,23 @@ def main() -> None:
             case["seconds"] = round(time.perf_counter() - t0, 1)
             out["cases"].append(case)
             print(json.dumps(case), flush=True)
+    for spec_ in filter(None, args.raised.split(",")):
+        k, n, groups, fill = spec_.split(":")
+        for run in map(int, args.runs.split(",")):
+            t0 = time.perf_counter()
+            case = T._raised_case(k=int(k), n=int(n), groups=int(groups), units=args.units, run=run, fill=fill)
+            case["seconds"] = round(time.perf_counter() - t0, 1)
+            out["cases"].append(case)
+            print(json.dumps(case), flush=True)
     rows, cols = map(int, args.tile.split("x"))
+    for spec_ in filter(None, args.raised_scheme.split(",")):
+        k, groups, fill = spec_.split(":")
+        for i in range(args.salts):
+            t0 = time.perf_counter()
+            r = raised_scheme_check(int(k), int(groups), fill, hashlib.sha512(b"raised/salt/%d" % i).digest()[:32], rows, cols)
+            r["seconds"] = round(time.perf_counter() - t0, 1)
+            out["scheme"].append(r)
+            print(json.dumps(r), flush=True)
     for spec_ in filter(None, args.scheme.split(",")):
         k, groups = map(int, spec_.split(":"))
         for i in range(args.salts):
