@@ -122760,3 +122760,21 @@ NEEDS: nothing.
 To post: nothing.
 
 Not established: that my files build at `4d5a24fe63` (`2f67`). `LedgerInOrder` and `Apart` at any deployment (taken). That the form accepts an honest play; `binds_dev₂`, `cut_dev₂`, `cutRead_dev₂` and `cutOrder_dev₂` say nothing of a run until it does. The known hole: on the play's own two windows the history holds exactly this play's runs.
+
+## MAJORITY, Fri 05:40Z: my three roots are in the lock (`62cd4b512f8e`, roots only); `security` also prints `AUDIT: FAIL` in r20261113-050045-991a, on one line that the three roots fix and six record differences that are not my change; waiting on the rehearsal r20261113-052157-b358 (about 05:55Z)
+
+In plain words: I added my three files' names to the lock's list of roots, as you ruled, and nothing else in the lock. The audit's second part (`security`) also failed. One of its reasons is mine: a file the lock already lists now imports my shared `Majority.lean`, which the lock did not list. The new roots fix that. Its six other lines say that some definitions listed guarantees read differ from their records. None of those definitions differs between my head and the `main` it branched from, so they are not from my branch.
+
+**The roots** [run: `git diff`, a Python comparison of the lock with `roots` set aside] Commit `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2` on `cursor/proofs-majority-cb10`, pushed. It appends `Proofs.Properties.Verity.Majority`, `Proofs.Properties.Verity.SampledTwo.Majority` and `Proofs.Properties.Verity.SampledTwo.Binding` at the end of `roots` (181 names) and changes nothing else in the lock. TWOLEG's nine are not added.
+
+**`security` in r20261113-050045-991a** [run: `lean-audit/requirer-security/audit-security/report.json`, 7 failures]: "AUDIT …/security: FAIL  27776 declarations in 730 modules; axioms propext, Classical.choice, Quot.sound; 1137 guarantees", then "lean-records: security: check.py exit 1 in 1123 s".
+- One failure is "proved_in: Proofs's roots (…) import its Proofs.Properties.Verity.Majority, which are not under them, so its replay does not check them". [derived] That is my `Recursive/Target.lean` change: the lock's root `Recursive.Target` imports `Majority`. The root `Proofs.Properties.Verity.Majority` in `62cd4b512f8e` covers it.
+- Six failures are of the form "guarantees: definitions in Properties.Verity.Game that Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady, … read changed". The definitions they name are in `Commitments.FV3`, `NetworkCheck.Period`, `Proofs.Properties.Verity.Sampled.Instance`, `Properties.Verity.Game` (`Verity.Vocab` and its fields) and `Properties.Verity.Idle`. One more line says "they no longer read Flock.FV3".
+- [run: `git diff --name-only 34c5cbb3705c HEAD`] None of the files holding those definitions differs between my head and its merge base with `main`, `34c5cbb3705c`. [derived] So these are differences between that `main`'s records and its definitions, not a change of mine. A records run regenerates record differences. The run says it could not: "security requires security/Proofs, and its records fail on this build, not only on record differences".
+- `security/Properties` is being audited now. No `RECORDS rc` line yet.
+
+**Machines** [run] This machine was replaced again under my turn. Everything was pushed; I restored the branch from the remote. `~/wt/.pen` is this loop's (made at 05:34Z).
+
+**NEEDS.** None new. **STOP RULE.** None: the root edit is the one your ruling allows. **To post.** Nothing.
+
+**Not established.** The rehearsal r20261113-052157-b358 (12 roots in its clone only; it has printed only its "scratch" line), expected about 05:55Z; the `security/Properties` verdict and `RECORDS rc` of r20261113-050045-991a. Pushed head: `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`; nothing is left unpushed.
