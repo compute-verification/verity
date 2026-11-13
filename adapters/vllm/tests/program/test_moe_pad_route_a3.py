@@ -19,17 +19,33 @@ import os
 import re
 
 import pytest
-
 from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, composite
-from verity.definitions.registry import b1, lifted as L, moe_pad as MP
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.prims import BF16
 from verity.circuits.types import Array
+from verity.definitions.registry import b1
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import moe_pad as MP
+from verity.definitions.registry.prims import BF16
 
-from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, WG_T, X_T, MoeIndexedReadRef, run, token_for_route,
-                                  unlifted_inputs, weights)  # noqa: F401  (weights: the shared fixture)
+from tests.program.test_moe_pad_stage2 import (
+    BOT16,
+    BOT32,
+    OFF,
+    ON,
+    VPT,
+    W2_T,
+    W13_T,
+    X_T,
+    E,
+    H,
+    I,
+    MoeIndexedReadRef,
+    run,
+    token_for_route,
+    unlifted_inputs,
+    weights,  # noqa: F401  (the shared fixture)
+)
 
 LOGITS_T = Array(E, BF16)
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -98,7 +114,7 @@ def test_2_the_lift_of_record_is_the_hand_authored_lmoeffnl_on_both_paths_disabl
         _, _, y_pad = run(padded_l, lifted_inputs_l(x, weights))
         assert y_pad == y_fixed                                                           # Active words: payload == word
         _, _, rec = run(block_l, lifted_inputs_l(x, weights))
-        y, ids, alpha, s, g, z, u, a_e = (rec[:H], rec[H:H + TOPK], rec[H + TOPK:H + 2 * TOPK], rec[H + 2 * TOPK:H + 2 * TOPK + E],
+        y, ids, _alpha, s, g, z, _u, a_e = (rec[:H], rec[H:H + TOPK], rec[H + TOPK:H + 2 * TOPK], rec[H + 2 * TOPK:H + 2 * TOPK + E],
                                           rec[H + 2 * TOPK + E:H + 2 * TOPK + 2 * E], rec[H + 2 * TOPK + 2 * E:H + 2 * TOPK + 2 * E + E * H],
                                           None, rec[-E:])
         assert y == y_fixed and [L.payload(32, w) for w in ids] == list(route)
@@ -132,7 +148,8 @@ def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
                       "52de640566245b7f": "SHA-512", "cb0b7ed7255cfe06": "router step ArgmaxStepF32"}
     assert d[:16] in STAGE2_DIGESTS, d
     if os.path.exists(STAGE2_EVIDENCE):
-        ev = json.load(open(STAGE2_EVIDENCE))["program_digest"]
+        with open(STAGE2_EVIDENCE) as f:
+            ev = json.load(f)["program_digest"]
         assert ev[:16] in STAGE2_DIGESTS and (ev == d or STAGE2_DIGESTS[ev[:16]] != STAGE2_DIGESTS[d[:16]])
     dl = program_digest(encode_program(Program(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=I))))
     assert dl != d

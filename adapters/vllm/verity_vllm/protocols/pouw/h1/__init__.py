@@ -66,56 +66,63 @@ served int8 linear call as its own Program on bits, which `verity.protocols.pouw
 from __future__ import annotations
 
 import bisect
-import hashlib
 import json
 import os
 from collections import Counter, deque
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
-from verity.protocols.pouw.prover.circuit import compile as C, h1tile as H
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.credit import CREDIT
-from verity.protocols.spot.device.challenger import CoinError
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.circuits.types import Array
+from verity.definitions.ops.boolean import gemm as BG
+from verity.protocols.pouw.prover.circuit import compile as C
+from verity.protocols.pouw.prover.circuit import h1tile as H
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
+from verity.protocols.pouw.verifier.credit import CREDIT
+from verity.protocols.spot.device.challenger import CoinError
 
 from verity_vllm.protocols.pouw import credit_gate as CG
-from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,
-                                             tables_device as TD)
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.commit import calls_root
-from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
-from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
+from verity_vllm.protocols.pouw.h1.names import SALT_TAG, program_salt
+from verity_vllm.protocols.pouw.h1.records import numpy_of
+from verity_vllm.protocols.pouw.h1.requests import slots
+from verity_vllm.protocols.pouw.h1.static import (
+    FILL,
+    Static,
+    bind_all,
+    graph_pad,
+    utilization,
+)
+from verity_vllm.records.schema_ids import POUW_H1_CALLS_SCHEMA
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
 #: the bits of one s8 entry and of one bf16 output
 I8_BITS, BF16_BITS = 8, 16
-RECORD = "verity-vllm/pouw-h1-calls/v2"
+RECORD = POUW_H1_CALLS_SCHEMA
 CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
 PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
-SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
               "auditor host's challenger (the pouw setting 'challenger'), so it credits nothing")
-
-
-def program_salt(epoch_salt: bytes) -> bytes:
-    """`pouw.salt` of the install's Programs: the epoch's 32-byte salt under `SALT_TAG`, a SHA-512 digest."""
-    return hashlib.sha512(SALT_TAG + epoch_salt).digest()
 
 
 def coordinate(k: int) -> Any:
@@ -151,6 +158,8 @@ def _body(B: Any, S: Any, x: Coll, sx: Coll, w: Coll, sw: Coll) -> Coll:
 
     def pad(p: int, scale: bool) -> Refs:
         # contiguous leaves of its own, not one leaf repeated: compile keys a row by its runs, one per repeat
+        if zero is None:
+            raise ValueError(f"pad row {p} of a call with no pad rows")
         return zero.slice(p * (L + F) + (L if scale else 0), p * (L + F) + (L + F if scale else L))
 
     rows = [x.refs.slice(i * L, (i + 1) * L) for i in range(S.M)] + [pad(p, False) for p in range(mp - S.M)]
@@ -227,17 +236,6 @@ def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int
     return offs, at
 
 
-def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
-    """The call's A table of `rows` slots, on a's device: its m served rows and scales first, then empty rows, zero bytes
-    under scale 0 (a served row's scale is never 0)."""
-    m = int(a.shape[0])
-    if m > rows:
-        raise ValueError(f"{m} rows past the call's {rows} slots")
-    out, sc = a.new_zeros((rows, int(a.shape[1]))), s_a.reshape(-1).new_zeros(rows)
-    out[:m], sc[:m] = a, s_a.reshape(-1)
-    return out, sc
-
-
 @dataclass(frozen=True)
 class Call:
     """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
@@ -293,10 +291,6 @@ Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
-def numpy_of(t: Any) -> np.ndarray:
-    return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
-
-
 class H1Run:
     """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
     public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
@@ -334,10 +328,11 @@ class H1Run:
         if (salt is None) == (opener is None):
             raise ValueError(f"{entry}: a window's salt is given or opened by its opener, one of the two")
         self.entry, self._salt, self._opener, self.modules, self.commit = entry, salt, opener, dict(modules), commit
-        self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
+        self.shapes_, self.rows, self.steps = [(int(n), int(k)) for n, k in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
         #: the calls at their indices s·L + w; per step, how many are in; the step's linears as they came; step 0's
-        self.calls, self._in, self._came, self._order = list[Call](), Counter[int](), list[int](), None
+        self.calls, self._in, self._came = list[Call](), Counter[int](), list[int]()
+        self._order: list[int] | None = None
         self.listeners: list[Listener] = []
         self.bound: dict[int, Mapping[str, Any]] = {}
         self.refused: list[dict[str, int]] = []
@@ -347,7 +342,7 @@ class H1Run:
         self._weights: dict[int, tuple[Any, Any]] = {}
         #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
         self.verdicts: dict[int, dict[str, Any]] = {}
-        self._recorded: tuple[Call, Any] | None = None
+        self._recorded: tuple[Call, Any, tuple[Any, Any, Any] | None] | None = None
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
@@ -419,6 +414,8 @@ class H1Run:
                                        or RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._key))
             requests = self._requests0(table.commitment.root)
             try:
+                if self._opener is None:
+                    raise TypeError(f"{self.entry}: a window with neither a salt nor an opener")
                 salt, self.rounds, self.draw, commits = self._opener(requests)
             except Exception as e:
                 self._unopened = self.details["unopened"] = str(e)
@@ -695,7 +692,7 @@ class H1Run:
         (`request_gaps`), whose coins aren't the challenger's (`IN_PROCESS`) or, with the Commit, whose A tables or input
         ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
-        untied = bool((self.details.get("roots1") or {}).get("reason"))
+        untied = bool(tie.get("reason")) if (tie := self.details.get("roots1")) else False
         for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
                         (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
@@ -705,8 +702,8 @@ class H1Run:
         """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `draw_root`): its
         `gated` verdict, true only for a served call with a z table."""
         gated = self.gated()
-        return {c.index: c.index in gated and gated[c.index]["credit"] and (self.tables.get(c.index) or {}).get("z") is not None
-                for c in self.calls}
+        return {c.index: c.index in gated and gated[c.index]["credit"]
+                and (t.get("z") if (t := self.tables.get(c.index)) else None) is not None for c in self.calls}
 
     def credit(self) -> dict[str, Any]:
         """Gate-passed: the served rows' MACs of the calls the serving process's own credit gate passes (`gated`), only. No
@@ -794,7 +791,7 @@ class H1Run:
             raise ValueError(refused)
 
 
-__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM", "PROGRAM_META", "RECORD", "SALT_TAG",
-           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
-           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "WEIGHT_KEY"]
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM",
+           "PROGRAM_META", "RECORD", "SALT_TAG", "SCHEME", "Static", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root",
+           "check_tiles", "compiled", "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
+           "units", "utilization", "weight_root", "WEIGHT_KEY"]

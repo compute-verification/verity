@@ -13,8 +13,8 @@ def _network_compile_slice_v5_roots() -> list[Any]:
     own checks can't reach: the steps' scan and its records' columns, the arrivals' and the ragged row's scans into the
     keys bit, the stream's three entry runs and the verdict. At 269,528 ANDs the whole is past the default
     whole-lowering budget; its parts are each lowered."""
-    from verity.protocols.certifier.prover import compile_slice_v2 as V2
+    from verity.protocols.certifier.prover import compile_slice_v4 as V4
     from verity.protocols.certifier.prover.compile_slice_v5 import statics, unit
 
-    engine = {**V2.DEMO_ENGINE, "max_model_len": 8, "num_gpu_blocks": 3}
+    engine = {**V4.DEMO_ENGINE, "max_model_len": 8, "num_gpu_blocks": 3}
     return [unit(**statics(2, 1, 1, engine, 1, Q=1, D=2, P=3, K=1, CTW=4, CU=1, DA=1, NS=2, NM=1, NRB=1, NRK=1))]

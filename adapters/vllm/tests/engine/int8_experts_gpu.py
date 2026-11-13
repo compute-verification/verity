@@ -118,7 +118,9 @@ class ExpertBase:
         self.base = base
 
     def weight(self, prefix: str, expert: int, projection: str) -> torch.Tensor:
-        layer = re.search(r"layers\.(\d+)\.", prefix).group(1)
+        named = re.search(r"layers\.(\d+)\.", prefix)
+        assert named is not None, prefix
+        layer = named.group(1)
         names = []
         for p in PROJ[projection]:
             hit = [k for k in self.base.where if re.search(rf"layers\.{layer}\..*experts\.{expert}\.{p}\.weight$", k)]
