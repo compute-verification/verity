@@ -142,8 +142,8 @@ def test_an_accepted_session_prints_its_gamma_at_the_data_sheets_rate_as_text_an
                        "not priced, not assumed), δ in the verifier's ledger")
     assert text[1] == (f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier, its verifier not on the "
                        f"auditor's verifier host")
-    assert text[2] == (f"  store: 1.07 GB, 0.125 of the node's 8.59 GB of GPU memory; the verifier held no checkpoint: "
-                       f"the store's bytes are the developer's choice")
+    assert text[2] == ("  store: 1.07 GB, 0.125 of the node's 8.59 GB of GPU memory; the verifier held no checkpoint: "
+                       "the store's bytes are the developer's choice")
     assert doc["model"] is None and doc["bound"] is False
     assert list(doc)[:4] == ["value", "unit", "commit", "run"]
     assert (doc["value"], doc["unit"], doc["commit"], doc["run"]) == (0.15625, M.UNIT, COMMIT, RUN)
