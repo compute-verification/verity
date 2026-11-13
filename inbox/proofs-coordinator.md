@@ -122253,3 +122253,52 @@ Not established:
 - The run id of the try the old machine's loop launched at 04:47Z (`CutAccept` alone, at `8ce13e23d3`) went with that machine's log. That try fails on `CutFirst` either way.
 
 Head: `b69d0b4b22` (`cursor/proofs-cut-9323`), pushed; nothing unpushed.
+
+## ACCEPTS, Fri 05:23Z: MY `readsWithin` STAYS (`Within.lean` compiled first, probe clean; RUNCOINS's `RunsAs/Within.lean` goes); `Within`, `AcceptsTop`, `Fits` and `RuleTwo` COMPILE at the merged head; STATEMENT CHANGE: `acceptsRun_form` and `reachedAccepts_form` drop `RuleIsTwo` and `RoundTwo`, and the new `playAccepts_form` gives `JoinsAt.playAccepts` from ten premises (`bb06c823bc`, not compiled)
+
+In plain words: every file of mine now compiles on the merged base with only the three axioms, and the top statements ask for three premises fewer than at 04:18Z, with two more about to go. All of it is true and empty until the form accepts an honest play [relayed: TWOLEG 04:46Z].
+
+**1. Compiled** [run: `research fetch --all`, each run's `stdout.log`; `7fb2`'s from the store, `art:0bdb11488e24…`].
+- `r20261113-042027-7fb2` (vy-nebius-cpu-3, tree `93b2445716`, done rc 0, ended 04:28:48Z): `Within.lean` "lean exit 0 in 319 s", "axiom probe: none of its 14 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; `AcceptsTop.lean` "lean exit 0 in 131 s", 2 theorems, same probe line (its 04:18Z text, which took `RuleIsTwo` and `RoundTwo`).
+- `r20261113-042055-897c` (vy-nebius-cpu-14, tree `93b2445716`, done rc 0): `Fits.lean` "lean exit 0 in 299 s", 3 theorems; `Reached.lean` 30 s, 5 theorems; `OfRun.lean` 144 s, 5 theorems; each probe line clean. So `sourcesFit (A) (C) : SourcesFit A C` holds with no premise.
+- `r20261113-042540-6f86` (vy-nebius-cpu-12, tree `66e1ede150`, done rc 0): `RuleTwo.lean` "lean exit 0 in 412 s", 1 theorem (`ruleIsTwo (C) : RuleIsTwo C`), probe clean. RUNCOINS: `Parsed.lean` built as its import, so `paramsOfJson_twoStage` compiles on my tree; its own probe line is not in this run.
+
+**2. One `ReadsWithin`: mine stays** [run; relayed: RUNCOINS 05:05Z]. Mine ended inside `7fb2` before 04:28:48Z, RUNCOINS's `49aa` at 04:29:05Z. `Within.lean` keeps `readsWithin` and `playAccepts_of_run'`; RUNCOINS deletes `RunsAs/Within.lean` as it offered. Nothing of mine imports RUNCOINS's file.
+
+**3. The statement change (title)** [read: `AcceptsTop.lean` at `bb06c823bc`; NOT compiled, in `r20261113-051943-a0a1`].
+- `acceptsRun_form` and `reachedAccepts_form` no longer take `(hrule : RuleIsTwo C)` or `(hr2 : RoundTwo A.h)`. `RuleIsTwo` is `ruleIsTwo C`; `RoundTwo A.h` is `SpotFlock.RunsAs.stmtOk_of_check A.h` (`RoundTwoOf.lean`, RUNSAS's, compiled [relayed: RUNSAS 05:17Z]).
+- New: `playAccepts_form A C S P' (hheld : HeldAt A C) (htwo : TwoHolds A.h) (hnd : NamesDistinct A.h) (hrec : RecordsAt A C) (hread : RecordsRead C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') : PlayAccepts A C S P'`.
+- Unchanged: `reaches_frame`, `reachedAccepts`, `SourcesFit`, `sourcesFit`, `PlayAccepts`, `SessionMsgs`, `playAccepts_of_run`, `playAccepts_of_run'`, `acceptsRun_of_run`.
+
+**4. ASSEMBLY, your three fields of mine** [derived from `JoinsAt`'s field list in your 05:08Z].
+- `sourcesFit`: proved outright, compiled. The field can leave the structure: `sourcesFit A C`.
+- `playAccepts`: `playAccepts_form`, from the ten premises above. Whose each is: `HeldAt`, `TwoHolds` (HELDOF); `RecordsRead` (waits on TWOLEG's two-line form change, my 03:00Z); `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`, `SessionsRun` (MESSAGES and the sessions' workers); `NamesDistinct` and half of `RecordsAt` go next (item 5).
+- `sessionMsgs`: `SessionMsgs A C S P'`, still a premise; nothing of mine proves it.
+- Take my line at `bb06c823bc` only when `a0a1` passes; `66e1ede150` is the last head where everything compiles.
+
+**5. Next, started now** [relayed: RUNSAS 04:23Z item 3 and 05:17Z]. I merge RUNSAS's compiled head `321cdde02b` (`cursor/proofs-runsas-7e3a`, which holds RUNCOINS's `d3cb96c006`) and drop two more: `NamesDistinct A.h` is `namesDistinct_of_two htwo`, and `RecordsAt`'s `RegistersNone it.record` half is `registersNone_of_two`. That is a third statement change, and I name it in a title when it is pushed.
+
+**6. Loops and machines** [run: `uptime -s`, `git reflog`, the transcript of this conversation].
+- This loop wrote the 04:18Z entry. Its machine went at about 04:27Z: one shell call hung for 45 minutes and came back at 05:13Z on a machine booted 05:13:04Z, fresh `main`, no `~/wt`.
+- Another loop of this agent, on your 04:24Z text (which this loop never received), wrote the 04:27Z and 04:29Z entries, `RuleTwo.lean` (`66e1ede150`) and the try `6f86`, and ended its turn at 04:29Z. Its work is good and kept.
+- I made `~/wt/.pen` at 05:16Z. Since 04:29Z the branch, the inbox and the runs show no act that is not this loop's. No timer of mine exists [run: `list_subscriptions`, empty].
+- Nothing was lost: everything was pushed.
+
+**7. Runs** [run].
+- `r20261113-051943-a0a1` (vy-nebius-cpu-1, `--on auto`): `AcceptsTop.lean` at `bb06c823bc`; launched 05:19:43Z, expected by about 05:40Z [guess].
+- `r20261113-033021-8be7` (vy-nebius-2, the pre-merge tree): superseded by `897c`; I did not read it this turn.
+- Done rc 0: `7fb2`, `897c`, `6f86`.
+- A note for the line: `--on auto` took a place at once four times tonight (cpu-1, cpu-3, cpu-12, cpu-14), while vy-nebius-2's line was 10 to 16 deep.
+
+**Not mine, acted on none.** 24 messages of your `#agent-coordination` thread (04:04Z to 04:21Z) were delivered to me at 05:13Z as this turn's start.
+
+**STOP RULE.** Not reached: no lock, no `Sampled.lean`, no guarantee listed, no change to the form, no switch.
+
+**NEEDS.**
+1. TWOLEG: `RecordsRead`'s two-line form change (my 03:00Z) still stands; without it `RecordsRead` stays a premise of `playAccepts_form`.
+2. Coordinator: my mailbox ends at your 04:09Z; your 04:19Z text to every worker I read in another worker's mailbox, and the 04:24Z one to me I have not seen. If it asked for something beyond what the 04:27Z entry answers, send it again.
+
+**Not established.**
+- That `AcceptsTop.lean` at `bb06c823bc` compiles (`a0a1`).
+- `Parsed.lean`'s own axiom line on my tree.
+- Anything about a run: the form accepts no play today.
