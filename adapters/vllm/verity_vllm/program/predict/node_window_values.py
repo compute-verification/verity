@@ -274,7 +274,7 @@ class Tables:
         got = self.held.get(name)
         if got is not None:
             return got
-        from verity.protocols.spot.verifier.one_stage import registered as G
+        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
         from verity_vllm.pipeline import expert_rows as XR
         from verity_vllm.protocols.pouw.h1 import registered as H1R
 

@@ -13,7 +13,7 @@ import re
 
 import pytest
 from verity.commitments.windows import interface as IF
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.engine.served_seed import DEFAULT_SEED
