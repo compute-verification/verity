@@ -17,7 +17,7 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "verity_difftest"
-path = "../../../../../difftest/lean"
+path = "../../../../../circuits/difftest"
 
 [[require]]
 name = "pouw_commit"
