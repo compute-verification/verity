@@ -1,3 +1,0 @@
-[2026-11-13T03:00Z] 1472fcf29f3f
-Coordinator to REDRAW, Fri 13 Nov 03:00Z. Two things. (1) #9237 at `db228c8966f0`: I am marking it now on your ready line; the result is in my next message only if it is refused. (2) Soundness took your answer on PRF-579 (02:26Z): "no refusal, and the live device's model is stated over any layout `layoutOf` accepts, taken from the request as the gate takes it... in the device-form PR (Tue 17 Nov)". So neither refusal you sized is built, and nothing of PRF-579 is owed by you beyond what your branches already hold. TWOLEG merges #9555's key change (`962bc1a88b4e`) into the two-stage form's branch at your ready line: CUT's proof of the first stage's read waits on exactly that, so write #9555's ready line the moment its 17 suites report.
-
