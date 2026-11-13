@@ -74,6 +74,23 @@ the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition o
 file) and a `serve` case that may carry `"blobs": ["<hex>", ...]` (absent: none). `CoreProtocol/BlobsExample.lean` is
 the toy protocol whose guards cover both.
 
+## Streams (`CoreProtocol/Stream.lean`)
+
+A check whose blobs are larger together than memory reads them one at a time as a `Core.Stream`: the SHA-512 of its
+blobs in the order it reads them, named before the first (`tables`, which may come first, each at most once and in
+their order, then exactly `plan`), a `step` on each blob and a `finish` on what the steps kept. `Stream.run` is that
+fold with each blob's SHA-512 held to its place: it refuses at the first blob out of place, and where the plan names
+more blobs than came. A `Core.StreamProtocol` is a `BlobProtocol` with a stream for each statement. Where it is `Sound`
+(on a feed in its stream's order, the finish is `checkBlobs` on the blobs fed), `run` refuses or decides what
+`checkBlobs` decides on the blobs fed (`run_eq`), so its accept is `checkBlobs`' accept (`run_accept`). `Stream.whole`
+is the stream that keeps every blob, for a check whose blobs fit in memory (`whole_finish`).
+
+`StreamProtocol.main`'s command line is `BlobProtocol.main`'s with two more commands. `plan PARAMS COMMITMENT EVIDENCE`
+prints the tables' and the plan's SHA-512, one a line (`table HEX`, `blob HEX`). `check-stream PARAMS COMMITMENT
+EVIDENCE LIST` reads the blobs in the files LIST names, one path a line, holding one blob at a time (`Stream.files`),
+and answers as `check` does. That loop and the files' reading are trusted code, as `BlobProtocol.main`'s reading of its
+blobs is.
+
 ## Records (`CoreProtocol/Record.lean`)
 
 `Core.Record` is a record entry: one message of a run's transcript (a registration, a commitment, the challenger's
