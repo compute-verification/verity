@@ -2228,6 +2228,11 @@
       "paths": {
         "verity/protocols/remote/verifier/composition/": "verity/protocols/compose/verifier/composition/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/verifier/": "verity/protocols/compose/verifier/remote/"
+      }
     }
   ]
 }

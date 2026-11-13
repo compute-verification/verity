@@ -69,7 +69,7 @@ path = "../../pous/device/lean"
 # (`Core.Remote.windows`).
 [[require]]
 name = "core_remote"
-path = "../../remote/verifier"
+path = "../../compose/verifier/remote"
 
 [[lean_lib]]
 name = "CoreOnsite"
