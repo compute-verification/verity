@@ -805,7 +805,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
         "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
         "merge_requires={'lean-agreement': ['verity/protocols/proofs/flock/prover/', '!README.md']})\n")
     (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
-    (tmp_path / "verity" / "protocols" / "flock" / "prover" / "verify.rs").write_text("fn main() {}\n")
+    (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover" / "verify.rs").write_text("fn main() {}\n")
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
@@ -1896,7 +1896,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("add", "-A")
     git("commit", "-q", "-m", "base")
     (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
-    (tmp_path / "verity" / "protocols" / "flock" / "prover" / "é.py").write_text("x = 1\n")
+    (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.py").write_text("x = 1\n")
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")
