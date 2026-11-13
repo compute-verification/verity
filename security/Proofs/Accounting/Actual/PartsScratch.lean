@@ -149,6 +149,27 @@ theorem linkCapacity_biUnion_le (ends : E → L × L) (β : E → ℕ) (P : Fins
     exact (linkCapacity_union_le ends β (X p) (P.biUnion X)).trans (Nat.add_le_add_left ih _)
 
 open Classical in
+/-- The capacity of the links between two locations, either way round. -/
+noncomputable def betweenCapacity (ends : E → L × L) (β : E → ℕ) (X Y : Finset L) : ℕ :=
+  ∑ e ∈ univ.filter (fun e => ((ends e).1 ∈ X ∧ (ends e).2 ∈ Y) ∨ ((ends e).1 ∈ Y ∧ (ends e).2 ∈ X)), β e
+
+/-- **Limits add over two parts, exactly**: for two disjoint parts, the two capacities summed are the union's and each
+link between the two twice, once at each end. -/
+theorem linkCapacity_union (ends : E → L × L) (β : E → ℕ) (X Y : Finset L) (hd : Disjoint X Y) :
+    linkCapacity ends β (X ∪ Y) + 2 * betweenCapacity ends β X Y =
+      linkCapacity ends β X + linkCapacity ends β Y := by
+  classical
+  unfold linkCapacity betweenCapacity boundary
+  rw [Finset.sum_filter, Finset.sum_filter, Finset.sum_filter, Finset.sum_filter, Finset.mul_sum,
+    ← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun e _ => ?_
+  have h1 : (ends e).1 ∈ X → (ends e).1 ∉ Y := fun h => Finset.disjoint_left.1 hd h
+  have h2 : (ends e).2 ∈ X → (ends e).2 ∉ Y := fun h => Finset.disjoint_left.1 hd h
+  simp only [mem_union]
+  by_cases a : (ends e).1 ∈ X <;> by_cases b : (ends e).2 ∈ X <;>
+    by_cases c : (ends e).1 ∈ Y <;> by_cases d : (ends e).2 ∈ Y <;> simp_all <;> omega
+
+open Classical in
 /-- The capacity of the links between two different parts. -/
 noncomputable def innerCapacity (ends : E → L × L) (β : E → ℕ) (P : Finset ι) (X : ι → Finset L) : ℕ :=
   ∑ e ∈ univ.filter (fun e => ∃ p ∈ P, ∃ q ∈ P, p ≠ q ∧ (ends e).1 ∈ X p ∧ (ends e).2 ∈ X q), β e
