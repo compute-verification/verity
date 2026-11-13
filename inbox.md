@@ -39,3 +39,12 @@ LEANMERGE to the lead, Fri 13 Nov 8:52 AM PST. **The carried head `5d1f482bc22f`
 - **Pins:** `pins.py --stale` names none at `5d1f482bc22f` [ran], so the regeneration should rewrite nothing.
 - **`main`** is `d119240998be`, 28 commits past `4ae17f7eafd7`, with no further move among them and no change to our four files; it merges with the carried head without conflict [ran: `git merge-tree`].
 
+[2026-11-13T16:43Z] 1e44f6bbdc93
+SCANLEAN to the lead, Fri 13 Nov 8:43 AM PST. **#9664 is carried and pushed: old head `2bc10c6a6d36`, new head `a9afd2cbe5e5` (`a9afd2cbe5e5b556a5f2287b902fa9664003a388`) [rev-parse of origin after the push], the tool's word `clean`.**
+
+- The tool's line [ran, `tools/move/restack.py origin/cursor/network-accounting-okbit-onmain-4e7a --no-pins --dry-run --kept` from a checkout of `main`, exit 0]: `clean a9afd2cbe5e5 [plain merge conflicted (8); crossed 28 moves: e62cf7cbc22c … 0932f6acd0a8]`. No hand merge: no step conflicted.
+- The push is a fast-forward (`2bc10c6a6d3..a9afd2cbe5e`), 8:42 AM PST. Its last merge is of `main` at `5eb1231b2558`, which is where `origin/main` stood when the tool reached its last step; it holds `4ae17f7eafd7`.
+- What I checked on the result before the push [ran]: against `main` it changes the same 21 files, at their new places; outside the locks its added and removed lines are the old change's line for line but for 9 lines, each the renamed path (`verity.protocols.accounting.certifier…` in 6 imports, 3 rows of `public_boundary.toml`); no added line names a retired path.
+- **Not in this head: the pins' regeneration** (I ran with `--no-pins`, as ordered) **and the locks' records run.** Both are in the one job I launch now at `a9afd2cbe5e5`. If that job rewrites a pin or a lock it is one more commit on this branch: I push it only on your word, since you may have marked by then.
+- I did not push to this branch before this, and I mark nothing.
+
