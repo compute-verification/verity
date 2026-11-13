@@ -1,0 +1,33 @@
+# The specs' move: what `tools/move/layout.py --map tools/move/specs_map.toml` moves and rewrites.
+#
+# `benchmarks/specs/` becomes `benchmarks/harness/specs/`: the harness's spec files live in the harness, the one reader
+# of them. The row moves every file under the directory, its suite with it, and rewrites each path that names it: the
+# workspace member, the suites' inputs, the harness's own joins and each doc. Nothing is split, edited or deleted, and
+# no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_bench = "benchmarks/harness/verity_bench" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", verity_bench = "benchmarks/harness/verity_bench" }
+
+[paths]
+"benchmarks/specs/" = "benchmarks/harness/specs/"
+
+[retired]
+paths = ["benchmarks/specs/"]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/lake-manifest.json", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+# Kept in the one file that states it: the harness reads a run recorded before the move by its spec's former path, and a
+# command written then by the path it names, so that path's form stays there (`presets.FORMER_SPEC`). The file's anchor
+# on the directory itself (`SPEC_ROOT`) is not that string, and moves.
+keep_in = {"benchmarks/harness/verity_bench/vllm/presets.py" = ["benchmarks/specs/{name}.toml"]}
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`): a Python file under a directory is named by its path from the
+# root. The directory's only Python is its two tests, which nothing imports, so no import changes.
+"benchmarks.specs" = "benchmarks.harness.specs"
