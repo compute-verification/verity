@@ -131,13 +131,13 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
     # each tensor under its first registration, the name the loader fills from the checkpoint: the runner re-registers the block's
     # gate as its own `gate`
     named = {id(p): n for n, p in model.named_parameters()}
-    out: dict[str, dict[str, Any]] = {}
-    for m in runners:
+
+    def layer(m: Any) -> dict[str, Any]:
         ex, r, gate = m.routed_experts, m.router, getattr(m, "gate", None)
         experts = getattr(getattr(ex.quant_method, "moe_kernel", None), "fused_experts", None)
         w = {"gate": getattr(gate, "weight", None), "w13": ex.w13_weight, "w2": ex.w2_weight}
         E = int(ex.w13_weight.shape[0])
-        out[str(m.layer_name)] = {
+        return {
             **{k: {"weight": named.get(id(t)), "shape": list(t.shape)} if t is not None else None for k, t in w.items()},
             "E": E, "top_k": int(r.top_k), "renormalize": flag(lambda: r.renormalize), "VPT": router_vpt_bf16(E),
             "gate_held": gate is not None, "fused_gate": flag(lambda: m._fse_fuse_gate),
@@ -148,7 +148,8 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
             "clamp": None if experts is None else flag(lambda: experts.activation_config.clamp_limit is not None),
             "silu": flag(lambda: m.activation == MoEActivation.SILU),
             "bf16": all(t is not None and t.dtype == torch.bfloat16 for t in w.values())}
-    return out
+
+    return {str(m.layer_name): layer(m) for m in runners}
 
 
 def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], steps: int, out: str) -> dict[str, Any]:
