@@ -116469,3 +116469,80 @@ theorem holds_of_rTwo_inner … (hU : UnitsAreInner V θ F c H Cm s Pt dd readX)
 **To post.** #9574's head is now `e2971a1dafaa`: the form refuses a stage's bytes past one coin's 1,048,576, which lean's wiring should build on. It moves again only if a run finds a fault or you rule the second bound differently.
 
 **Not established.** That `DevAgrees`, `ClaimInner` and `SecondRead` compile. That the form with `stagesFit`, and `Steps` with `accepted_fits`, compile on a node (stand-ins on the VM only). That `Refused`, `Reading`, `Projection`, `Leg` and `Claim` are clean of extra axioms (no probe has run on them). That the records run moves no listed record. That the quick tier passes at the pull request's head. `CellCapsAt` at any design.
+
+## HELDOF, Fri 03:00Z: the per-block bound compiles; heldOf now decides only descriptor-sized checks and gets TwoHolds from the run's population check (compiling)
+
+**What has compiled:** the per-block bound (`BlockCommits`, `ScopeOf.partitions_keyProg`, `ScopeDesc.memberOk` / `memberFits_of_memberOk` / `two_of_descOk`) compiled in run `r20261113-022722-0597` on vy-nebius-2: exit 0, and the axiom probe found nothing beyond `propext`, `Classical.choice` and `Quot.sound` in its 19 theorems [run]. That tree carried a one-token fix to FRAME's `BlockSize.lean`, applied locally and not committed (NEEDS 1). Without that fix, `BlockSize.lean` does not build at FRAME's L1 head (run `r20261113-021526-ffd9`) [run]. On the heldof branch, the last compiled `HeldOfRun` is still `r20261113-011911-4032`, from before the merges. The new `descCore` / `twoHolds_of` / `xS₀_of_files` are compiling now in `r20261113-025949-65d3` (vy-nebius-2) [run].
+
+In plain words: a unit's proof block commits at most the unit's inputs plus its returned output bits. That gives a per-block bound of about 131k bits, under 262,144, at Friday's shape. `memberOk` and `MemberFits` now state that bound, not the member's whole gate count. `heldOf` no longer evaluates `two`, which walks every gate. It decides `descCore`: each template's `memberOk`, `designOk` on the strata, the second stage's counts and cells, and each template's `templateOk`. That is a step per template or stratum, with no step per unit or gate. `TwoHolds` then follows from `heldOf` plus the run's own `population-order` check. The form's check is `heldOkDesc p bs i it`.
+
+**Done this hour**
+- Block branch `cursor/proofs-heldof-block-4c7b` @ `85b96096df` [run, `r20261113-022722-0597`, with FRAME's fix]:
+  - `BlockCommits.committed_le_ends`: a block's committed count is at most its outputs and inputs, given disjoint blocks, a cover and closed blocks.
+  - `length_ends_le c n u : ≤ (bitsRows c).nIn + outBits c`.
+  - `partitions_keyProg` takes `hw : nIn + outBits ≤ unitClassMax`.
+  - `MemberFits`' fourth conjunct and `memberOk`'s third clause are `unitIns c + outBits c ≤ unitClassMax`.
+- Heldof branch `cursor/proofs-heldof-4c7b` @ `6c35526238` [read; compiling in `r20261113-025949-65d3`]:
+  - `HeldOf.descCore` replaces `two` in `decided`. `anyStatement` and the old `twoHolds_of` are deleted.
+  - `HeldOfCheck.descCoreAt` and `descCore_eq` (rfl). `decidedAt` reads `descCoreAt`, so `decided_held₀` stays rfl.
+  - The form's check is renamed `heldOkFiles` → `heldOkDesc`, the name TWOLEG's line uses.
+  - `HeldOfRun.firstOf_program`.
+  - `twoHolds_of (hh : heldOf i it u = some h) (hp : Slots.popOk i.params.verifier.program i.params.verifier.query n) : TwoHolds h`, through `two_held₀` and `built_of_templates` (so `Built` comes from the parse; NEEDS 2 of 01:34Z is closed).
+  - `twoHolds_of_ok` and `twoHolds_of_files` (from `heldOkDesc p bs i it = true` and `hp`).
+  - `xS₀_of_files` (ACCEPTS's (a)).
+  - The merges renamed `Spot.Slots.Layout` → `SlotOrder` and moved `NamesDistinct` / `RecordsHeld` / `RegistersNone` / `TwoHolds` into `SpotFlock.RunsAs.Round2`. `HeldOf` is adapted to both; the 02:43Z try `r20261113-024300-8e50` failed on exactly those names [run].
+
+**ACCEPTS's asks (02:17Z)**
+- (a) `h.xS₀ t` is the encoding of `refRawOf p bs t`. It is written as `HeldOfRun.xS₀_of_files`, for `unreadOf p bs … = some u`, `heldOf i it u = some h` and `t < p.circuits.size`, giving `∃ r, refRawOf p bs t = some r ∧ h.xS₀ t = r.encode` [read; compiling in `r20261113-025949-65d3`].
+- (b) is **false as stated** [read]: `FlockDeploy.setupOf true x` runs `Ins.setup`, which reads all three fields:
+  - `Read.setup` = `Stmt.setupTables … r.I.publicFile … r.draw …` (`Claims/Scope/Readable.lean:84`);
+  - then `Registered.checkFull s.registered r.draw`, `checkRegistered st s.registered`, `RecSetup.checks … s.registered`, `RecCoins.check · s.registered`, `RecVStar.checkPubRows · s.registered` and `ProvedScope.drawLaw … r.draw` (`Claims/DeployInputs.lean:250–264`).
+
+  So `shapeOf` (`[]` where the setup fails) depends on `draw`, `registered` and `publicFile`. A form that may hold, and what `RoundsHeld` likely needs: where the reference statement and the session statement differ only in `draw`, and both set up, their `m`s agree. That needs a lemma that `Stmt.setupTables`' tables' `m` doesn't read `draw` [guess, not read]. Who writes it is open. I can look at `setupTables` after (c) lands.
+
+**Cost of deciding the held copies (the verifier-cost rule)** [read]
+- `heldOkDesc` = `refStmtsOf` (one blob read and one encoding per template), then `heldOk`, which is `decidedAt`:
+  - name and length checks, per template;
+  - `Slots.layout` and `slotDesign`, once;
+  - `designOk`, per stratum;
+  - the counts and cells, per template;
+  - `memberOk`, per template: a closed form in the unit's descriptor (`unitIns`, and `outBits` summing `leavesOut` over the unit's ports);
+  - `templateOkAt`, per template: the session verifier's own parse of the circuit file.
+- No step is per unit, per inner block or per gate. `filesOk` and `fillOk` (per unit) are not decided. They come from the run's `popOk` (`filesOk_held₀`, `fillOk_held₀`). `scopeOk`'s walk over every gate comes from `memberOk` (`two_of_descOk`).
+
+**STOP RULE**
+- None. On the block branch, `memberOk` and `MemberFits` are read by `descOk` and `two_of_descOk`, not by `two` or any `lean-audit.json` record [read, 01:48Z entry].
+- On the heldof branch, `heldOf` / `decided` are proof-side definitions (`security/Proofs`), not a guarantee or the verifier.
+- TWOLEG's line `if !heldOkDesc p bs i it then throw HELD_WHY` would change what the form accepts. Its before/after is TWOLEG's to write when it lands; the check takes `it` too.
+
+**NEEDS**
+1. FRAME: `BlockSize.lean:73`, `mem_insOf.1 hg` → `NeededBitsOf.mem_insOf.1 hg`. Inside `namespace Flock.Bridge.BlockSize`, the bare name resolves to `Flock.Bridge.mem_insOf` (`Bridge/Lowers.lean:613`), not the opened `NeededBitsOf.mem_insOf`. It fails at `d702f45e9e` and at FRAME's head `a6ccdd66a6` [run, `r20261113-021526-ffd9`]. With that token, my block branch compiles [run, `r20261113-022722-0597`].
+2. Whoever states the two-stage theorem (ASSEMBLY or RUNSAS): `TwoHolds h` now needs `Slots.popOk i.params.verifier.program i.params.verifier.query n` at the run's population `n`. `Run.run` refuses without it (`Spot/Run.lean:301`, `population-order`), but I found no lemma that extracts it from an accepted run [read: grep of `RunsAs/`]. It is a step lemma about `Run.run`'s register step. It is RUNSAS's file, and I can write it in a new file beside mine if told.
+3. Merge order: the block branch is cut from FRAME's L1, and the heldof branch from TWOLEG. When FRAME's L1 reaches my base, `two_of_descOk` takes `hsc` / `hw` (`membersScoped`, `wiringOk`). I add those two conjuncts to `descCore` then.
+
+**Hours, against Sat 02:00Z** [guess]
+- The per-block bound: done once FRAME's token lands.
+- `Built` from the parse: done in source, compiling now.
+- (c), `heldOkDesc` and `twoHolds_of_files`: compiling now; by 04:00Z if this try passes or needs one fix round.
+- Named premises left at Sat 02:00Z on my side:
+  - `RefsAre` (ruled);
+  - `PartsAt`;
+  - OWNREADS's `ReadsWf`;
+  - `popOk` from the accepted run, until NEEDS 2's lemma exists (an hour's work once someone owns it).
+
+**Machines:** vy-nebius-2, per the 02:14Z message.
+- `r20261113-020313-913d` on cpu-12 waited 12 minutes without building, and I cancelled it.
+- On vy-nebius-2:
+  - `ffd9` waited 0 minutes and failed in FRAME's `BlockSize`;
+  - `9e7d` waited 0 minutes and failed with 3 errors in my `BlockCommits`, now fixed;
+  - `0597` waited 0 minutes and passed;
+  - `8e50` waited 0 minutes and failed on the renamed names;
+  - `65d3` is running.
+
+**To post:** nothing.
+
+**Not established:**
+- The new heldof-branch lemmas compile (`65d3` is running).
+- `setupTables`' `m` reads no `draw`.
+- The run step lemma for `popOk`.
+- The ~131k figure is from the circuit headers in the 02:06Z entry, not a Lean evaluation.
