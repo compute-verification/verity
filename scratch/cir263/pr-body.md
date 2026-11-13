@@ -16,6 +16,9 @@ GLM-5.3's recipe serves with five draft tokens from one MTP draft layer. At vLLM
 - **`eh_proj`**: <route capture result; the Gemm_v2 and CublasSplitKGemm_v1 bindings at K 12288, N 6144>.
 - **The indexer's logits at six query rows a request**: on sm_90, next_n = 6 is not native, so vLLM flattens each request into six rows at next_n = 1. The kernel is the one `DsaMqaLogits_v3` was captured at. <capture result>.
 - **Captures**, beside the others under `adapters/vllm/tests/properties/`: `glm53_mtp_eh_norm_capture_gpu.py`, `glm53_mtp_eh_proj_capture_gpu.py` and `glm53_mtp_indexer_logits_capture_gpu.py`, with `glm53_mtp_capture_card.sh`, which runs one under a lease on one card after checking the card is idle. They add no `# noqa`: a phase that raises ends the capture with its traceback and writes no record. The one catch, around reading a scan process's `scan.json`, names `OSError` and `JSONDecodeError` and leaves that chunk `ok` False. No capture of record ran before that change (`920597d5ca`).
+- **Each capture's record is a registered property's.** `seal` refuses a schema that no property names, so the three captures are registered in `verity_vllm/properties/record.py` (`glm53_mtp_eh_norm_capture`, `glm53_mtp_eh_proj_capture`, `glm53_mtp_indexer_logits_capture`), with their schema ids in a new `verity_vllm/records/mtp_captures.py`: the typed-records lint keeps schema literals in `records/` and its list only shrinks.
+- **The split-K probe at eh_proj's shape.** `splitk_probe_words` in `glm53_bf16_gemm_capture_gpu.py` could not tell the strided partition from the contiguous one at K 12288, 2 splits, bf16 output, and raised. Where its random rows leave those two equal, and only there, it now plants a third row (2^25 in block 0, -2^25 in block 1, +1 in block `splits`) that the two partitions sum differently. That is exactly where it raised before, so every probe that existed is unchanged.
+- **A CPU test of each capture's `main`**, `tests/properties/test_glm53_mtp_captures.py`: the GPU is stood in for by the twin's words at the launch, and everything after it is real, through the worker pool to the sealed record, the GO / NO-GO line and the exit status, with a flipped word found where it was put. The first run on a card found the two slips above only after its comparisons; this test finds both without a card.
 - No registered Definition's words changed; `catalog_ids.json` lists the seven new ids.
 
 ## circuit-check
@@ -55,7 +58,11 @@ All four unchecked are `vectors/none`, on word Definitions bound at 6,144 and on
 - `r20261112-165318-9eb5` (suites, at `6a53fbc419`): the 57 suites the change touches, `--quick`, all passed (4 from cache), to `out/suites.json`. `repository`, whole with its slow tests, passed its 352 tests, to `out/suites-repository.json`. <rerun at the final head after the eh_proj bindings.>
 - `r20261112-210847-6529` (`repository`, whole, at `920597d5ca`): 352 passed, 0 failed.
 - `r20261112-215601-1b52` (`verity-vllm`, whole, at `920597d5ca`): 14,983 passed, 0 failed, 485 skipped.
-- <card runs>.
+- `r20261113-031522-215e` (node A, card 0, cores 0-9, one lease of 124 s, at `920597d5ca`; **not a capture of record**: it sealed no record). `eh_norm`: 25,165,824 words compared (4 x 6,291,456), 0 differ; the PTX's hash and counts as pinned. `indexer_logits`: 290,933 words compared (100,664 + 190,269), 0 differ. Both then failed at `seal` (the schemas were not registered). `eh_proj`: the route scan finished (below) and 14 unsplit launches ran, then the split-K probe raised before any comparison.
+- `r20261113-033120-282e` (a CPU pod, at `bcc3d97e7d`; computed after the fact from the words that run kept, not by the job that ran the kernel): the 14 unsplit `eh_proj` launches at M 1 to 96 against `Gemm_v2{K=12288,N=6144,DOT=HopperBF16WgmmaDot16_v1}`: 321 rows, 1,972,224 words compared, 0 differ.
+- `r20261113-035227-475a` (`repository`, whole, at `78884a1b8a`): 352 passed, 0 failed.
+- `r20261113-040826-9fec` (`verity-vllm`, whole, at `78884a1b8a`): <counts>.
+- <the captures of record: run id, head, rows and words compared, words that differ>.
 
 ## Not run
 
