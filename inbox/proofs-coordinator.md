@@ -159931,3 +159931,28 @@ One figure is worded more exactly than in my 16:54Z entry: the dead-pair program
 Nothing of mine is running. The second witness for `tileKeepsTheCap` still waits on mend 2's form.
 
 Mailbox read at 20:35Z; nothing newer than your 20:19Z.
+
+## TWOLEG, Fri 13 Nov 20:35Z: #9574: what it holds, its conflicts, and the carry by `restack.py`; ready line expected Sat 14 Nov about 03:00Z
+
+`cursor/proofs-twoleg-e0ff` `b7949765a080efc85050c4f72f9af37a564f520c` #9574, open, unmarked
+
+**1. #9574 against my later lines**
+
+- [run] Over its merge base with `main` (`2e99b1cf48b8`) it is 124 commits (21 merges), 50 files, 4,297 lines added and 1,516 removed. 14 of the files are Lean: the form's three new files under `recursion/verifier/recursive/`, five Spot files, four `security/Proofs/Properties/Challenger*` and `Sampled/RecordDraw.lean`, `security/Properties/Challenger.lean`, and `benchmarks/verifier_cost/whole_run/Main.lean`.
+- [run] Neither the hold (`b2602169f807`) nor rule B (`7635c47d68cf`) holds #9574's head. Both hold it up to `99da2b91892` (its first-parent chain) and lack its last 7 commits: `8d8015c0546` (the form's proofs leave the branch for a pull request of their own), `cecd0feb3f6` (no handler swallows what it catches), `e2971a1dafa` (`stagesFit`), `457a4837078` (the lock exempts `sampled-two`'s entry point) and three merges, one of `main` at `2e99b1cf48b8`.
+- [run] The join, the hold and rule B do carry `stagesFit` (6 lines in the form's file each), so it reached them another way; `main` has none.
+- [derived] Both later lines stand on #9574, not the other way: the hold adds the place family on top of it, and rule B adds the record's own-reads rule and seven proof files on the join. No commit of either belongs in #9574: the form's proofs (`Steps.lean`, `AcceptsOfSteps.lean` and the rest of `SampledTwo/`) left #9574 by `8d8015c0546` on purpose and are the join's.
+
+**2. Conflicts with `main` (`f479876a8758`), and the carry**
+
+- [run] A plain `git merge-tree` of #9574 with `main`: 11 files conflict: `benchmarks/one_stage/a5.py`, `security/Proofs/Properties/Challenger/Coins.lean`, `tools/pous_grader/TRUSTED.sha256`, the two composition test files and the form's three files (each "file location": added at an old path inside a directory the moves renamed), `Spot/ChallengerCoins.lean`, `Spot/RecordAcross.lean`, `spot/verifier/service.py`.
+- [run] `main` holds 28 commits with a move line since #9574's base: 7 `Move:` (the period and terms maps, 09:26Z to 09:47Z) and 21 `Layout-move:` (06:52Z to 07:03Z, then 10:02Z to 11:23Z, the last `0932f6acd0a8`, `protocol_groups_map.toml`). So the carry is `tools/move/restack.py`, not a merge.
+- [derived] #9574 holds `a2c3831345e0` (#9237's head), which `main` took at 08:07Z, after the first four moves (`config_map`, `settings_map`, `bench_instances_map`, `flat_files_map`). By `restack.py`'s rule it is based after those four, so it skips them and ends `clean-skipped` at best, crossing 24, as FRAME's carries did; the confirming command names the 24. Before running that I read those four maps' old paths against #9574's 50 files.
+- [run] #9574's own added lines name `trustedSessionOf` (9 lines) and `Window.window_opens` (1), the declarations the chain renamed by file. [derived] Where a file of mine is outside that file list (the form's file at least), the carry leaves the old name and the carried head does not build until a mend on top, as on the join: I search the carried head for the old names, mend in one commit, and build.
+
+**3. Plan and hour**
+
+- The carry on a named node with `--push-to cursor/proofs-twoleg-carried-9574-ad71` (a new branch of mine; nothing forced), `--onto 4ae17f7eafd7` like the other carries, then whether it merges with today's `main`. Then the mend, a build, the records run of each package it touches (no `--update` unless a record should move) and `suites.py --changed origin/main --quick`, each on a named node.
+- [guess] The carried head about 22:00Z, the ready line Sat 14 Nov about 03:00Z (Fri 7 PM PST). If the records run would move a listed guarantee's record, a named assumption or a statement, I stop there and write both texts.
+- The pull request's head branch must then move to the carried branch, or `cursor/proofs-twoleg-e0ff` fast-forwards to it: I say which when the head exists.
+- Stray events since your 20:19Z: none.
