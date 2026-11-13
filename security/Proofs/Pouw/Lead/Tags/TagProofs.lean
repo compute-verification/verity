@@ -6,20 +6,20 @@ public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.Ring
 
 /-!
-# Row tags against drawn weights: how often two rows' words agree (proofs)
+# Row tags against sampled weights: how often two rows' words agree (proofs)
 
 Row tags put `Σ_e d_e·(g_e − h)` on a column whose tag weights are digits `g ∈ [0, q)^ι`, read as `g − h`, where `d` is
-the difference of two rows' tags and the drawn weights `G : Fin n → ι → Fin q` hold one column's digits each. Two rows
+the difference of two rows' tags and the sampled weights `G : Fin n → ι → Fin q` hold one column's digits each. Two rows
 with the same data and coins have equal words in column `j` exactly when that term is `0`; with other coins, when it
 equals their coin difference there.
 
 * **At most `1/q`** (`col_card_le`): for `d ≠ 0` and any target, at most `q^(|ι|−1)` of the `q^|ι|` digit vectors hit it.
-  Over a tile of columns the draws are independent (`tile_card_le`), so two rows' tiles agree on all of `J` for at most
-  a `q^−|J|` share of the draws.
+  Over a tile of columns the samples are independent (`tile_card_le`), so two rows' tiles agree on all of `J` for at most
+  a `q^−|J|` share of the samples.
 * **At least `1/q` for a one-digit difference** (`col_card_single`): for `d = δ·e_k` and a target `δ·(s − h)`, exactly
-  `q^(|ι|−1)`. Summed over the draws (`tile_sum_agree`), the expected number of agreeing columns in `J` is `|J|/q`.
-* **The success set** (`tag_success_set`): over any family of row pairs, tiles and tries fixed before the draw, the
-  draws on which some pair's tiles are equal are at most the sum of the members' `q^−|J|` shares.
+  `q^(|ι|−1)`. Summed over the samples (`tile_sum_agree`), the expected number of agreeing columns in `J` is `|J|/q`.
+* **The success set** (`tag_success_set`): over any family of row pairs, tiles and tries fixed before the sample, the
+  samples on which some pair's tiles are equal are at most the sum of the members' `q^−|J|` shares.
 
 Exact tile equality is what these bound. A run that patches a tile from another word by word (the chunk model's
 `pathRun_attained`) saves the agreeing columns instead, `|J|/q` of them on average for a one-digit difference.
@@ -44,7 +44,7 @@ theorem tagTerm_split (h : ℤ) (d : ι → ℤ) (k : ι) (g : ι → Fin q) :
   unfold tagTerm
   rw [← Finset.add_sum_erase _ _ (mem_univ k)]
 
-/-- **At most `1/q` of a column's draws hit a target** when the tag difference is nonzero. -/
+/-- **At most `1/q` of a column's samples hit a target** when the tag difference is nonzero. -/
 theorem col_card_le (h : ℤ) (d : ι → ℤ) {k : ι} (hk : d k ≠ 0) (c : ℤ) :
     (univ.filter fun g : ι → Fin q => tagTerm h d g = c).card ≤ q ^ (Fintype.card ι - 1) := by
   let f : (ι → Fin q) → ({e // e ≠ k} → Fin q) := fun g e => g e
@@ -67,7 +67,7 @@ theorem col_card_le (h : ℤ) (d : ι → ℤ) {k : ι} (hk : d k ≠ 0) (c : �
         card_le_card_of_injOn f (fun _ _ => mem_coe.2 (mem_univ _)) hinj
     _ = q ^ (Fintype.card ι - 1) := by rw [card_univ, Fintype.card_fun, Fintype.card_fin, card_ne]
 
-/-- **Exactly `1/q` for a one-digit difference**: with `d = δ·e_k` and the target `δ·(s − h)`, the draws that hit it are
+/-- **Exactly `1/q` for a one-digit difference**: with `d = δ·e_k` and the target `δ·(s − h)`, the samples that hit it are
 those with digit `s` at `k`, `q^(|ι|−1)` of them. -/
 theorem col_card_single (h : ℤ) (k : ι) {δ : ℤ} (hδ : δ ≠ 0) (s : Fin q) :
     (univ.filter fun g : ι → Fin q => tagTerm h (Pi.single k δ) g = δ * ((s : ℤ) - h)).card =
@@ -101,7 +101,7 @@ theorem card_filter_forall (t : Fin n → Finset β) :
   ext G
   simp [Fintype.mem_piFinset]
 
-/-- **A tile agrees for at most a `1/q` share of the draws a column**: the draws meeting a condition on each column of
+/-- **A tile agrees for at most a `1/q` share of the samples a column**: the samples meeting a condition on each column of
 `J` number at most the product of each condition's count, times the free columns' `|β|`. -/
 theorem tile_card_le (P : Fin n → β → Prop) [∀ j b, Decidable (P j b)] (J : Finset (Fin n)) :
     (univ.filter fun G : Fin n → β => ∀ j ∈ J, P j (G j)).card =
@@ -129,7 +129,7 @@ theorem card_filter_at (P : β → Prop) [DecidablePred P] (j : Fin n) :
   rw [Finset.prod_congr rfl (g := fun _ => Fintype.card β) fun i hi => by simp [(mem_erase.1 hi).1], prod_const,
     card_erase_of_mem (mem_univ j), card_univ, Fintype.card_fin]
 
-/-- **The expected number of agreeing columns**: summed over every draw, the columns of `J` meeting their condition
+/-- **The expected number of agreeing columns**: summed over every sample, the columns of `J` meeting their condition
 total `Σ_{j∈J}` of each condition's count, times `|β|^(n−1)`. -/
 theorem tile_sum_agree (P : Fin n → β → Prop) [∀ j b, Decidable (P j b)] (J : Finset (Fin n)) :
     ∑ G : Fin n → β, (J.filter fun j => P j (G j)).card =
@@ -145,8 +145,8 @@ end Tiles
 variable {n : ℕ}
 
 /-- **Row tags: two rows' words agree in `|J|/q` columns on average** when their tags differ in one digit by `δ ≠ 0`
-and their coin differences in the columns of `J` are `δ·(s j − h)`: over every draw of the tag weights, the agreeing
-columns of `J` total `|J|·q^(|ι|−1)·(q^|ι|)^(n−1)`, a `1/q` share of `|J|` times the draws. -/
+and their coin differences in the columns of `J` are `δ·(s j − h)`: over every sample of the tag weights, the agreeing
+columns of `J` total `|J|·q^(|ι|−1)·(q^|ι|)^(n−1)`, a `1/q` share of `|J|` times the samples. -/
 theorem tag_sum_agree (h : ℤ) (k : ι) {δ : ℤ} (hδ : δ ≠ 0) (J : Finset (Fin n)) (s : Fin n → Fin q) :
     ∑ G : Fin n → ι → Fin q,
         (J.filter fun j => tagTerm h (Pi.single k δ) (G j) = δ * ((s j : ℤ) - h)).card =
@@ -156,7 +156,7 @@ theorem tag_sum_agree (h : ℤ) (k : ι) {δ : ℤ} (hδ : δ ≠ 0) (J : Finset
   rw [sum_const, Fintype.card_fun, Fintype.card_fin, nsmul_eq_mul, Nat.cast_id]
   ring
 
-/-- **Two rows' tiles are equal for at most a `q^−|J|` share of the draws** when their tags differ (`d k ≠ 0`), for any
+/-- **Two rows' tiles are equal for at most a `q^−|J|` share of the samples** when their tags differ (`d k ≠ 0`), for any
 coin differences `c`. -/
 theorem tag_tile_le (h : ℤ) (d : ι → ℤ) {k : ι} (hk : d k ≠ 0) (J : Finset (Fin n)) (c : Fin n → ℤ) :
     (univ.filter fun G : Fin n → ι → Fin q => ∀ j ∈ J, tagTerm h d (G j) = c j).card ≤
@@ -175,9 +175,9 @@ theorem tag_tile_le (h : ℤ) (d : ι → ℤ) {k : ι} (hk : d k ≠ 0) (J : Fi
         rw [filter_not, card_sdiff_of_subset (by simp), card_univ, Fintype.card_fin]
         simp
 
-/-- **The success set**: for any family `R` of (row pair, tile, try) fixed before the draw, each with tags differing
-(`d r (k r) ≠ 0`) and coin differences `c r`, the draws on which some member's tiles are equal number at most the sum
-of `tag_tile_le`'s bounds, a `Σ_r q^−|J r|` share. A prover that tries `T` inputs chosen before the draw is the family
+/-- **The success set**: for any family `R` of (row pair, tile, try) fixed before the sample, each with tags differing
+(`d r (k r) ≠ 0`) and coin differences `c r`, the samples on which some member's tiles are equal number at most the sum
+of `tag_tile_le`'s bounds, a `Σ_r q^−|J r|` share. A prover that tries `T` inputs chosen before the sample is the family
 with `T` times the members. -/
 theorem tag_success_set {R : Type} (F : Finset R) (h : ℤ) (d : R → ι → ℤ) (k : R → ι)
     (hk : ∀ r ∈ F, d r (k r) ≠ 0) (J : R → Finset (Fin n)) (c : R → Fin n → ℤ) :
