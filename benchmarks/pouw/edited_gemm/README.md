@@ -118,7 +118,7 @@ nothing on `sys.path`, and the Dither-C and P V references recompute through
 `cwgemm_ref.py`, `cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, `apv_ref.py` imports `cpv_ref.py`'s
 `patch_cols`, and `vprod_profile.py` imports `eps_profile.py`; each module another script imports lists in `__all__`
 what they read of it (the suite's tests read more of a module than its list). From outside the directory,
-`verity/protocols/pouw/receipts/receipt_conform.py --adopter egemm_ref` checks `egemm_ref.py`'s `xin_keys`,
+`verity/protocols/pouw/verifier/receipts/receipt_conform.py --adopter egemm_ref` checks `egemm_ref.py`'s `xin_keys`,
 `xin13_receipts` and `tile_receipts` (the suite runs that check too), `benchmarks/pouw/theory/`'s fold checks import
 `egemm_depthr_check.py`'s `key_ok_r11` and `key_ok_r11_32`, `adapters/vllm/tests/engine/` loads `fattn_ref.py` by path
 as the int8 attention's oracle, and the ACCEL model's honest profiles under `benchmarks/machine_model/data/` are
