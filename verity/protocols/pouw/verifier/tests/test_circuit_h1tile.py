@@ -11,11 +11,11 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, runs
 from verity.circuits.types import Array
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.boolean import gemm as BG
 from verity.protocols.pouw.prover.circuit import compile as C
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import seeds as SD
