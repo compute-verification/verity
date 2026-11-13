@@ -32,7 +32,8 @@ counts are public.
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
 kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
 (`Site.Entry`), and the information entry (`Registration.Entry.information`), which registers items
-(`Registration.Item`): θ's values, each by its committed root (`Registration.Theta`), and the builder `B`, the registered
+(`Registration.Item`): θ's values, each by its committed root, its rows' shape and its leaves' domain
+(`Registration.Theta`), and the builder `B`, the registered
 compiler (`Registration.Builder`, holding `Verity.Compiler`), and the declaration (`Registration.Entry.declaration`),
 which declares a day's circuit (`Registration.Declared`: its program's digest and its block Definitions by descriptor
 key). The log's θ and builder are what its items register (`Registration.theta`, `Registration.builder?`), and the

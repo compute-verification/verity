@@ -21,7 +21,7 @@ Two things the code holds are not the spec's, so the denotation takes them as pa
   holds the compiler itself (`Verity.Registration.Builder.B`). The denotation reads the compiler a builder names (`B`),
   which no check reads.
 * **An entry's digest.** The code names an entry by `SHA-512(format ‖ 0 ‖ canon(entry))` over all its fields, while a
-  spec entry holds fewer (a θ value only its name and root), so no function of a spec entry alone is the code's digest.
+  spec entry holds fewer (a θ value no checkpoint), so no function of a spec entry alone is the code's digest.
   The spec's digests (`digests`) name the Site's sheets and the genesis as the code does, and each entry by the code's
   digest of the first entry of the log checked that denotes it (`names`). Two entries of a log that denote one spec
   entry and differ in code register one item twice or declare one day twice, so the log is refused either way.
@@ -35,8 +35,9 @@ namespace Properties.Registration
 
 open Properties.Site (regEntry composite auditor)
 
-/-- The spec's value of θ of a code value: its name and its root. -/
-def theta (t : Core.Registration.Theta) : Verity.Registration.Theta := ⟨t.value, t.root⟩
+/-- The spec's value of θ of a code value: its name, its root, its rows' shape and its leaves' domain. -/
+def theta (t : Core.Registration.Theta) : Verity.Registration.Theta :=
+  ⟨t.value, t.root, t.leaves, t.words, t.wordBits, t.domain⟩
 
 /-- The spec's builder of a code builder: its digest, its advice's format, and the compiler `B` its digest names. -/
 def builder (B : Core.Registration.Builder → Verity.Compiler) (b : Core.Registration.Builder) :

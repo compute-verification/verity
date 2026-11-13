@@ -8,16 +8,15 @@ public import NetworkCheck.Check
 /-!
 # What a protocol names of the registration
 
-A protocol's answer or its parameters name things registration holds: a circuit, a link, a key, a registered value's
-root. Each such tie joins two protocols, registration and the one that names, so it is stated in the composition's
+A protocol's answer or its parameters name things registration holds: a circuit, a link, a key, a registered value. Each such tie joins two protocols, registration and the one that names, so it is stated in the composition's
 area, under a prefix of its own (`Properties.Ties`), the one module there that reads a protocol's code (Flock's verifier's
 reading of a circuit file, the network certifier's parameters). Every tie has one shape
 (`Registration.NamesRegistered`): what the answer names is `f x` for some `x` the registration holds, under a public map
 `f`, and it is stated at the head the answer names (`Registration.AtHead`): `h` heads a prefix of the accepted log, and
 what is registered is what that prefix registers. No entry retires what an earlier one registered, so what a prefix
 registers every longer prefix registers too (`Proofs.Properties.Ties`). `f` is the identity, up to
-projecting what the view holds to the field the answer names, for a key, a link, a memory leaf and a registered value's
-root. For the circuit, the parameters name the circuit file and the view holds the Program's digest, so the answer
+projecting what the view holds to the field the answer names, for a key, a link, a memory leaf and a registered θ
+entry. For the circuit, the parameters name the circuit file and the view holds the Program's digest, so the answer
 side is read through the one public map from the first to the second (`Registration.boundProgram`, the circuit file's
 META `program_sha512`), and `f` then projects a declaration to its program.
 
@@ -25,7 +24,8 @@ META `program_sha512`), and `f` then projects a declaration to its program.
   for the day.
 * `Registration.CertifiedIsParams`: a network certifier check's links, each with its key, are registered boundary links
   with that key pinned for their certifier.
-* `Registration.RootIsRegistered`: a value's root an answer names is θ's registered root of that value.
+* `Registration.RootIsRegistered`: a θ entry an answer names, root, rows and domain, is the one θ registers for its
+  value.
 
 Each is a predicate on a view (`…In`), and the tie is it at a head of the log's chain. None is read by a theorem yet, and no code checks any of them: each docstring says which check would make it a lemma.
 -/
@@ -105,18 +105,20 @@ def CertifiedIsParams (p : NetworkCheck.Check.Params) (D : Digests) (c : Composi
     Prop :=
   AtHead D c log h (CertifiedIn p)
 
-/-- **A registered value's root an answer names is the view's θ's**: the root `root` an answer names for the value
-`value` is the root the view's θ registers for it (`NamesRegistered`, `f` = `Theta.root`).
+/-- **A registered value an answer names is the view's θ's, whole**: the θ entry `t` an answer names (a value's name,
+its root, its rows' shape and the domain its leaves are hashed under) is the entry the view's θ registers for that
+value's name (`NamesRegistered`, `f` the identity). A tie on the root alone could not say that the leaves, words and
+domain an answer reads are the registered ones.
 
-No theorem reads it. It becomes a lemma when the check that reads the answer's root (sampled proofs' registered roots,
-a protocol's parameters) reads it from θ in the view of an accepted log rather than from its own parameters. -/
-def RootIn (value root : String) (v : View) : Prop :=
-  NamesRegistered {t | t ∈ v.theta ∧ t.value = value} Theta.root root
+No theorem reads it. It becomes a lemma when the check that reads the answer's θ entry (sampled proofs' registered
+values, a protocol's parameters) reads it from θ in the view of an accepted log rather than from its own parameters. -/
+def RootIn (t : Theta) (v : View) : Prop :=
+  NamesRegistered {x | x ∈ v.theta ∧ x.value = t.value} id t
 
-/-- **A registered value's root an answer names is θ's at the head `h`**: `RootIn` at the view of the prefix of the log
-`h` heads (`AtHead`). -/
-def RootIsRegistered (value root : String) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
-  AtHead D c log h (RootIn value root)
+/-- **A registered value an answer names is θ's at the head `h`**: `RootIn` at the view of the prefix of the log `h`
+heads (`AtHead`). -/
+def RootIsRegistered (t : Theta) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
+  AtHead D c log h (RootIn t)
 
 end Registration
 

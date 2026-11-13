@@ -100,12 +100,12 @@ theorem certifiedIn_take_mono (p : NetworkCheck.Check.Params) (D : Digests) (c :
     CertifiedIn p (view D c (log.take m)) :=
   fun l hl => (hc l hl).mono (certifiedKeys_take_mono D c log h)
 
-theorem rootIn_take_mono (value root : String) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}
-    (h : n ≤ m) (hr : RootIn value root (view D c (log.take n))) : RootIn value root (view D c (log.take m)) := by
+theorem rootIn_take_mono (t : Theta) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}
+    (h : n ≤ m) (hr : RootIn t (view D c (log.take n))) : RootIn t (view D c (log.take m)) := by
   obtain ⟨hθ, -⟩ := view_take_prefix D c log h
-  refine hr.mono fun t ht => ?_
-  simp only [Set.mem_ofPred_eq] at ht ⊢
-  exact ⟨hθ.subset ht.1, ht.2⟩
+  refine hr.mono fun x hx => ?_
+  simp only [Set.mem_ofPred_eq] at hx ⊢
+  exact ⟨hθ.subset hx.1, hx.2⟩
 
 end Registration
 
