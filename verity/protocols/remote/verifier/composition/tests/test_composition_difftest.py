@@ -746,6 +746,15 @@ def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
 
 @pytest.mark.slow
 def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
+    """`product IDS serve` over onsite's subprotocols disagrees with onsite's reference nowhere, and rejects with a
+    subprotocol undecided beside the rejection, at 50 cases; the nightly runs 200
+    (`test_product_over_onsites_subprotocols_is_onsite_at_200`)."""
+    _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 50, (R.REJECT, "reject, a component undecided"))
+
+
+@pytest.mark.slow
+@OPT_IN
+def test_product_over_onsites_subprotocols_is_onsite_at_200(product_onsite_server, recorded):
     _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 200, (R.REJECT, "reject, a component undecided"))
 
 
