@@ -279,6 +279,7 @@
     {"file": "verity/protocols/flock/agreement/ci.py", "count": 2},
     {"file": "tools/research/src/research/at_main.py", "count": 4},
     {"file": "benchmarks/served_commit/tests/test_served_arm.py", "count": 1},
-    {"file": "tools/research/src/research/landing.py", "count": 2}
+    {"file": "tools/research/src/research/landing.py", "count": 2},
+    {"file": "tools/config/verity_config/verity_settings.py", "registry": true}
   ]
 }

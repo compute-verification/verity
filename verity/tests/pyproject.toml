@@ -1,0 +1,13 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# What the tests import of `verity`: the Site, the wire whose canonical JSON its digests are taken over, and what the
+# wire's test holds the wire to: the commitments' canonical JSON, and S1's LMS, the handshake's party keys. Each module
+# is named by its file, so it stays an input wherever it sits; the handshake's package is read when it is imported.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
+          "verity/channel.py", "verity/runtime/handshake.py",
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/runtime/__init__.py", "verity/hardware/__init__.py"]

@@ -18,7 +18,7 @@ when_closed = ["tests"]
 # vectors the network certifier's encodings are held to
 fixtures = [
     "adapters/vllm/workloads",
-    "verity/protocols/certifier/verifier/tests/fixtures/{arith_encode,cache_step,cache_step_v2,replay_step}_vectors.json",
+    "verity/protocols/certifier/verifier/tests/fixtures/{arith_encode,cache_step,replay_step}_vectors.json",
 ]
 
 [public]
@@ -89,7 +89,7 @@ shared = [
     "verity/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/protocols/reporting.py",
-    "verity/configuration/config",
+    "tools/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
     # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
     # and the node files' test reads the Site, so each stays private)
@@ -321,13 +321,14 @@ via = ["package"]
 
 [[needed]]
 why = "the errors and settings every unit of `verity` shares"
-paths = ["verity/{errors,settings}.py"]
+paths = ["verity/errors.py", "tools/config/verity_config/verity_settings.py"]
 from = "*"
 
 [[needed]]
 why = "the challenger and service code SPOT needs"
 paths = [
     "verity/{claims,commitments,configuration,definitions,difftest,hardware,protocols}",
+    "verity/{channel.py,config.py,device.py,party.py,protocol.py,runtime,tests}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
 from = ["spot"]

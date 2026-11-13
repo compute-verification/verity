@@ -1401,7 +1401,7 @@ gives the batch order (Model Runner V2's stable sort by n), I1's numbering by fi
 `sources`, and the request records (`prompt_len`, `output_len`, `finish`). While the cumulative pool bound holds (sync
 scheduling, and ⌈(P + O)/B⌉ blocks for each request admitted through the step, that step's included, at most
 NB − 1), nothing has been evicted, and every hit is the longest cached prefix. Past it, every hit is the replay's block
-pool's, which the compile slice's pool derives (`CacheStep_v2`). The hits, the resumes and the new requests' order that
+pool's, which the compile slice's pool derives (`CacheStep_v3`). The hits, the resumes and the new requests' order that
 the walk would otherwise read are the replay's, at 0 bits.
 
 **The arrival order**, recovered from the advice's rows (`v1.arrival_order`). FCFS admits new requests in arrival
@@ -1493,7 +1493,7 @@ charge (the composition below): what the bound counts is the charge, not the com
    largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
    `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits.
    While the bound holds each lookup's hit is h*. Past it, `CacheStep_v1`'s table, which never evicts, can't give the
-   pool's hit and v1 sends none, so the session needs `CompileSlice_v2`, whose pool (`CacheStep_v2`) derives each
+   pool's hit and v1 sends none, so the session needs `CompileSlice_v4`, whose pool (`CacheStep_v3`) derives each
    one. The chain reads every committed value and none past them, so the values are exactly the asks and the
    deviations. Under async scheduling
    (AS) the certified O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
@@ -1607,7 +1607,7 @@ in `ReplayStep_v1`'s scheduling order:
     hold every unit computed: 149,212 bits of table a state row at smallkv's (511, 16, 17, 10).
 - *Past the bound.* The table never evicts, so it holds every unit the session computed, not NB − 1: 961 units on
   corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
-  holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v2`
+  holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v3`
   derives, so the window row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
   prefix, are unused.
 - *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
@@ -1648,8 +1648,8 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   each, 2.2e8 ANDs for the session, plus a 5.7M-AND pass: some 35,000 times less than the linear table. At 2.9M ANDs a
   layer (E/2 comparators), it fits as 91 layer proof blocks or as one proof block, whichever size class the service
   runs.
-- *The block pool, in the same records.* The same mechanism replays the pool's LRU, which `CacheStep_v2` runs as a
-  linear table:
+- *The block pool, in the same records.* The same mechanism replays the pool's LRU, which a linear table would read
+  and write whole at every call:
   - The free queue becomes a doubly linked list over block ids, a node per block holding prev, next and its reference
     count, about 50 bits a record keyed by BW = bitlen(NB) bits.
   - The hash map becomes the table above, with a delete record when a block is evicted. An entry's id is the time of
@@ -1664,7 +1664,7 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   only to h*, so any hit up to the longest donor prefix passes, whatever the real pool evicted. The attack's probe
   holds this: a hit no donor computed is refused, and a shorter one is accepted. So `CompileSlice_v1` past the bound
   would need a sent shortfall, and the schedule it accepts needn't be the one vLLM's pool gives. v1 sends none: its
-  decoder holds each hit to the replay's pool, and `CompileSlice_v2` holds the circuit's to `CacheStep_v2`'s.
+  decoder holds each hit to the replay's pool, and `CompileSlice_v4` holds the circuit's to `CacheStep_v3`'s.
 
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
@@ -1678,8 +1678,8 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
     stand-in (its ``max-tokens`` unit is refused by the b‖c check alone); a proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
-  as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v2`
-  derives all three from `CacheStep_v2`'s pool, past the bound too.
+  as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v4`
+  derives all three from `CacheStep_v3`'s pool, past the bound too.
 - Past the bound the table holds the session's units, so the scan at a whole session's size needs offline memory
   checking (above).
 - *The order's floor.* A server that admitted in release order at the next bucket boundary, a change to vLLM's
