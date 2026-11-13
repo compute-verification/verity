@@ -121163,3 +121163,38 @@ No ready line in this entry: #9595's still waits for its quick tier (`1199`, run
 **Not established.** (l) has not elaborated anywhere: its four `mvcgen` lemmas, `prev_of_text` and the main theorem are unchecked. #9595's quick tier has not ended. No Lean check (kernel replay, lock rules) ran on any of these heads, and no second reader read the restated statements. The runs cited for #9581 and #9625 are at the commit before the docstring sentence.
 
 **Pause:** yes, at any time; nothing is unpushed but logs under `/tmp`. Scratch `cursor/proofs-prf600-periodread-scratch-0b7e` holds the bodies. Mailbox read at `7e01000574`.
+
+## HELDOF, Fri 05:05Z: new head `488e6131f4` on `cursor/proofs-heldof-4c7b`: held₀ sets refHeaders; RefsAre proved by construction; STATEMENT CHANGE: heldMatches_of and heldMatches_form drop RefsAre
+
+**What has compiled:** nothing new on the heldof branch.
+- `r20261113-042956-388c` (at `2f078771d8`) started and failed at exactly OWNREADS's line: "error: ../Proofs/Flock/SpotFlock/HeldOf.lean:136:52: Fields missing: `refHeaders`" [run].
+- The new head `488e6131f4` is in `r20261113-050209-28f4` (vy-nebius-2), launched 05:02Z. I expect it to end around 05:45Z [guess].
+
+In plain words: on the moved base, `Held` has `refHeaders`, and `refsOf h` pairs each template's name with `h.refHeaders t` (`Code.lean:157`, `:690`) [read]. My `held₀` now sets `refHeaders := fun t => (it.circuits.map (·.2.2.1)).toList.getD t .null`, the third part of each params entry, its header, which is OWNREADS's reading [read, and checked against `RefsAre`'s `(t, _, hd, _)` pattern]. `RefsAre it h` then holds at every held copy `heldOf` builds, by the same argument as `refReads_eq`. So it is no longer a premise [derived; compiling in `28f4`].
+
+**STATEMENT CHANGE** (not compiled): `heldMatches_of (hh) (hP : PartsAt i it h) : HeldMatches i it h`, and `heldMatches_form`'s third conjunct `PartsAt … → HeldMatches …`. Both drop `RefsAre`. New: `refHeaders_eq` and `refsAre_of (hh : heldOf i it u = some h) : RefsAre it h`. `RefsAre` is kept as a definition [read]. No other file in `security/` uses `heldMatches_of`, `heldMatches_form` or `RefsAre` [read: grep at `488e6131f4`]. OWNREADS and ASSEMBLY: merge `488e6131f4`.
+
+**The rest, unchanged since 04:36Z:**
+- `descCore` decides `membersScoped` and `wiringOk`.
+- `heldOk` is at `held₀`, through the frame lemmas.
+- `twoHolds_of` and `twoHolds_of_files` take the run's `popOk`.
+- `xS₀_of_files`.
+
+All are in the same try, not compiled.
+- Theorems at the form's accept (`heldMatches_form`, `twoHolds_of_files`) are empty until TWOLEG's #9555 is in the form and an honest play is accepted [relayed].
+- None goes into a lock, and I add no `unwitnessed` entry.
+
+**FRAME's `BlockSize.lean:73`:** fixed on FRAME's line (`8e282166e9`, in `a8d00d755a`) [relayed]. My block branch `85b96096df` compiles once that reaches it. Its compiled run `r20261113-022722-0597` carried the same token [run].
+
+**Machine:** this turn began on a fresh machine: no worktrees, and the checkout on `main`. Both branches were pushed before, so nothing was lost [run: `git log` at `origin/cursor/proofs-heldof-4c7b` = `2f078771d8`]. The uncommitted `BlockSize` token is gone and isn't needed. I created `~/wt/.pen` at 05:00Z; it is mine.
+
+**STOP RULE:** none. `held₀` and `heldMatches_*` are proof-side, not a listed guarantee or the verifier.
+
+**NEEDS:**
+- The `popOk` step lemma (ASSEMBLY or RUNSAS).
+- FRAME's per-template `wiresMove`.
+- SESSIONOF's partition-up-to-`Same`: mine, next entry.
+
+**To post:** nothing.
+
+**Not established:** that `488e6131f4` compiles.
