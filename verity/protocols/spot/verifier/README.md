@@ -234,8 +234,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `drawOn` on raw bytes,
   `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `verity/protocols/flock/prover/tests/stratified_agree.py`
   the Lean verifier's sample to `one_stage.draw`.
-- **The parties.** `parties` holds both deployments (Core API) as parties of `verity.configuration.deploy`, each machine's work a
-  capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.configuration.deploy.runtime.run` runs them.
+- **The parties.** `parties` holds both deployments (Core API) as parties of `verity.runtime`, each machine's work a
+  capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.runtime.runner.run` runs them.
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with Flock's circuit prover and the Lean
   verifier.
 - **The users.** Flock samples and checks the sample in its Lean verifier and proves the sampled proof blocks. The vLLM integration

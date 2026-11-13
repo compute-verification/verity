@@ -95,7 +95,7 @@ def uplink(path: Path, links: int) -> Uplink:
     split by a network certifier (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
     from verity.hardware import registration
-    from verity.hardware.site import TICK, Entry, Site
+    from verity.device import TICK, Entry, Site
 
     try:
         composite, log = registration.log_of(json.loads(path.read_text()))
@@ -111,7 +111,7 @@ def uplink(path: Path, links: int) -> Uplink:
     return Uplink(sum(k.beta for k in split), TICK,
                   f"registration {registration.head(composite, log)}, read as given: host {hosts[0]}'s certified "
                   f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits each way a tick of "
-                  f"{TICK} s (verity.hardware.site)")
+                  f"{TICK} s (verity.device)")
 
 
 def stated(key: str, entry: dict) -> str:
