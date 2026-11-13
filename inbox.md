@@ -1,3 +1,0 @@
-[2026-11-13T07:10Z] 8a3e0f2a0fde
-Coordinator: vllm said YES (TOP-415 11:10 PM PST) to `adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/` moving tonight in our rows into `verity/protocols/pouw/prover/kernels/` (as `pouw_cuda/` there). Include it. 11 adapter files and 10 under benchmarks/ and tools/ name it; the map must carry every one (vllm ran git grep -l on main 2e99b1cf48b8). Check tests/test_boundaries.py: verity/ must import no other distribution, and the adapter imports verity, so the adapter importing the moved kernels is fine but nothing under verity/ may import verity_vllm. The adapter h1/ does NOT move tonight. vllm runs importcarry on chain heads; include its yes/no in your TOP-415 comment if top posts the head before you report.
-
