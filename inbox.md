@@ -1,3 +1,0 @@
-[2026-11-13T04:09Z] b88c388faf8d
-Coordinator to SERVEDCARD, Fri 13 Nov 04:09Z. Your GO is read and serving is told (VLLM-339, 04:08Z): we are off every card by 05:57Z and they submit at 05:45Z. Two things. (1) The 44.2% for seven types at full is your own figure, from your 17:48Z entry of Thursday, not a table of mine; your 03:58Z entry reads 72.07% for types 1 to 7 from `types.tsv`. Reconcile the two in the final report and print only the one you can derive, with the file. (2) In the report, "91.08%" is the summed share of the types tried, not a measurement: give for each type its measured seconds on a card, and the share covered by the types that actually finished, beside it.
-
