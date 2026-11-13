@@ -277,7 +277,7 @@ theorem trustedSessionOf_ok_of_steps {ledger window : Json} {key : ChallengerKey
   unfold trustedSessionOf
   simp only [hp, hs, bind, Except.bind]
 
-/-! ## The draw -/
+/-! ## The sample -/
 
 /-- `challengerStream` reads the coin of a segment's one opening: the segment is of the family from coin 0, opened
 after `after`, its opening is coin 0's under the commitment (`liveReason`), and the family's roots are the one

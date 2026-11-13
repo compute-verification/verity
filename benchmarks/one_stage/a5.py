@@ -60,8 +60,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), with a window's history tables (`audit`'s ``history``, `ml.windows.history.params`), each
-  table's root the verifier of record computes from its writers' public bodies, to which it holds the window's registered
-  root, in its check before the draw and in the stream's registrations its run of record reads (a root both its verifiers
+  table's root the verifier computes from its writers' public bodies, to which it holds the window's registered
+  root, in its check before the sample and in the stream's registrations its run of record reads (a root both its verifiers
   refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
@@ -80,7 +80,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   sample: the registration naming another compiler or another advice root, the opening under another salt, the verifier opening
   other advice (``--other-advice-opening``: `source` and R2), and a unit committed under other advice (``--other-windows``: R4
   and its roots). With ``--transfer-gate`` (the templates the compiler lists as holding transfer gates), the window's
-  work law (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
+  work sampling design (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
   rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
   trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
@@ -99,9 +99,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   member's verdict to the one `verify` prints for its session as a process of its own.
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
-  So a plain audit takes only a stream's sample (``--challenger``) by a stratified law, over a window of one member with no
+  So a plain audit takes only a stream's sample (``--challenger``) by a stratified sampling design, over a window of one member with no
   registered reads or shared rows, and refuses any other before the sample (`plain_refusal`): a stream's rule is a rate, and
-  the stratified rate (`stratified-rate:NUM/DEN`) is the one whose law is stratified (`service.selection_law`).
+  the stratified rate (`stratified-rate:NUM/DEN`) is the one whose sampling design is stratified (`service.selection_law`).
   The member's one session is served the stream's sample itself and runs on the keyed coin tree (``FC_COINS=tree``), and
   Lean `verify --coins tree --stratified K` holds it to the stratified sampling design it derives from its own `--program` and
   `--partition`. Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the
@@ -339,7 +339,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
 
 
 def rated(w: CS.Binding, rule: str) -> CS.Binding:
-    """``w`` under the rate ``rule`` its stream samples by (`service.Law`): its law and work table the rule's over its
+    """``w`` under the rate ``rule`` its stream samples by (`service.Law`): its sampling design and work table the rule's over its
     population (`service.params_law`), as `serving_rows.population` resolves a partition file's rate."""
     law, table = S.params_law(rule, w.program, w.query, w.work_table)
     return replace(w, law=law, work_table=table)
@@ -753,11 +753,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
-    registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
+    registration (a two-stage design's second stage of its interior registration), its sample, law and receipt, proved in
     place of a5's own; the summary's ``handed`` is then what the audit record took (its verdicts, statement, sessions,
-    proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the verifier
-    of record's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
-    registration's check holds the window's registered roots before the draw, and the stream's registrations for its run
+    proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the
+    verifier's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
+    registration's check holds the window's registered roots before the sample, and the stream's registrations for its run
     of record; None for a window with none."""
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 
@@ -958,7 +958,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
     def staged(mm: dict, local: list[int]) -> dict:
-        """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
+        """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's sample
         and its prover's file."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
@@ -1425,9 +1425,9 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 
 
 def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
-    """Whether the draw under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), which
-    fails the window, so only a draw that ends gives `link_points` its counts (`coins.ran_out`, Lean `Draw.ranOutOf`);
-    where the law refuses otherwise, why."""
+    """Whether the sample under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), which
+    fails the window, so only a sample that ends gives `link_points` its counts (`coins.ran_out`, Lean `Draw.ranOutOf`);
+    where the sampling design refuses otherwise, why."""
     try:
         return CC.ran_out(law, population, read)
     except ValueError as e:
@@ -1437,8 +1437,8 @@ def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
-    drawn units under the drawn law over the draws that end (one that runs out of coins fails the window:
-    `draw_ran_out`), or why it refuses them all, a law no draw of which ends among them (`link_points.NEVER_ENDS`).
+    sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
+    `draw_ran_out`), or why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here; a registration whose verifier names its members refuses (`Registration.check`)."""
     from verity.protocols.spot.verifier.one_stage import link_points as LP
 
