@@ -1,0 +1,18 @@
+# AllReduceMultimem lowered in rank 0's node window (REQBLOCK, Thu 12 Nov 10:20 PM PST [Fri 06:20Z])
+
+Branch `cursor/circuits-cir274-multimem-6f04` (from DENSE's 30dac672), head 5005ee9e. Module
+`adapters/vllm/verity_vllm/program/predict/node_window_multimem.py`, tests `tests/program/predict/test_node_window_multimem.py`.
+
+| (43 ids, 2 outputs, rank 0) | 4 layers before | 4 layers now | 78 layers before | 78 layers now |
+|---|---|---|---|---|
+| digest | 61b9f8d8516fe67f… | 3ee9420daaf7545f… | f4c1c567288f… | 08a3b9bbb6575290… |
+| units | 5,137,384 | 5,191,393 | 123,537,384 | 124,208,701 |
+| templates | 105 | 108 | 105 | 108 |
+| wire patterns | 13,238 | 13,266 | 945,322 | 946,126 |
+| peak GiB | | 1.012 | 10.9 | 13.916 (watch 14,214,264 kB) |
+| window build s | | 28.2 | 594 | 681.6 |
+| unlowered | | EmbeddingShard 2, StopCheck 1, TokenSelect 2 | +AllReduceMultimem 157 | EmbeddingShard 2, StopCheck 1, TokenSelect 2 |
+
+Before: the coordinator's figures (r20261113-025656-e215 at 78). Now: r20261113-055056-24b4 (4) and r20261113-055026-4829
+(78), both at 5005ee9e, read from their records. Tests: r20261113-055126-6a3b at 5005ee9e, 38 passed with the frame's,
+dense and sparse files. Value check: r20261113-053257-b863 at 26d5e1ae (same lowering; reads() was sped up after).
