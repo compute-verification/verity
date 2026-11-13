@@ -131611,3 +131611,45 @@ Friday's audit proves the greedy select. Its units read no weight row, so it ope
 - 07:46Z to 07:50Z: your old timers again: `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, `proofs-sweep-30m-v42` six times, `history-try-4d04`, `board-7pm-pst-0300z`, `servedcard-gonogo-0412z`, `sweep-840pm-pst-0440z`, `runs-ended-resumes-0505z`, `servedcard-cards-free-0558z`, `answers-due-0710z`.
 
 No run of mine is running. No timer of mine is set.
+
+## ASSEMBLY, Fri 13 Nov 09:00Z: the join is at `cb2d54f3d8` = `03273f219d` + ACCEPTS `82c77292dd` + FRAME `6e7ac16f9a` + TWOLEG `744ded04cb` + HONEST2 `0faf5b2084` + SESSIONCOINS `1d1352eb2d`; `JoinsAt` has 23 fields (`twoHolds` and `firstTreeless` are theorems now, `heldAt` is `partsHeldAt`); NOT compiled: STAGECOINS's two lines still hold it, one compile when it names a head; TWOLEG: the tip moved, outside `security/` only by `744ded04cb` and the pin's line
+
+Mail read: your 08:37Z and 08:55Z (both by the hook). Entries read: ACCEPTS 08:47Z, FRAME 08:48Z, TWOLEG 08:53Z, SESSIONCOINS 08:55Z.
+
+**In plain words.** Every head named for the join is on it. The join's one premise lost two more fields, because their owners proved them from the form's own check. Nothing here is compiled since `401d7ef808`: two lines of STAGECOINS's still read the old shape of `inputAt_ok`, and I launch the one compile when STAGECOINS names its head.
+
+**1. Merged since 08:45Z** [run: each `git merge`, no conflict in any; each head's base on `main` is `8ef93f0196` or its ancestor `4a7291116e`, so none brings `main`].
+- ACCEPTS `82c77292dd` (`86ee6f379b`), then `JoinsAt.lean` mended as ACCEPTS wrote (`6c6fd6cd56`): the field `twoHolds` goes, `heldAt : HeldAt A C` is `partsHeldAt : PartsHeldAt A C`, and `playAccepts_form` is called with `h.partsHeldAt h.heldOfAt h.portsDistinctAt …`.
+- FRAME `6e7ac16f9a` (`ece55a0cca`): `Challenger/CanonWf.lean` with its two root lines; `OwnReads.lean`, `RecordDraw.lean`, `SpecTie.lean`.
+- TWOLEG `744ded04cb` (`324a03d012`): the recursive package's root imports `VStarRecursive.SampledTwo`. Three files, none under `security/`.
+- HONEST2 `0faf5b2084` (`cc8aaaf147`): 15 new files (`SpotFlock/Honest/` five, `AddressFacts/Row*.lean` ten) and their roots. ADDRROW's `c9ba3542f8` is not in: neither owner has named it to me.
+- SESSIONCOINS `1d1352eb2d` (`6e9b7bca6c`), then `JoinsAt.lean` mended as its item 3 says (`645ecaa587`): the import of `SessionTreeless`, the field `firstTreeless` gone, and `hlog` reads `SessionCoins.firstTreeless_of_check C h.caseIsSent (fun _ _ _ _ _ _ _ _ => rfl)`. Not compiled.
+- After the last merge [run]: lakefile roots 306, lock roots 309, each the union of its parents' with no name lost; `lock_roots.py` adds nothing and finds nothing wrong; `dup_names.py` reports the same 17 names; `pytest tests/test_lean_packages.py`, "35 passed, 3 warnings". The lock's sections other than `roots` are as at `03273f219d`.
+
+**2. Your item 4, the duplicate root: already gone** [run: the lakefile parsed at the tip]. `DeviceOrder` is in `roots` once (line 165); `d476a92bb5` removed the second, before `22d3`. The one name still listed twice is `Proofs.Properties.Pouw.LiveSalt.Ledger`, which `main` lists twice itself; I leave it for the carry.
+
+**3. The pin** [run: `pins.py --stale`, then `--regen`]. `verity/protocols/pous/lean/TRUSTED.sha256` holds a hash of `security/Proofs/lakefile.toml`, so it goes stale with every root a merge adds. I regenerate that one line after each merge that adds a root (`c39d673db9`, `cb2d54f3d8`); `--stale` prints nothing at the tip. TWOLEG's 08:53Z found it stale at `03273f219d`.
+
+**4. What holds the compile** [read]. Only `FirstCoins.lean:262` and `StageCut.lean:209`. STAGECOINS's branch holds the two edits at `07319646f7` and `firstDrawn_of` above them at `adb9eba761`, both "not compiled" by their subjects, and no entry of STAGECOINS's since 07:52Z names a head. When one does: I merge it, and send `DrawRoots`, `JoinsAt`, `JoinedCoupling`, `JoinedForm` through `--on auto --mem-gb 72`, one try at a time.
+
+**5. TWOLEG, the scratch.** The join's tip is `cb2d54f3d8`, tree `ae0d043aa4e3`. Since `03273f219d` it moved in 29 files, 26 under `security/` and three outside: the two Lean files of your `744ded04cb` and the pin's line [run: `git diff --name-only`].
+- `git merge-tree` of the tip and `de592c42ef` has one conflict, the pin's line, which `pins.py --regen` writes [run]. In the merged tree `benchmarks`, `adapters`, `tools`, `tests` and `uv.lock` equal the scratch's (`0e58cccb3a`, `4e5227ee12`, `a54458591f`, `45b36ec144`, `e66be93c2b`), and `verity` differs from the scratch's in that one file only.
+- So by your item 7 no new play is needed, and I merge `de592c42ef` after your next entry names the run at it, resolving that one line with the tool and changing nothing else. Say if you would rather merge the tip in yourself.
+
+**6. `JoinsAt`'s 23 fields at `cb2d54f3d8`** [read]: `ledgerInOrder`, `distinctFamilies`, `family₁`, `family₂`, `otherRoots`, `firstDrawn`, `sessionMatches`, `msgOpens`, `digestBefore`, `partsHeldAt`, `heldOfAt`, `portsDistinctAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`. The table for soundness is of these and comes in its own entry by 10:45Z.
+
+## Runs
+
+None out. No timer held.
+
+## NEEDS
+
+- **STAGECOINS:** the head with your two lines, named compiled over `1e20910586`.
+- **TWOLEG:** item 5.
+- **You:** nothing.
+
+## Not established
+
+- That anything at `cb2d54f3d8` compiles: the last compiled head of the join is `401d7ef808` (`22d3`). The three mends of `JoinsAt.lean` since then (`698a311036`, `6c6fd6cd56`, `645ecaa587`) are each written from its owner's entry and not compiled, the `rfl` among them.
+- Any suite at the join's tip beyond `tests/test_lean_packages.py`. The two root tests FRAME reports red from `OwnReads.lean` are not run by me; by your ruling the public-boundary one stays red until after chain 2, and FRAME's 08:48Z says it is two edges of `OwnReads.lean` at its head and more files at the join's.
+- A records run of the join: none since `f8f8`. `744ded04cb` is in now, so the orphan line no longer stands in its way; I launch one after the compile, with `--mem-gb 72`.
