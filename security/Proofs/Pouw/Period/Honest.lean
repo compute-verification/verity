@@ -310,7 +310,7 @@ theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (windows n).prefixLen prm x 
 /-! ## The honest windows' claims -/
 
 theorem period_every {P : (Fin 144 → Bool) → SplitStages Bool (Fin 144) 1 → Prop} (h : P (fun _ => true) stages) :
-    ∀ n, (period n).EveryWindow P
+    ∀ n, (period n).EveryExecutionPhase P
   | 0 => trivial
   | n + 1 => ⟨h, fun _ => period_every h n⟩
 
@@ -343,7 +343,7 @@ theorem paid_share (s : Mode) (hs : s ≠ .paid) (t : Fin 144) (c : Bool) :
 theorem every_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
     (h : ∀ k (t : Fin 144), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) (n : ℕ) :
-    (period n).EveryWindow (fun live W => PerLiveTile Honest.scheme circuit live W P) :=
+    (period n).EveryExecutionPhase (fun live W => PerLiveTile Honest.scheme circuit live W P) :=
   period_every (P := fun live W => PerLiveTile Honest.scheme circuit live W P)
     ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩ n
 
@@ -386,17 +386,17 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (∀ t : Fin 144, 0 < shareCone Honest.scheme circuit 144 t →
       tileLuck Honest.scheme circuit 144 t ≤ 7 / 8 ∧ tileLuck0 Honest.scheme circuit 144 t ≤ 1 / 2) ∧
     (play n).game = monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n) ∧
-    (period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
+    (period n).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧
     RegisteredBeforeDraw (windows n) ∧ SampleIsCoin hK24 prm (windows n) ∧
     ServiceSound prm (windows n) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := n)) enc ∧ StagedPins staged flat ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
     UnitFixed (play n) (layer n) (monitoringPeriodMode circuit (period n) (run n))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
