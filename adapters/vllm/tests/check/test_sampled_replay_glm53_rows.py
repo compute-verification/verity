@@ -15,7 +15,7 @@ from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.circuits.evaluation.reference import signature_of
 from verity.definitions.numerics import batched_gemm_rows, glm53_rows, rows
 from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import (
     b1,
     boolean_rope,

@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-import verity.definitions.ops.scalar  # noqa: F401
+import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
