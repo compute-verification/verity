@@ -10,7 +10,7 @@ public import Proofs.Flock.SamplingGeneric.Guarantees
 (`Verity.Sampled.spotSound_of_targets`) proves the target at the one-stage form and reads every other form as refused
 (`Verity.Sampled.recursiveForm_refused`). A two-stage form of the component makes that split three-way: this module
 states the target form by form and the two-stage form's leg, from the two-stage verifier's knowledge soundness at the
-auditor's held copies (`Flock.Guarantees.SpotKSTwo`'s conclusion, `Live₂.KS`) to SPOT's target on the parameters that
+auditor's held copies (`Live₂.KS`, a hypothesis that no guarantee concludes) to SPOT's target on the parameters that
 name the two-stage form.
 
 * **The target on a set of parameters** (`TargetOn`): SPOT's target asked only at the parameters `P` picks. SPOT's
@@ -34,7 +34,7 @@ name the two-stage form.
 * **The leg** (`TwoLeg`, `twoLeg`): from the knowledge soundness at each session of record in scope, the cover and the
   coupling at each session, SPOT's target on the two-stage form's parameters.
 
-Statements and their bookkeeping only: no module imports this one, and no guarantee reads it. The two-stage form's
+Statements and their bookkeeping only: no guarantee reads it. The two-stage form's
 parameters are a predicate here (`TwoAt`) because the component's two-stage parse is not written.
 -/
 
@@ -75,15 +75,23 @@ structure Live₂ where
 
 namespace Live₂
 
-/-- **The session's verifier**: the compiled two-stage verifier at SPOT[Flock]'s code at the held copies, its sessions
-Flock's masked verifier over the readable relation, the interior registrations' roots, the two-stage design, the
-replay sample of record and the replay cap, as `Flock.Guarantees.SpotKSTwo` states it. -/
+/-- **The session's verifier**: the compiled two-stage verifier at SPOT[Flock]'s code at the held copies
+(`SpotFlock.code`, the members' programs side by side), its sessions Flock's masked verifier over the readable
+relation, the interior registrations' roots, the two-stage design (`SpotFlock.two`), the replay sample of record
+(`SpotFlock.rs`) and the replay cap. `Flock.Guarantees.SpotKSTwo` states its verifier at the connected program
+(`SpotFlock.codeConnected`, `SpotFlock.twoConnected`, `SpotFlock.rsConnected`), not at this code. -/
 noncomputable abbrev L (A : Live₂) :=
   SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code A.h)
     SpotFlock.iroots (SpotFlock.two A.h) (SpotFlock.rs A.h) (SpotFlock.cap A.h)
 
-/-- **The session's knowledge soundness**: `CompiledTwo.KS` at SHA-512, `Flock.Guarantees.SpotKSTwo`'s conclusion at
-the held copies. -/
+/-- **The session's knowledge soundness**: `CompiledTwo.KS` at SHA-512 of the compiled two-stage verifier at
+`SpotFlock.code`, `SpotFlock.two` and `SpotFlock.rs` of the held copies (`Live₂.L`). The leg takes it as a
+hypothesis, and no guarantee concludes it: `Flock.Guarantees.SpotKSTwo` concludes at the connected program
+(`SpotFlock.codeConnected`), and no lemma carries that conclusion to this code. At this code `SpotFlock.ksTwo_spot`
+proves it from the sessions' openings (`SessionOpensTwo`), which `SpotFlock.sessionOpensTwo_of_frameIs` and
+`SpotFlock.frameIs_built` give from `SpotFlock.Built` and `SpotFlock.Addresses`. `SpotFlock.Addresses` is false at a
+held code with an accepted run in which a checked unit needs an input gate and round 2 reads every registered read of
+the unit's session off the interior record (`SpotFlock.CheckedRun.not_addresses_of_input_readsInterior`). -/
 def KS (A : Live₂) : Prop := A.L.KS FlockDeploy.sha512
 
 /-- **The session's relation**: the two-stage relation at the session's `δ` (`Claims.Sampling.RTwo`): at some
