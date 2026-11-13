@@ -10,6 +10,7 @@ elementwise arithmetic pass; the checker also measures it (counterexample.py) an
 - `Identity`: the full tensor (a full update).
 - `LowRank(rank, scale, bits)`: base + scale * B @ A, factors at fp32, or with `bits` each rank component rounded to
   nearest at that many bits with an f16 scale.
+- `RowScale()`: diag(l) · base, a scale a row at fp32.
 - `SparseMask(values)`: the base with the entries that differ replaced, the indices as a bitmask or int32 list
   (whichever is smaller), the values encoded by `values` against the base's (default `Identity`).
 - `QuantDelta(bits)`: base + codebook[index], a 2**bits-entry fp32 codebook and `bits`-bit indices.
@@ -146,6 +147,35 @@ class LowRank(Codec):
         h, _ = unpack(enc)
         r = h["shapes"][0][0] if "bits" in h else h["a"][0][1][0]
         return r * base.numel() + 2 * base.numel()
+
+
+class RowScale(Codec):
+    """base with each row times its scale: diag(l)·base, the scales at fp32."""
+
+    kind = "rowscale"
+
+    @staticmethod
+    def apply(base: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
+        return (base.float() * scales.float()[:, None]).to(base.dtype)
+
+    def encode_trained(self, scales):
+        return pack({}, [scales.detach().float().cpu().contiguous()])
+
+    def encode(self, target, base):
+        if base.dim() != 2:
+            raise Unencodable(f"rowscale takes a matrix, not shape {tuple(base.shape)}")
+        b, t = base.double().cpu(), target.double().cpu()
+        norm = (b * b).sum(1)
+        return self.encode_trained(torch.where(norm > 0, (t * b).sum(1) / torch.where(norm > 0, norm, 1.0), 1.0))
+
+    def decode(self, enc, base):
+        _, (scales,) = unpack(enc)
+        if scales.shape != base.shape[:1]:
+            raise ValueError(f"rowscale: {scales.numel()} scales for a {tuple(base.shape)} weight")
+        return self.apply(base, scales.to(base.device))
+
+    def cost_macs(self, enc, base):
+        return base.numel()
 
 
 def _bits_view(t: torch.Tensor) -> torch.Tensor:
@@ -444,6 +474,8 @@ def from_spec(spec: dict) -> Codec:
         return Identity()
     if kind == "lowrank":
         return LowRank(spec["rank"], spec.get("scale", 1.0), spec.get("bits", 0))
+    if kind == "rowscale":
+        return RowScale()
     if kind == "sparse":
         return SparseMask(from_spec(spec["values"]) if "values" in spec else None)
     if kind == "quant":

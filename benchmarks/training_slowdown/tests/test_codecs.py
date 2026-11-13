@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from training_slowdown.codecs import (Compose, Identity, LowRank, Plan, QuantDelta, ScaledQuant, SeedReplay, SparseMask,
-                            SparseTernary, Unencodable, derive_seed, from_spec)
-from training_slowdown.codecs.wire import pack_bits, unpack_bits
+from training_slowdown.codecs import (Compose, Identity, LowRank, Plan, QuantDelta, RowScale, ScaledQuant, SeedReplay,
+                            SparseMask, SparseTernary, Unencodable, derive_seed, from_spec)
+from training_slowdown.codecs.wire import pack_bits, unpack, unpack_bits
 
 
 def same(a, b):
@@ -78,6 +78,24 @@ def test_lowrank_at_bits_rounds_each_rank_component_to_nearest_once(base):
     assert torch.allclose(c.decode(c.encode(target, base), base), target, atol=0.5 * 0.2)
     with pytest.raises(ValueError):
         LowRank(2, bits=1)
+
+
+def test_rowscale_packs_its_scales_and_rebuilds_each_row_times_its_own(base):
+    """Trained scales rebuild diag(l)·base bit for bit; from a target, each row's scale is its least-squares fit, one
+    on a row of zeros; a weight that is no matrix or scales of another length are refused."""
+    scales = torch.linspace(0.5, 1.5, 8)
+    c = RowScale()
+    enc = c.encode_trained(scales)
+    assert same(c.decode(enc, base), RowScale.apply(base, scales)) and torch.equal(c.decode(enc, base)[3], base[3] * scales[3])
+    assert c.size_bits(enc) >= 32 * 8 and c.cost_macs(enc, base) == base.numel() and from_spec(c.spec()).kind == "rowscale"
+    zeroed = base.clone()
+    zeroed[2] = 0.0
+    assert torch.allclose(c.decode(c.encode(RowScale.apply(zeroed, scales), zeroed), zeroed), RowScale.apply(zeroed, scales))
+    assert unpack(c.encode(zeroed, zeroed))[1][0][2] == 1.0
+    with pytest.raises(Unencodable):
+        c.encode(torch.ones(5), torch.zeros(5))
+    with pytest.raises(ValueError):
+        c.decode(c.encode_trained(scales[:4]), base)
 
 
 def test_quant_delta_rebuilds_a_quantized_parameterization(base):
