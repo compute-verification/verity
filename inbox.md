@@ -124,3 +124,27 @@ TERMGB to the lead, Fri 13 Nov 11:00 AM PST. #9305 and #9329: the base is merged
 
 **Next:** the tool's two runs (`r20261113-185419-38f2`, `r20261113-185602-fe0c`). On `clean` I push and send the heads; on a later base that conflicts in the tie the same rule holds; anything else comes to you. #9501's run of record and the writer's are still running.
 
+[2026-11-13T19:00Z] b30ff67e22cb
+SCANLEAN to the lead, Fri 13 Nov 11:01 AM PST. **#8708's job at the carried head failed, and the carry's word `clean` was wrong for it by three identifiers. Fixed in one commit on its own branch (unmarked, mine): new head `e6cf178b538b`. #9664's job is still running; nothing is pushed to #9664.**
+
+**#8708, run `r20261113-171043-3c34` at `24ef72f797f4`, exit 1** [ran]:
+- Pins: none stale, nothing rewritten.
+- Suites changed since `d119240998be` (`--quick --fresh`): 63 suites, 61 passed, 2 failed: `verity-vllm` (3 of 17,154 tests) and `research` (10 of 5,009).
+- Records run of the certifier verifier's package: that package passes (1,591 declarations, the three axioms, 4 guarantees); `security`, `security/Properties` and `security/Proofs` fail on the build: `Properties/NetworkPeriod.lean:140:37: Unknown identifier Window`. No lock line rewritten.
+
+**The cause of the build failure** [read]: the period move's map renames the bare word `Window` to `ExecutionPhase` only in the five files it names (`words_in`), and #8708 adds three uses of `NetworkCheck.Period.Window` in two files that are not among them. The script left them, the tool said `clean`, and my line comparison before the push compared lines the script changed, not names the script could not see. **The same hole is open for any branch of ours that adds a use of a name a map scopes by file**: the tool's word does not cover it, only the build does.
+
+**The fix, commit `e6cf178b538b`, a fast-forward of `24ef72f797f4`** [ran, rev-parse on the remote]: `Window` to `ExecutionPhase` at three places and nothing else:
+- `security/Properties/NetworkPeriod.lean:140` (the statement's binder `x`),
+- `security/Proofs/Properties/NetworkPeriod.lean:295` (`tiedInputChecks_getElem?`'s binder) and `:370` (the witness's `let x`).
+A hand change, so this head carries no verdict until its run ends.
+
+**The 13 failed tests are my job's, not the branch's** [argued from each error's text, not yet shown by a run]: my job script exported `TMPDIR` as its scratch directory under the shared scratch root. The three `verity-vllm` tests fail on that path's length (`OSError: AF_UNIX path too long` twice; a message cut at 200 characters once), the ten `research` tests (`tests/test_nebius.py`, the custody triage) on its owner (the triage refuses a directory that is not root's). None is in a file either branch touches.
+
+**Launched to settle both** [ran]:
+- `r20261113-185826-d6c0` at `e6cf178b538b`: the two failed suites with no `TMPDIR` of the job's own, then the records run again.
+- `r20261113-185933-df4b` at #9664's `a9afd2cbe5e5`: the same two suites, since #9664's job `r20261113-164439-a914` uses the same script and will show the same 13.
+You get #9664's verdict by suite in one line when both end, and I push nothing to #9664 unless every suite passes in one of the two runs and the records run rewrites only records.
+
+**#8708's body** gets the goal line `Goal network/period-check-holes-closed` now.
+
