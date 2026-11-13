@@ -8,6 +8,10 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Opens
 public import Proofs.Properties.Verity.Sampled.MemberForm.Run
 public import Proofs.Properties.Verity.Sampled.MemberForm.SetsUp
 public import Proofs.Properties.Verity.Sampled.MemberForm.States
+public import Proofs.Properties.Verity.Sampled.MemberForm.Passes
+public import Proofs.Properties.Verity.Sampled.MemberForm.Tree
+public import Proofs.Properties.Verity.Sampled.MemberForm.Opened
+public import Proofs.Properties.Verity.Sampled.MemberForm.Place
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -36,4 +40,14 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   the window's instance's setup at every accepted play from it (`windowAt_members`).
 * `MemberForm.States`: the statement the form read for a member is its window's member's (`statesMember`), so a
   session's verdict at it is flock-verify `--zk`'s at the window's member.
+* `MemberForm.Passes`: a member whose files the form's run held has its files pass at the window's member
+  (`filesPass_of_held`, `WindowOn.passes`), and a member whose files pass has roots that fix their domains
+  (`FilesPass.rootsFix`).
+* `MemberForm.Tree`: what a session's record's check gives of its own tree of a log of several, less the tree's
+  closing round (`tree_round`, `tree_keyAt`, `tree_rounds_le`, `helloSpec_of_text`).
+* `MemberForm.Opened`: each opening the read shows is the opening its tree shows of that round, with its count, the
+  bytes it answers and the coins the records give it (`read_opening`), and a record's tree opens only the record's
+  rounds (`tree_recorded`).
+* `MemberForm.Place`: the `j`-th tree the read opens is the `j`-th session's, and the read opens as many trees as
+  sessions (`members_place`, `members_count`).
 -/
