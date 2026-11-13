@@ -393,7 +393,7 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
 
 @pytest.mark.slow
 @DEPLOYED
-def test_an_inner_sample_that_does_not_parse_is_refused_by_both(session, tmp_path):
+def test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both(session, tmp_path):
     """The inner statement's sample cut short: the compiled check refuses the whole check at Flock's plain verifier on the
     inner statement (`innerOk`), and `flock-verify` accepts no part."""
     inner = copy.copy(session.inner)
