@@ -157367,3 +157367,74 @@ If you would rather mark `890a84bf6067` and have no new head, say so before I pu
 - #9717's suites beside the 18:49Z run (`7856`), at `890a84bf6067`: "10 suites: 10 passed (0 cached), 0 failed", exit 0. [run]
 - Then #9728's two names on `cursor/proofs-carried-9728-4ae1`, as your 19:11Z orders. Names run: 1 ahead in line on
   vy-nebius-cpu-5 at 19:03Z.
+
+## ASSEMBLY, Fri 13 Nov 19:16Z: THE JOIN MOVED: `1bdb77ac7d99ed35cc62d288af723e9cfc83d9b3`, SESSIONOF2's params line merged and built, with `PortsOfParams.lean` moved to `SampledTwo`; beyond the carried `a61b7adf0d83` the tip holds MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`, the tool's pin, the mend, MESSAGES's replay line `24f63f743de2` and now SESSIONOF2's `6b274de57993`
+
+Your 19:11Z is read: rule B is `7635c47d68cf` on `cursor/proofs-twoleg-ruleb-ad71`, in its place after HELDOF's line; #9728's two files are REDRAW's and I do not mend them.
+
+**1. The merge** [git]
+
+- `7aeba81f536e` to `1bdb77ac7d99` by a fast-forward, pushed at 19:13Z. Three commits:
+
+| Commit | What |
+|---|---|
+| `b3265512d310` | the line: `a427a6df4396` (it merged with the carried join) into the join, no conflict; three new files |
+| `869e69839576` | mine: three roots in the lakefile and the lock, `DoWalk`'s `compile_time` listing at digest `9c4f23f6…`, the pin |
+| `1bdb77ac7d99` | mine, by your 18:44Z: `PortsOfParams.lean` to `security/Proofs/Properties/Verity/SampledTwo/`, unchanged; its root follows; the pin |
+
+- Against the old tip: `Flock/SpotFlock/DoWalk.lean`, `Flock/SpotFlock/ParamsWf.lean`, `Properties/Verity/SampledTwo/PortsOfParams.lean`, the lakefile, the lock, the pin.
+
+**2. Its build** [run `r20261113-184121-78d7`, cpu-11, rc 0, ended 19:12Z]
+
+- A build of every `SampledTwo` file and the two `SpotFlock` files at the merged tree: `lake` exit 0 in 492 s, nothing failed.
+- A try of each new file, each `lean exit 0`:
+
+| File | Theorems | Axiom probe |
+|---|---|---|
+| `DoWalk.lean` | 0, tactics only | nothing to probe |
+| `ParamsWf.lean` | 22 | none beyond `propext`, `Classical.choice`, `Quot.sound` |
+| `PortsOfParams.lean` | 2 | none beyond the three |
+
+**3. On this machine at `1bdb77ac7d99`** [run on this machine]
+
+- The five root test files: 84 passed. `pins.py --stale` silent, `lock_roots.py --check` clean, `dup_names.py` the same 17.
+- The scoped-words search over the 538 added Lean lines: 0 hits.
+
+**4. The eight edges across the public boundary at this tip** [run on this machine: `public_boundary.py`]
+
+Each is a file under `security/Proofs/Flock/SpotFlock/` that imports a file the export does not copy.
+
+| File and line | Imports |
+|---|---|
+| `OwnReads.lean:9` | `Proofs.Properties.Challenger.CanonLine` |
+| `OwnReads.lean:10` | `Proofs.Properties.Challenger.CanonWf` |
+| `ParamsWf.lean:5` | `Proofs.Properties.Spot.Units` |
+| `ReadsCheck.lean:3` | `Proofs.Properties.Challenger.CanonRead` |
+| `RunsAs/Coins.lean:4` | `Proofs.Properties.Challenger.Drawn` |
+| `RunsAs/OfCheck.lean:5` | `Proofs.Properties.Verity.SampledTwo.Steps` |
+| `RunsAs/Proved.lean:4` | `Proofs.Properties.Spot.Credited` |
+| `RunsAs/Statement.lean:6` | `Properties.Challenger` |
+
+- The third is new with this merge. The other seven were at the join before it.
+- `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy` fails on them, at this tip and at the tips before it. Its other 55 tests pass.
+
+**5. The records run at this tip is out** [launched, not back]
+
+- `r20261113-191340-fe1c`, cpu-3. It is the first run to read the new roots and `DoWalk`'s listing.
+
+**6. HELDOF's line: I take the carried couples line now** [your 18:31Z item 2]
+
+- SESSIONOF2's merge is built and no carried blob head has been named to me. HELDOF's last entry (18:28Z) says "no carry line yet".
+- So the next candidate is `02e3d5f39ec1` by my step one `2bf213c2cdce`, with the six roots the lock lacks. It is built before the join moves.
+- **Say so if you want the join to wait for the blob line instead**: I stop at the candidate.
+- Rule B after it. TWOLEG's merge-tree was against `7aeba81f536e`; I run it again at the tip I merge into.
+
+**7. The two reruns at `7aeba81f536e`, one commit of merge below this tip** [run]
+
+- The adapter's tests, `r20261113-185022-f1c7`, cpu-3: rc 0. Engine and interior tests 1,268 passed, 150 skipped; `serve_tax`'s replay 21 passed. The same counts as `5183` at the carried head.
+- `two_stage_small.sh`, `r20261113-184949-7d69`, cpu-1: it has its slot and is running, not back.
+
+**Not established**
+
+- That the lock is right at this tip: `fe1c` is out.
+- A kernel replay at any head of the join.
