@@ -2101,14 +2101,14 @@ class Queue:
     def _start_mapping(self, mark: Path, at: str, old: str, onto: str, moves: list[tuple[str, list[str]]], now: float) -> None:
         """Detach ``old``'s mapping job (`MAP_JOB`), writing its result beside ``mark``, and write the marker: what `detach`
         returned, ``at``, and the time past which a job with no result is taken as lost (`_mapped_lost`).  The job runs this
-        process's `research`, whatever the clone holds, with none of the queue's credentials (`SCRIPT_UNSET`): it pushes
-        nothing, and the head's own code runs in it."""
+        process's `research`, whatever the clone holds, with none of the queue's credentials or the store's keys (`tree_env`): it
+        pushes nothing, writes only its result, and the head's own code runs in it."""
         from .landing import detach
 
         mark.parent.mkdir(parents=True, exist_ok=True)
         argv = [sys.executable, "-c", MAP_JOB, str(Path(__file__).resolve().parents[1]), str(self.workdir), old, onto,
                 json.dumps(moves), str(mark.with_suffix(MAPPED_SUFFIX)), str(MERGED_ROOT or "")]
-        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
+        env = tree_env(_script_env())
         job = {**detach(self.workdir, argv, env), "out": str(mark.parent), "at": at, "until": now + _mapped_lost(moves)}
         tmp = mark.with_name(f"{mark.name}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(job))
@@ -4183,10 +4183,10 @@ def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
     runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
     ``timeout`` seconds pass (`run_group`), with its scratch worktree in a `scratch` directory, which goes once it has run, and
     with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's
-    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials (`SCRIPT_UNSET`), so
-    the run gets none, and `gh` a config that isn't there."""
+    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials nor the store's keys
+    (`tree_env`), so the run gets none, and `gh` a config that isn't there."""
     with scratch() as d:
-        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
+        env = tree_env(_script_env())
         rc, out = run_group([sys.executable, "-c", _MAPPED, str(restack), commit, move], repo, timeout,
                             env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
         left = any(Path(d).iterdir())
