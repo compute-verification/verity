@@ -115511,3 +115511,109 @@ Nothing.
 - `FirstReads θ` is a premise, unproved, and false at today's base for the two plays of NEEDS 1 and 2.
 - The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence counts as the forger's, and the forger's term bounds nothing there. The docstrings say so; soundness's change of Tue 17 Nov closes it.
 - Nothing is wired into `Sampled.lean` or `Projection.lean`; ASSEMBLY takes `cutBound_read` or `cutBound` as it chooses.
+
+## STOPDRIVER (run B), Fri 13 Nov 02:43Z: the second build's first entry (reading and two calculations, nothing built): the list form of the read across streams reaches two of soundness's four verdicts, and `main`'s reader of the four holds none of them to one class; the wrong stop words' charge at 1,024 ids is millions of GB a world-year or a few kilobytes, depending on which of two readings of ruling 6 is meant, and "16 bits each" leaves out which blocks are the wrong ones; the order of pieces amended
+
+In plain words: this is the reading for the second thing PRF-608 asks of me, due Fri 22:00Z, written early because I was waiting on your word about which of my two runs you keep. Three findings need a decision before anything is built. First, the check that is to come back (`acrossAll`) follows the chain of records for one class of requests and, as it was written, reads only two of the four verdicts soundness requires; the reader of the four that is already on `main` takes four accepts from anywhere, so four accepts from four different serves would pass it. Second, soundness's charge for wrong stop words can be read two ways that differ by a factor of about 10^12; under the stricter reading a class is only better off than without a stop block if every stop block is proved, and proving every one is cheap. Third, that charge counts 16 bits a wrong word and does not count the server's choice of which words are wrong. I built nothing, launched no run and changed no file of the tree.
+
+I am run B (the run that holds your 02:11Z message). Run A answered in `/tmp/sd` at 02:36Z: it keeps the cards branch, #9458's body, the suites and the rehearsal, and does not start the second build. It pushed the cards branch joined with the second try's at `bdd91c5b7bcb` and has two runs out (`r20261113-023239-4995`, `r20261113-023309-5129`); its own entry reports them. My NEEDS of 02:21Z (say which run you keep) is still open and the split holds until you answer.
+
+Marks: [read] a file or a comment I read this turn; [run] a command I ran this turn; [derived] my reasoning from those, tested by nothing. Tree lines are at `main` `8c11a1d5abff` unless a commit is named; my two calculations ran at my checkout's `636d15d041b5`.
+
+**1. The read across streams and the four verdicts**
+
+- **What `across` is on `main`** [read: `verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean`]. One read: a later registration whose `previous` names a record of an earlier stream. Three verdicts: `logged`, `order` (the earlier registration's coins come before the later's in the challenger's signed log) and `audit`, the earlier stream's audit record as the caller hands it, with its own `accepted` and `complete`. That record "is held to nothing". Case 1 needs all three and `complete`.
+- **What `acrossAll` was** [read: `git show 99ff4197a4`]. A list of such reads beside one class's boundary record; a read reaches the boundary record through the list; the list's case is the worst of its reads'. "It holds nothing about a record the list leaves out."
+- **The chain for a stop class, after soundness's ruling of Thu 12:00 PM PST** [read: NET-390]. The request tie is no stream any more: the stop block reads the three request words as certified values from the certifier's own table (NET-398), through the certified read. So the chain has two reads: the stop record after the boundary record, and the response tie after the stop record.
+- **Which verdicts the list reaches** [derived]. Read 1 gives the boundary stream's audit record: the compute audit, its second stage included. Read 2 gives the stop stream's audit record. No read gives the response tie's own audit record, because nothing comes after it. The request words are either an entry of the stop record (`request-row`, which has no verdict on any run today) or a record of their own; your board has us writing "the certified read's" record as a separate one [read: the lead's comment of 19:57Z]. So of the four, the list reaches two, and a third only if the certified read is an entry of the stop record.
+- **The reader of the four that is on `main` holds them to nothing** [read: `benchmarks/harness/verity_bench/exfiltration.py:537-624`, `stop_class`]. It reads every run labelled `run_of_record=exfiltration-glm53-stop-verdicts`, keeps one verdict a piece (`stop_record`, `response_tie`, `request_tie`, `second_stage`), and says `complete` where each is `accept` and each control is refused. A verdict's record is `piece`, `control`, `run`, `verifier`, `verdict`, `proved_by`, `open`: no class, no serve, no registration digest. Four accepts from four different serves, or of four different classes, pass it. This is the smell "a check that passes for the wrong reason", and the read across streams is what would close it.
+- **Three readers of the four are coming, and `acrossAll` must not be a fourth** [read: NET-390, network's 20:13Z; `exfiltration.py`]. Benchmarks' `stop_class` is on `main`. Network's worker writes "one function in the certifier's verifier package that takes the head and a class's four records and says how the class is charged". NET-387 is that in Lean, 23 Nov. Each reads `accepted` and `complete` of records handed to it. `across` reads the same two fields of two of the same records.
+- **What I propose to build, for your yes or no** [derived]:
+  1. `acrossAll` comes back as cut, with one more input: the last stream's own audit record, read by `auditVerdict` as every other is. Its case 1 is then: every read in order, every audit record of the chain accepted and complete, the last one included.
+  2. `across` refuses a handed boundary audit record that differs from the composite's own verdict (PRF-574's second item). Its trigger is the first served caller.
+  3. The readers of the four take the chain's verdict from it and do not read `accepted` and `complete` again: `stop_class` gains a fifth requirement, the chain's case 1 on the class, and its verdict records gain the registration's digest. That change is benchmarks' and network's, not ours; what we give them is the JSON.
+- **Size** [run at `4352bffdc16b`, in my 01:05Z note]. `git revert --no-commit 99ff4197a4` applies cleanly: four files, 222 lines back (`Spot/RecordAcross.lean` 82, `Spot/Pieces.lean` 21, `stop_audit.py` 19, `test_stop_audit.py` 110). Item 1's extra input is about 30 lines of Lean with its guards and about 40 of Python and tests [derived, not written]. Item 2 needs the composite's verdict as an input and I have not sized it.
+- **What it waits on** [read: Linear and NET-390, 02:29Z]. The response tie's stream on a serve has no owner; network names "the service" by Fri 10 AM PST. Its Python verifier (NET-386) is in Backlog in Linear with no assignee, dated 19 Nov, and network's lead says it opens Mon 16 Nov noon PST; its Lean (NET-400) is dated 19 Nov. Until a tie's record exists, `acrossAll`'s first caller is a fixture. Items 1 and 2 can be written and tested against the stop stream alone before that.
+
+**2. The stop and tie rows, and ruling 6's first two charges at 1,024 ids**
+
+- **The plan has no row for either** [run: `rg -i 'stop|tie'` over `benchmarks/sampling_plan/`; read: `glm53.py`, `glm53_blocks.json`]. The card is a census of one request's Program rows, 254 Definitions, and each is one candidate. A stop block and a tie block are one a response, in populations of their own, so the census has no place for them. The card's only output-side rows are the token select's (`GreedyChunk_v1`, `GreedyCombine_v1`).
+- **The calculator has no term for either charge** [read: `benchmarks/network_traces/leak_bounds.py` on `main` and on network's branch at `e2feccf258`]. Its stop block is one flag: the schedules are 0 where `stop` is true. It has terms for the failed connections and the held rows, and none for the stop sample, the wrong stop words or the no-stop responses.
+- **The blocks' sizes** [run; read]. `StopRule16_v2{T=1024,NSTOP=3}` is 107,848 ANDs, 6,796 at T = 64 (Friday's serve) and 3,533 at T = 32 [run: `verity.circuits.evaluation.bits.compile`, counts `and`]. Its output is one 16-bit word. `ResponseTieStop_v1{O=1024}` is 33,915 ANDs [read: its pin]. Together 141,763 ANDs a response, which is 1.5 × 10^-11 of the 9.2 × 10^15 ANDs the card counts for one request of 256 prompt tokens and 31 decode steps [run: summed from the card]. I have not lowered the stop block at 1,024 ids, so I have no `k_log` and no proving time for it.
+- **What the stop block removes at 1,024 ids** [run: `leak_bounds.py --json --response-ids 1024`]. The count is 11 bits a response, 16,941 bits a link an execution phase of 128 s at the plan's 1,540 requests. Over a datacenter of 12,500 machines that is 125 / 536 / 6,521 GB a week / month / year; over the world's 46,870,000 machines 468,962 / 2,009,837 / 24,453,012 GB. These are the calculator's own figures at an assumed schedule; no run backs them.
+
+*Reading S: each stop record's own bound, summed over the period* (the summed-error rule, as ruling 6 is worded)
+
+A stop record samples k of its class's N stop blocks in one execution phase on one link. Except with probability δ, at most w are wrong and unreached, w the largest count with C(N − w, k) / C(N, k) ≥ δ [run: the tree's `Stratified.count_bound`]. The charge is 16·w bits a record, and the δ's add over records. At δ = 2^-20 a record the sum passes 1 for a datacenter's week (56 with one class a link, 338 with six), so that δ gives "no bound at this period" at every period. The table is at δ = 8.259 × 10^-20 a record, network's choice, which pools to 9.5 × 10^-7 over the world's year with one class a link and 5.7 × 10^-6 with six.
+
+| classes a link | N | sampled | w | ε = w/N | bits a class a phase | of what the stop block removes | a datacenter: week / month / year, GB | the world: week / month / year, GB |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1,540 | 1/10 | 362 | 0.235 | 5,792 | 0.34 | 42.8 / 183 / 2,230 | 160,338 / 687,161 / 8,360,460 |
+| 1 | 1,540 | 1/2 | 61 | 0.040 | 976 | 0.06 | 7.2 / 31 / 376 | 27,018 / 115,792 / 1,408,807 |
+| 1 | 1,540 | 9/10 | 18 | 0.012 | 288 | 0.02 | 2.1 / 9 / 111 | 7,973 / 34,168 / 415,713 |
+| 1 | 1,540 | all | 0 | 0 | 0 | 0 | 0 | 0 |
+| 6 | 257 | 1/10 | 198 | 0.770 | 3,168 | 1.12 | 140 / 601 / 7,317 | 526,191 / 2,255,103 / 27,437,089 |
+| 6 | 257 | 1/2 | 53 | 0.206 | 848 | 0.30 | 37.6 / 161 / 1,959 | 140,849 / 603,639 / 7,344,271 |
+| 6 | 257 | 9/10 | 16 | 0.062 | 256 | 0.09 | 11.3 / 49 / 591 | 42,520 / 182,231 / 2,217,138 |
+| 6 | 257 | 255 of 257 | 2 | 0.008 | 32 | 0.01 | 1.4 / 6 / 74 | 5,315 / 22,779 / 277,142 |
+| 6 | 257 | all | 0 | 0 | 0 | 0 | 0 | 0 |
+
+- The load is the calculator's (1,540 requests a link a phase). The six classes are network's assumption, and their equal sizes are mine. [run: `/tmp/sd/b/stop_charges.py`, kept with its output in the artifacts]
+- **A sampled class can be charged more than an unsampled one.** With six classes and a tenth sampled, 16·w is 3,168 bits against the 2,827 the class pays with no stop block. The row needs the lesser of the two, and ruling 6 does not say so. [derived]
+- **Only a stop record that proves every block gives 0** under this reading: any block left out leaves w at least 1, which is 16 bits a class a phase, 77 times the calculator's target of 0.21 bits a link a phase (300 GB over the world's year). [derived] The stop audit takes `--design rate:NUM/DEN` and the design's parser takes NUM = DEN, so "all" is `rate:1/1`; I have not run the stop audit at it. [read: `benchmarks/one_stage/stop_audit.py:5`, `verity/protocols/spot/verifier/one_stage/draw.py:106`]
+
+*Reading P: one pooled count over the period, at one δ* (soundness's earlier rulings on NET-300 and NET-297, "one pooled count"; PRF-608's own wording, "the compute part's pooled count")
+
+The stated guarantee is `NetTiming.Guarantees.PooledLeakAccepted` [read: `security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`]. With each wrong block missed with probability at most 1 − q, and F ≥ ln(1/δ)/q, the period's count gains (N + 1)^F · 2^(b·F): F wrong blocks over the whole period, each charged its b output bits and log₂(N + 1) bits for which block it is. It is conditional on two inputs that are not discharged (`hesc`, `hleak`). At b = 16 and N the period's responses:
+
+| sampled (q) | F at δ = 2^-20 | a datacenter: week / month / year, bits | the world: week / month / year, bits | of which the 16-bit words |
+|---|---|---|---|---|
+| 1/10 | 139 | 7,284 / 7,576 / 8,077 | 8,935 / 9,226 / 9,727 | 2,224 |
+| 1/2 | 28 | 1,467 / 1,526 / 1,627 | 1,800 / 1,859 / 1,959 | 448 |
+| 9/10 | 16 | 838 / 872 / 930 | 1,028 / 1,062 / 1,120 | 256 |
+
+- At δ = 8.259 × 10^-20 a period, F is 440, 88 and 49, and the world's year is 30,792, 6,158 and 3,429 bits. [run]
+- So at one δ, 8.259 × 10^-20, a tenth sampled costs 30,792 bits (under 4 kilobytes) over the world's year under reading P and 8.4 million GB under reading S with one class a link, 27 million with six. [run; derived]
+- **"16 bits each" is a quarter of the pooled charge.** At the world's year log₂(N + 1) is 54 bits, so a wrong stop word costs 70 bits, not 16. The same is true under reading S, where the choice of which w of N blocks are wrong adds log₂ of the number of such choices (15 bits beside 32 at N = 257 and w = 2). [derived]
+
+**What soundness has to say before the row is built** (to relay; worded to send under `To post`)
+1. Whether ruling 6's first two charges are each stop record's own bound summed (reading S) or the pooled count's (reading P).
+2. Whether a wrong stop word is charged 16 bits, or 16 bits and which block it is.
+3. Under reading S, whether the row takes the lesser of 16·w and the class's schedule.
+
+**Where the rows go** [derived]. The stop population and the tie population become two rows of the plan beside the card's 254: a response's count of 1 each, their ANDs, their output widths, and their rate. Their harm is a response's length, not incorrect compute, so the plan's exfiltration mode prices them, by width. The count bound stays the profile's (`Stratified.count_bound`, or the pooled F), and the calculator charges the bits from it: one value, computed once. Under either reading my proposal for the rate is `rate:1/1`: at 1.5 × 10^-11 of a request's ANDs, proving every stop block and every tie block costs less than any sample of the request's own blocks, and it makes both charges 0 with no δ spent.
+
+**3. The order of pieces, amended** (from my 19:17Z entry; each line: owner, state, the date its issue carries) [read: NET-390 and Linear, 02:29Z to 02:40Z, unless marked]
+
+1. A GLM-5.3 serve under a stop rule. vllm. Tonight's serve registers `Stop{ids: [154820, 154827, 154829], max_model_len: 4096, T: 64}`, 8 requests in one class, not behind the network certifier. The first serve behind it is the ties' serve, Tue 17 Nov.
+2. Struck: "the rule held to the pinned checkpoint". It is completeness (ruling 5). What remains is its registration: the stop Definition registered by digest before the first execution phase and before any coin, every stop record naming that digest. Owner vllm; I have not re-read whether tonight's serve does it.
+3. The three request words, in place of the request tie: the certifier's own parse in a fourth table a class (NET-398, network), and the stop Definition's three ports registered as certified reads of its columns, with two refusals (another row, no row). The second half is ours, on the certified read's branch. It needs the id form of the request (VLLM-270). Network: opens Mon 16 Nov noon PST.
+4. Form 2's heads: #9378, open and unmarked at `a852289e494b` [run: `gh pr view`], with the head leaving at a set time (NET-399, ruled).
+5. The response tie: its stream on a serve (no owner), its Python verifier (NET-386, Backlog, 19 Nov), its Lean (NET-400, 19 Nov). Network.
+6. `complete` in one-stage's answer: #9458 at `049c5875989c`, **not marked at that head** (my 02:21Z entry, section 3).
+7. The read across the tie's streams: section 1 above. Ours, Mon 23 Nov. Waits on 5 for its first caller.
+8. The stop and tie rows and their charges: section 2 above. Ours, Mon 23 Nov. Waits on soundness's three answers.
+9. The fourth verdict's `complete`: the registered request Definition as the replay block (circuits and vllm), and the two-stage form certified (PRF-419, Mon 30 Nov). Until then every boundary verdict carries `complete` false (ruling 4), so no class is charged below its schedule before Mon 30 Nov whatever else lands.
+10. The period check reads the four verdicts and prints ruling 6's charges: network's Python function first, NET-387 in Lean, 23 Nov.
+
+**4. PRF-608's fourth item may have its trigger tonight** [read: GATHER's 02:32Z entry; PRF-608]. Item 4 is "the stop audit on the first served stop class, with `stop_audit.py` as it is on `main`, at the first node slot after vllm's first stage on a GLM-5.3 serve under a stop rule". Tonight's serve is under a stop rule, and the first command of GATHER's rehearsals reports "the stop blocks' order held", so it registers a stop record. If serving's worker's first command on the served class does the same, the stop audit can run on that class: 8 stop blocks at T = 64, 6,796 ANDs each. Its record accepts and is not complete, so it moves no figure; it gives the first measured proving time of a stop block on a served class. I have not read whether serving's run keeps the files `stop_audit.py` reads.
+
+**5. Corrections to my 02:21Z entry**
+- "`dbb268ce3009` itself conflicts with `main` and is red on the ratchet gate": the conflict is [run] (`git merge-tree` against `636d15d041b5`, one conflict in `served_integrity.py`). The ratchet red at that commit is [derived] from the fix being in a later commit; I did not run the gate there.
+- `/tmp/sd/RUNS.md` says my scan of the two circuit files ran at 02:19Z; it ran at 02:17Z.
+
+STOP RULE: not reached; nothing here changes a statement or what the verifier accepts.
+
+NEEDS:
+1. Still open from 02:21Z: which run you keep.
+2. Your yes or no on section 1's three items, before I write any of it. Item 3 changes benchmarks' and network's readers, so it is yours to put to them.
+3. Whether item 4 of PRF-608 runs on tonight's served class, and whose it is (run A holds the driver).
+
+To post (each worded to send unchanged):
+- On NET-390, to network-accounting's 6:08 PM PST question: "Item 4's scope is on this thread: our comment of Thu 12 Nov 11:28 AM PST, 'Item 4, the audit's side of sampling the stop block, early'. Soundness ruled on its six questions here at 11:45 AM PST. It was posted ahead of the 6 PM PST it was dated for, and nothing more of it is owed."
+- On NET-390, to soundness: "Three questions on ruling 6's first two charges, before the stop row is built. (1) Is each a stop record's own bound at its δ, summed over the period, or the pooled count's over the period at one δ (`PooledLeakAccepted`'s form)? At 1,024 ids, a tenth of a class's stop blocks sampled, 1,540 requests a link an execution phase in one class and δ = 8.259 × 10^-20, the first is 8.4 million GB over the world's year and the second 30,792 bits; at δ = 2^-20 the first has no bound at any period and the second is 9,727 bits. (2) Is a wrong stop word charged 16 bits, or 16 bits and which block it is (log₂(N + 1) in the pooled form, 54 bits at the world's year)? (3) Under the summed reading a class sampled at a tenth in six classes is charged 3,168 bits a phase against 2,827 with no stop block: does the row take the lesser? Our proposal is to prove every stop block and every tie block, which makes both charges 0: together they are 141,763 ANDs a response, 1.5 × 10^-11 of the request's own."
+- To benchmarks, with section 1's finding: "`stop_class` accepts four verdicts from four different serves: a verdict's record names no class, serve or registration. The read across the class's streams is what holds them to one class; we propose it as a fifth requirement once it is back on `main`."
+
+Not established: any figure above on a served run; the stop block's `k_log` and proving time at 1,024 ids; item 2 of section 1's size; whether tonight's serve registers the stop Definition before its first execution phase; the tie block's output width; that the six classes are equal.
+
+**Pushed.** Nothing of mine is unpushed: I changed no file of the tree. Notes: this entry's two calculations are in `/opt/cursor/artifacts/` (`stop-charges-stop_charges.py`, `stop-charges-1024.json`) and in a note of this hour. Heads: the cards branch is run A's at `bdd91c5b7bcb`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989c`.
