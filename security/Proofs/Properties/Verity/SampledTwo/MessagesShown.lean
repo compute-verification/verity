@@ -504,14 +504,15 @@ theorem flock_answer (H : Msg → Msg) (zk : Bool) (xS : Msg) (As : List Msg) (C
     ((FlockDeploy.next zk xS As Cs).eval H).1 = .rej ∨ ((FlockDeploy.next zk xS As Cs).eval H).1 = .acc ∨
       ∃ c, Cs.getLast? = some c ∧ ((FlockDeploy.next zk xS As Cs).eval H).1 = .msg c.bytes := by
   unfold FlockDeploy.next
-  split
-  · exact Or.inl rfl
-  · rename_i c hc
-    exact Or.inr (Or.inr ⟨c, Claims.Bridge.act_coin hc, rfl⟩)
-  · unfold FlockDeploy.outOf
-    rw [OC.eval_bind]
+  cases hact : FlockDeploy.act zk xS As Cs with
+  | rej => exact Or.inl rfl
+  | coin c => exact Or.inr (Or.inr ⟨c, Claims.Bridge.act_coin hact, rfl⟩)
+  | decide s spec sts link c₁ mids f =>
     dsimp only
-    split <;> simp [OC.eval]
+    cases hv : ((FlockDeploy.outOf (FlockDeploy.decision zk s xS link c₁ mids f)).eval H).1 with
+    | msg m => exact absurd hv (SpotFlock.outOf_ne_msg _ H m)
+    | acc => exact Or.inr (Or.inl rfl)
+    | rej => exact Or.inl rfl
 
 /-! ## SPOT[Flock]'s verifier answers as `RunShown` needs -/
 
@@ -541,10 +542,12 @@ theorem answers_spot (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (hne
     · rw [next_stmt h x hcs hst]
       split_ifs <;> simp [OC.eval, msgOf]
     · rw [next_long h x as cs (by omega) hcs]
-      split
-      · rename_i t ht
+      rcases ht : slotOf h as.length with _ | t
+      · dsimp only
+        split_ifs <;> simp [OC.eval, msgOf]
+      · dsimp only
         unfold sessStep
-        split
+        split_ifs
         · right
           simp [OC.eval, msgOf]
         · rw [OC.eval_bind]
@@ -560,7 +563,6 @@ theorem answers_spot (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (hne
           · left
             rw [hF, ← hcs, getD_of_getLast?_drop default hc]
             rfl
-      · split_ifs <;> simp [OC.eval, msgOf]
 
 theorem answersOwn : AnswersOwn (V h) := by
   intro x as cs c hne hcs hc
