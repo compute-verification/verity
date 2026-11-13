@@ -741,7 +741,12 @@ def test_a_slim_bundle_at_an_unproven_world_is_not_refused_and_reaches_tp_commit
 
 def test_a_tp_row_runs_at_the_world_its_file_says_unless_the_flag_names_one(tmp_path, monkeypatch):
     worlds: list[int] = []
-    monkeypatch.setattr(TpRow, "run", lambda self: worlds.append(self.W) or 0)
+
+    def run(self):
+        worlds.append(self.W)
+        return 0
+
+    monkeypatch.setattr(TpRow, "run", run)
     for row, flags in ((GLM53, ()), (TP_DENSE, ()), (GLM53, ("--world", "4"))):
         o = _opts(tmp_path, *flags, row=row)
         assert run_row(o, o.stages) == 0
