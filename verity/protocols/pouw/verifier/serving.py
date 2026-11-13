@@ -237,7 +237,8 @@ class KernelVariant:
     published γ reads), ``loader`` how the runtime loads it.  ``fold_bound``, when set, is the largest |p| whose output
     the epilogue serves bit for bit, p the integer its fold reads back: past it the output is wrong and nothing on the
     device flags it.  The gate holds outputs within it, and `variant_refusals` refuses a gate held to any other bound;
-    refusing a served word past it is the scheme's Definition's, and `POUW_V2` has none yet, so nothing refuses one."""
+    refusing a served word past it is the scheme's Definition's, so under a Definition that states no bound nothing refuses
+    one."""
 
     family: str
     device: str
