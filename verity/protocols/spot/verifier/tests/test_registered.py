@@ -9,7 +9,7 @@ import tracemalloc
 
 import pytest
 
-import verity.definitions.ops.scalar  # noqa: F401
+import verity.circuits.ops.scalar  # noqa: F401
 from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.commitments import history as HT
 from verity.commitments.merkle import merkle_depth, tree_levels

@@ -62,7 +62,7 @@ from __future__ import annotations
 import functools
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array, Value
 from verity.definitions.evidence import EVIDENCE

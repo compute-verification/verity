@@ -114,7 +114,7 @@ def test_the_codec_round_trips_it(fam, V, S):
 
 @pytest.mark.slow
 def test_q_word_cuts_it_into_word_units():
-    from verity.definitions import word as WQ
+    from verity.circuits import word as WQ
 
     r = WQ.unit_rule(bind(TWG.TopPKeepWord, V=300, S=8), 16, 32)
     assert not r["violations"] and r["max_out_bits"] <= 32 and r["units_per_call"] > 1000
