@@ -6417,7 +6417,8 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     monkeypatch.setattr(A, "store_cached_facts", lambda cache, key, doc: wrote.append(("stored", key)))
     monkeypatch.setattr(A, "write_facts_document", lambda at, doc: wrote.append(("written", at)))
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
-                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     out = tmp_path / "facts.json.gz"
@@ -6457,7 +6458,8 @@ def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_f
     monkeypatch.setattr(A, "facts_document", lambda *a: {})
     monkeypatch.setattr(A, "store_cached_facts", lambda cache, key, doc: wrote.append(key))
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
-                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, replay=False, log=lambda *_: None, ready=lambda p: True,
