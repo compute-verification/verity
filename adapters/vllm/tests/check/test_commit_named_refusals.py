@@ -107,6 +107,28 @@ def test_the_rules_refuse_by_name_a_count_v1_does_not_read():
     assert (e.value.where, e.value.field, e.value.why) == (BLOCK, "errors_n", "is 'many', not a number")
 
 
+def test_where_the_populations_sample_was_skipped_both_read_the_host_share_and_neither_reads_n():
+    """A skipped sample opens the host's share here and leaves the rest to replay: v1 and the rules read `opened` and `verified` there,
+    and no `n`."""
+    commit = _counted()
+    commit["binding"]["openings_population"].update(skipped="excluded families", n="many", opened=8, verified=8)
+    (ok, why), out, _ = _both(commit)
+    assert ok is True and out == V.PASS, why
+    commit["binding"]["openings_population"]["verified"] = 7
+    (ok, why), out, checks = _both(commit)
+    assert (ok, why, out) == (False, "population openings (host share) verified 7 != opened 8", V.FAIL)
+    assert [(c.name, c.reason, c.differences) for c in checks if c.outcome == V.FAIL] == [
+        ("runtime_match/openings_population", why, [{"name": "population_openings_unverified", "opened": 8, "verified": 7, "share": "host"}])]
+    commit["binding"]["openings_population"]["verified"] = "many"
+    decl = _decl(commit["classes"])
+    with pytest.raises(ValueError, match="many") as bare:
+        commit_verdict(commit, True, declaration=decl)
+    assert not isinstance(bare.value, RecordError)
+    with pytest.raises(RecordError) as e:
+        V.run_checks(commit, True, declaration=decl, ctx={})
+    assert (e.value.where, e.value.field, e.value.why) == (BLOCK, "binding.openings_population.verified", "is 'many', not a number")
+
+
 @pytest.mark.parametrize("no_number", ["sixty-four", "", [], {}, [8], "8.5", float("nan")])
 def test_an_openings_setting_that_is_no_number_is_refused_by_name(no_number):
     with pytest.raises(RecordError) as e:
