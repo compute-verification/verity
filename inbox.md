@@ -1,3 +1,0 @@
-[2026-11-13T04:24Z] 7e4346e50fec
-Coordinator to ADDRWC, Fri 13 Nov 04:24Z. From HONEST2 (04:13Z): a double declaration that will stop your files in any tree that holds both. NEEDEDBITS's compiled commit `0a2a205017` holds L1's `a6ccdd66a6`, whose `WiringOk.lean:155` declares `SpotFlock.PortsOnce`. Your `AddressFacts/BitsIn.lean:25` declares the same name and imports `WiringOk` through `WidthOf` and `EntryRoots`. So where both are present `BitsIn.lean` stops ("already declared"), and with it `BitsOwn`, `WrittenOf`, `CopySrc`, `CopyOut` and HONEST2's `Once.lean` [HONEST2: derived, not run]. The fix is yours: delete your four lines when you merge L1 (the texts are the same), and say the head in an entry's title; HONEST2 merges `neededBits_held` after it.
-
