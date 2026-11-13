@@ -204,14 +204,22 @@ def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_
 
 def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch):
     """A record's format may have several codec kinds (here a made-up second one for `quant`). A plan of either, or
-    of both, is that kind; one that keeps a tensor whole is not, and neither is any plan beside a format this table
-    doesn't know."""
+    of both, is that kind; one that keeps a tensor whole beside them is too where the format carries tensors whole
+    beside its coded ones (`quant`), but a plan that keeps every tensor whole is not, and neither is a whole tensor
+    beside a format that carries none (`lora2`) or any plan beside a format this table doesn't know."""
     assert of_record.e_kind(["scaledquant"], "quant") == [] == of_record.e_kind(["identity"], "full")
+    assert of_record.e_kind(["lowrank"], "lora2") == []
     monkeypatch.setitem(of_record.E_KINDS, "quant", ("scaledquant", "coded"))
-    for kinds in (["scaledquant"], ["coded"], ["scaledquant", "coded"]):
+    for kinds in (["scaledquant"], ["coded"], ["scaledquant", "coded"], ["coded", "identity"]):
         assert of_record.e_kind(kinds, "quant") == []
-    assert of_record.e_kind(["identity", "coded"], "quant") == [
-        "E's kind: the config's plan is identity, coded, the record's format quant (scaledquant or coded)"]
+    assert of_record.e_kind(["identity"], "quant") == [
+        "E's kind: the config's plan is identity, the record's format quant (scaledquant or coded, with identity "
+        "beside one of them)"]
+    assert of_record.e_kind(["identity", "lowrank"], "quant") == [
+        "E's kind: the config's plan is identity, lowrank, the record's format quant (scaledquant or coded, with "
+        "identity beside one of them)"]
+    assert of_record.e_kind(["lowrank", "identity"], "lora2") == [
+        "E's kind: the config's plan is lowrank, identity, the record's format lora2 (lowrank)"]
     assert of_record.e_kind(["coded"], "full") == [
         "E's kind: the config's plan is coded, the record's format full (identity)"]
     assert of_record.e_kind(["identity"], "model") == [

@@ -49,7 +49,7 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   before the count (`run.set_threads`): what a job trains on a CPU follows the count. A record that states none
   is counted at a job's default (`run.THREADS`), and the output says the record names none.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
-  beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
+  beside the codecs of that kind), or one the format carries beside at least one of them (`E_BESIDE`); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
 
 `--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
@@ -78,11 +78,16 @@ SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
 #: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
 #: (`scaledquant`) or the ternary ones the run trained (`sparseternary`). A format may have several kinds
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary")}
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary"), "lora2": ("lowrank",)}
+#: the codecs a plan may hold beside at least one of its record's format's own kind: a tensor the record's program
+#: carried whole beside its coded ones
+E_BESIDE = {"quant": ("identity",)}
 #: a codec that packs the same encoding another way than the records' program did, so that its size is expected to
 #: differ from a record's by the packing alone: named in the entry's E line
 E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the record's program kept the smallest "
-                              "of several settings' streams of all its matrices"}
+                              "of several settings' streams of all its matrices",
+             "lowrank": "each matrix's rounded factors packed apart under a header of their own, where the record's "
+                        "program packed every matrix's factors in one stream under one header"}
 #: how many of a config's steps are counted; the last is the one compared
 STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
@@ -522,12 +527,14 @@ def e_sizes(kinds: list[str], e_bytes: int, last: dict, steps: int) -> str:
 
 def e_kind(kinds: list[str], fmt: str) -> list[str]:
     """The difference, if any, between a plan's codec `kinds` and a record's E `fmt`: every codec of the plan must be
-    one of the format's kind of encoding (`E_KINDS`)."""
-    same = E_KINDS.get(fmt, ())
-    if kinds and set(kinds) <= set(same):
+    one of the format's kind of encoding (`E_KINDS`), or one it carries beside them (`E_BESIDE`) with at least one of
+    the format's own."""
+    same, beside = E_KINDS.get(fmt, ()), E_BESIDE.get(fmt, ())
+    if set(kinds) & set(same) and set(kinds) <= {*same, *beside}:
         return []
     return [f"E's kind: the config's plan is {', '.join(kinds) or 'empty'}, the record's format {fmt} "
-            f"({' or '.join(same) or 'none known here'})"]
+            f"({' or '.join(same) or 'none known here'}"
+            + (f", with {' or '.join(beside)} beside one of them" if beside else "") + ")"]
 
 
 def verdict(r: dict) -> str:
