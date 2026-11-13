@@ -53,7 +53,7 @@ open Properties.NetworkCertifier.Bytes (hash_size)
 /-- The scheme of the device's commitment. -/
 def SCHEME : String := "challenges/v1"
 
-/-- The one family the device commits to. -/
+/-- The family the two theorems' play commits to. -/
 def LABEL : String := "sample"
 
 /-- The auditor's device, as its record and the ledger's open name it. -/
@@ -88,6 +88,8 @@ set_option maxRecDepth 100000 in
 theorem pinned_later : later PINNED_AT 0 = some PINNED_AT := by decide +kernel
 
 theorem label_plain : PlainStr LABEL := by decide
+
+theorem label_short : LABEL.length ≤ 128 := by decide
 
 theorem device_plain : PlainStr DEVICE := by decide
 
@@ -153,8 +155,8 @@ theorem startReason_whole {coin : ByteArray} (h : coin.size = 64) : startReason 
 /-! ## What the parties write -/
 
 /-- The device's commitment: one family of one challenge, its root the challenge's leaf. -/
-def commitmentOf (epoch : Nat) (dom coin salt : ByteArray) : LiveCommitment :=
-  Files.one SCHEME LABEL epoch (Files.coinRoot dom SCHEME coin salt)
+def commitmentOf (label : String) (epoch : Nat) (dom coin salt : ByteArray) : LiveCommitment :=
+  Files.one SCHEME label epoch (Files.coinRoot dom SCHEME coin salt)
 
 /-- The device's release log: its head, the root it answers and the release. -/
 def linesOf (c : LiveCommitment) (rootText releaseText : String) : List String :=
@@ -179,7 +181,8 @@ def openOf (pub pin window : ByteArray) (pinText : String) (sig : ByteArray) : C
 def endOf (root : ByteArray) (files : Json) (openText : String) (sig : ByteArray) : Core.Record :=
   ⟨endBody root files 1, "end", Flock.hexOf (Flock.Sha512.hash openText.toUTF8), LEDGER_SCHEMA, 1, some SESSION, sig⟩
 
-theorem root_size (epoch : Nat) (dom coin salt : ByteArray) : (commitmentOf epoch dom coin salt).root.size = 64 := by
+theorem root_size (label : String) (epoch : Nat) (dom coin salt : ByteArray) :
+    (commitmentOf label epoch dom coin salt).root.size = 64 := by
   show (Flock.Sha512.hash _).size = 64
   exact hash_size _
 
@@ -311,11 +314,12 @@ theorem entry_read {r : Core.Record} {text : String} {mb : Std.TreeMap.Raw Strin
 
 /-! ## A play, and what makes it honest -/
 
-/-- What an honest session withheld is written from: the key's public bytes, the commitment's epoch and domain, the
-challenge and its salt, the root the challenge answers, the window's root, the commit pinned, the device's two files
-as it wrote them, the four signatures, and the text of each line. -/
+/-- What an honest session withheld is written from: the key's public bytes, the name of the commitment's one family,
+its epoch and domain, the challenge and its salt, the root the challenge answers, the window's root, the commit
+pinned, the device's two files as it wrote them, the four signatures, and the text of each line. -/
 structure Play where
   pub : ByteArray
+  label : String
   epoch : Nat
   dom : ByteArray
   coin : ByteArray
@@ -342,7 +346,7 @@ variable (p : Play)
 /-- The key the verifier holds. -/
 def key : ChallengerKey := ⟨Lms.deployed, p.pub⟩
 
-def commitment : LiveCommitment := commitmentOf p.epoch p.dom p.coin p.salt
+def commitment : LiveCommitment := commitmentOf p.label p.epoch p.dom p.coin p.salt
 
 /-- The device's record of its commitment. -/
 def record : ChallengerRecord := ⟨p.commitment, DEVICE, p.sigRecord⟩
@@ -364,11 +368,11 @@ def openRecord : Core.Record := openOf p.pub p.pin p.window p.pinText p.sigOpen
 def endRecord : Core.Record := endOf p.commitment.root p.files p.openText p.sigEnd
 
 /-- The challenge, opened after the root it answers. -/
-def opening : LiveOpening := ⟨p.epoch, LABEL, 0, p.after, p.coin, p.salt, []⟩
+def opening : LiveOpening := ⟨p.epoch, p.label, 0, p.after, p.coin, p.salt, []⟩
 
 /-- The sample's segment: the family, from its first challenge, and the one opening. -/
 def segment : Json :=
-  Json.mkObj [("after", .str (Flock.hexOf p.after)), ("label", .str LABEL), ("openings", .arr #[p.opening.toJson]),
+  Json.mkObj [("after", .str (Flock.hexOf p.after)), ("label", .str p.label), ("openings", .arr #[p.opening.toJson]),
     ("start", Lean.toJson (0 : Nat))]
 
 /-- The evidence `drawCoins` reads. -/
@@ -387,12 +391,15 @@ structure Honest (I : ByteArray) : Prop where
   afterSize : p.after.size = 64
   windowSize : p.window.size = 64
   pinSize : p.pin.size = 20
-  domain : liveDomain SCHEME p.epoch [(LABEL, 1)] = .ok p.dom
+  labelName : isName p.label = true
+  labelPlain : PlainStr p.label
+  labelShort : p.label.length ≤ 128
+  domain : liveDomain SCHEME p.epoch [(p.label, 1)] = .ok p.dom
   recordSigned : ∃ m s, recordMessage I DEVICE p.commitment = .ok m ∧
     Lms.Signature.decode Lms.deployed p.sigRecord = .ok s ∧ Lms.verify Lms.deployed p.pub m s = .ok true
   recordLeaf : leafOf p.sigRecord = 1
-  rootLine : Flock.canon (Logs.rootLine LABEL p.after) = .ok p.rootText
-  releaseLine : Flock.canon (Logs.releaseLine LABEL p.after) = .ok p.releaseText
+  rootLine : Flock.canon (Logs.rootLine p.label p.after) = .ok p.rootText
+  releaseLine : Flock.canon (Logs.releaseLine p.label p.after) = .ok p.releaseText
   closeSigned : ∃ m s, closeMessage I DEVICE p.commitment SESSION 3 (logChain p.lines) none = .ok m ∧
     Lms.Signature.decode Lms.deployed p.sigClose = .ok s ∧ Lms.verify Lms.deployed p.pub m s = .ok true
   pinLine : Flock.canon (pinValue p.pin) = .ok p.pinText
@@ -411,18 +418,19 @@ variable {p : Play} {I : ByteArray}
 
 /-! ## The session's files -/
 
-theorem commitment_root (p : Play) : p.commitment.root.size = 64 := root_size _ _ _ _
+theorem commitment_root (p : Play) : p.commitment.root.size = 64 := root_size _ _ _ _ _
 
-theorem record_read (p : Play) : ChallengerRecord.ofJson p.record.toJson = .ok p.record :=
+theorem record_read (h : p.Honest I) : ChallengerRecord.ofJson p.record.toJson = .ok p.record :=
   Files.record_ofJson p.sigRecord
-    (Files.commitment_ofJson p.epoch scheme_name label_name (root_size p.epoch p.dom p.coin p.salt)) device_named
+    (Files.commitment_ofJson p.epoch scheme_name h.labelName (root_size p.label p.epoch p.dom p.coin p.salt))
+    device_named
 
 theorem close_read (p : Play) : ChallengerClose.ofJson p.close.toJson = .ok p.close :=
   Files.close_ofJson p.sigClose (chain_size p.commitment p.rootText p.releaseText) (by decide) (by decide) session_id
 
-theorem released (h : p.Honest I) : releasedRootsOf p.commitment p.lines = .ok [(LABEL, [p.after])] := by
-  obtain ⟨a, b, ha, hb, hr⟩ := Logs.released_one (c := p.commitment) (label := LABEL) (after := p.after) (n := 1) rfl
-    label_plain (by decide) h.afterSize
+theorem released (h : p.Honest I) : releasedRootsOf p.commitment p.lines = .ok [(p.label, [p.after])] := by
+  obtain ⟨a, b, ha, hb, hr⟩ := Logs.released_one (c := p.commitment) (label := p.label) (after := p.after) (n := 1) rfl
+    h.labelPlain h.labelShort h.afterSize
   obtain rfl : a = p.rootText := Except.ok.inj (ha.symm.trans h.rootLine)
   obtain rfl : b = p.releaseText := Except.ok.inj (hb.symm.trans h.releaseLine)
   exact hr
@@ -430,7 +438,7 @@ theorem released (h : p.Honest I) : releasedRootsOf p.commitment p.lines = .ok [
 theorem record_signed (h : p.Honest I) : recordReason p.key p.record.toJson = .ok none := by
   obtain ⟨m, s, hm, hd, hv⟩ := h.recordSigned
   have hI : p.key.pub.extract 0 16 = I := h.pubId
-  exact Steps.recordReason_none_of_steps (r := p.record) rfl (record_read p)
+  exact Steps.recordReason_none_of_steps (r := p.record) rfl (record_read h)
     (by
       rw [hI]
       exact hm) hd hv
@@ -439,10 +447,10 @@ theorem record_signed (h : p.Honest I) : recordReason p.key p.record.toJson = .o
 session's name. -/
 theorem session_read (h : p.Honest I) :
     sessionOf p.key p.record.toJson (.arr (p.lines.map Json.str).toArray) p.close.toJson =
-      .ok (p.commitment, [(LABEL, [p.after])], SESSION) := by
+      .ok (p.commitment, [(p.label, [p.after])], SESSION) := by
   obtain ⟨m, s, hm, hd, hv⟩ := h.closeSigned
   have hI : p.key.pub.extract 0 16 = I := h.pubId
-  exact Steps.sessionOf_ok_of_steps (r := p.record) (c := p.close) (record_signed h) (record_read p) rfl (close_read p)
+  exact Steps.sessionOf_ok_of_steps (r := p.record) (c := p.close) (record_signed h) (record_read h) rfl (close_read p)
     (by
       rw [hI]
       exact hm) hd hv rfl rfl rfl (released h)
@@ -466,7 +474,7 @@ theorem end_read (h : p.Honest I) :
         some ⟨e, p.endText, LEDGER_SCHEMA, 1, Flock.hexOf (Flock.Sha512.hash p.openText.toUTF8), "end", SESSION,
           p.sigEnd, .obj nb⟩ :=
   entry_read (r := p.endRecord) (B := 800) rfl (end_plain _ p.closeFile p.recordFile p.lines)
-    (end_text p.closeFile p.recordFile p.lines (root_size p.epoch p.dom p.coin p.salt)) (by decide) (.inr rfl)
+    (end_text p.closeFile p.recordFile p.lines (root_size p.label p.epoch p.dom p.coin p.salt)) (by decide) (.inr rfl)
     (by
       show (Flock.hexOf (Flock.Sha512.hash _)).length = 128
       rw [hexOf_len, hash_size]) (plain_hexOf _) (Flock.Hex.unhex_hexOf _) rfl ⟨_, canon_num 1, by decide⟩ rfl
@@ -485,7 +493,7 @@ head, and the session's files are the ones the ledger's end seals. -/
 theorem trusted (h : p.Honest I) :
     trustedSessionOf (.arr #[.str p.openText, .str p.endText]) (Json.mkObj [("root", Json.str (Flock.hexOf p.window))])
       p.key (.arr #[.str p.pinText]) (.arr #[.str (Flock.hexOf p.pin)]) p.session =
-        .ok (p.commitment, [(LABEL, [p.after])]) ∧
+        .ok (p.commitment, [(p.label, [p.after])]) ∧
       withheldOn (.arr #[.str p.openText, .str p.endText]) (Flock.hexOf p.window) = true := by
   obtain ⟨eo, nbo, hbo, hto, heo⟩ := open_read h
   obtain ⟨ee, nbe, hbe, hte, hee⟩ := end_read h
@@ -601,7 +609,7 @@ theorem trusted (h : p.Honest I) :
   have g3 : getD p.session "close" = p.close.toJson := rfl
   have g4 : getD p.session "hellos" = .arr (([] : List String).map Json.str).toArray := rfl
   have hsn := Steps.sessionNamed_ok_of_steps (key := p.key) (session := p.session) (c := p.commitment)
-    (roots := [(LABEL, [p.after])]) (r := p.record) (lines := p.lines) (hellos := [])
+    (roots := [(p.label, [p.after])]) (r := p.record) (lines := p.lines) (hellos := [])
     (a :=
       { session := SESSION, host := strOf (getD (.obj nbo) "host"), prover := laneOf (.obj nbo),
         files := getD (.obj nbe) "files", recordLeaf := 1, commitment := strOf (getD (.obj nbe) "commitment"),
@@ -613,7 +621,7 @@ theorem trusted (h : p.Honest I) :
       exact session_read h)
     (by
       rw [g1]
-      exact record_read p)
+      exact record_read h)
     (by
       show DEVICE = strOf (getD (.obj nbo) "host")
       rw [r1]
@@ -634,7 +642,7 @@ theorem trusted (h : p.Honest I) :
 
 /-- **`drawCoins` returns an honest play's challenge.** -/
 theorem draws (h : p.Honest I) :
-    drawCoins p.key (Flock.hexOf p.window) LABEL p.after p.evidence = .ok p.coin := by
+    drawCoins p.key (Flock.hexOf p.window) p.label p.after p.evidence = .ok p.coin := by
   obtain ⟨ht, hw⟩ := trusted h
   have c1 : getD p.evidence "ledger" = .arr #[.str p.openText, .str p.endText] := rfl
   have c2 : getD p.evidence "pins" = .arr #[.str p.pinText] := rfl
@@ -642,11 +650,11 @@ theorem draws (h : p.Honest I) :
   have c4 : getD p.evidence "session" = p.session := rfl
   have c5 : getD p.evidence "segment" = p.segment := rfl
   have hst := Steps.challengerStream_one (c := p.commitment) (segment := p.segment) (doc := p.opening.toJson)
-    (after := p.after) (label := LABEL) (o := p.opening)
+    (after := p.after) (label := p.label) (o := p.opening)
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)) rfl (Files.nat?_nat 0) rfl
     (Logs.jsonStrIs_str _) (Files.opening_ofJson _ _ _ _ _ _)
     (Files.liveReason_one p.after h.domain h.coinSize h.saltSize)
-  exact Steps.drawCoins_ok_of_steps (c := p.commitment) (roots := [(LABEL, [p.after])])
+  exact Steps.drawCoins_ok_of_steps (c := p.commitment) (roots := [(p.label, [p.after])])
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide))
     (by
       rw [c1, c2, c3, c4]
@@ -664,7 +672,7 @@ theorem draws (h : p.Honest I) :
 /-- **`coinsReason` gives no reason against an honest play** read whole, under the verifier's own copy of main's
 history. -/
 theorem reads (h : p.Honest I) :
-    coinsReason p.key (.arr #[.str (Flock.hexOf p.pin)]) p.evidence (Flock.hexOf p.window) LABEL p.after p.coin =
+    coinsReason p.key (.arr #[.str (Flock.hexOf p.pin)]) p.evidence (Flock.hexOf p.window) p.label p.after p.coin =
       none := by
   have c3 : getD p.evidence "main" = .arr #[.str (Flock.hexOf p.pin)] := rfl
   exact Steps.coinsReason_none_of_steps (draws h)
@@ -674,25 +682,26 @@ theorem reads (h : p.Honest I) :
 
 /-! ## A key's honest play -/
 
-/-- **A key derived at the deployed parameters has an honest play**, for every epoch, challenge and salt, root
-answered, window's root and commit pinned of the protocol's sizes. -/
+/-- **A key derived at the deployed parameters has an honest play**, for every family's name, epoch, challenge and
+salt, root answered, window's root and commit pinned of the protocol's sizes. -/
 theorem exists_honest {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k)
+    {label : String} (hn : isName label = true) (hl : PlainStr label) (hll : label.length ≤ 128)
     (epoch : Nat) {coin salt after window pin : ByteArray} (hc : coin.size = 64) (hs : salt.size = 192)
     (ha : after.size = 64) (hw : window.size = 64) (hp : pin.size = 20) (recordFile closeFile : ByteArray) :
-    ∃ p : Play, p.pub = k.publicKey ∧ p.coin = coin ∧ p.after = after ∧ p.window = window ∧ p.pin = pin ∧
-      p.Honest I := by
+    ∃ p : Play, p.pub = k.publicKey ∧ p.label = label ∧ p.coin = coin ∧ p.after = after ∧ p.window = window ∧
+      p.pin = pin ∧ p.Honest I := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
   subst hIk
   have hpub : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
-  obtain ⟨dom, hdom⟩ := Messages.liveDomain_ok SCHEME epoch [(LABEL, 1)]
+  obtain ⟨dom, hdom⟩ := Messages.liveDomain_ok SCHEME epoch [(label, 1)]
   -- the device's record
-  obtain ⟨mR, hmR⟩ := Messages.recordMessage_ok hIs DEVICE (commitmentOf epoch dom coin salt)
+  obtain ⟨mR, hmR⟩ := Messages.recordMessage_ok hIs DEVICE (commitmentOf label epoch dom coin salt)
   obtain ⟨sR, hdR, hvR, -, hlR, -⟩ := Signer.signs hk mR (q := 1) (by decide)
   -- its log and its close
-  obtain ⟨a, b, hca, hcb, -⟩ := Logs.released_one (c := commitmentOf epoch dom coin salt) (label := LABEL)
-    (after := after) (n := 1) rfl label_plain (by decide) ha
-  obtain ⟨mC, hmC⟩ := Messages.closeMessage_ok hIs DEVICE (commitmentOf epoch dom coin salt) SESSION 3
-    (logChain (linesOf (commitmentOf epoch dom coin salt) a b)) none
+  obtain ⟨a, b, hca, hcb, -⟩ := Logs.released_one (c := commitmentOf label epoch dom coin salt) (label := label)
+    (after := after) (n := 1) rfl hl hll ha
+  obtain ⟨mC, hmC⟩ := Messages.closeMessage_ok hIs DEVICE (commitmentOf label epoch dom coin salt) SESSION 3
+    (logChain (linesOf (commitmentOf label epoch dom coin salt) a b)) none
   obtain ⟨sC, hdC, hvC, -, -, -⟩ := Signer.signs hk mC (q := 3) (by decide)
   -- the pins log's line
   obtain ⟨tPin, htPin⟩ := FlockComplete.JsonRT.canon_ok_some _ (Entry.good_of_plain (pin_plain pin))
@@ -706,28 +715,29 @@ theorem exists_honest {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lm
     (Ledger.plainAt_record (r := openOf k.publicKey pin window tPin sO.encode) (open_plain k.publicKey pin window tPin)
       open_kind Ledger.zero_plain schema_plain rfl session_plain))
   -- the ledger's end
-  have hfiles : PlainAt 3 (endBody (commitmentOf epoch dom coin salt).root
-      (filesFor closeFile recordFile (linesOf (commitmentOf epoch dom coin salt) a b)) 1) :=
+  have hfiles : PlainAt 3 (endBody (commitmentOf label epoch dom coin salt).root
+      (filesFor closeFile recordFile (linesOf (commitmentOf label epoch dom coin salt) a b)) 1) :=
     end_plain _ closeFile recordFile _
   obtain ⟨mE, hmE⟩ := Messages.ledgerMessage_ok hIs
-    (r := endOf (commitmentOf epoch dom coin salt).root
-      (filesFor closeFile recordFile (linesOf (commitmentOf epoch dom coin salt) a b)) tOpen .empty) rfl
+    (r := endOf (commitmentOf label epoch dom coin salt).root
+      (filesFor closeFile recordFile (linesOf (commitmentOf label epoch dom coin salt) a b)) tOpen .empty) rfl
     (Entry.good_of_plain hfiles)
   obtain ⟨sE, -, -, hvE, hlE, hzE⟩ := Signer.signs hk mE (q := 2) (by decide)
-  have hmE' : ledgerMessage k.I (endOf (commitmentOf epoch dom coin salt).root
-      (filesFor closeFile recordFile (linesOf (commitmentOf epoch dom coin salt) a b)) tOpen
+  have hmE' : ledgerMessage k.I (endOf (commitmentOf label epoch dom coin salt).root
+      (filesFor closeFile recordFile (linesOf (commitmentOf label epoch dom coin salt) a b)) tOpen
       sE.encode).toJson = .ok mE :=
-    (Entry.ledgerMessage_sig k.I (endOf (commitmentOf epoch dom coin salt).root
-      (filesFor closeFile recordFile (linesOf (commitmentOf epoch dom coin salt) a b)) tOpen .empty)
+    (Entry.ledgerMessage_sig k.I (endOf (commitmentOf label epoch dom coin salt).root
+      (filesFor closeFile recordFile (linesOf (commitmentOf label epoch dom coin salt) a b)) tOpen .empty)
       sE.encode).trans hmE
   obtain ⟨tEnd, htEnd⟩ := FlockComplete.JsonRT.canon_ok_some _ (Entry.good_of_plain
-    (Ledger.plainAt_record (r := endOf (commitmentOf epoch dom coin salt).root
-      (filesFor closeFile recordFile (linesOf (commitmentOf epoch dom coin salt) a b)) tOpen sE.encode)
+    (Ledger.plainAt_record (r := endOf (commitmentOf label epoch dom coin salt).root
+      (filesFor closeFile recordFile (linesOf (commitmentOf label epoch dom coin salt) a b)) tOpen sE.encode)
       hfiles end_kind (plain_hexOf _) schema_plain rfl session_plain))
-  exact ⟨⟨k.publicKey, epoch, dom, coin, salt, after, window, pin, recordFile, closeFile, sR.encode, sC.encode,
-    sO.encode, sE.encode, a, b, tPin, tOpen, tEnd⟩, rfl, rfl, rfl, rfl, rfl,
+  exact ⟨⟨k.publicKey, label, epoch, dom, coin, salt, after, window, pin, recordFile, closeFile, sR.encode,
+    sC.encode, sO.encode, sE.encode, a, b, tPin, tOpen, tEnd⟩, rfl, rfl, rfl, rfl, rfl, rfl,
     { identifier := hIs, pubId := hpub, coinSize := hc, saltSize := hs, afterSize := ha, windowSize := hw,
-      pinSize := hp, domain := hdom, recordSigned := ⟨mR, sR, hmR, hdR, hvR⟩, recordLeaf := hlR, rootLine := hca,
+      pinSize := hp, labelName := hn, labelPlain := hl, labelShort := hll, domain := hdom,
+      recordSigned := ⟨mR, sR, hmR, hdR, hvR⟩, recordLeaf := hlR, rootLine := hca,
       releaseLine := hcb, closeSigned := ⟨mC, sC, hmC, hdC, hvC⟩, pinLine := htPin, openLine := htOpen,
       openSigned := ⟨mO, hmO', hvO⟩, openLeaf := hlO, openSize := hzO, endLine := htEnd,
       endSigned := ⟨mE, hmE', hvE⟩, endLeaf := hlE, endSize := hzE }⟩
@@ -763,8 +773,9 @@ theorem familyOneCommitment_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
       Lms.keygen Lms.deployed seed = .ok k ∧ drawCoins ⟨Lms.deployed, k.publicKey⟩ w label after coins = .ok ξ := by
   obtain ⟨k, hkg, I, hk⟩ := Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Withheld.zeros_size 64)
-  obtain ⟨p, hpub, -, -, -, -, h⟩ := Withheld.exists_honest hk 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192)
-    (Withheld.zeros_size 64) (Withheld.zeros_size 64) (Withheld.zeros_size 20) .empty .empty
+  obtain ⟨p, hpub, -, -, -, -, -, h⟩ := Withheld.exists_honest hk Withheld.label_name Withheld.label_plain
+    Withheld.label_short 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192) (Withheld.zeros_size 64)
+    (Withheld.zeros_size 64) (Withheld.zeros_size 20) .empty .empty
   have hd := Withheld.draws h
   have hkey : p.key = ⟨Lms.deployed, k.publicKey⟩ := congrArg (ChallengerKey.mk Lms.deployed) hpub
   rw [hkey] at hd
@@ -778,8 +789,9 @@ theorem familyOneCommitmentRead_honest :
       Lms.keygen Lms.deployed seed = .ok k ∧
         coinsReason ⟨Lms.deployed, k.publicKey⟩ main coins w label after read = none := by
   obtain ⟨k, hkg, I, hk⟩ := Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Withheld.zeros_size 64)
-  obtain ⟨p, hpub, -, -, -, -, h⟩ := Withheld.exists_honest hk 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192)
-    (Withheld.zeros_size 64) (Withheld.zeros_size 64) (Withheld.zeros_size 20) .empty .empty
+  obtain ⟨p, hpub, -, -, -, -, -, h⟩ := Withheld.exists_honest hk Withheld.label_name Withheld.label_plain
+    Withheld.label_short 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192) (Withheld.zeros_size 64)
+    (Withheld.zeros_size 64) (Withheld.zeros_size 20) .empty .empty
   have hd := Withheld.reads h
   have hkey : p.key = ⟨Lms.deployed, k.publicKey⟩ := congrArg (ChallengerKey.mk Lms.deployed) hpub
   rw [hkey] at hd
