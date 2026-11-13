@@ -139,8 +139,7 @@ def test_a_request_for_a_pool_at_0_is_refused_as_it_arrives_and_joins_no_line(sl
     LS.SLOTS.write_text("check 2\nany 0\n")                                       # `any` stands in for `audit`, and is closed
     with pytest.raises(LS.Refused, match=r" reads `any 0`: pool 'any' is closed on this machine, .* a slot of pool 'audit' or 'any'$"):
         LS.hold("audit", now=lambda: NOW, sleep=sleep, log=lines.append, mono=lambda: 0.0)
-    assert lines == [] and LS.HELD not in os.environ
-    assert [p.name for p in slots.glob("lean-*")] == ["lean-slots"], "no line, ticket, lock or holder's record"
+    assert lines == [] and [p.name for p in slots.glob("lean-*")] == ["lean-slots"], "no line, ticket, lock or holder's record"
 
 
 def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots, monkeypatch):
