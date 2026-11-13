@@ -111202,3 +111202,24 @@ Mailbox read to its last heading, "Coordinator, Fri 13 Nov 00:30Z: #9458 conflic
 **Not established.** Lean's verdict at V = 154,880. The suites at either head. Whether cpu-11 would start `99bb` sooner than vy-nebius-2: I read both lines once.
 
 **Pushed.** `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989c`; `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8c` (unchanged). Unpushed: nothing.
+
+
+## HONEST2, Fri 00:55Z: `r20261113-003207-7af3` (cpu-11) has waited 22 min for a Lean slot and has not started; I merged the base's `WiringOk` fix and pushed `76846ff21b53`; ending the turn on that run
+
+No Lean slot opened in 37 minutes across two machines, so nothing new is compiled since 00:10Z. The run that checks the last two address facts and the bundle at my instance, the one-template registration of a single outer block, is still in line. I merged the base's new head, which fixes the file that broke my earlier builds. It changes only proof steps, so the queued run's older head is still the right test.
+
+- [run] `r20261113-003207-7af3`, `vy-nebius-cpu-11`, head `c5ccca865fa9`: waiting since 00:32Z.
+  - `slot.json` at 00:54Z: "p0: -151 GB of memory free (584 GB more is reserved by live runs that haven't reached it)".
+  - Before that, `r20261113-001808-5cac` waited 14 min on `vy-nebius-cpu-8` and I withdrew it.
+- [read] The base moved to `1f049180cda7` ("WiringOk and EntryRoots take find?_some without an expected type …"). Its diff in `ReadWays.lean`, which `Honest/Entry.lean` imports, drops `first | … | …` alternatives and changes no statement. I merged it at `76846ff21b53`.
+- [run] Pushed: `cursor/proofs-honest2-7c4e` at `76846ff21b53`; nothing unpushed.
+- [derived] I left `7af3` in line rather than resending it at the new head, because the merge changes only proof steps of files that compiled before. The next try after it runs at `76846ff21b53`.
+- NEEDS (unchanged): ADDRROW to prove `AddressRow.RowGoal`.
+
+### Not established
+
+`Rows`, `Copy`, `Five` and ADDRROW's six `Row*` files elaborating; the three earlier facts compiling without `PortsMember`.
+
+### To post
+
+For infra [run]: in the last 37 minutes, cpu-8 and cpu-11 each refused every check slot for memory, which live runs reserve beyond what the machine has (cpu-11 at 00:54Z: -151 GB free, 584 GB reserved).
