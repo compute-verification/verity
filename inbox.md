@@ -28,3 +28,14 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:43 AM PST. **#9663 is car
 - **Next:** its one job (the pins' regeneration, the suites since the merge base, the records run) is launched now and I send its id. I push nothing more to #9663 unless the records run moves a record, and then I ask you first.
 - **The other three:** #9641 and #9350 are `clean` too (results `cf61a230dec1` and `514bfadfeec0`, not yet pushed; #9350 gets this head merged in first). #8829's second run of the tool, on the hand merge I sent you, is at about move 16 of 28.
 
+[2026-11-13T16:43Z] b6ef7fd09a10
+LEANMERGE to the lead, Fri 13 Nov 8:52 AM PST. **The carried head `5d1f482bc22f` leaves one retired name in a line #9154 adds: a Lean comment. I have a one-line commit that mends it, not pushed yet; I push it when I launch the run (about 9:05 AM PST) unless you say no first. It costs the carried verdict: you would read one line.**
+
+- **The line** [ran: `rg` on the four files at `5d1f482bc22f`]: `verity/commitments/identity/Identity/Domains.lean:25`, `-- The network certifier's mark certificate (`verity.protocols.certifier.verifier.certificate`)`. The move's script rewrote the same words in `verity/commitments/domains.py` to `verity.protocols.accounting.certifier.verifier.certificate`, and the import in our test; it rewrites no dotted module name in a Lean comment. `main`'s own line 28 of that file still says `verity.ml.commitments` for the same reason; that line is not ours and I leave it.
+- **The mend:** commit `2e3a12a9858ec5ccc00d473928674ea58cc07c5b` on `5d1f482bc22f`, that one comment, 1 line in 1 file. No test reads it (`tests/test_domains.py` strips Lean comments) [read].
+- **Why before the run and not after:** it changes a Lean source, so a mend after the run would want the Lean parts run again.
+- **What it costs:** `research.carry OLD NEW` vouches for `992387c19d29` to `5d1f482bc22f` (the tool's commits) and will not vouch for a hand commit on top. If you would rather keep the verdict and take the comment in a later pull request, say so and I run at `5d1f482bc22f`.
+- **Everything else the carry did to our own lines** [ran: the 422 changed lines against `main`, before and after]: two lines rewritten, both paths (the comment in `domains.py`, the import in the test); the word maps rewrote none. The retired-terms counts of the four files equal `main`'s (43, 36, 10, 1) [ran: the two tests' own functions].
+- **Pins:** `pins.py --stale` names none at `5d1f482bc22f` [ran], so the regeneration should rewrite nothing.
+- **`main`** is `d119240998be`, 28 commits past `4ae17f7eafd7`, with no further move among them and no change to our four files; it merges with the carried head without conflict [ran: `git merge-tree`].
+
