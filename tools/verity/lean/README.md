@@ -51,6 +51,10 @@ verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
   as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
+verity lean bits [PKG...] [--facts F... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]
+  every guarantee the locks list (default the three security locks), with whether it bounds a probability, its error
+  term, and that term's bits where something gives it a number, at one audit and over a week, a month and a year at a
+  census deployment and at the world; from the locks and the sources, or a run's facts, no build (`bits.py`)
 research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   the fast path (the lean-proofs skill): PKG's records and its requirers'
@@ -61,6 +65,15 @@ research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --c
 
 `check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
 `--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs' own.
+
+A guarantee's number in `verity lean bits` has one of three sources, strongest first. `proved`: a Lean row, a theorem
+that the guarantee's bound at one point and budget is at most a stated figure, which the lock records with the bound it
+reads; no lock holds a row yet. `computed`: an evaluator written in Lean, with a property that it bounds the error term,
+run at a point; none is built yet. `mirrored`: a Python restatement of one error term (`bits_mirror.py`), printed only
+while the hashes it pins in the locks hold, and held under a `norm_num` instance where one exists
+(`tests/test_bits.py`); this is the one built today. A mirror evaluates one term of a bound, so the guarantee's
+security in bits is at most the printed figure. Whether a statement bounds a probability, and its error term,
+are read from its text and marked `~`; the rest comes from the locks.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
@@ -302,6 +315,9 @@ Lean's job in `check` and the tools around the audit:
   the entry). Two PRs that each raise an area merge without a conflict: `merge.py --caps` sums their changes
   (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
+- `bits.py`: `verity lean bits`, each guarantee's error term in bits and the source of the number.
+  `bits_mirror.py`: the Python mirrors of error terms it evaluates; `bits_pins.json`: the guarantees and definitions
+  each one pins, with their hashes in the locks.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
 
