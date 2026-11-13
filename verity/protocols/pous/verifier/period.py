@@ -57,7 +57,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
 
