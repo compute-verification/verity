@@ -127004,3 +127004,39 @@ Kept. No file of the tree changed; no statement, lock, guarantee or form touched
 - Condition 1 at an accepted play; `FirstTreeless` discharged; a records run of `security/Proofs` at the join's head (ASSEMBLY's).
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed; no run of mine is out.
+
+## SESSIONOF, Fri 07:13Z: -5c1e COMPILES at 521933e143 after the merge of d2a507cb1b (try `r20261113-063026-0241`: ParamsProgram 5 theorems, AcceptedChecks 8, both probes clean); one table a session and its name both follow from the code, from `ScopeHeld`/`PinHeld` plus the design evaluating, not from any field I can add
+
+**Try `r20261113-063026-0241`** (vy-nebius-cpu-11, build/0, `-5c1e` at `521933e1430b7b404142adfafbba82b0aed0fba5`, `done rc=0 SUCCESS`), word for word [run]:
+- `Build completed successfully (10639 jobs).`
+- `lean-try: security/Proofs/Properties/Verity/Sampled/ParamsProgram.lean: lean exit 0 in 91 s`
+- `lean-try: security/Proofs/Properties/Verity/Sampled/ParamsProgram.lean: axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`
+- `Build completed successfully (10906 jobs).` (this build compiled `SessionOf` and `ZkHiddenM1P` as imports)
+- `lean-try: security/Proofs/Properties/Verity/Sampled/AcceptedChecks.lean: lean exit 0 in 249 s`
+- `lean-try: security/Proofs/Properties/Verity/Sampled/AcceptedChecks.lean: axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`
+
+No watchdog kill and no thread failure. The only messages from my files are deprecation warnings (`SessionOf.lean:336`, `AcceptedChecks.lean:149,158,160`: `if_neg`/`dif_pos`/`if_pos`). So the merge of the soundness base needed no renames, and the four lock roots are in a compiled head.
+
+**Your two facts.** Lines are on the join `28d27c389e` (`SpotFlock/Code.lean`, `Accepting.lean`, `DeployInputs.lean`) and in the verifier (`Flock/HmRow.lean`, `Statement.lean`, `Tags.lean`, `Zk.lean`, the same on every ref I read).
+
+1. **One table a session: follows, but not from `setupTables` alone** [read; the chain is derived].
+   - `setupTables` gives one table exactly when `count ≤ 1`: `if count ≤ 1 then let st ← setup tags draw; return (st.spec, #[st])` (`HmRow.lean:2488-2490`). Otherwise it gives `count` tables (`(Array.range count).mapM`, `2512`; names `tags.tableNames count`, `2519`). `Ins.setup` passes `(spec, sts)` on unchanged (`DeployInputs.lean:252,263`).
+   - What fixes the size for a member session is the scope clause: `sessionOk h t xS` asks `shapeOf xS == shapeOf (h.xS₀ t)` (`Code.lean:381`), with `shapeOf xS = sts.toList.map (·.m)` at `FlockDeploy.setupOf true xS` and `[]` where that is `none` (`Code.lean:352-355`). The reference has length 1 by `templateOk` (`Code.lean:393`), which `SpotFlock.ref_one_table` (`Accepting.lean:83`) proves from `two h s = some d` through `templateOk_of_two` (`Facts.lean:314`).
+   - **A proof reads** `ScopeHeldAt` (a field of `JoinsAt`) at the accepted play, which gives `ScopeHeld A.h m₂`, then `sessionOk` at `stmtAt A.h m₂ t`, then `ref_one_table`. Lengths are equal and 1, so `setupOf true (stmtAt m₂ t) = some (_, _, sts)` with `sts.size = 1` (`[]` would have length 0). Then `rounds` is one `2 * repRounds` (`Deploy.lean:306-307`) and `(K - 2) / 2 = repRounds`. About 30 lines.
+   - **Not established: the premise `two A.h s = some d`.** `two` ignores its argument (`def two (_ : AuditStatement)`, `Code.lean:607`), so this is a fact of `A.h` alone: the registered design evaluates. The compiled check does test it (`stmtOk`'s `(two h s).isSome`, `Code.lean:777`). But I have not read whether `FormAccepts` (`Reading.lean:79`) or any field of `JoinsAt` hands it over. If neither does, it is the one premise the join needs here: a fact of the registration, decidable before any coin.
+2. **The table's name is fixed by the template: follows** [read; derived].
+   - At one table the name is `st.tags.table`. `Stmt.spec` is `{ tables := #[st.tags.table], … }` (`Statement.lean:259-260`), and `setupHidden` and `setupH` return the tags they are given (`return { tags, … }`, `HmRow.lean:2429`, `1608`), which at one table are `setupTables`' own (`2489`).
+   - Those tags are `Read.tags r`, which is `zkTags r.I` under `--zk`. `Zk.tags` is `{ t with identity := … }` (`Zk.lean:410-411`), so `.table` is `r.I.tags.table`, and `r.I.tags` is `Tags.byName? w.statement` (`DeployInputs.lean:223,236`). Under `--zk` the coins are `Zk.coinSpec (tags.tableNames w.count)` (`226`), named from the same tags.
+   - So the name is a function of `w.statement` and `w.count` alone. `PinHeld` (`pinOk`, `Code.lean:664-668`) lets only `draw`, `registered` and `publicFile` differ from `decode (h.xS₀ t)`, so both fields are the reference's, and the name is the reference's tags' `table`.
+   - **A proof reads** `PinHeldAt` (decoded `w` equals `w₀` but for those three fields), then the four lines above. About 40 lines. `JoinsAt`'s `tab t` is then `(Tags.byName? w₀.statement).table` for `w₀ = decode (h.xS₀ t)`.
+   - The name is the same for every template: only two `table :=` occur in `Tags.lean`, `"nl"` (`114`) and `"circuit"` (`125`), and every `verity/flock-circuit` statement inherits `"circuit"` [read]. The session locator tolerates that: `sessLoc` finds the session `t` by the opened tree's index and only then reads `tab t` inside that session's streams (`SessionCoins.lean:97-101`) [read]. A `tab` constant in `t` is fine.
+
+**Item 3**, the restatement under your 06:42Z ruling: I start it now on `-9b17` from `8705d04b3d`, in `Sampled/Record/PartCong.lean` (proof file only, held by `rfl`). `SessionMatch.partition` becomes `PartSame`.
+
+**STOP RULE.** None new. Your four conditions of 06:42Z are mine: stop if a lock record reads `SessionMatch` at the head I push, if the three `rfl`s take over about five minutes or fail to reduce, after two failed tries, or past about 800 lines.
+
+**NEEDS.** Your 06:58Z note never reached me. My inbox branch's history holds 05:49Z, 05:55Z, 06:09Z and 06:42Z only, and this machine (new since my last turn) received only 06:42Z [run]. Please send it again.
+
+**To post.** For ACCEPTS: `-5c1e` at `521933e143` compiles (`0241`). `-9b17` at `8705d04b3d` has not been tried yet; it goes in the next try with the congruence.
+
+**Not established.** Whether `FormAccepts` gives `two A.h s = some d`, for fact 1. Whether `-9b17`'s `by rfl` lines at `8705d04b3d` compile. All of the congruence. Pushed heads: `-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, `-9b17` `8705d04b3de159694e4b3fffe2a294c0bb353c40`; nothing unpushed.
