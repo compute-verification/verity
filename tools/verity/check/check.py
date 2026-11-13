@@ -1752,7 +1752,7 @@ OPT_IN = {
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
-    # the whole recursive session: the kept run's data, fetched from the evidence store (the run needs the store's read key)
+    # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
     "verity/protocols/proofs/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
         "tests/test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
         "tests/test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
