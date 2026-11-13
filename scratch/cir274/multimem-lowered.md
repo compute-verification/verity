@@ -25,3 +25,4 @@ dense and sparse files. Value check: r20261113-053257-b863 at 26d5e1ae (same low
 - 09:39Z REQBLOCK: piece D r20261113-091230-0102: SIZE=96 plant 749 of 1024 differ (749 covered); fix check 0862: P1 P3 pass, typed_records schema-literal on the domain, P3 diff revised (DRAW_DOMAIN constant). (The 09:42Z line above was 09:25Z.)
 - 09:44Z REQBLOCK: fix check 70cd: both diffs, vllm lint 89 passed 0 failed 1 skipped, gate []; 0862: windows 101 passed, repository 392 passed, 1-layer value check 0 mismatches. Multimem head unchanged cb65dbaa.
 - 17:46Z REQBLOCK: #9627 carried: head b9e5c4a0 (0e6e13c3 + main c68135b4) pushed; pins 4d7b nothing stale; collect x7 at b9e5c4a0 equal old in every field; suites 5017 and research.carry running.
+- 18:38Z REQBLOCK: #9627 b9e5c4a0: suites 5017 24/24 passed; research.carry exit 0 merge-only carries; mypy lint 33c4 queued (cluster memory).
