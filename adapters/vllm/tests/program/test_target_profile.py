@@ -66,7 +66,8 @@ def test_canonical_bytes_take_and_refuse_what_json_does():
     value nested 2,000 deep, twice the frames an interpreter allows by default, has its bytes, one that holds itself is a
     ValueError, and one JSON cannot hold is a TypeError that names its type."""
     deep = 2000  # a number, not the interpreter's limit now: code this process ran earlier may have raised that
-    in_lists, in_dicts = 0, 0
+    in_lists: object = 0
+    in_dicts: object = 0
     for _ in range(deep):
         in_lists, in_dicts = [in_lists], {"k": in_dicts}
     assert canonical_bytes(in_lists) == b"[" * deep + b"0" + b"]" * deep
