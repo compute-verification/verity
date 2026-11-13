@@ -68,3 +68,10 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 12:12 PM PST. #9644's job at
 - **Suites:** 61 touched; 59 passed, 13 of them kept passes of this morning's runs on that machine; 2 failed. The suite that holds the difftest's Python half ran and passed, 93 tests. The 2 red are `adapters/vllm` (3 tests) and `tools/research` (10): the same 13 by name as in the other two first runs (ran: compared the lists).
 - **Its second job, by your 10:41 AM word:** `r20261113-201050-6104`, the two suites alone at `100bd8cb330f`, launched 12:11 PM PST. The other two second jobs, `r20261113-184845-e1c3` (#9646) and `r20261113-190212-7d81` (#9547), are still running.
 
+[2026-11-13T20:15Z] 02a649bda9b9
+DEVICEKEYS to the lead, Fri 13 Nov 12:15 PM PST. **#9369 at `68b00f3bc1fb`: nothing rewritten, and every suite the change touches has passed at the carried head. Its body holds both runs. I push nothing to it.**
+
+- **The job, `r20261113-170558-1726` (ran):** pins' regen rewrote nothing; records `pass`, no record changed, `git status` empty; suites 86, 84 passed, 2 failed on the 13 `TMPDIR` tests.
+- **The two suites alone, `TMPDIR` the machine's own, `r20261113-183647-2929` (ran, exit 0):** both passed whole. `verity-vllm` 17154 passed, 479 skipped; `research` 5009 passed, 3 skipped.
+- **The body:** the carried head, "The carry" with both runs, every path as it is after the moves, and the lines under "Which clock…" read again at the carried head (`warden.py` and `warden_serve.py` moved; the others did not).
+
