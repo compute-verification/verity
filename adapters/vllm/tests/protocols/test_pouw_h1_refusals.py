@@ -282,11 +282,11 @@ def test_a_model_key_answer_without_a_hex_key_or_its_digests_is_refused():
     for edit in ({"key": None}, {"key": "zz" * 32}, {"key": 7}):
         with pytest.raises(ValueError, match="^model-key: the answer has no key in hex$"):
             MK.model_key({k: v for k, v in {**answer, **edit}.items() if v is not None})
-    for edit in ({"circuit": "AB" * 64}, {"circuit": "ab" * 63}, {"weights_root": "cd" * 65}, {"weights_root": 7},
-                 {"model": None}, {"model": b"M"}):
+    for named in ({"circuit": "AB" * 64}, {"circuit": "ab" * 63}, {"weights_root": "cd" * 65}, {"weights_root": 7},
+                  {"model": None}, {"model": b"M"}):
         with pytest.raises(ValueError, match=r"^model-key: the answer names no model, circuit and weights' root "
                                              r"\(SHA-512 digests in hex\)$"):
-            MK.model_key({**answer, **edit})
+            MK.model_key({**answer, **named})
 
 
 @pytest.fixture
