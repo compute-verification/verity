@@ -1,7 +1,7 @@
 """The response tie's proof block: one response row of the network certifier's content rows (`content_rows`)
 computed, as the proof block's gates, from the compute side's committed row of the same connection's ids and the
-network certifier's end row of it. Nothing here is in a Spec or proved, and no table holds the rows it reads and
-returns: `content_rows` has their formats alone.
+network certifier's end row of it. Nothing here is in a Spec or proved. The network certifier's tables hold the end
+row it reads and the response row it returns (`content_rows`' "The tables"); no statement here registers its reads.
 
 **One proof block a connection**, of one of two Definitions by the kind of its class: `ResponseTieStop` in a stop
 class, whose rows have a stop word, and `ResponseTieNoStop` in a no-stop class, whose rows have none. Each takes

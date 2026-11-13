@@ -14,6 +14,8 @@ import random
 
 import pytest
 
+from verity.circuits.defs import bind
+from verity.definitions.ops import s8 as OS8
 from verity.protocols.pouw.prover.circuit import eps1_reference as EPS
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import segment as SG
@@ -41,9 +43,6 @@ def _rows(rng, n, k, lo, hi):
 def test_one_design_across_schemes():
     """Both name the one scheme and the one fold, h1tile takes the s8 Boolean kinds the reference's arm serves, and the only
     difference is the receipt view (CP-W, two words a set, vs chains, eight a thread)."""
-    from verity.circuits.defs import bind
-    from verity.definitions.ops import s8 as OS8
-
     assert H.SCHEME == EPS.SCHEME == "eps1-sm120-h1fx1"
     assert H.FOLD == EPS.FOLD == "fx1"
     assert EPS.arm(64) == bind(OS8.S8Dot, **OS8.SMOKE_EDITED)          # the reference's arm is the s8 family

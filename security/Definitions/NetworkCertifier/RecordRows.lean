@@ -3,6 +3,7 @@ module
 public import Definitions.NetworkCertifier.Run
 public import Definitions.NetworkCertifier.Warden
 public import Mathlib.Algebra.GroupWithZero.Nat
+public import Mathlib.Data.Fin.VecNotation
 
 /-!
 # The network certifier's record as rows: a row a bucket, each frame naming its connection
@@ -27,6 +28,9 @@ frames, which the network certifier's admission keeps (at most `lanes` connectio
 ingress past its bound) fails at once, before `adm c + D` too; `certifierLane` fails a lane only at a late cell or a late
 end, so such a lane is not one `certifierCode` gives. A lane whose server sends past `egress_cells` cells fails at the last
 of them (limit): its arrivals are the ones whose cell there never arrives.
+
+`fxQueueSched` is the schedule of the fixture `fxQueue` (three connections on two lanes), one of the Python network
+certifier's egress records that `Proofs.NetworkCertifier.RecordRows` holds the format to.
 -/
 
 @[expose] public section
@@ -108,5 +112,9 @@ def Fits (S n : ℕ) (s : CertifierSchedule κ) : Prop :=
   (∀ c j, j < s.cells c → s.bucket c j < n * F.T) ∧ ∀ b, (F.conns.map fun c => laneLoad s c b).sum ≤ S
 
 end RowsFormat
+
+/-- `fxQueue`: 3 connections; the Python network certifier's egress record, buckets 0 … 9 (every later bucket empty). -/
+def fxQueueSched : CertifierSchedule (Fin 3) :=
+  { r := 2, D := 3, adm := ![1, 2, 6], cells := ![6, 2, 2] }
 
 end NetTiming

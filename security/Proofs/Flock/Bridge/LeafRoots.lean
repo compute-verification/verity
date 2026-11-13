@@ -87,10 +87,10 @@ def depthL (L : LeafMap) (q : ℕ) : ℕ := Flock.log2ceil (L.cnt q)
 first two members; at level 0 the first leaf's frame, or with no leaf the lone pad's. -/
 def spineL (c : Flock.Circuit) (L : LeafMap) (q k : ℕ) : ByteArray :=
   if k = 0 then
-    if L.cnt q = 0 then Registered.frame "pad" [domOf c q, Flock.FV3.uint 0]
-    else Registered.leafInAs (schemaOf c q) (domOf c q) 0 (Flock.Hm96.Default512.treeLeaf (L.dig q 0))
-  else Registered.nodeIn (domOf c q) (k - 1) 0 (TopRoot.lev (domOf c q) (leavesL c L q) (k - 1))[0]!
-    (TopRoot.lev (domOf c q) (leavesL c L q) (k - 1))[1]!
+    if L.cnt q = 0 then Registered.frame "pad" [L.dom q, Flock.FV3.uint 0]
+    else Registered.leafInAs (schemaOf c q) (L.dom q) 0 (Flock.Hm96.Default512.treeLeaf (L.dig q 0))
+  else Registered.nodeIn (L.dom q) (k - 1) 0 (TopRoot.lev (L.dom q) (leavesL c L q) (k - 1))[0]!
+    (TopRoot.lev (L.dom q) (leavesL c L q) (k - 1))[1]!
 
 theorem leavesL_size (c : Flock.Circuit) (L : LeafMap) (q : ℕ) : (leavesL c L q).size = L.cnt q := by
   simp [leavesL]
@@ -106,34 +106,34 @@ theorem leavesL_width (c : Flock.Circuit) (L : LeafMap) (q : ℕ) : ∀ x ∈ le
   exact Flock.Sha512.hash_size _
 
 theorem lev_sizeL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) {k : ℕ} (hk : k ≤ depthL L q) :
-    (TopRoot.lev (domOf c q) (leavesL c L q) k).size = 2 ^ (depthL L q - k) := by
-  have h := TopRoot.lev_size (domOf c q) (leavesL c L q) k (by rw [leavesL_size]; exact hk)
+    (TopRoot.lev (L.dom q) (leavesL c L q) k).size = 2 ^ (depthL L q - k) := by
+  have h := TopRoot.lev_size (L.dom q) (leavesL c L q) k (by rw [leavesL_size]; exact hk)
   rw [leavesL_size] at h
   exact h
 
 theorem lev_widthL (c : Flock.Circuit) (L : LeafMap) (q k : ℕ) {i : ℕ}
-    (hi : i < (TopRoot.lev (domOf c q) (leavesL c L q) k).size) :
-    ((TopRoot.lev (domOf c q) (leavesL c L q) k)[i]!).size = 64 :=
+    (hi : i < (TopRoot.lev (L.dom q) (leavesL c L q) k).size) :
+    ((TopRoot.lev (L.dom q) (leavesL c L q) k)[i]!).size = 64 :=
   TopRoot.lev_width _ _ (leavesL_width c L q) k _ (TopRoot.get!_mem hi)
 
 /-- **Level `k`'s first member is SHA-512 of the spine's frame there**, at every level up to the root's. -/
 theorem hash_spineL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) {k : ℕ} (hk : k ≤ depthL L q) :
-    Flock.Sha512.hash (spineL c L q k) = (TopRoot.lev (domOf c q) (leavesL c L q) k)[0]! := by
+    Flock.Sha512.hash (spineL c L q k) = (TopRoot.lev (L.dom q) (leavesL c L q) k)[0]! := by
   cases k with
   | zero =>
     by_cases h0 : L.cnt q = 0
     · simp [spineL, h0, TopRoot.lev, TopRoot.base, leavesL, Flock.nextPow2, Flock.log2ceil, Registered.hash_frame]
     · have hc : 0 < (leavesL c L q).size := by rw [leavesL_size]; omega
-      have hb : 0 < (TopRoot.base (domOf c q) (leavesL c L q)).size := by
+      have hb : 0 < (TopRoot.base (L.dom q) (leavesL c L q)).size := by
         simp only [TopRoot.base, Array.size_append]
         omega
-      rw [show TopRoot.lev (domOf c q) (leavesL c L q) 0 = TopRoot.base (domOf c q) (leavesL c L q) from rfl,
+      rw [show TopRoot.lev (L.dom q) (leavesL c L q) 0 = TopRoot.base (L.dom q) (leavesL c L q) from rfl,
         getElem!_pos _ 0 hb]
       simp only [TopRoot.base]
       rw [Array.getElem_append_left hc]
       simp [spineL, h0, leavesL, Registered.leafAs_eq]
   | succ k =>
-    have hs : 0 < (TopRoot.lev (domOf c q) (leavesL c L q) k).size / 2 := by
+    have hs : 0 < (TopRoot.lev (L.dom q) (leavesL c L q) k).size / 2 := by
       rw [lev_sizeL c L q (by omega)]
       have h1 : 1 < 2 ^ (depthL L q - k) := Nat.one_lt_two_pow (by omega)
       omega
@@ -142,12 +142,12 @@ theorem hash_spineL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) {k : ℕ} (hk : 
 
 /-- **A port's root is SHA-512 of its spine's frame at its tree's depth.** -/
 theorem root_spineL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) :
-    Flock.FV3.root (domOf c q) (leavesL c L q) Flock.Sha512.hash = Flock.Sha512.hash (spineL c L q (depthL L q)) := by
+    Flock.FV3.root (L.dom q) (leavesL c L q) Flock.Sha512.hash = Flock.Sha512.hash (spineL c L q (depthL L q)) := by
   rw [TopRoot.root_eq, hash_spineL c L q le_rfl, leavesL_size]
   rfl
 
 theorem rootsOfL_getD (c : Flock.Circuit) (L : LeafMap) {q : ℕ} (hq : q < c.ports.size) :
-    (rootsOfL c L).getD q [] = bs (Flock.FV3.root (domOf c q) (leavesL c L q) Flock.Sha512.hash) := by
+    (rootsOfL c L).getD q [] = bs (Flock.FV3.root (L.dom q) (leavesL c L q) Flock.Sha512.hash) := by
   simp [rootsOfL, List.getD_eq_getElem?_getD, hq]
 
 /-- **Two ports with one root hash their spines' frames at their depths to one digest.** -/
@@ -163,10 +163,10 @@ theorem spine_child {c : Flock.Circuit} {L : LeafMap} {q' q k' k : ℕ} (hk' : 1
     (hk : 1 ≤ k) (hkD : k ≤ depthL L q) (h : spineL c L q' k' = spineL c L q k) :
     Flock.Sha512.hash (spineL c L q' (k' - 1)) = Flock.Sha512.hash (spineL c L q (k - 1)) := by
   rw [hash_spineL c L q' (by omega), hash_spineL c L q (by omega)]
-  have h2' : 1 < (TopRoot.lev (domOf c q') (leavesL c L q') (k' - 1)).size := by
+  have h2' : 1 < (TopRoot.lev (L.dom q') (leavesL c L q') (k' - 1)).size := by
     rw [lev_sizeL c L q' (by omega)]
     exact Nat.one_lt_two_pow (by omega)
-  have h2 : 1 < (TopRoot.lev (domOf c q) (leavesL c L q) (k - 1)).size := by
+  have h2 : 1 < (TopRoot.lev (L.dom q) (leavesL c L q) (k - 1)).size := by
     rw [lev_sizeL c L q (by omega)]
     exact Nat.one_lt_two_pow (by omega)
   simp only [spineL, ite_eq_right (show k' ≠ 0 by omega), ite_eq_right (show k ≠ 0 by omega), Registered.nodeIn,
@@ -176,7 +176,7 @@ theorem spine_child {c : Flock.Circuit} {L : LeafMap} {q' q k' k : ℕ} (hk' : 1
 
 /-- **A frame at level 0 of one spine equal to a frame of another has its domain.** -/
 theorem spine_bottom0 {c : Flock.Circuit} {L : LeafMap} {q' q k : ℕ} (h : spineL c L q' 0 = spineL c L q k) :
-    domOf c q' = domOf c q := by
+    L.dom q' = L.dom q := by
   unfold spineL at h
   rw [ite_eq_left rfl] at h
   by_cases hk : k = 0
@@ -200,7 +200,7 @@ theorem spine_bottom0 {c : Flock.Circuit} {L : LeafMap} {q' q k : ℕ} (h : spin
 
 /-- **Two equal frames of two spines, one of them at level 0, have one domain.** -/
 theorem spine_bottom {c : Flock.Circuit} {L : LeafMap} {q' q k' k : ℕ} (h0 : k' = 0 ∨ k = 0)
-    (h : spineL c L q' k' = spineL c L q k) : domOf c q' = domOf c q := by
+    (h : spineL c L q' k' = spineL c L q k) : L.dom q' = L.dom q := by
   rcases h0 with rfl | rfl
   · exact spine_bottom0 h
   · exact (spine_bottom0 h.symm).symm
@@ -212,7 +212,7 @@ theorem dom_of_spine {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ}
       ¬ (spineL c L q' (depthL L q' - i) ≠ spineL c L q (depthL L q - i) ∧
         Flock.Sha512.hash (spineL c L q' (depthL L q' - i)) = Flock.Sha512.hash (spineL c L q (depthL L q - i))))
     (h0 : Flock.Sha512.hash (spineL c L q' (depthL L q')) = Flock.Sha512.hash (spineL c L q (depthL L q))) :
-    domOf c q' = domOf c q := by
+    L.dom q' = L.dom q := by
   have hall : ∀ i, i ≤ min (depthL L q') (depthL L q) →
       spineL c L q' (depthL L q' - i) = spineL c L q (depthL L q - i) := by
     intro i
@@ -246,7 +246,7 @@ def spineColl (c : Flock.Circuit) (L : LeafMap) (q' q : ℕ) : Option ℕ :=
     decide (spineL c L q' (depthL L q' - i) ≠ spineL c L q (depthL L q - i) ∧
       Flock.Sha512.hash (spineL c L q' (depthL L q' - i)) = Flock.Sha512.hash (spineL c L q (depthL L q - i)))
 
-theorem spineColl_ne_none {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ} (hd : domOf c q' ≠ domOf c q)
+theorem spineColl_ne_none {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ} (hd : L.dom q' ≠ L.dom q)
     (h0 : Flock.Sha512.hash (spineL c L q' (depthL L q')) = Flock.Sha512.hash (spineL c L q (depthL L q))) :
     spineColl c L q' q ≠ none := by
   intro hn
@@ -257,7 +257,7 @@ theorem spineColl_ne_none {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ} (hd : d
 /-- The first pair of ports, earlier first, with one registered root at `L` and different domains. -/
 def collPairL (c : Flock.Circuit) (L : LeafMap) : Option (ℕ × ℕ) :=
   (PortRoots.pairs c.ports.size).find? fun p =>
-    decide ((rootsOfL c L).getD p.1 [] = (rootsOfL c L).getD p.2 [] ∧ domOf c p.1 ≠ domOf c p.2)
+    decide ((rootsOfL c L).getD p.1 [] = (rootsOfL c L).getD p.2 [] ∧ L.dom p.1 ≠ L.dom p.2)
 
 /-- **The collision a registration's roots at a leaf map expose**: at `collPairL`'s two ports, their spines' frames
 at `spineColl`'s level. -/

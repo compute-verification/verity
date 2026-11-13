@@ -69,8 +69,10 @@
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`, `verity.hardware.registration`). The verifier passes
-  the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
-  it holds when it samples (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
+  the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
+  "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
+  before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
+  window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
   (`Spot.Registration.declaredCode`), which `verifier.check` runs beside it.
@@ -137,7 +139,7 @@ from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import draw as D, partition as P, registered as G
+from . import draw as D, link_points as LP, partition as P, registered as G
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
@@ -232,7 +234,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-          held: Sequence[str] | None = None, day: int | None = None,
+          held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None) -> Verdict:
@@ -280,7 +282,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
-    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`)."""
+    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
+    form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
+    refuses the record when a member's fewest and most sampled units give different link points
+    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
+    sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -408,6 +414,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
     if shared:
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
+    if members:
+        try:
+            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+        except (P.QueryRefused, ValueError) as e:
+            c.fail("link-points", str(e))
+        else:
+            if refused:
+                c.fail("link-points", {"members": refused})
     return c.verdict(fanout=fan, rests_on_period_check=through)
 
 

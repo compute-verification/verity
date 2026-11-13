@@ -41,4 +41,6 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
 `honest`, or `skip:F`, a fraction F of the chunks dropped); it writes `verifier.json`, `prover.json` and their logs, which
 `summary.py`, `sampling_inputs.py` and `gate_whatif.py` read. **Backs:** its line reads the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` and `HeldOverTimeLinks`, and `Properties.RemoteAudit.Line`'s `LineHeld` and
-`LineHeldIdentity` state that line holds, with the named assumption `NoOutsideCompute` among their premises.
+`LineHeldIdentity` state that line holds, with the named assumption `NoOutsideCompute` among their premises. The
+line's error reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): the table prints it in those words
+(`ledger.DELTA_FORM`) with δ's number after them, and every error of the document names the term (`NAMED_TERMS`).

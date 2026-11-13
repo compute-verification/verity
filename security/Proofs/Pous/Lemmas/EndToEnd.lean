@@ -7,12 +7,12 @@ public import Properties.Pous.EndToEnd
 
 The two non-vacuity lemmas beside `Properties.Pous.EndToEnd`'s ring-model properties: the honest full-state server
 passes P2's audit, and `EndToEndRing`'s event, with probability 1. Neither is a property, nor a witness of one: a witness
-constructs its instance, and each quantifies over every `W` (and the session's id and binding). Each is a `def G : Prop`
+constructs its instance, and each quantifies over every `W` (and the session's id). Each is a `def G : Prop`
 under the properties' namespace, proved by the `SecurityProofs` theorem of its name in lower camel case, and audited
 with the proofs: no record pins it.
 
 * `HonestPassesRing`: the honest full-state server passes P2's ring audit (`seqAcceptsOn`) with probability 1.
-* `HonestPassesAccepts`: it passes the session with probability 1, for every 32-byte session id, binding and `W`.
+* `HonestPassesAccepts`: it passes the session with probability 1, for every 32-byte session id and `W`.
 -/
 
 @[expose] public section
@@ -32,10 +32,10 @@ def HonestPassesRing : Prop :=
     ∀ W, pr (seqAcceptsOn sch 105 W A₁ A₂) = 1
 
 /-- **Non-vacuity of `EndToEndRing`'s event, in the ring model, with `ω` uniform**: the honest full-state server, a
-`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id, binding and `W`: the code
-always builds the coin tree, and the sample never fails (`ε_rs = 0`, `DrawExact`). -/
+`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id and `W`: the code always
+builds the coin tree, and the sample never fails (`ε_rs = 0`, `DrawExact`). -/
 def HonestPassesAccepts : Prop :=
-  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
-    pr (Passes session binding W A) = 1
+  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ W : Bits sch.n,
+    pr (Passes session W A) = 1
 
 end Pous.EndToEnd

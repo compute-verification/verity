@@ -285,9 +285,11 @@ def check_block_statics(D_: int, BN: int) -> None:
         raise ValueError(f"FlashMlaBlock: D={D_} and BN={BN} must be multiples of 16")
 
 
-def block(o: Ops, S, dot, q, k, nm_prev=None, l_prev=None, o_prev=None):
-    """`FlashMlaBlock_v1`'s body over ``o``'s steps, ``dot`` the score chain (`DotBf16{K = D, DOT}`)."""
+def block(o: Ops, S, dot, q, k, nm_prev=None, l_prev=None, o_prev=None, DV: int | None = None):
+    """`FlashMlaBlock_v1`'s body over ``o``'s steps, ``dot`` the score chain (`DotBf16{K = D, DOT}`).  ``DV``: the value is a
+    row's first DV elements and O that wide (default: the whole row, D)."""
     B, D_, BN, FIRST, T, L = o.B, S.D, S.BN, S.FIRST, o.T, o.leaf
+    DV = D_ if DV is None else DV
     check_block_statics(D_, BN)
     RS = D_ * L + 1                               # a staged row's leaves: its elements', then its validity bit
     scale = o.word(scale_log2_bits(S.SCALE))
@@ -311,11 +313,11 @@ def block(o: Ops, S, dot, q, k, nm_prev=None, l_prev=None, o_prev=None):
             acc = o.add(acc, p[c])
         lanes.append(acc if FIRST else o.fma(l_prev[t], r, acc))
     pb = [o.cvt(x) for x in p]
-    out = [o.word(0)] * D_ if FIRST else list(B.batch(o._defs["mul"], o_prev, r, axes=(0, None)))
+    out = [o.word(0)] * DV if FIRST else list(B.batch(o._defs["mul"], o_prev, r, axes=(0, None)))
     for ks in range(BN // 16):
         k0 = 16 * ks
         prow = Coll(Array(16, T.bf16), concat([pb[k0 + j].refs for j in range(16)]))
-        vt = Coll(Array(D_, Array(16, T.bf16)), concat([strided_view(k, k0 * RS + d * L, L, RS, 1, 16 * L) for d in range(D_)]))
+        vt = Coll(Array(DV, Array(16, T.bf16)), concat([strided_view(k, k0 * RS + d * L, L, RS, 1, 16 * L) for d in range(DV)]))
         out = list(B.batch(S.DOT, array_of(out), prow, vt, axes=(0, None, 0)))
     return tuple_of(nm, array_of(lanes), array_of(out))
 
@@ -341,6 +343,22 @@ def check_split_statics(NB: int) -> None:
         raise ValueError(f"FlashMlaSplit: NB={NB} blocks")
 
 
+def split_end(o: Ops, partial: bool, nm, l, acc, sink=None):
+    """A split's end from its last block's state (the module docstring's step 3): the bf16 output with the sink folded in, or
+    (``partial``) the f32 partial and its lse."""
+    B = o.B
+    total = o.add(o.add(l[0], l[1]), o.add(l[2], l[3]))
+    empty = o.eq(total, o.word(0))
+    mul = o._defs["mul"]
+    if not partial:
+        den = o.add(total, o.exp2(o.add(o.mul(sink, o.word(L2E)), nm)))
+        scale = o.sel(empty, o.word(0), o.rcp1(den))
+        return B.batch(o._defs["cvt"], B.batch(mul, acc, scale, axes=(0, None)), axes=(0,))
+    scale = o.sel(empty, o.word(0), o.rcp1(total))
+    lse = o.sel(empty, o.word(F_NINF), o.add(o.log2(total), o.neg(nm)))
+    return tuple_of(B.batch(mul, acc, scale, axes=(0, None)), lse)
+
+
 def split(o: Ops, S, tile_of, q, k, sink=None):
     """`FlashMlaSplit_v1`'s body, ``tile_of(first)`` the bound block."""
     B, NB, BN = o.B, S.NB, S.BN
@@ -350,16 +368,7 @@ def split(o: Ops, S, tile_of, q, k, sink=None):
         kb = k[b * BN:(b + 1) * BN]
         res = B.call(tile_of(True), q, kb) if b == 0 else B.call(tile_of(False), q, kb, nm, l, acc)
         nm, l, acc = res[0], res[1], res[2]
-    total = o.add(o.add(l[0], l[1]), o.add(l[2], l[3]))
-    empty = o.eq(total, o.word(0))
-    mul = o._defs["mul"]
-    if not S.PARTIAL:
-        den = o.add(total, o.exp2(o.add(o.mul(sink, o.word(L2E)), nm)))
-        scale = o.sel(empty, o.word(0), o.rcp1(den))
-        return B.batch(o._defs["cvt"], B.batch(mul, acc, scale, axes=(0, None)), axes=(0,))
-    scale = o.sel(empty, o.word(0), o.rcp1(total))
-    lse = o.sel(empty, o.word(F_NINF), o.add(o.log2(total), o.neg(nm)))
-    return tuple_of(B.batch(mul, acc, scale, axes=(0, None)), lse)
+    return split_end(o, S.PARTIAL, nm, l, acc, sink)
 
 
 def _split_type(S, T: Types = WORD_T):
@@ -386,9 +395,9 @@ def check_combine_statics(NS: int) -> None:
         raise ValueError(f"FlashMlaCombine: NS={NS} splits (one split is written by the decode itself)")
 
 
-def combine(o: Ops, S, lse, oacc, sink):
-    """`FlashMlaCombine_v1`'s body."""
-    B, NS = o.B, S.NS
+def combine_scale(o: Ops, NS: int, lse, sink=None):
+    """-g of a request's NS splits, g the log2 of what the partials are weighed against (the module docstring's step 4):
+    split s weighs exp2(lse[s] - g).  ``sink`` None: the call gives no sink and the kernel skips its term."""
     check_combine_statics(NS)
     mx = o.word(F_NINF)
     for s in range(NS):
@@ -404,11 +413,18 @@ def combine(o: Ops, S, lse, oacc, sink):
         lanes.append(acc)
     total = D.halving_tree(lanes, lambda a, b: a if b is None else b if a is None else o.add(a, b))
     g = o.sel(o.eq(total, o.word(0)), o.word(F_PINF), o.add(o.log2(total), mx))
-    sl2e = o.word(L2E)
-    g_sink = o.add(g, o.log2(o.add(o.word(F_ONE), o.exp2(o.fma(sink, sl2e, o.neg(g))))))
-    g_none = o.sel(o.eq(sink, o.word(F_NINF)), o.word(F_PINF), o.mul(sink, sl2e))
-    g = o.sel(o.eq(g, o.word(F_PINF)), g_none, g_sink)
-    ng = o.neg(g)
+    if sink is not None:
+        sl2e = o.word(L2E)
+        g_sink = o.add(g, o.log2(o.add(o.word(F_ONE), o.exp2(o.fma(sink, sl2e, o.neg(g))))))
+        g_none = o.sel(o.eq(sink, o.word(F_NINF)), o.word(F_PINF), o.mul(sink, sl2e))
+        g = o.sel(o.eq(g, o.word(F_PINF)), g_none, g_sink)
+    return o.neg(g)
+
+
+def combine(o: Ops, S, lse, oacc, sink):
+    """`FlashMlaCombine_v1`'s body."""
+    B, NS = o.B, S.NS
+    ng = combine_scale(o, NS, lse, sink)
     fma = o._defs["fma"]
     res = o.word(0)
     for s in range(NS):

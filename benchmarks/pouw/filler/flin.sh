@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dcap.cu's fused filler (flin.cuh) on one leased GPU (cwd = the source tree): the decode linears as a warp-specialized GEMM
 # whose filler warps run the DRAM-free chain while its consumers wait on memory. Under one lease: fgate (every linear's
-# output on every row and the filler's receipts, bit for bit) and CAP's gate first, and nothing is timed unless both pass;
+# output on every row and the filler's receipts, bit for bit) and dcap's gate first, and nothing timed unless both pass;
 # then each linear's 32 layers against cuBLASLt (flin), ncu's DRAM and tensor-pipe counters for a few configurations, and
 # the decode step with its linears through flin (fstep). The round's coins are flipped once per run (coins.txt). Clocks are
 # read, never set.
@@ -18,8 +18,8 @@
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS[:ALZ]]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
 # details, raw and SASS pages), FL_REPS,
-# FL_GATE (0 skips CAP's gate), FL_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler; empty builds pfill.cuh's,
-# -DPFILL_BITS its {0,1} tile)
+# FL_GATE (0 skips dcap's gate), FL_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler;
+# empty builds pfill.cuh's, -DPFILL_BITS its {0,1} tile)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH

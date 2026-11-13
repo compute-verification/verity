@@ -13,12 +13,12 @@ and a Hypothesis strategy of inputs, invalid ones included. There are two kinds,
   not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 
 `run` keeps one server process open, feeds both sides every input the strategy samples, and fails with a `Mismatch` on the
-first difference, shrunk by Hypothesis to a minimal input; a reference that raises something it doesn't declare, and a
-server that faults or dies, are differences too. A run is deterministic: Hypothesis samples from `seed` (`derandomize`, no
-example database, no deadline) and from its own constants alone (`_no_local_constants`), so `run(port, examples=N,
-seed=S)` finds the same minimal input again whatever modules the process has loaded, and `replay(port, value)` compares
-one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
-never answers hangs its test.
+first difference, shrunk by Hypothesis to a minimal input (as it was sampled under `shrink=False`); a reference that raises
+something it doesn't declare, and a server that faults or dies, are differences too. A run is deterministic: Hypothesis
+samples from `seed` (`derandomize`, no example database, no deadline) and from its own constants alone
+(`_no_local_constants`), so `run(port, examples=N, seed=S)` finds the same minimal input again whatever modules the
+process has loaded, and `replay(port, value)` compares one input. Nothing here reads a clock or times out
+(`tests/test_no_wall_clock.py`): a port whose Lean never answers hangs its test.
 
 A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
 skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/pouw/verifier/verifier.py`). Either way the
@@ -68,8 +68,9 @@ class BuildError(Exception):
 
 
 class Mismatch(AssertionError):
-    """Lean and Python differ on `input` (the minimal one Hypothesis found): `lean` and `python` are each side's
-    `Outcome`, and `of_record` is the port's side of record, whose verdict the message holds the other to."""
+    """Lean and Python differ on `input` (the minimal one Hypothesis found, or the first of an unshrunk run): `lean` and
+    `python` are each side's `Outcome`, and `of_record` is the port's side of record, whose verdict the message holds the
+    other to."""
 
     def __init__(self, label: str, value: Any, lean: Outcome, python: Outcome, of_record: str = "python"):
         self.label, self.input, self.lean, self.python, self.of_record = label, value, lean, python, of_record
@@ -403,19 +404,22 @@ def _no_local_constants() -> Iterator[None]:
         providers.CONSTANTS_CACHE.cache.clear()
 
 
-def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
+def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None,
+        shrink: bool = True) -> Stats:
     """Sample `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
     count the outcomes of the side of record by kind.  Hypothesis is imported here, so the server, `build` and `replay` run
-    without it."""
-    from hypothesis import HealthCheck, given, settings
+    without it. Without `shrink` the `Mismatch` is of the first input the sides differ on, as it was sampled: for a run that
+    expects one, on inputs of megabytes that Hypothesis would compare many times more to shrink."""
+    from hypothesis import HealthCheck, Phase, given, settings
     from hypothesis import seed as use_seed
 
     seen: dict[str, int] = {}
 
     @use_seed(seed)
     @settings(derandomize=True, database=None, deadline=None, max_examples=examples, report_multiple_bugs=False,
-              suppress_health_check=[HealthCheck.too_slow])
+              suppress_health_check=[HealthCheck.too_slow],
+              phases=[p for p in settings.default.phases if shrink or p is not Phase.shrink])
     @given(port.inputs)
     def differential(value: Any) -> None:
         _compare(port, s, value, seen)
@@ -428,7 +432,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
             e.report = "\n".join([
                 f"difftest of {port.label!r} ({s.argv[0]}): "
                 + ("Python differs from the Lean, the verifier of record" if lean_of_record else "Lean and Python differ")
-                + "; the minimal input Hypothesis found:",
+                + f"; the {'minimal' if shrink else 'first'} input Hypothesis found:",
                 f"  input:  {canonical(e.input)}",
                 f"  lean:   {_show(e.lean)}" + ("  (of record)" if lean_of_record else ""),
                 f"  python: {_show(e.python)}",

@@ -65,7 +65,7 @@ def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id:
 
 def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-test"):
     """Commit `steps[s]` on the direct staging path -> (committer, run commitment); missing steps below the last are placeholders."""
-    com = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    com = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=hashlib.sha512(b"program").digest())
     stream = []
     for s in range(max(steps) + 1 if steps else 0):
         tensors = []

@@ -7,18 +7,32 @@ import itertools
 import random
 
 import pytest
-
 from pous_fakes import Clock
+
 from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.protocols.pous.verifier import setup
-from verity.protocols.pous.verifier.audit import (DEADLINE_NS, HonestResponder, UnsignedRounds, challenge_key, deadline_rounds, run_timed,
-                               simulate)
+from verity.protocols.pous.verifier.audit import (
+    DEADLINE_NS,
+    HonestResponder,
+    UnsignedRounds,
+    challenge_key,
+    deadline_rounds,
+    run_timed,
+    simulate,
+)
 from verity.protocols.pous.verifier.oracle import PQuery, Tweak, pure
 from verity.protocols.pous.verifier.params import Params
 from verity.protocols.pous.verifier.primitives import reference
 from verity.protocols.pous.verifier.scheme import encode
-from verity.protocols.pous.verifier.verifier import (MerkleTree, VerifierKey, leaf_hash, node_hash, path_length, tree,
-                                                 verify_path)
+from verity.protocols.pous.verifier.verifier import (
+    MerkleTree,
+    VerifierKey,
+    leaf_hash,
+    node_hash,
+    path_length,
+    tree,
+    verify_path,
+)
 
 PARAMS = Params(8, 64, 3, 3)
 PRIMS = reference(PARAMS)

@@ -12,10 +12,11 @@ committed token id and the rank's static range.  The Match record holds no value
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
+
+from verity_vllm.query.manifest.format import query_id_digest
 
 FAMILY = "vocab_range"
 MEMBER = "vocab_range"
@@ -97,7 +98,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
+    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
                required_families=[*q.get("required_families", []), FAMILY])
     out["vocab_range"] = {"family": FAMILY, "member": MEMBER, "layout": [n for n, _p in LAYOUT], **stats}
     return out

@@ -57,6 +57,7 @@ untraced = [
     "tests/test_lean_typed_statement.py",
     "tests/test_lean_typed_template.py",
     "tests/test_lean_verifier.py",
+    "tests/test_lean_verify_members.py",
     "tests/test_lean_width_refusals.py",
     "tests/test_lean_zk.py",
     "tests/test_lean_zk_mask.py",
@@ -105,7 +106,9 @@ inputs = [
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
     # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
     "verity/difftest/python/verity_difftest", "verity/difftest/lean", "verity/protocols/recursion/verifier/firewall",
-          "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py"]
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py",
+          # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
+          "verity/settings.py", "verity/configuration/config/verity_config"]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
 worker_gb = 16
@@ -227,6 +230,7 @@ tests = [
     "tests/test_lean_typed_reads.py",
     "tests/test_lean_typed_statement.py",
     "tests/test_lean_typed_template.py",
+    "tests/test_lean_verify_members.py",
 ]
 paths = ["tools/research/src/research"]
 

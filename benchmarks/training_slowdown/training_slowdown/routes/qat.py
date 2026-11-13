@@ -12,9 +12,10 @@ V's, straight through the rounding, and Muon steps V.
 
 A step decodes each matrix from the codes the step before left (`SparseTernary.apply` on θ's own copy of the
 matrix; the first step's codes are zero, so it reads θ), runs its forwards and backwards on that, steps the latents,
-and rounds them into the next step's codes. So one step hands the next each matrix's codes, two bool planes and its
-scales, which is all the next forward reads of the training; the latents and Muon's momentum, which it hands on
-too, only the update rule reads.
+and rounds them into the next step's codes. The forward runs under bf16 autocast on every device, as `subset`'s
+does, so a job on a CPU runs the program a job on a GPU does. So one step hands the next each matrix's codes, two
+bool planes and its scales, which is all the next forward reads of the training; the latents and Muon's momentum,
+which it hands on too, only the update rule reads.
 
 The latents are parameters θ has none of, and θ's copies and the codes are buffers no state dict holds: θ's load
 leaves them as built, but for each copy, which takes θ's matrix as loaded, in θ's own dtype. A kept state's load,
@@ -104,7 +105,7 @@ def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
         for layer in layers:
             layer.weight.copy_(SparseTernary.apply(layer.start, layer.scales, layer.plus, layer.minus))
     for x in rows.chunk(dials["micro_batches"]):
-        with torch.autocast(x.device.type, dtype=torch.bfloat16, enabled=x.device.type == "cuda"):
+        with torch.autocast(x.device.type, dtype=torch.bfloat16):
             logits = model(x[:, :-1])
         loss = F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
         (loss * (len(x) / len(rows))).backward()
