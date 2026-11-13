@@ -24213,9 +24213,14 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8", "Pouw.PearlC.Assumptions.W1CompleteH100"],
+    "assumptions": [],
     "domain": [],
-    "open": ["Pouw.PearlC.Adversary.Bounded", "Pouw.PearlC.Workload.InDomain"],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8",
+     "Pouw.PearlC.Assumptions.W1CompleteH100",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
     "reads": [
      "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
      "Pouw.PearlC.Assumptions.TTOutTileW1",
@@ -24231,9 +24236,14 @@
    "signature": ["Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192"],
    "assumptions": [],
    "premises": {
-    "assumptions": ["Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8", "Pouw.PearlC.Assumptions.W1CompleteH100"],
+    "assumptions": [],
     "domain": [],
-    "open": ["Pouw.PearlC.Adversary.Bounded", "Pouw.PearlC.Workload.InDomain"],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8",
+     "Pouw.PearlC.Assumptions.W1CompleteH100",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
     "reads": [
      "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
      "Pouw.PearlC.Assumptions.TTOutTileW1",
@@ -34304,15 +34314,6 @@
     "FlockSoundness.Assumptions.UniformRandomBytesTest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
    }
   },
-  "Definitions.Assumptions.PearlC": {
-   "digest": "02c5a71042c95c9ae2579b9a46e77676e93b15e026c6ddcdd8efe6e4b3046637",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
-    "Pouw.PearlC.Assumptions.W1CompleteH100": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
-    "Pouw.PearlC.CostModel.DominatedWithin": "38b733b0a1bade47cc584f180c4d73fae9ad09b590d6b87ee40fe7597184ca8f",
-    "Pouw.PearlC.W1.W1Device.s8H100Best": "8de5c71192e3bf6f3a11e89901258ab8dfc6baeb7f01f053679fd233668cd49f"
-   }
-  },
   "Definitions.Assumptions.Pouw": {
    "digest": "efdf273874d92486e0a8367f4875bc6090c6146b359059f17a8b4894b8ea0707",
    "definitions": {
@@ -39563,6 +39564,15 @@
    "definitions": {
     "Pouw.PearlC.pearlCProtocolDevRev1KRowCap": "73cf6c5bde80581358c4771008ff2389d2d6574fe661e38e1842af3295b0fea1",
     "Pouw.PearlC.pearlCTilesDevRev1KRowCap": "bb8b060e2a730ffb3d8561cdab8cc6ff646998428045966eb230d50e4e22ecb0"
+   }
+  },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutS8": {
+   "digest": "02c5a71042c95c9ae2579b9a46e77676e93b15e026c6ddcdd8efe6e4b3046637",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
+    "Pouw.PearlC.Assumptions.W1CompleteH100": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
+    "Pouw.PearlC.CostModel.DominatedWithin": "38b733b0a1bade47cc584f180c4d73fae9ad09b590d6b87ee40fe7597184ca8f",
+    "Pouw.PearlC.W1.W1Device.s8H100Best": "8de5c71192e3bf6f3a11e89901258ab8dfc6baeb7f01f053679fd233668cd49f"
    }
   },
   "Definitions.Pouw.Assumptions.PearlC.TTOutUOnly": {
