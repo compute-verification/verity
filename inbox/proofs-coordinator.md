@@ -116993,3 +116993,48 @@ Mailbox read at `6afa7ee890`: your 03:00Z message taken. I push nothing to #9520
 **Not established:** that `Sample.lean`, `Units.lean`, and the restated `States.lean` and `Passes.lean` compile in the tree; `Run.lean` and `Passes.lean` at the older head (`0c5b` has no verdict); `Reads.lean` and `WindowPasses` are not written; whether soundness's merged files compile on my branch (I compiled none of theirs). `FormAccepts` (an accept on parameters naming members is one of the form) stays MEMBERS' lift: on this branch it holds only because the check refuses such parameters.
 
 **To post:** nothing.
+
+## NEEDEDBITS, Fri 13 Nov 03:14Z: `NeededBitsHeld.lean` COMPILES WHOLE (`r20261113-022741-ab80`, `0a2a205017`): `NeededBits h` with no premise, `WrittenOnce h` with no hypothesis, `RowsArePorts h` at an accepted design. The output fact is written to the 02:43Z ruling and is in try `r20261113-031031-d9f9`. No Friday template returns an input or its constant: read from the writer, not decided on the 20 files, which no kept run holds
+
+Compiled [run]: `security/Proofs/Flock/SpotFlock/NeededBitsHeld.lean` at `0a2a205017`, in `r20261113-022741-ab80` (vy-nebius-2): "lean exit 0 in 1209 s", "none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". With `NeededBitsOf.lean` (`aba961b663`, `r20261113-010728-cdf5`) that is two files of mine compiled. `OutputsWritten.lean` has not compiled.
+
+In plain words: three of the facts the connected statement lists are now proved from what the verifier already checks, with nothing assumed. Every bit an inner block reads from outside itself is a bit of one of its input rows. No bit of an output row is written twice. Every row a bit is read from or written to is a row port of its circuit file. The fourth fact says every bit of an output row, below the row's real words, is written by some inner block. It is written and not compiled, and it still assumes one thing the verifier does not check today: that an inner block returns only values it computed. For Friday's 20 circuit files that holds by how the files are written, which I read. I could not check it on the files themselves, because the kept runs do not keep them.
+
+**Compiled, by name** [run: `r20261113-022741-ab80`]
+- `SpotFlock.membersRowed_of_two (hd : two h s = some d) : MembersRowed h`.
+- `SpotFlock.neededBits_held (h : Held) : NeededBits h`. No premise: an accepted run gives the design.
+- `SpotFlock.writtenOnce_held (h : Held) : WrittenOnce h`.
+- `SpotFlock.rowsArePorts_of_two (hd : two h s = some d) : RowsArePorts h`.
+- [derived] These are `hM`, `hO` and `hR` of FRAME's `addressesConnected_of_rowed`. I have not built them together with FRAME's `AddressesGive.lean`.
+
+**The output fact, written to the 02:43Z ruling** [not compiled; `security/Proofs/Flock/SpotFlock/OutputsWritten.lean` at `ef7f3403a4`]
+- (a) `SpotFlock.outputsWritten_of_two (hd : two h s = some d) (hC : ∀ t ht, OutsComputed h.ms[t].1) (ht) (hu : u < h.ms[t].2.size) (ho : o < h.ms[t].1.outPorts.size) (hb : bit < 16 * (HmOut.outGroup h.ms[t].1 o).2.2.2) : ∃ x, (x, t, ⟨(h.ms[t].1.ports.getD (HmOut.nIn h.ms[t].1 + o) default).name, u, bit⟩) ∈ writtenBits h.ms`.
+- `SpotFlock.outputsWritten_at_port`: the same at a port index `q` with `HmOut.nIn c ≤ q < c.ports.size`, `w` the words of output row `q − nIn c`. It is for `wiresMove`, which holds a port and not an output row's index.
+- (b) The hypothesis is `Flock.Bridge.NeededBitsOf.OutsComputed c`: `∀ k < c.upv, ∀ j < (c.leavesOut.getD k #[]).size, ∀ t < 16, nIn ≤ outCol c j t ∧ outCol c j t < nIn + nComp`, with `nIn` and `nComp` those of `Spot.Bits.Rows.ofNet c.unit`.
+  - `outsComputedB c : Bool` is the same clause decided, word for word `Spot.Bits.check`'s (`nIn = min (inWords · WORD) constPos`, `nComp = constPos − nIn`), for FRAME to paste into `templateOk`. `outsComputed_of_b : outsComputedB c = true → OutsComputed c` is the discharge.
+  - [derived] With `min` in the clause its `nIn` and `nComp` are `Rows.ofNet`'s by definition, so `inWords · WORD ≤ constPos` is not needed. My 02:13Z entry said it was; that was wrong. The two `rfl`s in `outsComputed_of_b` test this in the try.
+- Try: `r20261113-031031-d9f9` (vy-nebius-2, `ef7f3403a4`), launched 03:10Z, expected to end by 03:45Z [guess].
+- The earlier wording is the second file of `ab80`. It began building at 03:03Z in another build tree, and `ab80`'s 45-minute limit ends at 03:19Z, so I expect it cut [guess]. `d9f9` replaces it.
+
+**Friday's templates: does any return an input or its constant?** No, by how each file is written [read]. Not decided on the 20 files [not run].
+- [read: `benchmarks/one_stage/two_stage.py:724–760` and `:782–789`, `verity/protocols/flock/prover/python/verity_flock/class_statement.py:1228–1241`, `:861–899`, `:1109`, at `5ad83c84ef5e`] Each template's circuit file, the reference's and the sessions', is `member_stager`'s: `UnitStager(definition, "unit/<id>", …)` with no `layout`, `structural` false and `reads` inline. So each is a flat statement whose unit is laid out by `ir_lower.layout`.
+- [read: `verity/protocols/flock/prover/python/verity_flock/ir_lower.py:753–838` at `5ad83c84ef5e`] `layout` writes the input port groups first, then the ANDs, the table reads and the assertions, then each output port's bits as copy rows (`rows_a.append(form(w))`, `rows_b.append(["C"])`), then the constant: `const = len(rows_a)` after the output group is closed. With no `out_split` there is one output group, opened at `c · WORD = len(rows_a)`, so port `j`'s bit `t` is column `c · WORD + 16 j + t`, which is `outCol c j t`.
+- [read: `verity/protocols/flock/verifier/Flock/Net.lean:193`, `:275`] The verifier takes `constPos` from the header's `const`, and `inWords` as the last input group's `col + words`, which is the writer's `in_words`. So `nIn = inWords · WORD ≤ outCol c j t < constPos = nIn + nComp` for each output port `j` and each `t < 16`.
+- [not read] The clause ranges `j` over each instance's `leavesOut`. That its size is the unit's output port count on these files I did not read.
+- [run: `r20261113-025620-adeb`, `r20261113-030328-3f6c`, vy-nebius-2] No kept run holds the files:
+  - `out/tables/second/references/m0` to `m19` of `r20261113-011523-7b90` hold `pub.bin` only;
+  - `out/second/references/m0` of `r20261113-011443-b025` holds `pub.bin` only (208,782 bytes); `b025` ended rc 0 at 02:59Z and its scratch directory is gone;
+  - no `circuit.txt` newer than 12 Nov 12:00Z is under a `references` directory in `/workspace/tmp` or `/workspace/research/scratch`, to depth 8.
+  - [relayed: GATHER's 01:50Z entry] `two_stage_small.sh`'s filter drops `circuit.txt`.
+- [guess] The cheapest [run]: the next rehearsal keeps, per template, the `flock-ir-unit/v2` header line and the `LEAVES` line of `references/m<k>/circuit.txt`, which is all the clause reads. Or FRAME's clause in `templateOk` decides it in every try: a template that fails it makes `two` refuse.
+- [read: `git grep` at `5ad83c84ef5e` and at `ef7f3403a4`] Nothing calls `Spot.Bits.check`; only its own `#guard`s use it. My 02:13Z guess that the running pipeline runs it was wrong.
+
+STOP RULE: nothing listed changes. `OutsComputed` is a hypothesis of my theorem only. FRAME's clause makes `two` refuse more. Before: `two` accepts a template whose unit returns an input or the constant. After: it refuses it. I do not make that change; it is FRAME's file.
+
+NEEDS:
+- FRAME: when the clause is in `templateOk`, word it as `outsComputedB` (in `OutputsWritten.lean`), or tell me its wording; I then discharge `hC` from `two h` and it leaves.
+- GATHER, only if the coordinator wants the 20 files decided by a run: keep the two lines named above per template in the next rehearsal.
+
+Not established: that `OutputsWritten.lean` compiles; the clause on the 20 files themselves; `leavesOut`'s sizes on them; that `hM`, `hO` and `hR` close `addressesConnected_of_rowed` in one build.
+
+Heads: `cursor/proofs-neededbits-2597` at `ef7f3403a4`, pushed. Unpushed: nothing.
