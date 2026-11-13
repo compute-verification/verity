@@ -22,6 +22,9 @@ A place (`analyse`) is a slot the launcher's own rule would start the job in now
   - any other pool as `auto._pool` decides for the ask on the job's ticket (NO_ASK_GB for a ticket that names none: a run
     that reserves nothing would start beside a line stalled on memory), against the memory not reserved (`free_gb`), with
     each slot that shares a core with any held slot on the machine first marked blocked;
+  - a check job that carries a twin (a queue shard) has no place off its own lines: it was launched as one run on each machine
+    of its launcher's list (the loop's `--on` line), all in one twin group, so a machine where the group has no line is one
+    that list leaves out by choice, which no window records;
   - two idle slots that overlap are one place, and one place takes one job: places are dealt oldest first (priority first in
     the check pool), and a job left with none is in line but not stranded;
   - a twin still in line while its pair holds a slot (`runs_on`: its machine can't ask its home, so it can't see that) is a
@@ -413,6 +416,8 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
     peers = {m: d.get("peers") for m, d in docs.items() if isinstance(d, dict)}
 
     def places(j: dict) -> list[dict]:
+        if j["pool"] == CHECK and j["twin"]:
+            return []
         mine, found = {ln["machine"] for ln in j["lines"]}, []
         for m, pools in work.items():
             if m in mine or j["pool"] not in pools or (m, j["pool"]) in shut:
@@ -492,12 +497,15 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
 
 def _move(j: dict) -> dict:
     """Where a stranded job should wait: its own line, then the machines with a place for it now, most places first, three
-    lines at most, never one that can't claim on the job's home (its /etc/vy/peers). `how`: `late twin` for a waiter that
-    carries a pair (slot.py's claim lets one of them run), `at launch` for one that carries none (only its next launch can be
-    placed better), `none` when nothing should move."""
+    lines at most, never one that can't claim on the job's home (its /etc/vy/peers). `how`: `late twin` for a lane pool's
+    waiter that carries a pair (slot.py's claim lets one of them run), `at launch` for one that carries none (only its next
+    launch can be placed better), `none` when nothing should move, a queue shard among them."""
     if j.get("runs_on"):
         return {"how": "none", "to": [], "why_not": f"its pair runs on {', '.join(j['runs_on'])}; this twin leaves its line once "
                                                     f"its machine can ask its home ({PEERS})"}
+    if j.get("pool") == CHECK and j.get("twin"):
+        return {"how": "none", "to": [], "why_not": "a queue shard runs only where the loop launched a copy of it, and no "
+                                                    "machine off its lines has one"}
     if not j.get("stranded"):
         return {"how": "none", "to": [], "why_not": "it has no place elsewhere now"}
     own = sorted({ln["machine"] for ln in j["lines"]})
