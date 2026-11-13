@@ -105,8 +105,11 @@ replay that differs, the first token that does and the first step.
   For the canonical DSA top-k, what its own counters say of the replay's processes and of serving's: the processes
   that kept counters, the calls of the indexer's top-k and the rows of more than its keys that were rewritten. The
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
-  `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
-  exits), and a replay in which no process kept any shows nothing of the top-k having run there.
+  `out/topk_counters.json`. A process writes its calls at the end of each one, so they are there when vLLM kills it,
+  as it does a serving worker. It reads its rows from its device every few thousand calls and when it exits in order,
+  so a killed process's rows are a lower bound: `rows_at` is the calls the processes had made when their rows were
+  read, and the report says so where it is below the calls. A replay in which no process kept any shows nothing of
+  the top-k having run there.
 - **settings**: what ours ran with, stock's beside it, each with what says so (the launch line, the engine's own
   configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding with the
   share of draft tokens accepted where the benchmark counts them, the context limit beside the model's own (the

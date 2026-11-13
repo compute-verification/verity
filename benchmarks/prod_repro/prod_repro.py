@@ -258,14 +258,18 @@ def replay_state(replay_dir: Path, expected: bool) -> dict:
 
 def topk_counters(dirs: list[Path]) -> dict | None:
     """The canonical top-k's counters over the processes that kept theirs in ``dirs`` (`dsa_topk.log_to`: a file a
-    process, written every few thousand calls and at its exit, so each figure is a lower bound): the processes, the
-    calls of the indexer's top-k and the rows of more than its keys that were rewritten. None where no process kept
-    any."""
+    process, written over at the end of each of its calls, so a killed process's calls are in it; its rows are its
+    device's as last read, every few thousand calls and at an exit in order): the processes, the calls of the
+    indexer's top-k, the rows of more than its keys that were rewritten, and the calls the processes had made when
+    those rows were read (``rows_at``: where it is below the calls, the rows are a lower bound). None where no
+    process kept any."""
     recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
-    return {"processes": len(recs), "calls": sum(sum(r["calls"].values()) for r in recs),
-            "rows_long": sum(dev.get("rows_long", 0) for r in recs for dev in r["rows"].values())}
+    calls = [sum(r["calls"].values()) for r in recs]
+    return {"processes": len(recs), "calls": sum(calls),
+            "rows_long": sum(dev.get("rows_long", 0) for r in recs for dev in r["rows"].values()),
+            "rows_at": sum(r.get("rows_at", n) for r, n in zip(recs, calls))}
 
 
 def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
@@ -1131,8 +1135,10 @@ def _engine(e: dict) -> list[str]:
     def one(c: dict | None, none: str) -> str:
         if c is None:
             return none
+        at = c.get("rows_at", c["calls"])
+        read = "" if at == c["calls"] else f", the rows as read after {at:,} of the calls"
         return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
-                f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten")
+                f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten{read}")
 
     names = ", ".join(x.split("=")[0].strip() for x in under["plugins"])
     env = ", ".join(f"{k}={v}" for k, v in under["env"].items())

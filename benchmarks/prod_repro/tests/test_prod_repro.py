@@ -856,12 +856,14 @@ def test_a_pass_vllms_client_sent_is_replayed_where_ours_kept_its_ids(tmp_path: 
 
 # ------------------------------------------------------------------------------------------------- the replay's engine
 
-def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int]) -> None:
-    """One process's counters as the canonical top-k's plugin keeps them (`dsa_topk.log_to`)."""
+def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int], rows_at: int | None = None) -> None:
+    """One process's counters as the canonical top-k's plugin keeps them (`dsa_topk.log_to`), its rows read at its
+    last call or, for a process killed since, when it had made ``rows_at``."""
     d.mkdir(parents=True, exist_ok=True)
     (d / f"dsa_topk.{pid}.json").write_text(json.dumps({
         "pid": pid, "calls": {"top_k_per_row_decode": calls}, "launches": {"top_k_per_row_decode": calls // 2},
-        "rows": {"cuda:0": dict(zip(("rows_long", "rows_tied", "rows_bisected"), rows))}}))
+        "rows": {"cuda:0": dict(zip(("rows_long", "rows_tied", "rows_bisected"), rows))},
+        "rows_at": calls if rows_at is None else rows_at}))
 
 
 #: what a replay of an arm that served on the canonical top-k says its engine ran under (`replay.served_under`)
@@ -896,21 +898,23 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
             "many rows it rewrote\n") in txt
     # with the job's private directory: serving's processes kept theirs under the arm's name, the replay's under its
     # directory's; a replay none of whose processes kept any shows nothing of the top-k having run there
-    topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
+    # a serving worker is killed: its calls are all there, its rows those its device had counted when last read
+    served = {"processes": 1, "calls": 9000, "rows_long": 60, "rows_at": 8192}
+    topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1), rows_at=8192)
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": served}
     assert ("  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
-            "60 rows of more than its keys rewritten\n") in txt
+            "60 rows of more than its keys rewritten, the rows as read after 8,192 of the calls\n") in txt
     topk_log(private / "replay-compiled/topk-log", 11, 5000, (40, 2, 1))
     topk_log(private / "replay-compiled/topk-log", 12, 3000, (10, 0, 0))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50}
+    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_at": 8000}
     assert ("  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
             "50 rows of more than its keys rewritten\n") in txt
     # the report keeps the counts in OUT, where a later reading of the job finds them once the node's directory is gone
     kept = json.loads((out / P.TOPK_KEPT).read_text())
-    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50}, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_at": 8000}, "served": served}
     shutil.rmtree(private)
     assert said()[1]["engine"]["topk"] == {"kept": True, **kept}
     # counters that can't be read end that part alone
@@ -1390,7 +1394,8 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
             "of more than its keys rewritten\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 "
             "rows of more than its keys rewritten\n") in p.stdout
-    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5}
+    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {
+        "processes": 1, "calls": 7, "rows_long": 5, "rows_at": 7}
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same
@@ -1483,7 +1488,7 @@ def test_the_runner_replays_an_earlier_jobs_pass_and_serves_nothing(tmp_path: Pa
             "  the canonical top-k while serving: 9 processes kept counters: at least 65,536 calls of the indexer's top-k, "
             "20,496,064 rows of more than its keys rewritten\n") in p.stdout
     assert json.loads((run_dir / "out/topk_counters.json").read_text()) == {
-        "replay": {"processes": 1, "calls": 7, "rows_long": 5}, "served": served}
+        "replay": {"processes": 1, "calls": 7, "rows_long": 5, "rows_at": 7}, "served": served}
     # and where this job's replay kept none, the earlier job's replay's are not shown as its own
     p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private-2"))
     assert "  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n" in p.stdout
