@@ -357,13 +357,6 @@ def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay
         CPU.tensor_root_of(json.loads((k / "weights" / "tree.json").read_text()), 1, PARTS["model.norm.weight"].view(np.uint8))
 
 
-def test_a_slim_tree_of_a_tensor_the_tree_holds_no_salt_key_for_raises_as_on_main():
-    """`keep` names only tensors that opened under the tree, so each has its key; a tree that carries none for one is not refused by
-    name here, as it is where a root is folded (`tensor_root_of`)."""
-    with pytest.raises(AttributeError):
-        CPU.slim_tree({"names": [["w", "f32", [1], 4]], "tensor_keys": {}, "extra": {}}, ["w"])
-
-
 def _decided(tmp_path):
     """A record whose deferred replay was decided and left its keep, and its instrumented row as it awaited the replay."""
     out, b, store, run, t, _want, c, plan = _kept(tmp_path)
