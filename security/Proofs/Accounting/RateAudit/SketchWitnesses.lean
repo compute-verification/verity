@@ -18,6 +18,8 @@ For `RateAuditSketch` and `RateAuditSketchInteractiveRO`, at one tile of one one
 * **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, a device that reads nothing
   (`RateSketch.blank`, `RateSketch.blankOne`) is short of the floor with probability 1, above the guarantee's error:
   `2^-1`, the fiber and rank terms `0`; for `RateAuditTensorSketch`, `2^-1057` and the signs' term, below `1 − 2^-1056`.
+Each lemma states that some device (and, for the first two guarantees, some digest) has its property and proves it of
+the named one.
 -/
 
 @[expose] public section
@@ -148,28 +150,29 @@ theorem sketch_error_lt :
 /-- **`RateAuditSketch`'s honest lemma**: the honest device, at one tile of one one-bit sector, is accepted within one
 tag's compute with its footprint at the floor, with probability 1. -/
 theorem RateAuditSketch_honest :
-    pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
-        (RateSketch.Completeness.honest 1 1 0 1 1 Bool Unit Bool firstSector).Accepts firstSector x.2.1.1 x.2.1.2 x.1
-            x.2.2 ∧
-          (RateSketch.Completeness.honest 1 1 0 1 1 Bool Unit Bool firstSector).compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
-          ¬ (RateSketch.Completeness.honest 1 1 0 1 1 Bool Unit Bool firstSector).footprint x.2.1.1 x.2.1.2 x.1 * 1 <
-            RateSketch.floor 1 1 0 0 0 1 1 1 1) = 1 :=
-  pr_one fun x => by
+    ∃ (dig : Unit → (Fin 1 → Bool) → Bool) (A : Prover 1 1 0 1 0 0 1 1 Bool Unit Bool),
+      pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
+          A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧
+            A.compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
+            ¬ A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 1 1 1 1) = 1 :=
+  ⟨firstSector, RateSketch.Completeness.honest 1 1 0 1 1 Bool Unit Bool firstSector, pr_one fun x => by
     obtain ⟨ha, hf, hc⟩ :=
       RateSketch.Completeness.honest_accepts 1 firstSector 1 1 x.2.1.1 x.2.1.2 x.1 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
     unfold Accounting.RateSketch.floor
-    omega
+    omega⟩
 
 /-- **`RateAuditSketch`'s nontrivial lemma**: with the check accepting everything, the device that reads nothing is
 within its compute and short of the floor on every coin, above the error `2^-1` (the fiber term is `0` at `g = 2`). -/
 theorem RateAuditSketch_nontrivial :
-    ¬ pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
-        True ∧ (blank 1 1 0 1 0 0 0 1 Bool Unit Bool).compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
-          (blank 1 1 0 1 0 0 0 1 Bool Unit Bool).footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 0 0 1 1)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        pr (fun σ : Unit => 2 < fib firstSector σ) + ((0 * 2 : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) := by
+    ∃ (dig : Unit → (Fin 1 → Bool) → Bool) (A : Prover 1 1 0 1 0 0 0 1 Bool Unit Bool),
+      ¬ pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
+          True ∧ A.compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
+            A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 0 0 1 1)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          pr (fun σ : Unit => 2 < fib dig σ) + ((0 * 2 : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) := by
+  refine ⟨firstSector, blank 1 1 0 1 0 0 0 1 Bool Unit Bool, ?_⟩
   have hev : ∀ x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool,
       True ∧ (blank 1 1 0 1 0 0 0 1 Bool Unit Bool).compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
         (blank 1 1 0 1 0 0 0 1 Bool Unit Bool).footprint x.2.1.1 x.2.1.2 x.1 * 1 <
@@ -186,24 +189,27 @@ theorem RateAuditSketch_nontrivial :
 /-- **`RateAuditSketchInteractiveRO`'s honest lemma**: the honest interactive device, at one tile of one one-bit
 sector, is accepted within one tag's compute with its footprint at the floor, with probability 1. -/
 theorem RateAuditSketchInteractiveRO_honest :
-    pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
-        honestOne.Accepts firstSector x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ honestOne.compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
-          ¬ honestOne.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 1 1 1 1) = 1 :=
-  pr_one fun x => by
+    ∃ (dig : Unit → (Fin 1 → Bool) → Bool) (A : InteractiveProver 1 1 0 1 0 0 1 1 Bool Unit Bool),
+      pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
+          A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
+            ¬ A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 1 1 1 1) = 1 :=
+  ⟨firstSector, honestOne, pr_one fun x => by
     obtain ⟨ha, hf, hc⟩ := honestOne_accepts x.2.1.1 x.2.1.2 x.1 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
     unfold Accounting.RateSketch.floor
-    omega
+    omega⟩
 
 /-- **`RateAuditSketchInteractiveRO`'s nontrivial lemma**: with the check accepting everything, the interactive device
 that reads nothing is short of the floor on every coin, above the error `2^-1`. -/
 theorem RateAuditSketchInteractiveRO_nontrivial :
-    ¬ pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
-        True ∧ blankOne.compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
-          blankOne.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 0 0 1 1)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        pr (fun σ : Unit => 2 < fib firstSector σ) + ((0 * 2 : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) := by
+    ∃ (dig : Unit → (Fin 1 → Bool) → Bool) (A : InteractiveProver 1 1 0 1 0 0 0 1 Bool Unit Bool),
+      ¬ pr (fun x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool =>
+          True ∧ A.compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
+            A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 0 0 1 1)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          pr (fun σ : Unit => 2 < fib dig σ) + ((0 * 2 : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) := by
+  refine ⟨firstSector, blankOne, ?_⟩
   have hev : ∀ x : Data 1 1 0 Bool × Coins 1 0 1 1 Bool Unit Bool,
       True ∧ blankOne.compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
         blankOne.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 0 0 1 1 := fun x =>
@@ -220,31 +226,30 @@ theorem RateAuditSketchInteractiveRO_nontrivial :
 tensor-core sketch with no sign rows, is accepted within one tag's compute with its footprint at the floor, with
 probability 1. -/
 theorem RateAuditTensorSketchRank_honest :
-    pr (fun x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) =>
-        (RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) sketch).Accepts
-            sketch x.2.1.1 x.2.1.2 x.1 x.2.2 ∧
-          (RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))
-            sketch).compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
-          ¬ (RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))
-            sketch).footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 1 1 1 1) = 1 :=
-  pr_one fun x => by
+    ∃ A : Prover 1 1 0 1 0 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)),
+      pr (fun x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) =>
+          A.Accepts sketch x.2.1.1 x.2.1.2 x.1 x.2.2 ∧
+            A.compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
+            ¬ A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 1 1 1 1) = 1 :=
+  ⟨RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) sketch,
+    pr_one fun x => by
     obtain ⟨ha, hf, hc⟩ := RateSketch.Completeness.honest_accepts 256 sketch 1 1 x.2.1.1 x.2.1.2 x.1 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
     unfold Accounting.RateSketch.floor
-    omega
+    omega⟩
 
 /-- **`RateAuditTensorSketchRank`'s nontrivial lemma**: with the check accepting everything, the device that reads
 nothing is short of the floor on every coin, above the error `2^-1` at `r = 0` (the rank and guess terms are `0`). -/
 theorem RateAuditTensorSketchRank_nontrivial :
-    ¬ pr (fun x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) =>
-        True ∧ (blank 1 1 0 1 0 0 0 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))).compute 0 1 x.2.1.1
-            x.2.1.2 x.1 ≤ 0 ∧
-          (blank 1 1 0 1 0 0 0 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))).footprint x.2.1.1 x.2.1.2 x.1 *
-            1 < RateSketch.floor 1 256 0 0 0 0 0 1 1)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        pr (fun σ : SketchSigns 0 1 => ∃ u, ((Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < 0) +
-        ((0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 0) := by
+    ∃ A : Prover 1 1 0 1 0 0 0 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)),
+      ¬ pr (fun x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) =>
+          True ∧ A.compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
+            A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 0 0 1 1)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          pr (fun σ : SketchSigns 0 1 => ∃ u, ((Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < 0) +
+          ((0 : ℕ) : ℝ≥0∞) / 2 ^ (8 * 0) := by
+  refine ⟨blank 1 1 0 1 0 0 0 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)), ?_⟩
   have hev : ∀ x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)),
       True ∧ (blank 1 1 0 1 0 0 0 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))).compute 0 1 x.2.1.1
           x.2.1.2 x.1 ≤ 0 ∧
@@ -264,13 +269,11 @@ theorem RateAuditTensorSketchRank_nontrivial :
 /-- **`RateAuditTensorSketch`'s honest lemma**: as `RateAuditTensorSketchRank_honest`, under `RateAuditTensorSketch`'s
 error. -/
 theorem RateAuditTensorSketch_honest :
-    pr (fun x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) =>
-        (RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) sketch).Accepts
-            sketch x.2.1.1 x.2.1.2 x.1 x.2.2 ∧
-          (RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))
-            sketch).compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
-          ¬ (RateSketch.Completeness.honest 1 1 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32))
-            sketch).footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 1 1 1 1) = 1 :=
+    ∃ A : Prover 1 1 0 1 0 0 1 256 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)),
+      pr (fun x : Data 1 1 0 Sector × Coins 1 0 1 1 Sector (SketchSigns 0 1) (Fin 0 → ZMod (2 ^ 32)) =>
+          A.Accepts sketch x.2.1.1 x.2.1.2 x.1 x.2.2 ∧
+            A.compute 1 1 x.2.1.1 x.2.1.2 x.1 ≤ 1 ∧
+            ¬ A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 1 1 1 1) = 1 :=
   RateAuditTensorSketchRank_honest
 
 /-- An event and its complement have probabilities summing to `1`. -/
@@ -317,13 +320,13 @@ theorem tensor_error_lt :
 is short of the floor on every coin, above the error at `33` sign rows over one sector, where the signs bind but for a
 set of chance below `1 − 2^-1056` (`bindSigns`), and `h = 1057`. -/
 theorem RateAuditTensorSketch_nontrivial :
-    ¬ pr (fun x : Data 1 1 0 Sector × Coins 1 0 1057 1 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32)) =>
-        True ∧ (blank 1 1 0 1057 0 0 0 256 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32))).compute 0 1 x.2.1.1
-            x.2.1.2 x.1 ≤ 0 ∧
-          (blank 1 1 0 1057 0 0 0 256 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32))).footprint x.2.1.1 x.2.1.2
-            x.1 * 1 < RateSketch.floor 1 256 0 0 0 0 0 1 1)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1057 +
-        pr (fun σ : SketchSigns 33 1 => ¬ SectorsBind σ) + ((0 : ℕ) : ℝ≥0∞) / 2 ^ 256 := by
+    ∃ A : Prover 1 1 0 1057 0 0 0 256 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32)),
+      ¬ pr (fun x : Data 1 1 0 Sector × Coins 1 0 1057 1 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32)) =>
+          True ∧ A.compute 0 1 x.2.1.1 x.2.1.2 x.1 ≤ 0 ∧
+            A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 0 0 1 1)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1057 +
+          pr (fun σ : SketchSigns 33 1 => ¬ SectorsBind σ) + ((0 : ℕ) : ℝ≥0∞) / 2 ^ 256 := by
+  refine ⟨blank 1 1 0 1057 0 0 0 256 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32)), ?_⟩
   have hev : ∀ x : Data 1 1 0 Sector × Coins 1 0 1057 1 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32)),
       True ∧ (blank 1 1 0 1057 0 0 0 256 Sector (SketchSigns 33 1) (Fin 33 → ZMod (2 ^ 32))).compute 0 1 x.2.1.1
           x.2.1.2 x.1 ≤ 0 ∧
