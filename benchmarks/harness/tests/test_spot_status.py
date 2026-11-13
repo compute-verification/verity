@@ -360,7 +360,7 @@ def test_a_served_run_passes_each_runs_open_reverted_and_not_known_why_through(c
     ancestor is closed, a reverted fix is open naming its revert, and a tree that rewrote the fix's lines is not known,
     naming the commit to declare."""
 
-    fix = changes.commit("a\nfix\n", "fix")
+    fix = changes.commit(f"a\n{FIX}\n", "fix")
     _git(changes.root, "checkout", "-q", "-b", "reverted")
     _git(changes.root, "revert", "--no-edit", fix)
     revert = changes.head()
@@ -377,9 +377,9 @@ def test_a_served_run_passes_each_runs_open_reverted_and_not_known_why_through(c
     assert runs["serve"] is None and runs["first"] == {"status": "closed", "why": None}
     assert runs["replay"] == {"status": "open", "why": reverted}
     assert runs["second"]["status"] == "not known" and runs["second"]["why"].startswith(
-        f"the fix's own patch (`git diff {fix[:12]}^ {fix[:12]}`) doesn't apply in reverse at the run's tree")
+        f"1 of the 1 line the fix {fix[:12]} added to f.txt is not in f.txt at the run's commit, among them `{FIX}`. ")
     text = S.render(doc)
-    assert (f"- redrawn sample: open\n  - at `{rewrite[:12]}` (second): not known: the fix's own patch" in text
+    assert (f"- redrawn sample: open\n  - at `{rewrite[:12]}` (second): not known: 1 of the 1 line the fix" in text
             and f"  - at `{fix[:12]}` (first): closed\n  - at `{revert[:12]}` (replay): open: {reverted}\n" in text)
     assert "add it to this hole's commits in spot_holes.json" in text
 
