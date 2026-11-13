@@ -158640,3 +158640,127 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 - [read: the notifications] `proofs-sweep-30m-v42` ("proofs coordinator sweep, v42"), eleven firings with `firedAt` every half hour from 2026-11-13T01:30:07Z to 06:30:02Z, all delivered to me at 19:57Z Fri. Each asks its reader to read `due.md`, answer what TOP-394, CI-489, LEAN-249 and the doorbell thread ask of proofs, post what workers' entries give, run `preview_advance.sh` if `main` moved, and log a checkpoint in the lane's notes.
 - I read no `due.md`, posted on no issue or thread, ran no script of yours, wrote no note and answered in no mailbox. One line here for the eleven, since their text is one text.
 - With the ten single timers I reported from 19:53Z to 19:56Z, that is 21 firings of yours under 13 names delivered to me between 19:50Z and 19:57Z today.
+
+## REDRAW, Fri 13 Nov 19:57Z: the table of the 47 groups and the field's block, with the names run in it: 19 move, 21 restate, 8 stop reading; 85 top-level theorems name an outside package, in 36 files
+
+Read-only: no branch, nothing written to the tree. It is the entry you asked for by Sat 14 Nov 18:00Z, early.
+
+### 1. The names run
+
+- **It is back and it finished.** [run] `r20261113-182631-21be` on vy-nebius-cpu-5, `main` at `fa3e619ee146` with one scratch file in no commit: "lean exit 0 in 1088 s". It read 16,881 modules, 5,279 of them the workspace's, and 273,025 constants of the workspace, 88,682 of them top-level theorems.
+- **The split stands.** [run] Joined with step 0: definitions 1,914, properties 2,281, neither 2,251; nothing moved against step 0. Every name the run printed is in step 0's facts, and the two hold the same 5,279 modules.
+- **132 constants of the workspace name a constant of an outside package, all in the proofs tree, in 48 files.** [run] 85 top-level theorems, 19 definitions, 15 abbreviations, 11 nested proofs, one constructor and one recursor. Outside means ArkLib, VCVio, CompPoly, PolyFun or cslib.
+- **Of the 85 theorems, 47 name one in the statement and 38 in the proof only.** [run] By package:
+
+| package | theorems | in the statement | in the proof only | its constants they name | of them lemmas |
+|---|---|---|---|---|---|
+| ArkLib | 64 | 47 | 17 | 76 | 37 |
+| VCVio | 24 | 2 | 22 | 14 | 2 |
+| CompPoly | 3 | 0 | 3 | 3 | 1 |
+| cslib | 2 | 0 | 2 | 2 | 0 |
+
+- **19 of VCVio's 24 name only the instance of the ten `default`s.** [run] They are the theorems whose proofs unfold the five `opn…` definitions. [derived] With the mend, 5 theorems are left that name VCVio.
+- **They sit in 36 files.** [run] 27 theorems under `Flock/Soundness/Discharge/`, 19 under `Flock/Claims/KS/`, 9 under `Flock/Claims/GS/`, 7 in `Flock/Soundness/LigeritoMCA.lean`, 5 in `Flock/Soundness/PadCode.lean`, and 18 in eleven more places. The list by theorem is `top-theorems.tsv` of the evidence.
+- **Of the 4,051 files of the proofs tree, 2,533 load an outside package and 951 hold a constant that reaches one.** [run] So in 1,582 files that load one, no constant names one or reaches one through what it uses.
+
+### 2. The table
+
+One row for each of the 47 groups and one for the field's block (row 1), in the order of definitions placed per theorem brought. The row without a number is the ten `default`s.
+
+| # | group, under `Proofs.` | holders (outside `Discharge`'s) | alone | with the field | lemmas / citing definitions | brings: theorems + others | files (own) | loads | names an outside constant (what comes; its files) | per theorem | my word | how it is held |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `Flock.Level3` | 1,881 (866) | 505 (+81) | the block itself | 15 / 85 | 181 + 35 | 6 (6) | Base, Flock | loads no outside package | 2.79 | **moves** | the field of 2^128 and its quadratic extension: `Fact` instances and `Equiv.ofBijective`. lean's yes |
+| 2 | `Flock.Bridge.UnitRows` | 6 (6) | 5 | 5 | 1 / 1 | 3 + 2 | 3 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, Spot, VStar; ArkLib and VCVio in 3 of 3 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 1.67 | **moves** | `unitInst` casts along `rows_keyProg` |
+| 3 | `Flock.Soundness.ExecPlacement` | 578 (78) | 0 | 46 | 2 / 2 | 36 + 33 | 3 (1) | Base, Circuits, Commitments, Flock, Properties | loads no outside package | 1.28 | **moves** | `Layout.model`'s `pin` bound and `Layout.col`'s bound |
+| 4 | `Core.Game.Expect` | 98 (2) | 1 (+1) | 1 (+1) | 1 / 2 | 1 + 0 | 1 (1) | no code package | loads no outside package | 1.00 | **moves** | `plurSZ` and `plurSL` take `Classical.choose` of `exists_pluralityE` |
+| 5 | `Flock.Claims.Recursion` | 2 (2) | 1 | 1 | 1 / 1 | 1 + 3 | 2 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, VStar; ArkLib and VCVio in 2 of 2 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 1.00 | **moves** | `IrDep` needs `Nonempty DepTape` |
+| 6 | `Flock.SpotFlock.FrameAt` | 5 (5) | 1 | 1 | 1 / 1 | 1 + 42 | 3 (1) | Base, Circuits, Commitments, CoreProtocol, Flock, Lms, Properties, Randomness, Spot, VStar; ArkLib and VCVio in 2 of 3 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 1.00 | **moves** | `frameAt`'s field `ownAt_depth` |
+| 7 | `Flock.Soundness.Refine` | 1,086 (147) | 57 (+19) | 86 (+24) | 29 / 38 | 87 + 121 | 14 (11) | Base, Circuits, Commitments, Flock; ArkLib and VCVio in 9 of 14 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 0.99 | **moves** | `H512`, `K512`, `enc512` (size and injectivity fields) and the `tabAt` and `table` values (`stmtOf_linkLayout`) |
+| 8 | `Accounting.TS.Session` | 6 (2) | 2 | 2 | 1 / 1 | 3 + 3 | 1 (1) | Base, Circuits, Commitments, Flock, PouwWindow, Properties, Randomness, VStar; ArkLib and VCVio in 1 of 1 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.67 | **restate** | `decLane`'s bound `Lanes.bitsN_lt` |
+| 9 | `Core.Game.Tape` | 10 (2) | 2 | 2 | 1 / 2 | 3 + 2 | 1 (1) | no code package | loads no outside package | 0.67 | **restate** | `readFinder` and `forger` need `Nonempty Tape` |
+| 10 | `Core.Game.TwoRun` | 18 (8) | 1 | 1 | 2 / 2 | 2 + 0 | 1 (1) | no code package | loads no outside package | 0.50 | **moves** | `AgreeCut.here`'s field; `sampleMap` needs `Nonempty CoinTape` |
+| 11 | `Flock.Claims.Bridge` | 3 (3) | 1 | 1 | 1 / 1 | 2 + 3 | 1 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, VStar; ArkLib and VCVio in 1 of 1 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 0.50 | **moves** | the Prop `KSLin2OnC` needs `Nonempty Tape` |
+| 12 | `Flock.Claims.Scope` | 165 (89) | 2 | 3 | 1 / 1 | 7 + 13 | 1 (1) | Base, Circuits, Commitments, Flock | loads no outside package | 0.43 | **moves** | `Sys.circ`'s field `topo` (`gate_lt`) |
+| 13 | `Flock.Recursive.ExecClass` | 7 (5) | 0 | 3 | 1 / 1 | 7 + 7 | 5 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, VStar; ArkLib and VCVio in 5 of 5 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 2 files | 0.43 | **restate** | `ExecClass.ofStmt`'s field (`hm_of_classOk`) |
+| 14 | `Flock.SpotFlock.Code` | 27 (27) | 19 | 19 | 5 / 4 | 75 + 307 | 14 (1) | Base, Circuits, Commitments, CoreProtocol, Flock, Properties, Randomness, Spot, VStar; ArkLib and VCVio in 6 of 14 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 0.25 | **restate** | three are the `@[csimp]` theorems of `topoOk`, `partitionsOk`, `scopeOk`, counted as used and not in their terms; `order` holds two bounds |
+| 15 | `Flock.Soundness.CompiledLock` | 116 (8) | 8 | 8 | 13 / 9 | 47 + 17 | 3 (1) | no code package; ArkLib and VCVio in 2 of 3 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.17 | **restate** | the lock's query and record steps and their ZK twins: bounds and update laws |
+| 16 | `Flock.Soundness.Audit` | 2 (2) | 2 | 2 | 3 / 2 | 15 + 6 | 3 (3) | no code package | loads no outside package | 0.13 | **restate** | `Law.work`'s bound and `Partition.analysis`'s fields |
+| 17 | `Flock.Soundness.ExecRows` | 416 (3) | 1 | 1 | 2 / 1 | 8 + 2 | 1 (1) | Base, Flock, Properties | loads no outside package | 0.12 | **restate** | `stackPlaceAt`'s two bounds |
+| 18 | `Flock.Recursive.Compile` | 3 (1) | 0 | 1 | 1 / 1 | 10 + 14 | 4 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness; ArkLib and VCVio in 3 of 4 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 3 files | 0.10 | **restate** | `clashPickCL`: the proof a collision picker takes |
+| 19 | `Flock.Claims.GS` | 195 (119) | 7 | 7 | 6 / 5 | 76 + 25 | 10 (3) | Base, Circuits, Commitments, Flock; ArkLib and VCVio in 8 of 10 | 0 of what comes; 10 constants in 3 of its files; a constant reaches one in 7 files | 0.09 | **moves** | `rf128`, `zkReader`, `levelZeroReader` (law fields); `padInvEquiv`, `novelInvEquiv` (injectivity) |
+| 20 | `Flock.Claims.ZK` | 134 (50) | 24 | 42 | 17 / 15 | 765 + 1,344 | 124 (9) | Base, Circuits, Commitments, Flock, Properties, Randomness, VStar; ArkLib and VCVio in 67 of 124 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 44 constants in 9 of its files; a constant reaches one in 36 files | 0.05 | **restate** | the embeddings of `ExeLayout`, `ZkTab.table`, `treeD`'s `mix_inj`, the bounds of `stAt` and `zkTab` |
+| 21 | `Properties.Verity.Sampled` | 53 (11) | 4 | 4 | 19 / 17 | 316 + 568 | 89 (11) | Attest, Base, CertifierDevice, Circuits, Commitments, CoreComposites, CoreComposition, CoreOnsite, CoreProtocol, CoreRemote, Difftest, Evaluate, Flock, Identity, Lms, MemoryChallenger, NciCheck, NetworkCertifier, NetworkCheck, PousCheck, PouwCheck, PouwCommit, PouwPearlPlus, PouwWindow, Properties, Randomness, RemoteAudit, Spot, VStar, VStarRecursive, World; ArkLib and VCVio in 66 of 89 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 23 constants in 7 of its files; a constant reaches one in 20 files | 0.01 | **restate** | `Live.hcS`, `hsz`, `hCust`: facts derived from the record's own fields; casts in `roundCut`, `freshSel` |
+| 22 | `Flock.Soundness.Discharge` | 1,073 (0) | 17 (+6) | 34 (+10) | 342 / 285 | 9,059 + 3,337 | 426 (287) | Base, Circuits, Commitments, CoreComposition, CoreProtocol, Flock, Lms, Properties, Randomness, Spot; ArkLib and VCVio in 322 of 426 | 19 of what comes (10 not theorems, 5 nested proofs, 4 theorems; ArkLib and VCVio); 38 constants in 18 of its files; a constant reaches one in 87 files | 0.00 | **stop reading** | the proof's own constructions: tables, layouts, sites, finders |
+| 23 | `Flock.Bridge.Draw` | 1 (0) | 0 | 0 | 1 / 1 | 95 + 68 | 13 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, Spot; ArkLib and VCVio in 10 of 13 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.00 | **restate** | the statement `SampledKSLiveV5` itself (`lawSized_size`) |
+| 24 | `Flock.Bridge.DrawnLaw` | 1 (0) | 0 | 0 | 1 / 1 | 78 + 62 | 7 (1) | Base, Circuits, Commitments, CoreProtocol, Flock, Lms, Properties, Randomness, Spot, VStar; ArkLib and VCVio in 3 of 7 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 0.00 | **restate** | the statement `SampledKSLiveV5` itself (`sized_designAt`) |
+| 25 | `Flock.Claims.DecodeFlock` | 69 (68) | 0 | 0 | 1 / 1 | 4 + 2 | 2 (1) | Base, Circuits, Commitments, Flock; ArkLib and VCVio in 2 of 2 | 0 of what comes; 3 constants in 1 of its files; a constant reaches one in 2 files | 0.00 | **moves** | `levelZero`'s field (`rowPoly_injective`) |
+| 26 | `Flock.Claims.Deploy` | 26 (25) | 0 | 0 | 1 / 13 | 1 + 2 | 1 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, VStar; ArkLib and VCVio in 1 of 1 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 0.00 | **moves** | `Nonempty Coin := ⟨default⟩`, an instance argument of 13 definitions, 10 of them statements' own |
+| 27 | `Flock.Claims.DeployPlainCode` | 67 (66) | 0 | 0 | 1 / 2 | 4 + 7 | 1 (1) | Base, Circuits, Commitments, Flock; ArkLib and VCVio in 1 of 1 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.00 | **moves** | `flockPlainLevelZero` and `plainReader`: the bound `plainCols_le` |
+| 28 | `Flock.Claims.RootFindGF128` | 184 (108) | 0 | 0 | 2 / 1 | 181 + 104 | 7 (1) | Base, Flock | loads no outside package | 0.00 | **restate** | `rf128`'s law fields (`roots128_spec`, `roots128_complexity`) |
+| 29 | `Flock.Claims.ZkDecode` | 144 (68) | 0 | 0 | 1 / 1 | 8 + 5 | 3 (1) | no code package; ArkLib and VCVio in 3 of 3 | 0 of what comes; 8 constants in 2 of its files; a constant reaches one in 3 files | 0.00 | **moves** | `zkLevelZero`'s field (`zkRows_injective`) |
+| 30 | `Flock.Claims.ZkDecodeFlock` | 142 (66) | 0 | 0 | 1 / 2 | 2 + 8 | 1 (1) | Base, Circuits, Commitments, Flock; ArkLib and VCVio in 1 of 1 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.00 | **moves** | `flockZkLevelZero` and `flockZkReader`: `zkShape_fits` |
+| 31 | `Flock.EndToEnd.Carry` | 13 (0) | 0 | 0 | 1 / 2 | 3,861 + 1,195 | 210 (1) | Base, Circuits, Commitments, CoreComposition, CoreProtocol, Flock, Lms, Properties, Randomness, Spot; ArkLib and VCVio in 146 of 210 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 26 constants in 8 of its files; a constant reaches one in 27 files | 0.00 | **restate** | `CarriedBlocks.mix` and `mixS`, statements' own, need `Nonempty Ses` |
+| 32 | `Flock.EndToEnd.Joint` | 22 (0) | 0 | 0 | 4 / 12 | 272 + 315 | 61 (2) | Base, Circuits, Commitments, CoreProtocol, Flock, Lms, Properties, Randomness, Spot, VStar; ArkLib and VCVio in 49 of 61 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 23 constants in 7 of its files; a constant reaches one in 17 files | 0.00 | **restate** | `MemberV5.hcS` and three more: facts derived from the statements' own records |
+| 33 | `Flock.Recursive.Flock` | 21 (0) | 0 | 0 | 1 / 1 | 2,518 + 920 | 172 (1) | Base, Circuits, Commitments, CoreComposition, CoreProtocol, Flock, Lms, Properties, Randomness, Spot; ArkLib and VCVio in 132 of 172 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 21 constants in 6 of its files; a constant reaches one in 17 files | 0.00 | **stop reading** | `ZkOuter.ofBase` casts along `ZkOuterD.hlen` |
+| 34 | `Flock.Recursive.PublicAudit` | 2 (1) | 0 | 0 | 1 / 1 | 17 + 46 | 9 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness, VStar; ArkLib and VCVio in 7 of 9 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 4 files | 0.00 | **restate** | `publicHidden`, a statement's own (`execClassAt_nnz`) |
+| 35 | `Flock.Recursive.Raw` | 7 (0) | 0 | 0 | 6 / 2 | 2,606 + 992 | 178 (1) | Base, Circuits, Commitments, CoreComposition, CoreProtocol, Flock, Lms, Properties, Randomness, Spot; ArkLib and VCVio in 137 of 178 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 21 constants in 6 of its files; a constant reaches one in 17 files | 0.00 | **stop reading** | `ZkOuterR.build` (`Typable.ht`, `hc`, `hpub`, `hlen`) and `ZkOuter.refuse` |
+| 36 | `Flock.Recursive.Registrants` | 4 (0) | 0 | 0 | 1 / 1 | 2,530 + 981 | 178 (1) | Base, Circuits, Commitments, CoreComposition, CoreProtocol, Flock, Lms, Properties, Randomness, Spot; ArkLib and VCVio in 136 of 178 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 21 constants in 6 of its files; a constant reaches one in 18 files | 0.00 | **stop reading** | `regFinder`: the proof a collision picker takes |
+| 37 | `Flock.Recursive.Stage` | 9 (1) | 0 | 0 | 1 / 1 | 4 + 8 | 3 (1) | Base, Circuits, Commitments, Flock, Properties, Randomness; ArkLib and VCVio in 3 of 3 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.00 | **restate** | `Openings.sigma`'s field (`sigmaCollide_self`) |
+| 38 | `Flock.SoundAtBridge.Session` | 51 (0) | 0 | 0 | 1 / 21 | 2,515 + 942 | 180 (1) | Base, Circuits, Commitments, CoreComposition, CoreProtocol, Flock, Lms, Properties, Randomness, Spot; ArkLib and VCVio in 139 of 180 | 3 of what comes (2 not theorems, 1 nested proofs; ArkLib); 23 constants in 7 of its files; a constant reaches one in 21 files | 0.00 | **restate** | `RowsSession.hc`, a fact derived from the record's own fields, cited by 21 |
+| 39 | `Flock.Soundness.Binding` | 381 (30) | 0 | 0 | 4 / 5 | 40 + 95 | 15 (5) | Base, Circuits, Commitments, Flock, Randomness; ArkLib and VCVio in 10 of 15 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 3 files | 0.00 | **moves** | `ExplicitLeaf.hm96X`, `hm96` and three `binding` values |
+| 40 | `Flock.Soundness.ExecSetup` | 91 (30) | 0 | 0 | 1 / 9 | 317 + 123 | 11 (1) | Base, Circuits, Commitments, Flock, Properties | loads no outside package | 0.00 | **restate** | `Accepted.mk` and eight more hold `setupH_layout` |
+| 41 | `Flock.Soundness.Instance` | 189 (113) | 0 | 0 | 1 / 4 | 264 + 57 | 15 (1) | Base, Circuits, Commitments, Flock; ArkLib and VCVio in 1 of 15 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.00 | **restate** | `flockZkLevelZero`, `flockPlainLevelZero` and their readers (`execArith_correct`) |
+| 42 | `Flock.Soundness.LigeritoMid` | 82 (0) | 0 | 0 | 1 / 1 | 10 + 4 | 2 (1) | no code package; ArkLib and VCVio in 1 of 2 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 1 files | 0.00 | **stop reading** | `lockQuery0Z` (`positions_length`) |
+| 43 | `Flock.Soundness.LigeritoPhase` | 20 (0) | 0 | 0 | 1 / 1 | 30 + 5 | 1 (1) | no code package; ArkLib and VCVio in 1 of 1 | 0 of what comes; 1 constants in 1 of its files; a constant reaches one in 1 files | 0.00 | **stop reading** | `TableCRL` (`fast100_shape`) |
+| 44 | `Flock.Soundness.ListSize` | 69 (68) | 0 | 0 | 1 / 1 | 4 + 2 | 1 (1) | no code package; ArkLib in 1 of 1 | 0 of what comes; 3 constants in 1 of its files; a constant reaches one in 1 files | 0.00 | **moves** | `levelZero`'s field (`rowPoly_natDegree`) |
+| 45 | `Flock.Soundness.Lowering` | 65 (0) | 0 | 0 | 1 / 3 | 1 + 0 | 1 (1) | no code package | loads no outside package | 0.00 | **stop reading** | three of `Discharge`'s placements (`Placement.sat`) |
+| 46 | `Flock.Soundness.PadCode` | 144 (68) | 0 | 0 | 1 / 1 | 42 + 4 | 4 (1) | no code package; ArkLib and VCVio in 4 of 4 | 0 of what comes; 10 constants in 3 of its files; a constant reaches one in 3 files | 0.00 | **moves** | `zkLevelZero`'s field (`encPoly_natDegree`) |
+| 47 | `Flock.Soundness.ParseStmt` | 1 (1) | 0 | 0 | 1 / 1 | 358 + 87 | 12 (1) | Base, Circuits, Commitments, Flock, Properties; ArkLib and VCVio in 3 of 12 | 0 of what comes; 0 constants in 0 of its files; a constant reaches one in 0 files | 0.00 | **restate** | the statement `TableReadBinding` itself (`unrolled_built`) |
+| 48 | `Flock.Verifier.Hash` | 26 (0) | 0 | 0 | 1 / 1 | 1 + 0 | 1 (1) | Base, Flock | loads no outside package | 0.00 | **stop reading** | `Coined.hm96At` (`Sha512.hash_size`) |
+| – | the ten `default`s: a mend in five definitions under `Flock/Soundness/Discharge/`, no group | 22 (4): the four read `opn…` definitions and 18 `SoundExec…` | – | 4, once the field's block has moved: `DecodeZL.opnAt`, `HiddenDec.opnAtH`, `PlainHJ.opnPHJ`, `PlainJ.opnPJ` hold lemmas of `Flock.Level3` only and no ArkLib | – | nothing. It changes the four definitions' terms, so the records of `flock_verify_sound` (reads 4) and `flock_verify_sound_205` (reads 2), neither deployed | 5 | VCVio in 5 of 5 | the instance `QueryImpl.instInhabitedOfRangeOfPure`: in the value of the five definitions, and in the proofs of 19 top-level theorems that name nothing else outside | – | **not now** (your word; no branch) | each falls back to `default` twice at a function type, which the elaborator fills with VCVio's instance where VCVio is loaded |
+
+**The columns.** [run] for every figure; the last column is [read].
+
+- *group*: the directory of the proofs tree a lemma sits in, its module's first four names (three for `Flock.Level3`).
+- *holders*: the read definitions, `neither` at step 0, that hold a lemma of the group in what they read. In brackets: those that hold no lemma of `Discharge`.
+- *alone*: the holders whose lemmas are all of this group, so what moving it alone places. `(+n)` more hold ArkLib or the VCVio instance too and stay `neither`.
+- *with the field*: the holders whose lemmas are all of this group or of the field's block.
+- *lemmas / citing definitions*: the group's lemmas that a read definition's own term cites, and the read definitions that cite one themselves.
+- *brings*: what the proofs of the cited lemmas use in the proofs tree, beyond the field's six files: theorems, then other constants.
+- *files (own)*: the files those sit in, and how many are in the group's own directory.
+- *loads*: the code packages those files load (`Properties` is the properties tree), then in how many of them ArkLib or VCVio is loaded.
+- *names an outside constant*: of what comes with the group, how many constants name one (none: the group is closed); how many constants in its files do, in how many files; and in how many files some constant reaches one through what it uses.
+- *per theorem*: the definitions placed with the field, free of an outside package, per theorem brought.
+
+### 3. My word, by lean's rule
+
+- **moves** (19): the group is closed, and it brings no more theorems, beyond what the groups already moving bring, than it has holders outside `Discharge`'s. "Closed and small against what it places, as the field is."
+- **stop reading** (8): `Discharge`, and the seven groups whose every holder holds a lemma of `Discharge` and whose citing definitions are all `Discharge`'s own.
+- **restate** (21): the rest. The definition stops holding the lemma, as the seven records do.
+
+What the words add up to [run]:
+
+- **The 19 moving groups bring 421 theorems in 57 files**, 181 of them the field's. They place 797 of the 2,116 definitions that hold a lemma; 689 of those are free of an outside package.
+- **With the 21 restated as well, 1,043 are placed**, 930 free. The restating is in 106 definitions that cite a lemma of a restated group themselves.
+- **1,073 are left**: every one holds a lemma of `Discharge`.
+- **Nine groups are not closed**: `Claims.ZK`, `EndToEnd.Carry`, `EndToEnd.Joint`, `Recursive.Flock`, `Recursive.Raw`, `Recursive.Registrants`, `SoundAtBridge.Session`, `Soundness.Discharge` and `Properties.Verity.Sampled`. In each, what comes names ArkLib; in `Discharge` VCVio too.
+- **The rule's third clause is not met by the files as they stand.** Of the moving groups' 57 files, 35 load ArkLib or VCVio. In 23 of them no constant reaches an outside one. In the other 12 some constant that does not come with the group does, so what comes has to be cut out of the file: they are files of `Claims.GS` (7), `Claims.ZkDecode` (3), `Soundness.PadCode` (3), `Soundness.Binding` (3), `Claims.DecodeFlock` (2), `Claims.DeployPlainCode`, `Claims.ZkDecodeFlock` and `Soundness.ListSize` (1 each), some shared. Nothing that comes with a moving group reaches an outside constant.
+
+Rows near the bar [run]:
+
+- **Restate, but close** (new theorems against holders outside `Discharge`'s): `Accounting.TS.Session` 3 against 2, `Core.Game.Tape` 3 against 2, `Recursive.ExecClass` 7 against 5, `Recursive.Stage` 2 against 1, `Soundness.ExecRows` 8 against 3, `Claims.RootFindGF128` 178 against 108.
+- **Were the bar every holder, `Discharge`'s included, ten more would move**: those six, and `Soundness.CompiledLock` (47 theorems, 116 holders), `Soundness.LigeritoMid` (10, 82), `Soundness.Lowering` (1, 65) and `Verifier.Hash` (1, 26). The last three are "stop reading" above only because all their holders are `Discharge`'s.
+
+### Not established
+
+- That a file which loads ArkLib or VCVio, and in which no constant reaches one, elaborates without the import. Notation, instances found at elaboration and tactics are not in a constant's term. Not tried, for any of the 1,582 or the 23.
+- That any group's theorems elaborate in the tree they would move to. Nothing was moved.
+- "Reaches" follows what a constant's type and value use, as step 0's facts hold it. Step 0's facts have 273,063 constants and the run 273,025; I did not look at the 38.
+- The words are mine. The bar, new theorems against holders outside `Discharge`'s, is my reading of "small against what it places"; item 3's last two bullets say what a different bar changes.
+- That the ten `default`s can be replaced without breaking the 19 proofs that unfold them: not tried.
+
+### State
+
+- Evidence: `art:7ed763d28843e206cd2a7aa93c1b26f531f90490c56c2dfaf9cc16185a74ff98` (the run's lines, the join, the table and its scripts, `top-theorems.tsv`), with refs to step 0 `art:730e32e2a5618e6719234edfc83143099d8dd9a02e02bf8e2502a13a2b148a1a` and the first probe `art:43131e3112fb53ee6ecf24b7dcf364e956f625d1a4e21a8b2b348be42509340c`.
+- #9717: ready to mark at `3e1103ded562ad68a1e8c2286491c82b7c314782` (19:34Z). #9795: ready to mark at `a669fecb7e221a8d23445c6fdbb90a092281fe08` (19:54Z). #9728: names mended at `7915e17cd3460d2a3edda87d0856f8e26bd2ff3a` (19:48Z); the credit branch waits for your word.
+- Y2: nothing written. I have no order left open but your answer on the credit branch.
