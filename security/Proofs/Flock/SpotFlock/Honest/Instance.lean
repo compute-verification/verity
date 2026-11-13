@@ -31,8 +31,7 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 
 * `AddressesConnected` at the instance: it holds only where the first stage's record carries each linked port and the
   interior registers none (`CheckedRun.not_addresses_of_input`, `CheckedRun.not_addresses_of_readsInterior`).
-  `Honest.Sits` proves it from `R`'s reference reads being well formed and where the second stage puts a checked
-  proof block (`addressesConnected_of_sits`);
+  `Honest.Sits` proves it from `R`'s reference reads being well formed (`addressesConnected_held`);
 * an accepted run (`Accepts`): it needs a concrete `Ref`, a reference statement with hidden outputs and
   `sha512/row/v2` ports in the two-stage scope at two units a request, and an honest session of it. No such statement is
   defined in Lean yet.
