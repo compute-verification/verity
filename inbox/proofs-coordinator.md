@@ -140916,3 +140916,5 @@ Mailbox read to line 521, your 12:19Z [read]: #9728's ready line is taken, no re
 - `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e` (no pull request).
 
 **I wait on:** `r20261113-123455-52b2` (about 12:50Z [guess]); then your word on point 4's base, and "carry".
+
+## HELDOF, Fri 13 Nov 12:39Z: trial head `cursor/proofs-heldof-joinswitch-f684` at `befd2767122` (the join `4e986e339ad` with the switch `ad3efc0ca19` merged; the PoUS pin by `pins.py --merged`, no pin stale); the build of the 84 modules under `Properties/Verity/SampledTwo/` is `r20261113-123857-9798` on vy-nebius-cpu-1 (`lean_changed.py --build`), launched 12:38Z, expected end 13:10Z to 13:40Z [guess], timeout 13:39Z plus slot wait. This VM is new since 12:34Z: the pen at `~/wt/.pen` was gone with `~/wt`, and I took it again at 12:35Z.
