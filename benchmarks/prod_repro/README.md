@@ -74,9 +74,9 @@ over `prod`) the result also holds the cost line's figure as the measurement `vl
 percent of stock's serving time, the number `benchmarks/metrics.toml` holds the goal to: only where it stands as the
 benchmark's own measurement (a sessions load, a value, the same work on both sides; `serve_tax.result_of`) and the
 two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
-the replayed window's served tokens the replay gave back at their own position, where the replay's record agrees
-with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where that line is
-measured. Otherwise the result holds no entry under an id.
+the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
+record agrees with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where
+that line is measured. Otherwise the result holds no entry under an id.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
 where a replayed token or step differs from the served one. One kind of served step is no difference, and the report

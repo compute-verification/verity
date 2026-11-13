@@ -155,7 +155,8 @@ def test_a_replayed_token_that_differs_fails_the_job_naming_the_token_and_the_st
     b = rid(f"{LOAD}1", 1)
     replayed(out, tokens={b: [7, 9]})
     rc, txt, r = run(out)
-    assert rc == 1 and r["tokens"]["reproduces"] is False and r["tokens"]["tokens_given_back"] == 3
+    assert rc == 1 and r["tokens"]["reproduces"] is False
+    assert (r["tokens"]["tokens_before_first_difference"], r["tokens"]["tokens_given_back"]) == (3, 3)
     # the first token that differs: its request and position, the ids on each side, and the step that emitted it
     assert ("tokens: FAILED: 2 requests replayed, 4 served tokens compared with 4 replayed, 1 differ in 1 requests\n"
             f"  the first token that differs: request {b} position 1: served id 1, replayed id 9; serving emitted it in "
@@ -179,7 +180,8 @@ def test_a_replay_that_stops_short_or_runs_another_schedule_fails_too(tmp_path: 
     replayed(out, tokens={a: [7]})
     rc, txt, r = run(out)
     assert rc == 1 and f"request {a} position 1 (served 2 tokens, replayed 1; 1 positions differ)" in txt
-    assert (r["tokens"]["tokens_given_back"], r["tokens"]["tokens_differing"]) == (3, 1)
+    assert (r["tokens"]["tokens_before_first_difference"], r["tokens"]["tokens_given_back"], r["tokens"]["tokens_differing"]) \
+        == (3, 3, 1)
     assert f"the first token that differs: request {a} position 1: served id 0, the replay ended before it; serving" in txt
     shutil.rmtree(out / "replay-compiled")
     # the same tokens from other rows: the replay did not run the served schedule, and the first step says how
@@ -1163,10 +1165,18 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
 
 def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where_they_stand(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Of `prod-record` on GLM-5.3, the share of the replayed window's served tokens the replay gave back and the advice
-    in bits a request are the measurements benchmarks/metrics.toml names beside the cost: the match where the replay's
-    record agrees with what it kept, the advice where the line is measured. Another arm as ours or another model names
-    no id, and an earlier report's entry under an id whose figure does not stand is dropped."""
+    """Of `prod-record` on GLM-5.3, the share of the replayed window's served tokens the replay gave back before each
+    request's first difference and the advice in bits a request are the measurements benchmarks/metrics.toml names
+    beside the cost: the match where the replay's record agrees with what it kept, the advice where the line is
+    measured. Another arm as ours or another model names no id, and an earlier report's entry under an id whose figure
+    does not stand is dropped."""
+    # a token after a request's first difference is not given back, though it is equal at its position
+    assert P.given_back({"r": [1, 2, 3, 4]}, {"r": [1, 9, 3, 4]}) == {"tokens_before_first_difference": 1,
+                                                                      "tokens_given_back": 3}
+    # a replay that stopped short gives back its common prefix; one that ran on, or none, the served tokens or none
+    assert P.given_back({"r": [1, 2, 3, 4]}, {"r": [1, 2]}) == {"tokens_before_first_difference": 2, "tokens_given_back": 2}
+    assert P.given_back({"r": [1, 2], "s": [3]}, {"r": [1, 2, 5]}) == {"tokens_before_first_difference": 2,
+                                                                       "tokens_given_back": 2}
     out, a, b = tmp_path / "out", rid(f"{LOAD}1", 0), rid(f"{LOAD}1", 1)
     monkeypatch.setattr(P, "encodings", Loader)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
@@ -1184,16 +1194,19 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
         return (json.loads((out / "prod_repro.json").read_text()),
                 json.loads((tmp_path / "result.json").read_text())["measurements"])
 
-    # b's second token differs and a's replay ran one token past its end: 3 of the 4 served tokens given back
-    r, got = report(tokens={a: [7, 0, 5], b: [7, 9]})
+    # b's first token differs and its second is equal, and a's replay ran one token past its end: 2 of the 4 served
+    # tokens given back before a difference, 3 equal at their position
+    r, got = report(tokens={a: [7, 0, 5], b: [8, 1]})
     t, v = r["tokens"], r["advice"]
     assert (t["metric"], v["metric"]) == ("vllm/prod-replay-match-glm53", "vllm/prod-advice-bits-glm53")
-    assert (t["tokens_served"], t["tokens_given_back"], t["tokens_differing"]) == (4, 3, 2)
+    assert (t["tokens_served"], t["tokens_before_first_difference"], t["tokens_given_back"], t["tokens_differing"]) == \
+        (4, 2, 3, 2)
     assert r["cost"]["measured"] and not r["cost"]["stands"]
     on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
     assert got == [
-        {"name": "vllm/prod-replay-match-glm53", "value": 75.0, "unit": "percent of served tokens", "better": "higher",
-         "tokens_served": 4, "tokens_given_back": 3, "requests": 2, "requests_differing": 2, "reproduces": False, **on},
+        {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "better": "higher",
+         "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2, "requests_differing": 2,
+         "reproduces": False, **on},
         {"name": "vllm/prod-advice-bits-glm53", "value": (230 + 6997) / 32, "unit": "bits a request", "better": "lower",
          "bits": 230 + 6997, "requests": 32, "tick": False, **on}]
     assert got[1]["value"] == v["bits_a_request"]

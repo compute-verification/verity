@@ -23,7 +23,7 @@ goal = "network/period-bound-checked"
 
 [[metric]]
 id = "vllm/prod-replay-match-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the share of a served window's tokens its replay gives back"
+title = "GLM-5.3 served at vLLM's production settings: the share of a served window's tokens its replay gives back before a request's first difference"
 owner = "vllm"
 unit = "percent of served tokens"
 better = "higher"
