@@ -18,7 +18,7 @@ window (`Flock.Guarantees.MemberV5`), with no hypothesis on its session, its sam
   files, which parse to its descriptor, unit rows and population and name no public input ports
   (`MemberV5.Checked`), so its circuit, partition and constants are the parsed circuit file's (`MemberV5.Cc_eq`,
   `P_heq`, `consts_eq`).
-* **A member's faulty units are incorrect proof blocks** (`MemberV5.faultyWrong`): a unit right at a registration with
+* **A member's incorrect proof blocks are incorrect proof blocks** (`MemberV5.faultyWrong`): a unit right at a registration with
   canonical openings is not faulty (`Flock.Bridge.faultyRightTargetC`), since each canonical registered opening
   opens the deployed commitment at the public file's leaf map (`Flock.Bridge.transports_shapedP`), whose roots are
   distinct where the ports' published domains are and the roots fix their domains. The transport reads the
@@ -97,7 +97,7 @@ theorem unboundFaulty : m.UnboundFaulty := by
   exact Flock.Bridge.unbound_subset_faulty_partOf m.P m.κ (show [m.n].sum = m.n by simp) Claims.Sampling.sha512Msg
     m.Cd m.stmt rfl (m.wit Xv) opens m.κ_isInput hK hO
 
-/-- **A member's faulty units are incorrect proof blocks** (`MemberV5.FaultyWrong`). -/
+/-- **A member's incorrect proof blocks are incorrect proof blocks** (`MemberV5.FaultyWrong`). -/
 theorem faultyWrong : m.FaultyWrong := by
   intro hc R Xv u hu
   by_contra hu'

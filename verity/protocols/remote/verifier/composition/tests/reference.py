@@ -184,7 +184,7 @@ def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsEitherOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
     (`paramsOfJson`): ``proofs``, exactly the circuit and public files' SHA-512s and the verifier's registered file or
     null, then v1's params (`parsed_params_v2`, which refuses them naming no challenger) with a partition object, under
-    a subset law (`subset_law`), its last refusal. The per-member form (``proofs`` exactly ``members``) is outside the
+    a subset sampling design (`subset_law`), its last refusal. The per-member form (``proofs`` exactly ``members``) is outside the
     mirror."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
@@ -333,8 +333,8 @@ PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
 def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
     """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
     ``verify.json``), framed as `PouwCheck.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
-    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the draws
-    asked for, the tiles drawn and the passes (`profileJson`)."""
+    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the samples
+    asked for, the tiles sampled and the passes (`profileJson`)."""
     a, digest = verified["answer"], hashlib.sha512(PEARL_PLUS_TAG.encode() + b"\0" + commitment).digest()
     if a["verdict"] != ACCEPT:
         return P.outcome(PEARL_PLUS.id, a["verdict"], a["reason"], digest)

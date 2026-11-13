@@ -22,7 +22,7 @@
 # machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: on a leased card,
 # debit.py's check of the ship's debit/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
 # every DEVICE_CHECK-th tile, default every one, replayed on the CPUs too and held equal), by default exactly while the
-# verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap (`served_passes.py volunteer-needed
+# verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap (`served_passes.py volunteer-needed
 # --verdict pass`, asked before anything runs: VOLUNTEER defaults to 1 then, and any other than 1 or device is refused,
 # exit 2; otherwise to 0, none), and
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's

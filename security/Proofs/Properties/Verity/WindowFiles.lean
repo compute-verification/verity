@@ -335,7 +335,7 @@ theorem correct_beside_right (X : (C.beside D).Trace) (u : Fin m) :
       exact (cast_cast_self _ _ _).symm
 
 open Classical in
-/-- **The incorrect units of two partitions side by side**: `P`'s at `C`'s part of the trace, then `Q`'s at `D`'s. -/
+/-- **The incorrect proof blocks of two partitions side by side**: `P`'s at `C`'s part of the trace, then `Q`'s at `D`'s. -/
 theorem wrong_beside (X : (C.beside D).Trace) :
     (P.beside Q).wrong X = (P.wrong (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∪
       (Q.wrong (Circuit.traceRight X)).map (Fin.natAddEmb n) := by

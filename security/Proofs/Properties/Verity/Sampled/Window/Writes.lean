@@ -27,8 +27,8 @@ carries that verdict to the writer, at a member of a window, as `Sampled/Accepts
   decodes to at the session `--zk` sets up at the member's inputs, and its proof files are the session's.
 * **The step's acceptance** (`member_step_accepts`): a session's verdict at the member's statement, with the
   outcome's moves the record's, gives `AcceptsZKP` of what the member's writer writes.
-* **The members' steps, from each drawn member's session's verdict and moves** (`memberSteps_of_verdicts`):
-  `MemberSteps` at an invariant wherever each drawn member's step gives the invariant at the next place, a session's
+* **The members' steps, from each sampled member's session's verdict and moves** (`memberSteps_of_verdicts`):
+  `MemberSteps` at an invariant wherever each sampled member's step gives the invariant at the next place, a session's
   verdict at the member's statement and the outcome's moves at its record.
 -/
 
@@ -158,7 +158,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The members' steps, from each drawn member's session's verdict and moves**: `MemberSteps` at an invariant `I`
+/-- **The members' steps, from each sampled member's session's verdict and moves**: `MemberSteps` at an invariant `I`
 that holds at the play's start and is kept at a member with no proof block in the sample, wherever the session's trace
 of each member `m` with a proof block in the sample, under `MemberSteps.step`'s premises, has `I` at the next place
 and the position past the stop after its session's end, a session's verdict (`SessionVerdict`) at a statement that is

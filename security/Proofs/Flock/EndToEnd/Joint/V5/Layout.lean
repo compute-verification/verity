@@ -284,7 +284,7 @@ theorem mem_design_draw (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fi
   rw [← e]
   exact w.mem_part k _ v
 
-/-- **A sampled unit `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
+/-- **A sampled proof block `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
 theorem mem_draw_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ (w.design k).draw ω := by
   constructor
