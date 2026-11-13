@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.codec import encode_program, program_digest
-from verity.definitions.circuits.constants import program_data
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.definitions.registry import b1, dense as DN, fa2_softcap as F2S, fa3_check_inf as F3, hopper
-from verity.definitions.registry import prims as P, ref_prims as RP
-from verity.definitions.registry import value_inputs as VI
+from verity.definitions.circuits.constants import program_data
+from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import dense as DN
+from verity.definitions.registry import fa2_softcap as F2S
+from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import layer_norm as LN
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as RP
+from verity.definitions.registry import value_inputs as VI
 
 HOP = dict(DOT=hopper.HopperBF16WgmmaDot16)
 

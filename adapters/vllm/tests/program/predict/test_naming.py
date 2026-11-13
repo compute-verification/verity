@@ -23,6 +23,8 @@ from typing import Any
 
 import pytest
 from verity.circuits.types import RecordType
+
+from tests.program.predict.test_steps import TINY, _hit, _registered
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
 from verity_vllm.correspondence.runtime import validate_document
@@ -34,10 +36,10 @@ from verity_vllm.program.predict.naming import WRAPPER, named_program, write_bui
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import compile_steps
 
-from tests.program.predict.test_steps import TINY, _hit, _registered
-
 FIX = Path(__file__).parent / "fixtures"
 TRACES = json.loads((FIX / "naming_traces.json").read_text())
+#: `test_steps.TINY`, a config.json's fields, each of its own type
+CONFIG: dict[str, Any] = TINY
 
 
 def _h(x: Any) -> str:
@@ -132,8 +134,8 @@ def test_compile_steps_names_each_program_the_same_on_every_compile_with_no_vllm
             hints = json.load(f)["annotations"]["node_hints"]
         assert {int(k): v for k, v in hints.items()} == n.names
     assert [c.named[u.digest].prefix for u in c.requests] == [None, {
-        "input": 1, "C": 16, "row_leaves": TINY["num_key_value_heads"] * TINY["hidden_size"] // TINY["num_attention_heads"],
-        "layers": [f"model.layers.{i}.self_attn.attn" for i in range(TINY["num_hidden_layers"])]}]
+        "input": 1, "C": 16, "row_leaves": CONFIG["num_key_value_heads"] * CONFIG["hidden_size"] // CONFIG["num_attention_heads"],
+        "layers": [f"model.layers.{i}.self_attn.attn" for i in range(CONFIG["num_hidden_layers"])]}]
 
 
 def test_a_named_build_declares_what_the_manifest_reads_from_a_traces_record(tmp_path):
@@ -150,7 +152,7 @@ def test_a_named_build_declares_what_the_manifest_reads_from_a_traces_record(tmp
     d = tmp_path / "build_request_LP24_T3"
     write_build(str(d), c.programs[dg], n)
     res = json.loads((d / "result.json").read_text())
-    layers = [f"model.layers.{i}.self_attn.attn" for i in range(TINY["num_hidden_layers"])]
+    layers = [f"model.layers.{i}.self_attn.attn" for i in range(CONFIG["num_hidden_layers"])]
     tp = reg.phi.target_profile()
     assert res["target"] == {"declared": tp.to_json(), "declared_source": "declared"} and sorted(res["attention_impls_declared"]) == layers
     assert Correspondence.of(from_instances(str(d / "instances.json.gz")), str(d),
@@ -158,7 +160,7 @@ def test_a_named_build_declares_what_the_manifest_reads_from_a_traces_record(tmp
     assert _profile(res, None)[0] == ("hopper" if tp.effective_flash_attn_version() == 3 else "ampere")
     impls, path = FP.attention_impls_of_record(programs_root=str(tmp_path))
     assert path == str(d / "result.json") and [(x.layer, x.NH, x.KVH, x.D, x.window) for x in FP.declarations_from_attention_impls(impls)] == [
-        (i, 4, 2, 16, None) for i in range(TINY["num_hidden_layers"])]
+        (i, 4, 2, 16, None) for i in range(CONFIG["num_hidden_layers"])]
 
 
 @pytest.mark.parametrize("config,fact", [("qwen25-05b", "a q/k/v bias"), ("qwen3-4b", "q/k norms")])

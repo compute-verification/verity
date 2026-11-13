@@ -22,9 +22,11 @@ compares only the keys both sides carry.
 
 from __future__ import annotations
 
+from typing import Any
+
 _SPLIT_ATTENTION = "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"
 
-COMPILATIONS = {
+COMPILATIONS: dict[str, dict[str, Any]] = {
     "piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
                   "emulate_precision_casts": False, "attention": _SPLIT_ATTENTION},
     "piecewise-emu": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
@@ -34,3 +36,6 @@ COMPILATIONS = {
                   "attention": "captured at the padded batch in a uniform decode step's FULL graph, else eager breaks "
                                "(eager_break_during_capture) on the real batch between captured segments"},
 }
+
+
+__all__ = ["COMPILATIONS"]
