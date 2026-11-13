@@ -43,11 +43,11 @@ own and changes with it.
   `floor_skip`, `floor_eps`, `prices`, `pv_ts`, the models' shapes (`MODELS`, `Shape`) and the rates (`RATES`).
 - **`verity_machine_model.lean_headline`**, sm_120's headline instances as exact data, which `lean-headline` writes as
   Lean: `instance()` and `measured()`, with `stars`, `load`, `mload`, `price`, `coef`, `branches` and the constants
-  its `__all__` lists. `benchmarks/pouw/lean_headline.py` gives the same names to the files that load that path.
+  its `__all__` lists.
 - **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data:
   `reading(family, vector, full, q)` with `FAMILIES` and `SM90`, and the constants its `__all__` lists; and
   **`verity_machine_model.lean_headline_dc`**, which `lean-headline` writes them as Lean with: `render_measured`,
-  `write` and `main`. `benchmarks/pouw/lean_headline_dc.py` gives both modules' names to the files that load that path.
+  `write` and `main`.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
