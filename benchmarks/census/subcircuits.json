@@ -407,7 +407,7 @@
       "ruling": "red-team-flock-3 granted attention on flock-ir-frame/v3 on condition that the headline footnotes this (handoff 20260926T1115Z), and the class-pin statement (one pin per key-count class, T 1–128, 129–256, 257–512) with condition CP7 (handoff 20260926T1340Z)",
       "sources": [
         {
-          "label": "red-team-flock-3's grant of AttentionHead_v3 on flock-ir-frame/v3 (lanes/coordinator/20260926T1115Z-handoff-from-red-team-flock-3.md); verity/protocols/flock/prover/python/verity_flock/templates/attention_head.py (the softmax is the native tail the verifier evaluates)"
+          "label": "red-team-flock-3's grant of AttentionHead_v3 on flock-ir-frame/v3 (lanes/coordinator/20260926T1115Z-handoff-from-red-team-flock-3.md); verity/protocols/proofs/flock/prover/python/verity_flock/templates/attention_head.py (the softmax is the native tail the verifier evaluates)"
         }
       ]
     },
@@ -618,7 +618,7 @@
       "ruling": "the verifier evaluates no part of the computation, so a cell that leaves any piece to it does not cover its subcircuit",
       "sources": [
         {
-          "label": "verity/protocols/flock/prover/python/verity_flock/templates/rmsnorm_fused_cuda.py (supports: 'the row tail evaluated by the verifier')"
+          "label": "verity/protocols/proofs/flock/prover/python/verity_flock/templates/rmsnorm_fused_cuda.py (supports: 'the row tail evaluated by the verifier')"
         }
       ]
     },
@@ -727,7 +727,7 @@
       "ruling": "the verifier evaluates no part of the computation, so a cell that leaves any piece to it does not cover its subcircuit",
       "sources": [
         {
-          "label": "verity/protocols/flock/prover/python/verity_flock/templates/rmsnorm_triton.py (supports: 'the row tail evaluated by the verifier')"
+          "label": "verity/protocols/proofs/flock/prover/python/verity_flock/templates/rmsnorm_triton.py (supports: 'the row tail evaluated by the verifier')"
         }
       ]
     },
