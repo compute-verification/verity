@@ -34,7 +34,12 @@ from verity.circuits.codec import canonical_json
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows, salt_of, weights_root
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    commit_rows,
+    salt_of,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
@@ -810,9 +815,10 @@ def test_a_value_holds_one_row_for_each_of_its_rows():
 
 
 def _salt_pass(tmp_path, monkeypatch, challenger, after=None):
-    """A Pearl-C pass over `test_pouw_pearl_c_served`'s weights, epoch 0, as its install records it, and its session on
-    a gate's ledger: reserved with the salt coin alone, opened on the epoch's root R, served by ``challenger``, its salt
-    coin taken after ``after`` (R unless given), closed by its client and ended. The pass, the gate, the session, R."""
+    """A Pearl-C pass over `test_pouw_pearl_c_served`'s weights, epoch 0, with what `salt_session_reason` reads of the
+    pass its install records, and its session on a gate's ledger: reserved with the salt coin alone, opened on the
+    epoch's root R, served by ``challenger``, its salt coin taken after ``after`` (R unless given), closed by its
+    client and ended. The pass, the gate, the session, R."""
     gate = CH.Gate(PCS.PRIVATE, PCS.KEY)
     session = PCS._GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, challenger)
     weights = weights_root(PCS.ROOTS)
@@ -822,9 +828,9 @@ def _salt_pass(tmp_path, monkeypatch, challenger, after=None):
     session.client.close()
     assert session.end() is None
     coins = challenger.commitment
-    served_pass = {"scheme": PCS.SCHEME, "coin_source": "challenger", "weights_root": weights.hex(), "pass_index": 0,
-                   "coins": coins.to_json(), "salt_opening": opening.to_json(),
-                   "salt": salt_of(coins, opening.coin, weights).hex(), "session": PHC.carried(PHC.session_of(answer))}
+    served_pass = {"weights_root": weights.hex(), "pass_index": 0, "coins": coins.to_json(),
+                   "salt_opening": opening.to_json(), "salt": salt_of(coins, opening.coin, weights).hex(),
+                   "session": PHC.carried(PHC.session_of(answer))}
     return served_pass, gate, session, root
 
 
@@ -836,7 +842,7 @@ def test_a_pearl_c_pass_is_held_to_a_hex_weights_root_and_to_coins_and_a_salt_co
     ledger, fetch = gate.ledger(), {PCS.SID: session.tree}.get
 
     def why(**edit):
-        return PHC.session_reason({**served_pass, **edit}, ledger, fetch)
+        return PHC.salt_session_reason({**served_pass, **edit}, ledger, fetch)
     assert why() is None
     weights = served_pass["weights_root"]
     for root in ("zz", weights.upper(), weights[:-2], None, 7):
@@ -861,23 +867,26 @@ def test_a_pearl_c_passs_session_signs_the_salt_coin_alone_and_logs_its_epochs_r
         (tmp_path / name).mkdir()
     served_pass, gate, session, root = _salt_pass(tmp_path / "another-root", monkeypatch, PCS.salt_only(6),
                                                   after=bytes(range(64)))
-    assert PHC.session_reason(served_pass, gate.ledger(), {PCS.SID: session.tree}.get) == (
+    assert PHC.salt_session_reason(served_pass, gate.ledger(), {PCS.SID: session.tree}.get) == (
         f"session {PCS.SID}'s signed log does not show the epoch root alone as the root its salt coin followed")
     served_pass, gate, session, root = _salt_pass(tmp_path / "a-round-beside", monkeypatch,
                                                   Wd.live_challenger(0, 1, CH.entropy(7)))
     fetch, released = {PCS.SID: session.tree}.get, {Wd.ROUND: 0, Wd.SALT: 1}
-    assert PHC.session_reason(served_pass, gate.ledger(), fetch) == (
+    assert PHC.salt_session_reason(served_pass, gate.ledger(), fetch) == (
         f"session {PCS.SID} released {released}, not its one salt coin: a refused pass")
     claimed = PCS._ended_over(session.directory, Wd.SALT_FAMILIES, root.hex(), released={Wd.SALT: 1})
-    assert PHC.session_reason(served_pass, claimed, fetch) == (
+    assert PHC.salt_session_reason(served_pass, claimed, fetch) == (
         f"session {PCS.SID}'s signed coins: the coin commitment's coins are not a Pearl-C salt session's: its salt "
         "coin alone")
 
 
-@pytest.mark.parametrize("ids,said", [(lambda ids: [-1, *ids[1:]], f"an input id is not a u32 below {W.EMPTY_ID}"),
-                                      (lambda ids: [W.EMPTY_ID, *ids[1:]], f"an input id is not a u32 below {W.EMPTY_ID}"),
-                                      (lambda ids: ids * 9, f"{9 * sum(map(len, TC.PROMPTS.values()))} input ids, "
-                                                            f"past the Program's {TC.ROWS} slots")],
+_NO_TOKEN_ID = f"an input id is not a u32 below {W.EMPTY_ID}"
+_PAST_THE_SLOTS = f"{9 * sum(map(len, TC.PROMPTS.values()))} input ids, past the Program's {TC.ROWS} slots"
+
+
+@pytest.mark.parametrize("ids,said", [(lambda ids: [-1, *ids[1:]], _NO_TOKEN_ID),
+                                      (lambda ids: [W.EMPTY_ID, *ids[1:]], _NO_TOKEN_ID),
+                                      (lambda ids: ids * 9, _PAST_THE_SLOTS)],
                          ids=["negative", "the-empty-slots-word", "past-the-slots"])
 def test_step_0s_input_ids_in_the_commit_that_are_no_rows_of_token_ids_are_its_taps_refusal(tmp_path, monkeypatch, ids,
                                                                                             said):
@@ -896,7 +905,7 @@ def test_a_later_rounds_input_ids_that_are_no_token_ids_refuse_the_windows_serve
     make no table, the window's served trees are refused with the round's name, and the window credits nothing."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
     _record, run, tap = TC._window(tmp_path, monkeypatch, ids=lambda s, honest: [-1, *honest[1:]] if s == 1 else honest)
-    assert run.served.refused == [f"round 1's input ids: an input id is not a u32 below {W.EMPTY_ID}"]
+    assert run.served.refused == [f"round 1's input ids: {_NO_TOKEN_ID}"]
     assert tap.refused == [] and sorted(run.served.ids) == [0]
     assert run.details["roots1"]["reason"] == "roots1: the window's served trees were refused, so no table is the Commit's"
     assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
