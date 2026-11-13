@@ -1,4 +1,4 @@
-"""The source-close evaluator against ``verity.definitions.silicon.models`` and the hardware captures (test plan items a-d of lane WP1).
+"""The source-close evaluator against ``verity.definitions.silicon.models`` and the hardware captures (the driver's steps a to d, on samples).
 
 The exhaustive/pod counterpart is ``exhaustive_driver.py`` (recorded run, stage ``wp1.exhaustive``); these run in seconds.
 """
