@@ -14,6 +14,8 @@ step before it returned, so no step holds the evidence to anything the listed on
 * `firstTreeless_of_lines`: `firstTreeless` passes where the first session's log reads as lines none of which is a
   coin tree's.
 * `digestIs_of`: `digestIs` passes where the record's digest is the one named.
+* `repStreamsOrdered_of`: `repStreamsOrdered` passes where the interior audit reads its session's coin trees and
+  the log opens each one's rounds stream by stream.
 * `inputAt_of_steps`: `inputAt` returns where the interior registration's commitment reads, its sample's bytes are
   read, every session's verifier accepts, the verdicts are stamped, the interior's receipt names its place and each
   registration's record reads back (`readBack`), the boundary's with the commitment's digest.
@@ -21,7 +23,8 @@ step before it returned, so no step holds the evidence to anything the listed on
   (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
   are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
-  stage's law is computed (`secondLawOf`) and the interior audit's check at that law accepts (`secondCheck`).
+  session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`), the second stage's law is
+  computed (`secondLawOf`) and the interior audit's check at that law accepts (`secondCheck`).
 * `accepts_iff_steps`: the check accepts exactly there.
 
 That an honest prover's evidence passes each step is not shown here.
@@ -79,6 +82,16 @@ theorem digestIs_of {j : Json} {d : ByteArray} (h : Registration.digest j = .ok 
        rfl)
     | (simp; done)
 
+/-- **`repStreamsOrdered` passes where the log opens each coin tree's rounds stream by stream** (the converse of
+`repStreamsOrdered_trees`). -/
+theorem repStreamsOrdered_of {p : Params} {e : Evidence} {ts : Array Challenger.LoggedTree}
+    (ht : OneStageZk.treesOf p.audit.base e.interior.base = .ok ts)
+    (h : ∀ t ∈ ts, Challenger.repStreamOrder t = true) : repStreamsOrdered p e = .ok () := by
+  unfold repStreamsOrdered
+  rw [ok_bind _ ht]
+  unfold treesOrdered
+  simp only [Array.all_eq_true'.2 h, ↓reduceIte]
+
 /-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok`). -/
 theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {s : String} {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {vs : Array (String × Json)}
@@ -112,19 +125,21 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run law : Json}
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
     (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
-    (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hl : secondLawOf p run = .ok law) :
+    (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
+    (hl : secondLawOf p run = .ok law) :
     prepare true p c ξ e bs =
       .ok (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂
         { e.interior.base with verdicts := r.out }, run) := by
   unfold prepare
   first
-    | (simp only [hi, hfit, hr, hs, hu, ho, ht, hl, bind, Except.bind, pure, Except.pure]
+    | (simp only [hi, hfit, hr, hs, hu, ho, ht, hq, hl, bind, Except.bind, pure, Except.pure]
        first | done | rfl)
     | (rw [ok_bind _ hi]
        try dsimp only
-       rw [ok_bind _ hfit, ok_bind _ hr, ok_bind _ hs, ok_bind _ hu, ok_bind _ ho, ok_bind _ ht, ok_bind _ hl]
+       rw [ok_bind _ hfit, ok_bind _ hr, ok_bind _ hs, ok_bind _ hu, ok_bind _ ho, ok_bind _ ht, ok_bind _ hq,
+         ok_bind _ hl]
        rfl)
-    | (simp [hi, hfit, hr, hs, hu, ho, ht, hl, bind, Except.bind, pure, Except.pure]
+    | (simp [hi, hfit, hr, hs, hu, ho, ht, hq, hl, bind, Except.bind, pure, Except.pure]
        done)
 
 /-- **The two-stage check accepts where each of its steps passes** (module docstring), at the switch on. -/
@@ -133,12 +148,13 @@ theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {pub : OneStage.Public} {prof : Core.Integrity}
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
     (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
-    (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hl : secondLawOf p run = .ok law)
+    (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
+    (hl : secondLawOf p run = .ok law)
     (hj : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true)
     (htwo : secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂
       { e.interior.base with verdicts := r.out } = .accept pub prof) :
     checkBlobsAtWith true p c ξ e bs = .accept pub prof := by
-  have hp := prepare_of_steps hi hfit hr hs hu ho ht hl
+  have hp := prepare_of_steps hi hfit hr hs hu ho ht hq hl
   unfold checkBlobsAtWith
   first
     | (rw [hp]
@@ -160,7 +176,8 @@ theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray
     checkBlobsAtWith true p c ξ e bs = .accept pub prof ↔
       ∃ c₂ ξ₂ r i run law, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ stagesFit ξ ξ₂ = .ok () ∧
         Spot.Run.run i true = .ok run ∧ sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
-        stagesOrdered p e = .ok () ∧ firstTreeless p e = .ok () ∧ secondLawOf p run = .ok law ∧
+        stagesOrdered p e = .ok () ∧ firstTreeless p e = .ok () ∧ repStreamsOrdered p e = .ok () ∧
+        secondLawOf p run = .ok law ∧
         Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
         secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂
           { e.interior.base with verdicts := r.out } = .accept pub prof := by
@@ -181,11 +198,12 @@ theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray
       obtain ⟨u', hu, hp⟩ := bind_ok hp
       obtain ⟨u'', ho, hp⟩ := bind_ok hp
       obtain ⟨u₃, ht, hp⟩ := bind_ok hp
+      obtain ⟨u₄, hq, hp⟩ := bind_ok hp
       obtain ⟨law, hl, hp⟩ := bind_ok hp
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
       obtain ⟨rfl, rfl⟩ := hp
-      exact ⟨c₂, ξ₂, r, i, run', law, hi, hfit, hr, hs, hu, ho, ht, hl, hj, htwo⟩
-  · rintro ⟨c₂, ξ₂, r, i, run, law, hi, hfit, hr, hs, hu, ho, ht, hl, hj, htwo⟩
-    exact accepts_of_steps hi hfit hr hs hu ho ht hl hj htwo
+      exact ⟨c₂, ξ₂, r, i, run', law, hi, hfit, hr, hs, hu, ho, ht, hq, hl, hj, htwo⟩
+  · rintro ⟨c₂, ξ₂, r, i, run, law, hi, hfit, hr, hs, hu, ho, ht, hq, hl, hj, htwo⟩
+    exact accepts_of_steps hi hfit hr hs hu ho ht hq hl hj htwo
 
 end VStar.Recursive.SampledTwo
