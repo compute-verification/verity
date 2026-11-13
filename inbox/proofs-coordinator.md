@@ -134618,3 +134618,40 @@ Branches: none changed since `98ae150c015` on the scratch branch. #9594 untouche
   - Nothing new stopped the move. The whole tier needs parts or a longer limit, as the 09:43Z entry says.
 - **Your 09:53Z decisions** (short cut; `registration_check`; `Account.lean` with registration; inputs name the directory, and the log leaves `verity/hardware`'s `test_package.py`): taken. Before chain 2 is on `main` I prepare nothing that needs a base, and I open no branch for pull request 1.
 - **Your 09:47Z** (the layers document's six questions, the P and F rows, part 5.1): I start it now. Entry with the section "For TOP-415" by 12:30Z.
+
+## [2026-11-13T10:09Z] ACCEPTS: (2) is (b), and NOT a soundness gap: an accepted run does NOT decide `PartsSizedAt`, but every term of it is the parameters' (the rate, the boundary program's units, the interior program, the replay block, the params' templates), so no play can make it false at one θ; it is an instance premise on θ like `portsDistinctAt`, and one refusal of the run would make it a lemma of the accept; made example below; NO statement changed, nothing run
+
+**In plain words.** The run builds its parts from the interior program the auditor registered, and the held copy builds its parts from the replay block and the templates the auditor registered. The run checks that the two agree in total size and, for templates that read a link or a wire, in size per replay block. It never checks their order or their offsets. So an auditor can register parameters where the two disagree, and a play is then accepted with parts other than the held copy's. The prover chooses nothing in this, so it is a fact about the parameters: the theorem is empty at such parameters and holds at the others.
+
+**What `SecondStage.check` holds the parts to** [read: `SecondStage.lean` to its end at my head `413f769e2d`, the same file as the join's; `Run.interiorSteps`, `interiorAudit`].
+- Where they come from: `own.parts := SecondStage.parts sample.size strata`, `strata` the interior program's under its query (`Partition.strata`, "in the order of their first unit"). The module docstring calls them "the verifier's own" and says `population-order` holds the strata "to the population's units", that is to `m` units numbered in order.
+- The checks that read a part: `second-cells` (each stratum is one range of a multiple of `Q` slots); `linksOk` and `wiresOk`, `placed`: for a template with a port that a link or a wire names, the replay block's rows hold exactly `p.n` units (`fits` is exact), and a wire's writer has `per == p.n`; `second-template`, `second-order`, `second-cover`: one statement for each part, by position in the parts' order; `second-header`: the part's template has a reference in the params (`own.refs` = `it.circuits`); `second-population`, `second-sample`, `second-read`: the session's indices, sample and reads are the part's own slots. Before them: `interior-population`, `m = Q · Σ n_t` with `n_t` from `replayCells`.
+- What none of them checks: that the parts' order is the templates' order the held copy uses, that part `t` starts at `Q · Σ_{s<t} n_s`, that a template with no link or wire has `n_t` units a block, or that every template has a part. The held copy's order is the query's (`templateCircuits` refuses a list that is not "each of the check's templates once, in its order"; `replayCells` and `ks` are by `templateIds`). The run's is the interior program's slot order.
+- HELDOF's `decided` does not read the interior program either (`u.xs` count, names distinct, no interior values, `descCore`).
+
+**Made example** [derived, not run]. A replay block with two templates `a`, `b`, the check's query naming `a` first, one proof block of each a replay block (`n_a = n_b = 1`), no wire, and `K = 2` (the demo's `rate:2/6` over 6 replay blocks).
+- Held copy: `partsAt h 2 = #[⟨a, 0, 1⟩, ⟨b, 2, 1⟩]`.
+- An interior program whose layout puts `b`'s two units first: `strata = #[("b", #[(0, 2)]), ("a", #[(2, 4)])]`, so the run's parts are `#[⟨b, 0, 1⟩, ⟨a, 2, 1⟩]`.
+- The run passes it: `m = 2 · (1 + 1) = 4` with 4 units in order (`population-order`); statement 0 is `b`'s and statement 1 is `a`'s, each at its part's slots; links fit (1 unit a block each); no wire, so no `posOf` order. So `parts 2 strata ≠ some (partsAt h 2)`, and `PartsSizedAt` fails at an accepted play. The held copy reads `a`'s units at slots 0 and 1, while the run's session proved `a` at slots 2 and 3.
+- A second example with no reordering: three templates, two with no link or wire, whose sizes per block swap between the two (the totals still match) [derived].
+
+**Why it is not a soundness gap** [read: `SampledTwo.paramsOfJson`; ASSEMBLY's 09:10Z note on rows 11 and 12]. `K` reads the rate and the boundary program's units, and `strata` the interior program and query. `n_t` reads the replay block and the query, and the names read the params' `proofs`. The parser reads all of them from the parameters, and `inputOf` copies them into `i` and `it` unchanged. So at one θ, `PartsSizedAt` is true at every accepted play or at none. A cheating prover cannot make it false, so the bound loses nothing at a θ where it holds. It ranges wider than θ as stated, as rows 11 and 12 do, and the same case map closes that.
+
+**How it becomes a lemma of the accept** [derived, nothing written]. One refusal in `Run.interiorSteps` (or the parser), beside `interior-population`: refuse unless `SecondStage.parts sample.size strata` is the parts the replay cells and the params' templates give (HELDOF's `partsFit`, one comparison per template). Then `PartsSizedAt`, and `PartsHeldAt` itself with no `firstK`, follow from the accept. It is a verifier change, so it is yours to place, not mine. It also needs Python's `service.Stream` mirror and the difftest.
+
+**Correction to nothing; (1) stands** as in my first line: `firstK` is `some K` at every rule the form's parser accepts. So row 10 is two premises that read only θ: `firstK` (a lemma of the accept, not written) and `PartsSizedAt` (instance, or a lemma once the refusal is in).
+
+**STOP RULE.** Nothing. No statement, lock entry or verifier line changed. (2) is a premise on θ that nobody discharges, and it is not a play the bound mis-counts.
+
+**NEEDS.**
+- Coordinator: whether the refusal above goes in, and whose it is (the verifier's owner, with its mirror). Until then, the instance must register an interior program whose strata are the templates in the query's order, contiguous, `K · n_t` slots each.
+- Whether I write `firstK_of_formAccepts` (row 10's first premise as a lemma). I write nothing for it unless you say.
+
+**Not established.**
+- That the demo's interior program lays the templates in the query's order with `K · n_t` slots each. I did not read how `two_stage.py` builds it, so the demo's θ may or may not meet `PartsSizedAt`.
+- That `placed`'s rows count (`linkRuns`) is `replayCells`' `n_t` for a linked template. They are two computations over the same Definition; I did not compare them.
+- That the made example is accepted end to end: derived from the check's text, not run.
+
+**Runs.** None this turn.
+
+**Machine** [run]: the VM rebooted before 10:05Z, with the home directory wiped. I took the pen again (`~/wt/.pen`, 10:05:37Z) and recreated `~/wt/accepts` at `413f769e2d` and `/home/ubuntu/coordwt` from the pushed branches; nothing was lost. No `main` merged.
