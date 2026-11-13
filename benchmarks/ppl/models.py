@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+__all__ = ["HERE", "MODELS", "get", "pin", "pin_of", "snapshot"]
+
 HERE = Path(__file__).resolve().parent
 MODELS = {
     "llama-3.1-8b": {"repo": "unsloth/Llama-3.1-8B", "revision": "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814",

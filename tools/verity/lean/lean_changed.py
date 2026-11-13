@@ -21,11 +21,14 @@ status it takes: its stub imports no module whose build, or the build of anythin
 closure, is not of its source as it is, as a tree synced across a move of names holds them, and counts those it left
 out); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
-them against the outputs in place. It never runs check.py, so it reads and writes
-no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
+them against the outputs in place. Where the sibling check's stub is refused that way, the siblings the refusal names
+lose theirs the same way and `lake build` rebuilds them there and then, once, with a line that says so, before the stub
+is elaborated once more, whose result is the check's (`siblings.check`). It never
+runs check.py, so it reads and writes no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
-unsandboxed, and fetches dependencies the node does not keep. In the sandbox the tree's fetched dependencies are mounted
+unsandboxed, fetches dependencies the node does not keep, and restores nothing from a cache, its own included, so it
+compiles every module it needs (`build`). In the sandbox the tree's fetched dependencies are mounted
 read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
 no `.lake` gets an empty one, in the tree's own directory and never in the ones the audit keeps (`READ_ONLY`): Lake makes
 it before it compiles that configuration at a dependency order the tree was not loaded at, and a slot tree whose dependencies
@@ -41,7 +44,7 @@ reads); each package whose check.py passes, its report saying it built in the sa
 compiled there. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
 hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
-pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
+pool or closes it (`build 0`), or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
 instead (`dev_records`): `check.py --dev-cache --build --no-replay --no-runs` on this
 checkout's PKG, then its requirers, each build restored from the published cache (Security: about 40 minutes), with the same
 reports, record keep and kind; that path builds in this checkout, so a run takes it only with `--cwd clone`. It says which
@@ -411,7 +414,13 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
           cmd: list[str] | None = None, echo=None) -> tuple[int, str]:
     """`lake build` (of ``targets``, else the default ones; ``cmd``: that `lake` command instead) of ``tree/pkg``, in the
     sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes, or each line handed to ``echo``. Before the
-    default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
+    default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`).
+
+    Outside the sandbox Lake restores nothing from a cache, its own included, whatever the environment or a lakefile
+    says: there it restores by a hard link, and the restored file keeps the cache file's time, which `outdated` reads as
+    the time it was built. `LAKE_ARTIFACT_CACHE` turns the cache off for every package whose lakefile leaves
+    `enableArtifactCache` unset; a lakefile that sets it is read before the environment, so `LAKE_CACHE_DIR` names an empty
+    directory of this command's own, removed after it, and such a package finds there only what this command built."""
     if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
         rc, text = build(pkg, tree, lake, plugins, sandbox)
         if rc:
@@ -420,16 +429,19 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
     argv = in_sandbox(pkg, tree, argv) if sandbox else argv
     env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS") or
            str(AUDIT.build_threads(tree / pkg) or LA.COMMON.cores())}
-    p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                         encoding="utf-8", errors="replace")
-    out = []
-    for line in p.stdout:
-        if echo:
-            echo(line)
-        else:
-            print(line, end="", flush=True)
-        out.append(line)
-    return p.wait(), "".join(out)
+    with contextlib.nullcontext() if sandbox else tempfile.TemporaryDirectory(prefix="lake-no-cache-") as empty:
+        if empty is not None:
+            env |= {"LAKE_ARTIFACT_CACHE": "false", "LAKE_CACHE_DIR": empty}
+        p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                             encoding="utf-8", errors="replace")
+        out = []
+        for line in p.stdout:
+            if echo:
+                echo(line)
+            else:
+                print(line, end="", flush=True)
+            out.append(line)
+        return p.wait(), "".join(out)
 
 
 def sandboxed() -> bool:
@@ -519,9 +531,9 @@ BUILT = re.compile(r"^\s*\S+ \[\d+/\d+\] Built ([^\s:]+)(?: \(.*\))?$", re.M)
 
 
 def compiled(text: str) -> list[str]:
-    """The modules Lake's output ``text`` says it compiled. A `--try` or `--build` build reads Lake's own cache, so it
-    unpacks main's published build where that holds a module's input hash, and `put` must not take such a module as one
-    this node compiled: `LakeArtifacts.put` indexes only these."""
+    """The modules Lake's output ``text`` says it compiled. In the sandbox a `--try` or `--build` build reads Lake's own
+    cache, so it unpacks main's published build where that holds a module's input hash, and `put` must not take such a
+    module as one this node compiled: `LakeArtifacts.put` indexes only these."""
     return sorted({m.replace("«", "").replace("»", "") for m in BUILT.findall(text)})
 
 
@@ -645,7 +657,15 @@ def outdated(lib: Path) -> list[Path]:
     them from: one written before the source beside it, one with no source beside it, and one whose module has no trace,
     which Lake rebuilds, writing the source anew. Lake writes an object after its source, so such an object is from an
     earlier source, and Lake takes it as built whenever its trace names the hash the new source has. A `repair` that
-    dropped a module's trace and `.hash` files and kept its objects left them so."""
+    dropped a module's trace and `.hash` files and kept its objects left them so.
+
+    The rule reads the files' times, so it rests on one premise: a file Lake restores from a cache is a copy, with the
+    time of its restore. Lake restores by a hard link wherever one can be made, and a linked file keeps the cache file's
+    time: a source restored so can be older than the object of the source that was there before it, which then stays,
+    and an object restored so is older than its own source, and goes. The premise is kept in two places. In the sandbox
+    each `.lake` is a mount of its own (`sandbox.sh`), a link into it from a cache fails, and Lake copies. Outside the
+    sandbox nothing is restored into a slot tree: `build` gives Lake no cache to read there, and check.py's build of one
+    stages none and runs with Lake's cache off (`lake_env`)."""
     out = []
     ir = lib.parent.parent / "ir"
     for o, of in OBJECTS.items() if ir.is_dir() else ():
@@ -675,11 +695,12 @@ def orphaned(lib: Path) -> dict[str, list[Path]]:
 CLASH = re.compile(r"import (\S+) failed, environment already contains '[^']*' from (\S+)")
 
 
-def clashed(tree: Path, pkgs: list[str], text: str) -> list[str]:
+def clashed(tree: Path, pkgs: list[str], text: str, but: str | None = None) -> list[str]:
     """The modules of ``tree``'s ``pkgs`` that an import clash in ``text`` names, each `forget`-ten so the next build
-    there rebuilds it against the outputs in place."""
+    there rebuilds it against the outputs in place; ``but``, the tried file's module where the clash is its scratch
+    build's, is left as it is."""
     out = []
-    for m in dict.fromkeys(n for pair in CLASH.findall(text) for n in pair):
+    for m in dict.fromkeys(n for pair in CLASH.findall(text) for n in pair if n != but):
         for p in pkgs:
             lib = tree / p / ".lake" / "build" / "lib" / "lean"
             if (t := lib.joinpath(*m.split(".")).with_suffix(".trace")).is_file():
@@ -1691,7 +1712,9 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
     the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
     records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
-    artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile."""
+    artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile.
+    Nor is what the sibling check has Lake rebuild stored (the siblings its stub's refusal names, `clashed` and then
+    `lake build` of them): by then `lean` has run the file's code."""
     file = file.removeprefix("./")
     if tree is not None and not kept_tree(tree):
         log(f"lean-try: {tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}, where the trees `--records` and "
@@ -1782,10 +1805,17 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                         argv = [lake, "env", "lean", *a]
                         return SIBLINGS.run(in_sandbox(pkg, tree, argv) if sandbox else argv, tree / pkg)
 
-                    rc, output, line = SIBLINGS.check(plan, work, lean)
+                    def rebuild(refusal: str) -> tuple[int, str, float]:
+                        began = time.monotonic()
+                        clashed(tree, closure(pkg), refusal, but=plan.module)
+                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
+                        return status, built, time.monotonic() - began
+
+                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)
                     if output:
                         log(output.rstrip("\n"))
-                    log(f"lean-try: {file}: {line}")
+                    for line in lines.splitlines():
+                        log(f"lean-try: {file}: {line}")
             if said:
                 log(f"lean-try: {file}: {said}")
             (tree / DIRTY).unlink(missing_ok=True)
