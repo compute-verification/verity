@@ -3,23 +3,14 @@
 
 from __future__ import annotations
 
-import importlib.util
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
+import gamma
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-
-
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    return mod
 
 
 def _has_ifma() -> bool:
@@ -56,7 +47,6 @@ def test_ifma_gate(tmp_path: Path, g: int, bits: int, c: int) -> None:
     (1.45, 128 * 2.5e8, 113, 0.94, 1.18),   # issue bound, IFMA bound
 ])
 def test_gamma_matches_node_gamma(s: float, host: float, x1: int, low: float, high: float) -> None:
-    gamma = _load("gamma")
     h = host / (gamma.GPUS * gamma.GPU_MAX)
     x = gamma.X1 / (s * (1 + h))
     assert abs(x - x1) < 1
@@ -64,6 +54,5 @@ def test_gamma_matches_node_gamma(s: float, host: float, x1: int, low: float, hi
 
 
 def test_measured_rates_are_clock_matched() -> None:
-    gamma = _load("gamma")
     assert gamma.s_of(gamma.REF * gamma.MHZ / gamma.REF_MHZ) == pytest.approx(1.0)
     assert round(gamma.X1 / gamma.GPU["FOLD 5, column-chained (measured best)"], 1) == 138.0

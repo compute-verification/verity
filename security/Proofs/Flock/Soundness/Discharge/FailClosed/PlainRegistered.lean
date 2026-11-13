@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
-public import Proofs.Flock.Soundness.Discharge.PlainReg
 public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
 public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
@@ -20,6 +19,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
 /-!
 # The hidden-output headlines without `--zk`, over what `verify --registered F` accepts

@@ -157,7 +157,7 @@ def _table_reads(w: NodeWindow, tid: str, at: int, units: int, lo: int, label: s
     w.b.params[param] = H * E
     w.b.tables.setdefault((lo, H, block), IF.Table(param, param, 0, H, E))
     w.b.roots += [IF.TableRead(tid, "root", param, "root", at, units), IF.TableRead(tid, "domain", param, "domain", at, units)]
-    w.b.openings.append(IF.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, units))
+    w.b.openings.append(IF.TableOpening(tid, param, "tok", ("row", "salt", "path"), "o1", at, units))
 
 
 def _slots(rows: list[tuple[Row, ...]] | _Free, M: int) -> tuple[list[Row], int]:

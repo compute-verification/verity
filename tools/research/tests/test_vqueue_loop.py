@@ -25,9 +25,12 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, B
                              Rerun, Retry, Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
 from research.vqueue_records import lock_message
-from test_queue import World as Origin, _git, _landed_move, _merge
+from test_queue import AUTHORED, NAMED, OWN, World as Origin, _git, _landed_move, _merge, _who
 
 T0 = 1_900_000_000.0
+#: who the queue makes a commit as, each with its author and committer as `_who` reads them: `Q.IDENTITY`, or the author its
+#: repository's rules name (`Rules.identity`)
+AS = {"as its own": (Q.IDENTITY, OWN), "as the rules' author": (Q.Rules.parse(AUTHORED).identity, NAMED)}
 #: the env's spec files in each listed graph
 SPEC = ("pyproject.toml", "uv.lock")
 
@@ -221,6 +224,28 @@ def test_a_candidate_that_passed_fast_forwards_main_to_itself_and_its_branch_is_
     assert _git(env.o.origin, "for-each-ref", "--format=%(refname)", "refs/heads/") == "refs/heads/main"
     assert [r["tick"] for r in env.lines()] == [1, 3, 3, 4] and not any(r["shadow"] for r in env.lines())
     assert env.posts == [] and env.withdrawn == []
+
+
+def test_the_loops_candidates_carry_the_author_the_rules_at_main_name_from_the_tick_after_they_land(env):
+    """The loop takes no `--rules`: it reads the rules at `main` each tick (`World.at_main`).  The change that names an author
+    there (`Rules.author`) is merged as `IDENTITY`, as every candidate before it; the candidates built once it is on `main`
+    are that author's and committer's, on top of it, and the loop judges, advances and drops them as its own: it reads a
+    candidate's merges by their messages."""
+    main, loop = env.main(), env.loop(policy)
+    tops = [main]
+    for n, files, who in ((1, {"ci/queue.toml": AUTHORED}, OWN), (2, {"b.txt": "2\n"}, NAMED)):
+        env.put(n, files)
+        (built,) = loop.tick()
+        sha = built["sha"]
+        assert (built["action"], built["members"], built["base"]) == ("build", [n], tops[-1]), built
+        assert _who(env.o.origin, sha) == who and env.queued() == {branch(sha): sha}
+        keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+        env.result(keys["pytest:a"], "pytest:a", "pass")
+        assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
+        (drop,) = loop.tick()
+        assert (drop["action"], drop["outcome"]["members"], drop["outcome"]["state"]) == ("drop", [n], PASS)
+        tops.append(sha)
+    assert [m.pr for m in Q.chain_of(loop.world.repo, main, env.main())] == [1, 2] and env.queued() == {}
 
 
 def test_a_failed_candidate_ejects_the_member_its_failed_inputs_meet_and_the_rest_are_built_again(env):
@@ -3227,10 +3252,10 @@ class Records:
     """`research.vqueue_records`'s functions, faked: each start registers a records run on its candidate (``regen-N``), judged
     as ``verdicts`` says (pending unless it names it), a verdict other than pending kept in its record, with the run that
     passed, as `judge` keeps it; a commit commits ``files`` on top of the candidate in the clone ``repo`` as a lock commit
-    (`vqueue_records.lock_message`), at ``dated`` if set (else now), kept in ``made``, with ``told`` (what is told of the
-    bookkeeping its run repaired), makes none when ``files`` is empty (its run regenerated nothing), or says why not
-    (``held``).  With ``launching``, a start is a detached launch, pending until ``registered`` names the run ids it printed
-    for its sha."""
+    (`vqueue_records.lock_message`) as ``identity`` (the queue's own unless set to the author its rules name), at ``dated`` if
+    set (else now), kept in ``made``, with ``told`` (what is told of the bookkeeping its run repaired), makes none when
+    ``files`` is empty (its run regenerated nothing), or says why not (``held``).  With ``launching``, a start is a detached
+    launch, pending until ``registered`` names the run ids it printed for its sha."""
 
     def __init__(self, repo: Path):
         self.repo, self.files = repo, {"pkg/lean-audit.json": '{"records": 2}\n'}
@@ -3240,6 +3265,7 @@ class Records:
         self.verdicts: dict[str, RecordsRun] = {}
         self.held: str | None = None
         self.dated: str | None = None
+        self.identity: dict[str, str] = Q.IDENTITY
         self.told: tuple[str, tuple[str, ...]] | None = None
         self.launching, self.registered = False, {}
         #: each start's keywords
@@ -3289,7 +3315,7 @@ class Records:
                    f"100644,{Q._out(self.repo, 'hash-object', '-w', '--', str(blob))},{path}", env=index)
         tree, files = Q._git(self.repo, "write-tree", env=index).stdout.strip(), sorted(self.files)
         message = lock_message(" ".join(f"#{n}" for n in prs), rid, f"queue/{sha[:12]}", sha, [], files)
-        when = Q.IDENTITY if self.dated is None else {**Q.IDENTITY, **dict.fromkeys(Q.DATES, self.dated)}
+        when = self.identity if self.dated is None else {**self.identity, **dict.fromkeys(Q.DATES, self.dated)}
         made = Q._git(self.repo, "commit-tree", tree, "-p", sha, "-m", message, env=when).stdout.strip()
         if onto:
             made = vqueue_records._carry(self.repo, made, onto, files, lock_message(
@@ -3749,10 +3775,14 @@ def test_the_bookkeeping_a_records_run_repaired_is_told_as_drive_tells_it_once_a
     assert len(env.posts) == 1
 
 
-def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restart_starts_no_second_records_run(env):
+@pytest.mark.parametrize("identity, who", AS.values(), ids=AS)
+def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restart_starts_no_second_records_run(env, identity, who):
+    """The loop reads a records commit by its subject, its trailer and its one parent (`records_commit`), so one the queue
+    made as the author its rules name is adopted as one it made as `IDENTITY`."""
     loop, records, sha, _, _ = _records_loop(env)
-    records.verdicts["regen-1"], records.dated = RecordsRun(PASS), "2026-01-01T00:00:00+0000"
+    records.verdicts["regen-1"], records.dated, records.identity = RecordsRun(PASS), "2026-01-01T00:00:00+0000", identity
     made, *_ = records.commit("drive", sha, "regen-1", (1,))
+    assert _who(records.repo, made) == who
     _git(env.tmp / "clone", "push", "-q", "origin", f"{made}:refs/heads/queue/{made[:12]}")  # a tick cut off before its line
     again = env.loop(vqueue.decide, clone="again", records=records)
     again.world.slim_driver, records.repo, records.dated = lambda: "drive", again.world.repo, None   # in its loop's clone
@@ -3763,13 +3793,15 @@ def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restar
     assert env.queued() == {branch(sha): sha, branch(made): made} and len(records.started) == 1
 
 
-def test_a_records_commit_carried_onto_another_base_and_pushed_with_no_line_in_the_log_is_adopted(env):
+@pytest.mark.parametrize("identity, who", AS.values(), ids=AS)
+def test_a_records_commit_carried_onto_another_base_and_pushed_with_no_line_in_the_log_is_adopted(env, identity, who):
     """A tick cut off after it pushed the carried records commit leaves it with no line: the next tick merges the members
-    onto the chain's top again and adopts it (`World.recommitted` of that merge built before), with no second records run."""
+    onto the chain's top again and adopts it (`World.recommitted` of that merge built before), with no second records run;
+    whether the queue made it as `IDENTITY` or as the author its rules name."""
     loop, records, sha, _, _ = _records_loop(env)
     env.put(2, {"b.txt": "2\n"})
     (two,) = loop.tick()
-    records.verdicts["regen-1"], records.dated = RecordsRun(PASS), "2026-01-01T00:00:00+0000"
+    records.verdicts["regen-1"], records.dated, records.identity = RecordsRun(PASS), "2026-01-01T00:00:00+0000", identity
 
     class Cut(Exception):
         pass
@@ -3782,6 +3814,7 @@ def test_a_records_commit_carried_onto_another_base_and_pushed_with_no_line_in_t
         loop.tick()
     made = str(pushed.value)
     assert env.queued()[branch(made)] == made and not any(r.get("sha") == made for r in env.lines())
+    assert _who(env.o.origin, made) == who
     again = env.loop(vqueue.decide, clone="again", records=records)
     again.world.slim_driver, records.repo, records.dated = lambda: "drive", again.world.repo, None
     *_, fixed = again.tick()
@@ -3878,16 +3911,19 @@ def test_a_dry_run_starts_no_records_run_judges_none_and_says_what_it_would(env)
     assert "(records run: pending) (its check waits for its records run)" in said and "would " not in said, said
 
 
+@pytest.mark.parametrize("rules, who", [(None, OWN), (AUTHORED, NAMED)], ids=["as its own", "as the rules' author"])
 @pytest.mark.parametrize("changes", [False, True])
-def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement_change_it_makes(env, changes):
+def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement_change_it_makes(env, changes, rules, who):
     """The real `vqueue_records` on a real Landing, faked only where it reaches a machine (the launch, the runs' states, their
     evidence and run dirs): a lock run runs on the Lean candidate's tree before its check and regenerates `pkg`'s records, and
     its records commit, a lock commit the merge gate vouches for, is checked and lands in the candidate's place.  When the regenerated records change guarantee T's statement, they land all the same, nobody rung or ejected, and
-    the records commit names the change with T's owner in the candidate's lock, as the spec DM shows it once it lands."""
+    the records commit names the change with T's owner in the candidate's lock, as the spec DM shows it once it lands.  The
+    candidate and its records commit are the queue's own, or the author's the rules at `main` name (`Rules.author`), and the
+    gate vouches for the records commit whichever made it."""
     from research.landing import LEAN_STEP, Landing
     from test_landing import _live_run, _steps_run
 
-    main = env.main()
+    main = _main_to(env, {"ci/queue.toml": rules}) if rules else env.main()
     lock = {"guarantees": {"T": {"owner": "@proofs"}}, "reads": {}}
     one = env.put(1, {"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": json.dumps(lock)})
     loop = env.loop(vqueue.decide, records=vqueue_records)
@@ -3905,7 +3941,7 @@ def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement
     built, started = loop.tick()
     sha, (rid,) = built["sha"], started["record"]["ids"]
     assert (built["base"], built["records_first"], started["record"]["tip"], launched) == (main, True, sha, [(sha, "m1")])
-    assert loop.tick() == [] and _checks(env) == []
+    assert loop.tick() == [] and _checks(env) == [] and _who(env.o.origin, sha) == who
     regenerated = json.dumps({**lock, "reads": {"Pkg.M": "2"}}) + "\n"
     states[rid] = ("done", 0, None)
     evidence.append(_steps_run(env.tmp, rid, {LEAN_STEP: "passed"}))
@@ -3918,6 +3954,7 @@ def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement
     judged, fixed = loop.tick()
     new = fixed["sha"]
     assert (judged["why"], fixed["repairs"], fixed["enqueued"], _checks(env)) == ("judged pass", sha, True, [f"ready:{new}"])
+    assert _who(env.o.origin, new) == who
     body = _git(env.o.origin, "log", "-1", "--format=%B", new)
     named = ["pkg: guarantee T: changed (@proofs)"] if changes else []
     assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, [], ["pkg/lean-audit.json"], named).strip(), body
@@ -4135,9 +4172,9 @@ def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Run
 @pytest.mark.parametrize("graph2", ["pending", "fail", "pass"])
 def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatever_graph2_says_and_the_two_are_compared(
         env, monkeypatch, graph2):
-    """The check that gates is the after-landing run of the candidate, every step as three shards, a machine each; graph2's
-    check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances once every
-    shard passed, and once both ended one line says whether they agree."""
+    """The check that gates is the after-landing run of the candidate, every step as three shards, each on its own machine
+    first; graph2's check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances
+    once every shard passed, and once both ended one line says whether they agree."""
     from research.landing import AFTER_LANDING
 
     main = env.main()
@@ -4146,7 +4183,7 @@ def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatev
     below, built, started = loop.tick()
     sha = built["sha"]
     assert [(c, m, kw["shard"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
+        (c, ",".join(f"m{(k - 1 + i) % 3 + 1}" for i in range(3)), f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
     assert all(steps == ",".join(AFTER_LANDING) and kw["no_regenerate"] and not kw["agreement"]
                for _, _, steps, kw in runs.launches) and [kw["base"] for *_, kw in runs.launches[3:]] == [main] * 3
     assert started["record"]["gate"] == "check" and started["record"]["groups"] == [["c-4"], ["c-5"], ["c-6"]]
@@ -4728,8 +4765,8 @@ def test_under_gate_check_a_heavy_candidate_s_shard_auditing_security_proofs_and
     (env.tmp / "heavy").write_text(heavy)
     loop.world.heavy_file, loop.world.heavy_on = env.tmp / "heavy", on
     _, built, started = loop.tick()
-    sha, usual = built["sha"], ["m1", "m2", "m3"]
-    want = ["m1", "big", "m3"] if on else usual
+    sha, usual = built["sha"], ["m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
+    want = [usual[0], "big", usual[2]] if on else usual
     below = want if heavy == "*\n" else usual
     assert [(c, m) for c, m, _, _ in runs.launches] == [(main, m) for m in below] + [(sha, m) for m in want]
     assert started["record"].get("heavy_on") == (on or None)
@@ -5149,8 +5186,9 @@ def test_under_gate_check_a_ring_off_the_gate_whose_post_failed_is_rung_again_by
 def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a_candidate_dropped_while_it_is_made_launches_none(
         env, monkeypatch):
     """`--shards auto:6`: each check, `main`'s and the candidate's, has the auto plan of its tree made first, and the first tick
-    that finds it made launches its 6 shards `--shard auto:K/6` with its file, a machine each; the candidate advances once
-    every shard passed.  One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
+    that finds it made launches its 6 shards `--shard auto:K/6` with its file, each on its own machine first; the candidate
+    advances once every shard passed.  One dropped while its plan is made launches none, the plan given up
+    (`vqueue_slim.abandon`)."""
     from research.landing import AFTER_LANDING, AUTO_PLAN
     from test_landing import _plan_doc
     from test_vqueue_slim import Plans
@@ -5167,7 +5205,8 @@ def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a
     plans.answers.update({str(plans.tmp / f"plan-{k}"): (_plan_doc(6), None) for k in (1, 2)})
     assert _acts(loop.tick()) == ["slim", "slim"]
     assert [(c, m, kw["shard"], kw["shard_plan"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN)) for p, c in ((1, main), (2, sha))
+        (c, ",".join(f"m{(k - 1 + i) % 6 + 1}" for i in range(6)), f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN))
+        for p, c in ((1, main), (2, sha))
         for k in range(1, 7)]
     assert not any((plans.tmp / f"plan-{k}").exists() for k in (1, 2)) and loop.tick() == []
     runs.end(main, plan=PLAN6)
