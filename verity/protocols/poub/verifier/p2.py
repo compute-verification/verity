@@ -270,3 +270,7 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     if (sketcher or Sketcher(seed, registration.rows))(g, b"".join(o.blocks)) != y:
         return "receipt"
     return None
+
+
+__all__ = ["BLOCK_BYTES", "Opening", "Prover", "Registration", "Sketcher", "Store", "UNIT_BLOCKS", "UNIT_BYTES",
+           "codec_of", "register"]
