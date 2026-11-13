@@ -166,6 +166,118 @@ def test_a_launch_reads_a_view_at_the_views_width(art: Path, tmp_path: Path) -> 
     assert launch()["args"][0] == view and launch()["widths"] == [512, *whole["widths"][1:]]
 
 
+#: the first piece's two launches: its embedding with the first norm, and the RoPE of its first GEMM's rows
+EMBED = "triton_red_fused__to_copy_embedding_rms_norm_0"
+EMBED_RUN = f"{EMBED}.run(arg0_1, arg2_1, arg3_1, buf0, buf2, s72, 2048, stream=raw_stream0)"
+ROPE_RUN = "triton_poi_fused_1.run(buf3, arg5_1, arg6_1, buf4, buf5, triton_poi_fused_1_xnumel_0, triton_poi_fused_1_xnumel_1, stream=raw_stream0)"
+
+
+@pytest.fixture
+def first(art: Path, tmp_path: Path) -> Path:
+    """A copy of the fixture's wrappers; the path of the first piece's."""
+    return next(p for p in sorted(_copy(art, tmp_path).rglob("*.py")) if EMBED_RUN in p.read_text())
+
+
+def _edit_call(path: Path, old: str, new: str) -> None:
+    """One edit of a wrapper's `call()`: the example-value stubs above it hold some of its lines too."""
+    head, mark, call = path.read_text().partition("    def call(self, args):")
+    assert call.count(old) == 1, old
+    path.write_text(head + mark + call.replace(old, new))
+
+
+def test_a_view_named_beside_its_live_buffer_is_the_buffers_value_at_the_views_shape(first: Path) -> None:
+    """A line that names a view of a buffer and leaves the buffer alive gives the name the view's shape, and the launch that
+    wrote the buffer where one did."""
+    whole = C.parse_wrapper(str(first))
+    _edit_call(first, f"            {ROPE_RUN}", "            cols = reinterpret_tensor(buf3, (s72, 8, 64), (3072, 64, 1), 2560)\n"
+               f"            {ROPE_RUN.replace('buf3', 'cols')}")
+    _edit_call(first, "        return (", "        emb = reinterpret_tensor(buf0, (s72, 32, 64), (2048, 64, 1), 0)\n"
+               "        out = reinterpret_tensor(buf6, (s72, 32, 64), (2048, 64, 1), 0)\n        return (")
+    _edit_call(first, "reinterpret_tensor(buf6, (s72, 32, 64), (2048, 64, 1), 0), buf0, )", "out, emb, )")
+    doc = C.parse_wrapper(str(first))
+    rope, was = doc["launches"][1], whole["launches"][1]
+    assert (was["args"][0], was["widths"][0]) == ("buf3", 3072) and (rope["args"][0], rope["widths"]) == ("cols", [512, *was["widths"][1:]])
+    assert rope["edges"][0] == {"arg": 0, "role": "qkv", "from": "undefined", "base": "cols"}
+    assert doc["returns"][3] == {"pos": 3, "kind": "tensor", "from": "handoff", "base": "out"}
+    assert doc["returns"][4] == whole["returns"][4] == {"pos": 4, "kind": "tensor", "from": [EMBED, "emb"]}
+
+
+@pytest.mark.parametrize("dims", ["s72, s80, 64", "s72, 2*s72"])
+def test_a_view_whose_row_holds_a_dim_that_is_no_number_has_no_width(first: Path, dims: str) -> None:
+    assert C.parse_wrapper(str(first))["launches"][0]["widths"][3] == 2048
+    _edit_call(first, EMBED_RUN, EMBED_RUN.replace("buf0", f"reinterpret_tensor(buf0, ({dims}), (2048, 64, 1), 0)"))
+    assert C.parse_wrapper(str(first))["launches"][0]["widths"][3] is None
+
+
+def test_a_returned_expression_that_is_no_name_is_an_integer(first: Path) -> None:
+    whole = C.parse_wrapper(str(first))["returns"]
+    _edit_call(first, "buf0, )", "buf0, 2*s72, )")
+    assert C.parse_wrapper(str(first))["returns"] == [*whole, {"pos": 5, "kind": "int", "expr": "2*s72"}]
+
+
+@pytest.mark.parametrize(("run", "why"), [
+    ("triton_poi_fused_1.run(buf3, arg5_1, arg6_1, buf4, buf5)", "wrapper line not modelled: 'triton_poi_fused_1.run(buf3, arg5_1, arg6_1, buf4, buf5)'"),
+    ("triton_poi_fused_1.run(*args, stream=raw_stream0)", "triton_poi_fused_1.run with 1 arguments, its source takes ['in_ptr0', "),
+], ids=["no-stream", "starred"])
+def test_a_launch_the_parser_does_not_read_is_counted_and_the_build_refuses_it(art: Path, first: Path, run: str, why: str) -> None:
+    _edit_call(first, ROPE_RUN, run)
+    doc = C.parse_wrapper(str(first))
+    assert doc["unparsed_runs"] == 1 and [la["kernel"] for la in doc["launches"]] == [EMBED]
+    with pytest.raises(Unmodelled, match=re.escape(f"{first.name}: {why}")):
+        _build(art, inductor=first.parents[1])
+
+
+GRAPH = '''class GraphModule(torch.nn.Module):
+    def forward(self, s72: "Sym(s72)", L_input_ids_: "i32[s72]"):
+        submod_0 = self.submod_0(l_input_ids_, s72, plain)
+        getitem = submod_0[0]
+        getitem_1 = submod_0[1]
+        submod_1 = self.submod_1(getitem, getitem_1);  getitem = None
+        getitem_2 = submod_1[0]
+        getitem_3 = submod_9[4]
+        submod_2 = self.submod_2(getitem_2, getitem_3, getitem_1)
+        getitem_4 = submod_2[0]
+        return (getitem_4,)
+
+    class submod_0(torch.nn.Module):
+        def forward(self, l_input_ids_: "i32[s72]", s72: "Sym(s72)", plain):
+            return (embedding, view)
+
+    class submod_1(torch.nn.Module):
+        def forward(self, query: "bf16[s72, 32, 64]", output: "bf16[s72, 32, 64]"):
+            unified_attention_with_output = torch.ops.vllm.unified_attention_with_output(query, output)
+            return (output,)
+
+    class submod_2(torch.nn.Module):
+        def forward(self, x: "bf16[s72, 2048]", y, z: "bf16[s72, 2048]"):
+            return (x,)
+'''
+
+
+def test_the_wiring_names_an_attention_ops_return_and_a_parameter_of_no_annotation(tmp_path: Path) -> None:
+    """A piece argument taken from an attention op's return is named by the op's place among the attention ops, None for a
+    submodule the graph never calls; a parameter a signature gives no annotation is of no kind."""
+    (tmp_path / "graph.py").write_text(GRAPH)
+    wiring = C.split_graph_wiring(str(tmp_path / "graph.py"))
+    piece = {"kind": "piece_ret", "piece": 0}
+    assert wiring["pieces"] == 2 and wiring["attention"] == [{"layer": 0, "submod": "submod_1", "q": {**piece, "ret": 0}, "out": {**piece, "ret": 1}}]
+    assert wiring["wiring"] == [
+        {"piece": 0, "submod": "submod_0", "args": [{"kind": "input_ids"}, {"kind": "sym", "name": "s72"}, {"kind": "unknown", "name": "plain"}],
+         "raw_args": ["l_input_ids_", "s72", "plain"], "arg_kinds": ["tensor", "int", "?"], "n_ret": 2},
+        {"piece": 1, "submod": "submod_2", "args": [{"kind": "attn_ret", "layer": 0, "ret": 0}, {"kind": "attn_ret", "layer": None, "ret": 4}, {**piece, "ret": 1}],
+         "raw_args": ["getitem_2", "getitem_3", "getitem_1"], "arg_kinds": ["tensor", "?", "tensor"], "n_ret": 1}]
+
+
+def test_a_piece_that_reads_an_attention_ops_return_is_refused(art: Path, tmp_path: Path) -> None:
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    taken, call = "        getitem_3 = submod_0[3]\n", "submod_2 = self.submod_2(getitem_3, "
+    assert src.count(taken) == 1 and src.count(call) == 1
+    graph.write_text(src.replace(taken, taken + "        getitem_99 = submod_1[0]\n").replace(call, call.replace("getitem_3", "getitem_99")))
+    with pytest.raises(Unmodelled, match=r"piece 1 argument 0 \(getitem_99\): a attn_ret argument"):
+        _build(art, split_graph=str(graph))
+
+
 def test_batched_copy_flushes_are_no_calls(art: Path, tmp_path: Path) -> None:
     ind = _copy(art, tmp_path)
     flush = f"run_intermediate_hooks({FLUSH!r}, None)"
