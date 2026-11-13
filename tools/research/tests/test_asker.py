@@ -207,26 +207,28 @@ def test_a_twin_is_recorded_before_it_is_launched_so_an_asker_that_dies_then_lea
     assert asker.twin(world.root / RUN)["run"] == tw["run"], "so status and cancel follow it"
 
 
-@pytest.mark.parametrize(("ssh", "lost"), [(["sh", "-c"], "exit "), (["/no/such/ssh"], "FileNotFoundError: ")], ids=["refused", "unreached"])
-def test_no_twin_is_launched_while_its_record_can_not_be_copied_beside_the_firsts_request(world, monkeypatch, capsys, ssh, lost):
+@pytest.mark.parametrize("lost", ["exit ", "TimeoutExpired: "], ids=["refused", "unreached"])
+def test_no_twin_is_launched_while_its_record_can_not_be_copied_beside_the_firsts_request(world, monkeypatch, capsys, lost):
     """Another VM follows a run to its twin by the copy of the asker's record beside the first's request, and the launching
     VM may be gone a minute later: a twin launched while that copy can't be written is one no other VM could follow or
     cancel. The asker's log says why, and its next ask is of the same machine, which refused nothing."""
     world.answers = [((B, "research"), STARTS)] * 2
     beside = world.root.parent / A / "requests" / RUN / asker.FILE
-    monkeypatch.setattr(asker, "_beside", lambda run_dir: (ssh, str(beside)))
-    copies, real = [], world.launch
+    monkeypatch.setattr(asker, "_beside", lambda run_dir: (["sh", "-c"], str(beside)))
+    copies, launch, ssh_run = [], world.launch, remote.ssh_run
 
-    def launch(source, m, twin, wait_s):
+    def unreached(ssh, argv, **kw):
+        if lost != "exit " and not beside.parent.is_dir():
+            raise subprocess.TimeoutExpired(ssh, kw["timeout"])
+        return ssh_run(ssh, argv, **kw)
+
+    def launched(source, m, twin, wait_s):
         copies.append(json.loads(beside.read_text())["twin"])
-        return real(source, m, twin, wait_s)
+        return launch(source, m, twin, wait_s)
 
-    def its_machine_takes_the_copy():
-        beside.parent.mkdir(parents=True)
-        ssh[:] = ["sh", "-c"]
-
-    monkeypatch.setattr(asker, "launch", launch)
-    world.at[10] = its_machine_takes_the_copy
+    monkeypatch.setattr(remote, "ssh_run", unreached)
+    monkeypatch.setattr(asker, "launch", launched)
+    world.at[10] = lambda: beside.parent.mkdir(parents=True)
     world.at[20] = lambda: world.runs.update({world.launched[0]["run"]: held()})
     world.run()
     (tw,) = world.launched
