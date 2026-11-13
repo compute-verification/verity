@@ -1211,6 +1211,35 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
         cs.begin()
 
 
+@pytest.mark.parametrize(("result", "steps"), [(None, []), ({"accepted": True}, []), ({"accepted": True, "pass_steps": None}, []),
+                                               ({"accepted": True, "pass_steps": []}, []),
+                                               ({"accepted": True, "pass_steps": [[0, 0, 5]]}, [[0, 0, 5]])])
+def test_a_session_whose_result_leaves_its_pass_steps_out_records_none(monkeypatch, tmp_path, result, steps):
+    """The audit run's record of a session whose trace began: its map's ``pass_steps`` are the prover's result's, and the
+    empty list where the result leaves the field out, holds None there, or was never returned (the prover raised:
+    ``result`` None here); with no step in the map, none of them is mapped."""
+    def proves(backend, *a, **kw):
+        reg = audit.register(bytes(32), b"n", backend.blocks, backend.payload_root(b"n"), P512, nonce=bytes(32))
+        backend.encode(reg)
+        backend.begin_session()
+        backend.serving(reg, 2)
+        if result is None:
+            raise ConnectionResetError("the verifier went away")
+        return [result]
+
+    monkeypatch.setattr(remote, "prove", proves)
+    cs = remote.CommitSession("127.0.0.1:7781", out=tmp_path, codec=P512, log=lambda m: None)
+    cs.store, cs.binder = store(), Stats()
+    cs.begin()
+    rec = cs.end()
+    mm = rec["memory_map"]
+    assert mm["pass_steps"] == steps and mm["pass_steps_mapped"] is False and mm["first_step"] is None and mm["steps"] == 0
+    assert rec["prover"] == ({} if result is None else result) and rec["run"] == {"steps": 0, "audited": 0, "unaudited": 0}
+    assert rec["error"] == ("ConnectionResetError: the verifier went away" if result is None else None)
+    assert rec["accepted"] is (result is not None) and mm.get("agrees") is (None if result is None else True)
+    assert json.loads((tmp_path / "remote_session.json").read_text())["memory_map"]["pass_steps"] == steps
+
+
 @pytest.mark.slow
 def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():
     r, p, _, backend = run("serve", backend=HeadlessBackend)
