@@ -315,7 +315,8 @@
   "Proofs.Properties.Verity.SampledTwo.AtStmt",
   "Proofs.Properties.Verity.SampledTwo.DrawRoots",
   "Proofs.Flock.SpotFlock.HeldOfDesc",
-  "Proofs.Properties.Verity.SampledTwo.HeldOfAtDesc"
+  "Proofs.Properties.Verity.SampledTwo.HeldOfAtDesc",
+  "Proofs.Properties.Verity.SampledTwo.CopyOfOne"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
