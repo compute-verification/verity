@@ -404,18 +404,17 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
                                f"not scheduled: the EOS is served at the cap slot {t_eos} (no slot after it)")
             out["requests_at_cap"] += 1
         else:
-            if lag is None:                                       # the rule leaves an early EOS unjudged without the profile
-                raise TypeError(f"sample ledger {rid}: an EOS at slot {t_eos} of {T} was judged without the scheduler profile")
+            profile: Any = lag                                    # the rule leaves an early EOS unjudged without the profile: never None here
             ent["finish"] = "eos"
             out["requests_with_eos_before_cap"] += 1
             out["lag_slot_exercised"] = True
-            n_lag = min(int(lag), T - t_eos)
+            n_lag = min(int(profile), T - t_eos)
             k_eos = t_eos - 1
             ent["served_eos"] = {"draw_k": k_eos, "slot": t_eos, "step": dr[k_eos]["step"], "pos": dr[k_eos]["pos"], "token": dr[k_eos]["served"]}
             after = dr[k_eos + 1:]
             ent["draws_after_served_eos"] = len(after)
-            ent["lag_slot"] = {"profile_A": int(lag), "lag_slots_expected": n_lag,
-                               "bounded_by_cap": n_lag < int(lag),
+            ent["lag_slot"] = {"profile_A": int(profile), "lag_slots_expected": n_lag,
+                               "bounded_by_cap": n_lag < int(profile),
                                "draws": [{"slot": t_eos + 1 + j, "pos_expected": L + k_eos + j, "pos": x["pos"], "step": x["step"],
                                           "pos_ok": x["pos"] == L + k_eos + j} for j, x in enumerate(after)],
                                "measured": drawn == expected}

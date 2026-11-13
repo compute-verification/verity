@@ -143,15 +143,6 @@ def plane_copies(d: dict) -> list[dict]:
     return copies if copies else []
 
 
-def described(pi: ProgramIndex, r: dict) -> dict:
-    """`pi.describe(r)` of a row the caller took from the population (a picked VU, a row a request's replay needs), which holds
-    only modelled rows."""
-    d = pi.describe(r)
-    if d is None:
-        raise TypeError(f"row {r.get('i')} ({RM.spec_family(r['spec'])}) is unmodelled")
-    return d
-
-
 def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
     """``ProgramIndex(inst, **kw)``: the one of ``reuse`` built from this very document (no reader modifies one,
     `instances_file.read_instances`) with these same arguments (`index_key`), else a new one -- one index of a GLM-5.3 TP8 rank

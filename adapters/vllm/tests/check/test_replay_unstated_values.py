@@ -64,6 +64,20 @@ def test_the_same_row_under_the_replay_s_own_evaluator_is_recorded(world, store,
     assert [member for _op, member in replay.out[gemm]] == ["out"]
 
 
+def test_a_row_its_index_does_not_describe_ends_at_the_first_read_of_its_description(world, store, gemm, monkeypatch):
+    """A population holds only the rows its index describes and a replay evaluates only those (`Replay._ensure`); one handed
+    another is not refused ahead of the read."""
+    weights = T._weights(world)
+    replay = RR.Replay(world.pi, "r0", world.prompts["r0"], weights)
+    monkeypatch.setattr(world.pi, "describe", lambda r: None)
+    with pytest.raises(TypeError, match="'NoneType' object is not subscriptable"):
+        EV._replay_vu(world.pi, store, weights, {"i": gemm, "request_id": "r0", "phase": "prefill"}, 0, {})
+    with pytest.raises(TypeError, match="'NoneType' object is not subscriptable"):
+        replay._evaluate(gemm)
+    replay._ensure(gemm)
+    assert replay.out == {} and replay.rows == 0
+
+
 @pytest.mark.parametrize("entry, named", [(None, "'NoneType' object has no attribute 'get'"), ([], "'list' object has no attribute 'get'")])
 def test_a_cached_prefix_entry_that_is_no_mapping_is_read_whatever_its_request_s_program_takes(world, entry, named):
     programs = {rid: world.inst for rid in world.prompts}

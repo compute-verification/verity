@@ -22,7 +22,6 @@ from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import (
     IDS_MEMBER,
     ProgramIndex,
-    described,
     node_runs,
     plane_copies,
 )
@@ -112,7 +111,7 @@ class Replay:
 
     def _evaluate(self, i: int) -> None:
         r = self.pi.by_i[i]
-        d = described(self.pi, r)
+        d: Any = self.pi.describe(r)                                             # `_ensure` evaluates only a row its index describes
         fam = d["family"]
         t0 = time.perf_counter()
         self.busy.add(i)

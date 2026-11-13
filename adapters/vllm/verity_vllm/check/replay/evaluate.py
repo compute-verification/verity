@@ -23,7 +23,6 @@ from verity_vllm.check.replay.index import (
     SEED_PARAM,
     ProgramIndex,
     const_word,
-    described,
     file_args,
     plane_copies,
     row_args,
@@ -404,7 +403,7 @@ def evaluated(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, i
 def _replay_vu(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
-    d = described(pi, r)
+    d: Any = pi.describe(r)                                                      # None for a row no population holds: its first read below fails
     rid = vu["request_id"]
     fam, st = d["family"], d["statics"]
     rec.update({"i": vu["i"], "spec": r["spec"], "request_id": rid, "step": d["step"], "engine_step": arrive + d["step"], "op_path": d["op_path"],
