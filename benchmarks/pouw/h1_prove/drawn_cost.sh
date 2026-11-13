@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# drawn.sh's sessions under the ZK server against the unserved --zk path (H1_FIREWALL=0), on its test's served
+# drawn.sh's sessions under the ZK server against the --zk path with no ZK server (H1_FIREWALL=0), on its test's served
 # window (test_pouw_h1_drawn.py's `served` fixture under VERITY_VLLM_H1_DRAWN_J10R=1: J10-R's own tile unit at K 64, sample
 # K 2): each arm stages, proves and has credit check (drawn.py check, the Lean flock-verify) the window's sampled calls.
 # out/summary.json has each arm's sessions: the job cgroup's CPU seconds over each (the ZK server's Lean among them), both
