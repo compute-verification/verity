@@ -2,8 +2,8 @@ module
 
 public import Properties.Pouw.PearlPlus
 public import Properties.Pouw.PearlPlusDraw
-public import Properties.Challenger
-public import Properties.Verity.Game
+public import Definitions.Core.Interaction
+public import Flock.Hash
 
 /-!
 # Pearl+'s served y at the registration record's entries (`PouwCheck.PearlPlus.tieOf`, `checkTile`, `todo`)
@@ -62,10 +62,10 @@ opener that sees the coin, as the real prover does. A tile is tied at W's entrie
 An accepted opening is held to the table through `OpeningBinds`, which is the lemma here and no hypothesis: where a row
 the verdict opens at the coin differs from the table's opening of the same position of the same root, two openings of
 one of W's roots are accepted, and SHA-512 collides on the messages checking them hashes (`rowsHashed`). The play's
-finder (`Run.finder`, `Runs.finder`) is the first such collision among those messages
-(`Properties.Challenger.collisionIn`), a `Claims.Finder` over the play's coins whose cost is declared at the budget `q`
-for the play's whole SHA-512 work, the prover's own included, as `Claims.BAt`'s is. Its premise is
-`Claims.ExpectedCR` at the compiled SHA-512 (`Verity.sha512Msg`), what `Verity.Vocab.FinderCR` reads at a subprotocol's
+finder (`Run.finder`, `Runs.finder`) is the first such collision among those messages (`collisionIn`, the
+challenger's finder's), a `Claims.Finder` over the play's coins whose cost is declared at the budget `q` for the play's
+whole SHA-512 work, the prover's own included, as `Claims.BAt`'s is. Its premise is `Claims.ExpectedCR` at the compiled
+SHA-512 (`sha512Msg`, the composite's), what `Verity.Vocab.FinderCR` reads at a subprotocol's
 finder, and the bound reads δ plus its term, the budget over 2^256 (`Verity.Vocab.finderPr_le_crBound`'s form). There
 is no fork and no knowledge form.
 
@@ -337,6 +337,16 @@ def Run.hashed (R : Run) (o : Opener) (drawn : List (ℕ × ℕ)) : List ByteArr
         | _, _ => []
     | _, _ => []
 
+/-- The first string of `xs` whose SHA-512 digest another, different string of `xs` has, with that string: each string
+hashed once, as the challenger's finder finds one. -/
+def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
+  let hs := xs.map fun x => (x, Flock.Sha512.hash x)
+  hs.findSome? fun (x, hx) => (hs.find? fun (y, hy) => hy == hx && !(y == x)).map fun (y, _) => (x, y)
+
+/-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
+(`Claims.ExpectedCR`) read. -/
+def sha512Msg (m : _root_.Claims.Msg) : _root_.Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
+
 /-- A pair of byte strings as a pair of messages, as `Claims.Finder` outputs one. -/
 def msgPair (xy : ByteArray × ByteArray) : _root_.Claims.Msg × _root_.Claims.Msg := (xy.1.data.toList, xy.2.data.toList)
 
@@ -374,14 +384,14 @@ noncomputable def Run.wrongWeight (R : Run) : ℕ :=
 noncomputable def Run.wrongShare (R : Run) : ℝ :=
   (R.wrongWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
 
-/-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`Properties.Challenger.collisionIn`) among
+/-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`collisionIn`) among
 the messages checking the opener's rows on `c` and the table's hashes (`Run.hashed`). Its coins are the play's, `t`
 tickets, and its cost is declared at the budget `q` for the play's whole SHA-512 work, the prover's own included, which
 the reader computes from the prover's time (as `Claims.BAt`). -/
 noncomputable def Run.finder (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) : _root_.Claims.Finder where
   S := TicketDraws (tickets R.passes) t
-  out c := (_root_.Properties.Challenger.collisionIn (R.hashed (O c) (drawnAt (tickets R.passes) c))).map msgPair
+  out c := (collisionIn (R.hashed (O c) (drawnAt (tickets R.passes) c))).map msgPair
   cost _ := q
 
 /-- **PoUW's guarantee at W's entries, over every tile, for an opener that sees the coin.** For every run, number of
@@ -395,7 +405,7 @@ def YAtWIsTheCall : Prop :=
   ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (R.finder t O q) →
+    _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
     _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
         ε < R.wrongShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
@@ -462,7 +472,7 @@ def Runs.hashed {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin n → Ω) : List 
 noncomputable def Runs.finder {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (q : ℕ) :
     _root_.Claims.Finder where
   S := Fin n → Ω
-  out x := (_root_.Properties.Challenger.collisionIn (P.hashed x)).map msgPair
+  out x := (collisionIn (P.hashed x)).map msgPair
   cost _ := q
 
 /-- **PoUW's period bound for the tile sample, one sequence.** For a monitoring period of `n` execution phases, each
@@ -478,7 +488,7 @@ def PeriodYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     P.CommittedBeforeCoin → P.DrawIsTickets t →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (P.finder q) →
+    _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.tiedUpTo x k < 1 - ε) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
@@ -494,7 +504,7 @@ prefixes to them, each end counting in |ends|. -/
 def FleetYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (ends : Finset (Fin n)) (t q : ℕ) (δ : ℝ), 0 < δ →
     P.CommittedBeforeCoin → P.DrawIsTickets t →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (P.finder q) →
+    _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     _root_.Pouw.pr (fun x : Fin n → Ω => ∃ K : Finset (Fin n), K ⊆ ends ∧ K.Nonempty ∧
       (∀ k ∈ K, P.AcceptedUpTo x k) ∧
       (∏ k ∈ K, P.tiedUpTo x k) ^ t < ((K.card : ℝ) * δ / (ends.card : ℝ)) ^ K.card) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
@@ -584,7 +594,7 @@ def UntiedCellsAtW : Prop :=
   ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (R.finder t O q) →
+    _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
     _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
         cellsAt R.passes ε < (R.untiedCredited.card : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
@@ -611,7 +621,7 @@ def PeriodUntiedCellsAtW : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     P.CommittedBeforeCoin → P.DrawIsTickets t →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (P.finder q) →
+    _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.cellsUpTo x k ε < (P.untiedUpTo x k : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
