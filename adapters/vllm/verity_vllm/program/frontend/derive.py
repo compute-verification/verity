@@ -345,6 +345,11 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     wrec_t = RecordType(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
         params.append(("weights", wrec_t))
+    names = [n for n, _ in params]
+    for un in user_names:
+        if names.count(un) > 1:
+            refuse("shape", ph_nodes[un], None, f"input {un!r} has the name of a parameter this function gets beside its inputs "
+                                                f"({', '.join(names[len(user_names):])}): a Definition's parameter names are distinct")
 
     B = Builder(tuple(params), Value(1))  # ret type is set once the outputs are known
     pcolls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]

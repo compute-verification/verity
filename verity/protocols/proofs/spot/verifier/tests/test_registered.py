@@ -3,6 +3,7 @@ R7, the verifier's read map from its own program, the read check, and the audit 
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import re
 import tracemalloc
@@ -14,8 +15,8 @@ from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.commitments import history as HT
 from verity.commitments.merkle import merkle_depth, tree_levels
 from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-from verity.circuits.codec import canonical_json
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.codec import canonical_json, decode_program, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.circuits.types import Array, Value
@@ -399,6 +400,59 @@ def test_two_reads_under_one_port_name_are_refused():
         G.reads_file(_program(), Q, {"W": 2, "x": 2}, {"W": "ab" * 64, "x": "cd" * 64}, ports={"x": "w"})
     assert G.reads_file(tiles, QT, {"A": K // 2}, roots, ports={"a[0]": "a0", "a[1]": "a1"},
                         schemas={"A": G.SCHEMA_V2})["ports"].keys() == {"a0", "a1"}
+
+
+#: the SHA-512 of each `_two_params(second)` program's descriptor, `canonical_json(encode_program(...))` (for `w`, which
+#: no longer encodes, the `v` descriptor with `v` renamed): the bytes
+#: `verity/protocols/proofs/flock/verifier/Flock/Test/RegTwoParams.lean` holds (`desc`) and pins alike
+TWO_PARAMS = {
+    "w": "802171939d9baed267cc2b5516306111e61a937c6a5ad3892c0c032d44c287b2"
+         "78b2456e0f6e79f31d9797c9da6d86d1c67817396fa1f12ad1bb48055021b6fb",
+    "v": "352f7f13f7e80ef597b363b4fee73e5b2cd0a6c44cd4aae4a39337dbb87be66d"
+         "cd137737f06e3319226a2faee21a86c9a0921e027960d737e16164fbe5baa000",
+}
+
+
+def _two_params(second: str):
+    """A program of the registered values A and B (two rows of two bytes each) whose proof block u is an instance of a
+    template of the parameters `w` and `second`, reading row u of A at `w` and row u of B at `second`; and the template."""
+    row = Array(2, Value(8))
+    t = bind(CompositeDefinition("RegisteredTestTwoParams", 0, (), lambda S: ((("w", row), (second, row)), Value(8)),
+                                 lambda B, S, w, v: B.call(XOR8, B.call(XOR8, w[0], v[0]), B.call(XOR8, w[1], v[1])),
+                                 register=False))
+
+    def sig(S):
+        return (("A", Array(2, row)), ("B", Array(2, row))), Array(2, Value(8))
+
+    prog = Program(bind(CompositeDefinition("RegisteredTestTwoParamsProgram", 0, (), sig,
+                                            lambda B_, S, A, B: coll_concat(sig(S)[1], [B_.call(t, A[u], B[u])
+                                                                                        for u in range(2)]),
+                                            register=False)), registered=("A", "B"))
+    return prog, t
+
+
+def test_two_parameters_of_one_name_are_refused():
+    """A template whose two parameters are both named `w`, the first reading A and the second B: its body is refused
+    when it is built, and its descriptor when it is decoded, so no registered file keys two values by one parameter
+    name. Flock's decoder refuses the same bytes (`Flock/Test/RegTwoParams.lean`). Named `w` and `v`, the two get a
+    port each, of their own values."""
+    want = re.escape("definition 'RegisteredTestTwoParams_v0': parameters: a name twice")
+    with pytest.raises(ValueError, match=want):
+        _two_params("w")
+    distinct, t = _two_params("v")
+    desc = canonical_json(encode_program(distinct))
+    assert hashlib.sha512(desc).hexdigest() == TWO_PARAMS["v"]
+    assert desc.count(b'"v"') == 1
+    dup = desc.replace(b'"v"', b'"w"')
+    assert hashlib.sha512(dup).hexdigest() == TWO_PARAMS["w"]
+    reg = DefinitionTable()
+    reg.add(XOR8)
+    with pytest.raises(ValueError, match=want):
+        decode_program(json.loads(dup), reg)
+    q = P.template_instance_query(t.id)
+    doc = G.reads_file(distinct, q, {"A": 2, "B": 2}, {"A": "ab" * 64, "B": "cd" * 64})
+    assert {p: (e["value"], e["root"], e["reads"]) for p, e in doc["ports"].items()} == {
+        "w": ("A", "ab" * 64, [0, 1]), "v": ("B", "cd" * 64, [0, 1])}
 
 
 def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_refused():

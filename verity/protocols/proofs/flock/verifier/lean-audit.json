@@ -47,6 +47,7 @@
   "Flock.Test.DescOfProg",
   "Flock.Test.LinkUnits",
   "Flock.Test.RegCover",
+  "Flock.Test.RegTwoParams",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
