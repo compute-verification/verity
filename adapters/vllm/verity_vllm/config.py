@@ -40,6 +40,15 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.records import workload as workload_record
 
+#: The names the library's other modules read here.
+__all__ = [
+    "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
+    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
+    "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
+    "row_world", "rows_of_record", "run_store", "vllm_revision", "workload_arg", "workload_file", "workload_files",
+]
+
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
 ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
@@ -430,7 +439,8 @@ DONE_SOURCES = ("public-cap", "eos-token")
 
 def rows_of_record() -> frozenset[str]:
     """The row ids ``RECORDS`` lists (none without the file)."""
-    return frozenset(json.loads(RECORDS.read_text()).get("rows") or {}) if RECORDS.is_file() else frozenset()
+    rows = json.loads(RECORDS.read_text()).get("rows") if RECORDS.is_file() else None
+    return frozenset(rows) if rows else frozenset()
 
 
 def done_source(workload: Mapping[str, Any]) -> str:
@@ -455,8 +465,9 @@ def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False)
                f"so every request runs its public max_tokens")
     elif stops := [k for k in ("stop_token_ids", "stop") if s.get(k)]:
         why = f"sampling.{stops[0]} {s[stops[0]]!r} stops a request before its cap: drop it"
-    elif uncapped := [str(r.get("request_id", i)) for i, r in enumerate(workload.get("requests") or [])
-                      if isinstance(r.get("max_tokens"), bool) or not isinstance(r.get("max_tokens"), int) or r["max_tokens"] < 1]:
+    elif (requests := workload.get("requests")) and (uncapped := [
+            str(r.get("request_id", i)) for i, r in enumerate(requests)
+            if isinstance(r.get("max_tokens"), bool) or not isinstance(r.get("max_tokens"), int) or r["max_tokens"] < 1]):
         why = f"request(s) {', '.join(uncapped[:4])} declare no public cap (a positive integer max_tokens)"
     else:
         return None
@@ -491,13 +502,16 @@ class RowEngine:
         if stale:
             raise ValueError(f"workload keys {', '.join(stale)} are the v1 layout: regenerate the file (`verity-vllm workload`) or move "
                              f"them into its `engine` block ({', '.join(f'{k} -> engine.{_V1_KEYS[k]}' for k in stale)})")
-        e = doc.get("engine") or {}
+        engine = doc.get("engine")
+        e = engine if engine else {}
         unknown = sorted(set(e) - {f.name for f in fields(cls)})
         if unknown:
             raise ValueError(f"engine block: unknown field(s) {', '.join(unknown)} (known: {', '.join(f.name for f in fields(cls))})")
-        eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)), args=dict(e.get("args") or {}),
-                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None,
-                  reasons={str(k): str(v) for k, v in (e.get("reasons") or {}).items()})
+        eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)),
+                  args=dict(args) if (args := e.get("args")) else {},
+                  env={str(k): str(v) for k, v in env.items()} if (env := e.get("env")) else {},
+                  target=dict(e["target"]) if e.get("target") else None,
+                  reasons={str(k): str(v) for k, v in reasons.items()} if (reasons := e.get("reasons")) else {})
         if eng.vllm != VLLM:
             raise ValueError(f"engine.vllm {eng.vllm!r}: this tree derives and serves on vLLM {VLLM} only (config.VLLM)")
         if eng.target and eng.target.get("vllm_revision", eng.vllm) != eng.vllm:
