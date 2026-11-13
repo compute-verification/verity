@@ -86,13 +86,13 @@ import hashlib
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
-from verity.definitions.circuits.boolean import memcheck as MC
+from verity.circuits.boolean import memcheck as MC
 from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
 from verity.circuits.boolean.gf128 import mul_forms
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 from verity.protocols.certifier.verifier import cache_step as CST, compile_slice as CS
 from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4
 from verity.protocols.certifier.verifier import replay_chain as RC, replay_step as RS
