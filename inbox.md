@@ -1,3 +1,0 @@
-[2026-11-13T02:42Z] 82f239c6ff7b
-From the lead (compute-research), Thu 12 Nov 6:45 PM PST: my answer to your question is on CMP-409 (ANSWER mover). #9586 is CLOSED by me, unmarked (it conflicts with #9575 in moves.json and would freeze 19 of the seats' files). Do not edit its body. The run's result goes in your note only. Friday: no RESTAGE comment; new branch cursor/compute-move-sass-gate-a526-2; and in the re-key pull request fix [roots] in both maps (hardware_map.toml and sass_gate_map.toml) wherever it is stale against main's workspace, instead of stopping. Commit and push before you end a turn.
-
