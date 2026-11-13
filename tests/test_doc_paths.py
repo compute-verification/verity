@@ -8,7 +8,7 @@ carry a URL scheme or a glob or template character (`* < > { } $ | @ \\`), and a
 or punctuation is dropped. It is checked when its first segment is a top-level entry of the tree or a retired one
 (`RETIRED`). A link target is resolved from its document's directory; a backticked path may be written from the root or
 from the document's directory or one of its ancestors (a package README's `tests/test_x.py`). It exists when it is a
-tracked file, a directory holding one, or a fixture `fixtures/artifacts.json` registers for fetching (or a path inside
+tracked file, a directory holding one, or a fixture `artifacts.json` registers for fetching (or a path inside
 one). Under `verity/`, a token whose second segment is no entry of `verity/` is an identifier (`verity/partition/v1`),
 not a path, unless it names a file (its last segment has an extension: `verity/protocols/cap.py`, from before a move)
 or its second segment is a directory `verity/` had before a move (`VERITY_RETIRED`: `verity/core/`);
@@ -213,7 +213,7 @@ def test_a_directory_verity_had_before_a_move_reads_as_a_path():
 def test_the_scan_reads_each_form_and_catches_a_dead_path():
     """The rules above, on a toy tree."""
     files = frozenset({"README.md", "tools/x/README.md", "tools/x/tests/test_a.py", "verity/primitives/b.py",
-                       "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py", "security/A.lean",
+                       "tools/x/CHANGELOG.md", "artifacts.json", "tests/test_r.py", "security/A.lean",
                        "verity/primitives/B.lean"})
     dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "fixtures", "tests"})
     tree = (files, dirs, frozenset({"tools/x/tests/fixtures/big"}))
