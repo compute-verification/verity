@@ -6,7 +6,7 @@ and the stall reasons; the fold-cost sweep's table; and the profiles as TOML for
 
     python3 eps_profile.py OUT_DIR --mm MACHINE_MODEL_DIR [--epoch VF3l-16] [--json PATH] [--toml PATH] [--toml-arms A,B]
 
-MACHINE_MODEL_DIR is `benchmarks/pouw/machine_model` (verity_machine_model and its data/). An opcode with no class is
+MACHINE_MODEL_DIR is `benchmarks/machine_model` (verity_machine_model and its data/). An opcode with no class is
 priced as NOROW (issue only), so the bound is never above what the model says, and is listed under `unpriced`.
 """
 from __future__ import annotations
