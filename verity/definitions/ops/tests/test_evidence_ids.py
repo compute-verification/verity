@@ -1,4 +1,5 @@
-"""Every ``*_evidence.json`` under ``verity/definitions`` is keyed by what it describes and holds only well-formed ids.
+"""Every ``*_evidence.json`` of the catalog (each beside the module it describes, in the packages those modules sit in) is
+keyed by what it describes and holds only well-formed ids.
 
 Each file maps a registered key (an instruction id, a model or pipeline name, a target name, a Definition id) to roles,
 and each role to an id, a list of ids or nested roles.  The prose the key carries (an instruction's ``evidence``, a model's
@@ -12,12 +13,11 @@ from pathlib import Path
 
 import pytest
 
+import verity
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.definitions.ops import kv_cache, moe, prims
 from verity.definitions.silicon import instructions, integer, models, total_fp8
 from verity.definitions.circuits.targets import target
-
-CIRCUITS = Path(instructions.__file__).resolve().parents[1]
 
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 ART = re.compile(r"art:[0-9a-f]{8,64}")
@@ -42,21 +42,22 @@ def _own(module, names) -> dict[str, str]:
 _QUOTED = {m.validated for m in models.MODELS.values() if isinstance(m, integer.IntegerMma)}
 
 #: module -> (its EVIDENCE_IDS, key -> the prose that cites the entry's roles, roles the key's fields carry instead)
-FILES = {
-    "silicon/instructions_evidence.json": (
+_ENTRIES = {
+    instructions: (
         instructions.EVIDENCE_IDS,
         {i.id: [e for e in i.evidence if e not in _QUOTED] for i in instructions.INSTRUCTIONS.values()}, {"dossier"}),
-    "silicon/models_evidence.json": (
-        models.EVIDENCE_IDS, {name: [m.validated] for name, m in models.MODELS.items()}, set()),
-    "silicon/integer_evidence.json": (
-        integer.EVIDENCE_IDS, {name: [v] for name, v in _own(integer, integer.__all__).items()}, set()),
-    "silicon/total_fp8_evidence.json": (
-        total_fp8.EVIDENCE_IDS, {name: [v] for name, v in _own(total_fp8, total_fp8.__all__).items()}, set()),
-    "circuits/targets/target_evidence.json": (target.EVIDENCE_IDS, {name: [] for name in target.TARGETS}, {"dossier"}),
-    "ops/prims_evidence.json": (prims.EVIDENCE_IDS, {k: [v] for k, v in _definitions(prims).items()}, set()),
-    "ops/moe_evidence.json": (moe.EVIDENCE_IDS, {k: [v] for k, v in _definitions(moe).items()}, set()),
-    "ops/kv_cache_evidence.json": (kv_cache.EVIDENCE_IDS, {k: [v] for k, v in _definitions(kv_cache).items()}, set()),
+    models: (models.EVIDENCE_IDS, {name: [m.validated] for name, m in models.MODELS.items()}, set()),
+    integer: (integer.EVIDENCE_IDS, {name: [v] for name, v in _own(integer, integer.__all__).items()}, set()),
+    total_fp8: (total_fp8.EVIDENCE_IDS, {name: [v] for name, v in _own(total_fp8, total_fp8.__all__).items()}, set()),
+    target: (target.EVIDENCE_IDS, {name: [] for name in target.TARGETS}, {"dossier"}),
+    prims: (prims.EVIDENCE_IDS, {k: [v] for k, v in _definitions(prims).items()}, set()),
+    moe: (moe.EVIDENCE_IDS, {k: [v] for k, v in _definitions(moe).items()}, set()),
+    kv_cache: (kv_cache.EVIDENCE_IDS, {k: [v] for k, v in _definitions(kv_cache).items()}, set()),
 }
+#: each module's evidence file, `<module>_evidence.json` beside it, from ``verity/``
+VERITY = Path(verity.__file__).resolve().parent
+_PATHS = {m: Path(m.__file__).resolve().with_name(f"{Path(m.__file__).stem}_evidence.json") for m in _ENTRIES}
+FILES = {_PATHS[m].relative_to(VERITY).as_posix(): entry for m, entry in _ENTRIES.items()}
 
 
 def _leaves(role: str, value):
@@ -93,7 +94,8 @@ def _well_formed(role: str, value) -> bool:
 
 
 def test_every_evidence_file_is_checked_here() -> None:
-    on_disk = {p.relative_to(CIRCUITS).as_posix() for p in CIRCUITS.rglob("*_evidence.json")}
+    on_disk = {p.relative_to(VERITY).as_posix() for package in {f.parents[1] for f in _PATHS.values()}
+               for p in package.rglob("*_evidence.json")}
     assert on_disk == set(FILES), f"add {sorted(on_disk - set(FILES))} to FILES (or drop {sorted(set(FILES) - on_disk)})"
 
 
