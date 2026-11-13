@@ -8,8 +8,8 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 /-!
 # A sample reads only the bytes it reports reading
 
-A draw reads its source in order (`Draw.take`), from position `0`, and throws where the source runs out, so the
-position only grows and a draw that ends at position `R` read only the source's first `R` bytes. It draws the same from
+A sample reads its source in order (`Draw.take`), from position `0`, and throws where the source runs out, so the
+position only grows and a sample that ends at position `R` read only the source's first `R` bytes. It samples the same from
 any source that starts with those `R` bytes (`AgreesTo`): `drawUnits_read`, and through the stages' samples,
 `select_read` and `selectSecond_read`. The `R` a stage reports is the `read` `Run.coinsCode` holds to the challenger's
 released coins, so a stage's sample depends on its coins only through the bytes the challenger released.
@@ -183,7 +183,7 @@ theorem drawWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (l
     dsimp only at h ⊢
     exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
-/-- **A draw reads only the bytes it reports reading**: the units a law draws from `ξ`, having read `r.2` bytes, are
+/-- **A sample reads only the bytes it reports reading**: the units a sampling design samples from `ξ`, having read `r.2` bytes, are
 the same from any source that starts with `ξ`'s first `r.2` bytes. -/
 theorem drawUnits_read {ξ ξ' : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
     (h : Spot.Draw.drawUnits law n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) : Spot.Draw.drawUnits law n ξ' = .ok r := by
@@ -300,7 +300,7 @@ theorem sample_read {g : SamplingDeploy.RegTwo} {ξ ξ' : ByteArray} {draw : Jso
   simp only [SamplingDeploy.RegTwo.sample, hc, select_read h hA]
 
 /-- **Part 2, at the released bytes**: where the second stage accepted on `ξ` over the model's replay sample, having
-read `read` bytes, and the second stage's coins start with those bytes, the model's second draw is the run's. -/
+read `read` bytes, and the second stage's coins start with those bytes, the model's second sample is the run's. -/
 theorem secondDraw_read (h : Held) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) {ξ : ByteArray} {draw : Json} {read : ℕ}
     (hs : Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks ξ = .ok (draw, read))
     (hA : AgreesTo ξ (stageSrc c₁) read) :

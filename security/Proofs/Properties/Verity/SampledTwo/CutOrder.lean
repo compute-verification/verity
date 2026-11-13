@@ -24,7 +24,7 @@ This module takes the order from the ledger the check read, in three steps.
 * **Each of those lines is the device's** (`line_device`, `entry_device`): a line of a ledger `drawCoins` accepted is
   signed under the key (`Window.verifyLedger_sig`), so the device's own ledger holds a line with the same text apart
   from its signature, or the finder outputs a break from that session's record. `Window.window_opens` is this for the
-  one open a draw reads. Two lines of one text apart from their signatures have one kind, one `seq`, one window root
+  one open a sample reads. Two lines of one text apart from their signatures have one kind, one `seq`, one window root
   and, an open, an end or a reserve, one session (`same_fields`; `entry_seq` reads an entry's `seq` and session off its
   JSON).
 * **The device's fact** (`PrintsInOrder`): where the device's own ledger opens the first window for `a` and the second
@@ -174,7 +174,7 @@ section Lines
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-- **A signed line of the ledger a draw's coin evidence carries is a line of the device's own ledger, apart from its
+/-- **A signed line of the ledger a sample's coin evidence carries is a line of the device's own ledger, apart from its
 signature**, or the finder outputs a break: the device signed its message, or the signature is a forgery; what the
 device signs that hashes a ledger role is one of its own ledger lines' messages; and equal messages are equal texts
 without their signatures, or a collision of two strings the finder hashes. `Window.window_opens`' argument, for any

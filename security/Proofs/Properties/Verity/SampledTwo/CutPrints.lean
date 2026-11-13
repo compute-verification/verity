@@ -17,7 +17,7 @@ which the form's per-member check holds: `OneStageZk.membersRun`'s `membersTrees
   `Lines.PrintsLog` states (`printsLog_onWindow`), and `Lines.read_run` reads the session's releases as that log but for
   openings' coins of one SHA-512. `Lines.read_run` reads the history only at the run it reads, so no other run on
   another window need print this log.
-* **The first session** (`first_session`): `readsLogs` itself draws its coins under the parameters' key, so nothing of
+* **The first session** (`first_session`): `readsLogs` itself flips its coins under the parameters' key, so nothing of
   the form's check is read; its read takes no records.
 * **The interior session** (`second_session`): the coins the second stage read are what `drawCoins` reads from the
   interior audit's coin evidence (`oneStageZk_reads`), and its records are held to the trees its lines hold
@@ -27,7 +27,7 @@ which the form's per-member check holds: `OneStageZk.membersRun`'s `membersTrees
   coins aren't all the device's, gives an opening collision (`Lines.open_collision`) in the matching read without the
   samples' coins (`opensReads`).
 
-The history at each play may hold earlier runs and lines: `read_on` reads only the runs the draw names and the
+The history at each play may hold earlier runs and lines: `read_on` reads only the runs the sample names and the
 ledger. `PrintsTwo` is a premise at the history the leg's `dev` gives; at a one-play history it is the step
 `Device.lean`'s printing proves.
 -/
@@ -80,7 +80,7 @@ theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 
 /-- **A session's read, where `drawCoins` accepts its coin evidence and the runs on its window print `log`, is `log`
-but for openings' coins of one SHA-512**, or the finder outputs a break: the lines it read are the drawn run's
+but for openings' coins of one SHA-512**, or the finder outputs a break: the lines it read are the sampled run's
 (`hl`), and its records give each round opened the coins those lines show (`hL`). -/
 theorem read_on {dev : History} {key : ChallengerKey} {w label : String} {after ξ : ByteArray} {coins : Json}
     {log : List Release} {lines : List String} {recs : List Json} {out : List Release}
@@ -287,7 +287,7 @@ theorem source_window {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment
     simp only [hch, hw] at h <;> cases h
   first | rfl | simp [hw]
 
-/-- **The two sessions' windows are the ones the parameters name**: the first's draw's and the interior's. -/
+/-- **The two sessions' windows are the ones the parameters name**: the first's sample's and the interior's. -/
 theorem windowsOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₁ d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
     (h1 : caseOf s = .ok (p, c, e)) (h3 : firstDraws key p c e = some d₁) (h5 : interiorOf e = .ok c₂)
@@ -298,7 +298,7 @@ theorem windowsOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {
   rw [paramsAt_of_caseOf h1]
   simp [Except.toOption, hb, hw₁, hw₂]
 
-/-- **The interior's draw is under the parameters' key.** -/
+/-- **The interior's sample is under the parameters' key.** -/
 theorem key_second {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
     (h1 : caseOf s = .ok (p, c, e)) (h2 : keyOf s.params = some key) (h5 : interiorOf e = .ok c₂)

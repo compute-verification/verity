@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
 /-!
-# The two-stage leg's coin map: its law (`lawAt`)
+# The two-stage leg's coin map: its sampling design (`lawAt`)
 
 `LawAt` at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one coin node at a
 time. At a written node the node's value is a function of a chunk of the run's coins, and everything the map writes
@@ -15,14 +15,14 @@ its shortfall below uniform.
 * **Averages over blocks** (`avg_split`, `avg_restrict`, `avg_indep`, `avg_coord`, `avg_le_write1`): uniform coins
   restricted along an injective map are uniform, and a function of a block of uniform coordinates is independent of
   what reads only the others.
-* **The law at a node** (`LawHolds`, `law_opt`, `law_ite`, `law_keep`, `law_set`, `law_write`, `law_send`): a bounded
+* **The sampling design at a node** (`LawHolds`, `law_opt`, `law_ite`, `law_keep`, `law_set`, `law_write`, `law_send`): a bounded
   function of the play is on average at most its average at the mapped tape and uniform coins, plus a term; a kept coin
   node's term is the average of the terms after it, a node written with a value independent of what the map reads after
   it (`Splits`) costs nothing more, and a node written through `W` costs `W`'s shortfall.
 * **The chunks** (`OffChunk`, `splits_chunk`, `splits_fresh`, `splits_open`): a round's chunk of elements, a fresh coin's
   512 bits and an opening's elements split from the coins off the chunk.
 * **Along the releases** (`AgreeFrom`, `placeK_congr`, `law_fresh`, `law_hello`, `law_round`, `law_open`,
-  `law_placeK`): the coin map reads the run's coins only from what the releases before it gave each round, and its law
+  `law_placeK`): the coin map reads the run's coins only from what the releases before it gave each round, and its sampling design
   holds along `relK` at `gapK`.
 * **The first clause** (`law_place`, `lawAt`).
 -/
@@ -200,7 +200,7 @@ theorem avg_le_write1 {P C : Type} [Fintype P] [Nonempty P] [Fintype C] [Nonempt
   simp only [Tape.avg_prod, avg_const] at h
   exact h
 
-/-! ## The law at one node -/
+/-! ## The sampling design at one node -/
 
 variable {β : Type}
 
@@ -243,7 +243,7 @@ theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Gam
   simp only [avg_const] at h
   exact h
 
-/-- **The law at a node** with the map `P` of uniform coins `R` and the term `G`: every bounded function of the play's
+/-- **The sampling design at a node** with the map `P` of uniform coins `R` and the term `G`: every bounded function of the play's
 output is on average at most its average at the mapped tape and uniform coins, plus `G`. -/
 def LawHolds {R : Type} [Fintype R] (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (G : ℝ≥0∞) : Prop :=
   ∀ H : β → ℝ≥0∞, (∀ b, H b ≤ 1) →
@@ -655,9 +655,9 @@ theorem placeK_congr {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts
     placeOpen_congr L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s t r r' h => placeK_congr k fs ts pre f s t r r' h) fs ts pre f i sn n b s' t h
 
-/-! ### The law frame by frame -/
+/-! ### The sampling design frame by frame -/
 
-/-- The law along `relK k` from every layout, trees, releases before and continuation. -/
+/-- The sampling design along `relK k` from every layout, trees, releases before and continuation. -/
 def RecLaw {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) (gr : GapRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
     (s : Strategy (relK k fs ts f)), LawHolds (relK k fs ts f) s (fun r => rc r fs ts pre f s) (gr fs ts pre f s)
@@ -730,7 +730,7 @@ theorem law_open {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → Pl
   refine law_opt _ _ (fun s => law_id _ s) (fun p s₄ => ?_) _ s₃
   exact law_round L hlaw hrc fs ts pre f i sn n b T p s₄
 
-/-- **The law along the releases**: at every layout, trees, releases before, continuation and strategy, the coin map
+/-- **The sampling design along the releases**: at every layout, trees, releases before, continuation and strategy, the coin map
 `placeK` is uniform up to the hiding term `gapK`. -/
 theorem law_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β) (s : Strategy (relK k fs ts f)),

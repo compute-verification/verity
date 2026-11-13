@@ -427,7 +427,7 @@ class Interior:
 @dataclass(frozen=True)
 class DeviceCommit:
     """An interior commitment made on the device the replayed rows are on (a GPU commit), by port of `interior_ports`: its
-    root, every row's b || c, and the salt each row was hashed under, drawn as `interior` draws them. The rows never reach
+    root, every row's b || c, and the salt each row was hashed under, sampled as `interior` samples them. The rows never reach
     the host."""
     roots: Mapping[str, bytes]
     bc: Mapping[str, bytes]

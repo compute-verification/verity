@@ -42,7 +42,7 @@ open Lean (Json)
 /-! ## What the running verifier holds, against the model -/
 
 /-- **The running verifier's `Own` on what the model reads**: the fields the model's (`ownOf`) leaves at their defaults
-set to them: the reads the verifiers of record report (`reported`), what they name of each session (`verified`), the
+set to them: the reads the verifiers report (`reported`), what they name of each session (`verified`), the
 names of what the replay block returns (`returns`), the values the verifier supplies or fixes (`supplied`,
 `fixed`) and the templates the auditor's params record as reads (`reads`). Round 2's per-statement checks read none
 of these but `verified`. -/
@@ -50,7 +50,7 @@ def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
   { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
 
 /-- **The running verifier holds what the model holds of the run**, at the run's statement `st`, round 1's record `rec`,
-the second stage's draw and round 0's coin: the replay sample, the parts, the two records, the second draw's units, the
+the second stage's sample and round 0's coin: the replay sample, the parts, the two records, the second sample's units, the
 design's links, wires and rows, and the templates' reference headers and registered reads (`ownOf`). -/
 def OwnAgrees (h : Held) (own : Spot.SecondStage.Own) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Prop :=
   core own = ownOf h st rec draw c₀

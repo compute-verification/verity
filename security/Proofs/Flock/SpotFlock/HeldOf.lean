@@ -13,7 +13,7 @@ public import Proofs.Flock.SpotFlock.ScopeDesc
 auditor registers that the run never reads (`Unread`: the statement's descriptor and query, each template's reference
 session statement, the code the frame is built from, and the rounds past round 1 the second stage reads):
 
-* `reg`: the boundary registration `Run.run` hands `Select.select` (the verifier's copies with the law and work table
+* `reg`: the boundary registration `Run.run` hands `Select.select` (the verifier's copies with the sampling design and work table
   the rule expands over the record's population, the resolved rule, the closure map; `firstOf`), the second stage's
   cells and counts as `Run.run` computes them (`cellsOf`), request `ρ`'s unit `p` of template `t` the members' block
   (`filesBlockOf`), and no proof block always checked;
@@ -74,7 +74,7 @@ def namesOf (v : Spot.Registration.Verifier) : Names :=
   ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩
 
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands it to `Select.select`: the verifier's
-copies with the law the rule expands over the boundary record's population and the work table it expands, the resolved
+copies with the sampling design the rule expands over the boundary record's population and the work table it expands, the resolved
 rule (`Select.resolve`) and the closure map; none where any of them is refused. -/
 def firstOf (i : Spot.Run.Input) : Option Reg := do
   let v := i.params.verifier

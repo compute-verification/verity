@@ -62,7 +62,7 @@ gives its outcome (`prove`, `outcome_of`).
   (`interior_rows.write`); by template, the composer and Definition (`composer`: Flock's `member_stager` on the
   window's partition and program); by member key, the reads each port is verified against (`verifier_reads`: a link's
   port the value the interior registers for it, a wired port its writer's output, an output that writes a return
-  round 1 commits that port of round 1's record, any other its own); the second stage's draw, law and receipt; and the
+  round 1 commits that port of round 1's record, any other its own); the second stage's sample, law and receipt; and the
   auditor's params (``--proofs``; without them `references` builds a development run's, after the sample).
 * **The block's return.** The interior never registers the block's return, and round 2 reads it only at a port round
   1's record commits. Where the record commits one (`boundary_rows.Layout.ids`), the replay side opens that port from
@@ -95,7 +95,7 @@ gives its outcome (`prove`, `outcome_of`).
   Without it the sessions are proved on the CPU.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
-instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws. An inlined
+instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this samples. An inlined
 check whose body calls several templates needs core's two-stage over a window of templates. ``second`` replays a token
 select's spans from a capture of the sampler's inputs (`engine.sampler_capture`); a block whose ports read a table or a
 value the verifier supplies is not its yet.
@@ -599,7 +599,7 @@ def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
 
 def second_need(stream: S.Stream, q: int) -> int:
     """The most coins the second stage's sample of ``q`` replay blocks reads, known before its session opens
-    (`a5_coins.need`'s rule): its cells' draws on a source of zeros, with the widest read again."""
+    (`a5_coins.need`'s rule): its cells' samples on a source of zeros, with the widest read again."""
     reads: list[int] = []
 
     def zeros(k: int) -> bytes:
@@ -778,7 +778,7 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, else
     the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
-    first-stage law can draw; this command builds them after the sample, which is why its run is a development run."""
+    first-stage law can sample; this command builds them after the sample, which is why its run is a development run."""
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
@@ -917,12 +917,12 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
                  tie: Mapping[str, Any] | None = None) -> tuple[dict, bool, dict, dict, list[dict] | None]:
     """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
     the boundary registration ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
-    draw, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
+    sample, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
     key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
     (`round_two`, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior registration's check takes beside the boundary record (`a5.tie`: the
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
-    run reports, the sessions' statements: None without a draw). The audit record is a5's own of the interior, decided
+    run reports, the sessions' statements: None without a sample). The audit record is a5's own of the interior, decided
     as the stream decides the interior's before round 2's check is attached to it (a5's ``drawn``), so it is not the
     run's outcome: the report's ``accepted`` and ``record`` are that record's (``record``: the checks it fails, and
     ``own_reads``, that it took those reads as the stream's records do), ``round_two`` is round 2's with the form
@@ -1007,7 +1007,7 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
     """The verifier's half of the second stage on a registered interior ``r`` (`replayed`): the one-stage audit of the
     stream's second sample over the written window (`second_stage`). It hands over, by template, the composer and
     Definition (`composer`, on the check's own templates); by member key, the reads each port is verified against
-    (`verifier_reads`); the second stage's draw, law and receipt; and the verifier's own window (`Design.window`) and
+    (`verifier_reads`); the second stage's sample, law and receipt; and the verifier's own window (`Design.window`) and
     copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`).
     -> (a5's summary, what the run reports, the sessions' statements, the params)."""
     d, sample, layout = r.design, r.sample, r.first.layout

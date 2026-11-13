@@ -15,7 +15,7 @@ majority's is MAJORITY's at that frame (`majorityBound_opens`), with the two bou
 **One premise a commitment and strategy.** `joinedCouplingOfLaw` takes the coin map's law (`CoinMap.CoinMapHolds`) and,
 at each commitment `c` and strategy `σ`, one structure, `CouplesAt`: the join's premise (`JoinsAt`), what the majority's
 piece owes and the coupling's two clauses (the scope and the published `δ`). `joinedCoupling` (`JoinedForm.lean`) is
-it at COINMAP's proof of the law. The statement, the files, the stages' families, the deployment and the readings are
+it at COINMAP's proof of the sampling design. The statement, the files, the stages' families, the deployment and the readings are
 fixed across commitments and strategies except the statement `x`, which is the commitment's; the majority's statement
 data (`s`, `Pt`, `dd`) and its witness's reading and openings (`readX`, `openOf`, `dColl`) are each commitment's and
 strategy's.

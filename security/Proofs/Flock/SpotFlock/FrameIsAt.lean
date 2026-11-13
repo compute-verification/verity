@@ -16,7 +16,7 @@ follows from two facts, one about `c` and the slots, one about the run's records
   roots (`leafAt`), at an entry of the read's leaf count, the position the session header gives the row, the opening's
   path being the header's. At a one-table session's other ports: template `t`'s port of the interior record
   (`SlotKey.interior`), under the replay block's roots, at the published tree's schema, sized to its leaf count, its
-  leaf the drawn unit's row, the opening's path being the published tree's (`pubPath`).
+  leaf the sampled proof block's row, the opening's path being the published tree's (`pubPath`).
 * `EntriesAt c`: in an accepted run, the entry round 2 reads each registered read's value off has the read's root,
   leaf count and domain id, and template `t`'s port of the interior record at a port a one-table session doesn't read
   registered has its published tree's root and domain id; each port at most `c`'s own depth.

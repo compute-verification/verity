@@ -26,8 +26,8 @@ it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), 
 **One premise at the form's accept.** `joinedOfLaw` takes `JoinsAt`, a structure whose fields are the pieces'
 remaining premises, each in its owner's words, and the coin map's law (`CoinMap.CoinMapHolds`), which speaks of the
 period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfLaw` at
-COINMAP's proof of the law (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
-accepted play is one term of that structure. The law is a hypothesis here only so that this module does not import
+COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
+accepted play is one term of that structure. The sampling design is a hypothesis here only so that this module does not import
 its proof (`CoinMapAgree.lean`).
 
 **What `joinedOfLaw` discharges** from the fields:
@@ -57,7 +57,7 @@ back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodC
 
 **What the stages read is the form's accept's**, with `caseIsSent`, and no field. The check's first session is the
 cut's (STAGECOINS's `sessionMatches_of`, from the form's refusal of an interior record whose read-back digest is not
-the interior commitment's, `INTERIOR_DIGEST`), and the first stage read the cut's draw (`firstDrawn_of`, from its
+the interior commitment's, `INTERIOR_DIGEST`), and the first stage read the cut's sample (`firstDrawn_of`, from its
 refusal of a first-stage record whose read-back digest is not the commitment's), both taken at the kept case
 (`sessionMatches_goodCase`, `caseIsSent_goodCase`). The first stage's coins are read under the parameters' key and an
 accepted play on two windows shows its sessions' order (`firstReads`, `orderShown`, CUT's `CutAccept.lean`).
@@ -70,7 +70,7 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
   pull request (PRF-490). The model's device takes its ledger lines as given, so nothing here proves it, and it is a
   field by that name, not a part of `JoinGood`.
 * **The two families distinct** (`distinctFamilies`), until the form refuses equal labels (TWOLEG).
-* **Each stage's draw names its family** (`family₁`, `family₂`): the boundary registration's challenger's family is
+* **Each stage's sample names its family** (`family₁`, `family₂`): the boundary registration's challenger's family is
   `ℓ₁` and the interior audit's is `ℓ₂`, in the parameters of each accepted play.
 * **On two windows each session shows the other stage's family after that stage's digest alone** (`otherRoots`,
   CUT's `OtherRoots`): the form's accept does not give it.
@@ -143,8 +143,8 @@ theorem sessionMatches_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h :
     SessionMatches (goodCase C G) :=
   fun o ha => h o (formAccepts_goodCase.1 ha).1
 
-/-- **A stage's draw at the kept case**: `StageDraws` asked of the accepted plays `G` holds of is `StageDraws` at the
-kept case's acceptance and draw. -/
+/-- **A stage's sample at the kept case**: `StageDraws` asked of the accepted plays `G` holds of is `StageDraws` at the
+kept case's acceptance and sample. -/
 theorem stageDraws_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} {f : Case → Option (String × ByteArray)}
     {ℓ : String} (h : CoinMap.StageDraws (fun o => FormAccepts C o ∧ G o) (fun o => (C o).bind f) ℓ) :
     CoinMap.StageDraws (FormAccepts (goodCase C G)) (fun o => (goodCase C G o).bind f) ℓ := by
@@ -237,10 +237,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂
-  /-- The first stage's draw names `ℓ₁`, on the accepted plays `JoinGood` holds of: the family of the boundary
+  /-- The first stage's sample names `ℓ₁`, on the accepted plays `JoinGood` holds of: the family of the boundary
   registration's challenger, in the play's parameters (`firstDraw`). -/
   family₁ : ∀ o, FormAccepts C o ∧ JoinGood o → ∀ label after, (C o).bind firstDraw = some (label, after) → label = ℓ₁
-  /-- The second stage's draw names `ℓ₂`, on the accepted plays `JoinGood` holds of: the family of the interior
+  /-- The second stage's sample names `ℓ₂`, on the accepted plays `JoinGood` holds of: the family of the interior
   audit's challenger, in the play's parameters (`secondDraw`). -/
   family₂ : ∀ o, FormAccepts C o ∧ JoinGood o → ∀ label after, (C o).bind secondDraw = some (label, after) → label = ℓ₂
   /-- On two windows each session shows the other stage's family after that stage's digest alone (CUT's

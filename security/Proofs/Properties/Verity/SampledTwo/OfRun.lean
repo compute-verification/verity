@@ -106,7 +106,7 @@ def SessionsRun (A : Live₂) (C : CaseOf) (S : SessionReading) (P' : Verity.Exc
           .acc
 
 /-- **A stage's sample reads no byte past its source**: where the first stage's sample, or the second's, succeeds on
-a source and reports reading `read` bytes, the source has that many. A draw takes its bytes in order and throws where
+a source and reports reading `read` bytes, the source has that many. A sample takes its bytes in order and throws where
 the source runs out. -/
 def ReadsWithin (h : SpotFlock.Held) : Prop :=
   (∀ ξ draw proved read, Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query

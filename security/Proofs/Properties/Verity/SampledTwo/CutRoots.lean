@@ -8,12 +8,12 @@ public import Proofs.Properties.Challenger.Coins
 
 On a play whose logs the check read and found the device's (`ReadIsDevice`), every fresh coin the play's log shows of
 the first stage's family is released after the boundary registration's digest, and every one of the second stage's
-family after the interior registration's (`oneRoot_draws`, at the cut's two draws; `oneRoot_second`, the second
+family after the interior registration's (`oneRoot_draws`, at the cut's two samples; `oneRoot_second`, the second
 stage's in the case's words; `OneRootIn`).
 
 A session's read shows a fresh coin of a family only after a root its log's lines show of that family
 (`readLog_fresh`), and those are the roots `releasedRootsOf` lists (`Sampled.releasedRootsOf_ok`). The challenger's
-stream for a draw refuses a session that shows a root of the draw's own family other than its digest
+stream for a sample refuses a session that shows a root of the sample's own family other than its digest
 (`Coins.stream_ok`), so each session's read shows its own stage's family after its own digest alone (`first_oneRoot`,
 `second_oneRoot`).
 
@@ -189,10 +189,10 @@ theorem read_oneRoot {label : String} {after : ByteArray} {records : List Json} 
     OneRootIn L a out :=
   fun rl hrl hfr => hall _ (readLog_fresh h rl hrl L hfr)
 
-/-! ## A draw's session shows its own family after its digest alone -/
+/-! ## A sample's session shows its own family after its digest alone -/
 
-/-- **The session a draw's coins are read from**: its commitment and the roots it shows, its log's lines, every root
-it shows of the draw's own family the draw's digest (the challenger's stream refuses any other), and the roots it shows
+/-- **The session a sample's coins are read from**: its commitment and the roots it shows, its log's lines, every root
+it shows of the sample's own family the sample's digest (the challenger's stream refuses any other), and the roots it shows
 of each family those its lines' pairs name. -/
 theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : drawCoins key w label after coins = .ok ξ) :
@@ -211,7 +211,7 @@ theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteAr
   exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, Verity.Sampled.releasedRootsOf_ok hrr⟩
 
 /-- **The first session's read shows a family after one root where its roots do**, and its roots show the first
-draw's family after the draw's digest alone. -/
+sample's family after the sample's digest alone. -/
 theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws} {ξ : ByteArray} {r : List Release}
     (hd : firstDraws key p c e = some d)
@@ -232,7 +232,7 @@ theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Para
   exact hall
 
 /-- **The interior session's read shows a family after one root where its roots do**, and its roots show the second
-draw's family after the draw's digest alone. -/
+sample's family after the sample's digest alone. -/
 theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment} {d : Draws} {ξ : ByteArray} {r : List Release}
     (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondDraws p e = some d)
@@ -261,10 +261,10 @@ theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recurs
 /-! ## The premise on two windows -/
 
 /-- **On two windows each session shows the other stage's family after that stage's digest alone**: where the case
-reads as the two-stage form's, the parameters name a key and the two draws are on two windows, the roots the first
-session shows of the second draw's family are all the second draw's digest, and the roots the interior session shows
-of the first draw's family are all the first draw's digest. It holds wherever neither session's roots show the other
-draw's family. The form's accept does not give it. -/
+reads as the two-stage form's, the parameters name a key and the two samples are on two windows, the roots the first
+session shows of the second sample's family are all the second sample's digest, and the roots the interior session shows
+of the first sample's family are all the first sample's digest. It holds wherever neither session's roots show the other
+sample's family. The form's accept does not give it. -/
 def OtherRoots (s : Verity.Sent) : Prop :=
   ∀ p c e key d₁ d₂, caseOf s = .ok (p, c, e) → keyOf s.params = some key → firstDraws key p c e = some d₁ →
     secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
@@ -281,10 +281,10 @@ def OtherRoots (s : Verity.Sent) : Prop :=
 
 /-! ## The play's log -/
 
-/-- **The play's log shows each draw's family after its digest alone**, on a play whose logs the check read and found
+/-- **The play's log shows each sample's family after its digest alone**, on a play whose logs the check read and found
 the device's (`ReadIsDevice`), with every step the check read on the way: on one window each session's read is the
-whole log; on two, the log is the first session's releases then the interior's, each showing the other draw's family
-after that draw's digest alone (`OtherRoots`). -/
+whole log; on two, the log is the first session's releases then the interior's, each showing the other sample's family
+after that sample's digest alone (`OtherRoots`). -/
 theorem oneRoot_draws {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.sent) :
     ∃ p c e key d₁ c₂ d₂ ξ, caseOf o.sent = .ok (p, c, e) ∧ keyOf o.sent.params = some key ∧
       firstDraws key p c e = some d₁ ∧ drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧

@@ -21,7 +21,7 @@ the digest of the interior record where the cut reads the interior commitment's.
 (`interiorDigestIs`, `INTERIOR_DIGEST`), so `SessionMatches` is the form's check (`sessionMatches_of`).
 
 `FirstDrawn`, the premise `firstShown_of` takes, is the form's check (`firstDrawn_of`): the run of record's coin check
-reads the cut's first draw, at the record the form holds to the commitment's digest (`digestIs`).
+reads the cut's first sample, at the record the form holds to the commitment's digest (`digestIs`).
 -/
 
 @[expose] public section
@@ -220,7 +220,7 @@ theorem keyOf_challenger {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Param
   rw [hp] at hkey
   exact (Option.filter_eq_some_iff.1 hkey).1
 
-/-- **The interior's draw is the interior audit's**: its key and family the interior audit's challenger's, its window
+/-- **The interior's sample is the interior audit's**: its key and family the interior audit's challenger's, its window
 the interior audit's, after the interior commitment's digest. -/
 theorem secondDraws_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {d : Properties.Challenger.Draws} (h : secondDraws p e = some d) :
@@ -293,7 +293,7 @@ theorem sessionMatches_of (C : CaseOf) (hC : CaseIsSent C) : SessionMatches C :=
 theorem secondAlone_of_sent (C : CaseOf) (hC : CaseIsSent C) : SecondAlone C :=
   secondAlone_of_matches C hC (sessionMatches_of C hC)
 
-/-! ## The first stage's draw from the form's check -/
+/-! ## The first stage's sample from the form's check -/
 
 /-- The run of record's coin check reads the interior audit's key, the evidence's copy of main and `coins`, and the
 boundary registration's family. -/
@@ -315,12 +315,12 @@ theorem inputOf_coinsRead (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneS
        cases VStar.Recursive.SampledTwo.rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
 
-/-- **The first stage read the cut's draw**: `FirstDrawn` from the form's check. On an accepted play the run of record's
+/-- **The first stage read the cut's sample**: `FirstDrawn` from the form's check. On an accepted play the run of record's
 coin check gave no code, so either the first stage read no byte, or `drawCoins` read the evidence's `coins` under the
 run's key, window and family after the digest of the record the run was given, and the bytes read start them
-(`Coins.coinsReason_none`). The run's key, window and family are the cut's draw's (`inputOf`, `keyOf_challenger`), and
+(`Coins.coinsReason_none`). The run's key, window and family are the cut's sample's (`inputOf`, `keyOf_challenger`), and
 the form refuses unless the record the run is given has the commitment's digest (`digestIs`, `RECORD_DIGEST`), which
-is the draw's. -/
+is the sample's. -/
 theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
   intro o ha i read hi hread p c e key d ξ hcase hkey hd hξ
   obtain ⟨k, p', c', e', c₂, ξ₂, r, run, hk, hdec, hin, -, -, -⟩ := inputOn_accepts ha hi

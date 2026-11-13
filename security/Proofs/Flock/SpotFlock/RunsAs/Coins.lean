@@ -8,8 +8,8 @@ public import Proofs.Properties.Challenger.Drawn
 
 Each stage of an accepted two-stage run got no code from `Run.coinsCode` on the bytes it read (`accepted_steps`); where
 it read any, the verifier holds a key, a window and a family, the record has a digest and the challenger's check finds
-no reason under them (`coinsCode_read`). The check reads the challenger's draw under that key, window and family
-(`Properties.Challenger.Coins.coinsReason_draw`), and the draw's challenges are the device's or the model's finder
+no reason under them (`coinsCode_read`). The check reads the challenger's sample under that key, window and family
+(`Properties.Challenger.Coins.coinsReason_draw`), and the sample's challenges are the device's or the model's finder
 outputs a break (`Properties.Challenger.Drawn.drawnByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
 `runCoinsFromDevice`). No premise names the key: it is the run's own (`Input.key`).
 -/

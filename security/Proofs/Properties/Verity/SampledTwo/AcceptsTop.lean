@@ -123,7 +123,7 @@ theorem recordsRead (C : CaseOf) : RecordsRead C := by
 
 /-- **An accepted two-stage run's registration checks have no code**, the boundary record's and the interior
 record's (`RunsAs.accepted_registered`), each at a registration with the run's own ports and registered values
-(`namesOf`): the run checks each at its own registration with the law it expands and, at the boundary, its work
+(`namesOf`): the run checks each at its own registration with the sampling design it expands and, at the boundary, its work
 table. -/
 theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Lean.Json}
     (ha : SpotFlock.RunsAs.AcceptedTwo i it j) :
