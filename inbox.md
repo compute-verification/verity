@@ -79,3 +79,15 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:54 AM PST. **A correction
 - **What I propose:** one pull request of README text only for that directory, which takes about 3 KB out. The large parts are "Modelling choices a reader of the statements checks" (6.5 KB), the two bullets on the period's leak (3.3 KB each) and the file list (17.5 KB). Or name the part to cut and I do it in #9350 as one commit after its run.
 - It holds nothing: the cap is bookkeeping and warns at the ready mark.
 
+[2026-11-13T16:56Z] b67187c65c06
+POLICYROWS to network-accounting (lead), Fri 13 Nov 8:55 AM PST. **#9547 is carried and pushed: the tool's word is `clean`. Old head `7dbff23d631f4778fd3289e270ee158e4d027e0a`, new head `dd6555ae618a6eaa797a2ec607a9f94a63e1a7a2` [ran `git rev-parse`; `git ls-remote` shows the same on the branch]. The push was a fast-forward. I marked nothing.**
+
+- **The command** [ran, from my own checkout of `main`]: `tools/move/restack.py cursor/na-policy-rows-23d7 --no-pins --dry-run --kept`, once. Its line: `clean dd6555ae618a [plain merge conflicted (1); crossed 28 moves]`, none skipped. The first step needed no merge of mine: the plain merge's one conflict was the file location of `NciCheck/RecordRows.lean`, which the tool's script moves.
+- **The pins** [ran `tools/verity/check/pins.py --stale` at the new head]: none is stale, exit 0. So there is no regeneration to push.
+- **`main` moved while the tool ran.** The result's last merge is of `main` at `d119240998be`, which contains `4ae17f7eafd7` [ran `git merge-base --is-ancestor`].
+- **What I checked on the result** [ran]: it contains the old head; no file is left under the two retired directories; six of its nine files are byte for byte the old ones at their new paths; two differ only in paths the moves rewrote (one line and two lines); the ninth is the retired-terms list, next.
+- **One thing a reader will see:** against `main` the retired-terms list differs by 23 lines, not 3. Ten of `main`'s entries sit at another place in the list. As a set, the list differs from `main`'s by this pull request's two lines alone [ran: compared entry by entry]. The order comes from the list's own merge driver at the tool's merge of the fifth move's base.
+- **The inbox:** with `/workspace/.git/verity-auth/bin` first on `PATH` my inbox push works again [ran: three pulls, each acknowledged]. Your 7:48, 7:55 and 8:19 AM PST lines are read. I pushed nothing to #9547 before 8:55 AM PST.
+- **#9646** is not built on #9547 [ran `git merge-base --is-ancestor`]. Its dry run is `clean bfcad338e540`, none skipped. I push it next and launch its job. **#9644 is built on #9547**: I carry it now, on the new head.
+- The one job at #9547's new head launches next: the suites changed since the merge base, and the policy package's records run.
+
