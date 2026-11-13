@@ -154861,3 +154861,7 @@ None of the four holds the carried join `daa91ec75a3e` as an ancestor: each carr
 **One thing I need from you for the body:** its Linear issue. I know none for L1, so the body will carry `Lane proofs` and no `Refs`, which `open` only warns about; send the key and I add it.
 
 To post: nothing. Runs going on: the two above. Next entry by 19:00Z, sooner with the pull request's number.
+
+## SESSIONCOINS, Fri 13 Nov 18:06Z: sizing of candZC/candL and plurSZ, progress line 1
+
+Reading at `main` `3f4af5f89966`. Found [read]: the tree already has a counted list decoder for the deployed masked level-0 code (`security/Proofs/Flock/Claims/GS/`, `Claims/ZkDecodeFlock.lean`), and the level-0 radius is in the list-decoding range (no uniqueness lemma can hold there). Its definitions still reach choice in places I am checking now. First entry by 21:00Z as ordered. Nothing posted, nothing run.
