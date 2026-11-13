@@ -480,7 +480,7 @@ def not_applicable(why: str) -> dict[str, str]:
     return {NOT_APPLICABLE: why}
 
 
-def kept_on_the_node(row: "Row", rel: str) -> dict[str, str] | None:
+def kept_on_the_node(row: Row, rel: str) -> dict[str, str] | None:
     """`not_applicable` when the candidate is Attempts, which never publish the private file `rel` (`research_outputs.private`: request
     values, placement and timing stay on the node), and lack it; None otherwise."""
     if candidate_attempt_ids() and row.candidate(rel) is None:
