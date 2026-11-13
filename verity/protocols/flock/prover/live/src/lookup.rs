@@ -11,7 +11,7 @@
 //! what the prover computes, the same values the rows define.
 //!
 //! [`LookupNet::build_v2`] is `table/v2`, the mirror of the verifier's `Lookup.buildV2` (the one specification), held to
-//! its vectors (`verity/protocols/flock/agreement/lookup_v2_vectors.json`) by [`LookupNet::rows_digest`]: product rows only for the
+//! its vectors (`verity/protocols/flock/prover/agreement/lookup_v2_vectors.json`) by [`LookupNet::rows_digest`]: product rows only for the
 //! `k` = [`width`] output bits, and each output bit `k <= j < bits` its constant.
 
 use sha2::{Digest, Sha256, Sha512};
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn v2_reproduces_the_verifiers_vectors() {
         let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap().join("../../../../..");
-        let Ok(text) = std::fs::read_to_string(repo.join("verity/protocols/flock/agreement/lookup_v2_vectors.json")) else {
+        let Ok(text) = std::fs::read_to_string(repo.join("verity/protocols/flock/prover/agreement/lookup_v2_vectors.json")) else {
             return;
         };
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
