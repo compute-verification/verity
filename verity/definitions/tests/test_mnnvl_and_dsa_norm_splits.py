@@ -18,7 +18,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops.prims import ZERO32
+from verity.circuits.ops.prims import ZERO32
 from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import dsa_norm as DN
 from verity.definitions.registry import prims as P

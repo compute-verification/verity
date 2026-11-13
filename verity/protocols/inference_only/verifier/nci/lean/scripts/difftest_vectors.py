@@ -405,7 +405,7 @@ def hand() -> str:
 def hand_const() -> str:
     """A declaration with a constant: a: Value<8> (registered), b: Value<8> (bound per run); k = `Const8[0x2a]`, which
     reads nothing; c = f(a, k): Value<8>; d = g(c, b): Value<4>. Gates, and root nodes, 0 a, 1 b, 2 k, 3 c, 4 d."""
-    from verity.definitions.ops.prims import const
+    from verity.circuits.ops.prims import const
 
     k, f, g = const(8, 0x2A), prim((8, 8), 8), prim((8, 8), 4)
 
