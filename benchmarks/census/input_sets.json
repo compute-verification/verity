@@ -11,7 +11,7 @@
     "provenance": "captured",
     "sources": [
       {
-        "label": "fixtures/bench-instances/v1/manifest.json (sha256), verity_numerical.bench.instances"
+        "label": "benchmarks/numerical/bench-instances/v1/manifest.json (sha256), verity_numerical.bench.instances"
       }
     ]
   },
