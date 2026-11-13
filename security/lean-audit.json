@@ -5702,7 +5702,7 @@
   "Definitions.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions", "Definitions.Assumptions.Transport"],
    "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof; the transport's premises re-export its two named assumptions of the lock (ImprintPathPrivate, ChannelAuthentic), declared in the assumptions home (Definitions.Assumptions.Transport)",
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof; the transport's premises re-export its two named assumptions of the lock (ImprintPathPrivate, ChannelAuthentic), declared in the assumptions home's module for the transport",
    "sealed": true
   },
   "Definitions.Core.Guarantees": {
@@ -5961,7 +5961,7 @@
     "Definitions.Assumptions.Accounting"
    ],
    "except": [],
-   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home (Definitions.Assumptions.Accounting), which the modules that list them re-export",
+   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home's module for resource accounting, which the modules that list them re-export",
    "sealed": true
   },
   "Definitions.Claims": {
@@ -6081,7 +6081,7 @@
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and Definitions.Assumptions.Accounting), PoUS's timed audit (Definitions.Pous.Model.Audit, for Definitions.Assumptions.Pous), the hash area's messages and digests with core's coin probability (Definitions.Hash.Basic, Definitions.Core.Game, for Definitions.Assumptions.Hash), the transport's channels (Definitions.Core.Transport, for Definitions.Assumptions.Transport) and weight security's definitions and premises, never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and the resource-accounting assumptions), PoUS's timed audit (for PoUS's assumptions), the hash area's messages and digests with core's coin probability (Definitions.Hash.Basic, Definitions.Core.Game, for the hash's assumptions), the transport's channels (for the transport's assumptions) and weight security's definitions and premises, never a guarantee or a proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
    "imports": [
