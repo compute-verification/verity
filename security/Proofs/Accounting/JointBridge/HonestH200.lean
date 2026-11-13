@@ -292,19 +292,19 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (checkedPlay n).game =
       monitoringPeriodGame (tileStage HonestH1.circuit 144) (liveCone Honest.scheme HonestH1.circuit 144) 1 1 24
         (HonestH1.period n) ∧
-    (HonestH1.period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
+    (HonestH1.period n).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer n) (checkedPlay n).game ∧
     (∀ w, prob (fun x => (HonestH1.layer n).MovedIn x w) ≤ 0) ∧
     RegisteredBeforeDraw (HonestH1.windows n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
     ServiceSound HonestH1.prm (HonestH1.windows n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := n)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
-    (HonestH1.period n).EveryWindow
+    (HonestH1.period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
-    (HonestH1.period n).EveryWindow
+    (HonestH1.period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
-    (HonestH1.period n).EveryWindow
+    (HonestH1.period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
     UnitFixed (checkedPlay n) (HonestH1.layer n) (monitoringPeriodMode HonestH1.circuit (HonestH1.period n) (HonestH1.run n))
@@ -378,19 +378,19 @@ theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     (checkedPlay 1).game =
       monitoringPeriodGame (tileStage HonestH1.circuit 144) (liveCone Honest.scheme HonestH1.circuit 144) 1 1 24
         (HonestH1.period 1) ∧
-    (HonestH1.period 1).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
+    (HonestH1.period 1).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer 1) (checkedPlay 1).game ∧
     (∀ w, prob (fun x => (HonestH1.layer 1).MovedIn x w) ≤ 0) ∧
     RegisteredBeforeDraw (HonestH1.windows 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
     ServiceSound HonestH1.prm (HonestH1.windows 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := 1)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
-    (HonestH1.period 1).EveryWindow
+    (HonestH1.period 1).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
-    (HonestH1.period 1).EveryWindow
+    (HonestH1.period 1).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
-    (HonestH1.period 1).EveryWindow
+    (HonestH1.period 1).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
     UnitFixed (checkedPlay 1) (HonestH1.layer 1) (monitoringPeriodMode HonestH1.circuit (HonestH1.period 1) (HonestH1.run 1))
