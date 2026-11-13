@@ -67,7 +67,9 @@ Open premises (`open`):
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
-    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`;
+    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
+    tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
+    is withheld;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
   - `network-check-difftest INSTANCES PYTHON N`.
@@ -303,7 +305,8 @@ A spec-level reference for network accounting's timing channel:
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
   (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
-  `--registered` port of the proof blocks that read a table, one a row (`port`);
+  `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
+  that an execution phase has no head (`check_no_head`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the

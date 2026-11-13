@@ -2359,13 +2359,7 @@ requires-dist = [
 [[package]]
 name = "verity-bench-specs"
 version = "0.0.0"
-source = { virtual = "benchmarks/specs" }
-dependencies = [
-    { name = "verity-vllm" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-vllm", editable = "adapters/vllm" }]
+source = { virtual = "benchmarks/harness/specs" }
 
 [[package]]
 name = "verity-certifier-timing"

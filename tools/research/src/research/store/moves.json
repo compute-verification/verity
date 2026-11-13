@@ -2191,6 +2191,11 @@
     },
     {
       "paths": {
+        "benchmarks/specs/": "benchmarks/harness/specs/"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/remote_session/prover.py": "verity/protocols/poub/prover/remote_session/prover.py",
         "benchmarks/remote_session/device.py": "verity/protocols/poub/prover/remote_session/device.py",
         "benchmarks/remote_session/session.cu": "verity/protocols/poub/prover/remote_session/session.cu",

@@ -36,6 +36,8 @@ SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
     "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
+    "benchmarks/pouw/tests/test_pearl_c_vllm.py::timed":
+        "reports the version-2 tie's seconds at the run of record's size, the Python's and the Lean's; the tests print them and assert none",
     "infra/ops/tests/test_agent_watch.py::test_api_get_takes_a_shorter_timeout_but_never_a_longer_one":
         "passes timeout values to a stubbed urlopen and asserts them; nothing waits",
     "adapters/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":

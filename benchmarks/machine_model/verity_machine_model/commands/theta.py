@@ -8,10 +8,12 @@
                                           doesn't hold"""
 from __future__ import annotations
 
+import argparse
+
 from verity_machine_model import theta as T
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     c = sub.add_parser("theta")
     c.add_argument("--check", action="store_true", help="the file's rules and its figures only")
 
@@ -24,7 +26,7 @@ def _mix(m: dict[str, float]) -> str:
     return ", ".join(f"{k} {v:.3f}" for k, v in m.items() if v >= 5e-4)
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     t = T.theta(args.data)
     fs = T.figures(t)
     on_sheet = sum(r.sheet is not None for r in t.rates.values())
@@ -60,8 +62,8 @@ def run(args) -> int:
         print(f"{head}; exchange 5d/(4L) / (1 − {s.tensor:.4f}), MAC-times a MAC saved:")
         for name, x in s.rates.items():
             print(f"             {name}: {x:.3f}")
-    print(f"  at the no-fold receipt's L, where the k = L/2 products are k32 MMAs at full rate (post-additions only; the "
-          f"pre-additions and operand fix-ups uncounted), the cheapest route's exchange:")
+    print("  at the no-fold receipt's L, where the k = L/2 products are k32 MMAs at full rate (post-additions only; the "
+          "pre-additions and operand fix-ups uncounted), the cheapest route's exchange:")
     for big in T.NOFOLD_L:
         cells = []
         for reading in T.READINGS:

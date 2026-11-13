@@ -61,11 +61,15 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import cProfile
 import itertools
 import json
+import pstats
 import sqlite3
 import statistics
+import struct
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -119,7 +123,7 @@ def _instrument(run, PPD) -> None:
         pipe._ranged = True
 
 
-def run_mode(a) -> int:
+def run_mode(a: argparse.Namespace) -> int:
     import torch
     import glm53_timing as T
     from verity_vllm.protocols.pouw import pearl_c as PPD
@@ -170,7 +174,6 @@ def run_mode(a) -> int:
 def stamp_rows(raw: bytes, count: int, slots: int) -> tuple[list[dict], dict]:
     """The stamps' (timer ns, clock) pairs by phase: each pd_commit CTA's (rows 0 … count − 1, `PS`), and the tail's (row
     count, `PT`, with ``cta``: the (row, SM) of pd_commit's last CTA when it ran the tail)."""
-    import struct
     words = struct.unpack(f"<{len(raw) // 8}Q", raw)
 
     def at(row: int, slot: int) -> tuple[int, int]:
@@ -204,7 +207,7 @@ def stamp_summary(rows: list[dict], tail: dict) -> dict:
             **({"tail_cta": list(tail["cta"])} if "cta" in tail else {})}
 
 
-def stamps_mode(a) -> int:
+def stamps_mode(a: argparse.Namespace) -> int:
     import torch
     import glm53_timing as T
 
@@ -260,8 +263,6 @@ def stamps_mode(a) -> int:
 def _calls(run, f, n: int) -> tuple[float, float]:
     """`n` calls of f back to back: µs a call by the host's clock (until the last returns) and by the GPU's events (until its
     work, the run's side lanes' too, ends)."""
-    import time
-
     import torch
     s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize()
@@ -278,8 +279,6 @@ def _calls(run, f, n: int) -> tuple[float, float]:
 
 def _profiled(run, f, n: int) -> tuple[float, list[dict]]:
     """`_calls`' host µs a call under cProfile, and the `HOST_TOP` functions by own time a call."""
-    import cProfile
-    import pstats
     prof = cProfile.Profile()
     prof.enable()
     host, _ = _calls(run, f, n)
@@ -289,7 +288,7 @@ def _profiled(run, f, n: int) -> tuple[float, list[dict]]:
                   for tt, ct, fn in top]
 
 
-def host_mode(a) -> int:
+def host_mode(a: argparse.Namespace) -> int:
     import torch
     import glm53_timing as T
 
@@ -329,7 +328,7 @@ def host_mode(a) -> int:
     return 0 if rows else 1
 
 
-def grouped_mode(a) -> int:
+def grouped_mode(a: argparse.Namespace) -> int:
     import glm53_timing as T
     import grouped_check as GC
     import torch

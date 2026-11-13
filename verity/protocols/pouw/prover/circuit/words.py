@@ -1,12 +1,12 @@
-"""PoUW's IR primitives: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
+"""PoUW's primitive circuits: the word operations `ncp-v2`'s circuit is built from, the three Pearl-C4's tile check (`pc4`)
 adds to core's FP32, cast and tensor-core primitives, the three exact sums of squares Pearl-C's (`pc8`) liveness
-reads, and the masked words of a promotion window and an element's salt-dead bit that the prototype of Pearl-C's cap
-(`cap`) reads.
+reads, and the masked words of a promotion window and an element's salt-dead bit that the prototype of Pearl-C's inert-work
+bound (`cap`) reads.
 
 Every primitive but `PouwSqAcc` (576 bits), `PouwSqCeil` (64) and the two windows (480) returns one value of at most 32
 bits, so every unit of any `Q_word` cut of these Definitions meets the width rule, and a 64-bit hash word is carried as two
 32-bit halves: SHA-512's words as (hi, lo), Keccak's lanes as (lo, hi).  The two wide sums stay inside one `pc8` row unit,
-whose partition is `Q_template_instances`, and a window inside its cap word.
+whose partition is `Q_template_instances`, and a window inside the inert-work bound's word.
 Encodings: `U32` = `Value<32>`; `I7` = `Value<7>`, a two's-complement int7 (A's and B's entries: the type is the int7 domain
 check); `U8` = `Value<8>`, a byte read as u8 (X + β) or s8 (the noise, Y) as each primitive says; `F32`, `BF16` and `E2M1`
 the float encodings.  Every evaluator is total on encodings.
@@ -254,7 +254,7 @@ def PouwSqGe(x: int, th: int) -> int:
     return 1 if up48(sq300(x & M32)) >= th else 0
 
 
-# ---- Pearl-C's cap (`cap`): a promotion window's masked words ------------------------------------------------------------
+# ---- Pearl-C's inert-work bound (`cap`): a promotion window's masked words ------------------------------------------------
 
 #: a promotion window of G = 4 atoms of k = 32, and its masked words (`pearl_c_debit._masked`): mask m's word from +0, atom j
 #: passing its word through when bit j of m is set, at bits 32m to 32m + 31 for m = 0 to 14 (mask 15 passes every atom: +0)
@@ -298,7 +298,7 @@ def PouwWindowWord(x: int, m: int) -> int:
     return (x >> 32 * m) & M32 if m < MASKS else 0
 
 
-# ---- Pearl-C's cap (`cap`): an element's salt-dead bit ---------------------------------------------------------------------
+# ---- Pearl-C's inert-work bound (`cap`): an element's salt-dead bit ---------------------------------------------------------
 
 #: the salt-dead support's two ends (P3's `SaltDead.support`, `SaltDead`'s `plusEnd` and `minusEnd`): E′ is c_β at every
 #: position, and the F codes are e4m3(+11/4) at every position, or e4m3(−11/4) at every position

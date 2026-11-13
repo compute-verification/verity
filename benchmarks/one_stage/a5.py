@@ -93,7 +93,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
   core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
-  (units derived).
+  (units derived). Behind the ZK server the window's members are verified by one kept process, Lean's ``verify-members``
+  (`a0.VerifyMembers`), which reads the window's program once and is handed each member as its session ends; a member it
+  gives no verdict is refused, and so is every member after it, with no second try. `member_seconds.py` holds each
+  member's verdict to the one `verify` prints for its session as a process of its own.
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
   So a plain audit takes only a stream's sample (``--challenger``) by a stratified law, over a window of one member with no
@@ -107,7 +110,16 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   its sessions' trees from a challenger of its own (`ProofServer(challenger=True)`, `serve --queue --tree-from`), audited
   once the server closes, and a process pair's server from one of the session's own (`a0.session`); the audit passes only
   if each exited 0 and its audit held the sessions' records to its release log (``challenger/m<k>``, a verdict, and the
-  summary's ``challengers``).
+  summary's ``challengers``). A window of several members sampled on the auditor's challenger's coins takes them from
+  that challenger's session instead (`window_trees`, `member_trees`): the session stays open past the sample, every
+  verifier, the proof server's or a process pair's, reaches it through the audit's relay, the sessions run one at a
+  time, and each ends with its tree's closing round, asked once its files are written. The session's release log then
+  holds the sample, each session's rounds and its closing round, in the sessions' order, which ``challenger/m<k>``
+  holds the records to (`member_trees.trees_reason`) and v2's per-member form reads (`case_members`, with the
+  challenger's key, the window's root and the coins' evidence, `case_coins`). The summary's ``coin_trees`` names which
+  an audit that reached its sessions ran them on: ``window``, that challenger's session, or ``own``, each verifier's
+  own source (a challenger of its own where the summary has ``challengers``, else the tree it samples itself); a TP
+  rank's row carries the word.
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
@@ -124,7 +136,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   stream's outcome on the honest sample's bytes: the evidence with a tampered opening, with the coin opened before the
   registration, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
   window. Every rank of the step samples from the one session, so `--jobs` covers every rank. The verifier samples no coins of
-  its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`).
+  its own: a stream's sample is the challenger's (`service.NO_OWN_COINS`). The audit's case for `Spot.OneStageZk`
+  (``case-v2.json``, `write_case`) names that challenger, the family and the window's root and carries the coins' evidence
+  (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
+  case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
   registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
@@ -195,6 +210,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
+import member_trees as MT  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
@@ -350,7 +366,7 @@ def port_refusal(mine: CS.Binding, draw: dict, port: int, ports: int | None) -> 
 
 
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, members: list[dict], want: dict,
-               leaf_layer: str | None, history: dict | None = None
+               leaf_layer: str | None, history: dict | None = None, hold: bool = False
                ) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes], dict | None, dict | None,
                           int | None]:
     """Rank ``rank``'s sample of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
@@ -358,14 +374,17 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
     challenger's coins (``a.coins``), with the window's history tables (``history``): the rank first plans its sample's
     coins from its window (`a5_coins.need`), which opens
     the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the registration's
-    digest and the stream reads them in the rank's turn on the step's one client. -> (the stream, its
-    sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it sampled none,
-    and the challenger coins it planned)."""
+    digest and the stream reads them in the rank's turn on the step's one client. ``hold``: the rank holds the session
+    open past its sample, for its sessions' coin trees (`a5_coins`' `hold`), until the caller's `release`. -> (the
+    stream, its sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it
+    sampled none, and the challenger coins it planned)."""
     coins = AC.RankCoins(a.coins, rank)
     stream = draw = counts = refused = None
     try:
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
+        if hold:
+            a.coins.hold(rank)
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
                               **registering(a, history))
         coins.commit(bytes.fromhex(reg.digest))
@@ -421,7 +440,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
     and the evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
     where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
-    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
+    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record). The coins' record says
+    whose coins `coins_reason` took (``verified``; None where it refused): the SHA-512 of the challenger key the evidence
+    verified under, and the id of the one session the auditor's ledger opens on the window's root under that key
+    (`challenger.pinned_session`, the read `coins_reason` makes)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
@@ -468,7 +490,13 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
                      "lean": side}
     checks = (result or {}).get("checks") or {}
+    verified = None
+    if ev is not None and why is None:
+        key = AC.Ch.ChallengerKey.from_json(ev["key"])
+        held = AC.Ch.pinned_session(ev["ledger"], {"root": root}, key, ev["pins"], ev["main"], AC.lms_verify)
+        verified = {"key_sha512": hashlib.sha512(key.public).hexdigest(), "session": held.session}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
+              "verified": verified,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
 
@@ -861,6 +889,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 mm["st"]["interface_file"] = iface
 
     # one sample over the whole population; each member serves its share under --zk
+    trees = False
     if drawn is not None:
         union_draw, drawn_law, receipt = (dict(x) for x in drawn)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
@@ -869,8 +898,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
+        trees = window_trees(a, members)
         stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer,
-                                                                            hist)
+                                                                            hist, hold=trees)
         read = bytes(coins.read)
         summary["draw_ran_out"] = draw_ran_out(drawn_law, n_all, read)
         (out / "segment.json").write_text(json.dumps({"source": "challenger",
@@ -907,11 +937,13 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
-    archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
+    archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
 
-    server = proof_server(a, out)
+    relay = MT.Relay(a.coins, MT.listener()) if trees else None
+    summary["coin_trees"] = "window" if trees else "own"
+    server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
     def staged(mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
@@ -930,8 +962,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     def member_session(i: int, s: dict) -> dict:
         """Staged member ``s``'s (`staged`) `--zk` session: submitted to the audit's proof server, Lean's verify its verdict
-        of record, else (`proof_server`) on port ``port + i`` (``i`` its place among the members with proved units,
-        `port_refusal`), behind the ZK server under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
+        of record (the window's kept verifier's, where there is one, comes from `member_checks`), else (`proof_server`) on
+        port ``port + i`` (``i`` its place among the members with proved units, `port_refusal`), behind the ZK server
+        where the audit is; `member_checks` adds Lean's verdicts on it."""
         mm, local, sdir, session_draw, session_law = s["mm"], s["local"], s["sdir"], s["session_draw"], s["session_law"]
         m = mm["m"]
         if server is not None:
@@ -940,16 +973,37 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                         instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin",
                                         tmpl_unit=st.get("tmpl_unit")),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
-                              verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
+                              verdict=None if kept is not None else lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
             return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout,
+                                  tree_from=None if relay is None else relay.flags)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
         return {**s, "session_s": session_s, "record": record, "live": live, "draw_t": draw_t, "draw_check": v}
+
+    def closed(s: dict) -> dict:
+        """Session ``s`` (`member_session`) with its coin tree closed in the window's challenger session
+        (`window_trees`): once both sides have recorded it, the challenger is asked for its closing round
+        (`member_trees.closing_round`), before the next member's session starts. A session with no record closes no
+        tree, and the release log then refuses the audit (``challenger/m<k>``)."""
+        if relay is None:
+            return s
+        try:
+            if "handle" in s:
+                s["handle"].result(a.session_timeout)
+                directory = s["handle"].dir
+            else:
+                dirs = session_dirs(s["sdir"])
+                if len(dirs) != 1:
+                    raise ValueError(f"the session left {len(dirs)} records, not one")
+                directory = dirs[0]
+            return {**s, "closing": {"ok": True, "after": MT.closing_round(a.coins, directory)}}
+        except (ProofServerError, TimeoutError, AC.Ch.CoinError, OSError, ValueError) as e:
+            return {**s, "closing": {"ok": False, "why": str(e)[-600:]}}
 
     def collected(s: dict) -> dict:
         """Server session ``s`` (`member_session`) once both sides have recorded it, as a process pair's: a session the
@@ -958,6 +1012,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         try:
             h.result(a.session_timeout)
             record, live, lean_v = json.loads((h.dir / "session.json").read_text()), h.live, h.verdict(a.session_timeout)
+            # a member of the window's kept verifier has no verdict yet: it is handed in by `member_checks`, in its turn
         except (ProofServerError, TimeoutError) as e:
             record, live = None, {"accepted": False, "why": str(e)[-1200:]}
             lean_v = {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -984,7 +1039,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
-            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True)
+            lv = s.get("lean_verify") or a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
             got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
@@ -996,22 +1051,47 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                               "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
                               "lean_verify_s": lean_v.get("verify_s"), "lean_partition": lean_v.get("partition")},
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))],
-                "challenger": (live or {}).get("challenger"), "handle": s.get("handle")}
+                "challenger": (live or {}).get("challenger"), "handle": s.get("handle"), "closing": s.get("closing")}
 
     # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
     # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
     # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. A server's challengers audit
-    # its sessions at its close, each member's audit then a verdict.
+    # its sessions at its close, each member's audit then a verdict. On the window's challenger session (`window_trees`)
+    # a session is submitted once the one before has closed its tree there, and the session's log is the audit of them all.
+    # What Lean's verify reads of the window (each sampled member's circuit, public file, tables and registered reads, the
+    # partition and the program) is fixed once staged, so one process archives it all before the first session
+    # (``lean-verify/archive``) and a member's own archive links it. Behind the ZK server one kept process then verifies
+    # the members in turn, on the window's program in that archive.
+    kept = None
+    relayed: list[str] = []
     try:
         statements = [staged(mm, local) for mm, local in drawn]
+        if statements:
+            (out / "lean-verify").mkdir(exist_ok=True)
+            keys = a0.archive_put(a.lean, out / "lean-verify" / "archive",
+                                  [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
+                                  out / "lean-verify" / "archive-put.log", archived)
+            if a.firewall and not plain(a):
+                kept = a0.VerifyMembers(a.lean, out / "lean-verify" / "archive",
+                                        keys.get(Path(statements[0]["mm"]["st"]["program_file"]), ""),
+                                        out / "lean-verify" / "verify-members.log")
         with ThreadPoolExecutor(1) as lean:
-            checks = [lean.submit(member_checks, member_session(i, s)) for i, s in enumerate(statements)]
+            checks = [lean.submit(member_checks, closed(member_session(i, s))) for i, s in enumerate(statements)]
             done = [c.result() for c in checks]
     finally:
+        if kept is not None:
+            kept.close()
         if server is not None:
             exits = server.close()
             (out / "proof-server" / "server.json").write_text(json.dumps({"routes": server.routes, "exits": exits},
                                                                          indent=1, sort_keys=True))
+        if relay is not None:
+            relayed = relay.close()
+            a.coins.release(rank)
+    if relay is not None:
+        held = window_trees_held(a.coins.evidence(), done, relayed)
+        for got in done:
+            got["challenger"] = {**held, "closing": got["closing"]}
     for got in done:
         if got["handle"] is not None and got["handle"].challenger is not None:
             got["challenger"] = got["handle"].challenger
@@ -1059,16 +1139,18 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             print("A5 " + json.dumps({"no_audit_record": summary["coins"]["outcome"]}, default=str))
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
-                           "outcome": summary["coins"]["outcome"]}
+                           "outcome": summary["coins"]["outcome"], "verified": summary["coins"]["verified"]}
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
-                   per_member=members_proof(members, done, not plain(a)))
+                   per_member=members_proof(members, done, not plain(a)),
+                   coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root, member_trees=relay is not None)
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
+    result["case_v2"] = case_written(out)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1180,7 +1262,8 @@ def own_replay():
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
-               partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None) -> None:
+               partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None,
+               coins: dict | None = None, window_root: str | None = None, member_trees: bool = False) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
@@ -1191,7 +1274,12 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
     proofs case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
-    parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case."""
+    parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
+    (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins) and the
+    window's root ``window_root``, the v2 case names the challenger and carries its coins (`case_coins`), and so its
+    one-stage form: v2 reads a sample's coins under the challenger its parameters name, and refuses a case that names
+    none. The per-member case does where the sessions ran on the window's challenger session too (``member_trees``,
+    `window_trees`), as v2 reads the sample and the sessions' trees."""
     try:
         RP = own_replay()
 
@@ -1209,6 +1297,8 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
             if isinstance(v2, str):
                 raise ValueError(v2)
             zk = case_v2(c.case(), sessions, **v2)
+            if coins is not None:
+                zk = case_coins(zk, coins, AC.FAMILY, window_root)
             sampled = case_with_form(zk)
             (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
             (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
@@ -1218,9 +1308,22 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         try:
             if isinstance(per_member, str):
                 raise ValueError(per_member)
-            (out / "case-v2-members.json").write_text(json.dumps(case_members(c.case(), **per_member), sort_keys=True))
+            pm = case_members(c.case(), **per_member)
+            if coins is not None and member_trees:
+                pm = case_coins(pm, coins, AC.FAMILY, window_root)
+            (out / "case-v2-members.json").write_text(json.dumps(pm, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
             (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
+def case_written(out: Path) -> dict:
+    """Whether `write_case` left the case for the compiled check, `Spot.OneStageZk`'s, under ``out``
+    (``case-v2.json``): ``{"written": True}``, or ``{"written": False, "why"}`` with why it left none, in the words of
+    the file that says so (``case-v2-error.txt``, or ``case-error.txt`` where the v1 case it is made from failed)."""
+    if (out / "case-v2.json").is_file():
+        return {"written": True}
+    said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
+    return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
@@ -1268,6 +1371,21 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": pm}}
+
+
+def case_coins(case: dict, coins: dict, label: str, window_root: str | None) -> dict:
+    """``case`` (`case_v2`'s or `case_members`'s) with what v2 reads the sample's coins and the sessions' coin trees
+    from: its params naming the challenger (the key of ``coins``, the sample's coin evidence, and the sample's family
+    ``label``) and the window's open root ``window_root``, and its evidence carrying ``coins`` without that key, which
+    the verifier takes from its parameters, never from the evidence."""
+    RP = own_replay()
+
+    evidence = json.loads(bytes.fromhex(case["evidence"]))
+    if "coins" in evidence or "challenger" in case["params"] or window_root is None:
+        raise ValueError("the case names a challenger or carries coins already, or the audit has no window root")
+    evidence["coins"] = {k: v for k, v in coins.items() if k != "key"}
+    return {**case, "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], "challenger": {"key": coins["key"], "label": label}, "window_root": window_root}}
 
 
 #: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
@@ -1404,14 +1522,51 @@ def plain(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "plain", False))
 
 
-def proof_server(a: argparse.Namespace, out: Path) -> ProofServer | None:
+def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
+    """Whether the audit's sessions take their coin trees from the window's own challenger session and close them there
+    (module docstring, `member_trees`): a window of several ``members`` sampled on the auditor's challenger's coins, its
+    sessions `--zk`, where FLOCK_CHALLENGER=1 puts sessions' trees on a challenger, in a step of one rank (the session's
+    release log holds one rank's sessions, in the order they ran). A window of one member keeps a challenger of its
+    verifier's own: its case is the one statement's, which reads no closing round."""
+    return (streamed(a) and len(members) >= 2 and not plain(a) and a0.own_challenger(zk=True)
+            and len(a.coins.ranks()) == 1)
+
+
+def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[str]) -> dict:
+    """The audit of the sessions that ran on the window's challenger session (`window_trees`), once it has ended
+    (``published``, `a5_coins`' `evidence`): ``ok`` when the session's release log shows each session of ``done``
+    (`member_checks`'s, in the order they ran) on a tree of its own, closed after its evidence, one after another
+    (`member_trees.trees_reason`). ``relay`` is why each verifier's connection that did not end with its close ended
+    (``relayed``, `member_trees.Relay.close`), for a reader of a refusal: the log alone decides."""
+    named = [(name, d) for got in done for name, d in zip(got["sessions"], session_dirs(got["sdir"]))]
+    log = (published.get("session") or {}).get("log")
+    why = published.get("error", "the challenger's session published no release log") if log is None else \
+        MT.trees_reason(log, named)
+    return {"ok": why is None, "sessions": len(named), "why": why, "relay": list(relayed)}
+
+
+def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), relay: MT.Relay | None = None
+                 ) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
     ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
-    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. None where a session is one it doesn't
-    prove (plain, or behind the ZK server under ``--firewall``): each session is then a process pair of its own (`a0.session`)."""
-    if plain(a) or a.firewall:
+    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both; with ``relay`` (`window_trees`),
+    every verifier on the window's challenger session through it, one session at a time. Where the audit's sessions are
+    behind the ZK server so is its prover: one `prove --zk --stream` process that starts a Lean session loop for each
+    session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's
+    environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a
+    session is one it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own
+    (`a0.session`), which takes its tree through ``relay`` too."""
+    if plain(a):
         return None
-    return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
+    zk_server = a.firewall
+    trees = ({"challenger": a0.own_challenger(zk=True)} if relay is None else
+             {"verify_ahead": 0, "tree_from": relay.flags})
+    if not zk_server:
+        return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, **trees)
+    envs = [a0.prover_env(zk_server, st) for st in sts]
+    if not envs or any(e != envs[0] for e in envs):
+        return None
+    return ProofServer(a.bin, out / "proof-server", env=envs[0], **{**trees, "verify_ahead": 0})
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
@@ -1530,7 +1685,8 @@ def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) ->
             a.coins.skip(r)
     return {"ok": ok, "seconds": round(time.time() - t0, 1),
             **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding")},
+                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding",
+                                     "coin_trees")},
             **({"plain": s["plain"]} if "plain" in s else {})}
 
 
