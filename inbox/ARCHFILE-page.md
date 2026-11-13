@@ -33,7 +33,7 @@ flowchart LR
 
 1. <b>Three roles, messages only.</b> The workload is outside Verity. The prover is the developer's. The verifier is the auditor's, with its devices at the site.
 2. <b>A protocol is the unit.</b> One protocol establishes one property of the workload. Every protocol has the same three sides: its check, its parties and the messages they exchange, and what it needs of the workload. Every protocol's directory has the same three parts: <code>verifier/</code> (its check), <code>prover/</code> (the developer's side, with the GPU code it runs) and <code>device/</code> (the auditor's own devices, never the developer's GPUs).
-3. <b>Protocols stack.</b> The proof system is at the bottom. Sampling and recursion sit on it. The resource protocols (compute, memory, network, the inference-only policy) sit on those. Compose is on top: remote and onsite are each a list of protocols run on one registration.
+3. <b>Protocols come in two layers, and both call the proofs.</b> The accounting layer measures resources: compute (PoUW), memory (PoUS and PoUB) and network (the certifier). The policy layer sits on the accounting layer and holds one protocol, inference-only. Beside both sits the proofs module: the proof system (Flock), with sampling (SPOT) and recursion on it, which any protocol calls to prove a statement about committed values. Compose is on top: remote and onsite are each a list of protocols run on one registration.
 4. <b>Verity knows circuits and values, never models.</b> Only an adapter names PyTorch, vLLM or a model. A new serving system is a new adapter and changes nothing in <code>verity/</code>.
 5. <b>What decides is Lean. What must be fast is Python and CUDA. Public facts are TOML.</b> Python never returns accept or reject.
 6. <b>Hardware and configuration are data, passed in.</b> A data sheet per GPU model. One file per run that says which protocols run and which party runs on which machine.
@@ -72,13 +72,13 @@ The compiler is a circuit the developer registers up front. Given the period's a
 | <b>Adapter</b> <code>adapters/</code> | Makes one serving system a workload Verity can audit. <code>vllm/</code> sits on <code>torch/</code>. It holds the compiler and the circuits of the kernels the system serves. | The serving system and its settings. From the prover: what a protocol asks of the workload (run this multiply under PoUW, store these weights). | To the prover only. Up front: the compiler and the weights. Each period: the values and the advice. | The verifier, the auditor's devices, the runtime; how a protocol samples or decides; any protocol's code beyond the one call it makes. |
 | <b>Circuits</b> <code>verity/circuits/</code> | The language circuits are written in, and the circuits a protocol itself names: each GPU operation bit for bit, SHA-512, the universal circuit. | Nothing. | Circuits, each named by its hash. | Models, hardware schedules, proof systems. |
 | <b>Commitments</b> <code>verity/commitments/</code> | Hiding commitments to values, the one hash, signatures. Where the values sit on a GPU, GPU code computes the same bytes there. | Values. | Roots, and openings on request. | What a value means. |
-| <b>Flock</b> <code>protocols/flock</code> | The proof system: proves in zero knowledge that one statement about one circuit holds of committed values. | A circuit, commitments, challenges. | A proof. Its verifier says accept or reject. | Where the circuit came from. |
-| <b>SPOT</b> <code>protocols/spot</code> | Sampling: the challenger picks pieces at random after the commitments; from proofs of those it bounds how many of all pieces can be wrong. In its two-stage form it first picks whole requests, the prover then commits the inside of each picked request, and it picks pieces of those. | Commitments, challenges, proofs. | "At most this share is wrong, except with this probability." | What the pieces compute. |
-| <b>Recursion</b> <code>protocols/recursion</code> | One outer proof says the verifier accepted the developer's proofs. Holds the ZK server, the only exit from the datacenter to the auditor. | Flock's proofs. | One outer proof per statement. | Which protocol asked. |
-| <b>PoUW</b> <code>protocols/pouw</code> | Compute: how many of the served matrix multiplies' multiply-adds the GPU really computed, credited against its data sheet's capacity. A workload makes one call, "run this matrix multiply under PoUW", over GPU buffers. | The registered devices and their data sheets, the prover's commitments to each multiply, the challenger's challenges, proofs of the sampled tiles. | Credited work for the period, with its error, to compose's account. | Memory, network; the served values in the clear; the GPU's own word on what it is. |
-| <b>PoUS</b> and <b>PoUB</b> <code>protocols/pous</code>, <code>poub</code> | Memory. PoUS: how much of the registered store each device held, with the memory wipe inside it (between two stretches of serving, a server's whole memory is overwritten, so nothing it held before survives). PoUB: how many reads of the store a node made, and so how much of its memory's read rate is left uncertified. | The registered memory and its data sheets, the prover's commitments, the memory challenger's signed records, the challenger's challenges. Through compose, the network certifier's counts of what entered and left the node. | Bits held and bits read for the period, each with its error, to compose's account. | Compute; the weights; another protocol's code. |
-| <b>Certifier</b> <code>protocols/certifier</code> | Network: what left on a link is what the registered circuit produces from what entered. The auditor's device sits on every registered link out of a host, releases traffic on a fixed schedule and signs a record of what crossed. | The registered links, the network certifier's signed records, the prover's commitments to requests and responses, the challenger's challenges. | To compose's account: the period's exfiltration capacity (how many bits could have left unseen), with its error. Through compose, to memory: what entered and left each node. | Compute, memory, the weights. |
-| <b>Inference-only</b> <code>protocols/inference_only</code> | The policy: the registered circuit divides into inference blocks that each read little fresh input. | The circuit's description. From training, as data: how much such a circuit slows training. | Accept or reject, to compose. | Values, traffic. |
+| <b>Flock</b> <code>protocols/proofs/flock</code> | The proof system: proves in zero knowledge that one statement about one circuit holds of committed values. | A circuit, commitments, challenges. | A proof. Its verifier says accept or reject. | Where the circuit came from. |
+| <b>SPOT</b> <code>protocols/proofs/spot</code> | Sampling: the challenger picks pieces at random after the commitments; from proofs of those it bounds how many of all pieces can be wrong. In its two-stage form it first picks whole requests, the prover then commits the inside of each picked request, and it picks pieces of those. | Commitments, challenges, proofs. | "At most this share is wrong, except with this probability." | What the pieces compute. |
+| <b>Recursion</b> <code>protocols/proofs/recursion</code> | One outer proof says the verifier accepted the developer's proofs. Holds the ZK server, the only exit from the datacenter to the auditor. | Flock's proofs. | One outer proof per statement. | Which protocol asked. |
+| <b>PoUW</b> <code>protocols/accounting/pouw</code> | Compute: how many of the served matrix multiplies' multiply-adds the GPU really computed, credited against its data sheet's capacity. A workload makes one call, "run this matrix multiply under PoUW", over GPU buffers. | The registered devices and their data sheets, the prover's commitments to each multiply, the challenger's challenges, proofs of the sampled tiles. | Credited work for the period, with its error, to compose's account. | Memory, network; the served values in the clear; the GPU's own word on what it is. |
+| <b>PoUS</b> and <b>PoUB</b> <code>protocols/accounting/pous</code>, <code>poub</code> | Memory. PoUS: how much of the registered store each device held, with the memory wipe inside it (between two stretches of serving, a server's whole memory is overwritten, so nothing it held before survives). PoUB: how many reads of the store a node made, and so how much of its memory's read rate is left uncertified. | The registered memory and its data sheets, the prover's commitments, the memory challenger's signed records, the challenger's challenges. Through compose, the network certifier's counts of what entered and left the node. | Bits held and bits read for the period, each with its error, to compose's account. | Compute; the weights; another protocol's code. |
+| <b>Certifier</b> <code>protocols/accounting/certifier</code> | Network: what left on a link is what the registered circuit produces from what entered. The auditor's device sits on every registered link out of a host, releases traffic on a fixed schedule and signs a record of what crossed. | The registered links, the network certifier's signed records, the prover's commitments to requests and responses, the challenger's challenges. | To compose's account: the period's exfiltration capacity (how many bits could have left unseen), with its error. Through compose, to memory: what entered and left each node. | Compute, memory, the weights. |
+| <b>Inference-only</b> <code>protocols/policy/inference_only</code> | The policy: the registered circuit divides into inference blocks that each read little fresh input. | The circuit's description. From training, as data: how much such a circuit slows training. | Accept or reject, to compose. | Values, traffic. |
 | <b>Compose</b> <code>protocols/compose</code> | What an auditor runs. Remote and onsite are each a list of protocols on one registration. Accepts only if every protocol accepts and they agree on the commitments. One theorem covers any list: a prover who adapts across all the protocols at once is still held to each one's claim, except with the summed error. It holds the registration check: before any run, the registration is complete and each device's figures are its data sheet's. | Each protocol's outcome, the registered hardware. | One verdict, and the period's account. | How any one protocol works inside. |
 | <b>Party, channel, device, protocol, config</b> five files in <code>verity/</code> | The shared types: what a party is, what two parties exchange, the registered hardware, what a protocol declares, the file a run starts from. | Nothing. | Types every protocol uses. | Any one protocol. |
 | <b>Runtime</b> <code>verity/runtime/</code> | Runs a configuration's parties on real machines: sockets, randomness, clock, transcripts. | A configuration. | Running parties and their transcripts. | Any protocol's rules. |
@@ -150,24 +150,30 @@ flowchart TD
 Inside <code>protocols/</code>:
 
 ```mermaid
-flowchart BT
-    flock["flock<br/>the proof system"]
-    spot["spot<br/>prove a random sample,<br/>bound the rest"]
-    recursion["recursion<br/>one outer proof,<br/>and the ZK server"]
-    subgraph audits["the resource protocols"]
+flowchart LR
+    compose["compose<br/>remote and onsite"]
+    subgraph accounting["accounting"]
         pouw["pouw<br/>compute"]
         pous["pous<br/>memory held"]
         poub["poub<br/>memory read"]
         certifier["certifier<br/>network"]
-        io["inference_only<br/>the policy"]
     end
-    compose["compose<br/>remote and onsite"]
+    subgraph policy["policy"]
+        io["inference_only<br/>the inference-only policy"]
+    end
+    subgraph proofs["proofs, beside both layers"]
+        spot["spot<br/>prove a random sample,<br/>bound the rest"]
+        recursion["recursion<br/>one outer proof,<br/>and the ZK server"]
+        flock["flock<br/>the proof system"]
+    end
+    compose --> accounting
+    compose --> policy
+    policy --> accounting
+    accounting --> proofs
+    policy --> proofs
     poub --> pous
     spot --> flock
     recursion --> flock
-    audits --> spot
-    audits --> recursion
-    compose --> audits
 ```
 
 How a number reaches you:
@@ -193,8 +199,11 @@ verity/
                    which part of the hardware it accounts for
   config.py        reads the one public file a run starts from
   runtime/         runs parties over channels: sockets, randomness and clock, transcripts
-  protocols/       flock, spot, recursion, pouw, pous, poub, certifier, inference_only, compose
-                   each with verifier/ (its Lean check), prover/ (with the GPU code it runs) and device/
+  protocols/       each protocol with verifier/ (its Lean check), prover/ (with the GPU code it runs) and device/
+    proofs/        flock, spot, recursion: what the other protocols call to prove
+    accounting/    pouw, pous, poub, certifier: compute, memory and network
+    policy/        inference_only, on accounting/
+    compose/       remote and onsite, on policy/ and accounting/
     experimental/  a protocol being tried, which no demo lists
   circuits/        the circuit language; ops/ holds the circuits a protocol names
   commitments/     hiding commitments, the one hash, signatures, and their GPU code
@@ -218,7 +227,7 @@ The rules that keep the parts apart. A test enforces each one:
 4. <code>party.py</code>, <code>channel.py</code> and <code>device.py</code> use nothing. <code>protocol.py</code> uses only those three. <code>config.py</code> uses only <code>protocol.py</code>.
 5. <code>circuits/</code> uses nothing. <code>commitments/</code> uses only <code>circuits/</code>.
 6. An adapter uses a protocol's workload side, which is one call over GPU buffers (for PoUW: "run this matrix multiply"). A protocol never uses an adapter.
-7. Inside <code>protocols/</code>: flock at the bottom, spot and recursion on it, the resource protocols on those, compose on top.
+7. Inside <code>protocols/</code>: two layers, accounting (pouw, pous, poub, certifier) and policy (inference\_only), with policy on accounting and compose on top of both. Both layers use the proofs (flock, with spot and recursion on it), and the proofs use neither layer. Each group is a directory of its own: <code>proofs/</code>, <code>accounting/</code> and <code>policy/</code>.
 8. A verifier uses no prover code.
 9. Nothing uses a benchmark, and nothing in the repository reads the dashboard. A measurement reaches a guarantee one way only: a person writes it into a data sheet with its source, marked as a measurement, and the guarantee takes the sheet as a parameter.
 10. The tree above is one file in the repository, and a test fails on anything that is not in it. Both are on <code>main</code> since tonight. The file also lists the 36 places <code>main</code> still holds that the tree does not, each with its owner and its day (the last is Tue 24 Nov), and that list only shrinks.
@@ -247,7 +256,7 @@ Days are each owner's own, given today. A day is 6 PM PST unless it says otherwi
 | Loose files inside five protocols | beside <code>verifier/</code>, <code>prover/</code>, <code>device/</code> | inside one of the three, or out of <code>verity/</code> | proofs, compute-accounting, memory-accounting, network-accounting | Sat 14 to Thu 19 Nov |
 | <code>fixtures/</code> | the root | each file beside its reader | proofs | Wed 18 Nov |
 | GPU code | 61 directories, 49 of them under <code>benchmarks/</code>. A served run loads PoUW's kernel from there, which rule 9 forbids | each protocol's <code>prover/</code>, <code>verity/commitments/</code>, the adapter | kernels, with compute-accounting, memory-accounting, proofs and vllm | memory's two provers Fri 13 Nov; PoUW's not before Tue 17 Nov; the plan with days Fri 13 Nov |
-| The check that a kernel's machine code holds only instructions the verifier can recompute | <code>benchmarks/</code> | <code>protocols/pouw/prover/</code>, beside the kernels | compute-research | Fri 13 Nov after noon PST, behind kernels' timed runs that morning; Mon 16 Nov if it misses Friday's window |
+| The check that a kernel's machine code holds only instructions the verifier can recompute | <code>benchmarks/</code> | <code>protocols/accounting/pouw/prover/</code>, beside the kernels | compute-research | Fri 13 Nov after noon PST, behind kernels' timed runs that morning; Mon 16 Nov if it misses Friday's window |
 | The check | <code>tools/verity/check/</code> | <code>tools/check/</code> | ci | Wed 18 Nov, after the weekend's moves and after the old queue's code is deleted (Tue 17 Nov) |
 | The numbers each benchmark declares | one shared list | each benchmark's own directory, its owner's | console, with benchmarks | in review Mon 16 Nov |
 | The compute audit's cost model, and the commands that run an audit on a served run | proofs' scripts under <code>benchmarks/</code> | SPOT's <code>prover/</code> and <code>verifier/</code>, started from a demo's configuration. The measured proving costs stay recorded under <code>benchmarks/</code> and are handed in as data | proofs, with benchmarks and vllm | not dated |
@@ -262,11 +271,11 @@ Days are each owner's own, given today. A day is 6 PM PST unless it says otherwi
 | Every protocol has parties | Only SPOT, PoUS and the remote memory-read audit do | compute-accounting, memory-accounting, network-accounting | PoUW Thu 19 Nov; the certifier and the inference-only policy each state their parties, in review Mon 16 Nov noon (the certifier's device running as a party under the runtime is a second change, not dated: today the device does its own network I/O, and a party under the runtime does none); onsite PoUB Wed 25 Nov |
 | A PyTorch adapter under the vLLM adapter, with one translator from PyTorch to circuits | One adapter, and a second translator inside the training benchmark | vllm splits it out; training owns it from that day and folds its own translator in | the split Tue 17 Nov at the earliest; the fold after it |
 | The messages between workload and prover as one stated list | Function calls and files; 15 files with no settled name or place | vllm | the list reaches you as a page Mon 16 Nov; its code is dated after you read it |
-| PoUW's serving code and GPU kernels in one package under <code>protocols/pouw/</code>, reached by one call | In the adapter (18,800 lines) and under <code>benchmarks/</code> | compute-accounting, with vllm and kernels | not before Tue 17 Nov; the three name the day Fri 13 Nov |
+| PoUW's serving code and GPU kernels in one package under <code>protocols/accounting/pouw/</code>, reached by one call | In the adapter (18,800 lines) and under <code>benchmarks/</code> | compute-accounting, with vllm and kernels | not before Tue 17 Nov; the three name the day Fri 13 Nov |
 | Benchmarks and demos reach the adapter through its public interface only | 114 modules are reached past it | vllm, with benchmarks | dated Fri 13 Nov, with the list of what the adapter stops supporting |
 | The two demos start from a configuration, run by the runtime | The remote demo is a shell script under <code>benchmarks/</code>; the onsite demo is not built | vllm | remote Fri 20 Nov, onsite Tue 24 Nov |
 | Python never returns accept or reject | Several protocols still decide in Python. SPOT's two-stage outcome is joined in Python; its Lean check is written and refuses every audit until its proof exists | lean, then each protocol's owner | lean's page, with which verifier decides each verdict today, reaches you Mon 16 Nov, 10 AM PST; each owner dates its switch after your ruling |
-| Each resource protocol takes the registered hardware and says which part it accounts for | None does | compute-accounting for PoUW, memory-accounting for PoUS and PoUB, network-accounting for the certifier | PoUW: three days after the registered hardware's first change is on <code>main</code> (the remote merge, which it also waited on, landed tonight at 7:01 PM PST). Memory: PoUS accounts for what each device's memory can hold, PoUB for how fast its chips can read it; its day comes Mon 16 Nov, and it needs one theorem first (a device holds what its parts hold plus what is in flight between them). Network: the certifier accounts for the registered links, and a link with no certifier on it is unaccounted, Fri 20 Nov |
+| Each accounting protocol takes the registered hardware and says which part it accounts for | None does | compute-accounting for PoUW, memory-accounting for PoUS and PoUB, network-accounting for the certifier | PoUW: three days after the registered hardware's first change is on <code>main</code> (the remote merge, which it also waited on, landed tonight at 7:01 PM PST). Memory: PoUS accounts for what each device's memory can hold, PoUB for how fast its chips can read it; its day comes Mon 16 Nov, and it needs one theorem first (a device holds what its parts hold plus what is in flight between them). Network: the certifier accounts for the registered links, and a link with no certifier on it is unaccounted, Fri 20 Nov |
 | The security model has the auditor's devices as parties, each with a key the auditor pins and its whole signing history | Only the challenger is a party, so no onsite memory or network claim can be proved yet | soundness | Tue 17 Nov; the challenger's logs read through it Mon 23 Nov |
 | A device's figures have one source: the registration reads them from the auditor's data sheet | Written in two places that disagree (the H200's tensor rate at two clocks) | proofs (the type and the check), compute-research (the files) | agreed tonight; not dated |
 | The circuit checker is handed the served circuits and names none | It names them | circuits | in review Fri 13 Nov; it lands after the served circuits move, Sun 15 Nov at the earliest |
@@ -282,4 +291,3 @@ Days are each owner's own, given today. A day is 6 PM PST unless it says otherwi
 | A memory-read session is proved in zero knowledge | Each span's openings go to the verifier as they are | memory-accounting | not dated |
 | PoUS's setup is a proof about the store | The check reads the whole store | memory-accounting | not dated; your answer in section 9 first |
 | PoUS's session is checked inside a proof | The check reads the memory challenger's signed record as it is: for each round, which block was asked, when it was sent and answered, and the block's SHA-512 digest. It also reads a table of every block's digest. A digest hides nothing from someone who holds a candidate block | memory-accounting | not dated; what the auditor learns from the record is stated in Lean tonight on a branch, not proved |
-

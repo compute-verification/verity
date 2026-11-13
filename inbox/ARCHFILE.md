@@ -2,5 +2,57 @@
 
 `git fetch -q origin cursor/verity-top-4db4 && git show origin/cursor/verity-top-4db4:inbox/ARCHFILE.md`
 
-The page's sections 1 to 7, as Notion exported them Thu 12 Nov 10:28 PM PST, are `inbox/ARCHFILE-page.md` on the same
-branch. Nothing newer yet.
+## Thu 12 Nov 10:57 PM PST: Daniel changed the page himself; the export is replaced, and the tree of record changes with it
+
+Daniel edited the page with his own hand between 10:25 and 10:50 PM PST and told top at 10:51 PM PST ("I did make a
+few changes btw"). `inbox/ARCHFILE-page.md` on this branch is now sections 1 to 7 as the page stood at 10:50:33 PM PST
+(06:50:33Z). It is the text of record. Your first copy (commit `0a2136a1304`, the 10:28 PM PST export) already held his
+earlier edits ("challenges" where the page said "coins"; "registers its hardware, its circuit compiler and other
+information (e.g. the model's weights)"). It lacks six places, which
+`git diff 0a2136a1304 origin/cursor/verity-top-4db4 -- inbox/ARCHFILE-page.md` shows whole:
+
+1. Section 2, idea 3: "Protocols come in two layers, and both call the proofs." The accounting layer (PoUW, PoUS and
+   PoUB, the certifier), the policy layer on it (inference-only), the proofs module beside both (Flock, with SPOT and
+   recursion on it), compose on top.
+2. Section 4's table of parts: the paths are `protocols/proofs/flock`, `protocols/proofs/spot`,
+   `protocols/proofs/recursion`, `protocols/accounting/pouw`, `protocols/accounting/pous` and `poub`,
+   `protocols/accounting/certifier`, `protocols/policy/inference_only`.
+3. Section 5's diagram of the protocols (a new `flowchart LR` with the subgraphs accounting, policy and proofs).
+4. Section 6's tree: under `protocols/` the lines `proofs/`, `accounting/`, `policy/`, `compose/`, `experimental/`.
+5. Section 6's rule 7: "Inside `protocols/`: two layers ... Each group is a directory of its own: `proofs/`,
+   `accounting/` and `policy/`."
+6. Section 7's rows: `protocols/accounting/pouw/prover/`, `protocols/accounting/pouw/`, and "Each accounting protocol"
+   where the row said "Each resource protocol".
+
+What this changes in your task:
+
+- **A. The file.** `ARCHITECTURE.md` is written from the new export. Apply the six places to what you have; nothing else
+  in sections 1 to 7 changed. Do not write "coin" where the page says "challenge", and do not write "resource protocol".
+- **B. The tree of record, in the same PR.** `tests/tree.toml` (on main since #9539) says `verity/protocols/` is "one
+  directory per protocol, the list flat". Daniel's page now says otherwise, and your `END_STATE_DOCS` check needs the new
+  paths in the tree file, so the PR that brings the file also changes the tree. top asks for it (the header's "not
+  changed here without asking top" is met). What the tree file and `tests/test_tree.py` are to say:
+  - `verity/protocols/` means the protocols in three groups, with `compose/` and `experimental/` beside them.
+  - Three new `[[tree]]` entries, each still to come (`owner = "top"`, `day = "2026-11-15"`):
+    `verity/protocols/proofs/` (flock, spot and recursion: what the other protocols call to prove),
+    `verity/protocols/accounting/` (pouw, pous, poub and certifier: compute, memory and network),
+    `verity/protocols/policy/` (inference_only, on accounting/).
+  - The eight protocols' entries name the grouped place (`verity/protocols/proofs/flock/` and so on) and keep
+    `protocol = true`. `verity/protocols/compose/` and `verity/protocols/experimental/` stay where they are.
+  - Today's eight flat directories (`verity/protocols/flock/` ... `verity/protocols/inference_only/`) become
+    `[[not_yet]]` lines, each with `to` its grouped place, `owner = "top"`, `day = "2026-11-15"`. `NOT_YET_MAX` rises by
+    exactly those eight. The list otherwise only shrinks; say in the PR body that this one rise is Daniel's change of
+    the shape, by top's word.
+  - The test keeps checking the inside of each protocol's directory at the place main holds it: flat today, grouped
+    once the move lands. A stray inside either place still fails, and nothing is checked twice. The lines already on the
+    not-yet list for paths inside a flat directory (`verity/protocols/pouw/clear/` and the like) keep their `path`, and
+    a `to` of theirs that names a protocol's directory names the grouped place.
+  - The header comment and the test's docstring name the levels as they now are. How the file spells a protocol's
+    inside (`verity/protocols/NAME/...` today) is yours to choose; keep the file readable for a lead who opens it once.
+  - Run `tests/test_tree.py` and `tests/test_doc_paths.py` locally (each is under a minute), `python3 tests/test_tree.py
+    HEAD` on a merge with `origin/main`, and the remote suites as your brief says. Main is `7f5205fe75e4` now.
+- **C. Not yours.** No file moves (top's map worker moves the directories on Sunday's cut), no `GLOSSARY.md` row, no
+  `AGENTS.md` change, no import-rule test. If the lane-text lint or another test refuses a sentence of the page, bring
+  the sentence to top in your report instead of rewording Daniel's text.
+- **D. The hour.** The PR is open, unmarked, by **Fri 13 Nov 3:00 AM PST** (it was 1:30 AM). If the tree change is not
+  done by 2:30 AM PST, open the PR with what stands and say in the body exactly what is missing.
