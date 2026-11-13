@@ -13,7 +13,7 @@
    "why": "240 random instances on which NetworkCheck.ConnectionRows gives what verity/protocols/certifier/verifier/connection_rows.py and content_rows.py give: WardenParams.digest and tables_of of a schedule with lengths rows of either form and content classes, or the refusal of one WardenParams or content_rows.classes refuses; request_room, request_bytes and response_bytes; a table's domain id; a head's encoding and digest; and check_registration's head under an LMS key in the session, on honest registrations (under form 2 at counts from none to the most) and on ones changed in one place, those that change what the head lists signed again (a count past an execution phase's releases, a class's tables of two counts, a table of no row with a root), with each ValueError a refusal",
    "args": ["{connection-rows/instances.jsonl}", "{connection-rows/python.jsonl}", "240"],
    "data": {
-    "connection-rows/instances.jsonl": "216576cef8c47601e060f751a34d3c7857a49dea95a2fcdfcfd9835b4334c7e8",
+    "connection-rows/instances.jsonl": "0d0e278cb937e79fbd41693db81ca0bac3483f3b4aed14f22f2d48ad140286aa",
     "connection-rows/python.jsonl": "963c138f5021a4a484e6911da87211a6da4efa62c450b425acfee27446a9b30c"
    },
    "generate": ["python3", "scripts/connection_rows_vectors.py", "{repo}", "--out", "{out}"]

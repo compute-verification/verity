@@ -26,9 +26,10 @@ table of no row with a root, a table of the schedule's rows with another count. 
 was, or change it: a field, a key, a table's entry or layout of another value, missing or extra; a certificate of
 another digest, key id, session, link or execution phase, or with a signature that doesn't decode or verify.
 
-Every registration has the values' types `connection_rows.registration` writes: hex in lower case, integers written as
-integers, a certificate of three keys. Where `check_registration` reads more than that (`bytes.fromhex`'s upper case
-and spaces, a number equal to the integer, a certificate's further keys) the Lean refuses, and no instance has one.
+Three changes leave the head's bytes as they are and write the registration another way: hex in upper case or with a
+space between its bytes (a table's root, the certificate's key, digest or signature), an integer as the float or the
+bool equal to it (the execution phase, the word's bits, a table's rows or words, a value of its layout), and a
+certificate with a key beside its three. `check_registration` refuses each, as the Lean does.
 
 The first instances are `edges`: schedules at the two caps a proof block's public size class sets (`UNIT_CLASS_MAX`), a
 lengths row of the most slots and of one more, and a class of the most ids released and of the next size, the first of
@@ -319,6 +320,23 @@ def registrations(rng: random.Random, params: WardenParams, session: bytes, link
             at = d["tables"].index(t)
             gone = rng.choice(sorted(t))
             d["tables"][at] = rng.choice([t | {"extra": 0}, {k: v for k, v in t.items() if k != gone}, "table", None])
+        elif how == "hex":
+            holder, k = rng.choice([(t, "root")] + [(c, k) for k in CR.CERTIFICATE])
+            v = holder[k]
+            holder[k] = rng.choice([v.upper()] * (v != v.upper()) + [v[:2] + " " + v[2:]])
+        elif how == "number":
+            def other(n: int) -> bool | float:
+                return bool(n) if n in (0, 1) and rng.random() < 0.5 else float(n)
+            k = rng.choice(["window", "word_bits", "rows", "words", "layout"])
+            if k in ("window", "word_bits"):
+                d[k] = other(d[k])
+            elif k == "layout":
+                field = rng.choice(sorted(t[k]))
+                t[k] = t[k] | {field: other(t[k][field])}
+            else:
+                t[k] = other(t[k])
+        elif how == "more":
+            d["certificate"] = c | {"extra": 0}
         elif how == "certificate":
             k = rng.choice(["digest", "signature", "signature", "key"])
             at = rng.randrange(len(c[k]))
@@ -326,7 +344,8 @@ def registrations(rng: random.Random, params: WardenParams, session: bytes, link
                                            {f: v for f, v in c.items() if f != k}, None, c | {k: 0}])
         return d
 
-    for how in rng.sample(["field", "key", "tables", "entry", "entry", "shape", "certificate", "certificate"], 2):
+    for how in rng.sample(["field", "key", "tables", "entry", "entry", "shape", "certificate", "certificate",
+                           "hex", "hex", "number", "number", "more"], 2):
         out.append(changed(how))
     how = rng.choice(["session", "link", "window"])
     if how == "session":

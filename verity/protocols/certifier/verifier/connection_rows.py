@@ -127,6 +127,7 @@ its count, a proof block a held row, and a table of no row has no port.
 
 from __future__ import annotations
 
+import re
 import struct
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -507,18 +508,48 @@ def registration(head: Head, certificate: Certificate, params: WardenParams) -> 
                             "signature": certificate.signature.hex()}}
 
 
+def _is(got: Any, want: Any) -> bool:
+    """Whether `got`, a value a registration states, is `want` as `registration` writes it: of `want`'s own type, so an
+    integer is an `int` and neither a `bool` nor a float equal to it, and a layout's values each likewise."""
+    if isinstance(want, Mapping):
+        return isinstance(got, Mapping) and set(got) == set(want) and all(_is(got[k], v) for k, v in want.items())
+    return type(got) is type(want) and got == want
+
+
+def _stated(what: str, got: Any, want: Any) -> None:
+    """ValueError unless `got` is the schedule's `want` as `registration` writes it (`_is`); `what` names the value."""
+    if _is(got, want):
+        return
+    if got == want:
+        raise ValueError(f"{what} {got!r}, which is not written as the schedule's {want!r}: a registration's integer "
+                         f"is an int, neither a bool nor a float")
+    raise ValueError(f"{what} {got!r}, and the schedule's {want!r}")
+
+
+def _unhex(text: Any, what: str) -> bytes:
+    """The bytes `text` writes as hex in lower case with no space, as `bytes.hex` writes them, or ValueError naming
+    `what`: `bytes.fromhex` alone also reads upper case and skips spaces, and a head has one registration."""
+    if not isinstance(text, str) or re.fullmatch(r"(?:[0-9a-f]{2})*", text) is None:
+        raise ValueError(f"{what} is hex in lower case with no space, not {text!r}")
+    return bytes.fromhex(text)
+
+
+#: a registration's certificate's keys
+CERTIFICATE = ("key", "digest", "signature")
+
+
 def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
                        window: int) -> tuple[Head, dict[str, CommitmentDomain]]:
     """The verifier's read of an execution phase's registration, under the network certifier's key and session and the
     schedule's parameters: the head and each table's domain as the verifier derived it, or ValueError naming what
     fails. Under form 2 a class's rows are the registration's count of its held rows (the module docstring's "The
-    registration"), and the domains are derived at it."""
+    registration"), and the domains are derived at it. A registration reads one way only, as `registration` writes it:
+    an integer that is an `int`, hex in lower case with no space, and a certificate of its three keys and no other."""
     listed = tables_of(params)
     want = {"format": REGISTRATION, "link": link, "window": window, "parameters": params.digest.hex(),
             "word_bits": WORD_BITS, "row_schema": SCHEMA}
     for k, v in want.items():
-        if doc.get(k) != v:
-            raise ValueError(f"the registration's {k} is {doc.get(k)!r}, and the schedule's {v!r}")
+        _stated(f"the registration's {k} is", doc.get(k), v)
     if set(doc) != set(want) | {"tables", "certificate"}:
         raise ValueError(f"a registration holds the keys {sorted(set(want) | {'tables', 'certificate'})} and no other")
     got = doc["tables"]
@@ -543,12 +574,11 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
         wanted = {"name": name, "value": value_name(link, name, window), "rows": rows, "words": size * 8 // WORD_BITS,
                   "domain": dom.domain_id.hex(), "layout": _layout(params, window, name)}
         for k, v in wanted.items():
-            if t.get(k) != v:
-                raise ValueError(f"the registration's {name} table has {k} {t.get(k)!r}, and the schedule's {v!r}")
+            _stated(f"the registration's {name} table has {k}", t.get(k), v)
         if set(t) != set(wanted) | {"root"}:
             raise ValueError(f"a table holds the keys {sorted(set(wanted) | {'root'})} and no other")
         try:
-            entries.append(Entry(name, rows, size, dom.domain_id, bytes.fromhex(t["root"])))
+            entries.append(Entry(name, rows, size, dom.domain_id, _unhex(t["root"], "it")))
         except (TypeError, ValueError) as e:
             raise ValueError(f"the registration's {name} table's root doesn't read: {e}") from None
         if not rows and entries[-1].root != NO_ROWS_ROOT:
@@ -558,8 +588,10 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     head = Head(link, window, params.digest, tuple(entries))
     try:
         c = doc["certificate"]
-        cert = Certificate(bytes.fromhex(c["key"]), link, Direction.EGRESS, window, bytes.fromhex(c["digest"]),
-                           bytes.fromhex(c["signature"]))
+        if not isinstance(c, Mapping) or set(c) != set(CERTIFICATE):
+            raise ValueError(f"it holds the keys {sorted(CERTIFICATE)} and no other")
+        cert = Certificate(_unhex(c["key"], "its key"), link, Direction.EGRESS, window,
+                           _unhex(c["digest"], "its digest"), _unhex(c["signature"], "its signature"))
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the registration's certificate doesn't read: {e}") from None
     if cert.digest != head.digest():

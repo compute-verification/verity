@@ -256,6 +256,49 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
     refused({**doc, "certificate": {**doc["certificate"], "signature": cells_cert.signature.hex()}}, "doesn't verify")
 
 
+def test_a_registration_reads_one_way_only(handed, tmp_path):
+    """A head has one registration: the one `registration` writes. One that states the same head another way is
+    refused for the way it is written, each by name: an integer written as a bool or as a float equal to it (the
+    execution phase, the word's bits, a table's rows or words, a value of its layout), hex in upper case or with a
+    space between its bytes (a table's root, the certificate's key, digest or signature), and a certificate with a
+    key beside its three."""
+    _, _, by_window = handed
+    issuer, rows, cert = _attest(tmp_path / "a", by_window[1], window=1)
+    doc = json.loads(json.dumps(C.registration(rows.head, cert, LEN)))
+    key = issuer.signer.public_key()
+
+    def refused(changed, why):
+        with pytest.raises(ValueError, match=why):
+            C.check_registration(changed, key, signers.SESSION, LEN, LINK, 1)
+
+    def table(i, k, v):
+        return {**doc, "tables": [{**t, k: v} if j == i else t for j, t in enumerate(doc["tables"])]}
+
+    assert C.check_registration(doc, key, signers.SESSION, LEN, LINK, 1)[0] == rows.head
+    written = "not written as the schedule's"
+    refused({**doc, "window": True}, f"window is True, which is {written} 1")
+    refused({**doc, "window": 1.0}, f"window is 1.0, which is {written} 1")
+    refused({**doc, "word_bits": 16.0}, f"word_bits is 16.0, which is {written} 16")
+    for i, t in enumerate(doc["tables"]):
+        refused(table(i, "rows", float(t["rows"])), f"{t['name']} table has rows {float(t['rows'])}, which is {written}")
+        refused(table(i, "words", float(t["words"])), f"{t['name']} table has words .* which is {written}")
+        for field, v in t["layout"].items():
+            refused(table(i, "layout", {**t["layout"], field: float(v)}), f"{t['name']} table has layout .* {written}")
+        assert t["root"] != t["root"].upper()
+        for root in (t["root"].upper(), t["root"][:2] + " " + t["root"][2:], " " + t["root"], t["root"] + "\n"):
+            assert bytes.fromhex(root) == bytes.fromhex(t["root"])
+            refused(table(i, "root", root), f"{t['name']} table's root doesn't read: it is hex in lower case")
+    for k, v in doc["certificate"].items():
+        assert v != v.upper()
+        for text in (v.upper(), v[:2] + " " + v[2:]):
+            assert bytes.fromhex(text) == bytes.fromhex(v)
+            refused({**doc, "certificate": {**doc["certificate"], k: text}},
+                    f"certificate doesn't read: its {k} is hex in lower case")
+    refused({**doc, "certificate": {**doc["certificate"], "extra": 0}},
+            "certificate doesn't read: it holds the keys .* and no other")
+    refused({**doc, "certificate": list(doc["certificate"])}, "certificate doesn't read: it holds the keys")
+
+
 def test_a_refused_signer_gives_no_certificate(handed, tmp_path):
     _, _, by_window = handed
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)

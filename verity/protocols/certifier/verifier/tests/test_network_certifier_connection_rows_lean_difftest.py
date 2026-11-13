@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -93,3 +94,38 @@ def test_the_data_holds_the_size_class_cap_on_both_sides():
     assert past_o["content"] == [[2, 2 * CT.most_ids()]] and past_o["schedule"] == at_o["schedule"]
     assert o1["tables"] is None
 
+
+def test_a_registration_written_another_way_is_in_the_data_and_refused():
+    """The three ways a registration states its head's bytes otherwise (hex not in lower case or with a space, an
+    integer as a float or a bool, a certificate's further key) are each in the data, and each such registration is one
+    Python refuses, which the Lean half is held to."""
+    lower = re.compile(r"(?:[0-9a-f]{2})*")
+
+    def numbers(v):
+        if isinstance(v, dict):
+            return [x for u in v.values() for x in numbers(u)]
+        if isinstance(v, list):
+            return [x for u in v for x in numbers(u)]
+        return [v] if isinstance(v, bool | float) else []
+
+    seen = {"hex": 0, "number": 0, "more": 0}
+    for inst, results in (vectors.instance(s) for s in range(vectors.COUNT)):
+        honest = inst["registrations"][0] if inst["registrations"] else None
+        for d, x in zip(inst["registrations"][1:], results["registrations"][1:]):
+            c, tables = d.get("certificate"), d.get("tables")
+            ways = set()
+            if isinstance(c, dict) and set(c) > set(CR.CERTIFICATE):
+                ways.add("more")
+            if isinstance(c, dict) and isinstance(tables, list) and all(isinstance(t, dict) for t in tables):
+                texts = [c.get(k) for k in CR.CERTIFICATE] + [t.get("root") for t in tables]
+                same = [bytes.fromhex(a) for a in texts if isinstance(a, str) and not lower.fullmatch(a)
+                        and re.fullmatch(r"[0-9a-fA-F ]*", a)]
+                if same and {k: v for k, v in d.items() if k not in ("certificate", "tables")} == {
+                        k: v for k, v in honest.items() if k not in ("certificate", "tables")}:
+                    ways.add("hex")
+            if numbers(d) and d == honest:  # a float or a bool equal to the honest one's integer
+                ways.add("number")
+            for way in ways:
+                seen[way] += 1
+                assert x is None, (way, d)
+    assert all(n >= 10 for n in seen.values()), seen
