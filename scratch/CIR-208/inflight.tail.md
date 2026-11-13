@@ -25,7 +25,9 @@ files, so it got no verdict here. When its owner brings it up to `main` after #8
 Between the first read of the queue (02:52Z, 49 marked) and the one this document is made on (03:24Z, 58 marked), ten
 marked pull requests landed, twenty more were marked and one lost its mark; by the second read above (04:17Z) 68 were
 marked. An earlier sweep at the head `b1409cffb0` (`main` `8c11a1d5ab`) over the first read's 261 heads found the same:
-no head fails, 107 merges stop. A pull request opened, pushed or marked after 04:17Z is not in this document.
+no head fails, 107 merges stop. A pull request opened, pushed or marked after 04:17Z is not in this document. At 04:49Z
+`main` was `fa0877afdc12`, 17 landings past the `main` this head holds: the head merged with it is `3 passed`, with 239
+superseded versions and 239 entries, so the list was still exact there.
 
 ## Run, and inferred
 
