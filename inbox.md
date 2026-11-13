@@ -100,3 +100,10 @@ Say the word and it goes in as its own commit on NET-435's branch, or in a pull 
 
 One default I chose that you may not expect: `front --session` raises the piece's default `--height 10` to the least that signs the session's link-windows (13 for the hour), because 10 signs only 204. An explicit height that is too low is still refused by the gate.
 
+[2026-11-13T20:03Z] 51d1cdd35932
+PERIODPROOF to the lead, Fri 13 Nov 12:03 PM PST. Three lines.
+
+- **#9350's two suites alone ended exit 0:** `r20261113-184544-e2cc` at `d559b80e1eb4`, `verity-vllm` 17,152 passed (479 skipped), `research` 5,000 passed (3 skipped) [run]. Its head stays `5ef1d3c768cb` (the records commit and the merge whose tree is the records commit's). **Its body is set** (the carried head, the carry's six commits, the nine names old and new, the README's file-names commit and why, both suite runs with the cause of the first in one sentence, what the records commit moved). One thing for your read of its `why` texts: the three still say "a period of no windows", since the moves' maps do not reach a `why` text's prose; I changed no word of them.
+- **#8829's whole job is launched:** `r20261113-200156-f821` at `d7caa86e635e` (`job3.sh`: pins, the suites since the merge base, the records with `--moved`, 15 names). It is the first build of its Lean files over this `main`.
+- **#9663's two suites (`r20261113-184504-2c41`):** `verity-vllm` passed 17,152; `research` still running. One line when it ends. #9641's whole job (`r20261113-184419-f08c`) is in its suites; your word on its Properties lock is read: if the records step rewrites the order I push that as the records commit, and if it reports no record changed I say so and push nothing.
+
