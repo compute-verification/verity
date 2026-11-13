@@ -2260,6 +2260,11 @@
       "paths": {
         "security/Proofs/Properties/Challenger/Session.lean": "security/Proofs/Properties/Challenger/ChallengePhase.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/pous/lean/": "tools/pous_grader/"
+      }
     }
   ]
 }
