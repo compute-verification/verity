@@ -51908,12 +51908,6 @@
     "FlockSoundness.Discharge.ZkHidden.ZkTab.table": "6f20306952c62b0ee0a1af2e4276fbe303cd768c3902a140754e4b2f40aa2747"
    }
   },
-  "Proofs.Flock.Claims.ZK.NonVacuous": {
-   "digest": "468bd4762d92aca19aa8c4dce88fe740aab90a219a01c7bb7d84408806f587e0",
-   "definitions": {
-    "Claims.ZKMal.witMsg": "ca5489c145ec1db67e2961ff54bae441d7e6f3c0603bfcd19119fe5c63f63911"
-   }
-  },
   "Proofs.Flock.Claims.ZK.OneTape": {
    "digest": "7f8eebcf22964d014e6223d0ef180f9ccec077a98cd6d813d804a48e568f0dfc",
    "definitions": {
@@ -53846,10 +53840,9 @@
    }
   },
   "Proofs.Flock.SessionLoop.Leak": {
-   "digest": "841b149912da2e88b62c251001128c0e806be26b38fdfc9144e8e939b9173373",
+   "digest": "b006b305b23a7b8f74c2cdc07a6e50790151df083a4bd9b84c53da7733a0decb",
    "definitions": {
-    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d",
-    "Claims.ZKServer.Loop.leakL": "a7fdd5ffefdec54ad40305a1741d46f3d4e125ea34ccacdc21cd39c6ed78a9ce"
+    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d"
    }
   },
   "Proofs.Flock.SessionLoop.Level0SrcSat": {
@@ -53958,17 +53951,6 @@
     "Claims.ZKServer.Loop.tapeL₀": "b03609278486f0b28e924abccdbeaf10bf2c443b8af5983f60c4f55924d82123",
     "Claims.ZKServer.Loop.tapeRel": "48b8729493eef3c04c5a01c688090bd4d1319bdddddfa86e619c80630e892542",
     "Claims.ZKServer.Loop.tapeWk": "e10ebd23253fc1e3b3e6a9c40b58f4eed799a5aa8c801a51e23f6edf9042532a"
-   }
-  },
-  "Proofs.Flock.SessionLoop.ZkAnyNontrivial": {
-   "digest": "f41582d29993e7845a9e6017a9f107899b2d423ff46f66eb138ff9869ba723ad",
-   "definitions": {
-    "Claims.ZKServer.Loop.NT": "bd4adb1e9c5a4b03874622e36e24826368b973bca1778d6e811b86081a2f21c3",
-    "Claims.ZKServer.Loop.constRel": "99d08792904a28e4834c36dd1a91cfa076776209d0ad41c2f020b39a2a0714a4",
-    "Claims.ZKServer.Loop.noReal": "0e7b6d955ea32ea3ff3a979982f5566f8d92f7ff06dcb78cc25e1c7a37afc253",
-    "Claims.ZKServer.Loop.noTables": "0cb04796bf0048e9dc32287254a280be0c7a0df0c287edf7691360da01b48d43",
-    "Claims.ZKServer.Loop.noVals": "177ca5a2a097553bdc0cf48243a3861ad08eecb53583b09d57c0c335d8526e6b",
-    "Claims.ZKServer.Loop.noWk": "af81cbf8063345139740a15c63b960b72994a7153b9d6cb557fcb87e3f4f2887"
    }
   },
   "Proofs.Flock.SoundAtBridge.Served": {
