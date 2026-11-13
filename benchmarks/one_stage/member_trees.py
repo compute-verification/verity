@@ -31,19 +31,18 @@ import shutil
 import socket
 import tempfile
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from verity.commitments import coin_tree as CT
 from verity.protocols.spot.device import challenger as Ch, remote as R
 from verity.protocols.spot.verifier.one_stage.closing import closing_after
+from verity.protocols.spot.verifier.one_stage.members import TABLES
 
 #: a relay's refusal of a frame that is none of its own
 FRAMES = ("a relay's frames are hello, then tree {nonce, spec} per coin tree and tree-open {after, n, round, stream, "
           "tree} per round of one, then close: the session's other frames are its driver's")
-#: v2's one table of a session (`OneStageZk.sessionTables`), its ``root_B``'s length the statement's to fix
-TABLES: Mapping[str, int | None] = {"circuit": None}
 
 
 def listener() -> socket.socket:
