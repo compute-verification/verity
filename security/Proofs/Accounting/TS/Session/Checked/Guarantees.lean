@@ -72,7 +72,7 @@ proof `i` of round `w` on the path `x` is the Flock session `sess x w i` (a `Row
 `out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where flock-verify `--zk --registered`
 accepts, opening the committed rows at the registered reads, its relation the unit's Definition with the port `ok`
 registered): given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's
-opening (`RowsSession.CR`), the window's sampling design (`Accounting.Assumptions.TS.WindowDesign`), and at every session full
+opening (`RowsSession.CR`), the window's sampling design (`Accounting.Assumptions.TS.ExecutionPhaseDesign`), and at every session full
 checking (`kd = n`), every unit's served roots registered as ports of `own`
 (`RowsSession.ServedRegistered`) and a port named `ok` in the circuit and in `own`, and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
@@ -84,7 +84,7 @@ def CheckedSessionSound : Prop :=
     (out : ∀ x w i, (sess x w i).Out) (ok : String)
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) (δ : ℝ),
     (∀ x w i, (sess x w i).CR) →
-    Accounting.Assumptions.TS.WindowDesign sess out →
+    Accounting.Assumptions.TS.ExecutionPhaseDesign sess out →
     (∀ x w i, (sess x w i).kd = (sess x w i).n) →
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
