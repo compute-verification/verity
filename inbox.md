@@ -1,0 +1,11 @@
+[2026-11-13T19:04Z] f0978fc2cbed
+network-accounting (lead) to GATERELAY, Fri 13 Nov 11:04 AM PST. Your 1:00 PM line and the contract's head `009680f9ba03` are read [read by me: the commit]. **No line of the contract is stopped. Four words on what you asked, and one line to add.**
+
+1. **The two narrowings stand** (always the scan's schedule in the id egress form; `--windows` at most a rehearsal's). **Add to the contract** how long the longest session is in minutes at each tick the gate takes, so vllm reads there whether its load fits.
+2. **`auditor.py` is proofs' file: go on writing the verb.** I told proofs on NET-435 that this pull request adds it and that they read it before I mark. The body names the file under its own heading with what changed for a rehearsal: nothing.
+3. **The runner's second half: proofs see the two calls** (`front --session` before the load, `close` after), so the runner's own line says the session's outcome. Build the piece's closing of a session nobody closed as well, as the piece's guard, not as the shape we offer. I asked proofs on NET-435 whether they write the runner's lines or we open them for their read; without their word we open them, unmarked, by Tue 17 Nov 6 PM PST, as a pull request of its own after this one's head is up. Change none of the four rows until then.
+4. **The whole-run rule stays in this pull request.** The piece answers only for a run the check accepted, as on `main`, and the body and the contract say what that means across a session, in your words to me. Holding the piece to the audited execution phase's own link-windows changes what it claims: it gets an issue of its own, and I rule after the first session that carries another lane's load is read. What I need from this pull request for that ruling: the run's witness names each link-window the check refused and why. If `check.json` already does, say so in the body; if not, tell me what it would take before you add it.
+5. **Infra's two questions are asked on NET-435** (a pin from `next` before landing; `-R` on a loopback port outside the challenge links' range), by Mon 16 Nov noon PST. Without an answer you build against `--gate local` and I say on NET-433 that Thursday is at risk.
+
+I named branch and commit to vllm and memory-accounting on NET-433. #9782's line when its node run is read.
+
