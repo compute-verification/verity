@@ -459,8 +459,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     def lean(audit: dict | None) -> dict | None:
         return ((((audit or {}).get("checks") or {}).get("run") or {}).get("detail") or {}).get("disagree", {}).get("lean")
 
+    family = stream.family(draw)
+
     def reason(coins: dict | None, window: str = root) -> str | None:
-        return CC.coins_reason(coins, window, after, read, AC.lms_verify)
+        return CC.coins_reason(coins, window, family, after, read, AC.lms_verify)
 
     why = published.get("error") if ev is None else reason(ev)
     try:
@@ -475,7 +477,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
     for name, coins in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
+        s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read, family))
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
                                     **registering(a, history)))
@@ -1145,7 +1147,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
                    per_member=members_proof(members, done, not plain(a)),
-                   coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root, member_trees=relay is not None)
+                   coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root,
+                   family=stream.family(draw), member_trees=relay is not None)
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1263,7 +1266,8 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None,
-               coins: dict | None = None, window_root: str | None = None, member_trees: bool = False) -> None:
+               coins: dict | None = None, window_root: str | None = None, family: str | None = None,
+               member_trees: bool = False) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
@@ -1275,9 +1279,10 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     proofs case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
-    (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins) and the
-    window's root ``window_root``, the v2 case names the challenger and carries its coins (`case_coins`), and so its
-    one-stage form: v2 reads a sample's coins under the challenger its parameters name, and refuses a case that names
+    (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins), the
+    family ``family`` the sample read them from (its registration's own, `a5_coins.family`) and the window's root
+    ``window_root``, the v2 case names the challenger and carries its coins (`case_coins`), and so its one-stage form:
+    v2 reads a sample's coins under the challenger and the family its parameters name, and refuses a case that names
     none. The per-member case does where the sessions ran on the window's challenger session too (``member_trees``,
     `window_trees`), as v2 reads the sample and the sessions' trees."""
     try:
@@ -1298,7 +1303,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                 raise ValueError(v2)
             zk = case_v2(c.case(), sessions, **v2)
             if coins is not None:
-                zk = case_coins(zk, coins, AC.FAMILY, window_root)
+                zk = case_coins(zk, coins, family, window_root)
             sampled = case_with_form(zk)
             (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
             (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
@@ -1310,7 +1315,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                 raise ValueError(per_member)
             pm = case_members(c.case(), **per_member)
             if coins is not None and member_trees:
-                pm = case_coins(pm, coins, AC.FAMILY, window_root)
+                pm = case_coins(pm, coins, family, window_root)
             (out / "case-v2-members.json").write_text(json.dumps(pm, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
             (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
@@ -1381,8 +1386,9 @@ def case_coins(case: dict, coins: dict, label: str, window_root: str | None) -> 
     RP = own_replay()
 
     evidence = json.loads(bytes.fromhex(case["evidence"]))
-    if "coins" in evidence or "challenger" in case["params"] or window_root is None:
-        raise ValueError("the case names a challenger or carries coins already, or the audit has no window root")
+    if "coins" in evidence or "challenger" in case["params"] or window_root is None or label is None:
+        raise ValueError("the case names a challenger or carries coins already, or the audit has no window root or "
+                         "names no family its sample read")
     evidence["coins"] = {k: v for k, v in coins.items() if k != "key"}
     return {**case, "evidence": RP.DT.canonical(evidence).encode().hex(),
             "params": {**case["params"], "challenger": {"key": coins["key"], "label": label}, "window_root": window_root}}
