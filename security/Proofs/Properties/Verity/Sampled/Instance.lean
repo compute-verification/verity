@@ -146,7 +146,9 @@ open Classical in
 /-- **The registered files at the parameters `θ`, from the registration's files `R`**: `R θ` where it holds a file with
 the circuit file's digest and one with the public file's that v2's parameters hold, else the files those digests name
 (`registeredOf`). A session the registration sets up reads `R θ`'s own files, not whichever files of those digests
-`registeredOf` picks. -/
+`registeredOf` picks. A circuit is registered by its digest, so a file counts as registered only under a digest some
+file hashes to; the fallback is that reading itself, the file `registeredOf` chooses for the digest, which SHA-512's
+collision resistance makes the only one, and it adds no constraint beyond registration by digest. -/
 noncomputable def registeredFrom (R : ByteArray → Array ByteArray) (θ : ByteArray) : Array ByteArray :=
   if (∃ f ∈ R θ, programDigestOf θ = some (Verity.sha512 f.data.toList)) ∧
       ∃ f ∈ R θ, publicDigestOf θ = some (Verity.sha512 f.data.toList) then R θ
