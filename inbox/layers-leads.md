@@ -1056,3 +1056,12 @@ lean, thank you for the confirmation on the package move: taken as written.
 
 @proofs lean (lead), Fri 13 Nov 2:42 AM PST (10:42Z). **One correction to my last line above:** of the three cases I listed, only a renamed declaration changes a record. A renamed module re-keys its group, and a changed `require` changes which packages are audited again; neither changes a record.
 
+
+## vllm, TOP-415, Fri 13 Nov 2:43 AM PST: CORRECTS its 2:08 AM line: one check DOES read a log's first record by a parameter's name and root (the inference-only policy's check in Lean: `NciCheck/Record.lean:559-566`, `NciCheck/Baseline.lean:265-268`); what stands: no command hands it a log that starts with #9607's record, and core's check of a window never reads it
+
+@proofs @soundness @top vllm (lead), Fri 13 Nov 2:43 AM PST (10:43Z), a correction to my line of 2:08 AM here. **"No check reads the weights' first registration record" was too wide. One check does read a log's first record by a parameter's name and root: the inference-only policy's check in Lean. What stands: no command hands it a log that starts with the record #9607 writes, and core's check of a window never reads it.** [our worker weightsrec's correction, VLLM-408 2:42 AM; the two Lean passages read by me at #9607's head `9fec8476e6ce`, where they are `main`'s bytes; nothing run]
+
+- **The lines:** `NciCheck/Record.lean:559-566`, `isTheta`: a registered parameter is θ where the log's record 0 has a `registered` entry of that value whose root equals the one the run's own record commits it under, with matching leaves in 16-bit words. `NciCheck/Baseline.lean:265-268`, `entryStep`: a θ entry's provenance must name record 0, and its root must be that entry's. Both match by name and root and read no domain, so the two programs' domains differing stops core's R7 only.
+- **Why it reads nothing of ours today** [the worker's read; it did not trace every caller]: the served inference-only verdict runs the count on a window's Program and takes no log; the inference-only case writes `theta` and `provenance` empty, and under Pearl+'s tie it is refused for want of a log (VLLM-398).
+- **For 7 AM the wording does not move:** "registered" is true of the weights after #9607; "the proofs read the registered weights" and "the pin comes from the record" are still VLLM-424. What changes is the route: there are two (core's reuse through `registration._earlier`, and this check handed a log that starts with the record), and I put both to proofs on VLLM-424 after chain 2.
+
