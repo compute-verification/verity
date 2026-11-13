@@ -7,13 +7,13 @@ remote run's output; [inferred] is inferred.
 A wire reads one writer's row whole. A port with several writers is cut k ways along its outer elements, or read
 through `AllGather_v1` with cut parts.
 
-**Count: 3 families, at 43 prompt ids and 4 layers 2 + 2 + 1 = 5 nodes.** All three are left unlowered, so their
+**Count: 3 families, at 43 prompt ids and 4 layers 2 + 2 + 1 = 5 nodes [r20261113-015207-eb58].** All three are left unlowered, so their
 readers' rows are free. None is cured by a Definition or by a hunk in vllm's files.
 
 ## 1. `EmbeddingShard_v1{VS=19360,H=6144,START=0}`: its SLICES unit reads a strided column of the weight
 
 - **Nodes.** At LP = 32 and 1 layer, these are node 0 (the prefill, batch of 32) and node 20 (the decode) [local dump].
-  At 43 ids and 4 layers there are 2 nodes [interface.md §2.5's unlowered list].
+  At 43 ids and 4 layers there are 2 nodes [r20261113-015207-eb58].
 - **Reader's port.** `table`, of the slice `EmbeddingShard_v1{VS=19360,H=1,START=0}`. `unit_templates` lists it 6144
   times; it is the only template besides the row itself [local].
 - **Words read.** Each of the 6144 units reads 19360 words: column h of the [19360, 6144] table, at stride 6144.
@@ -28,7 +28,8 @@ readers' rows are free. None is cured by a Definition or by a hunk in vllm's fil
   column h. So the lowering must not be written that way.
 - **The row itself.** It fails `check_proof_block`: its table row is 237,895,680 B, which needs a 2^38-bit block [local].
 - **What is left free.** At LP = 32 and 1 layer, the all-reduce's own partial: row 0 of `AllReduceMnnvl` `parts`, cut
-  8 ways. That is 1,056 unit ports of 192 words, 202,752 words [test]. At 43 ids, 4 layers: see census.md.
+  8 ways. That is 1,056 unit ports of 192 words, 202,752 words [test]. At 43 ids and 4 layers it is the decode's
+  all-reduce only (the prefill's is `AllReduceMultimem`, piece 2): 32 unit ports, 6,144 words [r20261113-015207-eb58].
 - **What would cure it, not done.** A registration of the table transposed, i.e. column-major rows of 19360. Or the
   embedding as a table read at the token's key (`window_circuit._Embedding`'s `b.table` / `EmbeddingRead_v1`), which
   is not the `SLICES` split. Either is vllm's or a Definition's call. The lead also said to lower table reads last, as
@@ -36,7 +37,7 @@ readers' rows are free. None is cured by a Definition or by a hunk in vllm's fil
 
 ## 2. `TokenSelect_v4{V=154880}`: no proof block holds its unit
 
-- **Nodes.** At LP = 32 and 1 layer, nodes 19 and 39 [local dump]. At 43 ids and 4 layers there are 2 nodes [interface.md].
+- **Nodes.** At LP = 32 and 1 layer, nodes 19 and 39 [local dump]. At 43 ids and 4 layers there are 2 nodes [r20261113-015207-eb58].
 - **Reader's port.** `logits`, 154880 words, read from `AllGather_v1{WORLD=8,N=19360}`'s output. That output is now
   the 8 rank-major slices `AllGather_v1{WORLD=1,N=19360}`, each 19360 words, so a cut of 8 ways takes the read as a
   wire (rank 0's slice wired, the 7 peers' free).
@@ -48,7 +49,7 @@ readers' rows are free. None is cured by a Definition or by a hunk in vllm's fil
 
 ## 3. `StopCheck_v1{T=2,STOP=(),...}`: no serving template holds it
 
-- **Nodes.** At LP = 32 and 1 layer, node 40 [local dump]. At 43 ids and 4 layers there is 1 node [interface.md].
+- **Nodes.** At LP = 32 and 1 layer, node 40 [local dump]. At 43 ids and 4 layers there is 1 node [r20261113-015207-eb58].
 - **Reader's port.** `ids`, 2 leaves of 32 bits: each step's token select's one u32 (`n19[0,1)`, `n39[0,1)`). Its
   output is 1 leaf of bits.
 - **Why it stays unlowered.** `serving_templates.template` refuses it: "the serving rows commit u16 words, and its
