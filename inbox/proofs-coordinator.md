@@ -139161,3 +139161,48 @@ Whether every accepted play's reference statements are the same now comes down t
 
 - `cursor/proofs-heldof-4c7b` at `2861eed8d0a` (pushed): `96b2def6e27` → `b0c0254a5e1` (RefsOfSent, first text) → `7ef4fd6577b` (`TablesHeldAt`, `NamesAt`) → `43b4dd218ea` (one step of `get_ofArray` mended, compiled) → `2861eed8d0a` (its unused fallbacks dropped, compiled).
 - `cursor/proofs-heldof-logitsrun-f684` at `828e59d30d` (scratch, no pull request).
+
+## ADDRWC, Fri 13 Nov 11:54Z: FIRST LINE, for soundness: BOTH CODES NAME ONE VERIFIER (`codeConnected h` has `V := V h`); they differ in the relation. The side-by-side relation needs every input of a proof block opened under the statement's roots, which the verifier does not check at a wired or unlinked port. So `Live₂.KS` as stated is FALSE at such a session wherever an honest play is accepted, and the carrying lemma (way 2, stated below) is false with it. Way 1 changes no verifier
+
+Clock: `date -u` read 11:54Z. Read at the join's tip `6247d2ddfc`. Nothing compiled, no file changed. The sizing follows by 13:00Z.
+
+**In plain words.** The two "codes" are not two verifiers. Both name the same checking function. They differ only in which circuit the analysis says an accepted run proves knowledge of: the members' circuits standing apart, or the same circuits with the wires between them joined. The verifier checks a wired input against the interior record. Read side by side, that input would have to be opened in the boundary record, where it never is. So the side-by-side claim is one an honest wired run cannot meet, and no lemma can carry the connected theorem to it. The leg should read the connected program, and that does not change which verifier runs.
+
+**1. Which `Code` the verifier runs a session at: one verifier, in both** [read].
+- `baseWired` sets `V := V h`, and its `session`, `rounds`, `sessions` and frame are `base h`'s (`WiredCode.lean:56` to `:72`). The file's header: "The verifier, the sessions, their rounds, the samples and the frame are `code h`'s." `codeConnected`'s docstring: "Its verifier is `V h`."
+- A compiled proof on `main` already uses the two as one term: `sessionOpensTwo_wired` (`WiredKS.lean`) hands `run_checked`, which is stated at `(deploy … (code h)).V`, an accepted run of `(deploy … (codeWired h ω keep)).V`, with no rewrite between them.
+- What differs: `parse` (the statement's program: `bitsProgs h.ms`, or that wired by `wireMap h`), `scopeCheck`, `partition` (each block without the gates the wiring moves), `reveal`, and the design passed beside the code (`two h` or `twoConnected h`). `CompiledTwo.KS` reads these only in its scope, its relation `RTwo` and its extractor.
+- `V h`'s session step is the wired one. `stmtOk` holds each session's reads to the held links and wires and runs round 2's check (`readsOk`, `SecondStage.designOk`); round 2 reads a session's own ports and a wired read off the interior record (`readsInterior`, `FrameIsAt.lean:37`; `AddressesWired.lean`'s header).
+- So restating `Live₂.L` at the connected program leaves `A.L.V` the term it is today. It would not make the leg about a verifier that does not run.
+
+**2. Side by side, there is no knowledge soundness for a unit that needs an input gate read off the interior record** [derived, by reading the definitions; not compiled].
+- `RTwo` counts a proof block correct on the values `refIn rb (w.val …) ι` (`wrongIn`, `SamplingTwo.lean`). `w.val g` is an opening that passes under the statement's roots (`Wit.val`). An input gate is always on the boundary (`Prog.Boundary`), so `refIn` reads it from `w.val` and never from the interior `ι`. Side by side, every input of a proof block is an input gate.
+- So side by side a proof block is correct only if each of its inputs is opened under the statement's roots. Those are the boundary record's, and never a replay block's interior roots (`roots_ne`, `AddressesAt.lean`).
+- At a port a wire names, or one no link names, round 2 reads the value off the interior record. Nothing in an accepted run opens it under the statement's roots, so the block is counted wrong whatever the prover did.
+- Where every proof block has such a port, the relation fails at every `δ ≥ 0` and the bad event is the whole accept. A prover accepted with probability above the error then makes `Live₂.KS` false. Honest serving is such a prover wherever an honest wired play is accepted.
+- It is `CheckedRun.not_addresses_of_input_readsInterior` read one level up: that theorem refutes the proof's premise, this is the conclusion failing.
+
+**3. The carrying lemma (way 2), as Lean text.**
+
+```lean
+theorem ksTwo_code_of_connected (h : SpotFlock.Held)
+    (hKS : (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+      (SpotFlock.codeConnected h) SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h)
+      (SpotFlock.cap h)).KS FlockDeploy.sha512) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+      (SpotFlock.code h) SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).KS
+      FlockDeploy.sha512
+```
+
+- Its conclusion is `Live₂.KS` at `A.h = h`, word for word. It takes no wiring premise because both sides speak only of statements in scope, where the design evaluates, and the design's evaluation decides the wiring checks (`wiring_of_two`).
+- **I believe it false** at a held code as in 2, and for that reason. Same verifier, same runs, same accepts; the conclusion's relation asks for openings the accepted run does not hold.
+- It is true where round 2 reads nothing off the interior record. There `Addresses h` can hold and `ksTwo_spot` gives the conclusion without `hKS`, so the lemma buys nothing.
+- **Which statement the reason says is wrong:** `Live₂.L`, and with it `Live₂.R` and `Live₂.KS`, at `SpotFlock.code`. Not `SpotKSTwo`.
+
+**STOP RULE.** No listed guarantee is said false: no lock names `Live₂`, `TwoLeg` or any declaration under `SampledTwo/` outside `roots` [run: a script over the three locks]. What is empty is the join's leg at a session with a wire: its first premise `A.KS` cannot be met there, so `twoLeg` concludes nothing about it.
+
+## Not established
+
+- That `V h` accepts any play at a held code with a wire: no Lean instance has one (HONEST2's has none). If it accepts none, `Live₂.KS` holds there emptily; it is still not what an accepted wired run proves.
+- Point 2 in Lean: I read `RTwo`, `Wit.val`, `refIn`, `Boundary` and the two headers; I did not read `Reveal.reveal` or `assemble` line by line.
+- That the two verifiers are equal by `rfl` as a statement of its own: I send a one-file probe for it next.
