@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections
 import gzip
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -100,10 +101,7 @@ def test_dataflow_attribution_is_primary_and_refuses_cross_request(monkeypatch, 
     reads node 3 -> R0 by data flow though the row rule cannot place it), node 6 (reads nodes 3 AND 4 -> refused), node 7 (TokenSelect
     of R0), node 8 (TokenSelect of R1). Weights = param 2. The oracle RootView is stubbed; no Programs are decoded."""
 
-    class FakeProg:
-        pass
-
-    B = FakeProg()
+    B = SimpleNamespace()
     B.inputs = {0: ("Input", 3), 1: ("Input", 2), 2: ("Input", 10)}
     B.n_input_nodes = 3
     B.digest = "d"
@@ -140,10 +138,7 @@ def _multi_weights_prog(n_weight_nodes=3):
     2, 3, 4 = the weights leaves (offsets 0..3, 4..9, 10..11 of the Record).  Each request: Embedding(prompt, W[2]) -> Linear(., W[3]) ->
     Norm(., W[4]) -> TokenSelect.  The rows rule cannot place any of them (rows=1); dataflow must."""
 
-    class FakeProg:
-        pass
-
-    B = FakeProg()
+    B = SimpleNamespace()
     B.inputs = {0: ("Input32_v1", 3), 1: ("Input32_v1", 2), 2: ("Input8_v1", 4), 3: ("Input32_v1", 6), 4: ("Input16_v1", 2)}
     B.n_input_nodes = 5
     B.digest = "d"
@@ -184,17 +179,17 @@ def test_multi_node_weights_are_shared_inputs_not_cross_request_reads(monkeypatc
     assert reqs[R0]["n_instances"] == 4 and reqs[R1]["n_instances"] == 4
     assert res["missing_derived"] == [[2, 0], [3, 0]] and res["verdict"] == "MISSING_DERIVED"   # nothing refused: only the components are absent
     # the projection's canonical sources: weight reads name the FIELD by Record-global offset (input_base), not node-local offset 0
-    P = bd.Projection(B, "oracle[r0]", [0, 2, 4, 6], tok_node=0, weights_node={2, 3, 4})
+    P = bd.Projection(B, "oracle[r0]", [0, 2, 4, 6], tok_node=0, weights_node={2, 3, 4}, seed_node=None)
     assert P.canon(0) == [[("TOK", 0, 1)], [("W", "w_e4m3", 0, 4)]]
     assert P.canon(1) == [[("N", 0, 0, 0, 2)], [("W", "w_scale", 0, 6)]]
     assert P.canon(2) == [[("N", 0, 1, 0, 2)], [("W", "norm", 0, 2)]]
     assert not P.xreq
     # the other request's prompt is still a cross-request read (the set fix does not widen what counts as shared)
-    Q = bd.Projection(B, "oracle[r1-wrong]", [0, 2, 4, 6], tok_node=1, weights_node={2, 3, 4})
+    Q = bd.Projection(B, "oracle[r1-wrong]", [0, 2, 4, 6], tok_node=1, weights_node={2, 3, 4}, seed_node=None)
     Q.canon(0)
     assert Q.xreq == {"prompt-param": 1}
     # the old single-node call form (an int) still means that one node
-    S = bd.Projection(B, "oracle[r0]", [0], tok_node=0, weights_node=2)
+    S = bd.Projection(B, "oracle[r0]", [0], tok_node=0, weights_node=2, seed_node=None)
     assert S.weights_nodes == frozenset({2}) and S.weights_node == 2
 
 
@@ -222,9 +217,6 @@ def _dag_prog(order: list[int], rewire: bool = False):
     """A 4-instance DAG over a stub RootView: two per-row ops (rows 0, 1) each feeding a Norm, then a TokenSelect over both norms. Emitted in
     `order` (indices into the canonical node list); `rewire` swaps which row feeds which Norm (same multiset of specs, different wiring)."""
 
-    class FakeProg:
-        pass
-
     tok, w = 0, 1
     nodes = [
         {"spec": "Linear_v1{N=2}", "form": "call", "args": [[("n", tok, 0, 1)], [("n", w, 0, 4)]], "out": "bf16"},           # 2: row 0
@@ -233,7 +225,7 @@ def _dag_prog(order: list[int], rewire: bool = False):
         {"spec": "Norm_v1{N=2}", "form": "call", "args": [[("n", 3 if not rewire else 2, 0, 2)]], "out": "bf16"},           # 5
         {"spec": "TokenSelect_v1{V=2}", "form": "call", "args": [[("n", 4, 0, 2), ("n", 5, 0, 2)]], "out": "i32"},          # 6
     ]
-    P = FakeProg()
+    P = SimpleNamespace()
     P.inputs = {tok: ("Input", 2), w: ("Input", 4)}
     P.tok_node, P.weight_fields = tok, {w: "w"}
     P.oracle_wmap = None
