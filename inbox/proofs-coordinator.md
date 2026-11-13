@@ -115143,3 +115143,57 @@ I am the run that woke on the 02:00Z timer. I do not hold your 02:11Z message; I
 STOP RULE: not reached. NEEDS: item 2. To post: nothing. Not established: the join's suites; `second --kept --devices` on a card; what Friday's launch hands as `BOUNDARY_ROWS`.
 
 **Pushed.** `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Unpushed: nothing. I end this turn to wait on the two runs, with a one-off timer for 03:35Z that carries the heads, the run ids and the other run's file.
+
+## GATHER, Fri 13 Nov 02:38Z: `c6bd` passed every check by name: Friday's shape at the first try's design (served vocabulary, 4 of 8 requests, 1 of 64 a cell, made-up logits) runs end to end, 52 minutes for the two commands at a peak of 59 GiB
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `5ad83c84ef5efe9a65082c3da087cf7ce38e753d`, the head I stand behind, rehearsed at it by `7b90` (exit 0); `b025` at it is still running. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed at it by `c6bd`, which this entry reads. Both pushed, unchanged. [run: `git rev-parse HEAD` in each worktree, 02:12Z]
+
+**For the board, in place of the first lines of my 02:32Z entry.** Friday's first try now runs end to end at its own size and design, except for the engine. At the served model's vocabulary (154,880), on 8 requests of 64 tokens under a stop rule, the first command sampled 4 of the 8 outer blocks on the challenger's coins. The second committed those 4 outer blocks' 5,120 inner blocks, sampled 1 inner block in each of the 80 cells, proved the 80 in zero knowledge in 20 sessions of 4, and had Lean verify each session: all 20 accepted. The 18 negatives were each refused, and the outcome is refused by `two-stage-form` alone, as it must be while the accept is off. The two commands took 52 minutes on a CPU node at a peak of 59 GiB. What is still missing is as my 02:32Z entry lists it: the engine (the logits are made up), the accept, the second try's design at this size (`b025`, running), and proving on cards. [run: `r20261113-005324-c6bd` on vy-nebius-2, at `496aa18354`, ended 02:33:06Z exit 0; its `second/summary.json`, `expect.txt`, `first.log` and `resources.jsonl`, read 02:34Z to 02:36Z]
+
+### 1. `c6bd`'s own verdict, by the same names
+
+- Its summary line: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true}`, under `Friday shape at the rate serving names (8 spans of 64 tokens under a stop rule, rate:1/2, k 1) rc=0`. [run: `out/expect.txt`, `out/rc.txt`]
+- The first command: sampled outer blocks 0, 1, 2, 4 of the class `p4-o64`; the stop class's blocks 1, 2, 3, 5; the order held; no error. [run: `out/first.log`]
+- 22 checks before the sample (`m0` to `m19`, `registration`, `source`): all true.
+- 60 verdicts, 3 for each of the 20 sessions (`m0-verifier`, `lean-draw`, `lean-verify`): all accepted. Each session proved 4 inner blocks of one template, at `k_log` 24 for the 19 chunk templates and 25 for the combine.
+- 18 negatives: all refused. The 20 circuit files are the ones the params name. The second stage's check on the statements: `ok`, no code.
+- The outcome: not accepted; the second stage's audit record fails `statements` alone, with `two-stage-form`; the first stage's fails nothing. The second-stage record registers one value, the logits, and has 20 links: this is the first try's tree, where nothing ties the select's inputs to the serve.
+- The record's own bound: at most 44 of the sampled outer blocks' 5,120 inner blocks wrong at δ = 1/2, and at most 32 of 64 in a cell. This is over the 4 sampled outer blocks only; the class's figure over all 10,240 is the one my 01:50Z entry gives (1,699 at δ = 1/2) and the run does not print.
+- Nothing failed. The Lean it compiled is the two verifiers' executables, as in my 02:32Z entry; both builds completed. [run: `out/build-lean.log`]
+
+### 2. Times and memory
+
+| Part | From, to | Minutes |
+|---|---|---|
+| Waited for a place on vy-nebius-2 | 00:53:32Z to 01:10:08Z | 16.6 |
+| The builds | to 01:15:29Z | 5.4 |
+| The made-up serve (not part of Friday's run) | to 01:40:35Z | 25.1 |
+| First command | to 01:44:15Z | 3.7 |
+| Second command | 01:44:18Z to about 02:33:00Z | 48.7 |
+| of it: Python alone, before any prover | to 02:14:53Z | 30.6 |
+| of it: the prover and Lean's verifier | to 02:25:12Z | 10.3 |
+| of it: the rest, the negatives and the statements' check | to about 02:33:00Z | 7.8 |
+
+[run: `slot.json`, file times under `out/`, and each sample's process names in `resources.jsonl`; the last row's reading of what ran is a guess]
+
+- Peak memory 58.8 GiB at 02:15:20Z, while the prover ran; the run asked 72 GB. Outside the four minutes from 02:14Z to 02:18Z it stayed at 8 GiB or under. [run: `job-memory.py` on its `resources.jsonl`]
+- A session's proof took 1.7 to 3.8 seconds, Lean's verdict on it 26 to 31 seconds, composing each circuit 14 to 19 seconds. [run: `audit.timing` and `audit.circuits` in its summary]
+- Against `b876`, the same shape at 2 of 8: its second command took 50.9 minutes at a peak of 57.9 GiB. So doubling the first stage's sample moved neither the time nor the peak. At 1 inner block a cell the second command's time is a part that does not grow with the sample. [run: both; derived]
+
+**The first try's half of the estimate (the whole is due 05:30Z).** At `--replay rate:1/2 --k 1`, Friday's first try needs about 4 minutes for the first command and about 50 for the second on a CPU node, and peaks at 59 GiB: ask 80 GB (the peak plus a quarter). Serving's terms for its own run of this design tonight (96 GiB, 120 minutes) cover it. This is measured on made-up logits; on the served class the first command also reads the serve's kept files, which I have not timed. [run: `c6bd`; derived; relayed: serving's terms from VLLM-300, read 02:17Z]
+
+### 3. Kept files, and the rerun over them
+
+- `c6bd` kept all eight kinds the rerun reads; its `statements.json` is 20.2 MB. Three files passed 63 MiB and were left out with their digests in `large.txt` (`audit/case.json`, `audit/case-v2-members.json`, `audit/program.json`, 98 to 116 MB each); the rerun reads none of them. [run: `ls` of the fetched `out/second`, `large.txt`]
+- The rerun over `c6bd`'s kept files is `r20261113-023437-3243`, launched 02:34:36Z on vy-nebius-2, where the files are. At 02:36Z it waited for a place behind 4 checks. [run: `slot.json`]
+
+### 4. `b025` at 02:36Z
+
+Still one Python process at 5.5 GiB, 39 minutes into its second command, no prover and no verifier yet. `c6bd` reached its prover after 30.6 minutes, so `b025`'s preparation does grow with its sample (640 inner blocks in 8 outer blocks against 80 in 4). My guess for its end stays 03:15Z to 04:20Z. My word on the second try's design waits on it. [run: `research fetch --all`, process names by the minute, 02:36Z; guess]
+
+### 5. Not established
+
+- Anything on the served engine or on cards in my runs.
+- The second try's design at Friday's shape: `b025` has not reached its prover.
+- That `c6bd`'s outcome prints again from its kept files: `3243` has not started.
+- The accept.
