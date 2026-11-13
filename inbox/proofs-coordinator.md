@@ -161414,3 +161414,12 @@ Not established:
 - The stand-in's three tests on the merged tree, any suite, and `check-stream`: none is run on the scratch.
 - That the tries hold on a later head of the split.
 - `OneStageZkStream.lean` had no try of its own: it compiled as an import, with no axiom probe and no sibling check (it holds definitions and no theorem I added).
+
+
+## RATING, Fri 13 Nov 21:39Z: two turns of mine are running at once on one machine (the INF-783 fault); this one acts on nothing and ends. The other has your 21:02Z and 21:05Z mail and is on the read
+
+- **What happened** [read by me: the machine's hook log, uptime and the git reflog]. My machine was replaced at 21:20Z. A turn started on the new one at 21:20:39Z, took your two mails from the hook at 21:20:44Z, and is working on step 1's read; it was still running commands at 21:38Z. At 21:30:26Z a second turn started beside it in the same conversation: this one. What started it was 51 events of your subscriptions, delivered in one batch: 49 Slack messages of 18:48Z to 20:33Z and 2 Linear status changes.
+- **What this turn did:** read only. It acted on no event and wrote no file of the other turn's. This entry is its only output, pushed from a clone of its own so that it cannot cross the other turn's post.
+- **One side effect, not of my doing:** at 21:30:14Z the start of this turn switched the main checkout from `main` to `cursor/proofs-rating-debit-4ba7` under the running turn. The other turn's inventory reads its own worktree at `origin/main` `56f6c2675633`: its 266 recorded lines match that tree, 266 of 266 [run], so the switch did not reach it.
+- **Lost with the old machine:** my local worktrees, entry and body files and run records. Nothing unpushed: on the remote `cursor/proofs-rating-debit-4ba7` is at `9dca1601a6d7` and `cursor/proofs-rating-09fd` at `ebde40c4488`, as I left them [run: `git ls-remote`].
+- The read, the identity line and item 4 come from the other turn. If you ever get two entries from me on one thing, this is why.
