@@ -1,0 +1,71 @@
+base: 879 records, version 65913bb84cfa79f8, 0 unstored
+head: 879 records, version e466c91852e33c97, 0 unstored
+bindings only at the base: []
+bindings only at the head: []
+
+bindings whose record at the head reads fewer files than at the base: 0
+
+files some binding's record stopped reading (0):
+
+files some binding's record started reading (4):
+   345 verity.definitions.registry.catalog.circuit-check   [not expected]
+   343 verity.definitions.registry.catalog   [not expected]
+    50 verity.definitions.registry.catalog.circuit-check#common   [not expected]
+     1 verity.definitions.registry.catalog.circuit-check#*   [not expected]
+
+files read at both whose digest differs (13):
+   879 tools/verity/circuit_check/src/circuit_check/targets.py#common   [not expected]
+   879 verity.definitions.registry   [not expected]
+   345 tools/verity/circuit_check/src/circuit_check/cache.py
+   345 tools/verity/circuit_check/src/circuit_check/cli.py
+   345 tools/verity/circuit_check/src/circuit_check/units.py
+   336 verity_vllm.circuit-check#common   [not expected]
+    50 verity.definitions.boolean   [not expected]
+    50 tools/verity/circuit_check/src/circuit_check/targets.py#_kernel_roots   [not expected]
+     2 verity.definitions.registry.catalog   [not expected]
+     2 *   [not expected]
+     1 verity.definitions.word   [not expected]
+     1 tools/verity/circuit_check/src/circuit_check/targets.py#*   [not expected]
+     1 verity.definitions.call_scope   [not expected]
+
+bindings with a difference outside the expected files: 879
+  <registered>:0: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.registry']
+  <registered>:1: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  <registered>:2: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  <registered>:3: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.registry']
+  <registered>:4: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  <registered>:5: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  <registered>:6: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.registry']
+  <registered>:7: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  <roots>: ['*', 'tools/verity/circuit_check/src/circuit_check/targets.py#*', 'tools/verity/circuit_check/src/circuit_check/targets.py#_kernel_roots', 'tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.boolean', 'verity.definitions.call_scope', 'verity.definitions.registry', 'verity.definitions.registry.catalog'] ...
+  TEMPLATE_PARAMS:bf16-mul-scalar: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  TEMPLATE_PARAMS:bias-add: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  TEMPLATE_PARAMS:moe-router-topk: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  TEMPLATE_PARAMS:moe-router-topk-norm: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity_vllm.circuit-check#common']
+  TEMPLATE_PARAMS:moe-sum: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  _kernel_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#_kernel_roots', 'tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry', 'verity.definitions.registry.catalog', 'verity.definitions.registry.catalog.circuit-check', 'verity.definitions.registry.catalog.circuit-check#common', 'verity_vllm.circuit-check#common']
+  verity.circuits.population.circuit-check#_population_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.embedding.circuit-check#_embedding_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.frame_v3.circuit-check#_merkle_read_at_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.frame_v3.circuit-check#_merkle_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.lms.circuit-check#_lms_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.merkle.circuit-check#_merkle_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.rowleaf.circuit-check#_merkle_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.sha512.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.commitments.gates.sha512_stream.circuit-check#_sha512_stream_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.circuits.boolean.memcheck.circuit-check#_memcheck_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.circuits.requirement_units.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.commitments.gates.attest.circuit-check#_attest_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.commitments.gates.block_key.circuit-check#_block_key_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.kernels.tc.circuit-check#_core_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.argmax.circuit-check#_core_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.argmax.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.gemm.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.gemm.circuit-check#_population_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.gf2k.circuit-check#_gf2k_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.moe.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.norm_quant.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.quant.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.rmsnorm.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.rmsnorm.circuit-check#_chunk_sums_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
+  verity.definitions.ops.boolean.rows.circuit-check#_boolean_roots: ['tools/verity/circuit_check/src/circuit_check/targets.py#common', 'verity.definitions.registry']
