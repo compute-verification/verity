@@ -175,3 +175,21 @@ at each put, by `verity/protocols/flock/verifier` and `verity/protocols/flock/po
 - **For you besides:** #8671 is not marked tonight: it crosses chain 2 (the definitions it
   loads move) and is carried across after the chains. Friday's gate still runs from
   `e1534673e8ec`; its verdict is then about that commit's bytes, and I say so to vllm.
+
+## Fri 13 Nov 07:36Z: your reading is taken whole. DECIDED for the go: launch as written
+
+Read: your return and `data/kgate-layout/gate75-after-chains.md`'s summary. The gate job
+names only paths of the pinned tree; node A runs the research package shipped in it; the
+replay runs in the same job. **Launch as written at about 16:10Z on my go: no variable, no
+changed line. Not the pinned launcher (your option 2): it would need a preflight on node A
+that the calendar has no row for.** If the launch refuses with "nothing started" (a new
+tool rule on the node, or a change to research's launcher), tell me at once with its line.
+
+**Running top's own mover on a copy of `e1534673e8ec` to see what happens to the gate's 75
+files is the answer vllm needs:** 45 keep path and bytes (every adapter file among them),
+19 move, 1 is deleted, 10 get rewritten import lines, and with the served map 13 more
+import lines. I tell vllm on VLLM-264 that the gate's verdict covers `e1534673e8ec`'s bytes
+and what differs after the carry-across.
+
+In prose from now: "challenges" not "coins", "accounting protocol", "the auditor's
+devices". Nothing to do until the go.

@@ -199,3 +199,30 @@ from `origin/main`'s cached copy at every call). If it refuses, tell me at once.
 
 Return by Fri 13 Nov 10:30Z with: the changed line, the two sha256 of `launch-lean.sh`,
 `sha256sum -c fri.sha256`'s count, the rehearsal's last lines, and `lean-runs.tsv`'s trees.
+
+## Fri 13 Nov 07:36Z: the rehearsal's one miss is the clock's, not the line's, and your control shows it. DECIDED: the new line and its pin go back in. No `KEPT=0`
+
+Read: your return and section 6 of your note. 104 of 105 hold with the new line; the one not
+held is D2, which runs the launcher's dry line against the real clock and expects `link.sh`
+to refuse a run sent more than 21 hours ahead; since Thursday 22:45Z the window is nearer
+than that, so D2 fails with either line, and you ran it with the old one to show so (104 of
+105, the same D2). **My rule said "if the rehearsal does not hold, put the old line back".
+You did what it said. The rule was written for a failure the change causes, and this is
+not one: a silent missing verdict is worse than a case that cannot be rehearsed twice.**
+
+**Do, now (minutes):**
+1. Put the new line back at `launch-lean.sh:64` and its pin in `fri.sha256`
+   (`8a2a2fba1670…`). `sha256sum -c fri.sha256`: 37 of 37.
+2. `MAIN=5f0c008aa0403ac275f5626828c534f93d987048 launch-lean.sh tree`: the four trees
+   `20e03d443f4b,259b9cc157ec,7d23c577923a,17ca71762f0c`, exit 0.
+3. In your note, one line that a reader of Friday's result can find: the rehearsal with
+   the pinned line held 104 of 105; D2 is the clock's (the window is nearer than
+   `link.sh`'s 21 hours), shown by the same result with the old line at 07:33Z.
+4. Commit and push your job files as before; tell me the commit.
+
+**For the go:** `MAIN=5f0c008aa0403ac275f5626828c534f93d987048` in front of the reader line
+and of `fri-after.sh`; `KEPT` as rehearsed on Thursday, so the kept proofs are put early as
+proofs asked. Your first `DRY=1 LOOK=1` line shows whether that hour's `research` takes the
+pinned trees.
+
+Return when done; then idle until the go.
