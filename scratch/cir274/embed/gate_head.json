@@ -1,0 +1,62 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+ "top": "cd2c09ea9c22de67244bb1a0fc3fefd37aa12ece",
+ "changes": [
+  {
+   "name": "1e4d5c993c08..cd2c09ea9c22",
+   "commit": "cd2c09ea9c22de67244bb1a0fc3fefd37aa12ece",
+   "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+   "pr": null,
+   "verdict": "failed",
+   "why": "adds 1 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (adapters/vllm/verity_vllm/program/predict/node_window_values.py 0 -> 1): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).",
+   "before": null,
+   "after": null,
+   "touched": [],
+   "lints": [],
+   "fix": [
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:634 'sampled units' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)"
+   ],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [],
+   "counted": {
+    "repo_env_reads": [],
+    "repo_silent_excepts": [],
+    "repo_lane_text": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py"
+    ]
+   }
+  }
+ ],
+ "failures": [
+  {
+   "commit": "cd2c09ea9c22de67244bb1a0fc3fefd37aa12ece",
+   "pr": null,
+   "why": "adds 1 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (adapters/vllm/verity_vllm/program/predict/node_window_values.py 0 -> 1): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).",
+   "fix": [
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:634 'sampled units' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)"
+   ]
+  }
+ ]
+}
