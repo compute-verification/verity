@@ -22,13 +22,13 @@ import pytest
 
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import flock_inputs as FI, links as LK, rows as CS
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")

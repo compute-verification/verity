@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.certifier.verifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
+from verity.protocols.accounting.certifier.verifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
