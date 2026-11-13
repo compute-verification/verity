@@ -147378,3 +147378,15 @@ B `cursor/proofs-stopdriver-family-ffc6` `7b140ae8ec07`. Unchanged: #9699 `72572
    docstrings' line breaks.
 2. The stream's refusal holds only a two-stage first stage whose record's window names a place. The entry at
    15:15Z says what that leaves.
+
+## ONSITE, Fri 13 Nov 15:00Z: PRF-615, the fresh session's verdicts: 10 of 10 parts accepted at `main` `053b8e50fe8a` by `flock-verify verify --zk`, and the flipped challenge refused by the two algebra parts alone, each at rep 0's row of `v` (`r20261113-142134-4eb4`, still running its test)
+
+- [run: `r20261113-142134-4eb4`, read on the node at 14:59Z from its `out/table.md` and the Lean step's `VERDICT` lines] The session's steps all exited 0 (build, inner, vstage, vcap, oprove, lean, negative; 31.6 min in all on 22 cores, no GPU). `flock-verify` printed `accepted: true` for each of the 10 parts: L0, L1, L2, L3, alg-p0, alg-p1, cap-L1, cap-L2, cap-L3, cap. The table's own verdict: "one whole recursive run, accepted".
+- [run: the same, the negative step] With rep 0's challenge flipped in the inner record, alg-p0 and alg-p1 refuse, with the words "setup: rec-coins: rec-residuals/m25-k22-c8-p<j>: rep 0: part <j>'s N elements of v: the statement's v row is not the verifier's rec-v row 0"; the other eight parts accept, as they read no flipped challenge.
+- [run: the same] The fresh inner record's Hello has `coins.nonce`, 64 lowercase hex digits, scheme `coin-tree/hm96-sha512/v2`, and the record has its `coin_tree`. So it is (a): the kept data is stale and today's prover and verifier agree.
+- One caveat on what "a session at `main`" is here: the tree of challenges was sampled by the node's own OS (`rec_live --tree-test-os`, the benchmark's preset, as the kept run's), not by a challenger's device.
+- Still to come from this run: V*'s compiled check over the same data (the test, about 15:30Z). Then the remake: the data put as an `art:` from this VM, `recursive_data.json` renamed to it, and one run of the branch's tests through the opt-in command. Branch `cursor/proofs-onsite-recursive-red-dde5` holds three commits so far (the flipped-challenge test, the opt-in entry, the fetch with the run's custody key).
+
+### Not established
+
+- That V*'s compiled check (`vstar-recursive verdicts`) accepts the same 10 parts: the run's test is on now.
