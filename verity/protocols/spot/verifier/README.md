@@ -258,9 +258,9 @@ from verity.protocols.spot.verifier import service
 from verity.protocols.spot.verifier.one_stage import audit, draw, partition, registration
 from verity.protocols.spot.device.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
-from verity.protocols.spot.optimize import Candidate, CostModel, Objective, frontier, for_budget
-from verity.protocols.spot.candidates import Shape, cuts
-from verity.protocols.spot.costfit import fit
+from verity.protocols.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
+from verity.protocols.spot.prover.candidates import Shape, cuts
+from verity.protocols.spot.prover.costfit import fit
 ~~~
 
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and
