@@ -7,8 +7,8 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 export PATH="$HOME/.elan/bin:$HOME/.local/bin:$PATH"
-L=$PWD/verity/protocols/spot/verifier/lean
-F=$PWD/verity/protocols/flock/verifier
+L=$PWD/verity/protocols/proofs/spot/verifier/lean
+F=$PWD/verity/protocols/proofs/flock/verifier
 S=$(mktemp -d)
 keep() { mkdir -p "$O/kept"; cp "$S"/case/stream/*.out "$S"/case/stream/*.err "$S"/case/check/std* "$O/kept/" 2>/dev/null || true; rm -rf "$S"; }
 trap keep EXIT
@@ -35,7 +35,7 @@ if [ -z "${MF_CASE:-}" ]; then
   (cd "$F" && lake build flock-verify flock-firewall) > "$O/verifier-build.log" 2>&1 \
     || { log "verifier build failed"; tail -60 "$O/verifier-build.log"; exit 7; }
   log "check_build.sh bin"
-  bash verity/protocols/flock/prover/check_build.sh bin "$S/flock-circuit" > "$O/prover-build.log" 2>&1 \
+  bash verity/protocols/proofs/flock/prover/check_build.sh bin "$S/flock-circuit" > "$O/prover-build.log" 2>&1 \
     || { log "prover build failed"; tail -20 "$O/prover-build.log"; exit 8; }
   from=(--members "${MEMBERS:-300}" --bin "$S/flock-circuit" --lean-bin "$F/.lake/build/bin")
 fi

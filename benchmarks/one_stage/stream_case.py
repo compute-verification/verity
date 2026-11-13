@@ -58,7 +58,7 @@ def main() -> None:
     ap.add_argument("--lean-bin", type=Path)
     ap.add_argument("--stream-exe", type=Path, required=True)
     a = ap.parse_args()
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if a.case:
         path, audit_s = a.case, None
