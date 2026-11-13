@@ -1586,8 +1586,10 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     records audit's v2 case, its blobs the proofs and public files, in the form ``one-stage``; ``exe`` default built here)
     on files in a 0700 directory under ``scratch``, its answer tied to the window's registration record (`LEAN_HERE`),
     whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
-    no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. A case the Lean
-    doesn't make or answer, or an answer about another record, is the row's error."""
+    no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. So does a case whose check
+    was not started (`served_cases.NotStarted`: its blob files sum past the limit, the host makes no memory scope, or
+    its proofs are in the per-member form): the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why,
+    the sum and the limit. A case the Lean doesn't make or answer, or an answer about another record, is the row's error."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1599,6 +1601,10 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
         SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
         return {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+    except SC.NotStarted as e:
+        return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
+                "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): this host's Lean check of the audit's v2 case was "
+                               f"not started: {e}"[:2000]}
     except (SC.Refused, OSError, ValueError) as e:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000],
                 "answer_from": LEAN_HERE}

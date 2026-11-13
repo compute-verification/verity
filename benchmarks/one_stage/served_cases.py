@@ -93,16 +93,30 @@ subprotocols: remote's are sampled proofs', the inference-only case's and the pe
 place), onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
 files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
 Pearl+'s the Lean verdict of record's.
-This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
+
+**No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
+Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
+`CHECK_MEM_GB`, no swap), and on a host with no such scope it is not started (``CHECK_SCOPE=none`` runs it under no
+limit, a development host's choice, which its line then says). The executables read every blob file into memory before
+they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
+`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's sampled proofs' or the bare one, is not asked where
+its proofs are not one statement's sessions (the per-member form, `proofs.statements_v2`): one-stage v2 refuses that
+form when it parses the evidence (`OneStageZk.proofsOf`), after it has read every blob, so its answer is known and the
+check is not run.
+
+This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``memory``, where its check ran
+under no limit), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
+started, the case's blob files' sum and the limit beside it, and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
 and fresh-input bits. The lines go to a private log (a reason may quote a5's ``case-error.txt`` or
-``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict`` are public. Exit 0 when every case is
-written, 1 when one is refused, 64 on a usage error.
+``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict`` (and a check not started's sum and limit)
+are public. Exit 0 when every case is written, 1 when one is refused or not started, 64 on a usage error.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import fcntl
 import functools
 import hashlib
@@ -163,8 +177,80 @@ UNBOUNDED = (2**64, 2**64)
 FROM_DIVISION = "read off the honest division, so the check confirms it complies; not a security setting"
 
 
+#: A check's memory limit in GB, its own scope's ``MemoryMax`` (``CHECK_MEM_GB`` in the environment), and the most a
+#: case's blob files may sum to, in GB, for its check to be started (``CHECK_BLOBS_GB``)
+CHECK_MEM_GB, CHECK_BLOBS_GB = 170, 64
+#: ``CHECK_SCOPE``'s value under which a host with no systemd user scope runs its checks under no memory limit
+NO_SCOPE = "none"
+#: what a check that ran under no memory limit says of it, on its CASE line
+UNLIMITED = f"no limit (CHECK_SCOPE={NO_SCOPE}: a development host's choice)"
+#: the scope a check runs in, ahead of its memory limit
+SCOPE = ("systemd-run", "--user", "--scope", "--quiet", "--collect")
+#: why no check starts on a host that makes no such scope
+NO_SCOPE_HERE = (f"this host makes no systemd user scope ({' '.join(SCOPE)}), and no check runs outside a memory limit "
+                 f"of its own (CHECK_SCOPE={NO_SCOPE} runs it under none, on a development host)")
+
+
 class Refused(Exception):
     """The audit's outputs don't make the case; the message says why."""
+
+
+class NotStarted(Refused):
+    """A check that was not started; the message says why, and ``line`` holds what its NOT_STARTED line names beside
+    it: the case's blob files' count and sum in bytes, and the limit in bytes."""
+
+    def __init__(self, reason: str, *, blobs: int, blob_bytes: int, limit_bytes: int):
+        super().__init__(reason)
+        self.line = {"blobs": blobs, "blob_bytes": blob_bytes, "limit_bytes": limit_bytes}
+
+
+@dataclasses.dataclass(frozen=True)
+class Limits:
+    """What a check runs under: the most its case's blob files may sum to, in bytes, and the command its process runs
+    behind, a scope of its own with its memory limit (``mem_gb``), or none where the host said `NO_SCOPE`. ``refusal``:
+    why no check starts under them (`NO_SCOPE_HERE`), else None."""
+    blob_bytes: int
+    mem_gb: int
+    scope: tuple[str, ...] | None
+    refusal: str | None = None
+
+    @property
+    def memory(self) -> str:
+        return UNLIMITED if self.scope is None else f"its own scope, MemoryMax {self.mem_gb}G, no swap"
+
+
+def scope_here() -> bool:
+    """Whether this host makes a systemd user scope."""
+    try:
+        return subprocess.run([*SCOPE, "true"], capture_output=True, check=False).returncode == 0
+    except OSError:
+        return False
+
+
+def limits(env: Mapping[str, str] | None = None) -> Limits:
+    """The limits a check runs under here, from ``env`` (default the environment): ``CHECK_BLOBS_GB`` and
+    ``CHECK_MEM_GB`` over their defaults, and a scope of its own where the host makes one (`scope_here`). On a host
+    that makes none they start no check (``refusal``), unless ``CHECK_SCOPE`` is `NO_SCOPE`."""
+    env = os.environ if env is None else env
+    try:
+        blobs, mem = (int(env.get(k) or d) for k, d in (("CHECK_BLOBS_GB", CHECK_BLOBS_GB), ("CHECK_MEM_GB", CHECK_MEM_GB)))
+    except ValueError:
+        raise Refused("CHECK_BLOBS_GB and CHECK_MEM_GB are whole numbers of GB") from None
+    _need(blobs > 0 and mem > 0, "CHECK_BLOBS_GB and CHECK_MEM_GB are positive")
+    if env.get("CHECK_SCOPE") == NO_SCOPE:
+        return Limits(blobs * 10**9, mem, None)
+    if not scope_here():
+        return Limits(blobs * 10**9, mem, None, NO_SCOPE_HERE)
+    return Limits(blobs * 10**9, mem, (*SCOPE, "-p", f"MemoryMax={mem}G", "-p", "MemorySwapMax=0", "--"))
+
+
+def blob_bytes(case: Mapping[str, Any]) -> tuple[int, int]:
+    """How many blob files ``case`` names and what they sum to, in bytes."""
+    try:
+        sizes = [Path(b).stat().st_size for b in case.get("blobs", ())]
+    except OSError as e:
+        raise Refused(f"a blob of the case can't be read: {type(e).__name__}: {e}") from None
+    return len(sizes), sum(sizes)
 
 
 def _need(ok: bool, reason: str) -> None:
@@ -202,8 +288,16 @@ def window_case(audit: Path) -> dict[str, Any]:
     return case
 
 
-def v2_case(audit: Path) -> dict[str, Any]:
-    """Sampled proofs' v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs."""
+#: why a v2 case in the per-member form is not asked
+PER_MEMBER = ("the case's proofs are not one statement's sessions but the per-member form, which one-stage v2 refuses "
+              "when it parses the evidence (OneStageZk.proofsOf), after reading every blob: its answer is known, so "
+              "the check is not started")
+
+
+def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Sampled proofs' v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
+    whose proofs are in the per-member form is not asked (`PER_MEMBER`: `NotStarted`, with its blobs' sum and the limit
+    of ``env``, default the environment)."""
     w = audit / "window"
     v1 = window_case(audit)
     if not (w / "case-v2.json").is_file():
@@ -218,6 +312,14 @@ def v2_case(audit: Path) -> dict[str, Any]:
     _need(isinstance(case["blobs"], list) and all(isinstance(b, str) for b in case["blobs"]), "v2's blobs are paths")
     gone = [b for b in case["blobs"] if not Path(b).is_file()]
     _need(not gone, f"v2's case names {len(gone)} blob(s) that aren't files, the first {gone[:1]}")
+    try:
+        proofs = json.loads(bytes.fromhex(case["evidence"])).get("proofs")
+    except (TypeError, ValueError, AttributeError) as e:
+        raise Refused(f"v2's evidence is not a JSON object: {type(e).__name__}: {e}") from None
+    if isinstance(proofs, dict) and set(proofs) != {"sessions"}:
+        n, total = blob_bytes(case)
+        raise NotStarted(PER_MEMBER, blobs=n, blob_bytes=total, limit_bytes=limits(
+            dict(os.environ if env is None else env) | {"CHECK_SCOPE": NO_SCOPE}).blob_bytes)
     return case
 
 
@@ -447,10 +549,27 @@ def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe
     return max(Fraction(bits, gates) for gates, bits in blocks), max(gates for gates, _ in blocks)
 
 
+def may_start(case: Mapping[str, Any], within: Limits) -> None:
+    """``case``'s check may start under ``within``; otherwise `NotStarted`, naming the case's blob files' sum and the
+    limit: on a host that makes no scope, or when the blob files sum past the limit (the executable reads every blob
+    into memory before it checks anything)."""
+    n, total = blob_bytes(case)
+    if within.refusal is not None:
+        raise NotStarted(within.refusal, blobs=n, blob_bytes=total, limit_bytes=within.blob_bytes)
+    if total > within.blob_bytes:
+        raise NotStarted(f"the case's {n} blob files sum to {total:,} bytes, past the {within.blob_bytes:,} a check is "
+                         "started on (CHECK_BLOBS_GB): the executable reads every blob into memory before it checks "
+                         "anything", blobs=n, blob_bytes=total, limit_bytes=within.blob_bytes)
+
+
 def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
-                cmd: Sequence[str] = ()) -> tuple[dict[str, Any], str]:
+                cmd: Sequence[str] = (), within: Limits | None = None) -> tuple[dict[str, Any], str]:
     """``exe check`` (`CoreProtocol.Cli`; with ``cmd``, the command ahead of ``check``, as ``vstar-recursive sampled``)
-    on ``case`` and its blobs, its files in a 0700 directory under ``scratch``: the answer and its line."""
+    on ``case`` and its blobs, its files in a 0700 directory under ``scratch``: the answer and its line. The check is
+    one process in a scope of its own under ``within``'s memory limit (default `limits`, this host's), and it is not
+    started where ``within`` doesn't let it (`may_start`)."""
+    within = limits() if within is None else within
+    may_start(case, within)
     scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
     with tempfile.TemporaryDirectory(prefix="case-", dir=scratch) as d:
         os.chmod(d, 0o700)
@@ -459,13 +578,13 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = subprocess.run([str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())], capture_output=True,
-                           text=True)
+        p = subprocess.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
+                           capture_output=True, text=True)
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])
     except (IndexError, ValueError):
-        raise Refused(f"{exe} answered no line (exit {p.returncode})") from None
+        raise Refused(f"{exe} answered no line (exit {p.returncode}) under {within.memory}") from None
     _need(isinstance(answer, dict), f"{exe}'s answer is not an object")
     return answer, lines[-1]
 
@@ -542,24 +661,29 @@ def produce(a: argparse.Namespace) -> int:
 
     kept: dict[str, dict[str, Any]] = {}
 
-    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any) -> None:
+    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any, memory: str | None = None) -> None:
         write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict},
-                                   sort_keys=True), flush=True)
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict,
+                                    **({"memory": memory} if memory else {})}, sort_keys=True), flush=True)
 
     def refused(id: str, e: Exception) -> None:
         nonlocal bad
         bad = 1
-        print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
+        if isinstance(e, NotStarted):
+            print("NOT_STARTED " + json.dumps({"protocol": id, "reason": str(e), **e.line}, sort_keys=True), flush=True)
+        else:
+            print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
 
     def one(id: str, make, exe, cmd: Sequence[str] = ()) -> None:
         try:
             case = make()
-            answer, line = lean_answer(exe(), case, private / "scratch", cmd)
+            within = limits()
+            may_start(case, within)                             # before its executable is built
+            answer, line = lean_answer(exe(), case, private / "scratch", cmd, within)
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
             return refused(id, e)
-        written(id, case, line, answer.get("verdict"))
+        written(id, case, line, answer.get("verdict"), UNLIMITED if within.scope is None else None)
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     one(SAMPLED, lambda: sampled_case(audit), functools.cache(lambda: a.sampled_exe or build(*SAMPLED_LEAN)), SAMPLED_CMD)

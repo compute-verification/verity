@@ -922,6 +922,15 @@ print(os.environ["ANSWER"])
 LEAN_RECORD = {"format": "toy-registration", "window": 7}
 
 
+@pytest.fixture(autouse=True)
+def no_scope(monkeypatch) -> None:
+    """A check `served_cases.lean_answer` starts here runs under no memory limit of its own, as on a development host:
+    a test's host may make no scope."""
+    monkeypatch.setenv("CHECK_SCOPE", "none")
+    for k in ("CHECK_MEM_GB", "CHECK_BLOBS_GB"):
+        monkeypatch.delenv(k, raising=False)
+
+
 def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
     """A compose host's copy of a hand-off, off the served node vy-dc-h200: sampled proofs' records audit with the
     summary the served node wrote (a refusal of its own), v1's case and v2's naming one proof blob, PoUW's piece's
@@ -1035,6 +1044,50 @@ def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_tak
     assert row["answer_from"] == (S.LEAN_HERE if change != "no-v2" else (
         f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): the records audit wrote no v2 case (window/case-v2.json), so "
         "there are no proofs to recompute it from"))
+    assert line["answers"]["sampled proofs"] == row["answer_from"]
+
+
+@pytest.mark.parametrize("why", ["past-limit", "no-scope", "per-member"])
+def test_a_sampled_proofs_check_that_was_not_started_leaves_the_audits_own_row_naming_the_sum_and_the_limit(
+        tmp_path, monkeypatch, capsys, why):
+    """A v2 case whose check this host does not start (its blob files sum past the limit, the host makes no memory
+    scope, or its proofs are in the per-member form, which the Lean is known to refuse) is not handed to the Lean: the
+    row is the audit's own, as the served node wrote it, and its ``not_started`` and ``answer_from`` name the reason,
+    the blob files' count and sum and the limit, in the record and on its line."""
+    import served_cases as SC
+    from verity.circuits import codec
+
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, _exe = _lean_handed(tmp_path)
+    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    monkeypatch.setenv("ANSWER", json.dumps({**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1"}))
+    limit = SC.CHECK_BLOBS_GB * 10**9
+    if why == "past-limit":
+        monkeypatch.setenv("CHECK_BLOBS_GB", "1")
+        limit = 10**9
+        with open(w / "m0" / "p0.bin", "r+b") as fh:
+            fh.truncate(limit + 1)                              # sparse: its size alone is read
+        said = "the case's 1 blob files sum to 1,000,000,001 bytes, past the 1,000,000,000 a check is started on"
+    if why == "no-scope":
+        monkeypatch.delenv("CHECK_SCOPE")
+        monkeypatch.setattr(SC, "scope_here", lambda: False)
+        said = SC.NO_SCOPE_HERE
+    if why == "per-member":
+        case = json.loads((w / "case-v2.json").read_text())
+        evidence = {"draw": [0, 3], "proofs": {"statements": []}}
+        (w / "case-v2.json").write_text(json.dumps({**case, "evidence": codec.canonical_json(evidence).hex()}))
+        said = SC.PER_MEMBER
+    size = (w / "m0" / "p0.bin").stat().st_size
+    _rc, line, rows = _recorded(tmp_path, argv, capsys)
+    row = rows["integrity"]
+    assert not (tmp_path / "seen.json").exists()
+    assert row["verdict"] == "reject" and "refused: \"the node's own verdict\"" in row["reason"], row
+    assert row["not_started"]["reason"].startswith(said), row
+    assert {k: v for k, v in row["not_started"].items() if k != "reason"} == {
+        "blobs": 1, "blob_bytes": size, "limit_bytes": limit}
+    assert row["answer_from"] == (f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): this host's Lean check of the audit's v2 "
+                                  f"case was not started: {row['not_started']['reason']}")
     assert line["answers"]["sampled proofs"] == row["answer_from"]
 
 
@@ -4684,7 +4737,8 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     """`_handed`'s serve dir with `_lean_handed`'s sampled proofs cases (v2's naming a5's ``BLOBS``), sent by
     `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
     `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
-    pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
+    pinned archive has none), its checks under no memory scope (the gate's environment says ``CHECK_SCOPE=none``: it is
+    built afresh, so `no_scope` doesn't reach it). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
     ``extra`` adds to the sender's environment. The sender's run and $OUT."""
     from verity.circuits import codec
 
@@ -4706,7 +4760,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": REG.digest(LEAN_RECORD)}
     gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2",
                 "SAMPLED_EXE": str(exe), "SEEN": str(tmp_path / "seen.json"), "ANSWER": json.dumps(answer),
-                "GIT_DIR": str(tmp_path / "no-git")}
+                "GIT_DIR": str(tmp_path / "no-git"), "CHECK_SCOPE": "none"}
     cases.update({f"{sp}/{name}": None if body is None else json.loads(body) for name, body in (edit or {}).items()})
     run = _handed(tmp_path, files=cases, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
                   pouw={"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]},
@@ -5123,8 +5177,10 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     Lean built but the two products'; the wipe's, which no piece wrote, is named not written and none is made; and
     served_cases.py's are written under the private dir, given no α or Γ while ALPHA and GAMMA are unset; each product
     gets the cases of its own subprotocols; OUT/verdicts.txt gets each
-    CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
-    VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
+    CASE line's protocol and verdict, each case not written by its protocol, each check not started with why, its
+    case's blob files' sum and the limit (`served_cases.NotStarted`, whose reasons quote no file), each product's
+    NOT_ESTABLISHED and
+    VERDICT lines and the host it composed on, never a PIECE line, a refused case's reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
     and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
     says so and fails, since no Lean answered. PRODUCT=remote reads neither PoUS's case nor the wipe's, and runs
@@ -5164,8 +5220,12 @@ Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-
 print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
 print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "235330880/1544757928"}}))
 print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
+print("NOT_STARTED " + json.dumps({{"protocol": "verity/sampled-proofs/v1", "reason": "too large to read", "blobs": 3,
+                                   "blob_bytes": 9000, "limit_bytes": 8000}}))
 sys.exit(1)
 ''')
+    unstarted = ("COMPOSITE NOT_STARTED verity/sampled-proofs/v1: its check was not started; the case names 3 blob files "
+                 "that sum to 9000 bytes, and the limit a check is started on is 8000 bytes; too large to read")
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "COMPOSE_OFF_NODE": "0"}
     run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
@@ -5188,7 +5248,7 @@ sys.exit(1)
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
         "COMPOSITE CASE verity/registration/v0 accept",
-        "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", unstarted,
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components",
@@ -5217,7 +5277,8 @@ sys.exit(1)
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
         dev, "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
-        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", unstarted,
+        "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         on]
     assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
