@@ -369,6 +369,13 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
                           + no_control(CC.RESPONSE_TIE, "another commit")) and len(got.why) == 6
     there = tie | {CC.VERIFIER: tie[CC.VERIFIER] | {"commit": "another commit"}}
     assert stop(both, four(first) + moved, controls=the_controls() + [there]).held == 2
+    # each class that holds a row owes its own verifiers' controls
+    wide = head(3, 5, 2)
+    wider = four(wide) + [r | {CC.VERIFIER: r[CC.VERIFIER] | {"commit": "another commit"}} if i == 1 else r
+                          for i, r in enumerate(four(wide, 1))]
+    got = stop([registration(wide)], wider)
+    assert got.held == 0 and got.why[3] == at + no_control(CC.RESPONSE_TIE, "another commit")
+    assert stop([registration(wide)], wider, controls=the_controls() + [there]).held == 1
     # two records of one verdict, each accepted by its own verifier: each verifier owes its control
     twice = four(first) + [four(first)[1] | {CC.RUN: "a second tie's run", CC.VERIFIER: {
         "module": "a second tie's verifier", "commit": "a commit"}}]
@@ -472,6 +479,14 @@ def test_a_class_is_held_only_at_the_rate_its_registration_registers_for_both_po
     assert got.held == 1 and got.why[0].startswith("1 of the 2 execution phase(s) read are charged below")
     assert got.why[5] == (f"the link {LINK}, execution phase 4, class 0: held to its whole schedule by the rate: the "
                           "registration registers the response tie at `rate:1/8`, not `rate:1/1`") and len(got.why) == 6
+    # each class that holds a row is held to the rate of its own registration
+    wide = head(3, 5, 2)
+    wider = four(wide) + at_rate(CC.RESPONSE_TIE, "rate:1/8", under(eighth, four(wide, 1)))
+    got = stop([registration(wide)], wider, served=[SERVED, eighth])
+    assert got.held == 0 and got.why[3] == (
+        f"the link {LINK}, execution phase 3, class 1: held to its whole schedule by the rate: the registration "
+        "registers the response tie at `rate:1/8`, not `rate:1/1`")
+    assert stop([registration(wide)], four(wide) + four(wide, 1)).held == 1
     # held back by the rate and by a control: the first line counts each
     got = stop(one, four(first), controls=[], served=[])
     assert got.held == 0 and got.why[0] == held_back(1, 1, rate=1, control=1) and len(got.why) == 5
