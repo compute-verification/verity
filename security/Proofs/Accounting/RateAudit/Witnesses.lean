@@ -17,6 +17,8 @@ one sampled word:
   budget, with its footprint at the floor, with probability 1: the guarantee's event is not one no device passes.
 * **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, a device that reads nothing
   (`Rate.blank`) has its footprint short of the floor with probability 1, above the guarantee's error.
+
+Each lemma states that some device has its property and proves it of the named one.
 -/
 
 @[expose] public section
@@ -110,25 +112,28 @@ theorem natCast_div_pow_succ_lt (a n : ℕ) (h : a < 2 ^ n) : (a : ℝ≥0∞) /
 /-- **`RateAudit`'s honest lemma**: the honest device, at one word of one bit, is accepted within one tag's compute
 with its footprint at the floor, with probability 1. -/
 theorem RateAudit_honest :
-    pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        (Completeness.honest 1 1 1 0).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
-          (Completeness.honest 1 1 1 0).compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
-          ¬ (Completeness.honest 1 1 1 0).footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 1 1 1 1 0) = 1 :=
-  pr_one fun x => by
+    ∃ A : Prover 1 1 1 0 0 0 1,
+      pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
+            A.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
+            ¬ A.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 1 1 1 1 0) = 1 :=
+  ⟨Completeness.honest 1 1 1 0, pr_one fun x => by
     obtain ⟨ha, hf, hc⟩ := honest_one x.1 x.2.1.1 x.2.1.2 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
     unfold floor
-    omega
+    omega⟩
 
 /-- **`RateAudit`'s nontrivial lemma**: with the check accepting everything, the device that reads nothing is within
 its compute and short of the floor on every coin, above the error `2^-1`. -/
 theorem RateAudit_nontrivial :
-    ¬ pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        True ∧ (blank 1 1 1 0 0 0 0).compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          (blank 1 1 1 0 0 0 0).footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 1 0)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+    ∃ A : Prover 1 1 1 0 0 0 0,
+      ¬ pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          True ∧ A.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            A.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 1 0)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+  refine ⟨blank 1 1 1 0 0 0 0, ?_⟩
   have hev : ∀ x : Store 1 1 × Coins 1 1 1 0 1,
       True ∧ (blank 1 1 1 0 0 0 0).compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
         (blank 1 1 1 0 0 0 0).footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 1 0 := fun x =>
@@ -144,34 +149,37 @@ def blankDevices : Devices 1 1 1 1 0 0 0 0 1 := fun _ _ => blank 1 1 1 0 0 0 0
 
 /-- **`RateAuditWindows`'s honest lemma**: one window of `RateAudit_honest`'s device, at `m = 1`. -/
 theorem RateAuditWindows_honest :
-    pr (fun x : Store 1 1 × (Fin 1 → Coins 1 1 1 0 1) =>
-        (∀ i, (honestDevices.dev i x.2).Accepts x.1
-            (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
-          (honestDevices.dev i x.2).compute 1 1 x.1
-            (x.2 i).1.1 (x.2 i).1.2 ≤ 1) ∧
-        ¬ ∑ i, (honestDevices.dev i x.2).footprint x.1
-            (x.2 i).1.1 (x.2 i).1.2 * 1 < (1 + 1 - 1) * floor 1 0 0 0 1 1 1 1 0) = 1 :=
-  pr_one fun x => by
-    refine ⟨fun i => ?_, ?_⟩
-    · obtain ⟨ha, -, hc⟩ := honest_one x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2
-      exact ⟨ha, (show (Completeness.honest 1 1 1 0).compute 1 1 x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ 1 by omega)⟩
-    · obtain ⟨-, hf, -⟩ := honest_one x.1 (x.2 0).1.1 (x.2 0).1.2 (x.2 0).2
-      rw [Fin.sum_univ_one]
-      change ¬ (Completeness.honest 1 1 1 0).footprint x.1 (x.2 0).1.1 (x.2 0).1.2 * 1 < _
-      rw [hf]
-      unfold floor
-      omega
+    ∃ D : Devices 1 1 1 1 0 0 0 1 1,
+      pr (fun x : Store 1 1 × (Fin 1 → Coins 1 1 1 0 1) =>
+          (∀ i, (D.dev i x.2).Accepts x.1
+              (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
+            (D.dev i x.2).compute 1 1 x.1
+              (x.2 i).1.1 (x.2 i).1.2 ≤ 1) ∧
+          ¬ ∑ i, (D.dev i x.2).footprint x.1
+              (x.2 i).1.1 (x.2 i).1.2 * 1 < (1 + 1 - 1) * floor 1 0 0 0 1 1 1 1 0) = 1 :=
+  ⟨honestDevices, pr_one fun x => by
+      refine ⟨fun i => ?_, ?_⟩
+      · obtain ⟨ha, -, hc⟩ := honest_one x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2
+        exact ⟨ha, (show (Completeness.honest 1 1 1 0).compute 1 1 x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ 1 by omega)⟩
+      · obtain ⟨-, hf, -⟩ := honest_one x.1 (x.2 0).1.1 (x.2 0).1.2 (x.2 0).2
+        rw [Fin.sum_univ_one]
+        change ¬ (Completeness.honest 1 1 1 0).footprint x.1 (x.2 0).1.1 (x.2 0).1.2 * 1 < _
+        rw [hf]
+        unfold floor
+        omega⟩
 
 /-- **`RateAuditWindows`'s nontrivial lemma**: one window of `RateAudit_nontrivial`'s device, at `m = 1`, with the
 check accepting everything. -/
 theorem RateAuditWindows_nontrivial :
-    ¬ ((1 : ℕ) : ℝ≥0∞) * pr (fun x : Store 1 1 × (Fin 1 → Coins 1 1 1 0 1) =>
-        (∀ i, True ∧ (blankDevices.dev i x.2).compute 0 1 x.1
-            (x.2 i).1.1 (x.2 i).1.2 ≤ 0) ∧
-        ∑ i, (blankDevices.dev i x.2).footprint x.1
-            (x.2 i).1.1 (x.2 i).1.2 * 1 < (1 + 1 - 1) * floor 1 0 0 0 0 0 1 1 0)
-      ≤ ((1 : ℕ) : ℝ≥0∞) * ((((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0) := by
+    ∃ D : Devices 1 1 1 1 0 0 0 0 1,
+      ¬ ((1 : ℕ) : ℝ≥0∞) * pr (fun x : Store 1 1 × (Fin 1 → Coins 1 1 1 0 1) =>
+          (∀ i, True ∧ (D.dev i x.2).compute 0 1 x.1
+              (x.2 i).1.1 (x.2 i).1.2 ≤ 0) ∧
+          ∑ i, (D.dev i x.2).footprint x.1
+              (x.2 i).1.1 (x.2 i).1.2 * 1 < (1 + 1 - 1) * floor 1 0 0 0 0 0 1 1 0)
+        ≤ ((1 : ℕ) : ℝ≥0∞) * ((((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0) := by
+  refine ⟨blankDevices, ?_⟩
   have hev : ∀ x : Store 1 1 × (Fin 1 → Coins 1 1 1 0 1),
       (∀ i, True ∧ (blankDevices.dev i x.2).compute 0 1 x.1
           (x.2 i).1.1 (x.2 i).1.2 ≤ 0) ∧
@@ -191,14 +199,14 @@ theorem RateAuditWindows_nontrivial :
 /-- **`RateAuditInteractiveRO`'s honest lemma**: the honest device as an interactive device, whose side sources ignore
 the oracle, is accepted within one tag's compute with its footprint at the floor, with probability 1. -/
 theorem RateAuditInteractiveRO_honest :
-    (∀ E R O O', (Completeness.honest 1 1 1 0).toInteractive.side E R O =
-      (Completeness.honest 1 1 1 0).toInteractive.side E R O') ∧
-    pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        (Completeness.honest 1 1 1 0).toInteractive.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
-          (Completeness.honest 1 1 1 0).toInteractive.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
-          ¬ (Completeness.honest 1 1 1 0).toInteractive.footprint x.1 x.2.1.1 x.2.1.2 * 1 <
-            floor 1 0 0 0 1 1 1 1 0) = 1 :=
-  ⟨fun _ _ _ _ => rfl, pr_one fun x => by
+    ∃ A : InteractiveProver 1 1 1 0 0 0 1,
+      (∀ E R O O', A.side E R O = A.side E R O') ∧
+      pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
+            A.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
+            ¬ A.footprint x.1 x.2.1.1 x.2.1.2 * 1 <
+              floor 1 0 0 0 1 1 1 1 0) = 1 :=
+  ⟨(Completeness.honest 1 1 1 0).toInteractive, fun _ _ _ _ => rfl, pr_one fun x => by
     obtain ⟨ha, hf, hc⟩ := honest_one x.1 x.2.1.1 x.2.1.2 x.2.2
     refine ⟨(Prover.toInteractive_accepts _ _ _ _ _).2 ha, ?_, ?_⟩
     · rw [Prover.toInteractive_compute]
@@ -210,11 +218,13 @@ theorem RateAuditInteractiveRO_honest :
 /-- **`RateAuditInteractiveRO`'s nontrivial lemma**: with the check accepting everything, the device that reads
 nothing, as an interactive device (whose side sources ignore the oracle), is short of the floor on every coin. -/
 theorem RateAuditInteractiveRO_nontrivial :
-    ¬ pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        True ∧ (blank 1 1 1 0 0 0 0).toInteractive.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          (blank 1 1 1 0 0 0 0).toInteractive.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 1 0)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+    ∃ A : InteractiveProver 1 1 1 0 0 0 0,
+      ¬ pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          True ∧ A.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            A.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 1 0)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+  refine ⟨(blank 1 1 1 0 0 0 0).toInteractive, ?_⟩
   have hev : ∀ x : Store 1 1 × Coins 1 1 1 0 1,
       True ∧ (blank 1 1 1 0 0 0 0).toInteractive.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
         (blank 1 1 1 0 0 0 0).toInteractive.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 1 0 := fun x =>
@@ -225,29 +235,32 @@ theorem RateAuditInteractiveRO_nontrivial :
 
 /-- **`RateAuditInteractive`'s honest lemma**: `RateAuditInteractiveRO_honest`'s device at `m = 0`. -/
 theorem RateAuditInteractive_honest :
-    pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        (Completeness.honest 1 1 1 0).toInteractive.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
-          (Completeness.honest 1 1 1 0).toInteractive.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
-          ¬ (Completeness.honest 1 1 1 0).toInteractive.footprint x.1 x.2.1.1 x.2.1.2 * 1 <
-            floor 1 0 0 0 1 1 1 (1 - 0) 0) = 1 :=
-  pr_one fun x => by
-    obtain ⟨ha, hf, hc⟩ := honest_one x.1 x.2.1.1 x.2.1.2 x.2.2
-    refine ⟨(Prover.toInteractive_accepts _ _ _ _ _).2 ha, ?_, ?_⟩
-    · rw [Prover.toInteractive_compute]
-      omega
-    · rw [Prover.toInteractive_footprint, hf]
-      unfold floor
-      omega
+    ∃ A : InteractiveProver 1 1 1 0 0 0 1,
+      pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
+            A.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
+            ¬ A.footprint x.1 x.2.1.1 x.2.1.2 * 1 <
+              floor 1 0 0 0 1 1 1 (1 - 0) 0) = 1 :=
+  ⟨(Completeness.honest 1 1 1 0).toInteractive, pr_one fun x => by
+      obtain ⟨ha, hf, hc⟩ := honest_one x.1 x.2.1.1 x.2.1.2 x.2.2
+      refine ⟨(Prover.toInteractive_accepts _ _ _ _ _).2 ha, ?_, ?_⟩
+      · rw [Prover.toInteractive_compute]
+        omega
+      · rw [Prover.toInteractive_footprint, hf]
+        unfold floor
+        omega⟩
 
 /-- **`RateAuditInteractive`'s nontrivial lemma**: with the check accepting everything, the device that reads nothing,
 as an interactive device, is short of the floor at `k − m = 1` of `k = 2` words on every coin, above the error
 `(1/2)^1 + C(2, 1)·2^0/2^3 + 0 = 3/4` at `N = 2`, `h = 3`, `m = 1`. -/
 theorem RateAuditInteractive_nontrivial :
-    ¬ pr (fun x : Store 2 1 × Coins 2 1 3 0 1 =>
-        True ∧ (blank 2 1 3 0 0 0 0).toInteractive.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          (blank 2 1 3 0 0 0 0).toInteractive.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 (2 - 1) 0)
-      ≤ (((2 - 1 : ℕ) : ℝ≥0∞) / ((2 : ℕ) : ℝ≥0∞)) ^ 1 + ((Nat.choose 2 1 : ℕ) : ℝ≥0∞) * 2 ^ 0 / 2 ^ (3 * 1) +
-        ((Nat.choose 0 (2 - 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+    ∃ A : InteractiveProver 2 1 3 0 0 0 0,
+      ¬ pr (fun x : Store 2 1 × Coins 2 1 3 0 1 =>
+          True ∧ A.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            A.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 (2 - 1) 0)
+        ≤ (((2 - 1 : ℕ) : ℝ≥0∞) / ((2 : ℕ) : ℝ≥0∞)) ^ 1 + ((Nat.choose 2 1 : ℕ) : ℝ≥0∞) * 2 ^ 0 / 2 ^ (3 * 1) +
+          ((Nat.choose 0 (2 - 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+  refine ⟨(blank 2 1 3 0 0 0 0).toInteractive, ?_⟩
   have hev : ∀ x : Store 2 1 × Coins 2 1 3 0 1,
       True ∧ (blank 2 1 3 0 0 0 0).toInteractive.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
         (blank 2 1 3 0 0 0 0).toInteractive.footprint x.1 x.2.1.1 x.2.1.2 * 1 <
@@ -272,27 +285,30 @@ theorem RateAuditInteractive_nontrivial :
 within one tag's compute with its footprint at the floor, with probability 1, at `rounds = c_root = 1` and every price
 of a completion. -/
 theorem RateAuditPartial_honest :
-    pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        (Completeness.honest 1 1 1 0).toPartial.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
-          (Completeness.honest 1 1 1 0).toPartial.compute 1 (fun _ => 0) x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
-          ¬ (Completeness.honest 1 1 1 0).toPartial.footprint x.1 x.2.1.1 x.2.1.2 * (1 * 1) <
-            floor 1 0 0 0 1 1 (1 * 1) 1 0) = 1 :=
-  pr_one fun x => by
-    obtain ⟨ha, hf, hc⟩ := honest_one_partial (fun _ => 0) x.1 x.2.1.1 x.2.1.2 x.2.2
-    refine ⟨ha, by omega, ?_⟩
-    rw [hf]
-    unfold floor
-    omega
+    ∃ A : PartialDevice 1 1 1 0 0 0 1,
+      pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
+            A.compute 1 (fun _ => 0) x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
+            ¬ A.footprint x.1 x.2.1.1 x.2.1.2 * (1 * 1) <
+              floor 1 0 0 0 1 1 (1 * 1) 1 0) = 1 :=
+  ⟨(Completeness.honest 1 1 1 0).toPartial, pr_one fun x => by
+      obtain ⟨ha, hf, hc⟩ := honest_one_partial (fun _ => 0) x.1 x.2.1.1 x.2.1.2 x.2.2
+      refine ⟨ha, by omega, ?_⟩
+      rw [hf]
+      unfold floor
+      omega⟩
 
 /-- **`RateAuditPartial`'s nontrivial lemma**: with the check accepting everything, the device that reads nothing, as a
 partial device, is short of the floor on every coin. -/
 theorem RateAuditPartial_nontrivial :
-    ¬ pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
-        True ∧ (blank 1 1 1 0 0 0 0).toPartial.compute 0 (fun _ => 0) x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          (blank 1 1 1 0 0 0 0).toPartial.footprint x.1 x.2.1.1 x.2.1.2 * (1 * 1) <
-            floor 1 0 0 0 0 0 (1 * 1) 1 0)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
-        ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+    ∃ A : PartialDevice 1 1 1 0 0 0 0,
+      ¬ pr (fun x : Store 1 1 × Coins 1 1 1 0 1 =>
+          True ∧ A.compute 0 (fun _ => 0) x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            A.footprint x.1 x.2.1.1 x.2.1.2 * (1 * 1) <
+              floor 1 0 0 0 0 0 (1 * 1) 1 0)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
+          ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+  refine ⟨(blank 1 1 1 0 0 0 0).toPartial, ?_⟩
   have hev : ∀ x : Store 1 1 × Coins 1 1 1 0 1,
       True ∧ (blank 1 1 1 0 0 0 0).toPartial.compute 0 (fun _ => 0) x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
         (blank 1 1 1 0 0 0 0).toPartial.footprint x.1 x.2.1.1 x.2.1.2 * (1 * 1) <
