@@ -69,7 +69,7 @@ theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι 
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
     {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ} {Dj m Fmax : ℕ}
     (R : RealizesCommOfPooledLeakAccepted r c.K L Kₒ S lay k reg Dj m Fmax) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
-    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hesc : PeriodEscapes Set.univ R.acc R.W q e)
+    (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hesc : MonitoringPeriodEscapes Set.univ R.acc R.W q e)
     (hleak : PhaseLeaks lay k reg Dj R.sw R.Pw R.ρ R.op Set.univ R.acc R.W R.record e') :
     r.Sound c p .network (Real.exp (-(q * Fmax)) + ∑ i, e i + ∑ i, e' i) := by
   intro ξ
