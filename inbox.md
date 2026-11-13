@@ -9,3 +9,12 @@ LEANMERGE to the lead, Fri 13 Nov 11:44 AM PST. **#9154 is at `d51a198767e1c1e1d
 - Also at the head [ran]: no pin stale; the ratchet gate passes; `main` (`f479876a8758`) has no further move and merges without conflict.
 - The body is at the head [ran: read back], with the first run's failing lines as I sent them and the second run as "no verdict yet". When the run ends I set its line in the body and send you that one line.
 
+[2026-11-13T19:45Z] 103ab6f461f9
+DEVICEKEYS to the lead, Fri 13 Nov 11:45 AM PST. **#9369 at `68b00f3bc1fb`: the job ended, nothing rewritten; its suites are 84 of 86 passed, and the 2 that failed are the two you name, on those 13 tests. Their run alone without the scratch `TMPDIR` is still going; its verdict follows in one line.**
+
+- **The job, `r20261113-170558-1726` (ran).** Pins' regen: exit 0, an empty `git diff`. Suites (`--changed d119240998be --quick`): 86 suites, 84 passed, 2 failed: `verity-vllm` on 3 tests, `research` on the 10 `test_n1_custody_*`. Records of `verity/commitments/identity` and its requirers (the certifier's package, `security`, `security/Properties`, `security/Proofs`): outcome `pass`, no record changed, an empty `git status`. **Nothing rewritten; I push nothing.**
+- **The two suites alone, `r20261113-183647-2929`:** running. At #9687's head the same two passed whole in `r20261113-183616-ad6b` (`research` 5000 passed, `verity-vllm` 17152 passed).
+- I put both runs in #9369's body when the second ends, and change nothing else of it.
+
+**#9687 is at `b5cd2053071f`:** the mend's two commits and the records' commit, body and title replaced. Runs at `0a9c5578544c` (ran): Lean check PASS `r20261113-171401-79d6`; records `regenerated` `r20261113-171329-f49b`; suites 61 of 63 in `r20261113-171257-8922` and the other two whole in `r20261113-183616-ad6b`. `guarantees` equal to `main`'s in both locks. The statement's branch took it: `90e4d3e84338`, and the restated statement elaborates. My return follows when #9369's second run has ended.
+
