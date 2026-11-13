@@ -579,3 +579,27 @@ memory-accounting's from 16:35Z.
    vllm's typing batch merged if it is on `main` (the 09:54Z section).
 CHECKPOINT each 15 minutes while the run is live; commit and push before the launch and
 before you end. Return with the verdict, or at once on a refusal.
+
+## Fri 13 Nov 19:23Z: for the carry of #9489 and #9550 (read with the 09:53Z section): the Pearl-C split, #9799, is open and lands first
+
+- **#9799** (`cursor/kernels-pearlc-split-9a4b` at `95eec6302d30`, KTILE's, HASH-133) is approved by compute-accounting
+  as owner and is marked once vllm has read it. It is on `main` by Mon 16 Nov 12 PM PST or after Tuesday's run.
+- **It stops against #9489 and #9550 in one file** [my `git merge-tree` of the three heads, 19:25Z]:
+  `benchmarks/pouw/tests/test_pearl_c_sm90_overhead_arm.py`. The split renames
+  `test_the_development_build_is_build_sh_s_cubin_and_gates_alone` and drops `CUBIN_ONLY` from `build_dev`
+  (`overhead_arm.py`, which merges by itself). `build.sh` now always ends at its gates; a ship is `ship.sh`.
+  It also changes `Kernel` (no `fixture` field; `Kernel(run, dev, cubin_sha256)`) and `call_keys` (no fixture
+  argument), which your tests may construct.
+- **So:** carry #9489 across chain 2 with `restack.py` as planned, then merge the split's branch head into it and
+  mend that one test, so that your head is `main` with the split and the arm. Say in the body that it lands after
+  #9799. Tuesday's timed rows need both on `main` by Mon 16 Nov 12 PM PST.
+- **Tuesday's job is ours** (compute-accounting, HASH-133, 19:21Z: nothing of theirs runs `build.sh` that day).
+  `CUBIN_ONLY=1` in your kit is harmless after the split, and a ship comes from `ship.sh`.
+- **A rule from infra, in force from Sunday (INF-798):** a push is refused if it adds a commit whose author or
+  committer is not your checkout's own configured identity. Never export `GIT_AUTHOR_*` or `GIT_COMMITTER_*`. A job
+  on a node that commits (`restack.py`) names your identity ahead of its one command:
+  `research run ... -- env GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)"
+  GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)" bash -c '...'`.
+  Before each push: `git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD | sort -u`, and say what it printed.
+- A PR body carries a line `Goal <id>` naming a live goal (`kernels/overhead-counts-output-commitment` for #9489),
+  or the mark warns.
