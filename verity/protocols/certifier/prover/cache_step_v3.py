@@ -470,7 +470,7 @@ def bus(S, records: Sequence[tuple[int, ...]], alpha: int) -> int:
 
 
 def size_class(n: int, least: int = 64) -> int:
-    """The public ladder NS and NE are drawn from: the least of 2^k and 3·2^(k−1) (k ≥ 1) that is at least n and
+    """The public ladder NS and NE are sampled from: the least of 2^k and 3·2^(k−1) (k ≥ 1) that is at least n and
     ``least``. A window takes the class its slots (entries) fit, so the class is a function of the window, and it
     reveals at most log2 of the classes up to the pool's bound."""
     c = 2
