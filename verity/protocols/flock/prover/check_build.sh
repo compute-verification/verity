@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # check's flock-circuit build step (tools/verity/check/check.py): a Flock b684b12 checkout with the Rust patches the pods apply
-# (../pod/20-gpu-link.sh, ../pod/60-circuit.sh; no CUDA), this tree's live crate linked in, then `cargo check` of flock-circuit in each
+# (pod/20-gpu-link.sh, pod/60-circuit.sh; no CUDA), this tree's live crate linked in, then `cargo check` of flock-circuit in each
 # CPU feature set a pod builds: the class sweep's proving build (sha512), 60-circuit's (sha512, glue), and the selftests'
 # (sha512, glue, seed-injection). A proving build never has seed-injection, so code only that feature defines must stay behind it.
 # `check_build.sh test` (check's flock-rust-tests step) runs the Rust tests on the same checkout instead, in release as upstream's
 # CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the six crates the
 # patches change (the live crate's features don't reach them, so one run).
-# `check_build.sh bin DEST` builds the proving binary on the same checkout instead, as ../pod/60-circuit.sh builds it on a CPU
+# `check_build.sh bin DEST` builds the proving binary on the same checkout instead, as pod/60-circuit.sh builds it on a CPU
 # (release, sha512 and glue), and copies it to DEST while it holds the checkout: a test that proves runs its own copy, which
 # no later build of another tree replaces. A test's build fetches nothing: its cargo runs offline, and it exits 3 where this
 # machine has no checkout, not the toolchain or not every crate of this tree's build, which the steps above leave.
