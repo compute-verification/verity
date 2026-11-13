@@ -186,6 +186,11 @@ TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # <module path>/part_ran
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
 
 
+def is_hidden_value_row(name: str) -> bool:
+    """Whether a committed tensor's name is a hidden-value row of either FlashAttention tap."""
+    return name.startswith(HIDDEN_M1_PREFIXES)
+
+
 def tp_partials_bad(man: dict[str, Any], names: Counter[str]) -> dict[str, int]:
     """TP rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
     (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
@@ -1458,7 +1463,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         for s in steps:
             metas = self._layouts.get(s.step)                             # a step that staged nothing has no layout, or an empty one
             names = [] if not metas else metas.names if hasattr(metas, "scan") else [m.name for m in metas]
-            fa2 = next((n for n in names if n.startswith(HIDDEN_M1_PREFIXES)), None)
+            fa2 = next((n for n in names if is_hidden_value_row(n)), None)
             out.append({"step": s.step, "root": s.root[:8].hex(), "tensors": s.n_tensors, "bytes": s.n_bytes, "leaves": s.n_leaves,
                         "layout": s.layout_digest[:8].hex(), "fa2": fa2})
         return out
@@ -1547,7 +1552,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 violations.extend([{**verdicts[cols], "step": step}] if verdicts[cols] else [])
                 continue
             names = Counter(m.name for m in metas) if cols is None else Counter(cols)
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
+            mod_names = Counter({n: c for n, c in names.items() if not is_hidden_value_row(n) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             tp_bad = tp_partials_bad(man, names)
             mod_names, rt_bad = rt_src.split_step_names(mod_names, step, False, metas) if rt_src is not None else (mod_names, {})
             by_module: Counter[str] = Counter()
