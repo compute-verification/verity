@@ -1491,12 +1491,10 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 def _placed(rec: dict, family) -> bool:
     """`Run.placed`: a family the run names is the one of the place its record's window names (`window_place.family`),
     whatever the rule; a run that names no family and a window that names no place are held to none."""
-    if not isinstance(family, str):
+    window = rec.get("window")
+    if not isinstance(family, str) or not service._names_place(window):
         return True
-    try:
-        return family == WP.family(rec.get("window"))
-    except ValueError:
-        return True
+    return family == WP.family(window)
 
 
 def run(j):
