@@ -4,8 +4,9 @@
 sources have to be a function of the record's: each source as a progression of one run, then the greedy RLE (`RootView.canon`).
 
 Held here by kind of read: a parameter of the body, the prompt, the seed, a supplied field, a window of the fold's weights map, a
-warm request's prefix input, a witness and peers; a top-p select's split count; a read through a mux that the comparison unfolds;
-and, in one request's projection of a fold, the other request's parameters and nodes.
+warm request's prefix input, a witness and peers (one read of peers is not such a function yet, and is held as it is); a top-p
+select's split count; a read through a mux that the comparison unfolds; and, in one request's projection of a fold, the other
+request's parameters and nodes.
 
 The views are built by hand as a loader leaves them, the way `test_compare_tp_peer_split.py` builds its own: no Program is decoded."""
 from __future__ import annotations
@@ -14,6 +15,7 @@ import pytest
 
 from verity_vllm.check.match.canonical_operands import as_progression
 from verity_vllm.check.match.instance_sequence import RootView
+from verity_vllm.check.match.program_compare import compare_steps
 from verity_vllm.check.match.projection import Projection
 from verity_vllm.program import compact as K
 
@@ -123,6 +125,18 @@ def test_a_peers_read_is_under_its_fields_ordinal_and_the_compact_form_expands_t
     assert K.expand_mixed(_reader(inputs, [runs], compact=True, peer_fields={PEERS: fields}).canon(0)[0]) == record
 
 
+def _peers_fold(runs: list[tuple], *, compact: bool) -> RootView:
+    """A fold's reader of a request's peers: one Record, a field of 8 leaves a peer, the ordinals 7 and 8."""
+    return _reader({TOK: ("Input32_v1", 4), 1: ("Input16_v1", 8), PEERS: ("Input16_v1", 16)}, [runs], compact=compact,
+                   peer_fields={PEERS: [(0, 7), (8, 8)]})
+
+
+def _peers_program(runs: list[tuple], *, compact: bool) -> RootView:
+    """A rank Program's reader of the same peers: one Input of 8 leaves a peer."""
+    return _reader({TOK: ("Input32_v1", 4), 1: ("Input16_v1", 8), PEERS: ("Input16_v1", 8), PEERS + 1: ("Input16_v1", 8)}, [runs],
+                   compact=compact, peer_fields={PEERS: [(0, 7)], PEERS + 1: [(0, 8)]})
+
+
 @FORMS
 @pytest.mark.parametrize(("fold_runs", "program_runs"), [
     pytest.param([("n", PEERS, 8, 10), ("n", PEERS, 12, 14)], [("n", PEERS + 1, 0, 2), ("n", PEERS + 1, 4, 6)], id="windows of one peer"),
@@ -132,12 +146,31 @@ def test_a_peers_read_is_under_its_fields_ordinal_and_the_compact_form_expands_t
 ])
 def test_windows_of_peers_are_the_same_sources_in_a_folds_one_record_and_in_a_rank_programs_inputs(fold_runs, program_runs, compact):
     """The fold holds a request's peers in one Record, a field a peer at increasing offsets; the rank Program holds one Input a
-    peer.  The same leaves read from either are the same sources, in the record's form and in the compact one."""
-    fold = _reader({TOK: ("Input32_v1", 4), 1: ("Input16_v1", 8), PEERS: ("Input16_v1", 16)}, [fold_runs], compact=compact,
-                   peer_fields={PEERS: [(0, 7), (8, 8)]})
-    program = _reader({TOK: ("Input32_v1", 4), 1: ("Input16_v1", 8), PEERS: ("Input16_v1", 8), PEERS + 1: ("Input16_v1", 8)}, [program_runs],
-                      compact=compact, peer_fields={PEERS: [(0, 7)], PEERS + 1: [(0, 8)]})
-    assert fold.canon(0) == program.canon(0)
+    peer.  In these three reads the same leaves read from either are the same sources, in the record's form and in the compact one."""
+    assert _peers_fold(fold_runs, compact=compact).canon(0) == _peers_program(program_runs, compact=compact).canon(0)
+
+
+def test_a_stride_over_two_peers_fields_is_one_operand_in_the_records_form_and_counted_different_in_the_compact_one():
+    """Two windows of each peer, one stride apart across the two fields.  The record's sources are the same from the fold's Record
+    and from the rank Program's Inputs.  The compact sources are not, though both expand to the record's: the fold reads one
+    progression over both fields, which is the record's sources run by run with the ordinal in each base, and the rank Program
+    reads one progression an Input, which has the ordinal in its head (`PeerReads._peer_srcP`).  A comparison in the compact form
+    then counts one different operand under equal hashes.  Today's answer, held so that a change of it shows; the two forms
+    should agree."""
+    fold_runs = [("n", PEERS, 0, 2), ("n", PEERS, 4, 6), ("n", PEERS, 8, 10), ("n", PEERS, 12, 14)]
+    program_runs = [("n", PEERS, 0, 2), ("n", PEERS, 4, 6), ("n", PEERS + 1, 0, 2), ("n", PEERS + 1, 4, 6)]
+    record = [("PEER", 7, 0, 2), ("PEER", 7, 4, 6), ("PEER", 8, 0, 2), ("PEER", 8, 4, 6)]
+    fold, program = _peers_fold(fold_runs, compact=False), _peers_program(program_runs, compact=False)
+    assert fold.canon(0) == program.canon(0) == [record]
+    same = compare_steps(program, fold)
+    assert same["totals"]["operands_different"] == 0 and same["canonical_sha256"]["equal"]
+
+    fold, program = _peers_fold(fold_runs, compact=True), _peers_program(program_runs, compact=True)
+    assert fold.canon(0) == [[("PEER", (7, 0, 2), (0, 4, 4), 2), ("PEER", (8, 0, 2), (0, 4, 4), 2)]]
+    assert program.canon(0) == [[("PEER", 7, (0, 2), (4, 4), 2), ("PEER", 8, (0, 2), (4, 4), 2)]]
+    assert K.expand_mixed(fold.canon(0)[0]) == K.expand_mixed(program.canon(0)[0]) == record
+    counted = compare_steps(program, fold)
+    assert counted["totals"]["operands_different"] == 1 and counted["canonical_sha256"]["equal"]
 
 
 # ------------------------------------------------------------------------------------------------ a top-p select's split count
