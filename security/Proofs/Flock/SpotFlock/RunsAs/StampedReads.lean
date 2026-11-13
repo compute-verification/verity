@@ -87,9 +87,7 @@ theorem sessionRegistered_congr {a b : Array (String × Json)} (h : a.toList.map
   simp only [reads3, Prod.mk.injEq] at hxy
   obtain ⟨h1, h2, h3⟩ := hxy
   funext r
-  first
-    | (simp only [h1, h2, h3])
-    | (dsimp only; rw [h1, h2, h3])
+  simp only [h1, h2, h3]
 
 /-- Setting keys other than `key` on an object over a well-formed map leaves its entry at `key`. -/
 theorem getD_setObjVals {key : String} (F : Json → String × Json → Json)
@@ -142,9 +140,8 @@ theorem stamped_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursi
   unfold VStar.Recursive.SampledTwo.stamped at h
   try dsimp only at h
   split at h
-  · first
-      | (obtain ⟨_, hthrow, -⟩ := bind_ok' h; cases hthrow)
-      | cases h
+  · obtain ⟨_, hthrow, -⟩ := bind_ok' h
+    cases hthrow
   rename_i hsize
   have hsz := size_of_not_bne hsize
   rw [Array.mapM_eq_mapM_toList] at h
@@ -175,15 +172,7 @@ theorem stamped_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursi
 /-- The run of record's verdicts are the ones the form hands it. -/
 theorem inputOf_verdicts (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ ξ₂ : ByteArray)
     (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
-    (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).verdicts = vs := by
-  first
-    | rfl
-    | (unfold VStar.Recursive.SampledTwo.inputOf
-       rfl)
-    | (simp only [VStar.Recursive.SampledTwo.inputOf]
-       generalize VStar.Recursive.SampledTwo.rootsSplit c.record e.interior.base.sessionRoots = rs
-       obtain ⟨a, b⟩ := rs
-       rfl)
+    (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).verdicts = vs := rfl
 
 /-- **The run of record's verdicts report the reads the sessions' own verdicts report**: `inputAt`'s input carries
 the verdicts `stamped` returned on `r.out`, and `sessionRegistered` reads the same of both. -/
