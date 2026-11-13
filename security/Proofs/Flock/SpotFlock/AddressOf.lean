@@ -36,13 +36,6 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **Member `t`'s circuit**: its reference statement's statement circuit (`Held.ms`). -/
-def memberCircuit (t : ℕ) : _root_.Flock.Circuit := stmtOf (h.xS₀ t)
-
-/-- **The first port of member `t`'s circuit named `name`**; port `0` where none is. -/
-def portNamed (t : ℕ) (name : String) : ℕ :=
-  ((List.range (memberCircuit h t).ports.size).find? fun q => (memberCircuit h t).ports[q]!.name == name).getD 0
-
 /-- **A gate's commitment position**: its member and its row position at the member's own units, as a source bit
 (`sourceBits`), else as a written bit (`writtenBits`); none for a gate that is neither. -/
 def bitAtGate (i : ℕ) : Option (ℕ × Spot.Bits.RowPos) :=
@@ -57,24 +50,18 @@ def placeAt (t : ℕ) (r : Spot.Bits.RowPos) : (w : ℕ) × Fin w :=
     ⟨16 * ((memberCircuit h t).ports[portNamed h t r.row]!).words, ⟨r.bit, hb⟩⟩
   else ⟨1, 0⟩
 
-/-- **The row schema template `t`'s reference registered reads give port `port`** (`Held.refReads`, the key
-`row_schema`); `hm96-sha512/row/v1`, the default, where they name none. -/
-def refSchema (t : ℕ) (port : String) : String :=
-  match Spot.getD (Spot.getD (Spot.getD (h.refReads t) "ports") port) _root_.Flock.Registered.SCHEMA_KEY with
-  | .str s => s
-  | _ => _root_.Flock.HmRow.ROW_SCHEMA
-
-/-- **The slot of member `t`'s row position `r`**, a gate the wiring map leaves alone. At a port a link names, an
-input a replay block reads or an output it returns: the boundary port the link names, at the reference reads' schema,
-at the row the position's unit reads there, its replay block's `per` rows from `ρ · per` and its cell position's
-row among them (`heldRows`). At any other port, an output only the interior record holds: the member's port of the
-interior record, at the port's published schema, at the unit's place in its cell on a stride of the member's units
-a replay block, sized. -/
+/-- **The slot of member `t`'s row position `r`**, a gate the wiring map leaves alone, at the schema Flock frames
+the member's port's rows in (`PortRoots.schemaOf`), which a session's registered read at the port is held to
+(`Registered.checkPort`). At a port a link names, an input a replay block reads or an output it returns: the boundary
+port the link names, at the row the position's unit reads there, its replay block's `per` rows from `ρ · per` and
+its cell position's row among them (`heldRows`). At any other port, an output only the interior record holds: the
+member's port of the interior record, at the unit's place in its cell on a stride of the member's units a replay
+block, sized. -/
 def slotAt (t : ℕ) (r : Spot.Bits.RowPos) : Slot :=
   match heldLink h (h.names.getD t "") r.row with
   | some l =>
     { key := .port l.value
-      schema := refSchema h t r.row
+      schema := _root_.Flock.PortRoots.schemaOf (memberCircuit h t) (portNamed h t r.row)
       pos := r.leaf / h.reg.ns.getD t 0 * ((heldRows h (h.names.getD t "") r.row).map (·.per)).getD 0 +
         ((heldRows h (h.names.getD t "") r.row).bind fun rows =>
           Spot.SecondStage.rowAt rows.runs (r.leaf % h.reg.ns.getD t 0)).getD 0 }
