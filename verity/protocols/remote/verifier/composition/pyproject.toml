@@ -37,12 +37,12 @@ parts = 3
 # difftest (`nci_reference` and θ's provenance difftest's declarations), each from its own suite's tests; and space's
 # and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
-# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.configuration.deploy.config`)
+# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.config`)
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verity/claims",
+inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/verity_settings.py", "verity/claims",
           "verity/hardware/record.py",
           "verity/difftest", "verity/protocols/spot/verifier/profile.py",
-          "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",
+          "verity/hardware/registration.py", "verity/device.py", "verity/tests", "verity/channel.py", "verity/runtime",
           "verity/protocols/onsite/verifier", "verity/protocols/remote/verifier", "verity/protocols/interface",
           "verity/protocols/pouw/verifier", "verity/protocols/spot",
           "verity/protocols/inference_only/verifier/nci", "verity/protocols/certifier",
@@ -54,7 +54,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verit
           "verity/commitments/identity", "verity/commitments/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
           # (`deploy.stream.Side`)
-          "verity/configuration/deploy", "verity/configuration/wire",
-          "verity/circuits", "verity/commitments", "verity/configuration/__init__.py", "verity/hardware/__init__.py",
+          "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/circuits", "verity/commitments", "verity/hardware/__init__.py",
           "verity/definitions", "verity/protocols/flock/agreement", "verity/protocols/flock/pod", "verity/protocols/flock/prover", "verity/protocols/flock/tool.py",
-          "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py",
+          # the distribution the settings registry's move puts it in, which importing the registry then reads
+          "tools/config/verity_config"]

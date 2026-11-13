@@ -8,7 +8,9 @@ per-member case's parameters, registration record and files, as the executable's
 of the blobs' paths, a line each. A row is the case's first N members of its first member's circuit file, in the
 parameters' order, so N members of one circuit file; `all` is every member of the case. Each pass is timed once the
 case is parsed and the blobs are read and hashed; one `PHASE {json}` line each on stdout. The stated pass runs up to R
-members.
+members. The case's own line carries its program's size (its bytes and its root's nodes) and the microseconds of one
+evaluation of the strata of its partition's query on the program (`Partition.strata`), which the stated pass makes
+once a member and the compiled pass once for the members that share the parameters' partition.
 
 The guard, without which no figure counts: both return every member's statement with its files held, and the two
 agree on every check's result of every statement; exit 1 otherwise. `members_files.sh` builds it against the
@@ -56,6 +58,18 @@ def timed (f : List Member → Files) (ms : List Member) : IO (Files × Nat) := 
   let t1 ← IO.monoNanosNow
   return (r, (t1 - t0) / 1000)
 
+/-- One evaluation of the strata of the partition's query `query` on the program `prog`: how many it gave and its
+microseconds; `query` reads the clock's reading so the compiler can't hoist the evaluation out of the timing. -/
+def strataTimed (prog : Program) (query : Json) : IO (Nat × Nat) := do
+  let t0 ← IO.monoNanosNow
+  let query := if t0 == 0 then Json.null else query
+  let n := match Partition.strata prog query with
+    | .ok s => s.size
+    | .error e => e.length
+  if n == 1000000007 then IO.eprintln "unreachable"
+  let t1 ← IO.monoNanosNow
+  return (n, (t1 - t0) / 1000)
+
 def usage : String := "usage: members-files-time PARAMS COMMITMENT BLOBS N|all... [--ref-max R]"
 
 def main (args : List String) : IO UInt32 := do
@@ -75,6 +89,11 @@ def main (args : List String) : IO UInt32 := do
   let some m := ms[0]?
     | do IO.eprintln "the parameters' members are none"; return 2
   let roots ← IO.ofExcept (rootsOf ms c.record)
+  let prog ← IO.ofExcept (Program.parse p.own.program)
+  let rootNodes := match prog.prog.defs[prog.prog.root]? with
+    | some d => d.body.nodes.size
+    | none => 0
+  let (strata, strataUs) ← strataTimed prog (getD p.own.partition "query")
   let paths := (← IO.FS.lines blobs).filter (· != "")
   let files ← paths.mapM fun (f : String) => IO.FS.readBinFile f
   let bs := Core.Blobs.ofArray files
@@ -85,7 +104,8 @@ def main (args : List String) : IO UInt32 := do
     | .error _ => 0
   let head := Json.mkObj [("fn", Json.str "case"), ("members", toJson ms.size), ("circuit_members", toJson same.length),
     ("blobs", toJson files.size), ("blob_bytes", toJson (files.foldl (· + ·.size) 0)),
-    ("circuit_bytes", toJson circuit)]
+    ("circuit_bytes", toJson circuit), ("program_bytes", toJson p.own.program.size), ("root_nodes", toJson rootNodes),
+    ("strata", toJson strata), ("strata_us", toJson strataUs)]
   IO.println s!"PHASE {head.compress}"
   let mut bad := false
   for size in sizes do

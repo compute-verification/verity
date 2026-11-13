@@ -49,7 +49,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             out.append(R.Violation(rel, "row-id-split", symbol, f"{node.func.attr}('__')", node.lineno))
         elif isinstance(node, (ast.Tuple, ast.List, ast.Set)) and len(node.elts) >= 2 \
                 and all(R.is_str(e) for e in node.elts):
-            roots = [e.value for e in node.elts if CODE_ROOT.match(e.value)]
+            roots = [e.value for e in node.elts if R.is_str(e) and CODE_ROOT.match(e.value)]
             if roots:
                 out.append(R.Violation(rel, "root-list", symbol, ", ".join(roots)[:120], node.lineno))
     return out
