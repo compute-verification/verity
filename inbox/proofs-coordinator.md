@@ -124456,3 +124456,50 @@ Nothing.
 - The `DevSecond` instantiation at `goodCase C JoinGood` is not written or compiled anywhere.
 - `SessionMatches`' two conjuncts are hypotheses, not proved.
 - Nothing of mine is compiled at TWOLEG's `b53983fdab` or later.
+
+## ACCEPTS 06:20Z: HELDOF's 02e64d44d7 merged at ba19d67373 (not compiled); RecordsHeldAt needs two facts the run does not decide
+
+- [run] Merged HELDOF's `02e64d44d7` into `cursor/proofs-accepts-7d08`: no conflict, head `ba19d67373`, pushed. Not tried
+  yet, because the next commit changes `AcceptsTop.lean` anyway. ASSEMBLY: still take `ddbac96a10` for AcceptsTop; it
+  compiled in `r20261113-052326-960f`.
+- [run] Roots rule checked on my branch: every SampledTwo and SpotFlock name in `security/Proofs/lean-audit.json`'s
+  `roots` is under a lakefile root (178 roots; 4103 modules reached from the lakefile's roots). No lock root is missing.
+- [derived] `RecordsHeldAt` does not follow from `namesHeld_of` plus the run's checks alone. Two facts are missing:
+  1. `namesHeld_of` needs `heldOf i it u = some A.h` at each accepted play, and no premise of `playAccepts_form`
+     says so. I would replace `RecordsHeldAt` with
+     `HeldOfAt A C := ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it → ∃ u, heldOf i it u = some A.h`.
+     With HELDOF's `PartsAt`, the same premise also gives `HeldAt` (through `heldMatches_of`), so one premise could
+     stand for two.
+  2. `R3-ports` passes when a verifier lists a port twice, but `recordOk` fails then. Example: ports `[a, a]` and
+     record roots `[a, b]`. `portIndex` counts 2 distinct roots, which equals `v.ports.size`, and every port is in
+     the index. `namesEq [a, b] [a, a]` is false. So the boundary half needs "the verifier's port names are
+     distinct", for both registrations. `R7-values` needs nothing extra: it forces the registered names to be
+     distinct, because the record's names are distinct, there are as many as `mine` has, and each is in `mine`.
+- [derived] Which of the other eight premises can be discharged, and by whom:
+  - `HeldAt`: HELDOF (`heldMatches_of` plus `PartsAt`), or folded into `HeldOfAt` as above.
+  - `TwoHolds`: HELDOF (`twoHolds_of…` in `HeldOfRun.lean`).
+  - `RecordsRead`: TWOLEG's form change.
+  - `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt` and `SessionsRun`: the messages and sessions workers (not
+    mine). None of these five is decided by `Spot.Run.run` accepting, so I cannot discharge any of them from an
+    accepted run.
+- [run] Technique, tested on a toy copy of the check's shape (Lean core only, on my VM, about a second of CPU).
+  `Registration.check` is an imperative `do` block. A plain `simp` or `mvcgen` duplicates each remaining statement
+  per path, so their cost doubles with every `if`. The toy proof is linear instead:
+  - `lift_lets` and `extract_lets` pull every join point into the context.
+  - A small tactic names them and proves, deepest first, that each one keeps a nonempty code list nonempty.
+  - Then it walks the one path on which no code is added.
+  The toy's walk ends with exactly that path's conditions. Next, the same tactic on the real `Registration.check`,
+  plus one such lemma per helper (`checkOutputs`, `checkRegistered`, `poolMarks`, `r8Codes`, `kept`).
+
+STOP RULE: I stop and ask if the walk over the real `Registration.check` fails on two tries, or if `HeldOfAt` and the
+distinct ports have no owner by 07:30Z. Then I would leave both as named premises of `playAccepts_form`.
+
+NEEDS:
+- The coordinator: who owns "the ports are listed once"? Either HELDOF's `heldOf` refuses a registration that lists a
+  name twice (it returns `none`, and `HeldOfAt` then carries the fact), or TWOLEG's form refuses duplicate ports. If
+  neither does, it stays a premise of mine, named `PortsDistinctAt`.
+- HELDOF: is `HeldOfAt` (above) yours to discharge, from the form's accept?
+
+Not established: the walk over the real `Registration.check` (it has not run yet). Whether the verifier's JSON object
+parser already refuses duplicate keys, which would make the ports distinct at parsing (I have not read it). Whether
+`RecordsRead`'s change touches my statements: TWOLEG has not named its head yet.
