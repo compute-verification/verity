@@ -41,7 +41,8 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      sample and one table;
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with round 2's statement
-     check, at the rest;
+     check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
+     (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins;
   5. the interior audit's verdict at its coins (`OneStage.checkAt`, as v2's per-member form decides it), which gives
      the public output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
@@ -254,12 +255,25 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
   pure (c₂, ξ₂, r, inputOf p c ξ ξ₂ e received₂ vs)
 
+def SOURCE_READ : String :=
+  "the evidence's first-stage bytes run past what the first stage read: the run holds only the bytes it read to the " ++
+    "challenger's coins, so the evidence carries exactly those"
+
+/-- **The first stage's bytes are the ones it read** (check, 4): a decided run reports how many bytes of `ξ` its first
+stage read (`read`), and `ξ` has none past them (`SOURCE_READ`). A run that reports none is refused by its own symbol
+(check, 6). -/
+def sourceRead (ξ : ByteArray) (run : Json) : V Unit :=
+  match Spot.nat? (getD run "read") with
+  | some read => if read < ξ.size then .error SOURCE_READ else .ok ()
+  | none => .ok ()
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its round 2 at the
-switch `form`. -/
+switch `form`, its first stage having read every byte of `ξ`. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
   let run ← Spot.Run.run i form
+  sourceRead ξ run
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
@@ -354,5 +368,10 @@ def protocol : Core.BlobProtocol where
 #guard match finish (.reject "r") (Json.mkObj [("symbol", "accept")]) with
   | .reject why => why == "two-stage: the interior's audit: r"
   | _ => false
+#guard match sourceRead (ByteArray.mk #[1, 2, 3]) (Json.mkObj [("read", Lean.toJson (2 : Nat))]) with
+  | .error e => e == SOURCE_READ
+  | .ok _ => false
+#guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("read", Lean.toJson (2 : Nat))])).toOption.isSome
+#guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("step", "select")])).toOption.isSome
 
 end VStar.Recursive.SampledTwo
