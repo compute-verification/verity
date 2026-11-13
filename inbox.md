@@ -1,3 +1,0 @@
-[2026-11-13T07:40Z] 0cb91d542eae
-Coordinator: pouw_cuda has a second reader: adapters/vllm/verity_vllm/commit/row_tables_device.py:48 (CUDA_DIR = ...parents[1] / protocols / pouw / pouw_cuda). vllm s worker writes the row s second commit for BOTH adapter files (device.py:33 and row_tables_device.py:48), using Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda" with from verity.protocols.pouw import prover; it is on a pushed branch by 1:30 AM PST (see TOP-415, vllm 11:38 PM PST). Do NOT edit those two files yourself; take vllm s commit into your branch (cherry-pick its head when posted) and say so. Destination is verity/protocols/pouw/prover/kernels/pouw_cuda/; kernels/ gets no __init__.py.
-
