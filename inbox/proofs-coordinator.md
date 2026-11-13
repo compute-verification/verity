@@ -131653,3 +131653,184 @@ None out. No timer held.
 - That anything at `cb2d54f3d8` compiles: the last compiled head of the join is `401d7ef808` (`22d3`). The three mends of `JoinsAt.lean` since then (`698a311036`, `6c6fd6cd56`, `645ecaa587`) are each written from its owner's entry and not compiled, the `rfl` among them.
 - Any suite at the join's tip beyond `tests/test_lean_packages.py`. The two root tests FRAME reports red from `OwnReads.lean` are not run by me; by your ruling the public-boundary one stays red until after chain 2, and FRAME's 08:48Z says it is two edges of `OwnReads.lean` at its head and more files at the join's.
 - A records run of the join: none since `f8f8`. `744ded04cb` is in now, so the orphan line no longer stands in its way; I launch one after the compile, with `--mem-gb 72`.
+
+## MEMBERS, Fri 13 Nov 09:01Z: MEMBERS: the record's name: 15 pins, 295 identifiers; candidates sampling frame, deposit, docket
+
+For TOP-415. A reading of `main` at `257b6c5e2df5` (fetched 08:41Z), no code changed. Every count is [read `main`
+`257b6c5e2df5`] by `git grep` or by the two scripts kept in the notes (`lanes/proofs/record-name/`), unless tagged
+otherwise. Mailbox read to the 08:55Z message (`fc6c76ffe771`, soundness's two shapes): taken, the switch is next.
+
+**Answer in four lines.**
+1. The id strings stand in 101 lines of 55 files; 8 places define them as a value (5 Lean, 3 Python); the rest follow
+   those or are prose. A change of the string moves 15 stored values: 12 lock entries and one fixture record with its
+   digest in two more files. It also moves every digest computed afterwards, by design.
+2. The word is in 295 distinct identifiers (17 Lean, 278 Python), 4,085 uses in code, and names at least five things, of
+   which SPOT's record is one. A map of the word is not possible; a map of one Lean namespace and one Python module is.
+3. Two steps: yes, and it is the house rule already. Step 1 renames `Spot.Registration` and `one_stage.registration` and
+   the prose; ids, record keys, flags and reason codes keep their spelling. Step 2, the id, only with the record's next
+   format version, as a third accepted id. A kept record is never re-tagged.
+4. Free names: **sampling frame**, **deposit**, **docket**. I would take the first.
+
+**1. The format ids `verity/registration/v1` and `v2`.**
+
+Where the strings stand (lines, files):
+
+| directory | lines | files |
+|---|---|---|
+| `verity/protocols/spot` | 24 | 7 |
+| `verity/protocols/flock` | 20 | 11 |
+| `verity/protocols/pouw` | 12 | 9 |
+| `adapters/vllm` | 10 | 6 |
+| `benchmarks` (`one_stage` 5, `pouw` 3, `prove_path` 2) | 10 | 8 |
+| `verity/commitments` (`windows` 5, `identity` 2, `domains.py` 2) | 9 | 5 |
+| `verity/protocols/inference_only` | 6 | 4 |
+| `verity/protocols/remote` | 6 | 2 |
+| `verity/protocols/onsite` | 2 | 1 |
+| `verity/protocols/certifier` | 1 | 1 |
+| `verity/composite/device` | 1 | 1 |
+| total | 101 | 55 |
+
+By kind, the 101 lines are: 13 that define the string as a value, 12 Lean literals in `#guard`s and self-tests (records
+built at build time), 25 Python literals in tests and vector scripts, 5 error texts that quote the id, 1 fixture, and
+about 45 of prose (docstrings, comments, READMEs).
+
+The 8 places that define it (a change here changes digests):
+- `verity/protocols/flock/verifier/Flock/WindowRecord.lean` 25-26: `FORMAT`, `FORMAT_V2`, with `FORMATS`. This is the
+  digest's one definition: `digestOf format canon = SHA-512(format ‖ 0 ‖ canon)`, and `tagOf` takes the tag from the
+  record's own `format` (v2 if it says v2, else v1) [read, lines 28-38].
+- `verity/protocols/inference_only/verifier/nci/lean/NciCheck/Baseline.lean` 106-107, with a second definition of the
+  digest at 111 (`tag.toUTF8.push 0 ++ canon`). It does not read `Flock.WindowRecord`.
+- `verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean` 37: `formats`, both ids.
+- `verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean` 211: `COMMIT_FORMAT`, v2.
+- `verity/commitments/identity/Identity/Domains/Shared.lean` 54-55 and `verity/commitments/domains.py` 175-176: the
+  table of domain separators, Lean and Python, held equal by `tests/test_domains.py`. Two `example … := rfl` lines tie
+  PoUW's two literals to it (`Credit.lean` 2277, `Inputs.lean` 320).
+- `verity/protocols/spot/verifier/one_stage/registration.py` 145-146: Python's `FORMAT`, `FORMAT_V2`, with `digest` and
+  `record_digest`, the mirror.
+- `verity/protocols/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` 100.
+
+Who reads the digest:
+- Lean, `Flock.WindowRecord.*`: 44 lines in 12 files. `security/Proofs` 14 lines in 1 file, PoUW 10 in 4, SPOT 7 in 2
+  (`Spot.Registration` re-exports `FORMAT`, `FORMAT_V2`, `digest`, `digestHex`), the certifier 5 in 1
+  (`NetworkCheck.Period`, which accepts any of `FORMATS`), `security/Properties` 4 in 2, PoUB 2 in 1, Flock 2 in 1
+  (`RecVStar.registration`, the circuit registration whose digest the inner circuit's META binds).
+- Python: 364 calls of the module's `digest`, `record_digest` or `last_digest` in 98 files (matched by the module's
+  usual aliases, so a floor). Three more places compute the digest themselves: `pouw/verifier/credit.py` 577,
+  `pouw/verifier/lean/check/tests/pouw_check_cases.py` 450, `remote/verifier/composition/tests/test_registration_difftest.py` 90.
+- The format has four writers, not one: SPOT's one-stage record, PoUW's Commit record (`CommitTap.record`), Pearl+'s
+  window record W, and Flock's circuit registration (`inner_registered.bind`). All four write `verity/registration/v2`.
+  The inference-only check and the network check's period read them.
+
+The 15 pins (stored values that change with the string):
+- 12 lock entries: `Flock.WindowRecord.FORMAT`, `FORMAT_V2`, `FORMATS`, `NciCheck.Baseline.FORMAT`, `FORMAT_V2` and
+  `PouwCheck.Credit.COMMIT_FORMAT`, in the `reads` of `security/lean-audit.json` and of
+  `security/Properties/lean-audit.json`. A record hashes the value as written [read `tests/test_domains.py` 17-20]. The
+  three modules' digests in each lock move with them. Which guarantees' `unfolded_hash` move is not in the lock (it
+  holds hashes, not edges): [guess] every guarantee whose statement unfolds `Spot.OneStage.checkAt`, which is most of
+  the sampled audit's.
+- 3 fixture files: `benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json` holds a v1 record, and
+  its digest `d9caf961bbef84e3…` stands in `drawn-unit-bundle.json` (key `registration`) and in
+  `benchmarks/one_stage/tests/fixtures/bundle-window-public/window.json` (key `registration_digest`). [run, on my VM: I
+  recomputed SHA-512(format ‖ 0 ‖ canon) of the first file and searched for it.] No other tracked data file holds the
+  string. These move only under a clean break; while the old id is accepted they stand.
+- Not pins: the 37 test literals and the 5 error texts follow the constants or are edited with them. No digest under
+  the tag is written as a hex constant in a test [read: `test_registered.py` 728 recomputes it].
+
+One finding beside the count. The prefix `verity/registration/` already has two owners. The registration log's own
+formats are `verity/registration/information/v1`, `declaration/v1`, `log/v1` (`verity/hardware/registration.py` 47-49,
+`CoreProtocol/Registration.lean` 57-59) and `site/v1`, `sheet/v1`, `genesis/v1` (`verity/hardware/site/__init__.py`
+55-58). SPOT's record sits among them with `verity/registration/v1`, `v2`, its receipt `verity/registration-receipt/v1`
+and `verity/registration/produced/v1` (`domains.py` 238-239). Under Daniel's ruling the first six are registration's and
+the last four are not.
+
+**2. The identifiers.**
+
+In code, comments and docstrings left out [read, script `idents.py`]:
+- Lean: 17 distinct identifiers, 1,137 uses, and 28 distinct short strings, 175 uses; 172 files. `security/Proofs` 573
+  uses in 86 files, `security/Properties` 185 in 18, PoUB 117 in 9, SPOT 100 in 11, PoUW 81 in 12, the interface 76 in
+  5, `security/Definitions` 61 in 9, Flock 37 in 7.
+- Python: 278 distinct names, 2,948 uses, and 156 distinct short strings, 1,848 uses; 558 files. PoUB 766 uses in 53
+  files, `adapters/vllm` 724 in 155, `benchmarks/one_stage` 568 in 54, SPOT 547 in 34, the certifier 313 in 36, PoUW 263
+  in 29.
+- With prose the word stands 4,243 times in Lean and 9,779 times in Python.
+
+The word names at least five things, so the count that matters is SPOT's record's own:
+- **SPOT's record** (the one to rename). Lean: one module and namespace, `Spot.Registration`, 65 declarations in its
+  file and 90 definitions in each lock's `reads`; about 285 lines in 32 files name one of them (`Registration.check`,
+  `Registration.Verifier`, `Registration.digest`, …): `security/Proofs` 163 lines in 14 files, `security/Properties` 65
+  in 2, SPOT 41 in 8. Four files import the module. Python: one module, `one_stage/registration.py` (874 lines, 33
+  functions), imported by 141 files, about 134 of them under an alias (`R` 112, `REG` 19, `RG` 3), so the module's rename is
+  one line a file.
+- **Registration proper**, which keeps the word: the registration log (`verity/hardware/registration.py`,
+  `Core.Registration` in `CoreProtocol/Registration.lean`), the Site's `Registration` (`security/Definitions/Core/Site.lean`,
+  `CoreProtocol/Site.lean`: 135 of the locks' definition keys), the adapter's `registration_log.py`.
+- **PoUB's `Registration`** of a store (`RemoteAudit/Window.lean` 52, `P2.lean` 49), with its own digest and domain
+  `verity/remote-bandwidth/registration/v0`.
+- **The adapter's** weights, node and advice registrations (`weights_registration.py`, `node_registration.py`,
+  `verity-vllm/advice-registration/v1`).
+- **Flock's** circuit registration and the ZK server's `RegistrationRecord` (`Flock/Firewall/Salts.lean` 316), and PoUW's
+  `pouw/verifier/registration.py`. The first is a record of SPOT's format; whether it takes the new name is the ruling's
+  to say.
+
+What recorded data and other systems read:
+- CLI words: 6 flags, 81 uses. `--registration` 53, `--window-registration` 16, `--rec-inner-registration` 6,
+  `--registration-out` 3, `--registration-deadline` 2, `--node-registration` 1.
+- Record keys and file names: `"registration"` 984 times in Python and 123 in Lean (a key of evidence, verdict lines and
+  a configuration's `messages`), `registration.json` 217, `registration_digest` 35, `registration_deadline` 31,
+  `registration_head` 8, `circuit-registration.json` 8, and reason codes such as `late-registration` (20).
+
+**3. Two steps.**
+
+Yes. The move tool states the rule [read `tools/move/terms_map.toml` 1-17]: `rename.py --map` renames prose and
+identifiers; "what recorded data or another system reads keeps its spelling": record keys, reason codes, CLI flags,
+domain tags and format ids. The Glossary has the precedent [read `GLOSSARY.md` 141]: the ids under
+`verity/sampled-proofs/` "keep the name until a format version".
+
+- **Step 1, identifiers and prose.** A map by namespace and module, not by word: `Spot.Registration` and
+  `one_stage.registration` to the new name, and the prose that speaks of SPOT's record. No digest, fixture, record key
+  or flag moves. The locks do change: the module key and its 90 definition keys in two locks, carried by
+  `rename.py --moves` into `check.py --update --moved` [read `terms_map.toml` 10-11, `check.py` 2628-2660], which
+  certifies each as the same declaration under its new name. That is a change of a Lean audit key, so it needs a records
+  run and goes after the chains, as #9712 does. [derived]
+- **Step 2, the id.** Later, and only with a format version. What a kept record needs: the digest's tag is the record's
+  own `format`, and the record's digest is what its receipt signs, what the next record's `previous` names, what the
+  audit record and the period's chain name, and what the inner circuit's META binds [read `WindowRecord.lean`,
+  `Spot/Registration.lean` 551 and 595, `registration.py` `receipt`]. So an old record cannot be re-tagged, and a reader
+  of Friday's records must accept the old id and hash under it. That is how v1 and v2 live together today. A third id
+  costs one entry in `FORMATS`, one line in `tagOf`, the R1 comparison in `check` and `checkRef`, their Python mirror,
+  NCI's own copy, PoUW's two literals and the table's two entries, and it moves the 12 lock entries. The old ids then
+  stay accepted for as long as their records are replayed; there is no date at which they can go. [derived]
+- **A clean break** buys nothing a proof needs. Friday's records would replay only with the reader at the commit that
+  wrote them, and the 3 fixture files and 37 test literals would be regenerated. [derived]
+- **Never** is also sound: the string is an opaque tag. Its cost is the one in item 1's finding: SPOT's record keeps an
+  id in registration's prefix.
+
+**4. Names.**
+
+Taken (word hits, files): 'statement' (Flock's); 'Commit record' (236, 72; PoUW's); 'window record' (113, 54:
+`Flock.WindowRecord`, PoUW's and Pearl+'s W, the adapter's `WindowRecord`); 'audit record' (228, 60; `Spot.Record`);
+'run record' (259, 80); 'run commitment' (47, 26) and 'run header' (57, 29), both the adapter's; 'boundary commitment'
+(107, 30; the Glossary's word for the two-stage design's roots, a part of this record); 'declaration' (the registration
+log's, and the Glossary's declared circuit); 'sampling plan' (94, 27); 'commitment record' (22, 9); 'sampled statement'
+(117, 62); 'manifest', 'claim', 'receipt', 'ledger', 'bundle', 'plan', 'sheet', 'entry'; and `anchors`, `binding` and
+`scope`, which are names inside the record's own check.
+
+Free:
+- **sampling frame** (`Spot.SamplingFrame`, `one_stage/sampling_frame.py`): 0 hits. It is statistics' word for what is
+  fixed before a sample is drawn, and it sits beside the Glossary's sampling design. It would be confused with
+  `frame-v3`, the commitment trees' format ("frame" stands 11,333 times), so it can never be shortened to "frame".
+- **deposit** (`Spot.Deposit`): 0 hits as a word. The prover hands it over before the challenges and the verifier
+  already signs a receipt for it (`verity/registration-receipt/v1`), so the pair reads as it works. It would be confused
+  with money, beside accounting's "charged" and "credited".
+- **docket** (`Spot.Docket`): 0 hits. It would be confused with nothing in the tree; its cost is that it is an uncommon
+  word and says nothing of sampling or of commitment.
+
+Set aside: 'challenge input' and 'fixed input' are free and are Daniel's own words, but "input" is the Glossary's word
+for a subcircuit's input values and Flock's public inputs. 'Pre-challenge record' is free and says when, not what.
+
+One thing the new name meets whatever it is: the interface already calls this file the commitment. `Spot.OneStage.Commitment`
+is `{record, digest}`, `commitmentOf` parses "the registration record", and 171 lines in 48 Lean files read them. The
+name chosen stands beside that word or replaces it. [read `Spot/OneStage.lean` 101-103, 406-409]
+
+Not known: how many guarantees' `unfolded_hash` a change of the id moves. It is known after one records run of the
+change, about 70 minutes.
