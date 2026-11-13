@@ -26,7 +26,7 @@ SCANNED = ("*.py", "*.sh", "*.bash", "*.toml", "*.json", "*.yaml", "*.yml", "*.c
 
 #: what records history rather than naming code that must exist now; nothing here is read to find code to run
 HISTORY_PATHS = (
-    "fixtures/**",                 # shared fixtures: bytes of past runs (`fixtures/artifacts.json`)
+    "fixtures/**",                 # shared fixtures: bytes of past runs (`artifacts.json`)
     "**/fixtures/**",              # a suite's fixtures: captures and the records of the runs that made them
     "**/*vectors*.json",           # pinned vectors: what a run produced, by the names it had then
     "**/ledger/**",                # the frozen overhead ledger
