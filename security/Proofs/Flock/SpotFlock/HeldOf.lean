@@ -18,7 +18,7 @@ session statement, the code the frame is built from, and the rounds past round 1
   (`filesBlockOf`), and no proof block always checked;
 * `vus`: each template's units, `n_t` a request over the boundary layout's requests (`unitsOf`);
 * `k`, `names`, `refReads`: the counts, and the templates' names and reference reads in the params' order;
-* `links`, `wires`, `rows`: round 2's, from the replay block's Definition (`SecondStage.replayLinks` and the rest);
+* `links`, `wires`, `rows`: the second stage's, from the outer block's Definition (`SecondStage.replayLinks` and the rest);
 * `boundaryNames`, `interiorNames`: each registration's verifier's ports and registered values (`namesOf`);
 * `xS₀`: template `t`'s reference statement (`refStmt`), each in Flock's masked scope (`zkOk`), decided;
 * `frame`: SPOT's own frame at the wired program, from `Unread.c₀` (`withFrame`), as HONEST2's instance sets it.
@@ -229,7 +229,7 @@ theorem nil_of_mapM_nil {α β : Type} {f : α → Option β} (l : List α) (h :
   | nil => rfl
   | cons a l => simp [List.mapM_cons] at h
 
-/-- **Round 1's record registers no value** (`RegistersNone`) where it names the interior registration's names
+/-- **The first stage's record registers no value** (`RegistersNone`) where it names the interior registration's names
 (`RecordsHeld`) and `heldOf` built the held copy: `heldOf` decides that the interior registration registers none, and
 a record naming exactly no registered value has no entry under `registered`. -/
 theorem registersNone_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {x m₁ : Msg}
