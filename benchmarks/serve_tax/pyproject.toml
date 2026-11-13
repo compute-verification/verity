@@ -22,7 +22,7 @@ inputs = [
     "benchmarks/harness/verity_bench/kit.py",
     "benchmarks/harness/verity_bench/settings.py",
     "benchmarks/harness/verity_bench/overhead_node.py",
-    "verity/configuration/config/verity_config",
+    "tools/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
     "adapters/vllm/verity_vllm/__init__.py",
