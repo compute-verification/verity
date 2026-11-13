@@ -173,11 +173,13 @@ def per_row(struct: dict, shape: dict) -> dict:
     every token shape and out of the MACs of each entry whose shapes that changed. A dimension of rows x context
     becomes the context, and a leading dimension of rows before a context becomes 1. A product of attention's is
     batched over rows x heads: a `bmm` whose every operand leads with rows x heads over a context and nothing but
-    contexts and a head's width, and that leading dimension becomes the heads. An optimizer's entries have no such
-    shape and stay whole. A `_foreach_` op's operands are sorted: their order is the order a program lists its
-    parameters in, which is no part of the step. The dtype a row names for its op, where it names one, is not part
-    of an entry: a record's rows name none where a config's counted step names each, so rows of one op and shape in
-    several dtypes are one entry, their counts added. The bits a use reads its weight at are compared in `updated`."""
+    contexts and a head's width, and that leading dimension becomes the heads. A row of an optimizer's phase
+    (`gates.OPTIMIZER_PHASES`) stays whole: the counter gives a row that phase only where it is no backward's and no
+    operand derives from a token, so none of its dimensions is tokens, whatever its size. A `_foreach_` op's operands
+    are sorted: their order is the order a program lists its parameters in, which is no part of the step. The dtype a
+    row names for its op, where it names one, is not part of an entry: a record's rows name none where a config's
+    counted step names each, so rows of one op and shape in several dtypes are one entry, their counts added. The
+    bits a use reads its weight at are compared in `updated`."""
     ctx, heads = shape["ctx"], shape["n_head"]
     r = rows_a_forward(struct, ctx)
     a_head = {ctx, shape["d_model"] // heads}
@@ -194,7 +196,8 @@ def per_row(struct: dict, shape: dict) -> dict:
         gates.row_dtype(row)
         phase, kind, op, shapes, count, macs = row[:6]
         was = json.loads(shapes)
-        now = ([[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
+        now = (was if phase in gates.OPTIMIZER_PHASES else
+               [[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
                [of_tokens(s) for s in was])
         e = log.setdefault((phase, kind, op, json.dumps(sorted(now) if op.startswith("_foreach_") else now)), [0, 0])
         e[0] += count
