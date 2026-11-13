@@ -227,7 +227,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "launch says where it went and when it should start. A machine that can start no run takes none, and one "
                          "that refuses the launch for that is passed over for the next, the launch saying which and why. A run "
                          "sent to a pool that waits there on memory asks again and moves to a pool that would start it now, "
-                         "while the VM that launched it is up (research/asker.py; `research status RUN` says)")
+                         "while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
+                         "(research/asker.py's MAX_ASKERS; the launch and `research status RUN` say)")
     ap.add_argument("--accept-wait", action="store_true",
                     help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
                          "(research/auto.py's START_WITHIN_MIN). Such a launch is warned in one line, or refused once "

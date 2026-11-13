@@ -585,6 +585,71 @@ def test_an_asker_is_alive_until_it_ends_or_misses_its_next_look():
     assert not asker.alive({**rec, "here": True}, T0), "on its own VM, an asker whose process is gone is not alive"
 
 
+# ---- how many a VM holds ------------------------------------------------------------------------------------------------------
+
+def _askers(root: Path, n: int, **over) -> list[str]:
+    """``n`` askers alive at T0 under the runs root ``root``, as their records say: processes of this VM (this test's own),
+    each with its log."""
+    (root / asker.DIR).mkdir(parents=True, exist_ok=True)
+    runs = [f"r20261001-08{i:02d}00-aaaa" for i in range(n)]
+    for run in runs:
+        (root / asker.DIR / f"{run}.json").write_text(json.dumps({"run": run, "pid": os.getpid(), "next": asker._utc(T0 + 60), **over}))
+        (root / asker.DIR / f"{run}.log").write_text("")
+    return runs
+
+
+def _leave(root: Path) -> str:
+    """What the launch of RUN says of its asker at T0 (`asker.leave`), from a checkout beside the runs root ``root``."""
+    subprocess.run(["git", "init", "-q", str(root.parent / "repo")], check=True)
+    asks = {"cpus": 4, "mem_gb": 16, "lean": None, "home": A, "pool": "research", "commit": "c" * 40, "wait_s": 14400}
+    return asker.leave(root / RUN, asks, root.parent / "repo", {"job_namespaces": ()}, [], now=lambda: T0)
+
+
+def test_the_ninth_launch_of_a_vm_leaves_no_asker_and_its_line_and_status_say_the_run_will_not_move_by_itself(
+        machines, monkeypatch, capsys, _no_asker_left):
+    """An asker is a process of a VM every agent on it shares, and those of launches of one minute ask every machine, and
+    check a twin's tree out, in the same minute: a sweep of forty runs that all wait would hold forty of them for hours.
+    A VM holds eight. The next launch leaves none, and says whose hold the places; `research status` says the same of
+    its run."""
+    root = machines / "here"
+    _on(machines, A, RUN, "running", FIRST)
+    runs = _askers(root, 8)
+    assert _leave(root) == (
+        f"8 askers are alive on this VM already, and it holds at most 8 (their runs: {', '.join(runs[:3])} and 5 more), so this "
+        f"run will not move by itself: it waits in {A}'s line; `research status RUN` shows when one of them has started or ended, "
+        "and its asker ends at its next look after that")
+    assert _no_asker_left == [] and not (root / asker.DIR / f"{RUN}.json").exists(), "none is started, and none recorded"
+    assert cli.main(["status", RUN, "--runs-dir", str(root)]) == 0
+    assert f"auto waits on memory on {A}; no asker is alive, so it will not move by itself" in capsys.readouterr().out
+    monkeypatch.setattr(asker, "MAX_ASKERS", 3)
+    for run in runs[3:]:
+        (root / asker.DIR / f"{run}.json").unlink()
+    assert f"3 askers are alive on this VM already, and it holds at most 3 (their runs: {', '.join(runs[:3])}), so this" in _leave(root)
+
+
+@pytest.mark.parametrize("how", ["ended", "its-next-look-overdue", "its-process-gone"])
+def test_an_asker_that_ended_or_missed_its_look_or_whose_process_is_gone_frees_its_place(tmp_path, _no_asker_left, how):
+    """The count is of the askers alive now, by the rule `research status` holds this VM's own records to: one that is no
+    longer alive holds no place, and neither does a log."""
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    root = tmp_path / "runs"
+    _askers(root, 8)
+    _askers(root, 1, **{"ended": {"ended": {"at": SINCE, "why": "it started"}}, "its-process-gone": {"pid": gone.pid},
+                        "its-next-look-overdue": {"next": asker._utc(T0 - asker.LATE_S - 1)}}[how])
+    assert _leave(root).startswith("an asker of this launch stays on this VM (pid 4242)") and [m["run"] for m in _no_asker_left] == [RUN]
+
+
+def test_a_record_that_can_not_be_read_holds_a_place_and_the_line_says_how_many_are_such(tmp_path, _no_asker_left):
+    """An asker whose record this launch can't read may be alive: left out of the count, it would be a ninth."""
+    root = tmp_path / "runs"
+    runs = _askers(root, 8)
+    (root / asker.DIR / f"{runs[7]}.json").write_text('{"run": ')
+    assert (f"8 askers are alive on this VM already, and it holds at most 8 (their runs: {', '.join(runs[:3])} and 5 more; 1 of them "
+            "by a record that could not be read, counted as alive), so this run will not move by itself") in _leave(root)
+    assert _no_asker_left == []
+
+
 def test_status_says_whether_an_asker_is_alive_for_a_waiting_run_or_that_it_will_not_move_by_itself(machines, capsys):
     _on(machines, A, RUN, "running", FIRST)
 

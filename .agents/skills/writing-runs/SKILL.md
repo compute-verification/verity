@@ -64,4 +64,5 @@ research run --on auto --cwd source -- \
 Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
 "Tests"), and check that the run dir holds only your output directory beside the harness's files. A run `--on auto`
 sent to a pool that waits there on memory moves by itself to a pool that would start it now only while the VM that
-launched it is up: `research status RUN` says whether its asker is alive.
+launched it is up and holds its asker, one of at most eight alive there: its launch and `research status RUN` say
+whether it has one.

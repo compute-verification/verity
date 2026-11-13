@@ -3,6 +3,7 @@ when another machine's pool would start the run now it launches the run's late t
 
 A pool run `--on auto` placed carries a pair (slot.py's `--twin`, the run's own id), and `research run` leaves one asker of
 that launch behind (`leave`): a detached process on the launching VM that holds what the launch shipped in its memory alone.
+A launch that finds MAX_ASKERS of them alive under its runs root leaves none and says so: its run waits where it is.
 At minute FIRST_ASK_MIN of its life, then every ASK_EVERY_MIN minutes, it looks at the run (`see`). While the run waits
 and its last reason is memory, it asks (`ask`: `auto.read` and `auto.elsewhere`) by the files of the commit the launch
 shipped (`files`: the few `auto.read` reads, no checkout), never by what the launching checkout holds by then. The answer
@@ -53,6 +54,10 @@ ASK_EVERY_MIN = 10
 FIRST_ASK_MIN = 1
 #: an asker whose next look is this many seconds overdue is not alive (`alive`)
 LATE_S = 300
+#: the most askers alive under one runs root (`live`): each is a process of the launching VM, and those of launches of one
+#: minute ask every machine, and check a twin's tree out, in the same minute. Soft: the count reads the askers' records
+#: and takes no lock, so two launches of the same second may each count one short of it and both leave one
+MAX_ASKERS = 8
 #: the askers' records and logs, under the runs root: <run id>.json, <run id>.log
 DIR = ".askers"
 #: the copy of an asker's record beside its run's request on the run's machine
@@ -93,13 +98,36 @@ def _cancelled(s: dict) -> bool:
 
 # ---- leaving one behind -------------------------------------------------------------------------------------------------------
 
-def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path]) -> str:
+def live(root: Path, now: float) -> tuple[list[str], int]:
+    """The runs under ``root`` whose askers hold a place on this VM at ``now``, by the records it keeps of them: those alive
+    (`alive`, each a process of this VM) and those whose record can't be read, which may be; and how many are the second."""
+    from . import remote
+
+    held, unread = [], 0
+    for p in sorted((root / DIR).glob("*.json")):
+        rec = remote._read_json(p)
+        if rec is None or alive({**rec, "here": True}, now):
+            held.append(p.stem)
+            unread += rec is None
+    return held, unread
+
+
+def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path], *, now: Callable[[], float] = time.time) -> str:
     """Leave an asker of the launch of the run in ``run_dir`` behind (`start`) and say so in a line. ``asks`` is what the
     launch asked: of `auto` (cpus, mem_gb, lean), its answer (home, the machine, and pool), the commit it shipped from the
     checkout ``source`` and the first's wait for a slot (wait_s); ``what`` is the request as `remote.launch` took it and
     ``sends`` its --send files. A launch whose asker can't be started is still launched: the line says the run won't move
-    by itself."""
+    by itself. So is one that finds MAX_ASKERS alive under its runs root already (`live`): it leaves none, and the line
+    names their runs. Such a run still carries its pair, which is harmless: only a run's asker launches its twin, so no
+    twin of it is ever launched and nothing but the run itself claims the pair."""
     try:
+        held, unread = live(run_dir.parent, now())
+        if len(held) >= MAX_ASKERS:
+            return (f"{len(held)} askers are alive on this VM already, and it holds at most {MAX_ASKERS} (their runs: "
+                    f"{', '.join(held[:3])}" + (f" and {len(held) - 3} more" if len(held) > 3 else "")
+                    + (f"; {unread} of them by a record that could not be read, counted as alive" if unread else "")
+                    + f"), so this run will not move by itself: it waits in {asks['home']}'s line; `research status RUN` shows "
+                      "when one of them has started or ended, and its asker ends at its next look after that")
         git = subprocess.run(["git", "-C", str(source), "rev-parse", "--path-format=absolute", "--git-common-dir"],
                              capture_output=True, text=True, check=True).stdout.strip()
         m = {"run": run_dir.name, "root": str(run_dir.parent), "git": git, **asks, "sends": {str(p): _sha256(str(p)) for p in sends},

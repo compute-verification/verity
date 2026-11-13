@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from research import auto, cores, remote
+from research import asker, auto, cores, remote
 from research.cli import main
 from research.pods.nebius import slot_only
 
@@ -1593,6 +1593,21 @@ def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_ask
                  "--", "pytest", "-q"]) == 0
     assert "--twin" not in launched[0]["command"] and _no_asker_left == [], "a run named to a machine never moves"
     assert "asker" not in capsys.readouterr().err
+
+
+def test_a_launch_that_finds_its_vm_holding_all_the_askers_it_may_goes_through_and_leaves_none(tmp_path, monkeypatch, capsys, _no_asker_left):
+    """Nothing else bounds what a lane's sweep of launches leaves on the VM every agent on it shares. The launch past the
+    bound is the same launch, pair and all, and says in its own line that its run will not move by itself."""
+    launched, _ = _on_auto(monkeypatch, tmp_path, {N2: share(waiters=56), CPU1: pool(slot("r0"))}, {CPU1: None})
+    (tmp_path / "runs" / asker.DIR).mkdir(parents=True)
+    for i in range(asker.MAX_ASKERS):
+        (tmp_path / "runs" / asker.DIR / f"r20300101-00000{i}-aaaa.json").write_text(json.dumps({"pid": os.getpid(), "next": "2999-01-01T00:00:00Z"}))
+    assert main(RUN) == 0
+    (kw,) = launched
+    assert kw["machine_name"] == CPU1 and "--twin" in kw["command"] and _no_asker_left == []
+    assert (f"research: {asker.MAX_ASKERS} askers are alive on this VM already, and it holds at most {asker.MAX_ASKERS} (their runs: "
+            "r20300101-000000-aaaa, r20300101-000001-aaaa, r20300101-000002-aaaa and 5 more), so this run will not move by itself: it "
+            f"waits in {CPU1}'s line; ") in capsys.readouterr().err
 
 
 def test_a_waiter_asks_only_the_other_machines_pools_and_moves_only_where_it_would_start_now():
