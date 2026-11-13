@@ -107,7 +107,7 @@ def paramsOf (j : Json) : V Params := do
   let key ← Flock.unhex (← Flock.J.str j "key" "the object")
   unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
   let session ← Flock.unhex (← Flock.J.str j "session" "the object")
-  unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
+  unless session.size = attachmentBytes do throw s!"a certifier session id is {attachmentBytes} bytes, not {session.size}"
   let schedule ← Period.scheduleOf (← Flock.J.get j "schedule" "the object")
   unless schedule.maxTokensCap.isNone do
     throw "schedule: the rows audit reads no response cap, so a run under one isn't audited as rows"
