@@ -1,6 +1,6 @@
 """Trust: when we trust a silicon circuit.  Computed from evidence, never asserted.
 
-A *subject* is one exact tensor-core relation on one architecture: a :class:`~verity.definitions.circuits.targets.target.Target` (its
+A *subject* is one exact tensor-core relation on one architecture: a :class:`~verity.circuits.targets.target.Target` (its
 ``instruction`` and ``pipeline`` model) or, for instructions no target wraps yet, a registry
 :class:`~verity.circuits.silicon.instructions.Instruction` with its model.  Its trust **level** is the highest of
 
@@ -50,8 +50,8 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.circuits.targets import target as _target
-from verity.definitions.circuits.targets.target import TARGETS, Target
+from verity.circuits.targets import target as _target
+from verity.circuits.targets.target import TARGETS, Target
 from verity.circuits.silicon import models as _models
 from verity.circuits.silicon.instructions import INSTRUCTIONS, Instruction
 from verity.circuits.silicon.models import Model
