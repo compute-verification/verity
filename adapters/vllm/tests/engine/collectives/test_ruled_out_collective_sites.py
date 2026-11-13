@@ -13,12 +13,13 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
+from tests.acquire.test_tp_partial_source_moe import _T, _Committer, _make, _Mod, _model
 from verity_vllm.acquire.sources import partial_source as tps
-from tests.acquire.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model
 from verity_vllm.engine.collectives import collective_sites as CS
 
 THIS = __name__
@@ -39,6 +40,8 @@ def sequence_parallel_chunk(x):
 
 class Qwen3MoeSparseMoeBlockLike(_Mod):
     """vLLM qwen3_moe.py's forward: the experts' output is gathered across ranks only under sequence-parallel MoE."""
+
+    experts: Any                                                 # the model's child module; no test here runs forward
 
     def __init__(self, is_sequence_parallel, tp_size=2):
         super().__init__()
@@ -171,7 +174,7 @@ def test_match_verdict_lists_the_recorders_ruled_out_sites(tmp_path):
 
 
 def _calls_in(path: Path, fn: str, cls: str | None = None) -> set[str]:
-    tree = ast.parse(path.read_text())
+    tree: ast.AST = ast.parse(path.read_text())
     if cls is not None:
         tree = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == cls)
     tree = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == fn)
