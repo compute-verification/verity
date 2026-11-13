@@ -42,7 +42,7 @@ inputs = [
     "verity/hardware/record.py",
     "verity/hardware/registration.py",
     "verity/device.py",
-    "verity/protocols/__init__.py",
+    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
     "verity/protocols/reporting.py",
     "verity/protocols/accounting/certifier",
     "verity/protocols/proofs/spot",
