@@ -121917,3 +121917,23 @@ The Lean leg [read: `lean-shard.sh`].
 - [guess] The rehearsal's Lean step accepted N=2 statements on 24 CPUs. Full statements at k_log 27 (three of them here) may need more memory than that.
 
 For the table: overhead run, reduced, done: 34 types timed on H200s at 0.58 to 1.51 s a full statement (median of four sessions, all accepted), 96.71% of ranked proving time; EmbeddingRead (1.48%) refused as templated; cards and leases free from 05:08:46Z; the Lean leg is ready on the kept sessions and waits on its launcher and on how it ships under TOP-412.
+
+## RUNSAS, Fri 05:17Z: the empty-values lemma compiles with a clean probe; the population lemma is written and in one try
+
+The machine was replaced again at 05:11Z, so `~/wt` was gone: I started from my pushed branch at `321cdde02b`, made `~/wt` and took `~/wt/.pen` (this loop holds it). The lemma you asked about compiles: the run checking `321cdde02b` built my files and probed `SecondStageOf.lean` clean, `values_nil_of_two` included, and `RoundTwoOf.lean` clean too; its last step, the probe of `Round2.lean`, was still running at 05:16Z. HELDOF's `n` is the run's own population: its three theorems take `n` as a free implicit, so any `n` at which `Slots.popOk` holds serves, and the run checks it at the `n` its boundary record states. I wrote the new lemma in a new file of mine, `RunsAs/PopulationOf.lean` (`632a30da27`, not compiled): from `AcceptedTwo i it j`, `Slots.popOk i.params.verifier.program i.params.verifier.query n = true` at the `n` with `Spot.nat? (Spot.getD i.record "population") = some n`. Its one try is `r20261113-051532-08a0` on vy-nebius-2.
+
+- [run] `r20261113-040705-7745` at `321cdde02b`: `lean-build` exit 0 in 655 s (SecondStageOf, RoundTwoOf, Played). `lean-try SecondStageOf.lean`: lean exit 0 in 577 s; "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", `values_nil_of_two` and `registersNone_of_two` at `[propext, Classical.choice, Quot.sound]`; siblings: no clash among built modules (293 unchecked, unbuilt there). `lean-try RoundTwoOf.lean`: lean exit 0 in 292 s, probe clean (1 theorem). `lean-try Round2.lean`: running at 05:16Z.
+- [read] HELDOF's `twoHolds_of`, `twoHolds_of_ok` and `twoHolds_of_files` (`HeldOfRun.lean` on `cursor/proofs-heldof-4c7b` at `488e6131f4`; the hypothesis is there, not in `HeldOfCheck.lean`) take `{n : ℕ}` and `hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true`; `n` is read nowhere else in their statements.
+- [read] `Run.run` (`Spot/Run.lean`, lines 291 and 300): `let some n := nat? (getD i.record "population")`, then `if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]`, with `v` the params' verifier with `law` and `workTable` replaced, so its program and query are the params'.
+- [derived] `PopulationOf.lean` holds three theorems. `run_popOk`: from `Spot.Run.run i form = .ok j`, any `form`, either `j` is a refusal object or `∃ n, nat? … = some n ∧ popOk … n = true`; it walks `run` as `Select/Code.lean`'s `run_decided` does but stops at the population check. `run_decided` itself could not serve: it is at the default switch, not `form := true`, and does not list `popOk`. `population_of_accepted`: from `AcceptedTwo`, that `∃ n`, with the refusal ruled out by RUNCOINS's `symbol_refused`. `popOk_of_accepted`: at any `n` with `nat? … = some n`, the form `HeldMatches.first` states, so HELDOF's `hp` follows from whichever `n` the caller has.
+- [derived] The file imports RUNCOINS's `Steps.lean` (for `symbol_refused`) and does not edit it. `RunsAs/PopulationOf` is added to `security/Proofs/lakefile.toml`'s roots.
+
+Not established: whether `PopulationOf.lean` compiles (run `08a0`); `Round2.lean`'s probe at `321cdde02b` (7745, still running).
+
+STOP RULE: before, nothing extracted `Slots.popOk` from an accepted run. After, `PopulationOf.lean` adds three theorems about `Run.run`. No listed guarantee, named assumption, lock entry or verifier code changes. No `unwitnessed` entry, and nothing stated at the two-stage form's accept goes into a lock.
+
+NEEDS: nothing.
+
+To post: nothing.
+
+Not mine, acted on none: none since 05:12Z.
