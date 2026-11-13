@@ -60,7 +60,7 @@ import statistics
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
@@ -81,6 +81,10 @@ from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_pl
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
+
+if TYPE_CHECKING:
+    from verity_vllm.acquire.sources import call_boundary_plan as CBP
+    from verity_vllm.pipeline.served_match import ServedCommit
 
 # automatic stage telemetry of THIS process: the engine's build, warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
@@ -999,7 +1003,51 @@ def generated_kernels_of(versions: dict) -> Any:
     return compilation.get("generated_kernels") if isinstance(compilation, dict) else None
 
 
-def main(args: Options) -> None:
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class CommitConfig:
+    """What a Commit has settled before it takes the GPU (`commit_config`): its options with the staging resolved, what it read
+    of the workload and of the required-value manifest, the committer kind of each arm, and what it derived on the CPU from the
+    Programs of record.  No field is written after."""
+
+    args: Options
+    #: the PoUB session (`remote_session.session_of`); None without ``--remote-verifier``
+    session: Any | None
+    #: the source identity precheck's document, which versions.json records
+    source_identity: dict[str, Any]
+    #: the slim replay bundle's planner, started (`replay_bundle.prepare`); None unless ``--replay-deferred slim``
+    planner: Any
+    #: ``VERITY_FAULT``, a negative test's deliberate fault; empty for none
+    fault: Any
+    #: the served row's source, its hooks installed (`served_match.ServedCommit`); None unless ``--compiled-taps served``
+    served: ServedCommit | None
+    #: ``--required-classes``' (`required_classes_cli`), else the default set, which the engine's attention implementation replaces
+    required_classes: tuple[str, ...]
+    required_classes_cli: bool
+    #: the required-value manifest, its partition of record checked; None without ``--required-manifest``
+    required_manifest: dict[str, Any] | None
+    out: Path
+    #: the workload (`vllm_adapter.load_workload`), and the engine arguments it requires under ``--engine-arg``'s
+    wl: dict
+    engine_args: dict
+    #: each treatment arm's committer kind: none for the control alone, the committer's, or those of ``--arms`` (`multi`)
+    kinds: list[str]
+    multi: bool
+    #: the challenge phase reserved with the auditor's challenger (`commit_coins.of_options`); None without ``--challenger-gate``
+    coins: CC.ChallengePhase | None
+    #: the Programs' producer facts and their summary (`commit_plan.producer_facts`); None without a manifest or without a committer
+    oracle_producers: tuple[dict | None, dict] | None
+    #: the record of ``--plan``, then the call-boundary plan and its record (`boundary_plan.use`)
+    plan_rec: dict[str, Any] | None
+    cb_plan: CBP.Plan | None
+    cb_rec: dict[str, Any] | None
+
+
+def commit_config(args: Options) -> CommitConfig:
+    """What a Commit does before it takes the GPU, in this order: the stack dump ``VERITY_TRACEDUMP`` asks for; the source identity
+    precheck, which ends the process with exit 3 on a tree other than the requested one; the staging's resolution; the refusals
+    that need no engine; the served source's hooks; the required-value manifest, held to its Build's digest and its partition of
+    record; the out directory; the workload; the challenge phase's reservation; and, from the Programs of record, the
+    call-boundary plan and the producer facts."""
     _rs = RS.session_of(args)
     if (tracedump := settings.VERITY_TRACEDUMP) is not None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
@@ -1035,12 +1083,10 @@ def main(args: Options) -> None:
         print(f"[delta] SERVED TAPS: every value of every engine step at vLLM's defaults; fault {served.src.fault!r}", flush=True)
     required_classes = tuple(c for c in (args.required_classes.split(",") if args.required_classes is not None else REQUIRED_CLASSES_DEFAULT) if c)
     required_classes_cli = args.required_classes is not None
-    moe_attached = False
     required_manifest = None
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # named refusal, before any engine
-        from verity_vllm.query.manifest.bind import coverage_check as manifest_coverage_check, source_ports
         from verity_vllm.commit.partition import require_partition
         required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
@@ -1060,7 +1106,6 @@ def main(args: Options) -> None:
     kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
     multi = bool(args.arms)
     coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor host's session, reserved before any root (or None: a measurement)
-    coms: dict[str, Any] = {}
     # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
     # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
     # at their first consumer's input, not the module's forward output (oracle_compare.promote_handed_down); form (B) reads them every pair
@@ -1077,6 +1122,22 @@ def main(args: Options) -> None:
                 print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
                       f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
+    return CommitConfig(args=args, session=_rs, source_identity=source_identity_doc, planner=_planner, fault=fault, served=served,
+                        required_classes=required_classes, required_classes_cli=required_classes_cli, required_manifest=required_manifest,
+                        out=out, wl=wl, engine_args=engine_args, kinds=kinds, multi=multi, coins=coins, oracle_producers=oracle_producers,
+                        plan_rec=plan_rec, cb_plan=cb_plan, cb_rec=cb_rec)
+
+
+def main(args: Options) -> None:
+    cfg = commit_config(args)
+    _rs, source_identity_doc, args, _planner, fault, served = cfg.session, cfg.source_identity, cfg.args, cfg.planner, cfg.fault, cfg.served
+    required_classes, required_classes_cli, required_manifest = cfg.required_classes, cfg.required_classes_cli, cfg.required_manifest
+    out, wl, engine_args, kinds, multi, coins = cfg.out, cfg.wl, cfg.engine_args, cfg.kinds, cfg.multi, cfg.coins
+    oracle_producers, plan_rec, cb_plan, cb_rec = cfg.oracle_producers, cfg.plan_rec, cfg.cb_plan, cfg.cb_rec
+    if args.required_manifest:
+        from verity_vllm.query.manifest.bind import coverage_check as manifest_coverage_check, source_ports
+    moe_attached = False
+    coms: dict[str, Any] = {}
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
