@@ -16,7 +16,7 @@ The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<
   `except` lists by module, with the few modules of other areas that read them.
 - Outside code may build modules here and run a Lean file that imports them in this package's Lake environment
   (`lake env lean`), or read this package's lock. These name a module here today, so renaming it changes them:
-  - `verity/protocols/pous/lean/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
+  - `tools/pous_grader/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
     `Proofs.Pous.Accounting.Numbers` for a submission to import, as `submissions/reference.lean` beside it does the
     first; `check.sh` beside it runs the Lean check on `security` with the grader, on scratch submissions that
     import `Proofs.Pous.Statements`.
