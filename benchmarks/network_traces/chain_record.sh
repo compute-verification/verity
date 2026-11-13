@@ -59,7 +59,11 @@
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
 # state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
-# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
+# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows),
+# nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
+# (warden-registration*.json) and the scan's answers, which carry them (answers.json). Those are witness, kept on the
+# chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case reads the
+# answers (certifier_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -208,10 +212,14 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "chain: no firewall frame"; exit 7; }
 
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
-keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive
-  mkdir -p "$2"
+WHOLE=(-name 'warden-registration*.json' -o -name answers.json)   # a step's files that hold a row registration whole
+keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive;
+           # a file holding a row registration whole goes to the chain's private side, $Q/witness/STEP, and not to TO
+  mkdir -p "$2" "$Q/witness/${2##*/}"
   (cd "$1" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin ! -name instances.bin \
-    ! -name signer-state.json ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$2/")
+    ! -name signer-state.json ! -path '*/archive/*' ! \( "${WHOLE[@]}" \) -print0 | xargs -0 -r -I{} cp --parents {} "$2/")
+  (cd "$1" && find . -type f \( "${WHOLE[@]}" \) ! -path '*/archive/*' -print0 \
+    | xargs -0 -r -I{} cp --parents {} "$Q/witness/${2##*/}/")
 }
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
