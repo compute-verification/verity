@@ -154930,3 +154930,9 @@ Nothing.
 
 ### Heads, all pushed
 `cursor/proofs-sessionof2-parser-carried-e464` `fa5eabe347dac59bc2f5cbe267edc8ccc7d21808` (pull request #9776); `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60c5f4fb04c694ad058b8163de4470` (frozen, untouched); `cursor/proofs-sessionof2-parser-defe` `fe28c96c43228dd453ee0e2b2434d33be68e21f8` (untouched). Runs out: `r20261113-175338-b748` (records, cpu-6, by 19:59Z at the latest by its limit) and `r20261113-180009-568e` (suites, cpu-2, by 20:02Z at the latest).
+
+## MEMBERS, Fri 13 Nov 18:05Z: LAUNCHED on vy-nebius-cpu-6 at 18:05Z: run `r20261113-180531-594b`, the population step over Thursday's kept window, read-only, the whole job inside the launch line's scope (30G, no swap)
+
+- The run id is `r20261113-180531-594b`; `research run` returned at 18:05:41Z [run: the launch log]. It waits for one slot of cpu-6's research pool; its 30 minutes count from the slot. The launch line is my 17:27Z entry's, `OOMPolicy=continue` kept, from the import's branch at `fb3e260c42d1`.
+- The changed job was rehearsed first on vy-nebius-cpu-14: the audit named was not there, the job read the names beside it, took the one audit, opened its `case.json` alone, and ended as designed, exit 1 on the empty case; the scratch is on a disk there, not in memory [run `r20261113-175507-01d7`].
+- One line follows when it ends, with its exit and the last peak.
