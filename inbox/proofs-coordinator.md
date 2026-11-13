@@ -162114,3 +162114,44 @@ Nothing.
 `cursor/proofs-sessionof2-parser-carried-e464` `4d1280e75928efe3b29d89635353ef2935ed2a34` (pull request #9776). Runs out: `r20261113-212044-4a85` (records, cpu-8, by 23:21Z), `r20261113-215849-7e1f` (suites, cpu-10).
 
 ## TWOLEG, Fri 13 Nov 22:07Z: the stale execution: your timer `history-try-4d04` (fired Fri 01:47Z) reached it a second time at 22:07Z; not acted on, no run read, no worker resumed
+
+## REDRAW, Fri 13 Nov 22:08Z: ready to mark #9728 at 711ee5f373414bb6f4126a44ba8d986a36b97bf4, stacked on #9717, once its own branch holds that head: say "push" and I fast-forward it
+
+To your 21:18Z. All five items are done but one push, which your 16:03Z word forbids me.
+
+**One word from you.** [git] The head is on `cursor/proofs-carried-9728-4ae1`. #9728's own branch, `cursor/proofs-honest-session-7c1e`, is still at `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`, so the pull request does not show the head yet. `36d6e37cbc7b` is an ancestor of the head, so the move is a plain push, no force. "Push nothing to either" (16:03Z) still stands for it. Say "push" and I move it and put up the body at once; or move it yourself and say so, and I put up the body.
+
+ready to mark #9728 at 711ee5f373414bb6f4126a44ba8d986a36b97bf4
+
+1. **The head is three commits over `7915e17cd346`, the head `51aa` ran at.** [git] Pushed at 21:54Z as a fast-forward of `cursor/proofs-carried-9728-4ae1`.
+   - `c4a7e08536a`: the cap, `UNWITNESSED["security/Properties"]` 184 to 182, one line of `tests/test_lean_packages.py`.
+   - `f53ef0c30ffe`: the two locks as `51aa` wrote them, byte for byte.
+   - `711ee5f37341`: the merge of #9717's marked head `3e1103ded562ad68a1e8c2286491c82b7c314782`. Parents `f53ef0c30ffe` and `3e1103ded562`. `git merge` exit 0, nothing settled by hand. It changes no file: its tree `d2785679cd8f` is the tree of `f53ef0c30ffe`.
+2. **No second records run: the merged tree's two locks are byte for byte what `51aa` wrote.** [run] sha256 at the head, the same as the run's kept records:
+   - `security/lean-audit.json`: `5a85c213a142619c75bab6d0f1007dfe5dc275a3dca677a9a7eda9eb673523e4`
+   - `security/Properties/lean-audit.json`: `7061af7d17633af4a6ff67dce8c885d6756a6c9f33b5c63674b4580985eca092`
+3. **The records run `r20261113-203529-51aa` (vy-nebius-cpu-8, `--records security/Proofs --update`, at `7915e17cd346`): outcome `regenerated`, exit 0.** [run]
+   - `security/Proofs`: "AUDIT … PASS 204963 declarations in 4062 modules", "check.py exit 0 in 943 s".
+   - `security`: FAIL, "every failure of its records is a record difference"; "check.py --update exit 0 in 1836 s"; audited again with the new record: PASS, 27776 declarations in 730 modules, 1137 guarantees.
+   - `security/Properties`: the same; "check.py --update exit 0 in 1335 s"; audited again: PASS, 3485 declarations in 107 modules, 542 guarantees.
+   - What it rewrote is #9717's list and no more: the records of six definitions of `Spot.ChallengerSession` and the module's digest, in both locks; `sessionOf` and `sessionNamed` leave the properties lock; one `trust_gap` entry's premises are in `main`'s order, the same entries. `witnesses` and `layers` are untouched; `unwitnessed` has 182 entries.
+   - Its suites at `7915e17cd346`: "73 suites: 73 passed (62 cached), 0 failed".
+4. **The quick suites of what the head changes over `7915e17cd346` pass.** [run] `r20261113-215437-c7d3` on vy-nebius-cpu-8, `HEAD_AT 711ee5f37341…`, three files changed (the two locks and the cap's file): "10 suites: 10 passed (2 cached), 0 failed". `repository` 358 passed, with `tests/test_lean_packages.py` run whole. The `unwitnessed` warning is gone.
+5. **The queue's merge onto today's `main` counts as clean.** [run] With the queue's own `merged_tree` and `conflicting_files` at `main` `e4f8f845a124`: one file conflicts textually, the pin `tools/pous_grader/TRUSTED.sha256`, in its one line for `security/Proofs/lakefile.toml`, which `main` has changed too. The queue rebuilds that pin from the merged tree (`repinned`) and `conflicting_files` returns none. In the merged tree the list has 182 entries, the cap is 182, and the pin's line is the sha256 of the merged lakefile.
+6. **The body.** [read] The sentence on the cap reads "from 184 to 182", as you ordered. The rest still describes `36d6e37cbc7b`, truly, since that is the head the pull request shows. The body for the new head is written and waits for the push: that it is stacked on #9717 and lands after it, the pin under its path on `main`, and Checks at the carried branch and the head. I put it up with `research queue edit` the minute the branch moves.
+7. **The credit branch's own file elaborates at `842b6a88ecc2`.** [run] `r20261113-213026-31b9` on vy-nebius-cpu-8, `security/Proofs/Pouw/Credit/Withheld.lean`: "Build completed successfully (10891 jobs)", "lean exit 0 in 167 s", "none of its 36 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+8. **Identity, item 4 of your 21:02Z, for this push.** [git] The three commits it added that the remote did not hold are under `Cursor Agent <cursoragent@cursor.com>`, author and committer. The merge also brought onto this branch the 118 commits under `restack carry` that #9717's marked head holds. They were already on the remote, on `cursor/proofs-honest-draw-5b2f`. I made no new one.
+
+### Not established
+
+- Nothing at the head was built or audited. Items 2 and 3 rest on `51aa` at `7915e17cd346`: a records run reads no file that differs between the two commits but the two locks, and those are the files the run wrote and then audited to PASS.
+- `51aa` is the fast path: no kernel replay and no tests of the Lean packages.
+- The head has not been built on today's `main`, which is 1422 commits past the pass's base `4ae17f7eafd7`. The candidate's check is the first build there.
+- Whether infra's rule from Sunday judges a commit new to the branch or new to the remote. If it is the branch, the fast-forward of `cursor/proofs-honest-session-7c1e` adds 178 carried commits under `restack carry` to it and would be refused: one more reason to move it before Sunday.
+
+### Next, unless you say otherwise
+
+- **The credit branch, now that #9728's line is written.** [git] I merge `711ee5f37341` into my own `cursor/proofs-redraw-credit-merged-4de2` (simulated: exit 0, no conflict, three files change: the two locks take `51aa`'s lines and the cap goes to 182). Then one records run with `--update` and the quick suites at that head on vy-nebius-cpu-8, commit what it writes, and lower the cap to the list's size, 181. I push to neither credit branch.
+- Bookkeeping I leave for the next pull request: the retired-terms tests warn on three of #9728's files (`Steps.lean` 12, `Withheld.lean` 13, `Entry.lean` 1), most of them the reader's own name `drawCoins`.
+
+**Runs going on:** none. **Next entry:** when the credit branch's records run is launched, with its id.
