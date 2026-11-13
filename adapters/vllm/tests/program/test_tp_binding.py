@@ -141,8 +141,8 @@ def test_the_programs_whose_combines_calls_read_keep_their_binding_records_byte_
     """The bindings of the Programs this suite builds, every combine's output read by calls, have the digests they had before
     a batch could read one (prefixes pinned), under the v1 tag, with no batch reader."""
     got = {"toy": [b.digest[:32] for b in toy],
-           **{k: TB.derive([rank_body(w, r, **kw) for r in range(w)]).digest[:32]
-              for k, w, kw in [("w3", 3, {"whole": True}), ("w4", 4, {"whole": True}), ("c3", 3, {"chain": True})]}}
+           **{k: TB.derive([rank_body(w, r, whole=not chain, chain=chain) for r in range(w)]).digest[:32]
+              for k, w, chain in [("w3", 3, False), ("w4", 4, False), ("c3", 3, True)]}}
     assert got == {"toy": ["c7245776074afe0eff9fc3fdbfaff86e", "5891b66d23e6ef4057b28779bac45886",
                            "c7245776074afe0eff9fc3fdbfaff86e"],
                    "w3": "f7be7eedbe63b283491a140e23b5067a", "w4": "261abcb2d66254ae8d61655eb69f01fd",
