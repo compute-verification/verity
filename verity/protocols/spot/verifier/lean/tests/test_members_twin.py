@@ -60,13 +60,14 @@ def _never(_):
 
 class Audit:
     """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its registration's two roots
-    named `ports`, audited on a challenger session that releases the sample and then opens one coin tree a member, in
-    the order `opened`, each tree's link, its rounds and its closing round after its session's evidence (its record and
-    one proof file) before the next tree's first round: the per-member parameters and evidence, and the files. A member
-    `opened` leaves out has no session and no statement. Only the members of `closed` have their tree's closing round
-    opened, and with `together` those rounds are opened after every tree's other rounds."""
+    named `ports`, audited on a challenger session that releases the sample and then opens one coin tree a member of
+    `opened`, in that order (a member it leaves out has no session and no statement), each tree's link, its rounds and
+    its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
+    the per-member parameters and evidence, and the files. Only
+    the members of `closed` have their tree's closing round opened, and with `together` those rounds are opened after
+    every tree's other rounds."""
 
-    def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, ...] = (A, B),
+    def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False):
         rng = random.Random(seed)
         s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
