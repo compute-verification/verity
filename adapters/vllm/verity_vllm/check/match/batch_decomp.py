@@ -528,7 +528,7 @@ class Options:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     res = decompose(a.oracle, a.derived, within_step=a.within_step)
     with open(a.out, "w") as f:
