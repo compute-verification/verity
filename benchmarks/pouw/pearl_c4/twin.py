@@ -3,7 +3,7 @@ from its 64 A rows and 64 B rows (BF16 words) and the job's seeds.
 
 The per-element and per-word work is batched over `verity.circuits.kernels.tc`' bit-exact steps: the noise atoms, the noisy block
 scales and the E2M1 cast, the chain, the fused A′·F_B and B̃·F_A, and the peel.  The per-row statistics, the lines and
-P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.pouw.prover.schemes.pearl_c4`).  `fixture.py` writes
+P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`).  `fixture.py` writes
 the device check's fixtures from these steps; `tile` is the steps as one tile, which
 benchmarks/pouw/tests/test_pearl_c4_twin.py holds to the scalar reference.
 """
@@ -17,9 +17,9 @@ import numpy as np
 from verity.circuits.kernels.tc import block_scaled_batch, group_sum_total_batch
 from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 __all__ = ["Job", "Side", "Tile", "block_scales", "cells", "chain", "e2m1", "e_tilde", "f32", "form", "job", "quantize",
            "rne_bf16", "tile", "u32", "ue4m3", "ue4m3_value", "ue8m0_up"]
