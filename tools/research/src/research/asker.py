@@ -257,11 +257,15 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
             break
         if started(first):
             why = f"it started on {m['home']}" + (f", and its twin {twin['run']} leaves {twin['machine']}'s line" if twin else "")
+            if twin:                                           # the first holds the pair's claim: its twin can't run
+                twin.update(state="left", left=f"{m['run']} took a slot on {m['home']} first")
             break
         if _cancelled(first):
             left = cancel(root / twin["run"], f"its first, {m['run']} on {m['home']}, was cancelled") if twin else None
             why = "it was cancelled" + (f", and its twin {twin['run']} on {twin['machine']} "
                                         + (f"could not be ({left})" if left else "with it") if twin else "")
+            if twin and not left:
+                twin["state"] = "cancelled"
             break
         if other and _cancelled(other):
             twin["state"], why = "cancelled", f"its twin {twin['run']} was cancelled, so it asks no more; the run keeps its place on {m['home']}"

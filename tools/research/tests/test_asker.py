@@ -230,22 +230,26 @@ def test_a_send_file_that_changed_since_the_launch_moves_nothing(world, tmp_path
 
 # ---- it ends ------------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize(("first", "twin", "why", "cancelled"), [
-    (held(), None, f"it started on {A}", []),
-    (held(), waiting(None), f"it started on {A}, and its twin TWIN leaves {B}'s line", []),
+@pytest.mark.parametrize(("first", "twin", "why", "cancelled", "live"), [
+    (held(), None, f"it started on {A}", [], None),
+    (held(), waiting(None), f"it started on {A}, and its twin TWIN leaves {B}'s line", [], False),
     (left("no check slot within --wait-max 14400 s"), None,
-     f"it ended on {A} without starting (failed: no check slot within --wait-max 14400 s)", []),
+     f"it ended on {A} without starting (failed: no check slot within --wait-max 14400 s)", [], None),
     (left("its twin took a slot first (claimed)"), waiting(None),
-     f"it ended on {A} without starting (failed: its twin took a slot first (claimed)); its twin TWIN on {B} is what is left of it", []),
-    (left(MEMORY, "CANCELLED_MANUAL"), None, "it was cancelled", []),
+     f"it ended on {A} without starting (failed: its twin took a slot first (claimed)); its twin TWIN on {B} is what is left of it", [],
+     True),
+    (left(MEMORY, "CANCELLED_MANUAL"), None, "it was cancelled", [], None),
     (left(MEMORY, "CANCELLED_MANUAL"), waiting(None), f"it was cancelled, and its twin TWIN on {B} with it",
-     [("TWIN", f"its first, {RUN} on {A}, was cancelled")]),
-    (waiting(), left(MEMORY, "CANCELLED_MANUAL"), f"its twin TWIN was cancelled, so it asks no more; the run keeps its place on {A}", []),
+     [("TWIN", f"its first, {RUN} on {A}, was cancelled")], False),
+    (waiting(), left(MEMORY, "CANCELLED_MANUAL"), f"its twin TWIN was cancelled, so it asks no more; the run keeps its place on {A}", [],
+     False),
 ], ids=["it-started", "it-started-beside-a-twin", "it-left-its-line", "it-left-for-its-twin", "it-was-cancelled",
         "it-was-cancelled-beside-a-twin", "its-twin-was-cancelled"])
-def test_the_asker_ends_when_the_run_has_started_ended_or_been_cancelled_and_a_cancel_reaches_its_twin(world, first, twin, why, cancelled):
+def test_the_asker_ends_when_the_run_has_started_ended_or_been_cancelled_and_a_cancel_reaches_its_twin(world, first, twin, why, cancelled,
+                                                                                                    live):
     """An asker that outlived its run would ask for, and could move, a run that is over; a cancelled run whose twin still
-    waited would run after all."""
+    waited would run after all. Its record's twin stays the run (``live``) only where it may still run: `research status`
+    and `research cancel` follow no twin that can't."""
     world.answers = [((B, "research"), STARTS) if twin else (None, NOWHERE)]
     world.at[10] = lambda: world.runs.update({RUN: first, **({world.launched[0]["run"]: twin} if twin else {})})
     said = world.run()
@@ -256,6 +260,9 @@ def test_the_asker_ends_when_the_run_has_started_ended_or_been_cancelled_and_a_c
     rec = world.record()
     assert rec["ended"] == {"at": "2026-10-01T09:10:00Z", "why": said} and rec["next"] is None
     assert not asker.alive(rec, world.t)
+    assert live is None if not twin else (rec["twin"]["state"] in asker.LIVE) == live
+    if first == held() and twin:
+        assert rec["twin"]["left"] == f"{RUN} took a slot on {A} first"
 
 
 def test_the_first_starting_while_its_twin_is_launched_ends_the_asker_at_once(world, monkeypatch):
