@@ -722,3 +722,20 @@ on `main` after the chains is for later, not now):**
 the TSV beside it, and a draft of the plan's row (what moves, to where, in which pull
 request, after what). CHECKPOINT lines each 30 minutes; commit and push before you end.
 **Return by 13:30Z.** HASH-130's backup record (by Sat 18:00Z) stands after this.
+
+## Fri 13 Nov 08:41Z: for your design's part 2, vllm's answer (TOP-415, 08:40Z): read it at your next checkpoint
+
+vllm takes the call and designs the split of `fixture.py` with us. Its input:
+- **The source digest is compared with nothing stored** [its `git grep` for `source_sha256`
+  and `source_digest` on `main` `b3902993caea`]: `pearl_c/kernel.py:57` computes it,
+  `ends.py:342` writes it into the manifest, `__init__.py:386` prints it; no test or check
+  of the adapter pins a value. **Check that once yourself, and look outside the adapter
+  too** (the harness's records, `overhead_arm.json`, the gate's record, the evidence store's
+  labels), since your option table needs it.
+- **Its wish for the design: the digest covers exactly the files the served loader
+  executes**, so that a change to a test vector's reader no longer renames a served
+  kernel. Serving reads `keys_of` from `fixture.py` and everything of `run.py`.
+- It answers our plan the evening it is posted (Fri 6 PM PST).
+So one option in your table is: the served part of `fixture.py` in a file of its own beside
+`run.py`, and the digest over `run.py`, that file and `grouped.py` where it is loaded.
+Say what that does to a reader who compares manifests across the change.
