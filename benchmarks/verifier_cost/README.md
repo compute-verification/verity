@@ -123,11 +123,14 @@ units: `population.py` writes, per N, a population of about N units over a layer
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
 `Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
-`popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
+`popOk_eq_popOkRanges`: no replay unit and no input gate is built), the one-stage check's call of it
+(`OneStageZk.popHeld`, compiled in `Spot/OneStageZk.lean`, which imports `Spot.PopOrder` so that it runs from the ranges
+too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every
 unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
 population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
 (default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
-layout's input class reads. `$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+layout's input class reads: `popOk`'s row and `popHeld`'s must not grow with M.
+`$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
 
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
