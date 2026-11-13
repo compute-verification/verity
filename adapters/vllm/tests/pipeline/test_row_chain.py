@@ -3,8 +3,9 @@ artifacts, the Commit's summary.json, the newest captures of record and the tree
 and a chain that would publish a row whose file is not done only at its public cap is refused before any stage runs.  The research
 CLI and `records publish` are stand-ins that record what they were asked.
 
-Then the run store's driver beside the chain (`pipeline/research.py`, which only this file may import): a job's recorded input,
-the pod guard's preserve list, a `row.json` that does not parse, and `row shed` on a tree with no pod guard."""
+Then the run store's driver beside the chain (`pipeline/research.py`, private with this file in the public boundary's `team` group,
+so only a file the boundary keeps private may import it): a job's recorded input, the pod guard's preserve list, a `row.json` that
+does not parse, and `row shed` on a tree with no pod guard."""
 from __future__ import annotations
 
 import json

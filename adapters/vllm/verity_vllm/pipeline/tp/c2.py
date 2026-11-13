@@ -65,6 +65,20 @@ def last_per_rank(rows: list[dict]) -> dict:
     return {}
 
 
+def block_of(doc: dict, name: str) -> dict:
+    """The block ``name`` of a document the Commit's driver reads: the workload, the manifest of record, a rank's answer to one of its
+    calls (its make, its finalize, an opening, a value check), the cross-rank pass's result, a rank's commit block, a run's row.  Empty
+    for a document that holds none, or holds it null or empty: each field read off it is then None."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def list_of(doc: dict, name: str) -> list:
+    """The list ``name`` of such a document; empty for a document that lists none."""
+    listed = doc.get(name)
+    return listed if listed else []
+
+
 def _rank_record(cblock: dict, name: str) -> dict:
     """A rank's record ``name`` on its commit block (`sampled_replay`, `boundary_linkage`, `weights_pin`, `attribution`,
     `match_oracle`); empty for a rank that holds none: the gate that writes it had nothing to write (it writes None: no replay, no
@@ -87,6 +101,13 @@ def _replay_list(sr: dict | None, name: str) -> list:
     for no record."""
     listed = sr.get(name) if sr else None
     return listed if listed else []
+
+
+def _by_family(populations: dict) -> dict:
+    """Each family's count over the ranks' population blocks (the fold's `population.by_family`); a rank whose population names no
+    family adds none."""
+    families = [p["by_family"] for p in populations.values() if p.get("by_family")]
+    return {f: sum(int(by.get(f) or 0) for by in families) for f in sorted({f for by in families for f in by})}
 
 
 def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tuple[dict, str | None]:
@@ -391,7 +412,6 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
         values = _strata_key(k_, "lifetime", "values")
         for lv, n_ in (values.items() if values else ()):
             lifetimes[lv] = lifetimes.get(lv, 0) + int(n_)
-    families = [p["by_family"] for p in popn.values() if p.get("by_family")]      # a rank whose population names no family adds none
     sr_comp: dict[str, Any] = {"result": sr_ok if all(s for s in srs.values()) else None,
                "method": ("per rank, in the rank's committing process (tp2_worker finalize): sampled_replay on THIS rank's binding map (identity.rank == r), "
                           "THIS rank's request Programs of record (derive_step --tp 2 --rank r; components per (LP, T)), the rank's committed members and "
@@ -399,7 +419,7 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
                           "by a peer rank's partial have no evaluator and are counted by name"),
                "population": {"n": sum(int(p.get("vus") or 0) for p in popn.values()), "per_rank": {r_: p.get("vus") for r_, p in popn.items()},
                               "source": next((p.get("source") for p in popn.values() if p.get("source")), None),
-                              "by_family": {f: sum(int(by.get(f) or 0) for by in families) for f in sorted({f for by in families for f in by})}},
+                              "by_family": _by_family(popn)},
                "n": sum(int(m.get("evaluated") or 0) for m in smp.values()),
                "sample": {"picked": sum(int(m.get("picked") or 0) for m in smp.values()), "evaluated": sum(int(m.get("evaluated") or 0) for m in smp.values()),
                           "equal": sum(int(m.get("equal") or 0) for m in smp.values()), "mismatch_n": sum(int(m.get("mismatch_n") or 0) for m in smp.values()),

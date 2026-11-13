@@ -46,8 +46,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 them at the deployed session's files, from the one named premise that those files parse
 (`Flock.Bridge.Assumptions.ServedFilesParse`): inputs `I` whose files have the deployed SHA-512 digests, at
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, `D`'s unit
-is built (`Built`), the public file loads with no shared-row tables, `D` is in `scopeOkH`, and the tags are the ones the
-statements take (`TagsOkZHJ`). The finders' collision resistance is no hypothesis of these: the statements take it as
+is built (`Built`), the public file loads with no shared-row tables, `D` is in `scopeOkH`, no two of its ports'
+published domains are one (`PortRoots.dupId`), and the tags are the ones the statements take (`TagsOkZHJ`). The finders' collision resistance is no hypothesis of these: the statements take it as
 `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`, the named assumptions `SHA512CRStrict` and `SHA512CRExpected` at
 the prover's finders.
 -/
@@ -75,8 +75,8 @@ open FlockSoundness FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExe
 hypothesis `SampledKSLiveV2` and `SampledKSLivePub` take of the files holds, and so do `SampledKSLiveV3`'s and its case
 `Bridge.KsScoped` (at one table every draw's `k` is a multiple of the tables): `I`'s files are the deployed ones (their
 SHA-512 digests), its tags `verity/flock-circuit`'s with one table and no session tables, untyped, the circuit file
-parses to `D` and `D`'s unit is built, the public file loads at `D` with no shared-row tables, `D` is in `scopeOkH`, and
-the tags are hidden-output ones (`TagsOkZHJ`). -/
+parses to `D` and `D`'s unit is built, the public file loads at `D` with no shared-row tables, `D` is in `scopeOkH`, no
+two of its ports' published domains are one (`PortRoots.dupId`), and the tags are hidden-output ones (`TagsOkZHJ`). -/
 def SampledKSLiveHonest : Prop :=
   Bridge.Assumptions.ServedFilesParse →
     ∃ (I : Inputs) (D : Flock.Desc) (pub : Flock.Public),
@@ -88,7 +88,7 @@ def SampledKSLiveHonest : Prop :=
       I.tags.typed = false ∧
       Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
       HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub ∧ pub.tables = none ∧
-      Discharge.Layout.scopeOkH D.unroll = true ∧ TagsOkZHJ I
+      Discharge.Layout.scopeOkH D.unroll = true ∧ Flock.PortRoots.dupId D.unroll pub = false ∧ TagsOkZHJ I
 
 end Flock.Guarantees
 
@@ -97,11 +97,11 @@ open FlockSoundness FlockSoundness.Discharge.ZkExec in
 unit is built because `HmRow.parse` built it (`built_of_parse`, through `parse_untyped` at untyped tags), and the
 verifier's `scopeOkH` is the analysis's (`scopeOkH_eq`). -/
 theorem Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest := by
-  rintro ⟨cf, pf, hcf, hpf, D, hD, hsc, pub, hpub, hpt⟩
+  rintro ⟨cf, pf, hcf, hpf, D, hD, hsc, pub, hpub, hpt, hdup⟩
   have hD' : Flock.Desc.parse (zkTags (Flock.Bridge.servedI cf pf)) cf [] = .ok D := hD
   have hpub' : Flock.HmOut.loadPublic (zkTags (Flock.Bridge.servedI cf pf)) D.unroll pf = .ok pub := hpub
   have ht : (Flock.Bridge.servedI cf pf).tags.typed = false := rfl
-  refine ⟨Flock.Bridge.servedI cf pf, D, pub, rfl, rfl, rfl, hcf, hpf, ht, hD', ?_, hpub', hpt, ?_, rfl, rfl, rfl⟩
+  refine ⟨Flock.Bridge.servedI cf pf, D, pub, rfl, rfl, rfl, hcf, hpf, ht, hD', ?_, hpub', hpt, ?_, hdup, rfl, rfl, rfl⟩
   · exact FlockC3.VStarList.built_of_parse
       (FlockSoundness.Discharge.Hidden.parse_untyped ((zkTags_typed _).trans ht) (Flock.Desc.parse_flat hD')).1
   · rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
