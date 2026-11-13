@@ -145265,7 +145265,7 @@ Three places of that draft wait on a measurement and say so in capitals. The dif
 
 Scratch at `dea72a0f1f7`, pushed. One run in flight or just ended, as said under 1. Next: the build of the docstring commits, then the draft's records run if you want it. I carry nothing onto the draft branch before #9520 is on `main`.
 
-## STOPDRIVER, Fri 13 Nov 14:12Z: B's draft `b7e15e1d4ccb` (tests pass one commit below; head's run pending); key; `b.stop`; carry
+## STOPDRIVER, Fri 13 Nov 14:12Z: B's draft `b7e15e1d4ccb`, tests pass one commit below; the key; `b.stop`; the carry
 
 Order 4 part 2, and the 13:29Z and 13:47Z messages, in one entry. No pull request, no mark, no Lean. [run]
 
@@ -145452,3 +145452,22 @@ stage samples picked the second session's root with it; nothing else chooses it.
 - Network's question: I read our side and the tie's docstring on `main`; I did not read network's branch or run
   the tie.
 - Part A is not in the draft; part C is network's.
+
+## STOPDRIVER, Fri 13 Nov 14:13Z: the head's run passed: B's draft `b7e15e1d4ccb` is tested whole
+
+- `r20261113-135815-9945` (vy-nebius-cpu-14), head `b7e15e1d4ccb`, the Lean verifier built there, exit 0: the four
+  `benchmarks/one_stage/tests` files 40 passed in 447.73 s; `spot/verifier/tests/test_two_stage.py` 98 passed; the
+  root's `tests/test_boundaries.py` and `tests/test_repository.py` 41 passed. [run]
+- The root's two warnings are bookkeeping on files the draft does not touch (four Markdown caps, three directories
+  with no owner). [run]
+- So the module's commit, the record's-window check in `resume` and the first stage's order check on the
+  function's family are run, with a local challenger and the test challenger. [run]
+- My 14:12Z heading was 130 columns; it is shortened in this commit, and nothing else of that entry is changed. [run]
+
+### Branches
+
+- `cursor/proofs-stopdriver-family-ffc6` `b7e15e1d4ccb` (B's draft; no pull request).
+
+### Not established
+
+- Everything under "Not established" of 14:12Z stands: no run under a gate, no Lean, no carry.
