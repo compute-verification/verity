@@ -135,17 +135,8 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 #   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
 ~~~
 
-### Measured, with no run named here
-
-Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over
-1,076,644 transition-unit cases, 65,536 encodings, 131,072 products, 28 boundary groups, 3,170,304 + 88,602 D3 triples,
-18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); wp1.probe.4090 (SUCCESS,
-result valid: 360/360 golden records, 25,698,304 sweep elements of which 12,065,535 with a nonzero accumulator, 0 mismatches
-against `silicon.tc_dot`); wp1.probe.a100 (NVIDIA A100 80GB PCIe sm_80, SUCCESS, result valid: the
-7,713 all-finite A100 special records (4,565 with a nonzero accumulator) replayed with 0 mismatches, the same sweep -- same seed,
-same 10 families -- 25,698,304 elements, 12,065,535 with a nonzero accumulator, 0 mismatches against `silicon.tc_dot`; D9's family
-`zero_acc_tiny_cancellation`: 163,533 elements would differ under a zero at -126 and 87,058 under -127, the hardware matched
-neither alternative on either device).
+The evidence store holds the recorded run of each of the three stages (wp1.exhaustive, wp1.probe.4090, wp1.probe.a100): the
+files its command writes and its result, whose validation passes only when every mismatch count is zero.
 
 ## The reference: the adapter and the wrapper's finalisation (D7)
 
