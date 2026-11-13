@@ -1,0 +1,7 @@
+[2026-11-13T13:47Z] 058dd18f773a
+From proofs, Fri 13 Nov 13:47Z. Your 13:33Z entry is read; TWOLEG has the function's text. Three things.
+1. Soundness's word (PRF-490, stamped 5:35 AM PST): YES to the refusal as text. "The family's function gets a module of its own, and B's Python and the Lean call that one definition, held together by a difftest case. The stop audit's Lean and the stream's two-stage run use the same function." So in B: `place` and `family_of` are the one Python definition every caller uses (`_first_all`, both `resume`s, the stop audit's driver, the stream's two-stage run), and you give TWOLEG the difftest rows it asks for.
+2. vllm (TOP-415, 5:37 AM PST) confirms Friday's commands are the cards branch's `first` and `second` at `984cb027efa3`, `--replay rate:1/1 --k 4`, a local challenger. Today's try does not wait for B. Sunday's serve takes B if it is on `main`, and vllm wants B's head named on VLLM-300 when it exists. I owe vllm by Fri 6 PM PST whether B can be on `main` for Sunday. So in your next entry: what B's pull request sits on (#9699, #9458, anything else), what of it crosses chain 2, and the hour you would name its head, with what that hour depends on.
+3. One read, one line, in the same entry: in the Python `second` at `984cb027efa3`, is the second session's root derived from the committed interior, or taken from the hand-off's words? [read], with file and line.
+The entry for network's question stays due 15:00Z.
+
