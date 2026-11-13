@@ -26,8 +26,9 @@ The descriptor check gives the copy (`HeldOf.heldOf_of_descOk`), and `CopyAt` sa
 
 ## `CopyAt` at the cases at one statement
 
-At the cases at the statement `x` (`atStmt C x`), `copyAt_of` gives `CopyAt` from three premises, one for each thing
-`heldOf` reads, and `heldOfAt_at` is `HeldOfAt A (atStmt C x)` from them and `DescAt`:
+At the cases at the statement `x` (`atStmt C x`), `copyAt_of` gives `CopyAt` from three premises, and `heldOfAt_at`
+is `HeldOfAt A (atStmt C x)` from them and `DescAt`. `heldOf` reads the boundary record, the parameters and the
+reference statements:
 
 * the boundary record needs none: every accepted play at `x` carries the record the proved verifier's reader reads
   from `x` (`inputOn_at`, `jsonMsg_of_readBack`);
@@ -38,12 +39,12 @@ At the cases at the statement `x` (`atStmt C x`), `copyAt_of` gives `CopyAt` fro
   name, and the pinned lookup tables the blobs hold, each under a digest the verifier pins;
 * `CopyOf A P j u`: `A.h` is the copy `heldOf` builds from the parameters `P`, the boundary record `j` and `u`, at
   every input and interior that carry them in the seven fields `heldOf` reads, which are the ones an accepted play's
-  input has (`fields_of_accept`).
+  input has (`fields_of_accept`). One such input and interior building `A.h` give it (`copyOf_of_one`, in
+  `CopyOfOne`).
 
 ## What this does not show
 
 * `DecodesAt`, `RefsAt` or `CopyOf` at any case map or session of record. `RefsAt` is no check's verdict.
-* That one input with the seven fields building `A.h` gives `CopyOf`: that `heldOf` reads no other field.
 * That the form's check calls `descOk`: it does not.
 -/
 
