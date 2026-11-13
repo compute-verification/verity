@@ -1294,7 +1294,7 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "c38c0365b73bdf04a0169c97b50c7f4e1a117470d5fc396f262d04a9c071d90c",
+NO_VERDICTS = {"text": "9d41837b5545286c7a4469289b881be8cf8773c49a2c4dbd9ffefc373f689c6d",
                "json": "73a3db53c47d38df60473bbd19134936c1b59c7f6090aff99d56899d2dad4e89"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
@@ -1742,8 +1742,8 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert head["inputs"][1:] == audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's",
                                                          *doc["runs"]]
     assert net["inputs"] == [
-        "modeled: the network certifier's term of record, its `scan` row as the scan's check charges it today at D_j = 2, "
-        "on an assumed class of at most 1,024 ids a response",
+        "modeled (run, not proved): the network certifier's term of record, its `scan` row as the scan's check charges it "
+        "today at D_j = 2, on an assumed class of at most 1,024 ids a response",
         f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
         f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)"]
     assert all("why" not in m and m["ci95"] is None and m["host"]["node"] == "cpu-node-0" for m in by.values())
@@ -1760,21 +1760,32 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
 def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, monkeypatch):
     """A row of the network certifier's legend that carries a mark (the calculator's `scan` row's accept, run, not
     proved) prints it beside the row's standing, as the mark, in that line alone; the network certifier's recorded
-    figure carries it beside its own mark. A mark this command has no name for is refused by the row's name."""
+    figure carries it beside its own mark. The calculator gives its `scan` row that mark itself, so the print as it
+    stands is the marked one, and the row without the mark is made here. A mark this command has no name for is
+    refused by the row's name."""
 
     lb = term()
     document = lb.document
 
-    def marked(mark: str):
+    def marked(mark: str | None):
         def made(*a, **kw) -> dict:
             doc = document(*a, **kw)
             return doc | {"legend": doc["legend"] | {"scan": doc["legend"]["scan"] | {"mark": mark}}}
 
         return made
 
-    base = E.render(E.build(store=recorded(tmp_path / "base").fresh(), root=REPO)).splitlines()
+    as_given = E.build(store=recorded(tmp_path / "given").fresh(), root=REPO)
+    assert as_given["certifier"]["legend"]["scan"]["mark"] == E.RUN_NOT_PROVED
+    monkeypatch.setattr(lb, "document", marked(None))
+    unmarked = E.build(store=recorded(tmp_path / "base").fresh(), root=REPO)
+    base = E.render(unmarked).splitlines()
+    scan = unmarked["certifier"]["legend"]["scan"]
+    assert scan["mark"] is None and f"- scan ({scan['standing']}): {scan['counts']}" in base
+    bare, = E.measurements(unmarked, {"benchmarks/x": "network_certifier"})
+    assert bare["mark"] == "modeled" and bare["inputs"][0].startswith("modeled: the network certifier's ")
     monkeypatch.setattr(lb, "document", marked(E.RUN_NOT_PROVED))
     doc = E.build(store=recorded(tmp_path / "marked").fresh(), root=REPO)
+    assert E.render(doc) == E.render(as_given)
     scan = doc["certifier"]["legend"]["scan"]
     assert [line for line in E.render(doc).splitlines() if line not in base] == [
         f"- scan ({scan['standing']}; run, not proved): {scan['counts']}"]
