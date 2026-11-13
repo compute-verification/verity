@@ -8,7 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_cublas_train.py"]
 # The catalog's test loads every registry module, which reads `verity.ml`.
 # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
-inputs = ["verity", "verity/settings.py", "verity/configuration/config/verity_config"]
+inputs = ["verity", "verity/settings.py", "tools/config/verity_config"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
 
