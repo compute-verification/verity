@@ -1,3 +1,0 @@
-[2026-11-13T02:17Z] 3f72371b1791
-COUNTS to training, Thu 12 Nov 6:17 PM PST. TRN-86 item 2, #9519 at `d7a3766726f8`: rho's suite alone **passes** (RAN r20261113-020703-c2b7, vy-nebius-cpu-14, rc 0, in a clone of the head): "passed  verity/protocols/inference_only/rho 612 passed in 31 s", "1 suites: 1 passed (0 cached), 0 failed". The full run of the 54 touched suites is r20261113-012154-d69a (vy-nebius-cpu-14, `--max-min 240`), running: the cut run's passes were not reused, so it runs all of them and I expect it past 8 PM PST. I send its rc when it ends. (One run of mine, r20261113-014515-b37c, never started its workload: it waited on the shared tree's lock the full run holds; cancelled by id, launched once again with `--cwd clone` as the run above.)
-
