@@ -42,8 +42,8 @@ PLACE_FORM = ("place is not the id the registration log registered the period's 
               "(a nonempty string)")
 #: `PouwCheck.Period.PART`'s name: the part of the device at ``place`` a period accounts for, its compute
 PART = "compute"
-SESSIONS_FORM = ("sessions is not a list of the ids of the sessions the challenger's ledger opened for the period "
-                 "(1 to 64 of [A-Za-z0-9._:-] each, the first alphanumeric)")
+CHALLENGE_PHASES_FORM = ("sessions is not a list of the ids of the sessions the challenger's ledger opened for the "
+                         "period (1 to 64 of [A-Za-z0-9._:-] each, the first alphanumeric)")
 
 
 def params(j: Any) -> dict:
@@ -61,7 +61,7 @@ def params(j: Any) -> dict:
         raise CC.Refused(PLACE_FORM)
     ss = j["sessions"]
     if not (type(ss) is list and all(type(s) is str and PS.SESSION.fullmatch(s) for s in ss)):
-        raise CC.Refused(SESSIONS_FORM)
+        raise CC.Refused(CHALLENGE_PHASES_FORM)
     return j
 
 
@@ -159,17 +159,17 @@ def _period_entry(ledger: list, kind: str, name: str) -> dict | None:
     return next((e for e in map(json.loads, ledger) if e["kind"] == kind and e["body"].get("period") == name), None)
 
 
-def ledger_sessions(ledger: list, name: str) -> list[str]:
-    """`PouwCheck.Period.ledgerSessions` on a ledger the challenger's checks have trusted: the sessions period `name`'s
-    close lists, in its order (each window's session, then its sample's), the empty list when it closes no period
-    `name`."""
+def ledger_challenge_phases(ledger: list, name: str) -> list[str]:
+    """`PouwCheck.Period.ledgerChallengePhases` on a ledger the challenger's checks have trusted: the sessions period
+    `name`'s close lists, in its order (each window's session, then its sample's), the empty list when it closes no
+    period `name`."""
     close = _period_entry(ledger, "period-close", name)
     return [] if close is None else [w["session"] for w in close["body"]["windows"]]
 
 
-def sessions_refusal(name: str, listed: list[str], got: list[str]) -> str | None:
-    """`PouwCheck.Period.sessionsRefusal`: the first session of `got` the parameters don't list (`listed`) or that
-    repeats one before it, else None."""
+def challenge_phases_refusal(name: str, listed: list[str], got: list[str]) -> str | None:
+    """`PouwCheck.Period.challengePhasesRefusal`: the first session of `got` the parameters don't list (`listed`) or
+    that repeats one before it, else None."""
     seen: set[str] = set()
     for i, s in enumerate(got):
         if s not in listed:
@@ -202,8 +202,8 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] |
                                        CC.lms_verify)
     if refused is not None:
         return "reject", f"{refused[0]}: {refused[1]}", None
-    if "sessions" in p and (why := sessions_refusal(p["name"], p["sessions"],
-                                                     ledger_sessions(c["ledger"], p["name"]))) is not None:
+    if "sessions" in p and (why := challenge_phases_refusal(p["name"], p["sessions"],
+                                                     ledger_challenge_phases(c["ledger"], p["name"]))) is not None:
         return "reject", f"sessions: {why}", None
     return "accept", None, (published(got, p, c["ledger"]), {"period": p["name"], "windows": len(got["windows"])})
 
@@ -244,6 +244,7 @@ def case(j: Any) -> dict:
     return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
 
 
-__all__ = ["ALONE_KEYS", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE", "HEAD_FORM", "ID", "KEYS_FORM",
-           "PARAMS_KEYS", "PART", "PLACE_FORM", "SESSIONS_FORM", "answer", "case", "check", "commitment", "digest",
-           "evidence", "form", "ledger_sessions", "params", "published", "sessions_refusal"]
+__all__ = ["ALONE_KEYS", "CHALLENGE_PHASES_FORM", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE",
+           "HEAD_FORM", "ID", "KEYS_FORM", "PARAMS_KEYS", "PART", "PLACE_FORM", "answer", "case",
+           "challenge_phases_refusal", "check", "commitment", "digest", "evidence", "form", "ledger_challenge_phases",
+           "params", "published"]

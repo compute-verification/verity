@@ -43,9 +43,9 @@ record, round log, sample, descriptor, registered entries, each sampled proof bl
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
 `Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`.
-Last it reads the sessions period's close lists (`ledgerSessions`) and refuses (`sessions: why`) a ledger it can't read
-them from, and, where the parameters name the registration, a session they don't list or that repeats one before it
-(`sessionsRefusal`). It never leaves a period undecided.
+Last it reads the challenge phases (sessions) the period's close lists (`ledgerChallengePhases`) and refuses
+(`sessions: why`) a ledger it can't read them from, and, where the parameters name the registration, a session they
+don't list or that repeats one before it (`challengePhasesRefusal`). It never leaves a period undecided.
 
 **Public**, on acceptance (`Published.toJson`), what `account` reads: `Credit.PeriodCredit.toJson`, each window's
 credited calls, its credited served work, the K the period's open committed, the δ (`Credit.DELTA`) and each window's
@@ -79,11 +79,12 @@ def aloneKeys : List String := ["key", "main", "name"]
 def evidenceKeys : List String := ["pins", "windows"]
 
 /-- What a period's parameters name of the registration log it is accounted against, all or none: its head, the id
-its device is registered under, and the sessions the challenger's ledger opened for the period's windows. -/
+its device is registered under, and the challenge phases (sessions, under the key `sessions`) the challenger's ledger
+opened for the period's windows. -/
 structure Registered where
   head : String
   place : String
-  sessions : List String
+  challengePhases : List String
 
 structure Params where
   key : Json
@@ -106,7 +107,7 @@ structure Profile where
 def HEAD_FORM : String := "head is not the registration log's head (a SHA-512 digest, 128 lowercase hex)"
 def PLACE_FORM : String :=
   "place is not the id the registration log registered the period's device under (a nonempty string)"
-def SESSIONS_FORM : String :=
+def CHALLENGE_PHASES_FORM : String :=
   "sessions is not a list of the ids of the sessions the challenger's ledger opened for the period (1 to 64 of " ++
   "[A-Za-z0-9._:-] each, the first alphanumeric)"
 
@@ -119,8 +120,8 @@ def registeredOf (j : Json) : V Registered := do
   let some place := (str? (get j "place")).filter (· != "") | throw PLACE_FORM
   let some sessions := (match get j "sessions" with
       | .arr a => a.toList.mapM fun s => (str? s).filter sessionId?
-      | _ => none) | throw SESSIONS_FORM
-  pure { head, place, sessions }
+      | _ => none) | throw CHALLENGE_PHASES_FORM
+  pure { head, place, challengePhases := sessions }
 
 def paramsOf (j : Json) : V Params := do
   let ks := keys j
@@ -224,7 +225,7 @@ def periodEntry? (es : List Spot.Challenger.LedgerEntry) (kind name : String) : 
 /-- **The sessions period `name`'s close lists** in the ledger `ledger`, in its order (each window's session, then its
 sample's): the empty list when the ledger closes no period `name`, and `none` when a line of the ledger isn't an entry
 or a window of the close names no session, ledgers the check refuses. -/
-def ledgerSessions (ledger : Json) (name : String) : Option (List String) := do
+def ledgerChallengePhases (ledger : Json) (name : String) : Option (List String) := do
   let es ← entries? ledger
   match periodEntry? es "period-close" name with
   | none => some []
@@ -234,7 +235,7 @@ def ledgerSessions (ledger : Json) (name : String) : Option (List String) := do
 
 /-- Why the sessions `got` the period's close lists aren't sessions the parameters list (`listed`), each once: the
 first that isn't listed or repeats one before it; `none` when they all are, once each. -/
-def sessionsRefusal (name : String) (listed got : List String) : Option String := Id.run do
+def challengePhasesRefusal (name : String) (listed got : List String) : Option String := Id.run do
   let mut seen : List String := []
   for (s, i) in got.zipIdx do
     unless listed.contains s do
@@ -246,15 +247,15 @@ def sessionsRefusal (name : String) (listed got : List String) : Option String :
   return none
 
 /-- One value for a list of sessions, its canonical JSON: `[]` for none. -/
-def sessionsValue (ss : List String) : ByteArray := (cs (Json.arr (ss.map Json.str).toArray)).toUTF8
+def challengePhasesValue (ss : List String) : ByteArray := (cs (Json.arr (ss.map Json.str).toArray)).toUTF8
 
-/-- The sessions a period's case names, as one value (`sessionsValue`): those its ledger's close lists
-(`ledgerSessions`), read with the check's own decoders from its parameters `params` and its commitment `commitment`;
-`none` only for a case the check rejects. -/
-def sessionsNamed (params : String) (commitment : ByteArray) : Option ByteArray := do
+/-- The challenge phases (sessions) a period's case names, as one value (`challengePhasesValue`): those its ledger's
+close lists (`ledgerChallengePhases`), read with the check's own decoders from its parameters `params` and its
+commitment `commitment`; `none` only for a case the check rejects. -/
+def challengePhasesNamed (params : String) (commitment : ByteArray) : Option ByteArray := do
   let p ← (Core.canonicalJson params.toUTF8 >>= paramsOf).toOption
   let c ← (commitmentOf commitment).toOption
-  sessionsValue <$> ledgerSessions c.ledger p.name
+  challengePhasesValue <$> ledgerChallengePhases c.ledger p.name
 
 /-- Period `name`'s span in the ledger: its open's and its close's seq, and the open roots its close lists in order. -/
 structure Span where
@@ -300,9 +301,9 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published 
     match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
     | .error (code, why) => .reject s!"{code}: {why}"
     | .ok pc =>
-      match ledgerSessions c.ledger p.name, spanOf c.ledger p.name with
+      match ledgerChallengePhases c.ledger p.name, spanOf c.ledger p.name with
       | some got, some s =>
-        match p.registered.bind fun r => sessionsRefusal p.name r.sessions got with
+        match p.registered.bind fun r => challengePhasesRefusal p.name r.challengePhases got with
         | some why => .reject s!"sessions: {why}"
         | none => .accept ⟨pc, p.registered.map fun r => (r.head, r.place), p.key, s.roots, s.start,
             s.stop + 1 - s.start⟩
@@ -358,8 +359,8 @@ private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".
 #guard reason (paramsWith "\"ab\"" "\"gpu0\"" "[]" "\"p\"") == some s!"params: {HEAD_FORM}"
 #guard reason (paramsWith s!"\"{HEAD.toUpper}\"" "\"gpu0\"" "[]" "\"p\"") == some s!"params: {HEAD_FORM}"
 #guard reason (paramsWith s!"\"{HEAD}\"" "\"\"" "[]" "\"p\"") == some s!"params: {PLACE_FORM}"
-#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "\"s0\"" "\"p\"") == some s!"params: {SESSIONS_FORM}"
-#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[\"-s\"]" "\"p\"") == some s!"params: {SESSIONS_FORM}"
+#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "\"s0\"" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
+#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[\"-s\"]" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
 #guard (protocol.answer wellFormed "{}".toUTF8 "{}".toUTF8).reason ==
   some "commitment: the auditor's ledger is not a list of its lines"
 #guard reason wellFormed == some "evidence: keys are not pins, windows"
@@ -369,17 +370,17 @@ private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".
 
 -- a session the parameters don't list, or one that repeats, is refused; the sessions named are one value, `[]` for a
 -- ledger that closes no such period, and none for a case the check refuses
-#guard sessionsRefusal "p" ["s0", "s1"] ["s0", "s1"] == none
-#guard sessionsRefusal "p" ["s0", "s1"] ["s1"] == none
-#guard (sessionsRefusal "p" ["s0"] ["s0", "s1"]).map (·.startsWith "session 1 of period p's close (s1) is not") ==
-  some true
-#guard (sessionsRefusal "p" ["s0"] ["s0", "s0"]).map (·.startsWith "session 1 of period p's close (s0) repeats") ==
-  some true
-#guard sessionsNamed (String.fromUTF8! wellFormed) "[]".toUTF8 == some "[]".toUTF8
-#guard sessionsValue ["s0", "s1"] == "[\"s0\",\"s1\"]".toUTF8
-#guard sessionsNamed (String.fromUTF8! wellFormed) "[\"x\"]".toUTF8 == none
-#guard sessionsNamed (String.fromUTF8! wellFormed) "{}".toUTF8 == none
-#guard sessionsNamed "{}" "[]".toUTF8 == none
+#guard challengePhasesRefusal "p" ["s0", "s1"] ["s0", "s1"] == none
+#guard challengePhasesRefusal "p" ["s0", "s1"] ["s1"] == none
+#guard (challengePhasesRefusal "p" ["s0"] ["s0", "s1"]).map
+  (·.startsWith "session 1 of period p's close (s1) is not") == some true
+#guard (challengePhasesRefusal "p" ["s0"] ["s0", "s0"]).map
+  (·.startsWith "session 1 of period p's close (s0) repeats") == some true
+#guard challengePhasesNamed (String.fromUTF8! wellFormed) "[]".toUTF8 == some "[]".toUTF8
+#guard challengePhasesValue ["s0", "s1"] == "[\"s0\",\"s1\"]".toUTF8
+#guard challengePhasesNamed (String.fromUTF8! wellFormed) "[\"x\"]".toUTF8 == none
+#guard challengePhasesNamed (String.fromUTF8! wellFormed) "{}".toUTF8 == none
+#guard challengePhasesNamed "{}" "[]".toUTF8 == none
 
 -- the account reads what an accepted period publishes: its head, place, work with its ε, and its span's entries
 private def credit : Credit.PeriodCredit := ⟨[[0], [1, 2]], [10, 20], 4, Credit.DELTA, [some (1 / 2), none]⟩
