@@ -51,7 +51,7 @@ The commit after it, `6ee3b8d3b9`, changes only `evidence.json`'s record id.
 
 - circuit-check: `r20261113-083534-e2a9` at `6ee3b8d3b9`.
 - The replay: `r20261113-081538-2873` at `0d2d60aba3`.
-- Suites at `6ee3b8d3b9`: SUITES_LINE
+- Suites at `6ee3b8d3b9`, run `r20261113-084943-f574`: `repository` 352 passed; `verity/definitions` 969 passed, 2 skipped (`2 suites: 2 passed (0 cached), 0 failed`).
 - The ratchet gate (`adapters/vllm/tools/ratchet_gate.py 66f957e940d7 HEAD --json`) at `6ee3b8d3b9` gives `failures: []`.
 - The whole `--changed` set, `verity-vllm` among it, last ran at `f65b556ae575` (`r20261113-015516-01e6`, before the merge of #9693's last commit), and all three suites passed. It runs again at the head carried across tonight's layout moves.
 
