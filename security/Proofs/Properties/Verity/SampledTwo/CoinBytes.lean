@@ -25,7 +25,7 @@ theorem src_getElem? (c : FlockDeploy.Coin) (t : ℕ) :
     Array.getElem?_ofFn]
   by_cases ht : t < SpotFlock.L
   · rw [dif_pos ht, if_pos ht]
-    congr 1
+    refine congrArg some ?_
     apply UInt8.toNat_inj.1
     simp [SpotFlock.coinByte]
   · rw [dif_neg ht, if_neg ht]
@@ -49,7 +49,7 @@ theorem exists_src (B : ByteArray) (hB : B.size = SpotFlock.L) : ∃ c : FlockDe
   ext1
   apply Array.ext_getElem?
   intro t
-  rw [src_getElem?, hc]
+  rw [src_getElem? (fun i => vs[i.val]'(by rw [hlen]; exact i.isLt)) t, hc]
   by_cases ht : t < SpotFlock.L
   · rw [if_pos ht, List.getD_eq_getElem?_getD, Array.getElem?_toList]
     have : t < B.data.size := by rw [ByteArray.size_data, hB]; exact ht
@@ -82,7 +82,7 @@ theorem stageSrc_getElem? {R : ℕ} (cs : Fin R → FlockDeploy.Coin) {x : ℕ} 
     show (SpotFlock.stageSrc cs).data = Array.ofFn fun i => UInt8.ofFin (SpotFlock.stageByte cs i) from rfl,
     Array.getElem?_ofFn, dif_pos hx,
     stageByte_at cs ⟨x / SpotFlock.L, div_lt_of hx⟩ ⟨x % SpotFlock.L, hL⟩ _ (Nat.div_add_mod' x _).symm]
-  congr 1
+  refine congrArg some ?_
   apply UInt8.toNat_inj.1
   simp [SpotFlock.coinByte]
 

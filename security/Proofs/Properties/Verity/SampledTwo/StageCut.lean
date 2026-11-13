@@ -149,7 +149,11 @@ theorem secondDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Sp
   rw [hp, he]
   rcases hch : p.audit.base.challenger with _ | ⟨key, label⟩ <;>
     rcases hw : p.audit.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h <;> cases h
-  simp [hch, hs, hc, bind, Except.bind, Except.toOption]
+  have hc' : Spot.OneStage.commitmentOf s.toByteArray = .ok c₂ := by
+    first
+      | exact hc
+      | simpa using hc
+  simp [hch, hs, hc', bind, Except.bind, Except.toOption]
 
 /-- The interior registration's commitment, as the form's check reads it, is the cut's. -/
 theorem interiorOf_of {e : VStar.Recursive.SampledTwo.Evidence} {s : String} {c₂ : Spot.OneStage.Commitment}
