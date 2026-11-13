@@ -20,7 +20,7 @@ spec = ["**/lean-toolchain", "**/lake-manifest.json"]
 
 [env.rust]
 # the Rust toolchain and the Flock commit cargo builds against
-spec = ["verity/protocols/flock/prover/check_build.sh"]
+spec = ["verity/protocols/proofs/flock/prover/check_build.sh"]
 
 [family.test-file]
 # one task per test file of every suite but those the build family's lean-suites tasks run (suites.py's AFTER_LEAN); a suite's
@@ -74,9 +74,9 @@ timeout_s = 3600
 [family.build]
 # the files its tasks are made from (suites.py's AFTER_LEAN and the suites' pyproject.toml: lean-suites', whose inputs are the
 # whole tree)
-files = ["verity/protocols/flock/verifier/**", "verity/circuits/base/**", "verity/circuits/lean/**",
-         "verity/commitments/lean/**", "verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live/**",
-         "verity/protocols/flock/prover/flock-*-b684b12.patch", "verity/protocols/flock/prover/agreement/**", "tools/verity/check/suites.py",
+files = ["verity/protocols/proofs/flock/verifier/**", "verity/circuits/base/**", "verity/circuits/lean/**",
+         "verity/commitments/lean/**", "verity/protocols/proofs/flock/prover/check_build.sh", "verity/protocols/proofs/flock/prover/live/**",
+         "verity/protocols/proofs/flock/prover/flock-*-b684b12.patch", "verity/protocols/proofs/flock/prover/agreement/**", "tools/verity/check/suites.py",
          "**/pyproject.toml"]
 kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
 env = "lean"
