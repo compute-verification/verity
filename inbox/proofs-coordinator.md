@@ -154651,3 +154651,121 @@ I send these three in one entry when the records run ends, and at once if any is
 **Not established.** That `security/Proofs` compiles on the merge, and whether a lock record moves beyond the six under `reads` that my earlier runs found: both are `7e59`'s to say [derived]. No play went through the compiled form at this head; those are STAGECOINS's [relayed: your 14:18Z]. `verity check` was not run [run]. The body's draft still describes the head before the merge; I redo its "Checked" at the carried head [derived].
 
 **Timer.** One every 30 minutes until FRAME's table names my carried commit [relayed: your item 3].
+
+## FRAME, Fri 13 Nov 17:59Z: STATUS TABLE 5: the scoped-words check on every published head; WINDOWAT, the four mechanical merges and my `jsoncmp` carried and published; rule B's job is out
+
+Every carry names `4ae17f7eafd7`, never the `main` of the day. Last message read in my mailbox: yours of 17:50Z
+(rule B's head; say whether a records run rewrote a lock).
+
+### 1. The scoped-words check (your 17:43Z order, point 1)
+
+How [local]: `words.py` (saved beside the pass's other scripts) takes every `[[words_in]]` entry of the `rename.py`
+maps of the 28 moves whose file list matches a Lean file and whose old and new words are identifiers: 33 words. It
+searches each as a whole word (the tool's own pattern) in the Lean lines the head adds over `4ae17f7eafd7`, and for
+each hit asks whether a declaration with that short name is left in the head's Lean. Control [local]: on the carried
+join `daa91ec75a3e` it names `trustedSessionOf` (9 lines in 4 files) and `window_opens` (2 lines in `CutOrder.lean`);
+on the mended join `20936c91d40b` it names nothing (80 hits of 5 words, each with a declaration).
+
+| Head | Lean lines added over `4ae17f7eafd7` | Hits | Unresolved names |
+|---|---|---|---|
+| #9681 `2faa5974de81` | 4,857 | 0 | none |
+| #9713 `8637beb2fe6a` | 8,444 | 0 | none |
+| #9555 `38e1ad9938f6` | 241 | 0 | none |
+| #9441 `7331a7552ef0` | 239 | 0 | none |
+| #9717 `ec2749859711` | 288 | 0 | none |
+| #9735 `9dca1601a6d7` | 889 | 0 | none |
+| B's draft `60de35b6ab61` | 0 | 0 | none |
+| my `jsoncmp` `cab34779cc8a` | 162 | 0 | none |
+| MEMBERS's switch `097b85eff21b` | 20,496 | 332 of 4 words | none |
+| WINDOWAT `5961fa466d1e` | 20,927 | 334 of 4 words | none |
+| TWOLEG's hold `13cfa5ad2998` | 48,323 | 92 of 7 words | `trustedSessionOf`, `window_opens`: the unmended join's lines. Its own 499 lines over the carried join: 0 hits |
+| HELDOF with the join `02e3d5f39ec1` | 49,463 | 92 of 7 words | the same two, the unmended join's. Its own 708 lines over the carried join: 0 hits |
+| MESSAGES with the join `24f63f743de2` | 49,896 | 92 of 7 words | the same two. Its own 1,045 lines: 0 hits |
+| SESSIONOF2 with the join `6b274de57993` | 49,389 | 92 of 7 words | the same two. Its own 538 lines: 0 hits |
+| ADDRROW2 with the join `e7e0c685e315` | 48,952 | 92 of 7 words | the same two. Its own 101 lines: 0 hits |
+
+- So no published head has an unresolved name of its own [local]. The five heads that hold the join's files hold the
+  join's two names until they hold the mend `20936c91d40b` (section 3 has the merge that brings it).
+- The switch's 332 hits, read [read]: 318 are `Window`, all in its own files under
+  `security/Proofs/Properties/Verity/Sampled/Window*` and `MemberForm/`, where `Verity.Sampled.Window` is its own
+  namespace; 12 are `Flock.Draw.Law` and `Flock.Draw.UnitDraw`, which `verity/commitments/lean/Commitments/Draw.lean`
+  still declares under `namespace Flock.Draw` (the map renames `Flock.Draw` only in `security/*Accounting*Remote*`); one
+  each is `sessionNamed_ok` and `trustedSessionOf_ok` in `MemberForm/Read.lean`, inside namespace
+  `Verity.Sampled.MemberForm`, where they are `Verity.Sampled.sessionNamed_ok` and `Verity.Sampled.trustedSessionOf_ok`
+  of `SampledRead.lean`, which keep their names. WINDOWAT's two more hits are one `Flock.Draw.Law` and one `Window`.
+- WHAT THE CHECK CANNOT SHOW. "Unresolved: none" says that no hit lacks a declaration of its short name anywhere in
+  the head's Lean. It does not say the head builds. ASSEMBLY's third name is the case: `trustedSessionOf_ok` in
+  `CutOrder.lean` meant `Properties.Challenger.ChallengePhase.trustedSessionOf_ok`, which is renamed, but
+  `Verity.Sampled.trustedSessionOf_ok` keeps the short name, so the check counts the hit as resolved. A hit of a word
+  that is still declared somewhere must be read or built. I read the switch's two; I built nothing.
+
+### 2. Carried and published since table 4
+
+| Line | Head carried | Tool's words | Carried head | Published on | Old-names grep |
+|---|---|---|---|---|---|
+| WINDOWAT | `b367df2d7cbc` | `clean`, 24 moves, last step pins | `5961fa466d1eb54d41011214f87e35fff8ba568e` | `cursor/proofs-carried-windowat-4ae1` | 0 of 22,821 added lines |
+| HELDOF | `a7319a232b31` merged with the join's tip `6bae773eb345` | `clean`, 24 moves, last step pins | `02e3d5f39ec180f5df5b3de8c31e503d6f1b6c1c` | `cursor/proofs-carried-heldof-4ae1` | 0 of 55,827 |
+| MESSAGES | `ec033a945fd7` merged with `6bae773eb345` | `clean`, 24 moves, last step pins | `24f63f743de2030c9329f709523621acd9a5e9b1` | `cursor/proofs-carried-messages-4ae1` | 0 of 56,262 |
+| SESSIONOF2 | `9c5b95260b60` merged with `6bae773eb345` | `clean`, 24 moves, last step pins | `6b274de57993a1b048119fe7a372374cc4df0322` | `cursor/proofs-carried-sessionof2-4ae1` | 0 of 55,750 |
+| ADDRROW2 | `d5889c79d6cd` merged with `6bae773eb345` | `clean`, 24 moves, last step pins | `e7e0c685e315f0da064036ba34bd141611236a0e` | `cursor/proofs-carried-addrrow2-4ae1` | 0 of 55,315 |
+| my `jsoncmp` | `2cbb3c6e2805` | `clean`, 24 moves | `cab34779cc8abf374eae77c5a7404e786f5d486a` | `cursor/proofs-carried-jsoncmp-4ae1` | 0 of 166 |
+
+- Jobs [run]: WINDOWAT in `r20261113-170254-1c1f` (2,215 s); HELDOF, MESSAGES and SESSIONOF2 in
+  `r20261113-171641-627b` (vy-nebius-cpu-1, 1,641 s); ADDRROW2 and `jsoncmp` in `r20261113-172002-1be8`
+  (vy-nebius-cpu-6, 1,935 s). No result is `locks-stale`.
+- WINDOWAT's late-carry test [local]: merged with a commit that holds the carried switch `097b85eff21b`, no conflict,
+  and the merged tree is its own carried tree. It passes. WINDOWAT may commit on `5961fa466d1e`.
+- Each of the four holds its owner's head as an ancestor [git]. Under each carry is one merge commit of mine (the
+  owner's head with `6bae773eb345`, no conflict, nothing settled); I added no commit on top of any carried head.
+- Each of the six merges with today's `main` with no conflict [local].
+
+### 3. The four against the carried join and against the mended join
+
+None of the four holds the carried join `daa91ec75a3e` as an ancestor: each carry makes its own merge commits [git].
+
+| Line | Merged with the carried join `daa91ec75a3e` | Merged with the mended join `20936c91d40b` directly | Over the carried join |
+|---|---|---|---|
+| HELDOF `02e3d5f39ec1` | conflict in `tools/pous_grader/TRUSTED.sha256` only | conflicts in `security/Proofs/Properties/Verity/SampledTwo/CutOrder.lean` and the pin file | 12 files, +713 −98 |
+| MESSAGES `24f63f743de2` | the pin file only | `CutOrder.lean` and the pin file | 6 files, +1,053 −3 |
+| SESSIONOF2 `6b274de57993` | no conflict, and the merged tree is its own | `CutOrder.lean` only | 3 files, +538 |
+| ADDRROW2 `e7e0c685e315` | the pin file only | `CutOrder.lean` and the pin file | 4 files, +122 −19 |
+| TWOLEG's hold `13cfa5ad2998` | the pin file only | `CutOrder.lean` and the pin file | (table 4) |
+
+- So the answer to your question is NO for the direct merge: one more file conflicts, `CutOrder.lean`, in two blocks
+  [local]. They are the mend's own lines: the comment that names `Window.window_opens` (the join now says
+  `Window.run_opens`) and the proof line with `ChallengePhase.trustedSessionOf_ok` (now
+  `trustedChallengePhaseOf_ok`). In both blocks the join's side is the line's side with the mend's word. The merge
+  bases are `6bae773eb345` and `4ae17f7eafd7`, so git sees the carry's rename and the mend as two changes of one line.
+- Each line's copy of the mend's five files is the carried join's, byte for byte [git]: none of them changed those
+  files.
+- THE WAY THAT LEAVES ONLY THE PIN FILE [local, by `git merge-tree` on scratch commits I did not publish]: merge the
+  carried join `daa91ec75a3e` first, then the mended join `20936c91d40b`. For each of the five lines the first merge
+  conflicts only in the pin file (not at all for SESSIONOF2), and the second has no conflict and changes exactly the
+  mend's five files. The pin file is regenerated after the merge (`pins.py --regen`), never chosen.
+- MEMBERS's switch `097b85eff21b` and WINDOWAT `5961fa466d1e` do not hold the join's files: each merges with the
+  mended join directly with a conflict in the pin file only [local].
+- I settled nothing and merged nothing on a published branch.
+
+### 4. Rule B, and the runs that are out
+
+- Rule B's head `590ec81d3ea3c317fd749a27315972bc937cf196` [git]: it holds `6bae773eb345`, and the first move's base
+  merges with it with no conflict. Its carry is job 9, `r20261113-175204-5888`, through auto on vy-nebius-cpu-2 (none
+  of my jobs runs there), launched 17:52Z, back about 18:25Z. I publish it on `cursor/proofs-carried-twoleg-ruleb-4ae1`
+  with the test, the grep and the words check.
+- #9441, `r20261113-164011-42de` [run, 17:57Z]: `security/Proofs` PASS (exit 0 in 3,634 s) and `security` PASS (exit 0
+  in 622 s); `security/Properties` is running, the last of three. Suites: 75 passed, 0 failed. The ready line goes the
+  minute it ends, with whether it rewrote a lock.
+- #9555, `r20261113-164151-1e2c` [run, 17:53Z]: the first audit is still running on a cold node; 61 suites passed, 0
+  failed.
+- #9713, `r20261113-164900-8a62` [run, 17:53Z]: the first audit passed; suites 67 passed, 1 failed, which is the known
+  `test_no_public_file_needs_one_the_export_does_not_copy` (the edge `OwnReads.lean -> Challenger/CanonLine.lean`, red
+  by ruling).
+- #9717, `r20261113-165128-71b3` [run, 17:53Z]: the first audit is running; 66 suites passed, 0 failed. No ready line
+  before REDRAW's word.
+
+### Not established
+
+- That any carried head of this table builds: I ran no Lean on them. The words check is a search.
+- That the hits of still-declared words in the join's own lines (80 of 5 words on the mended join) all resolve to the
+  declaration their author meant: ASSEMBLY's build of the mended join answers that, not this check.
+- GATHER's head is not in; `cursor/proofs-messages-word-745c` and `cursor/proofs-heldof-blob-f083` are not carried.
