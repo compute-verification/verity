@@ -12,9 +12,9 @@ from itertools import product
 
 import pytest
 
-from verity.protocols.spot import plancheck as P
+from verity.protocols.spot.prover import plancheck as P
 from verity.protocols.spot.verifier.one_stage.verifier import LeanError
-from verity.protocols.spot.optimize import Cell, Grain, leak_count, two_stage_rankin
+from verity.protocols.spot.prover.optimize import Cell, Grain, leak_count, two_stage_rankin
 
 DELTA = 0.01
 #: proof blocks, the widest one's output bits, and leak targets, from a thousand blocks to a world year's
