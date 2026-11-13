@@ -99,7 +99,8 @@ def test_the_topology_records_the_three_families_of_the_environment_in_its_order
         monkeypatch.setenv(name, value)
     _, out, _ = _arm(tmp_path, monkeypatch, stand_ins, "control", "--no-warmup")
     env = _read(out)[0]["env"]
-    assert list(env) == [k for k in os.environ if k.startswith(FAMILIES)] and "HF_TOKEN" not in env and "OTHER_VLLM_NAME" not in env
+    want = [k for k in os.environ if k.startswith(FAMILIES)]
+    assert list(env) == want and "HF_TOKEN" not in env and "OTHER_VLLM_NAME" not in env
     assert (env["NCCL_ALGO"], env["CUBLAS_WORKSPACE_CONFIG"]) == ("Ring", ":4096:8")
     assert (env["VLLM_API_KEY"], env["NCCL_DUMMY_TOKEN"]) == (settings.REDACTED, settings.REDACTED)
     assert env["VLLM_BATCH_INVARIANT"] == os.environ["VLLM_BATCH_INVARIANT"] and DUMMY not in (out / "topology.json").read_text()
