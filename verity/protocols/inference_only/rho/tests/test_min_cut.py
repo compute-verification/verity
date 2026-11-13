@@ -470,7 +470,7 @@ def test_a_beta_a_block_covers_every_way_the_untied_words_fall():
 def test_a_slowdown_is_quoted_beside_the_work_no_block_is_credited_for():
     """`capped`: a share of a block's work that nothing checks is the developer's whole, so the slowdown is at most
     one over that share whatever the count gives: a thousandth leaves under a thousand of `bound`'s 38 thousand. It is
-    `theorem.multiple_bound` at that dark share and the count's rate, and with no such share the count's own."""
+    `theorem.multiple_bound` at that unregistered share and the count's rate, and with no such share the count's own."""
     tied = min_cut.bound(C, TIED, **SERVED).slowdown
     assert min_cut.capped(tied, 0) == pytest.approx(tied, rel=1e-12)
     assert min_cut.capped(tied, 0.001) == pytest.approx(974.1, abs=0.05)

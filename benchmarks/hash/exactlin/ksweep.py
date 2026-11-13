@@ -48,7 +48,7 @@ import kgate
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SASS_GATE = Path(__file__).resolve().parents[2] / "pouw/harness/sass_gate.py"
+SASS_GATE = Path(__file__).resolve().parents[3] / "benchmarks/pouw/harness/sass_gate.py"
 BKS = (128, 256, 512)
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
