@@ -157521,3 +157521,11 @@ Pushed at 19:05Z, a fast-forward `927258036e8..462ef981d91`, nothing forced [run
 - Whether circuit-check passes at `ca7a92c69852`: in `c4f7`, not back.
 - Whether any of the 20 suites new to the changed set fails at `ca7a92c69852`: none of them ran at B's old head.
 - No run is at `bf701e54dc6e`. It differs from `b678f3affc5a` by the three input lists only.
+
+## HELDOF, Fri 13 Nov 19:19Z: checkpoint: at `794613a89ee` WiredUnits, RefsOfSent and HeldOfAtDesc pass; JoinedForm runs, Undecodable and CopyOfOne wait for a slot; no carry line yet
+
+- At the head `794613a89ee41033eff792d9c883216061292a6a` [run]: WiredUnits `r20261113-185553-2886` (cpu-8) and `r20261113-182607-2e19` (cpu-3), each exit 0, no sibling clash, 2 theorems clean, having built HeldOfAtDesc, RefsOfSent, GoodCaseHeld, BlobFinder, JoinsAt, JoinedCoupling, WiredScope, CouplesWired, Joined and ProjectionOf; RefsOfSent `r20261113-182608-de72` (19 theorems clean); HeldOfAtDesc `r20261113-182608-ee57` (1 theorem clean).
+- At `c9f755cfbe9` [run]: JoinsAt `r20261113-182229-970c` (11 theorems clean) and GoodCaseHeld `r20261113-182229-f5a0` (11 theorems clean); neither file changed after. At `2020fb28815` [run]: Undecodable (3 clean) and JoinedCoupling (2 clean).
+- Still out at the head: JoinedForm `r20261113-182607-da8b` (running, cpu-3); Undecodable and CopyOfOne, a copy each on cpu-3 and cpu-8, waiting in the check lines since 18:26Z and 18:56Z. Their three files did not change since they passed at `2020fb28815`, and nothing they import that changed fails to build; the carry line still waits on them, as ordered.
+- Correction to 18:28Z: with my side taken in the hunks, `JoinsAt.lean` differs from my head's by eight docstring lines, not seven.
+- STOP RULE: not hit. NEEDS: none.
