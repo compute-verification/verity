@@ -27,12 +27,14 @@ from pathlib import Path
 from verity.definitions.registry import catalog
 registry, errors = catalog.load()
 repo = Path(sys.argv[1])
+own = Path(catalog.__file__).resolve().parents[1]
 print(json.dumps({
     "ids": sorted(registry.defs),
     "errors": errors,
     "core": sorted(m for m in sys.modules if m.startswith("verity.protocols")),
     "integration": sorted(m for m, mod in list(sys.modules.items())
-                          if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(repo / "adapters")),
+                          if (f := Path(getattr(mod, "__file__", None) or "/").resolve()).is_relative_to(repo / "adapters")
+                          and not f.is_relative_to(own) and f != own.parent / "__init__.py"),
 }))
 """
 
@@ -123,6 +125,7 @@ def test_the_catalog_reads_no_protocol():
 
 
 def test_the_catalog_loads_nothing_of_the_integration():
+    """No module under `adapters/` but the catalog's own package and the `__init__.py` of the package that holds it."""
     assert not fresh()["integration"], f"loading the catalog imports the integration: {fresh()['integration']}"
 
 
