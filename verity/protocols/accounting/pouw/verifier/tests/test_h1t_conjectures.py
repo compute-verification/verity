@@ -82,8 +82,8 @@ class Unit:
         def hexes(vs):
             return [bytes(v).hex() for v in vs]
 
-        return f"unit {self.name} (k={self.k}, T={self.T}, m={len(self.xq)}, n={len(self.b)}): xq={hexes(self.xq)}, " \
-               f"b={hexes(self.b)}"
+        return (f"unit {self.name} (k={self.k}, T={self.T}, m={len(self.xq)}, n={len(self.b)}): xq={hexes(self.xq)}, "
+                f"b={hexes(self.b)}")
 
 
 def keys(U: Unit) -> list[tuple]:
