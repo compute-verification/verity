@@ -1,4 +1,4 @@
-"""The harness against its example port (`lean/DifftestExample.lean`, served by `Difftest.serve`): the right references agree
+"""The harness against its example port (`../../verity/circuits/difftest/DifftestExample.lean`, served by `Difftest.serve`): the right references agree
 on every sampled input, a wrong one is caught and shrunk to a minimal input, and a reject on one side only is caught."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
+LEAN = Path(__file__).resolve().parents[3] / "verity" / "circuits" / "difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers() | st.text(),
