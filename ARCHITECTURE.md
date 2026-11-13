@@ -259,12 +259,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 
 | What | Today | At the end |
 | --- | --- | --- |
-| Party, channel, device, protocol, config, runtime | `verity/configuration/` and `verity/hardware/site/` | the five files and `runtime/` |
-| The eight protocols in their three groups | flat, each at `verity/protocols/` | `verity/protocols/proofs/`, `accounting/` and `policy/` |
-| Hardware data sheets | `verity/hardware/` | `hardware/` |
-| Remote and onsite | two directories in `protocols/` | inside `protocols/compose/` |
 | The circuits of served kernels | `verity/definitions/` | what a protocol names to `verity/circuits/ops/`, the rest to `adapters/vllm/` |
-| The harness that holds Python copies to the Lean | `verity/difftest/` | `tools/` |
 | Leftovers in `verity/`: `claims/`, `settings.py`, `composite/` | `verity/` | deleted, `tools/`, and inside `compose/` |
 | Loose files inside five protocols | beside `verifier/`, `prover/`, `device/` | inside one of the three, or out of `verity/` |
 | `fixtures/` | the root | each file beside its reader |
