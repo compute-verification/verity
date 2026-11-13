@@ -10,7 +10,7 @@ import pytest
 from verity.hardware import registration
 from verity.protocols.spot.verifier.one_stage import registration as one_stage
 from verity.circuits import partition_object
-from verity.definitions.circuits.census import census
+from verity.circuits.census import census
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
