@@ -11,10 +11,14 @@ import copy
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import driver as SR, index as IX, recomputed_prefix as RP
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay.opening import CommittedStore
 
 C = 1
+#: the weights field only the world with attention registers
+ROTARY = "model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"
 
 
 @pytest.fixture(scope="module", params=[False, True], ids=["mlp", "attention"])
@@ -27,11 +31,10 @@ def world(request):
     for f in ("model.model.layers.0.input_layernorm.weight", "model.model.norm.weight"):
         weights[woff[f][0]:woff[f][1]] = 0x3F80
     if request.param:
-        lo, hi = woff["model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"]
+        lo, hi = woff[ROTARY]
         weights[lo:hi] = (np.asarray(rng.uniform(-1, 1, hi - lo), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
-    out = T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
-    out.attention = request.param
-    return out
+    assert (ROTARY in woff) == request.param
+    return T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
 
 
 def _weights(world):
@@ -79,17 +82,37 @@ def test_a_read_below_c_is_the_replay_s_and_one_past_it_is_serving_s_c_rows_earl
         RP.RecomputedPrefix(CommittedStore(bmap, committed), pi, "r1", 2, world.prompts["r1"], _weights(world))
 
 
+def test_a_replay_needs_the_weights_and_a_plan_runs_none_whatever_it_is_given(world):
+    pi = IX.ProgramIndex(world.inst)
+    bmap, committed = _warm(world)
+    store = CommittedStore(bmap, committed)
+    with pytest.raises(TypeError, match="none are given"):
+        RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], None)
+    op, w = "model.layers.0.mlp.down_proj", RP.positions(pi)[("model.layers.0.mlp.down_proj", "out")]
+    for weights in (None, _weights(world)):
+        plan = RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], weights, plan=True)
+        got, _ = plan.words("r1", 0, op, "out", 0, w)
+        assert plan.replay is None and got is not None and len(got) == w and not got.any()
+        assert plan.take() == [["r1", 0, op, "out", [0, w]]]
+
+
 def test_the_warm_request_replays_bit_for_bit_with_its_prefix_out_of_its_population(world, monkeypatch):
     bmap, committed = _warm(world)
     progs = {rid: world.inst for rid in world.prompts}
     warm = {"r1": {"cached": C, "producers": ["r0"], "prompt": world.prompts["r1"]}}
     answered, take = [], RP.RecomputedPrefix.take
-    monkeypatch.setattr(RP.RecomputedPrefix, "take", lambda self: answered.extend(got := take(self)) or got)
+
+    def taken(self):
+        got = take(self)
+        answered.extend(got)
+        return got
+
+    monkeypatch.setattr(RP.RecomputedPrefix, "take", taken)
     rep = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0, cached_prefixes=warm)
     assert rep["result"] is True and rep["sample"]["mismatch_n"] == 0, rep.get("why")
     per = RP.positions(IX.ProgramIndex(world.inst))
     assert all(rid == "r1" and step == 0 and 0 <= lo < hi <= C * per[(op, m)] for rid, step, op, m, (lo, hi) in answered)
-    assert not world.attention or any("rotary_emb" in op and m == "key" for _r, _s, op, m, _ in answered), answered[:4]
+    assert ROTARY not in world.woff or any("rotary_emb" in op and m == "key" for _r, _s, op, m, _ in answered), answered[:4]
     pi = IX.ProgramIndex(world.inst)
     prefix = [k for k in rep["population"]["not_evaluable_by_family"] if "(recomputed prefix" in k]
     assert sum(rep["population"]["not_evaluable_by_family"][k] for k in prefix) == len(RP.prefix_rows(pi, C))
