@@ -26,7 +26,7 @@ weights were served.  Pearl-C commits one pass per engine step, a step held to w
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.pouw.verifier.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.protocols.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside sampled proofs only in a window whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+runs beside sampled proofs only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
@@ -203,7 +203,7 @@ class Settings:
     backend: Any = None
     #: H1's sample session: the gate's reserve answer for the execution phase's sampling coin, opened withheld (`pouw_h1_window.DrawSession`)
     draw_session: Mapping[str, Any] | None = None
-    #: H1's Commit record named at the window's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
+    #: H1's Commit record named at the execution phase's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
     commit_record: Any = None
 
     @classmethod
@@ -286,7 +286,7 @@ def requires_build(scheme: str, ctx: Context) -> bool:
 
 
 def cuts(scheme: str) -> bool:
-    """Whether a window's circuit can be cut at ``scheme``'s sites, reading the tables each executed call commits in place
+    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call commits in place
     of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
     return scheme in PPD.SCHEMES
 

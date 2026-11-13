@@ -112,8 +112,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
   pricing. In one that does (remote), Pearl+'s claim reads the
   credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
   MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
-  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the draw's `ε` it published: the
-  tolerant audit's event (`Pouw.GγSampledTol`) with no drawn tile credited nothing.
+  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the sample's `ε` it published: the
+  tolerant audit's event (`Pouw.GγSampledTol`) with no sampled tile credited nothing.
 
 Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
@@ -877,7 +877,7 @@ published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's where `k` lists 
 MACs, not a period claim: a
 credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at least
 `(1 − ρ)(1 − ε) · W` MACs on the run's tiles (`macs`), where `W` is the credit's `macs` (the MACs of the cells its passes
-credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the draws that landed on tiles over
+credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the samples that landed on tiles over
 their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run `reject` accepts). -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
