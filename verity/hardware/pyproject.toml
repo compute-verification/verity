@@ -12,4 +12,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "security/Definitions/Core/A
           "security/Definitions/Core/Accel/H200.lean", "security/Definitions/Core/Accel/Sm120.lean",
           "security/Definitions/Accounting/Sheets/B200.lean",
           "verity/protocols/inference_only/rho/data/hardware.toml",
-          "verity/hardware/site/__init__.py", "verity/configuration/__init__.py", "verity/configuration/wire/__init__.py"]
+          "verity/device.py", "verity/channel.py"]
