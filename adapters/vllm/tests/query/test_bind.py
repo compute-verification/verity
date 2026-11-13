@@ -199,6 +199,13 @@ def test_two_sources_declaring_one_label_differently_are_refused():
         source_ports([S(QUANT), S({"x_q": QUANT["x_s"]})])
 
 
+def test_where_a_row_and_its_identity_disagree_the_identity_is_read():
+    flat, other = row(LIN, "out"), row(ATT, "0", step=1, inv=2)
+    assert Binder([flat]).rows != Binder([other]).rows
+    assert Binder([{**flat, "identity": other}]).rows == Binder([other]).rows, "every field under `identity` is read before the row's own"
+    assert Binder([{**flat, "identity": {"op_path": ATT}}]).rows == Binder([{**flat, "op_path": ATT}]).rows, "and one field alone is"
+
+
 def test_an_incomplete_manifest_covers_nothing_and_names_what_it_leaves_out():
     rows = [row(LIN, "out"), row(LIN, "out", step=1)]
     lay = {0: [{"name": LIN, "numel": 4}], 1: [{"name": LIN, "numel": 4}]}
