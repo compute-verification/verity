@@ -119409,3 +119409,35 @@ Nothing.
 That `CutOrder.lean`, `CutFirst.lean`, or the four compiled files at TWOLEG's tip compile (tries 10 and 12 have not started). The highest-risk proofs are `CutOrder`'s two `mvcgen` lemmas and `CutFirst`'s `run_coins`/`form_audit` case splits, and its `rfl` for `refused_symbol`. `FirstShown θ`, `OrderShown θ` and `PrintsInOrder` at any deployment. Anything about a run.
 
 Head: `cursor/proofs-cut-9323` at `fc93fee9c7`, pushed. Nothing unpushed except local scratch.
+
+## TWOLEG, Fri 13 Nov 04:09Z: (d)'s two refusals and CUT's deployed-key lemma written; the tries moved off the long lines
+
+One session holds the pen. Since 04:05Z I have written (d) and CUT's lemma, and I have moved both tries off the lines that held them. I moved J2 twice: off vy-nebius-2, where it had 8 checks ahead, and then to the head with CUT's lemma. Nothing new has compiled yet. **(b)** and **(d)** each have a run behind them now, but neither has a result; **(c)** has none and stays blocked on the last step's law (my 04:05Z entry, STOP RULE).
+
+- **(d)**, written at `9b300c2d3ea2` on `cursor/proofs-twoleg-c5e5`, pushed [read]:
+  - `evidenceOf` refuses a `null` first-stage coin evidence by name (`FIRST_COINS_NULL`), on one window as on two. It sits in `evidenceOf`, so no proof that unfolds `prepare` moves.
+  - `prepare` gains a last step, `stagesOrdered`. Where the boundary's window is not the interior audit's, it does three things. It holds the first stage's ledger copy to a prefix of the second stage's (`Challenger.extendsHead`, `LEDGER_PREFIX`). It reads the second stage's copy under the parameters' challenger key (`Challenger.checked`). It refuses unless the boundary window's session has an `end` line with a lower `seq` than the interior window's session's `reserve` line (`orderReason`, `STAGES_ORDER`); a missing line is the same refusal.
+  - The `#guard`s pin `orderReason` and the `null` refusal.
+- **Lemmas** [read]:
+  - `Steps.accepted_ordered`: an accepted check passed `stagesOrdered`. `accepted_steps` keeps its statement, so ASSEMBLY's destructuring holds.
+  - `Steps.orderReason_none`.
+  - `Ordered.stagesOrdered_order` (new file): on two windows, the prefix, the checked ledger, and `end.seq < reserve.seq`.
+  - `Deployed.paramsOfJson_deployed` (new file), CUT's lemma: `paramsOfJson j = .ok p → ∃ key label, p.audit.base.challenger = some (key, label) ∧ key.params = Lms.deployed`, through `OneStageZk.membersParamsOfJson` and `Limits.paramsOfJson_deployed`. The form itself needed no new line for it.
+- The lemmas over the form's accept say nothing about a run until the last step is ruled on (my 04:05Z entry) [derived].
+
+### STOP RULE
+Nothing in this entry alters what a listed guarantee says or makes the verifier accept more: both changes are refusals, the shipped switch stays off, and `accepted_steps`' statement is unchanged.
+
+### NEEDS
+Unchanged from 04:05Z: the ruling on the last step's law.
+
+### Runs
+- `r20261113-035525-5af6`, vy-nebius-cpu-9: build of `sampled-two` and `sampled-two-on`, the difftest and the key's timing, at `d06ec7c3306d`. Waiting since 03:56Z with 1 check ahead [run].
+- `r20261113-040646-c4e4`, vy-nebius-cpu-8: `lean_changed.py --build` of the form, `SampledTwoOnMain` and `Steps`, `Ordered`, `Deployed`, `DevAgrees`, `SecondRead`, `ClaimInner`, `Refused`, `Reading`, `Projection`, `Leg` and `Claim`, at `9b300c2d3ea2` [run: launched].
+- `r20261113-035641-a2e6` (vy-nebius-2) and `r20261113-040438-97a0` (cpu-11): cancelled unstarted, after 8 and 2 min [run].
+- `r20261113-025634-a018`, cpu-12: still running, at the stale head `b6d988648b2a` [run].
+
+### Not established
+- That any of it compiles.
+
+Heads: `cursor/proofs-twoleg-c5e5` at `9b300c2d3ea2`; #9574 at `457a4837078c`. Nothing unpushed.
