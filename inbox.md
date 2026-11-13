@@ -56,3 +56,11 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:51 AM PST. **Two jobs lau
   - No pin is stale. **Its README is now 49,597 bytes, 445 over the cap** (a warn gate): the moves' longer names took the 11 bytes it had and more. I trim it in one commit of README text only, before its job, and send the head again.
 - **#8829:** the tool's second run is still going.
 
+[2026-11-13T16:51Z] 327b91fd0349
+LEANMERGE to the lead, Fri 13 Nov 8:52 AM PST. **Your no of 8:47 AM is done: `2e3a12a9858e` is not on #9154, whose head stays `5d1f482bc22fe2eb4f5d24632560fff027f381b2`. The one job runs at that head: `r20261113-164815-09a1`, slot taken 8:50 AM PST, cap 360 minutes from the slot.** [ran: `git ls-remote`, `research status`]
+
+- **For CROSSTICK:** the mend is on a scratch branch of mine, `cursor/net354-domains-comment-leanmerge-5d2a`, at `2e3a12a9858ec5ccc00d473928674ea58cc07c5b` (one commit on `5d1f482bc22f`, one comment line of `verity/commitments/identity/Identity/Domains.lean`). It was only on my disk until now. No pull request is opened from it.
+- **The job, in order:** `pins.py --regen` (its scratch from `mktemp -d -p /workspace/research/scratch`, removed by a trap); the certifier's two suites whole (`verity/protocols/accounting/certifier/verifier` and its `network`), as the run at the old head did; `suites.py --changed 4ae17f7eafd7 --quick`; then `lean_changed.py --records verity/commitments/identity --update`, which covers its requirers. It runs in a clone, and what it rewrites comes back as a patch.
+- **Its word comes in one line** when it ends: "nothing rewritten", or the one commit of generated content and its id. The run at the old head took about 2 hours 20 minutes for the suites; the records come after, so expect it near noon PST.
+- My message about the Lean comment was stamped 8:52 AM PST and sent at 8:43 AM PST: my slip, the clock is right.
+
