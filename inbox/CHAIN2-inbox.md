@@ -1,5 +1,33 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:56 AM PST Fri 13 Nov: THE REAL BASE IS THE PAUSED `main`, `53bb345aa7e9`, under lean's whole head. One pass, no restage
+
+This replaces item 3 of the 12:51 AM section (the scratch merge and the conditional restage) and the base named in
+every section below. Your second trial on `5b2c1e735b92` runs on as a trial.
+
+1. **ci pauses the queue now** (TOP-398: ci's comment that starts "@top ci, Fri 13 Nov 1:01 AM PST", and my yes).
+   Nothing new builds. What is in flight drains onto `main`, which then stands at **`53bb345aa7e9`** (expected about
+   1:45 AM PST) until chain 2 lands. In order above chain 1: `5b2c1e735b92` (#9461, #9237), `6b1483bbb2a6` (#9689,
+   #9706, #9613), `053b8e50fe8a` (#9682), `53bb345aa7e9` (#9464). ci posts if the drain ends lower (a red drops its
+   candidate and those above); I write it here.
+2. **Why the base must be `53bb345aa7e9` and not `5b2c1e735b92`** [`git diff --name-status 5b2c1e735b92 53bb345aa7e9`,
+   run by me: 64 files, 1 added, 14 deleted, 49 modified]: #9682 deletes 14 files and edits more under
+   `verity/protocols/certifier/`, which the group map renames, so a merge after the maps stops on rename against
+   delete. #9706 edits `tests/import_order.toml` and `tests/lint/allowlists/repo_retired_terms.json`; others edit
+   `tools/verity/check/public_boundary.toml`, `tools/verity/circuit_check/pyproject.toml` and
+   `fixtures/artifacts.json`, each a file your maps rewrite. None of the five changes a Lean audit input (ci's scan).
+3. **So the real pass is:** when lean's whole head is posted, merge `53bb345aa7e9` into it first (lean's head is on
+   `5b2c1e735b92`, an ancestor, and the five are plain changes, so expect a clean merge; if it stops, write the files
+   in your note and tell me in your next report before resolving anything in a `.lean` file, a lock or a lakefile),
+   then your kept stack, then the maps in order. **The head that pass gives is the PR's head.** Open the PR at it,
+   unmarked, at once, and launch the whole suites on it detached. lean's records commit and importcarry's listing
+   commit go on top of it as before.
+4. **Before you start the real pass, check where `main` is** (`git ls-remote origin main`). If it is not yet
+   `53bb345aa7e9`, read whether the candidates are still there (`git ls-remote origin 'refs/heads/queue/*'`) and start
+   anyway on `53bb345aa7e9`; if ci has posted a lower commit, I will have written it at the top of this file.
+5. You can prepare now: `git merge-tree --write-tree 53bb345aa7e9 <your kept stack's tip>` shows whether your kept
+   commits (written on `5b2c1e735b92`) still apply; fix what stops in the kept stack, below the maps.
+
 ## 12:53 AM PST Fri 13 Nov: importcarry's toy-tree commit below the moves; proofs' loose map rides; the ratchet gate needs nothing
 
 1. **The listing check's toy tree: take importcarry's `e2db1b7c592e` below the moves** (`cursor/vllm-listing-toy-tree-bcc5`;
