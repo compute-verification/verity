@@ -157639,3 +157639,87 @@ heading is 128 characters, over the cap. Three of its lines are wrong or stale. 
 - Whether the composition test passes on the kept play at the merged head: `7f56`.
 - Whether any test of `requirement` could read `service.py`: its 22 tests passed the read guard at B's old head,
   which names no such read; I have not read why its list names the stream's files.
+## ONSITE, Fri 13 Nov 19:23Z: neither fixture premise fixes K or N, so (b) is a docstring-only edit; OUTERSTEP's data was never kept; the draft is `cursor/proofs-onsite-fixture-docs-dde5`, and the record check is building on cpu-9, not read yet
+
+Your order of 18:05Z, items 1 to 6. Mailbox read at 19:23Z: 274 lines, nothing after your 16:03Z section. Each claim is marked [read], [run], [derived] or [guess].
+
+**Recommendation.** (b), with no statement change, on the remade fixture (K 64, N 4, the one `recursive_data.json` names on `main` since [#9759](https://github.com/compute-verification/verity/pull/9759) landed at 18:34Z). The one reason: both statements are existentials over the statement's bytes and fix no K or N, so "N 16" was the docstring's alone, and the remade session is the only kept one that today's two verifiers accept (5 of 5, your 17:56Z). OUTERSTEP's cannot be chosen: its data was never kept.
+
+**One thing you did not ask and need before you answer soundness.** The opt-in tests on any fixture reproduce one of `HonestFixture`'s four conjuncts, `HonestRunAccepted`. The other three (`HonestWitSatisfies`, `NoCollAt`, `TopsAt`) have no test in the tree. The old docstring says they "passed" and names four tests and two `vstar-trace` modes (`--sat`, `--nocoll`). None of those is on `main`, was at `16a44e3b86` (the commit the docstring cites for the run), or was ever in a V\* test file or the two `vstar-trace` files on `main`'s history [run: `git grep` at both commits; `git log -S` for each name on `origin/main`, which does find the commit that added a test the file holds]. The two commits it cites for them, `547915a62c` and `93dac12374`, exist on GitHub, on no branch and in no pull request [read: `gh api`]. At `93dac12374` the test file holds the two `--sat` tests and the CLI holds `--sat`; `--nocoll` and the two `test_the_deployed_runs_*` tests are not there either [read]. `HonestWitSatisfies`'s own docstring says "Witness run: none passing yet" [read: `HonestWitR.lean:76`]. So "a session witnesses `HonestFixture`" is true today of the acceptance conjunct only, whichever fixture you choose. My draft says so in the docstring instead of "passed".
+
+### 1. The two premises at `origin/main` `fa3e619ee146`
+
+- **`RecDeploy.HonestFixture`**, `security/Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean`: docstring lines 67 to 115, statement 116 to 129 [read]. The statement: there exist a mask, brings, a statement `x`, a record, an inner decoder, a witness, a parsed statement, a tape and challenges such that `HonestRunAccepted ∧ HonestWitSatisfies ∧ NoCollAt ∧ TopsAt`, all at the deployed inner prover `IrDep x`. It fixes no K and no N, and carries no range of its own [read].
+- **`RecDeploy.KSFixture`**, `.../Assumptions/KSFixture.lean`: docstring 104 to 106, statement 107 to 110 [read]. The statement: there exist bytes `x` and a record with `DeployedParses x ∧ PartsInScope x`. It fixes no K or N. It fixes ranges only: the inner statement's setup has 1 to 200 tables, at most 2 link points, each table `22 ≤ m ≤ 35`, `k_log ≤ 27`, at most 1026 regions, `mPts ≤ 64` (`setupView`, lines 59 to 64); each part's setup has 1 to 200 tables, at most 2 points, each table `25 ≤ m ≤ 35` and `InRange` (`PartIn`, `LamDeployed.lean:288`); at most `2^16` parts and `2^56` inner setup inputs [read].
+- **What only the docstrings name.** "K = 64, N = 16", "at 16a44e3b86", the ten parts by name and every measured reading are in the docstrings of `HonestFixture` (lines 75 to 109) and of `HonestRunAccepted` (`HonestHalf.lean:122`) [read]. `KSFixture`'s conjuncts' docstrings name no K or N; they cite two commits, an art's `probe.diff` and the readings "10 V\* statements" and "(m, k_log, regions) = (25, 22, 3)" [read]. Those readings are the remade fixture's too: the compiled verifier's `rec-inner` on it wrote `m 25, k_log 22, regions 3` and neither a `holo` nor a `sparse` key, and it has ten V\* statements [read: `lean/rec-inner.json` and `table.md` in run record `art:234ba018…` of `r20261113-142134-4eb4`].
+- **Which listed guarantees read each, by the lock** (`security/lean-audit.json`; no other lock names either) [read]. Neither is taken by a guarantee's own statement or listed in a `trust_gap`. Each is taken by witness lemmas:
+  - `HonestFixture`: by `honest_half_fixture`, the honest witness of `Flock.SecurityProofs.RecursiveKS`, `RecursiveKSEvery` and `RecursiveKSCompiledEvery`; by `recursiveKSDeployed_honest`, of `RecursiveKSDeployed` (deployed); by `RecursiveZKLoop_honest`, of `RecursiveZKLoop`; by `RecursiveZKLoopAnySum_honest`, of `RecursiveZKLoopAnySum` and `RecursiveZKLoopAnySumDeployed` (deployed).
+  - `KSFixture`: by `recursiveKS_nontrivial`, `recursiveKSEvery_nontrivial`, `recursiveKSCompiledEvery_nontrivial` and `recursiveKSDeployed_nontrivial`, the nontrivial witnesses of the same four `RecursiveKS` guarantees.
+
+### 2. OUTERSTEP's session of Tue 10 Nov (`r20261110-163252-0788`)
+
+- **Its data is not kept** [read]. Its command had no `KEEP_DATA=1` (`inputs/job.sh`, `out/settings.json`), and `job.sh` removes `data/TAG` without it. On cpu-4, `/workspace/cache/rec-bench/data/` holds four other tags and not this one [read on the node].
+- **What is kept:** the run record, `art:1adfd90cd3c8bc76419e55d2b254850cd61df773352b976cd531d85acb13175b`, 431 files, 10.7 MB [read]. It holds the inner session's record and the logs, and none of the 16 outer sessions. So there is nothing for the two verifiers to run over, and I ran nothing.
+- **Its Hello holds `coins`** [read: the kept inner record]: `coins.nonce` is 64 lowercase hex, the scheme is `coin-tree/hm96-sha512/v2`, and the record has a `coin_tree`. Today's verifier would not refuse it at the Hello, where it refuses the stale fixture.
+- **What it showed when it ran:** 16 of 16 parts released and accepted by Flock's Lean verifier at `c3ae3eaaf0` [read: OUTERSTEP's notes]. V\*'s compiled check (`vstar-recursive verdicts`) was never run on it [read: nothing in the notes or the record says so].
+- **Two corrections to how it is described.** Its inner statement was 256 instances of `silu-mul-v2/i16384/bf16` at `m = 35`, 16 V\* statements; "K=4096" in its `params.txt` is the default label, which `SUBCIRCUIT=` overrides [read: `statement.txt`, `table.md`]. Its tree came from a challenger started on the same node beside the run (`TREE_FROM=local`, `tree-source.txt`: `local 127.0.0.1:42813`), not from a separate device [read]. By soundness's own words nothing may call that the challenger device's session.
+- **No other kept session serves.** cpu-4 holds one session with a challenger's tree and `coins` in its Hello, `rl-k64n4-ed22` (3 Nov, 2.7 GB), but it is a links session (`REC_LINKS=1`), and its cache expires 17 Nov [read on the node].
+
+### 3. What a remake costs
+
+The one measurement is `r20261113-142134-4eb4`: K 64, N 4, 22 cores, 31.6 min, peaks 35.5 GB (the Lean session loop) and 14.4 GB (the prover), fixture 2.14 GB, the five tests 13.2 min [run].
+
+| remake | wall | memory | fixture | rests on |
+|---|---|---|---|---|
+| K 64, N 16 (the old docstring's) | 32 to 40 min [guess] | as measured, ask 96 GB [guess] | 2.1 to 2.5 GB [guess] | at N 4 the inner statement fills 2 of the 8 blocks `m = 25` holds; N 16 fills 8, so I expect the same `m` and the same ten V\* statements [derived from `statement.txt`: `blocks=2 nbl=3`; not run]. The ten parts' circuit text is 1.75 GB of the fixture's 2.14 GB, and the inner shape fixes it [read: each part's `sizes.txt`] |
+| OUTERSTEP's size, as it ran (release schedule) | 5.6 h [read: its steps sum to 20,046 s] | 112 GiB cgroup peak [read] | not known; 3 to 6 GB [guess] | its run record |
+| OUTERSTEP's size, no release schedule | 50 to 60 min [guess] | 112 GiB [read] | same | its parts' proving sums to 1,978 s; the schedule's windows made `oprove` 19,404 s [read] |
+
+Each remake then needs a new art, a change to `recursive_data.json`, and the five tests again.
+
+### 4. Recommendation
+
+- **(b), and it needs no statement change.** Soundness's condition "the premise is stated at those parameters" is already met: the premise is stated at no parameters. So the edit is docstring-only, which by soundness's words needs nothing more from them. There is no before and after for a statement.
+- **The remade fixture, not OUTERSTEP's.** OUTERSTEP's has no data. A remake at its size costs an hour to 5.6 h and 112 GiB, for a witness of the same one conjunct.
+- **(a) buys nothing.** A remake at N 16 would match a number no statement reads.
+- **What to tell soundness beside the choice:** the fixture's tree is sampled by the node's operating system (their words allow it for an honest witness), and three of `HonestFixture`'s conjuncts have no test in the tree.
+
+### 5. The docstring edit
+
+Branch `cursor/proofs-onsite-fixture-docs-dde5`, cut from `origin/main` `fa3e619ee146`, one commit `d3585446eaa5`, pushed. No pull request.
+
+- **Files:** five under `security/Proofs/Flock/Claims/Recursion/` (`Assumptions/HonestFixture.lean`, `Assumptions/KSFixture.lean`, `HonestHalf.lean`, `HonestHalfTops.lean`, `HonestWitR.lean`) and the retired-terms list, lowered for three of them. The five Lean files: 78 lines in, 74 out, every one inside a docstring. No statement, definition or proof line changes [read: the diff].
+- **What each docstring now says:** its premise, unchanged; the generator (`benchmarks/recursion_e2e`, one pass on the CPU prover under the ZK server, `KEEP_DATA=1`); the parameters of the kept session (K = 64, N = 4, the challenge tree sampled by the node's operating system, a test stand-in for a challenger's device); the file that names it (`recursive_data.json`); the whole-session tests and their variable; which conjuncts those tests check and which no test checks; and how it is weaker than the Prop.
+- **What is gone:** the run's commit ids, its readings, the art's `probe.diff`, the tests and modes that were never on `main`, two dead paths, and the line that asks for a run id in `HonestWitSatisfies`'s docstring.
+- **Its parameters are true of `main` now.** #9759 landed at 18:34Z [read: `gh pr view`], and `recursive_data.json` at `origin/main` `ff95b899ecf8` names the remade session [read]. The branch is cut from before that. Between its base and `ff95b899ecf8` nothing changed in its five Lean files, the retired-terms list or `security`'s lock, and every test, variable and flag the docstrings name is there [run: `git diff --stat`, `git grep`].
+- **Checks:** the ratchet gate passes, 9814 to 9812 exceptions [run on the VM]; the retired-terms lint, 17 passed [run on the VM].
+- **No lock record moves:** **not shown yet.** The fast path for `security` is `r20261113-183536-a7da` on vy-nebius-cpu-9, research pool: launched 18:35Z, in the pool's line until 19:09Z, building since [read on the node]. Its outcome follows in a short entry. What I expect and why: the lock's digest of a premise is of its statement and the definitions it reads, and the diff changes neither [read: `check.py`; the diff].
+
+### 6. The lock's two entries (not committed)
+
+Today, both [read: `security/lean-audit.json` lines 3153 and 3159]:
+
+```json
+"RecDeploy.HonestFixture": {"owner": "@proofs", "digest": "9f236d72…", "issue": "LEAN-186", "due": "2026-11-30"},
+"RecDeploy.KSFixture":     {"owner": "@proofs", "digest": "d3c4dd5a…", "issue": "LEAN-186", "due": "2026-11-30"}
+```
+
+- **(i) An issue of ours with its day:** the same two entries with `"issue": "PRF-NNN", "due": "YYYY-MM-DD"`. The issue must exist first; I file nothing.
+- **(ii) No work planned:** the same two entries without the `issue` key: `{"owner": "@proofs", "digest": "…", "due": "2026-11-30"}`. The form allows it, and no entry of the lock's 479 does it today [read: `check.py` near line 3035]. The form still requires `due`, and an `open` entry has no field for a sentence. So the lock cannot say "none is planned": an entry without `issue` reads to the tooling as "not given yet" (the bookkeeping warning's words are "the next PR gives it one", `check.py` 3233). The sentence itself goes in the pull request. `--update`'s review will print "open premise …: no issue due 2026-11-30 (was LEAN-186 due 2026-11-30)" [read: `check.py` 4359].
+
+What replacing each with a proof would be:
+
+- **`HonestFixture`** is completeness at one instance: that the reference prover's run is accepted, that V\*'s part circuits compute the inner verifier's checks, and two events of the run's tape. A proof is a Lean completeness theorem for the recursive audit's prover. The two tape events (no SHA-512 collision, the reps' tops differ) cannot be proved at a concrete run; they would have to be restated as probabilities, which is a statement change. The design rules let completeness rest on Python, so no proof is owed.
+- **`KSFixture`** is three evaluations of the deployed reader on concrete bytes. The kernel cannot run them: the reader goes through `Lean.Json.Parser.anyCore`, a `partial def` [read: `KSFixture.lean:45`], and the bytes hold V\*'s part circuits, 56 to 419 MB of text each on the remade fixture [read: `sizes.txt`]. A proof needs a reader the kernel can unfold, which is a change to verifier code, or a nontrivial lemma restated over an abstract reader, which is a statement change.
+- **My reading:** (ii) for both. The issue worth filing is not a proof. It is tests for the three unchecked conjuncts on the kept session, starting from the `--sat` check at `93dac12374`. That would make "witnessed outside Lean" true of the whole premise.
+
+### Not established
+
+- That today's two verifiers accept OUTERSTEP's session. Only its Hello's shape is read; its outer sessions do not exist.
+- That K 64, N 16 stages to the same ten V\* statements as N 4. Derived from the block count, not run.
+- That the remade fixture's parts are inside all of `PartIn`'s ranges. Their `m` is 26 to 32 and `k_log` 22 to 26, inside `25 ≤ m ≤ 35` and equal to the old docstring's readings [derived: `k_log + nbl` of each part's live record in the run record of `r20261113-142134-4eb4`]. Regions and `mPts` I did not read, and no test compares any of them.
+- That the `HonestWitSatisfies`, `NoCollAt` and `TopsAt` checks ever passed on any session. The old docstring says so; the tests it names are not in the tree, and I ran none.
+- That nothing else in `security/` cites a run. I searched for these two premises' citations only. Seen and not touched: `Assumptions/LoopFixture.lean` cites a commit and a path under `verity/ml/`.
+- That the lock's `due` is never compared with a date. I found no such comparison in `check.py`; I did not read every tool.
+
+**Next.** I read `r20261113-183536-a7da` when it ends and send whether a record moved, in a short entry; a timer is set. `cursor/proofs-onsite-recursive-red-carried-dde5` is deleted (19:02Z), since #9759 landed. The pen stays mine while the docstring branch is in a tree. I need from you: which case, and then whether to open the pull request for the branch after #9759 lands.
