@@ -31,7 +31,7 @@ def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str 
     if not rec["ok"]:
         why = []
         if rec["used_digest"] != rows_digest:
-            why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} (edited after digesting)")
+            why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} " + ("(a 64-hex SHA-256 digest from before manifest digests became SHA-512: rebuild the manifest)" if len(str(rec["used_digest"])) == 64 else "(edited after digesting)"))
         if rows_digest != rec["rebuilt_digest"]:
             why.append(f"rows digest {rows_digest[:16]} != the Program x workload's manifest {rec['rebuilt_digest'][:16]} ({rec['used_identities']} vs {rec['rebuilt_identities']} identities): not the manifest of record")
         if rec["used_program_digest"] != rec["rebuilt_program_digest"]:

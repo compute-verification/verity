@@ -9,7 +9,6 @@ public import Proofs.Flock.EndToEndHidden
 public import Proofs.Flock.EndToEnd.Period
 public import Proofs.Flock.EndToEnd.Blocks
 public import Proofs.Flock.EndToEnd.Carry
-public import Proofs.Flock.EndToEnd.Joint
 public import Proofs.Flock.EndToEnd.Joint.MT.Bound
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.Flock.EndToEndRegistered
@@ -41,7 +40,6 @@ public import Proofs.Flock.SessionLoop.SampledAuditNontrivial
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
-public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.Claims.Complete.ZkTables
 public import Proofs.Flock.VBridge
 public import Proofs.Flock.Sampled
@@ -106,6 +104,8 @@ public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.AddressFacts
 public import Proofs.Flock.SpotFlock.AddressFactsGive
+public import Proofs.Flock.SpotFlock.AddressesGive
+public import Proofs.Flock.SpotFlock.InsideOf
 public import Proofs.Flock.SpotFlock.AddressOf
 public import Proofs.Flock.SpotFlock.EntryRoots
 public import Proofs.Flock.SpotFlock.NeededBits
@@ -127,6 +127,11 @@ public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
 public import Proofs.Flock.ZkAny
+public import Proofs.Flock.Claims.Complete.Zk
+public import Proofs.Flock.EndToEnd.Joint.Bound
+public import Proofs.Flock.Soundness.Audit.StratifiedProj
+public import Proofs.Flock.Claims.Complete
+public import Proofs.Flock.EndToEnd.Joint
 
 /-! Flock's proofs: the verifier's, level3's and soundness's. -/
 

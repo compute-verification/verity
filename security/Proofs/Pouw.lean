@@ -19,10 +19,7 @@ public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
 public import Proofs.Pouw.Dimension.ForestProofs
-public import Proofs.Pouw.Dimension.H100DenseProofs
 public import Proofs.Pouw.Dimension.H100FloorProofs
-public import Proofs.Pouw.Dimension.H100FragProofs
-public import Proofs.Pouw.Dimension.H100LoopFreeProofs
 public import Proofs.Pouw.Dimension.H100MeasuredProofs
 public import Proofs.Pouw.Dimension.H100PeakTcProofs
 public import Proofs.Pouw.Dimension.H100Proofs
@@ -58,12 +55,13 @@ public import Proofs.Pouw.FpG1.H1
 public import Proofs.Pouw.Game
 public import Spot.HiddenDraw
 public import Proofs.Pouw.H1Zy
+public import Proofs.Pouw.Lead
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
 public import Proofs.Pouw.MerkleExtract
+public import Proofs.Pouw.Salt.Witness
 public import Proofs.Pouw.OnsiteFreed
 public import Proofs.Pouw.Salt
-public import Proofs.Pouw.Salt.Witness
 public import Proofs.Pouw.ShaRealize
 public import Proofs.Pouw.ShaRealizeWitness
 public import Proofs.Pouw.Milestone
@@ -85,10 +83,10 @@ public import Proofs.Pouw.PeriodJ10RStrata
 public import Proofs.Pouw.PeriodJ10RStrata.Honest
 public import Proofs.Pouw.PeriodJ10R
 public import Proofs.Pouw.PeriodJ10R.Honest
-public import Proofs.Pouw.PeriodJ10R.Nontrivial
-public import Proofs.Pouw.PeriodJ10R.Stratum
 public import Proofs.Pouw.ServedValues
 public import Proofs.Pouw.ServedValues.Honest
+public import Proofs.Pouw.PeriodJ10R.Nontrivial
+public import Proofs.Pouw.PeriodJ10R.Stratum
 public import Proofs.Pouw.PearlC
 public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.AtomErr
@@ -140,7 +138,6 @@ public import Proofs.Pouw.PearlC.Row4Words
 public import Proofs.Pouw.PearlC.RowPrimChecks
 public import Proofs.Pouw.PearlC.RowCapAtGap
 public import Proofs.Pouw.PearlC.RowSeedCode
-public import Proofs.Pouw.PearlC.RowSeedFragment
 public import Proofs.Pouw.PearlC.RowSeedGap
 public import Proofs.Pouw.PearlC.RowSeedKGap
 public import Proofs.Pouw.PearlC.RowSeedSkip
@@ -174,6 +171,7 @@ public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
 public import Proofs.Pouw.PearlC.TileCheckWordsRev1
+public import Proofs.Pouw.PearlPlus
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
 public import Proofs.Pouw.Prob
@@ -201,14 +199,18 @@ public import Definitions.Pouw.TileBound.Defs
 public import Mathlib.Tactic.IntervalCases
 public import Definitions.Pouw.TileBound.Fp8Defs
 public import Proofs.Pouw.TileBound.Proofs
-public import Proofs.Pouw.TileBound.WinogradStrassen
 public import Proofs.Pouw.TileBound.Witness
 public import Proofs.Pouw.Window
 public import Proofs.Pouw.Witness
 public import Proofs.Pouw.Lemmas.Game
+public import Proofs.Pouw.Writes
+public import Proofs.Pouw.Dimension.H100LoopFreeProofs
+public import Proofs.Pouw.PearlC.RowSeedFragment
 
 /-!
 # PoUW's proofs
+
+`Writes` holds the proofs of what writing distinct words costs, one a guarantee under the guarantee's own name.
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Advantage`, `Barrier`,
