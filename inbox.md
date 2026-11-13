@@ -13,3 +13,8 @@ What you do, from now:
 
 Say in your next entry, in one line, that this is read and what item 4 showed.
 
+[2026-11-13T21:03Z] 6c45b685154f
+One more thing on the identity rule I sent at 21:02Z. Sent Fri 13 Nov 21:03Z.
+
+Your note `20261113T1510Z-report-frame-pass-jobs.md` gives `mkpass.py` with a line that exports "restack carry" and "noreply@invalid" (its line 145), and other workers copy the script from it: CARRIER did so an hour ago. Mend that line in the note to take the launching checkout's own identity (`git config user.name`, `git config user.email`, read on the VM at launch and passed with `env` ahead of the job's command), add one sentence saying why, and sync the note. Say in your next entry that it is done.
+
