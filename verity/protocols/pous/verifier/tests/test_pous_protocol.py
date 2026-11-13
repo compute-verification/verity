@@ -608,7 +608,7 @@ def test_p2_wide320_certificate_is_the_320_read_window():
     memory challenger's SHA-512 indices, under `WIDE_CLAIMS` and `prf/sha-512`, over the same 2^19 to 2^27 blocks; none
     elsewhere."""
 
-    assert CERT_K_WIDE320 == 320 and WIDE320_CLAIMS == (*WIDE_CLAIMS, "prf/sha-512")
+    assert CERT_K_WIDE320 == 320 and (*WIDE_CLAIMS, "prf/sha-512") == WIDE320_CLAIMS
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 1038), (1 << 16, 1 << 11)):
         q = P2Params(16448, 21065, bps, segments)
         cert = wide320_certificate(q)
