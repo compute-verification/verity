@@ -2223,6 +2223,11 @@
         "verity/hardware/site/pyproject.toml": "verity/tests/pyproject.toml",
         "verity/hardware/site/tests/test_site.py": "verity/tests/tests/test_device.py"
       }
+    },
+    {
+      "paths": {
+        "verity/composite/": "verity/protocols/compose/"
+      }
     }
   ]
 }
