@@ -18,6 +18,7 @@ Issue: PRF-600. One more statement about the ledger SPOT's period check reads, a
 
 - **`Numbered`**, as `LedgerOfDevice` takes it: a line of the device's ledger that is an entry numbered `i` is its line `i`.
 - **`Chained`, new**: where a line of the device's ledger and its next line are both entries, the next names as `prev` the SHA-512 of the earlier line's whole text.
+- **The device does chain its lines.** `verity/protocols/spot/device/challenger.py` writes each entry with `"prev": core_record.prev_of(lines[-1])`, and `prev_of` (`verity/hardware/record.py`) is the SHA-512 of the whole line in hex.
 - **Neither is a named assumption, and no listed guarantee reads either.** Each is the device's behaviour, which the model of the device (`History`) does not hold. That is soundness's decision for the device's ledger facts (PRF-490): no law goes into `History`; each fact is taken as a hypothesis of the one statement that uses it, and becomes a lemma of the modelled device once soundness's device pull request builds that device's whole ledger. The docstrings say so without the issue.
 
 ## Its own finder
