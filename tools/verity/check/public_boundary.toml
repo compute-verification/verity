@@ -323,8 +323,9 @@ flock_bench = [
 nested = [
     "verity/circuits/requirement",
     # the evaluator's package sits under the public `verity/circuits` since its move: its files that no public file
-    # imports stay private, as they were under `verity/definitions`, and the rest stay public
-    "verity/circuits/evaluate/{Evaluate.lean,README.md,lean-audit.json,pyproject.toml,tests}",
+    # imports stay private, as they were under `verity/definitions`, and the rest stay public (its lock with its
+    # lakefile)
+    "verity/circuits/evaluate/{Evaluate.lean,README.md,pyproject.toml,tests}",
     "verity/circuits/evaluate/Evaluate/{Main,Serve,Walk}.lean",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
