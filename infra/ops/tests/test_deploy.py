@@ -256,6 +256,62 @@ def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_r
     assert f"restart when safe: {node / 'bin' / 'a.py'} (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
 
 
+def test_a_file_whose_processes_are_left_to_end_is_never_named_for_a_restart(world, capsys):
+    """A run's own process (a waiter for a check slot) read its file when it started and ends by itself: nothing restarts it.
+    An entry's `no_restart` says so, and neither drift nor an install then names the file for a process older than it; a
+    file without it is still named."""
+    node, repo = world["node"], world["repo"]
+    plain = 'src = "src/b.sh"\nnodes = ["n"]\n'
+    text = world["manifest"].read_text()
+    assert text.count(plain) == 1
+    world["manifest"].write_text(text.replace(plain, plain + 'no_restart = "a run of its own: it read the file when it started"\n'))
+    n = deploy.load(world["manifest"])["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)
+    b, c = node / "bin" / "b", node / "bin" / "c.py"
+
+    def installed_later(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        r = local(name, argv, stdin)
+        if argv[:2] == ["sudo", "-n"]:
+            for f in json.loads(stdin)["files"]:
+                os.utime(f["path"], (FUTURE, FUTURE))
+        return r
+
+    holders = [subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(f)], stdin=subprocess.PIPE) for f in (b, c)]
+    try:
+        for f in (b, c):
+            os.utime(f, (FUTURE, FUTURE))
+        rep = deploy.drift(n, "origin/main", local, repo)
+        _commit(repo, {"src/b.sh": "b2\n", "src/c.py": "c2\n"}, "both change")
+        _git(repo, "push", "-q", "origin", "main")
+        assert deploy.main(["install", "n", "--by", "lane-x", "--apply", "--no-fetch"], run=installed_later,
+                           manifest=world["manifest"], repo=repo) == 0
+    finally:
+        for h in holders:
+            h.stdin.close()
+            h.wait()
+    by = {Path(e["path"]).name: e for e in rep["entries"]}
+    assert (by["b"]["state"], by["b"]["restart"]) == ("ok", None)
+    assert by["c.py"]["state"] == "ok" and "a process started" in by["c.py"]["restart"]
+    out = capsys.readouterr().out
+    assert b.read_text() == "b2\n" and f"installed     {b}  <- src/b.sh" in out
+    assert f"restart when safe: {c} (" in out and str(b) not in out.split("restart when safe: ")[1]
+
+
+def test_no_restart_says_why_and_is_only_for_a_copied_file_that_names_no_service(tmp_path):
+    m = tmp_path / "deploy.toml"
+    head, why = '[nodes.n]\nrecord = "/r"\n', 'no_restart = "its runs end by themselves"\n'
+    for entry in (f'[[file]]\npath = "/p"\nsrc = "s"\nrun = ["systemd:a"]\nnodes = ["n"]\n{why}',
+                  f'[[file]]\npath = "/p"\nby = "setup.sh"\nnodes = ["n"]\n{why}',
+                  f'[[tree]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\n{why}',
+                  '[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\nno_restart = " "\n',
+                  '[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\nno_restart = true\n'):
+        m.write_text(head + entry)
+        with pytest.raises(ValueError, match="`no_restart` says why"):
+            deploy.load(m)
+    m.write_text(head + f'[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\n{why}')
+    assert deploy.load(m)["n"].entries[0].no_restart == "its runs end by themselves"
+
+
 def test_installing_a_changed_unit_reloads_systemd_once_and_an_unchanged_one_does_not(world, monkeypatch):
     node, repo, manifest = world["node"], world["repo"], world["manifest"]
     monkeypatch.setattr(deploy, "UNITS", f"{node}/units/")

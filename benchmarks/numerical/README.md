@@ -4,19 +4,22 @@
 result must say about itself, the input sets results are measured on, and what each unit type of the census workloads costs
 as a Boolean circuit. It has three parts:
 
-- `bench`: the result contract (`contract`), a result's interaction time (`interaction`, `latency`), the census as Python
-  (`census`, which reads `benchmarks/census/`), input sets (`generate`, `fixture_sets`, `instances`), one measured cell on its
-  prover and verifier pods (`cell`, `placement`, `drivers`), the subcircuit catalog and the per-unit-type cost inventory
-  (`unit_costs` and its padding, prover and menu tables).
+- `bench`: the result contract (`contract`) and the comparison of two results under it (`judge`), a result's interaction
+  time (`interaction`, `latency`), the census as Python (`census`, which reads `benchmarks/census/`), input sets (`generate`,
+  `fixture_sets`, `instances`), one measured cell on its prover and verifier pods (`cell`, `placement`, `drivers`), the
+  subcircuit catalog and the per-unit-type cost inventory (`unit_costs` and its padding, prover and menu tables).
 - `reference`: the pinned GPU simulator's tensor-core step as integer operations (`hawkeye_close`), an independent reference
   for `verity.definitions.circuits.targets.target.FIRST`.
 - `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
 
-**What a caller may import** is each module's `__all__`. Its readers outside this directory are Flock's prover and pod
-scripts (`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
-(`bench.contract`, `bench.instances`, `reference.hawkeye_close`), and `proof_throughput/`, `judge.py` and `latency_compare.py`
-(`bench.contract`, `bench.latency`). Several benchmarks' scripts start `bench.generate` as a command, so what it prints is
-read too.
+**What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one,
+the Python inside a shell script counted. A name that starts with an underscore is in no list and is no part of what a
+caller may rely on; one test of Flock's prover calls `bench.contract._check_rates` all the same. The
+modules without a list (`bench.unit_costs_menu`, `bench.unit_costs_prover`) have no reader outside it, and `settings` also
+answers each setting it declares as an attribute. Its readers outside this directory are Flock's prover and pod scripts
+(`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`, `bench.instances`) and other benchmarks: `tc_probe/`
+(`bench.contract`, `bench.instances`, `reference.hawkeye_close`) and `proof_throughput/` (`bench.contract`). Several
+benchmarks' scripts start `bench.generate` as a command, so what it prints is read too.
 
 **What it never does.** It states no relation of its own: every expected word comes from `verity.definitions.silicon`, and the
 reference and the checker are held to it by tests. It reads the census and the committed input sets and never writes them

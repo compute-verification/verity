@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from gates import Gates
     from glm import GlmLayer
 
+__all__ = ["Collect", "Config", "Layer", "Weights", "check_reference", "head", "inv_freq", "make_layer", "rotary",
+           "rotate_half", "row_chunk"]
+
 #: what a calibration pass hands each linear's input to (and the attention's keys, as `keys`), by name
 Collect = Callable[[str, torch.Tensor], None]
 

@@ -86,16 +86,16 @@ theorem field_leaf (t : Ty) (f l : ℕ) (hf : f < (fieldsOf t).length) (hl : l <
   | array n e => exact field_leaf_one (.array n e) rfl f l hf hl
   | tuple fs =>
     by_cases he : fs.isEmpty = true
-    · exact field_leaf_one (.tuple fs) (if_pos he) f l hf hl
-    · have hfo : fieldsOf (.tuple fs) = fs.toList := if_neg he
+    · exact field_leaf_one (.tuple fs) (ite_eq_left he) f l hf hl
+    · have hfo : fieldsOf (.tuple fs) = fs.toList := ite_eq_right he
       rw [hfo] at hf hl ⊢
       obtain ⟨h1, h2⟩ := fields_leaf _ f l hf hl
       rw [leaves_tuple, wAt_tuple, h2, Option.getD_some]
       exact ⟨h1, rfl⟩
   | record fs =>
     by_cases he : fs.isEmpty = true
-    · exact field_leaf_one (.record fs) (if_pos he) f l hf hl
-    · have hfo : fieldsOf (.record fs) = fs.toList.map (·.2) := if_neg he
+    · exact field_leaf_one (.record fs) (ite_eq_left he) f l hf hl
+    · have hfo : fieldsOf (.record fs) = fs.toList.map (·.2) := ite_eq_right he
       rw [hfo] at hf hl ⊢
       obtain ⟨h1, h2⟩ := fields_leaf _ f l hf hl
       rw [foldl_map_wStep] at h2

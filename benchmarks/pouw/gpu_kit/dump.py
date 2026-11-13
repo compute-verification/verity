@@ -11,6 +11,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+#: what `compare.py` and the tests read
+__all__ = ["DumpError", "VERSION", "items", "read", "write"]
+
 VERSION = "gpu-kit-dump/v1"
 INDEX = "dump.jsonl"
 LAYOUTS = ("bytes", "sha512-be")

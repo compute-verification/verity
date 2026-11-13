@@ -2,23 +2,64 @@
 from it), and the key rules' stated equivalences and rates."""
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import random
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+from verity.protocols.pouw.receipts import receipt_conform as C
+from verity.protocols.pouw.receipts import receipt_folds as F
 
-import receipt_conform as C  # noqa: E402
-import receipt_folds as F  # noqa: E402
+HERE = Path(__file__).resolve().parent
+#: the repository's root, the one path entry a reader in the workspace has
+REPO = HERE.parents[4]
 
 #: the sha256 of the r9 folds' reference twin, receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
+
+
+def test_each_module_binds_what_it_lists_and_the_checks_read_only_listed_names():
+    """A caller takes the names a module's `__all__` lists (README.md), and the checks are the reference's first
+    caller."""
+    for module in (F, C):
+        unbound = [n for n in module.__all__ if not hasattr(module, n)]
+        assert not unbound, f"{module.__name__}.__all__ lists {unbound}, which it doesn't bind"
+    read = {n.attr for n in ast.walk(ast.parse(Path(C.__file__).read_text()))
+            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "F"}
+    unlisted = sorted(n for n in read if not n.startswith("_") and n not in F.__all__)
+    assert not unlisted, f"receipt_conform reads {unlisted} of receipt_folds: list them in receipt_folds.__all__"
+
+
+@pytest.mark.parametrize("path, code", [
+    (REPO, "from verity.protocols.pouw.receipts import receipt_conform as C, receipt_folds as F"),
+    (HERE.parent, "import receipt_conform as C, receipt_folds as F"),
+], ids=["the package's name, the repository on the path", "the bare name, the directory on the path"])
+def test_the_checks_import_under_each_name_and_check_that_names_reference(path, code):
+    """A reader in the workspace imports `verity.protocols.pouw.receipts.receipt_conform` with the repository alone on
+    the path; a file started by path imports `receipt_conform` from the directory. Under each name the checks hold the
+    `receipt_folds` of that name, not a second copy, and the other name is not loaded."""
+    code += ("; import sys; assert C.F is F, 'receipt_conform holds another copy of receipt_folds'; "
+             "loaded = [m for m in sys.modules if m.rpartition('.')[2] in ('receipt_conform', 'receipt_folds')]; "
+             "assert len(loaded) == 2, loaded")
+    run = subprocess.run([sys.executable, "-S", "-c", code], cwd=HERE, env={"PYTHONPATH": str(path)},
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+
+
+def test_run_as_a_file_the_checks_find_their_sibling():
+    """`python receipt_conform.py` is a command (README.md): started by path from another directory with nothing on the
+    path, the file imports `receipt_folds` from its own directory and checks it. The empty PATH leaves it no compiler,
+    so the header's checks, which the tests below run, are not built a second time here."""
+    run = subprocess.run([sys.executable, "-S", str(HERE.parent / "receipt_conform.py")], cwd=HERE, env={"PATH": ""},
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.splitlines() == [f"receipt_folds.py: {C.check_reference()} checks agree"]
 
 
 def test_the_published_vectors_are_what_the_reference_makes():

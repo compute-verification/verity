@@ -25,8 +25,13 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
 | `serve` | `serve.py`'s window on one leased GPU for at most 28 minutes, after `noise.cu` is built for the card and the Lean verifier's coins are built; extra arguments go to `serve.py` | `serve.py`'s record (`manifest.json` and the window's files), `tree.txt`, `nvcc.txt`, `lean-coins-build.log`, `prover-put.txt` (the prover's data put in the store, or `prover.tar` and `prover.sha256` beside it when the put fails) |
 | `producer_gpu` | the receipt producer's GPU tests (`benchmarks/pouw/tests/test_served_h1_producer.py`'s units-kernel tests) for each `h1u.cu` build in `BUILDS`, then `step_time.py` at each of `STEP_ROWS` | `builds.txt`, `build-*.log`, `junit-*.xml`, `pytest-*.log`, `step-*.json` |
 | `j10r_gpu` | by `JOB`: `tests`, J10-R's GPU tests and `j10r_time.py` (J10-R's noise and receipts against v1's, interleaved), or `window`, a served window over J10-R's tile unit through `pouw_h1_gpu.py` | `builds.txt`, `build-*.log`, `gpu.txt`, `junit.xml`, `pytest.log`, `j10r_time.json`, `j10r_time.log`, `window.log` |
-| `commit_legs` | served Commit windows one after another through `pouw_h1_gpu.py`, each over v1's or J10-R's tile unit, with in-process coins or, in its live form, coins from a gate session; the script's header names the forms and their knobs | a directory a window (`pouw_h1_gpu.json`, `stdout.log`, `stderr.log`, and a live window's session archives), the list of windows run, the gate's ledger, pins and key (`gate-*`), `builds.txt`, `build-hbc.log` |
 | `preflight` | a CPU check of the node: the imports `serve.py` makes, the int8 pin's path, the `research` command and one receipt against its reference | its standard output only |
+
+One more job has no row, because its name holds a term the Glossary retires; `run.sh` with no argument lists every job.
+It runs served Commit periods one after another through `pouw_h1_gpu.py`, each over v1's or J10-R's tile unit, with
+in-process coins or, in its live form, coins from a gate session; the script's header names the forms and their knobs.
+It writes a directory a period (`pouw_h1_gpu.json`, `stdout.log`, `stderr.log`, and a live period's session archives),
+the list of periods run, the gate's ledger, pins and key (`gate-*`), `builds.txt`, `build-hbc.log`.
 
 The verifier's check of a window's live coins, from the challenger's own run, is `coins.py check` (its command is in
 `serve.sh`'s header).
@@ -37,5 +42,7 @@ The verifier's check of a window's live coins, from the challenger's own run, is
 `commit.py` (the window's tables), `credit.py` (the padded-window credit), `producer.py` (`h1u.cu`'s units kernel),
 `partials.py` and `lane_refs.py` (option A's lane partials) are what they import. Other directories load some of them by
 path: `benchmarks/one_stage/a5_coins.py` reads `coins.py`, `adapters/vllm/tests/protocols/pouw_h1_gpu.py` reads
-`producer.py`, and `benchmarks/hash/dither/dither_a.py` reads `partials.py` and `lane_refs.py`. Their tests are the
-`test_served_h1*.py` files, `test_partials.py` and `test_lane_refs.py` under `benchmarks/pouw/tests/`.
+`producer.py`, and `benchmarks/hash/dither/` reads `coins.py`, `commit.py`, `credit.py`, `serve.py` and `lane_refs.py`.
+Each of these modules' `__all__` lists the names other files read through it, the tests' included, except underscore
+names; anything else in it may change without notice. Their tests are the `test_served_h1*.py` files,
+`test_partials.py` and `test_lane_refs.py` under `benchmarks/pouw/tests/`.

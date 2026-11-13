@@ -88,11 +88,10 @@ gives a gathered value:
   values the Program doesn't state (a rope table, which may hold a 0).
 
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
-one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
-each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
-two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
-of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
-positions whose prefixes hold the same tokens in the same proportions. The updates': a weight is `θ`'s rows, which
+one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
+words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
+The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
+under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
 are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
@@ -774,46 +773,59 @@ class Reader:
 
         def value(space: str, j: int, leaf: int):
             """A word as a generic f32 value would leave it: ("c", bits) where it is that constant whatever the data,
-            "g" where it is data the constants don't decide (a finite value), None where the rules here can't say."""
+            "g" where it is data the constants don't decide (a finite value), None where the rules here can't say. A
+            word's arguments are valued before it from an explicit stack, so a chain of any depth takes no frame a
+            node."""
             if space != "n":
                 return None if ctx[j] and any(s.stated for _e, s in ctx[j]) else "g"
-            if (j, leaf) in value_of:
-                return value_of[j, leaf]
-            nd = body.nodes[j]
-            f = nd.fn
-            out: object = "g"
-            if not isinstance(f, PrimitiveDefinition) or is_input(f):
-                out = "g"
-            elif not nd.args:
-                out = ("c", _const(f))
-            else:
-                m = leaf if nd.form == "batch" else 0
-                vs = [value(*member_words(nd, i, m)[0]) for i in range(len(nd.args))]
-                out = _generic(f.name, vs, f)
-            value_of[j, leaf] = out
-            return out
+            todo = [(j, leaf)]
+            while todo:
+                j_, leaf_ = todo[-1]
+                if (j_, leaf_) in value_of:
+                    todo.pop()
+                    continue
+                nd = body.nodes[j_]
+                f = nd.fn
+                if not isinstance(f, PrimitiveDefinition) or is_input(f):
+                    value_of[j_, leaf_] = "g"
+                elif not nd.args:
+                    value_of[j_, leaf_] = ("c", _const(f))
+                else:
+                    m = leaf_ if nd.form == "batch" else 0
+                    ws = [member_words(nd, i, m)[0] for i in range(len(nd.args))]
+                    pending = [(w[1], w[2]) for w in ws if w[0] == "n" and (w[1], w[2]) not in value_of]
+                    if pending:
+                        todo.extend(reversed(pending))
+                        continue
+                    value_of[j_, leaf_] = _generic(f.name, [value(*w) for w in ws], f)
+                todo.pop()
+            return value_of[j, leaf]
 
         def unselected(space: str, j: int, leaf: int):
             """The word a select gives where its condition is false whatever the data, else the word itself."""
-            nd = body.nodes[j] if space == "n" else None
-            if nd is None or not isinstance(nd.fn, PrimitiveDefinition) or nd.fn.name != "SelectF32":
-                return space, j, leaf
-            m = leaf if nd.form == "batch" else 0
-            c, b = member_words(nd, 0, m)[0], member_words(nd, 2, m)[0]
-            return unselected(*b) if value(*c) == ("c", 0) else None
+            while True:
+                nd = body.nodes[j] if space == "n" else None
+                if nd is None or not isinstance(nd.fn, PrimitiveDefinition) or nd.fn.name != "SelectF32":
+                    return space, j, leaf
+                m = leaf if nd.form == "batch" else 0
+                c, b = member_words(nd, 0, m)[0], member_words(nd, 2, m)[0]
+                if value(*c) != ("c", 0):
+                    return None
+                space, j, leaf = b
 
         def scaled(space: str, j: int, leaf: int):
             """The word a chain of `INJECTIVE` ops, each by constants alone, reads of data, else the word itself."""
-            nd = body.nodes[j] if space == "n" else None
-            if nd is None or not isinstance(nd.fn, PrimitiveDefinition) or nd.fn.name not in INJECTIVE or not nd.args:
-                return space, j, leaf
-            m = leaf if nd.form == "batch" else 0
-            ws = [member_words(nd, i, m)[0] for i in range(len(nd.args))]
-            vs = [value(*w) for w in ws]
-            data = [w for w, v in zip(ws, vs) if not isinstance(v, tuple)]
-            if len(data) != 1 or not all(INJECTIVE[nd.fn.name](v[1]) for v in vs if isinstance(v, tuple)):
-                return space, j, leaf
-            return scaled(*data[0])
+            while True:
+                nd = body.nodes[j] if space == "n" else None
+                if nd is None or not isinstance(nd.fn, PrimitiveDefinition) or nd.fn.name not in INJECTIVE or not nd.args:
+                    return space, j, leaf
+                m = leaf if nd.form == "batch" else 0
+                ws = [member_words(nd, i, m)[0] for i in range(len(nd.args))]
+                vs = [value(*w) for w in ws]
+                data = [w for w, v in zip(ws, vs) if not isinstance(v, tuple)]
+                if len(data) != 1 or not all(INJECTIVE[nd.fn.name](v[1]) for v in vs if isinstance(v, tuple)):
+                    return space, j, leaf
+                space, j, leaf = data[0]
 
         rows_of: list = []
 

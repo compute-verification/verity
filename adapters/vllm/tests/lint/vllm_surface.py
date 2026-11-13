@@ -50,6 +50,8 @@ SURFACE = {
     "vllm.distributed:tensor_model_parallel_all_reduce": "the all-reduce the export's TP ops stand in for",
     "vllm.distributed.parallel_state:get_pp_group": "a PoUW H1 rank's pipeline-parallel rank",
     "vllm.distributed.parallel_state:get_tp_group": "the TP group: its device communicator, and a PoUW H1 rank's TP rank",
+    "vllm.forward_context:is_forward_context_available": "whether a forward context is set, which the fused rope asks "
+                                                         "before it reads the KV slots",
     "vllm.forward_context:set_forward_context": "a forward context with no attention metadata, for the frontend's export",
     # compilation and CUDA graphs
     "vllm.compilation:cuda_graph": "CUDAGraphWrapper, whose replays the served compiled source hooks",
@@ -64,6 +66,8 @@ SURFACE = {
     "vllm.model_executor.determinism.batch_invariant_configs:_get_tuned_matmul_arch_family":
         "vLLM's tuned GEMM arch family for a device, which the GEMM targets and the profile record (private to vLLM)",
     # layers
+    "vllm.model_executor.layers.activation:SiluAndMul": "the silu-mul activation, which the int8 producers find by type "
+                                                        "and patch",
     "vllm.model_executor.layers.attention:Attention": "the attention layer, whose implementation the frontend observes",
     "vllm.model_executor.layers.attention.attention:Attention": "the attention layer, which served_match finds by type",
     "vllm.model_executor.layers.attention:MLAAttention": "the MLA layer, whose weight split loader parity and the "
@@ -84,6 +88,7 @@ SURFACE = {
                                                                                      "checks a MoE layer for",
     "vllm.model_executor.layers.fused_moe.runner.moe_runner:MoERunner": "the MoE runner, which served_match finds and the "
                                                                         "served compiled source hooks",
+    "vllm.model_executor.layers.layernorm:RMSNorm": "the RMSNorm layer, which the int8 producers find by type and patch",
     "vllm.model_executor.layers.linear": "the linear layers' module, whose collectives the rank worker hooks",
     "vllm.model_executor.layers.linear:LinearBase": "every linear layer, which PoUW, PoUS and the int8 recipe find by type",
     "vllm.model_executor.layers.linear:LinearMethodBase": "the base of the int8 linear method",
@@ -96,6 +101,8 @@ SURFACE = {
     "vllm.model_executor.layers.quantization:register_quantization_config": "registers the int8 quantization config",
     "vllm.model_executor.layers.quantization.base_config:QuantizationConfig": "the base of the int8 quantization config",
     "vllm.model_executor.layers.quantization.utils.quant_utils:is_layer_skipped": "the layers the int8 recipe leaves bf16",
+    "vllm.model_executor.layers.rotary_embedding.base:RotaryEmbedding": "the rotary embedding, whose CUDA forward the "
+                                                                        "fused rope stands in for",
     "vllm.model_executor.layers.vocab_parallel_embedding": "the embedding's module, whose all-reduce the rank worker hooks",
     "vllm.model_executor.layers.vocab_parallel_embedding:ParallelLMHead": "the LM head, which the int8 recipe keeps bf16",
     "vllm.model_executor.layers.vocab_parallel_embedding:VocabParallelEmbedding": "the embedding the export's TP ops bind",
@@ -106,11 +113,18 @@ SURFACE = {
     "vllm.model_executor.model_loader.utils:initialize_model": "a meta-device model, for the build inventory",
     "vllm.model_executor.model_loader.weight_tying:_get_untied_lm_head": "an untied LM head, which loader parity checks "
                                                                          "(private to vLLM)",
+    "vllm.model_executor.models.llama:LlamaAttention": "Llama's attention, whose forward the fused rope reproduces and "
+                                                       "the int8 producers require of a layer",
+    "vllm.model_executor.models.llama:LlamaDecoderLayer": "Llama's decoder layer, whose forward the int8 producers "
+                                                          "require of a layer",
+    "vllm.model_executor.models.llama:LlamaMLP": "Llama's MLP, whose forward the int8 producers require of a layer",
     "vllm.model_executor.parameter:ChannelQuantScaleParameter": "the int8 linear method's per-channel scales",
     "vllm.model_executor.parameter:ModelWeightParameter": "the int8 linear method's weights",
     "vllm.model_executor.utils:set_weight_attrs": "the int8 experts' weight loaders",
     # attention backends and kernels
     "vllm.v1.attention.backend:AttentionType": "the decoder attention type the int8 backend requires",
+    "vllm.v1.attention.backends:flash_attn": "the FlashAttention backend's module, whose cache write the fused rope "
+                                             "pins and whose implementation it patches",
     "vllm.v1.attention.backends.flash_attn:FlashAttentionBackend": "the base of the int8 attention backend",
     "vllm.v1.attention.backends.flash_attn:FlashAttentionImpl": "the base of the int8 attention implementation",
     "vllm.v1.attention.backends.registry:AttentionBackendEnum": "the backends' names: CUSTOM for the int8 backend, and the "

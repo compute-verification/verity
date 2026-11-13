@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import random
 
 import numpy as np
 import pytest
+import settings
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
@@ -91,7 +91,7 @@ def test_answer_opens_is_the_leaf():
     assert _bytes(out[0]) == INST.commit_string(INST.default_key, x, y)
 
 
-SLOW = pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="minutes at P2's width: VERITY_POUS_SLOW=1")
+SLOW = pytest.mark.skipif(not settings.SLOW, reason="minutes at P2's width: VERITY_POUS_SLOW=1")
 
 
 @SLOW

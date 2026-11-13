@@ -35,6 +35,8 @@ from pathlib import Path
 
 from verity_config.settings import SHARED
 
+__all__ = ["BIND", "guard", "scan"]
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 REFERENCE = HERE / "reference.json"

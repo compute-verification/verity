@@ -7,7 +7,8 @@ quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of s
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
 --on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
 node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
-memory slot.py finds free there (`free_gb`, read once a pool). `choose` then takes, in order:
+memory slot.py finds free there (`free_gb`, read once a pool). A pool is read by the machine's own slot.py where it has one
+(slot_only.NODE_SLOT), the copy its runs wait by, and by the inlined one where it has none. `choose` then takes, in order:
 
   - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
     trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
@@ -98,11 +99,10 @@ NULL_DEVICE, GIT = "/dev/null", "git"
 NO_START = "no run starts there"
 #: the machines that may refuse one `--on auto` launch as machines that can start no run before the launch gives up
 TRIES = 3
-#: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
-#: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
+#: a pool where a waiter the job would stand behind (`_behind`) has waited this long beside a free slot is stalled on memory and
+#: takes no job (`_pool`), nor does one whose every fitting slot is idle and blocked with slot.py's memory reason, which contains
+#: MEMORY_BLOCK
 STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
-#: slot.py's BACKFILL_MAX_GB: a run asking at most this many GB passes the lane waiters ahead that only memory keeps from starting
-BACKFILL_MAX_GB = 32
 #: a launch is on time when its run starts within this many minutes; one `expect` finds late is told so, or refused (REFUSE)
 START_WITHIN_MIN = 10
 #: how long a pool run holds its slot, in minutes, as `expect` takes it: the mean over the pools' runs, since a line of n runs
@@ -217,11 +217,19 @@ def once(f):
     return first
 
 
+def pool_src():
+    try:
+        return Path(NODE_SLOT).read_text()       # the copy this machine's pool runs wait by
+    except (OSError, UnicodeDecodeError):
+        return SLOT_SRC
+
+
 def pool_doc(pool, slots):
-    m = load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots})
+    m = load("auto_slot_" + pool, pool_src(), {"CHECK_SLOTS": slots})
     if not (hasattr(m, "memory_gb") and hasattr(m, "reserved_gb")):
         return m.status_doc(datetime.now(timezone.utc))
-    # slot.py reads the machine's memory and every live reservation's process tree for each slot with mem=; once is the same answer
+    # one reading of the machine's memory and of every live reservation's process tree for the pool, `free_gb` below included:
+    # slot.py's status makes one for each way its slots count them, and a slot.py from before it did, one for each slot with mem=
     m.memory_gb, m.reserved_gb = once(m.memory_gb), once(m.reserved_gb)
     d = m.status_doc(datetime.now(timezone.utc))
     # as the pool's own slots count the live reservations: whole, or by their peaks= (slot.py's `lane_peaks`)
@@ -319,7 +327,7 @@ def share_cpus(source: Path) -> str | None:
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: float | None = None, lean: bool = False) -> bytes:
     """The probe a machine runs as `python3 -`; `now` (an epoch) stands in for the machine's clock when HOLD_FILE is read. With
-    `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py."""
+    `lean` it reads the machine's Lean slots too, with the source tree's lean_slot.py and the slot.py beside it."""
     from . import cores, remote
     from .pods.nebius import slot_only
 
@@ -328,7 +336,8 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: f
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
             "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
-            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START}
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS, "NULL": NULL_DEVICE, "GIT": GIT, "NO_START": NO_START,
+            "NODE_SLOT": slot_only.NODE_SLOT}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -447,13 +456,14 @@ def _blocked(slot: dict, free_gb: Any, mem_gb: float) -> str | None:
     return None
 
 
-def _behind(ahead: list[dict], mem_gb: float, free_gb: float) -> list[dict]:
-    """The waiters of ``ahead`` a run asking ``mem_gb`` GB waits behind with ``free_gb`` GiB free, as slot.py counts them (its
-    `ahead`): all of them, but that a run asking at most BACKFILL_MAX_GB passes a lane waiter whose own ask is over what is
-    free. A priority waiter, or one whose ticket names no ask, is never passed."""
-    if mem_gb > BACKFILL_MAX_GB:
-        return ahead
-    return [w for w in ahead if w.get("priority") or not w.get("mem_gb") or w["mem_gb"] * 1e9 / 2 ** 30 <= free_gb]
+def _behind(ahead: list[dict], free_gb: float) -> list[dict]:
+    """The waiters of ``ahead`` a run that joins after them waits behind with ``free_gb`` GiB free, as slot.py counts them (its
+    `ahead`), whatever the run asks: all but a lane waiter whose own ask is over what is free, which only memory keeps from
+    starting. That one holds its place again once its ask fits in what is free and what the runs that passed it reserve
+    (its `passed_gib`, slot.py's `passed_gb` for the runs that hold slots; a run `_pool` starts behind it takes from what is
+    free what it adds to that, so it changes nothing). A priority waiter, or one whose ticket names no ask, is never passed."""
+    return [w for w in ahead if w.get("priority") or not w.get("mem_gb")
+            or w["mem_gb"] * 1e9 / 2 ** 30 <= free_gb + (w.get("passed_gib") or 0)]
 
 
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
@@ -501,13 +511,13 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
 
     stay, started = [], 0
     for w in waiters:
-        if _behind(stay, ask := w.get("mem_gb") or 0, left) or not take(ask):
+        if _behind(stay, left) or not take(w.get("mem_gb") or 0):
             stay.append(w)
         else:
             started += 1
-    ahead = _behind(stay, mem_gb, left)
-    # a waiter retries every 20 s (slot.py's POLL_S), so one that stays this long beside an idle slot waits on memory, and so
-    # would this job behind it (cpu-3's head asked 256 GB for hours while its other slots sat free)
+    ahead = _behind(stay, left)
+    # a waiter retries every 20 s (slot.py's POLL_S), so one that stays this long beside an idle slot waits on memory. One this
+    # job can't pass waits for what the runs that passed it hold, or for a slot's own mem=, and the job would wait behind it
     if idle and ahead and (head := max(w.get("minutes") or 0 for w in ahead)) >= STALL_MIN:
         raise Stalled(f"its line is stalled: a run has waited {head} min while slot {idle[0]['name']} is free, for more "
                       f"memory than the {left:g} GB free there", len(waiters))

@@ -4,18 +4,13 @@ are skipped, and a point whose KV cache wrapped is flagged."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import load
 
-_spec = importlib.util.spec_from_file_location("tpcomm_report",
-                                               Path(__file__).resolve().parents[1] / "comm" / "report.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+R = load("comm/report.py")
 
 MHZ = 2000.0
 PEAK = 1024 * 188 * MHZ * 1e6

@@ -7,10 +7,19 @@ harness; this kit is for a standalone `.cu` bench, and its constants are the har
 | File | What |
 |---|---|
 | `bench.cuh` | Header only (C++17). `gk::poison_gate`: 0xA5 the output on the kernel's own stream, run, judge; then the no-write control, which the judge must reject. `gk::timed_items`: every arm's item sized to 40 ms, a warm-up until the SM clock is steady, then rep by rep with the arms' order rotating, NVML's SM clock and throttle reasons before, during and after every item. `gk::summary`: a `GK arm=...` line an arm, tagged `[clock-gap]`, `[throttled]`, `[unsteady]` or `[no-clock]`. `gk::Dump`: the one dump format |
-| `sass_gate.py` | The timing gate, on the kernel's SASS before it is timed: the timed region's loops and each one's exact opcode counts (`--expect`), no LDL/STL, a live sink, and with `--smem` the bank check on the kernel's own addresses. It reuses `harness/sass_gate.py`'s cubin reader and instruction model; `--numeric` also runs that gate |
+| `sass_gate.py` | The timing gate, on the kernel's SASS before it is timed: the timed region's loops and each one's exact opcode counts (`--expect`), no LDL/STL, a live sink, and with `--smem` the bank check on the kernel's own addresses. It reuses `benchmarks/pouw/harness/sass_gate.py`'s cubin reader and instruction model; `--numeric` also runs that gate |
 | `banks.py` | Shared-memory bank conflicts of one warp-wide access (LDS/STS/ATOMS phases of 128 B, LDSM/STSM phases of 8 rows) |
 | `dump.py` | The dump format: `NAME.bin` and a `dump.jsonl` line a buffer, layout `bytes` or `sha512-be`; the reader checks sizes and names |
 | `compare.py` | The twin compare: a device dump against its twin's, naming the first difference and the known faults (not written, byte order, layout) |
+
+**What a caller may import.** A bench includes `bench.cuh` (`../edited_gemm/egemm80.cu`, `../opcode_probe/probe.cuh`,
+`../tensor_kinds/sm80.cu`). A script loads `sass_gate.py` from its file and reads the names in its `__all__`
+(`../opcode_probe/probe.py`, `../tensor_kinds/sm80.py`). `banks.py`, `dump.py` and `compare.py` state an `__all__` each;
+their readers are the kit's own files and its tests. `sass_gate.py` and `compare.py` are commands too (below).
+
+**What it never does.** It holds no kernel and no twin of one: the bench brings both. Its Python launches nothing on a
+GPU: the gate reads a built binary, and the other three read and write files where their caller says. It imports the
+standard library alone, but for the harness's gate, which `sass_gate.py` loads from its file.
 
 ## The gate
 

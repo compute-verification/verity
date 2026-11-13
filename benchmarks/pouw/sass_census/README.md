@@ -1,7 +1,7 @@
 # sass_census: every SASS opcode a device runs, against what the model prices
 
 The opcode census of a device family (sm_90: the H200, sm_100: the B200, sm_120: the RTX PRO 6000): every binary with
-device code on a node, disassembled and its dotted opcodes counted, then diffed against the menu the machine model
+device code on a node, disassembled and its dotted opcodes counted, then diffed against the menu the ACCEL model
 prices. An opcode the menu doesn't price is a row a person reads: can it head a committed word, and by which route.
 The probes beside it answer what the diff raises: the rate of a class the census leaves unpriced, what ptxas lowers a
 PTX form to, and what `multimem` does on a card with no NVLink. The opcode table's rows
@@ -49,8 +49,10 @@ python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]            
 - `eps_counts.py` counts, from each architecture's SASS, the instruction differences ε_skip is priced with, placed by
   the source lines each instruction's inline chain passes through.
 
-Nothing outside the directory reads its Python. `sass_semantics.py` offers `classify` to `diff_menu.py`, and the
-`unpriced*.cu` probes include `../opcode_probe/probe.cuh` and are started by its `probe.py`. `dump.sh`, `lowering.sh`
-and `eps_counts.sh` never take a GPU.
+Nothing outside the directory reads its Python. `sass_semantics.py` offers `classify` to `diff_menu.py`. The
+`unpriced*.cu` probes include `../opcode_probe/probe.cuh` and are started by its `probe.py`; `unpriced.cuh`, which
+all three include, holds the lane and mma.sync chains `unpriced.cu` and `unpriced90.cu` time (each op on 8
+independent chains a thread, alone or alternating with another op). `dump.sh`, `lowering.sh` and `eps_counts.sh`
+never take a GPU.
 
 The tests are `../tests/test_sass_census.py` and `../tests/test_eps_counts.py`.

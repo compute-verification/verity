@@ -36,6 +36,12 @@ import baselines as B
 import derive as D
 from arm import Buffer
 
+#: what `bench.py` and the tests read
+__all__ = [
+    "Chain", "PHASES", "SPLIT_VARIANTS", "Y_BYTES", "arm_links", "baseline_links", "gate", "has_phases", "has_side",
+    "length", "split_groups", "stale_control",
+]
+
 MIN_LENGTH = 64
 #: deprecated: the parts' names, v0.4's phases
 PHASES = tuple(A.PARTS)

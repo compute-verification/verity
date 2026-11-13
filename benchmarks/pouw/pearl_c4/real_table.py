@@ -55,8 +55,8 @@ def rows(summaries: list[dict], rho: Fraction, manifest: Path | None = None) -> 
                 "w_rows": w.get("rows"), "w_dnf_fail_split": w.get("dnf_fail_split"), "w_non_finite": w.get("non_finite"),
                 "tiles": len(tiles), "debited": len(debited), "rejected": sum(bool(t.get("rejected")) for t in tiles),
                 "max_ratio": max((t["ratio"] for t in debited), default=None),
-                "over_cap": sum(t["ratio"] > 1 for t in debited),
-                "over_cap_tight": sum(t["ratio"] > float(rho / RHO) for t in debited),
+                "over_bound": sum(t["ratio"] > 1 for t in debited),
+                "over_bound_tight": sum(t["ratio"] > float(rho / RHO) for t in debited),
                 "mean_share": {term: sum(d[term] for d in split) / len(split) for term in TERMS} if split else None,
                 "tile_shares": split, "screened_only_elements": [t["debit"]["counts"].get("screened_only_elements")
                                                                   for t in debited]})
@@ -74,15 +74,15 @@ def mac_shares(table: list[dict]) -> dict[str, dict]:
     for r in table:
         if not r["tiles"]:
             continue
-        acc = out.setdefault(r["model"], {"linears": 0, "tiles": 0, "macs": 0, "over_cap": 0.0, "over_cap_tight": 0.0,
+        acc = out.setdefault(r["model"], {"linears": 0, "tiles": 0, "macs": 0, "over_bound": 0.0, "over_bound_tight": 0.0,
                                           "rejected": 0.0})
         acc["linears"] += 1
         acc["tiles"] += r["tiles"]
         acc["macs"] += r["macs"]
-        for key in ("over_cap", "over_cap_tight", "rejected"):
+        for key in ("over_bound", "over_bound_tight", "rejected"):
             acc[key] += r["macs"] * r[key] / r["tiles"]
     for acc in out.values():
-        for key in ("over_cap", "over_cap_tight", "rejected"):
+        for key in ("over_bound", "over_bound_tight", "rejected"):
             acc[key] = acc[key] / acc["macs"] if acc["macs"] else None
     return out
 
@@ -99,10 +99,10 @@ def markdown(table: list[dict], rho: Fraction) -> str:
         share = r["mean_share"] or {}
         lines.append(f"| {name} | {r['x_dnf_fail_split']}/{r['x_rows']} | {pct(r['x_screened_share'])} | "
                      f"{r['w_dnf_fail_split']}/{r['w_rows']} | {r['debited']}/{r['tiles']} | {pct(r['max_ratio'])} | "
-                     + " | ".join(pct(share.get(t)) for t in TERMS) + f" | {r['over_cap']} | {r['over_cap_tight']} |")
+                     + " | ".join(pct(share.get(t)) for t in TERMS) + f" | {r['over_bound']} | {r['over_bound_tight']} |")
     lines.append("")
     for model, acc in mac_shares(table).items():
-        lines.append(f"- {model}: over the bound on {pct(acc['over_cap'])} of MACs at 1/400 and {pct(acc['over_cap_tight'])} "
+        lines.append(f"- {model}: over the bound on {pct(acc['over_bound'])} of MACs at 1/400 and {pct(acc['over_bound_tight'])} "
                      f"at {rho}; rejected tiles on {pct(acc['rejected'])} ({acc['tiles']} tiles over {acc['linears']} "
                      "linears, each linear's share its sampled tiles' fraction weighted by m·n·k)")
     return "\n".join(lines) + "\n"

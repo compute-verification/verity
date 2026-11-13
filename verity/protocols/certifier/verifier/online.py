@@ -20,8 +20,8 @@ its previous value. A window with no history declares the envelope.
 
 The bound doesn't depend on the rule, nor on the lag, nor on whether a choice was ready: the audit charges
 log2 #Σ_sync bits per window whatever chose the value, and the envelope is in Σ_sync
-(`SecurityProofs.EncardAccSeqsLeSync` counts every advice sequence). The rule sets liveness, since a window its
-declared sync doesn't meet is a violation (fail-closed), and the shaping latency. Since the prover reads the frames'
+(`Properties.NetworkCertifier.EncardAcceptedObservationsLe` counts every advice sequence). The rule sets liveness,
+since a window its declared sync doesn't meet is a violation (fail-closed), and the shaping latency. Since the prover reads the frames'
 ready buckets, a sender that times its writes steers the declarations: those charged bits become ones it can use.
 `Rule.choices` counts the values it could steer a window's declaration among.
 """

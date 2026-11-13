@@ -4,21 +4,16 @@ work-weighted and reproducible, the lottery selecting by digest."""
 from __future__ import annotations
 
 import random
-import sys
 from fractions import Fraction
-from pathlib import Path
 
 import pytest
-from verity.errors import ProtocolError
 
+from verity.errors import ProtocolError
+from verity.protocols.pouw.clear.clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
+from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier.audit import (HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, tile_refs,
                                               weight_binding)
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import ncp
-
-# the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-from clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
 
 BEACON, SOURCE = b"beacon round 1", b"verifier secret"
 

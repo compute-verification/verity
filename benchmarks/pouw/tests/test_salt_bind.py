@@ -36,7 +36,6 @@ from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.spot.device import challenger as Ch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC
 import of_record as OR
 

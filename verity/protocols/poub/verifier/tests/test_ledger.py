@@ -11,9 +11,19 @@ import math
 from fractions import Fraction
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
+from test_remote_bandwidth import (  # noqa: F401
+    SCHEDULE,
+    A,
+    N,
+    challenger,
+    drive,
+    finish,
+    params,
+    partial,
+    store,
+)
+
 from verity import claims
 from verity.protocols.poub.verifier import audit, codec, ledger, line, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Pace
@@ -201,18 +211,18 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     W, X, P = audit.pooled(r)[0], 3.0, r.passes
     assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
-    draws = len(r.windows) * r.samples
-    assert draws == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
+    sampled = len(r.windows) * r.samples
+    assert sampled == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
     assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
-                          + ledger.binding(r, n) + ledger.sketch(r, n) + draws * 2.0 ** -64)
+                          + ledger.binding(r, n) + ledger.sketch(r, n) + sampled * 2.0 ** -64)
     d = ledger.delta_parts(r, n)
     assert d == {"profile": r.windows[0].profile.delta, "slack": P * 2.0 ** -audit.SLACK_LOG2,
                  "hiding": ledger.hiding(r), "binding": ledger.binding(r, n), "sketch": ledger.sketch(r, n),
-                 "rejection": draws / 2 ** 64}
+                 "rejection": sampled / 2 ** 64}
     assert tuple(d) == ledger.DELTA_PARTS
     parts = d["profile"] + d["slack"] + d["hiding"] + d["binding"] + d["sketch"] + d["rejection"]
-    assert snap.delta == parts and draws > 0
-    assert Fraction(d["rejection"]) == Fraction(draws, 2 ** ledger.REJECTION_LOG2)
+    assert snap.delta == parts and sampled > 0
+    assert Fraction(d["rejection"]) == Fraction(sampled, 2 ** ledger.REJECTION_LOG2)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
 
 
@@ -283,14 +293,14 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
-    drawn = [w.profile.drawn["receipt"] for w in r.windows]
-    assert len(drawn) > 1 and max(drawn) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
+    sampled = [w.profile.drawn["receipt"] for w in r.windows]
+    assert len(sampled) > 1 and max(sampled) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
     d = ledger.draw(r, n)
     assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and not hasattr(d, "hiding")
     fc = n.sketch_outside * ledger.compressions(r, n)
     L = (2 ** 64 - 1) * r.codec.max_blocks
     want = len(r.windows) * math.sqrt(L * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5
-    realized = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, drawn)) / 2 ** 256.5
+    realized = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, sampled)) / 2 ** 256.5
     assert d.binding == ledger.binding(r, n) == pytest.approx(want, rel=1e-12) and realized < d.binding < 2.0 ** -100
     paced = dataclasses.replace(r, pace=audit.Pace(1), append_coins=0)
     assert ledger.binding(paced, n) == pytest.approx(
@@ -307,15 +317,15 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
     record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
-    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
+    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
-    rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
+    rounding.  A record whose samples aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
     s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     k = [r.samples] * len(r.windows)
-    U, drawn = [w.receipts for w in r.windows], [w.profile.drawn["receipt"] for w in r.windows]
-    assert k == [70] * 3 and U == [80, 60, 60] and drawn == [70, 60, 60] and r.public()["samples"] == 70
+    U, sampled = [w.receipts for w in r.windows], [w.profile.drawn["receipt"] for w in r.windows]
+    assert k == [70] * 3 and U == [80, 60, 60] and sampled == [70, 60, 60] and r.public()["samples"] == 70
     deltas = {line.delta for line in ledger.memory(r, n)}
     assert len(deltas) == 1
     D = Fraction(deltas.pop())
@@ -324,8 +334,8 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
             + Fraction(ledger.binding(r, n)))
     slack, rounding = Fraction(r.passes, 2 ** audit.SLACK_LOG2), 5 * D / 2 ** 53
-    assert D >= held and abs(D - held - slack) <= rounding < slack
-    assert D - Fraction(sum(k) - sum(drawn), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
+    assert held <= D and abs(D - held - slack) <= rounding < slack
+    assert D - Fraction(sum(k) - sum(sampled), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)
     with pytest.raises(ValueError, match="states no samples|a record no session made doesn't state"):
@@ -335,7 +345,7 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
     """On `k1`'s schedule: s = (0, 1, 350, 650, 950), the arrivals 300 later each, so e_0 = 350, L = 650 − 1 and
     Σ = 950 − 350; no receipt is wrong, so the line charges the chip and 2L·(X·(Σ + 2L) + B) over Σ, B the rebuild
-    and disk bursts and, link-charged, the link window too."""
+    and disk bursts and, link-charged, the link burst too."""
     r, _ = k1
     X = 1e-3
     n = node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, bursts=(2, 3, 0))
@@ -351,7 +361,7 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
-    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link window
+    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
     `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (

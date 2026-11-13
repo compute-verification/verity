@@ -17,7 +17,8 @@ activation returns, and every operand of a gate inside it, is a gate of the acti
 parameters, a leaf the parameter has. `ret_within_of` states the first on what a decoded Program with no order
 violation and bodies laid out gives, with no hypothesis on its bodies.
 
-`Prog.gate`'s walk for a gate inside a member of a root node goes from the root into that member (`gateStep_member`)
+`Prog.gate`'s walk for a gate inside a member of a root node goes from the root into that member (`gateStep_member`,
+a case of `gateStep_callee`, the step at a gate of a member of a node; `gateStep_at_prim` is its other case)
 and stays under it (`walk_within`), so the operands it ends with are `operands_within`'s: `gate_within`.
 -/
 
@@ -290,17 +291,21 @@ theorem walk_within (U : Scope) {g : ℕ} (n : ℕ) (sc : Scope) (x : ℕ × Arr
     · simp [throw, throwThe, MonadExceptOf.throw] at hb
 
 omit hroot hB in
-/-- **The step of `Prog.gate`'s walk into a member**: for a gate of member `m` of node `k` of an activation, the
-node calling a composite, the step from the activation goes to that member's. -/
-theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
+/-- **The step of `Prog.gate`'s walk at a gate of a member**: for a gate of member `m` of node `k` of an activation,
+the step from the activation is the node's callee's. Of a primitive, it ends at the node, with the member's operands;
+of a composite, it goes to the member's activation. -/
+theorem gateStep_callee (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
-    (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
     (hlo : sc.off + (P.defs[sc.d]!).body.offsets[k]! +
       m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g)
     (hhi : g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
       m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
       (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates) {x : (ℕ × Array ℕ × Scope) ⊕ Scope}
-    (h : gateStep P g sc = .ok x) : x = .inr (P.child sc k m) := by
+    (h : gateStep P g sc = .ok x) :
+    ((P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true ∧
+        ∃ ops, x = .inl (((P.defs[sc.d]!).body.nodes[k]!).fn, ops, sc) ∧
+          operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops) ∨
+      ((P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false ∧ x = .inr (P.child sc k m)) := by
   have hmono := offsets_mono P sc.d (hL sc.d hd) hp
   obtain ⟨-, -, hnodes⟩ := hL sc.d hd hp
   have hstep := hnodes k hk
@@ -322,8 +327,6 @@ theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.
       · have := hmono (k + 1) k' (by omega) (by omega)
         omega
     rw [hkk] at h
-    simp only [hc, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq] at h
-    subst h
     have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
         ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
       omega
@@ -332,8 +335,55 @@ theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.
         (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates = m :=
       Nat.div_eq_of_lt_le (by omega) (by rw [Nat.add_mul, Nat.one_mul]; omega)
     have hM := (Nat.div_eq_of_lt_le hm2 (by rw [Nat.add_mul, Nat.one_mul]; omega)).symm.trans e1
-    exact congrArg (fun M => Sum.inr (P.child sc k M)) hM
+    rcases Bool.eq_false_or_eq_true (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim with hc | hc
+    · simp only [hc, ite_true] at h
+      split at h
+      · cases h
+      · rename_i ops hops
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact Or.inl ⟨hc, ops, rfl,
+          (congrArg (fun M => operands P sc ((P.defs[sc.d]!).body.nodes[k]!) M = Except.ok ops) hM).mp hops⟩
+    · simp only [hc, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      exact Or.inr ⟨hc, congrArg (fun M => Sum.inr (P.child sc k M)) hM⟩
   · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+omit hroot hB in
+/-- **The step of `Prog.gate`'s walk into a member**: for a gate of member `m` of node `k` of an activation, the
+node calling a composite, the step from the activation goes to that member's. -/
+theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
+    (hlo : sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g)
+    (hhi : g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+      (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates) {x : (ℕ × Array ℕ × Scope) ⊕ Scope}
+    (h : gateStep P g sc = .ok x) : x = .inr (P.child sc k m) := by
+  rcases gateStep_callee P hL sc hd hp hk hm hlo hhi h with ⟨hc', -⟩ | ⟨-, hx⟩
+  · rw [hc] at hc'
+    cases hc'
+  · exact hx
+
+omit hroot hB in
+/-- **The step of `Prog.gate`'s walk at a member of a primitive's node**: for the gate of member `m` of node `k` of
+an activation, the node calling a primitive, the step from the activation ends there, with the member's operands. -/
+theorem gateStep_at_prim (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
+    (hlo : sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g)
+    (hhi : g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+      (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates) {x : (ℕ × Array ℕ × Scope) ⊕ Scope}
+    (h : gateStep P g sc = .ok x) :
+    ∃ ops, x = .inl (((P.defs[sc.d]!).body.nodes[k]!).fn, ops, sc) ∧
+      operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops := by
+  rcases gateStep_callee P hL sc hd hp hk hm hlo hhi h with ⟨-, hx⟩ | ⟨hc', -⟩
+  · exact hx
+  · rw [hc] at hc'
+    cases hc'
 
 /-- **An operand of a gate inside a member of a root node is an earlier gate of the member or a leaf of one of its
 parameters.** The walk's first step, from the root, goes into the member (`gateStep_member`), and from there it

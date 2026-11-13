@@ -231,13 +231,13 @@ def served_weights(ck: Any) -> dict[str, np.ndarray]:
 
 def weights_tree(served: dict[str, np.ndarray]) -> dict[str, Any]:
     """The weights registration's tree over the served tensors, as a committer registers them under rows-sha512."""
-    geo, wk = bytes(range(32)), bytes(range(64))
+    geo, wk = bytes(range(64)), bytes(range(64))
     names, roots = [], []
     for i, (_key, (name, shape, bits)) in enumerate(fields()):
         raw = served[name.removeprefix(WRAP)].view(np.uint8)
         names.append([name.removeprefix(WRAP), DTYPES[bits], list(shape), int(raw.size)])
         roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
-    return step_rows.weights_tree(geo, names, step_rows.names_digest(names), roots, wk)
+    return step_rows.weights_tree(geo, names, roots, wk)
 
 
 def partition() -> dict[str, Any]:

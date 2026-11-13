@@ -1,4 +1,4 @@
-"""One live registration a node: each registration draws a fresh codec seed, so a prover that registered R times and
+"""One live registration a node: each registration samples a fresh codec seed, so a prover that registered R times and
 kept the key that suits it would choose log₂ R bits of it, a retry that resamples.  The verifier's `Registry` refuses a second registration while one is live,
 and a registration ends only when the verifier closes it, counting its sessions, a failed or unended one as failed."""
 
@@ -7,8 +7,8 @@ from __future__ import annotations
 import json
 
 import pytest
+from test_appends import NODE, P512, SOURCE, N, Run, payload, salts
 
-from test_appends import N, NODE, P512, SOURCE, Run, payload, salts
 from verity.protocols.poub.verifier import audit
 
 
@@ -42,23 +42,23 @@ def unended(store: audit.Store, registry: audit.Registry) -> Run:
 
 
 def test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing(monkeypatch) -> None:
-    draws, draw = [], audit.register
+    nodes, register = [], audit.register
 
     def counted(*args, **kw):
-        draws.append(args[1])
-        return draw(*args, **kw)
+        nodes.append(args[1])
+        return register(*args, **kw)
 
     monkeypatch.setattr(audit, "register", counted)
     registry = audit.Registry()
     st = registered_in(registry)
-    assert draws == [NODE] and registry.live(NODE) == st.registration.digest and registry.drawn(NODE) == 1
+    assert nodes == [NODE] and registry.live(NODE) == st.registration.digest and registry.drawn(NODE) == 1
     for nonce in (bytes(32), bytes(range(32))):
         with pytest.raises(audit.RegistryError, match="live registration"):
             registered_in(registry, nonce)
-    assert draws == [NODE] and registry.refused == {NODE: 2} and registry.drawn(NODE) == 1
+    assert nodes == [NODE] and registry.refused == {NODE: 2} and registry.drawn(NODE) == 1
     assert registry.live(NODE) == st.registration.digest
     other = registered_in(registry, node=b"another node")
-    assert draws == [NODE, b"another node"] and registry.live(b"another node") == other.registration.digest
+    assert nodes == [NODE, b"another node"] and registry.live(b"another node") == other.registration.digest
 
 
 def test_a_registration_ends_only_when_closed_with_every_session_counted() -> None:
