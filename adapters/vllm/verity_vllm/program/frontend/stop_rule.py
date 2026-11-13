@@ -33,11 +33,12 @@ def spec(stops: Iterable[int], *, max_tokens: int, prompt_len: int, max_model_le
     """The rule's config: the stop ids, the request's max_tokens, prompt length and the model's length, its outputs through the
     Program's last, and the finish code there (`stop_rule.FINISH`: 0 where it runs on); a ValueError where `StopCheck_v1` has
     no check for it."""
-    s = {"stops": [int(x) for x in stops], "max_tokens": max_tokens, "prompt_len": prompt_len, "max_model_len": max_model_len,
+    ids = [int(x) for x in stops]
+    s = {"stops": ids, "max_tokens": max_tokens, "prompt_len": prompt_len, "max_model_len": max_model_len,
          "outputs": outputs, "finish": finish}
-    if not (type(outputs) is int and outputs >= 1) or (why := SC.refuse({"STOP": tuple(s["stops"]), "MAX_TOKENS": max_tokens,
-                                                                         "PROMPT_LEN": prompt_len, "MAX_MODEL_LEN": max_model_len,
-                                                                         "FINISH": finish})):
+    why = SC.refuse({"STOP": tuple(ids), "MAX_TOKENS": max_tokens, "PROMPT_LEN": prompt_len, "MAX_MODEL_LEN": max_model_len,
+                     "FINISH": finish})
+    if why or not (type(outputs) is int and outputs >= 1):
         raise ValueError(f"the stop rule's config {s}: {why or 'outputs must be a positive integer'}")
     return s
 
@@ -53,7 +54,7 @@ def of(finished: str, output_len: int, T: int, stops: Iterable[int], *, max_toke
         raise ValueError("finished on a stop id, and the registered model states none (its config's eos_token_id): register them")
     if finished not in ("eos", "length", "abort"):
         raise ValueError(f"finished on {finished!r}, which no length rule reads")
-    code = (0 if T + 1 < output_len or finished == "abort" else 1 if finished == "eos" else 2 if output_len >= max_tokens else 3)
+    code = (0 if output_len > T + 1 or finished == "abort" else 1 if finished == "eos" else 2 if output_len >= max_tokens else 3)
     return spec(stops, max_tokens=max_tokens, prompt_len=prompt_len, max_model_len=max_model_len, outputs=T + 1, finish=code)
 
 
@@ -115,3 +116,6 @@ def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
     except (TypeError, ValueError) as e:
         refuse("shape", at, None, f"the length rule (config `stop`): {e}")
     ctx.node_hints[len(ctx.B.nodes) - 1] = NAME
+
+
+__all__ = ["NAME", "KEYS", "stop_ids", "spec", "of", "body_refusal", "check", "definition", "in_derive"]

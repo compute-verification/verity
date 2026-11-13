@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from verity.circuits.codec import canonical_json
 
@@ -274,7 +275,7 @@ class PropertyRecord:
 
     @property
     def name(self) -> str | None:
-        p = BY_SCHEMA.get(self.doc.get("schema"))
+        p = BY_SCHEMA.get(self.doc.get("schema", ""))
         return p.name if p else None
 
     @property
@@ -304,7 +305,7 @@ class PropertyRecord:
         return p
 
     @classmethod
-    def load(cls, path: str | Path, root: str | Path | None = None) -> "PropertyRecord":
+    def load(cls, path: str | Path, root: str | Path | None = None) -> PropertyRecord:
         """An unreadable file loads as an empty document, so its citation names the problems instead of dropping the file."""
         p = Path(path)
         try:

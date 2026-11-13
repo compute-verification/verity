@@ -3,7 +3,6 @@ plan-vs-plan comparison.
 
     verity-vllm gate plan --manifest <manifest.json> --runtime <runtime_tree.json> --out <dir> [--row-id ID]
                                             [--programs-root <row dir> | --program <derive dir> ...] [--against <acquisition_plan.json>]
-    verity-vllm gate compare-plans <a.json> <b.json> [--out plan_compare.json]
     verity-vllm gate call-boundaries <row dir> [--out call_boundaries.json]
 
 `--runtime` is a `RuntimeTree` document: written by the GPU phase (`m1_capture` -> DIR/runtime_tree.json) or by
@@ -22,27 +21,34 @@ import glob
 import json
 import os
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Literal
 
-from verity_vllm.config import option
-from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
 from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import taps
+from verity_vllm.acquire.sources.call_boundary_plan import Plan
+from verity_vllm.config import option
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    RuntimeTree,
+)
+from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 
 PLAN_COMPARE_SCHEMA = "verity-vllm/acquisition-plan-compare/v1"
-CALL_BOUNDARIES_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+CALL_BOUNDARIES_SCHEMA = CALL_BOUNDARIES_GATE_SCHEMA
 #: identities without a source the record names, per kind (its counts are complete)
 NAMED = 100
 
 
-def run(manifest: Mapping[str, Any], rt: RuntimeTree, *, inplace_facts: Mapping[str, Any] | None = None, programs: Iterable[str | Path] = ()) -> AcquisitionPlan:
-    kw = dict(wrapper_prefix=str(manifest.get("wrapper_prefix") or ""), aliases=manifest.get("op_path_aliases") or {}, inplace_facts=inplace_facts)
+def run(manifest: Mapping[str, Any], rt: RuntimeTree, *, programs: Iterable[str | Path] = ()) -> AcquisitionPlan:
+    prefix, aliases = str(manifest.get("wrapper_prefix") or ""), manifest.get("op_path_aliases")
+    aliases = aliases if aliases else {}
     programs = list(programs)
-    corr = AcquireCorrespondence.from_programs(rt, programs, **kw) if programs else AcquireCorrespondence(rt, **kw)
+    corr = (AcquireCorrespondence.from_programs(rt, programs, wrapper_prefix=prefix, aliases=aliases) if programs
+            else AcquireCorrespondence(rt, wrapper_prefix=prefix, aliases=aliases))
     return acquisition_plan(manifest, corr)
 
 
@@ -91,7 +97,8 @@ def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
     on = taps.attached(manifest)
-    ids = sum(1 for r in manifest.get("identities") or [] if r.get("family") == CB.FAMILY)
+    rows = manifest.get("identities")
+    ids = sum(1 for r in (rows if rows else []) if r.get("family") == CB.FAMILY)
     uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(manifest, on)
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),
@@ -121,17 +128,7 @@ class PlanOptions:
                                 help="a request Program dir (repeatable); alternative to --programs-root")
     against: str | None = option("--against", default=None,
                                  help="another acquisition_plan.json to compare Value by Value (-> plan_compare.json)")
-    cmd: str = field(default="plan", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class ComparePlansOptions:
-    """Plan-vs-plan comparison of two acquisition_plan.json documents."""
-
-    a: str = option("a")
-    b: str = option("b")
-    out: str | None = option("--out", default=None)
-    cmd: str = field(default="compare-plans", init=False)
+    cmd: Literal["plan"] = field(default="plan", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -140,13 +137,13 @@ class CallBoundariesOptions:
 
     row_dir: str = option("row_dir", help="the row dir after its Build: manifest.json and the Build dirs (build_request*/) under it")
     out: str | None = option("--out", default=None, help="the record (call_boundaries.json)")
-    cmd: str = field(default="call-boundaries", init=False)
+    cmd: Literal["call-boundaries"] = field(default="call-boundaries", init=False)
 
 
-COMMANDS = {"plan": PlanOptions, "compare-plans": ComparePlansOptions, "call-boundaries": CallBoundariesOptions}
+COMMANDS = {"plan": PlanOptions, "call-boundaries": CallBoundariesOptions}
 
 
-def main(a: PlanOptions | ComparePlansOptions | CallBoundariesOptions) -> int:
+def main(a: PlanOptions | CallBoundariesOptions) -> int:
     if a.cmd == "call-boundaries":
         t0 = time.perf_counter()
         rec = call_boundaries(json.loads(Path(a.row_dir, "manifest.json").read_text()), a.row_dir)
@@ -155,16 +152,6 @@ def main(a: PlanOptions | ComparePlansOptions | CallBoundariesOptions) -> int:
             Path(a.out).write_text(json.dumps(rec, indent=1) + "\n")
         print(call_boundaries_line(rec), flush=True)
         return 0 if rec["pass"] else 1
-    if a.cmd == "compare-plans":
-        c = a
-        cmp = compare_plans(json.loads(Path(c.a).read_text()), json.loads(Path(c.b).read_text()))
-        if c.out:
-            Path(c.out).write_text(json.dumps(cmp, indent=1) + "\n")
-        print(f"[gate] plans a {str(cmp['a']['plan_digest'])[:16]} ({cmp['a']['correspondence_source']}) b {str(cmp['b']['plan_digest'])[:16]} ({cmp['b']['correspondence_source']}): "
-              f"digest_equal {cmp['plan_digest_equal']} common {cmp['common_values']} only_a {len(cmp['only_a'])} only_b {len(cmp['only_b'])} differing {len(cmp['differing'])}", flush=True)
-        for dv in cmp["differing"][:40]:
-            print(f"[gate]   {dv['value']}: a {dv['a']['chosen']} b {dv['b']['chosen']}", flush=True)
-        return 0 if cmp["identical"] else 1
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     man = json.loads(Path(a.manifest).read_text())
@@ -195,3 +182,5 @@ def main(a: PlanOptions | ComparePlansOptions | CallBoundariesOptions) -> int:
             rc = 1
     return rc
 
+
+__all__ = ["COMMANDS", "call_boundaries_line", "call_boundaries_of", "main", "run"]

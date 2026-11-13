@@ -11,7 +11,6 @@ Fields every runner log must carry: hot/cold process (`hot`), engine reused or r
 (`restart_reason`), compile/warmup time (`prep.*` stages), workload/Commit time (`work.*`), offline validation time (`validate.*`).
 
     verity-vllm timeline report <timeline.jsonl> [--json out.json] [--md out.md]
-    verity-vllm timeline mark <timeline.jsonl> <proc> <stage> <start|end|mark> [k=v ...]
 
 `report` folds the events into the stage table (process/model startup · preparation · workload · validation · closure) from the
 stage-name prefixes below, counts engine starts vs reuses and lists the restart reasons.  Overlapping spans are NOT summed into
@@ -22,18 +21,21 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import option
+from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
-SCHEMA = "verity-sweep/timeline/v1"
+__all__ = ["COMMANDS", "Timeline", "main"]
+
+SCHEMA = TIMELINE_SCHEMA
 
 # stage categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)
 CATEGORIES: list[tuple[str, tuple[str, ...]]] = [
@@ -66,7 +68,7 @@ class Timeline:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_env(cls, proc: str, **defaults: Any) -> "Timeline":
+    def from_env(cls, proc: str, **defaults: Any) -> Timeline:
         return cls(settings.VERITY_TIMELINE, proc=proc, **defaults)
 
     @property
@@ -158,12 +160,10 @@ def last_attempt(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], in
     return events[starts[-1]:], len(starts)
 
 
-def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, Any]:
+def report(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Pair start/end events per (proc, pid, stage) into spans; fold into the stage categories; count engine starts/reuses.
-    `attempt="last"` (default) reports the last row attempt in an append-only file; `"all"` folds every attempt together."""
-    attempts_seen = 1
-    if attempt == "last":
-        events, attempts_seen = last_attempt(events)
+    The report is of the last row attempt in an append-only file (`last_attempt`)."""
+    events, attempts_seen = last_attempt(events)
     open_: dict[tuple, dict[str, Any]] = {}
     spans: list[dict[str, Any]] = []
     for e in events:
@@ -210,10 +210,10 @@ def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, 
     hot = sorted({bool(e.get("hot")) for e in events if "hot" in e}, key=str)
     procs = sorted({(s["proc"], s["pid"]) for s in spans}, key=str)
     return {"schema": SCHEMA + "/report", "events": len(events), "spans": len(spans), "unclosed": unclosed,
-            "attempt": attempt, "attempts_in_file": attempts_seen,
+            "attempt": "last", "attempts_in_file": attempts_seen,
             "t_first_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t_first)) if t_first else None,
             "t_last_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t_last)) if t_last else None,
-            "elapsed_s": round(t_last - t_first, 3) if ts else None,
+            "elapsed_s": round(t_last - t_first, 3) if t_first is not None and t_last is not None else None,
             "envelope": [{"stage": s["stage"], "s": s["s"], "proc": s["proc"]} for s in envelope],
             "categories": {k: cats[k] for k in ("startup", "preparation", "workload", "validation", "closure", "other") if k in cats},
             "engine": {"starts": len(starts), "reuses": len(reuses), "restart_reasons": reasons,
@@ -241,134 +241,6 @@ def report_md(rep: dict[str, Any], title: str = "") -> str:
     return "\n".join(lines) + "\n"
 
 
-_STAGE_RE = re.compile(r"^(build|match|commit)\s+(PASS|FAIL|SKIP)\s+(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)\s+(.*)$")
-_RELEASE_RE = re.compile(r"^release\s+(\S+)\s+(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)")
-
-
-def _utc(s: str) -> float:
-    import calendar
-
-    return float(calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ")))
-
-
-def derive_from_logs(row_dir: Path) -> dict[str, Any] | None:
-    """Rows run by a runner WITHOUT the timeline: the row's stages.txt is itself timestamped -- a `release <tag> <utc>`
-    line at every attempt start, then `<stage> <verdict> <utc> ... wall=<N>s` per stage (row_pod verdict()). The LAST attempt is reported,
-    plus commit.log's own measured lines (engine build, weight registration). Labelled `derived`."""
-    stages_txt = row_dir / "stages.txt"
-    if not stages_txt.exists():
-        return None
-    attempts: list[dict[str, Any]] = []
-    for line in stages_txt.read_text(errors="replace").splitlines():
-        r = _RELEASE_RE.match(line)
-        if r:
-            attempts.append({"release": r.group(1), "t_start": _utc(r.group(2)), "stages": {}})
-            continue
-        m = _STAGE_RE.match(line)
-        if m:
-            if not attempts:
-                attempts.append({"release": None, "t_start": None, "stages": {}})
-            w = re.search(r"\bwall=(\d+)s", m.group(4))
-            attempts[-1]["stages"][m.group(1)] = {"verdict": m.group(2), "t_end": _utc(m.group(3)), "s": float(w.group(1)) if w else None}
-    att = next((a for a in reversed(attempts) if a["stages"]), None)
-    if att is None:
-        return None
-    t_start = att["t_start"] if att["t_start"] is not None else min(v["t_end"] - (v["s"] or 0) for v in att["stages"].values())
-    t_end = max(v["t_end"] for v in att["stages"].values())
-    env = {k: {"s": v["s"], "verdict": v["verdict"]} for k, v in att["stages"].items()}
-    out: dict[str, Any] = {"label": "derived (stages.txt: release line = attempt start, per-stage verdict utc + wall)", "stages": env,
-                           "release": att["release"], "elapsed_s": round(t_end - t_start, 1),
-                           "t_first_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t_start))}
-    cl = row_dir / "commit.log"
-    if cl.exists():
-        txt = cl.read_text(errors="replace")
-        builds = re.findall(r"\[delta\] engine built in ([0-9.]+)s", txt)
-        regs = re.findall(r"weight registration \(\S+\): \{[^}]*'wall_s': ([0-9.]+)", txt)
-        out["commit_log"] = {"engine_builds": [float(x) for x in builds], "register_weights_s": [round(float(x), 1) for x in regs],
-                             "engine_starts": len(builds)}
-    return out
-
-
-def collect(dirs: list[Path]) -> dict[str, Any]:
-    """One table over many rows: per row the §5 categories, engine starts/reuses and hot/cold from `timeline*.jsonl` when the runner wrote
-    one, else the log-derived envelopes; totals over the set (engine starts vs reuses as they accumulate)."""
-    rows: list[dict[str, Any]] = []
-    for d in dirs:
-        if not d.is_dir():
-            continue
-        is_row = (d / "stages.txt").exists() or (d / "row.log").exists()
-        for row_dir in sorted(p for p in ([d] if is_row else d.iterdir()) if p.is_dir()):
-            tls = sorted(row_dir.glob("timeline*.jsonl"), key=lambda p: p.stat().st_mtime)
-            if tls:
-                for tl in tls:
-                    rep = report(read(tl))            # last attempt in an append-only file
-                    rows.append({"row": row_dir.name, "source": tl.name, "measured": True, "elapsed_s": rep["elapsed_s"],
-                                 "attempts_in_file": rep["attempts_in_file"],
-                                 "categories": {k: v["union_s"] for k, v in rep["categories"].items()}, "engine": rep["engine"],
-                                 "t_first_utc": rep["t_first_utc"]})
-            else:
-                der = derive_from_logs(row_dir)
-                if der:
-                    rows.append({"row": row_dir.name, "source": "stages.txt", "measured": False, "elapsed_s": der["elapsed_s"],
-                                 "stages": der["stages"], "commit_log": der.get("commit_log"), "t_first_utc": der["t_first_utc"]})
-    starts = sum((r["engine"]["starts"] if r["measured"] else (r.get("commit_log") or {}).get("engine_starts", 0)) for r in rows)
-    reuses = sum(r["engine"]["reuses"] for r in rows if r["measured"])
-    reasons: dict[str, int] = {}
-    for r in rows:
-        if r["measured"]:
-            for k, v in r["engine"]["restart_reasons"].items():
-                reasons[k] = reasons.get(k, 0) + v
-    return {"schema": SCHEMA + "/collect", "rows": rows, "n_rows": len(rows), "measured_rows": sum(1 for r in rows if r["measured"]),
-            "engine_starts": starts, "engine_reuses": reuses, "restart_reasons": reasons,
-            "totals_s": {k: round(sum((r.get("categories") or {}).get(k, 0.0) for r in rows if r["measured"]), 1)
-                         for k in ("startup", "preparation", "workload", "validation", "closure", "other")}}
-
-
-def collect_md(col: dict[str, Any], title: str = "") -> str:
-    lines = [f"### Runner timelines{(' — ' + title) if title else ''}", "",
-             f"{col['n_rows']} rows ({col['measured_rows']} with a runner timeline, {col['n_rows'] - col['measured_rows']} derived from logs) · "
-             f"engine starts **{col['engine_starts']}** · engine reuses **{col['engine_reuses']}** · restart reasons {col['restart_reasons']} · "
-             f"measured totals s {col['totals_s']}", "",
-             "| row | source | start | elapsed s | startup | preparation | workload | validation | closure | engine starts / reuses | hot |",
-             "|---|---|---|---:|---:|---:|---:|---:|---:|---|---|"]
-    for r in col["rows"]:
-        if r["measured"]:
-            c = r["categories"]
-            lines.append(f"| {r['row']} | {r['source']} | {r['t_first_utc']} | {r['elapsed_s']} | {c.get('startup', 0):.1f} | {c.get('preparation', 0):.1f} | "
-                         f"{c.get('workload', 0):.1f} | {c.get('validation', 0):.1f} | {c.get('closure', 0):.1f} | {r['engine']['starts']} / {r['engine']['reuses']} | {r['engine']['hot_values']} |")
-        else:
-            st = "; ".join(f"{k} {v['s']} ({v['verdict']})" for k, v in r["stages"].items())
-            cl = r.get("commit_log") or {}
-            lines.append(f"| {r['row']} | {r['source']} (derived) | {r['t_first_utc']} | {r['elapsed_s']} | engine build {cl.get('engine_builds')} | "
-                         f"register_weights {cl.get('register_weights_s')} | — | — | — | {cl.get('engine_starts', '?')} / 0 | stages: {st} |")
-    return "\n".join(lines) + "\n"
-
-
-def _kv(items: list[str]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for it in items:
-        k, sep, v = it.partition("=")
-        if not sep:
-            continue
-        try:
-            out[k] = json.loads(v)
-        except ValueError:
-            out[k] = v
-    return out
-
-
-@dataclass(frozen=True, kw_only=True)
-class MarkOptions:
-    "append one event (bash callers)"
-
-    path: str = option("path")
-    proc: str = option("proc")
-    stage: str = option("stage")
-    ev: str = option("ev", choices=["start", "end", "mark"])
-    kv: list[str] = option("kv", default=[], nargs="*", help="k=v fields (JSON values when parseable)")
-    cmd: str = field(default="mark", init=False)
-
-
 @dataclass(frozen=True, kw_only=True)
 class ReportOptions:
     "fold a timeline into the stage table"
@@ -377,39 +249,14 @@ class ReportOptions:
     json: str | None = option("--json", default=None)
     md: str | None = option("--md", default=None)
     title: str = option("--title", default="")
-    all: bool = option("--all", default=False, action="store_true",
-                       help="fold every attempt in the (append-only) file together; default: the last row attempt")
     cmd: str = field(default="report", init=False)
 
 
-@dataclass(frozen=True, kw_only=True)
-class CollectOptions:
-    "one table over a sweep dir's rows (timelines where present, log-derived envelopes otherwise)"
-
-    dirs: list[str] = option("dirs", nargs="+")
-    json: str | None = option("--json", default=None)
-    md: str | None = option("--md", default=None)
-    title: str = option("--title", default="")
-    cmd: str = field(default="collect", init=False)
+COMMANDS = {"report": ReportOptions}
 
 
-COMMANDS = {"mark": MarkOptions, "report": ReportOptions, "collect": CollectOptions}
-
-
-def main(a: MarkOptions | ReportOptions | CollectOptions) -> int:
-    if a.cmd == "mark":
-        Timeline(a.path, proc=a.proc).event(a.stage, a.ev, **_kv(a.kv))
-        return 0
-    if a.cmd == "collect":
-        col = collect([Path(d) for d in a.dirs])
-        if a.json:
-            Path(a.json).write_text(json.dumps(col, indent=1, default=str) + "\n")
-        md = collect_md(col, a.title)
-        if a.md:
-            Path(a.md).write_text(md)
-        sys.stdout.write(md)
-        return 0
-    rep = report(read(a.path), attempt="all" if a.all else "last")
+def main(a: ReportOptions) -> int:
+    rep = report(read(a.path))
     if a.json:
         Path(a.json).write_text(json.dumps(rep, indent=1, default=str) + "\n")
     md = report_md(rep, a.title)
