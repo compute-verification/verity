@@ -120770,3 +120770,33 @@ Nothing.
 - The known hole (an earlier period's signature passes) is noted, not worked around.
 
 Next: idle until TWOLEG's head with #9555, or CUT's two-case `LogRead`. Then I merge, recompile, and say what broke.
+
+## REDRAW, Fri 13 Nov 04:41Z: #9555 at `38b7c6df38ba` lacks one thing for its ready line, the exit of `r20261113-031530-8504`; its three audits read PASS, the restated statement's hash did not move, and `r20261113-031427-2558` passed 5 of 5; I end the turn as you asked
+
+**This is not a ready line.** Everything a ready line for #9555 needs is below except the records run's exit code and outcome line. I end the turn now so as not to hold a place; resume me when it ends and I write the line within minutes.
+
+**1. `r20261113-031530-8504`: records, no `--allow`, at `df901c234fa4b35f8015678d44bce1250e2e0e74`.**
+- [run] State `running` at 04:40:32Z (`research fetch`, "observed 2026-11-13T04:40:32.690Z: running").
+- [read] Its command is `lean_changed.py --records security/Properties --update`, with no `--allow` (`launch.json`); its tree is `df901c234fa4b35f8015678d44bce1250e2e0e74` (`slot.json`).
+- [read] Since 04:33:04Z the last line of its `stdout.log` is the second check's exit. What a records run prints after that is two lines, the count of module versions it bundled for other nodes and the outcome; in `r20261113-030616-59c7` they came within three minutes [derived from that run's times]. Here they had not come after seven. Expected end: minutes [guess]; if it is still running at 05:00Z, something holds it and I would read its stall dump.
+- [read] The lines, word for word. Line 9: `security/Proofs: PASS  204313 declarations in 4051 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`. Line 573: `security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`. Line 584: `AUDIT: PASS`. Line 586: `lean-records: security/Properties: check.py exit 0 in 2181 s`, "without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse". Line 1156: `security: PASS  27776 declarations in 730 modules; axioms propext, Classical.choice, Quot.sound; 1137 guarantees`. Line 1179: `AUDIT: PASS`. Line 1181: `lean-records: security: check.py exit 0 in 934 s`.
+
+**2. Whether the restated statement's hash moved: it did not.** The run prints no line that names the entry, because it fails nothing; these are its words where it speaks of it.
+- [read] `lean-audit/audit.json`: `"passed": true`, `"failed": []`, `"regenerated": {}`. `lean-audit/audit-Properties/report.json`: `"failures": []`, `"failure_codes": []`, `"failure_entries": []`. The `security` package's `audit.json`: the same three values.
+- [read] The lock the run wrote (`lean-audit/audit-Properties/lean-audit.json`), under `guarantees`, for `Properties.Challenger.Drawn.familyOneCommitmentRead`: `"type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31", "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"`. Under `unwitnessed`, the same name holds the same two hashes, `"missing": "honest"`.
+- [run] That lock equals the branch's, byte for byte, at `df901c234fa4` and at `38b7c6df38ba` (compared in Python against `git show`). The list has 184 entries.
+- [derived] So the statement the run elaborated, with the remote branch merged in, has the hash lean said yes to at 01:44Z (`0c9cd9cc1ff7…3b58f286`); the entry did not lapse, and nothing was re-keyed.
+
+**3. `r20261113-031427-2558`: the five suites, at `df901c234fa4`: done, rc 0** [run: `research status` at 04:28Z].
+- [read] Line 31: `5 suites: 5 passed (0 cached), 0 failed`. `benchmarks/verifier_cost` 9 passed; `verity/protocols/spot/verifier` 912 passed; `verity-network-traces` 679 passed; `verity-core-sampled-proofs` 321 passed, 2 skipped; `benchmarks/one_stage` 1034 passed (lines 8 to 16).
+- [read] `verity/protocols/spot/verifier/tests/test_challenger_coins.py` ran whole, slow tests included (line 3 names it first of ten modules); it holds the test lean asked about, `test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames`, which the body names.
+
+**4. At the head `38b7c6df38ba9ad5ccfd154ae316b76697157020`, on my machine** [run at 04:35Z, fresh worktree]: the driver tests that need no Lean build, 42 passed, the file the merge stopped in among them; `main`'s layout test over the head, exit 0.
+
+**5. The difference between the runs' head and the head** [run: `git diff --name-only df901c234fa4 38b7c6df38ba`]: 37 files, `main`'s between `4a7291116e11` and `8ef93f01963c`. One is Lean, `security/Proofs/Properties/Nci/LeafWidthsPart.lean` (`main`'s own: a bound name in one theorem and its proof); no lock, lakefile, digest list, toolchain file or manifest. One is `benchmarks/one_stage/tests/test_a5_case_v2.py`, this branch's tests with the label read from the driver's constant, which is in the 42 tests.
+
+**6. `main`.** [run at 04:32Z] `main` is `33e504b391bf`; `git merge-tree --write-tree origin/main` against the head exits 0; no merge made (your (c)).
+
+**7. #9237's whole tier (part two of `r20261113-030646-1057`) was still running at 04:31Z**, 70 of 72 suites reported, one red (`research`, the node's two tests; my 04:34Z entry). Its final count is owed in my next entry.
+
+**Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c`. No code changed this turn. #9555's body holds point 3's verdict and point 1's state since 04:40Z; one cell of it changes when the run exits.
