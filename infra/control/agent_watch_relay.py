@@ -44,7 +44,9 @@ with each worker named, one in ERROR said so, and the wake-up it says it set. A 
 a swarm's integrator (`handin_waiting`: a comment on the issue it takes hand-ins on, with none signed by the integrator
 after it) leads with the integrator's lane's handle and rings it, once per such comment, linking the issue and saying who
 signed the comment, how many wait with it, and the command that signs a comment as the integrator's own, without which its
-answers don't count. A handle
+answers don't count. A read of the watch's own that GitHub refused (`github_refused`: the open PRs, read with a
+token GitHub doesn't take or with none) leads with infra's handle and rings it, once until a read works again, saying
+what the watch misses meanwhile and how to find the reason on the pod. A handle
 renamed in the registry ("renamed from @OLD") is rung by its new
 name. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
 posted.
@@ -120,7 +122,13 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "unplaced": "is under no lane: no Task call the watch saw, workers.d entry or brief gives it a launcher that a "
                    "handle owns, however many workers up, and no workers.d entry or note gives it a lane",
        "handin_waiting": "has a hand-in on {issue} waiting since {since} ({minutes} min): a comment signed {by} with no "
-                         "comment signed LANE/{signs} after it"}
+                         "comment signed LANE/{signs} after it",
+       "github_refused": "can't read {what} from GitHub: {why}. Until it reads, a push to a PR's branch counts only for the "
+                         "agents the last read's PRs named. On the control pod, `/data/infra/gh_read_token.sh > /dev/null` "
+                         "mints a token and prints GitHub's reason when it can't (the App's key, its installation or its "
+                         "permissions); if that mints, the cached token is the one GitHub no longer takes: `rm "
+                         "/dev/shm/verity-read-token`. The watch reads again every {every_min} min and says nothing more "
+                         "until a read has worked"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived", "handin_waiting"}     # rung to the record's handle
@@ -131,6 +139,7 @@ SILENT_LEAD = "has been in one turn for {active_minutes} min, with no note, no p
 SILENT_LEAD_UNREAD = ("has been in one turn for {active_minutes} min, with no note and no push for {minutes} min; the API "
                       "wouldn't read its conversation for {unread_minutes} min, so its assistant text is unchecked")
 UNROUTED = "infra"      # rung once for a worker the watch can't place, and for one whose lane no handle owns
+OWN = {"github_refused"}    # the watch's own reads failing, which infra mends: rung to infra
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
 RUNBELL_RE = re.compile(r"^from runs, run \S+ rc ")      # ring-run's doorbell
@@ -176,8 +185,8 @@ def renderable(rec: dict) -> bool:
 def rung(rec: dict) -> str | None:
     """The handle whose inbox the alert rings, if any. A worker's is its lane's: only its coordinator can resume it. One the
     watch could place under no lane (`unplaced`) goes to infra (`UNROUTED`), who finds its launcher, and so does an alert of a
-    worker whose lane no handle owns, and a record `text` can't render."""
-    if not renderable(rec):
+    worker whose lane no handle owns, a record `text` can't render, and a read of the watch's own that was refused (`OWN`)."""
+    if not renderable(rec) or rec.get("kind") in OWN:
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined,
         return None             # an alert of a worker or a run of a sender it placed nowhere and rang infra for already
@@ -296,6 +305,8 @@ def text(rec: dict) -> str:
         who = f" <@{human['slack_user']}>" if human and human.get("slack_user") else ""
         down = ", ".join(f"@{h}" for h in rec.get("handles") or [])
         return f"{lead.rstrip()}{who} *Agent watch, outage:* {SAY['outage'].format(**{**rec, 'handles': down})}."
+    if rec.get("kind") in OWN:
+        return f"{lead}*Agent watch:* the watch {line}."
     if rec.get("kind") == "dropped":
         line = dropped(rec)
     if rec.get("kind") == "silent":
