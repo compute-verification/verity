@@ -25,21 +25,21 @@ uniform store's when the blocks are uniform (`KeyBinding.uniformBut_coinStore`; 
 `KeyBinding.uniformBut_blocks`). A store uniform but for `δ` at an index read from the coins moves an event of the
 store and the coins to a uniform store at a cost of `δ` (`UniformBut.pr_le_of`), fiber by fiber over the coins.
 
-`Accounting.SecurityProofs.StackedSessionConservationSketchDeployed` charges each carrier's sectors in the pass's
+`Accounting.SecurityProofs.StackedRunConservationSketchDeployed` charges each carrier's sectors in the pass's
 rebuilds, so every pass rebuilds at most `X + C` bits, and bounds the session with a store per pass. A window that
 doesn't pay for its correct receipts has a sign matrix of low rank, paid once a window, or a pass whose kept candidate
 is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). That store is the append-coin rule's at the
 prefix before the pass, which `KeyBinding` moves to a uniform store independent of the session's coins, where the
-deployed guarantee's one-pass family bound holds (`SketchDeployedSession.pr_pass_le`). So the unpaid windows cost
-`n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)` (`SketchDeployedSession.pr_unpaidOn_le`). The passes' correct receipts are a
+deployed guarantee's one-pass family bound holds (`SketchDeployedRun.pr_pass_le`). So the unpaid windows cost
+`n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)` (`SketchDeployedRun.pr_unpaidOn_le`). The passes' correct receipts are a
 causal family of the windows' samples, whatever stores they are on (`pr_samples_causal_le`), so the samples' terms are the
 deployed guarantee's (`pr_deployed_of_unpaid_causal`).
 
-`Accounting.SecurityProofs.StackedSessionConservationRelay` simulates each pass device by one that reruns its carrier's
+`Accounting.SecurityProofs.StackedRunConservationRelay` simulates each pass device by one that reruns its carrier's
 circuit first, reading every step's bits over the side link at odd addresses (`PIChip.walk`, within `C` bits), and then
 runs the device with its carrier reads answered from the circuit's values (`PIChip.answer`). The simulating device
 (`PIDevice.stack`) has the device's state, memory, receipts, tier reads and compute, and side link `L + C`, so
-`RemoteSessionConservationRelay` bounds its session, which is the stacked session's event.
+`RemoteRunConservationRelay` bounds its session, which is the stacked session's event.
 
 `Accounting.SecurityProofs.StackedRequirementSketchDeployed` and `Accounting.SecurityProofs.StackedRequirementRelay`
 bound a declared circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the plans
@@ -778,13 +778,13 @@ theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r
 
 end SketchDeployedWindow
 
-namespace SketchDeployedSession
+namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
 /-- **One pass of a session on a uniform store**: at window `w`'s signs of rank at least `r`, pass `j` has an unpaid
 candidate with at most the one-pass family bound, the store uniform and independent of the session's coins. -/
-theorem pr_pass_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (r X qtot : ℕ) (hr32 : r ≤ 32)
+theorem pr_pass_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot : ℕ) (hr32 : r ≤ 32)
     (hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
       let D := Data.ofParts E R
@@ -828,7 +828,7 @@ theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank :
 /-- **A session's unpaid windows with a store per pass**: when every pass's store is `view` at the prefix before the
 pass, a uniform store but for `δ` at each prefix, some window fails to pay for its correct receipts with probability at
 most `n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)`: the rank tail once a window, and each pass's family bound and `δ`. -/
-theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedSession n P N m ρ h S L q ks G d)
+theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedRun n P N m ρ h S L q ks G d)
     (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m) (δ : ℝ≥0∞)
     (hKB : Accounting.UniformBut δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
     (hRank : Accounting.Assumptions.SketchRank ks m r ε)
@@ -1039,7 +1039,7 @@ theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
   · exact Rate.Deployed.pooled_deployed n hn
   · exact Rate.Deployed.window_deployed n (by omega)
 
-end SketchDeployedSession
+end SketchDeployedRun
 
 end Accounting.RateSketch
 
@@ -1093,9 +1093,9 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
   rwa [Nat.card_coe_set_eq, Set.ncard_eq_toFinset_card', Set.toFinset_range]
 
 /-- **The remote audit at the deployed parameters with a store per pass, with stacking**,
-`Accounting.Guarantees.StackedSessionConservationSketchDeployed`. -/
-theorem StackedSessionConservationSketchDeployed :
-    Accounting.Guarantees.StackedSessionConservationSketchDeployed := by
+`Accounting.Guarantees.StackedRunConservationSketchDeployed`. -/
+theorem StackedRunConservationSketchDeployed :
+    Accounting.Guarantees.StackedRunConservationSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A hn hP hN
     hE0 hrank hKB hSq hCs hEle hε hB hK C
   have hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden :=
@@ -1120,7 +1120,7 @@ theorem StackedSessionConservationSketchDeployed :
     intro o x x' w hlt hσ hp
     have hη : (fun v : {v : Fin n // v < w} => x v.1) = fun v => x' v.1 := funext fun v => hlt v.1 v.2
     have hwin : A.win w x = A.win w x' := by
-      simp only [SketchDeployedSession.win]
+      simp only [SketchDeployedRun.win]
       rw [hη]
     have hpre : ∀ j, SketchPrefix.of x w j = SketchPrefix.of x' w j := fun j => by
       simp only [SketchPrefix.of]
@@ -1129,9 +1129,9 @@ theorem StackedSessionConservationSketchDeployed :
       simp only [programmed]
       rw [hpre j]
     rw [hwin, hprog, hσ, hp]
-  have hu := SketchDeployedSession.pr_unpaidOn_le A view δ (hKB.uniformBut_coinStore choose slot) 12 (X + C) qtot ε
+  have hu := SketchDeployedRun.pr_unpaidOn_le A view δ (hKB.uniformBut_coinStore choose slot) 12 (X + C) qtot ε
     (by norm_num) hrank hX hB
-  refine (SketchDeployedSession.pr_deployed_of_unpaid_causal
+  refine (SketchDeployedRun.pr_deployed_of_unpaid_causal
     (fun o x w => (A.win w x).correctOn (programmed view o x w) (x w).1 (x w).2.1)
     (fun o x w => (A.win w x).readsOn (programmed view o x w) (x w).1 (x w).2.1)
     hcor (X + C) hn hP hN _ hu).trans (le_of_eq ?_)
@@ -1139,8 +1139,8 @@ theorem StackedSessionConservationSketchDeployed :
   ring
 
 /-- **The remote audit with relaying side sources on a programmed store, with stacking**,
-`Accounting.Guarantees.StackedSessionConservationRelay`. -/
-theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
+`Accounting.Guarantees.StackedRunConservationRelay`. -/
+theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservationRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
     δ Ω Ca Ch _ _ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hSq hCs hEle hε hk hp hp4 hK C
   have hE : Gates.EncodeBound Fc k B E εnum εden := SecurityProofs.Gates.encodeBound_of hSq hCs hEle hε hk hp hp4
@@ -1162,7 +1162,7 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
   have hunif := Rate.DeployedSession.pr_unpaid_le (A.stack L C K hL) tier _ _
     (Remote.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
       (fun w η j ι c => Rate.PIDevice.stack_ceiling _ L C (K w η j ι c) (hL w η j ι c) (hF w η j ι c)))
-  have base := Remote.session_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
+  have base := Remote.run_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
     lam m rounds cRoot F dbar dw hn hP hN hb hdw _ (hu.trans (add_le_add hunif le_rfl))
   refine ((Bandwidth.pr_mono fun y hy => ?_).trans base).trans (le_of_eq ?_)
   · have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2
@@ -1178,7 +1178,7 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
     plan win hn hP hN hE0 hrank hKB hSq hCs hEle hε hB hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
-  have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden
+  have base := StackedRunConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden
     T M ε δ enc choose slot A hn hP hN hE0 hrank hKB hSq hCs hEle hε hB hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
@@ -1193,7 +1193,7 @@ theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay 
     δ Ω Ca Ch _ _ enc choose slot A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hSq hCs
     hEle hε hk hp hp4 hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan b N (n * P) win hwin hm
-  have base := StackedSessionConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
+  have base := StackedRunConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
     E T M cost Fc k B es εnum εden tier δ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hSq hCs
     hEle hε hk hp hp4 hK
   dsimp only at base
