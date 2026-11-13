@@ -17,7 +17,7 @@ a host to it, one from it to the outside. Hosts carry no compute: a device names
 tensor clock and the peak rate of each operand class) and its memory figures (bits read from or written to device
 memory a second, bits of on-chip state and bytes of device memory). The auditor's data sheets, public and looked up
 by SKU, are sheets too, whose figures are its estimate of the SKU's (`Auditor.estimate`); they come from the card files
-(`verity/hardware/cards/<sku>.toml`): `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. The
+(`hardware/cards/<sku>.toml`): `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. The
 auditor's figures for each host and each leaf under one (`HostFigures`, `MemoryFigures`) come from the node files:
 `node_figures` reads a node file's table (`verity.hardware.nodes.load(kind)`), its host card's, its leaves
 (`verity.hardware.nodes.leaves`) and its ways out (`verity.hardware.nodes.ways_out`). `Registration.node_entry` reads
