@@ -20,9 +20,9 @@ collision, or the forger outputs a forgery of the device's LMS signature.
 
 * **The log a check read** (`Read`, `Logged`): each release's frame and the bytes it answered, and its coins where the
   check's evidence shows them. v2's evidence shows the sample's segment's coins and each coin tree's root and key, and of
-  a tree opening only its coins' SHA-512. `Logged reads` is `Vocab.Logged` at reads that show every release's coins
-  (`vocab_logged_iff`), so it binds as much wherever the evidence shows the coins, and it can hold on an honest play
-  where the evidence doesn't. v2's read (`readsV2`) is `Verity.Sampled.coinsRead`'s, each release's coins where v2
+  a tree opening only its coins' SHA-512. Where the play has no party beside SPOT's challenger, `Logged reads` is
+  `Vocab.Logged` at reads that show every release's coins (`vocab_logged_iff`), so it binds as much wherever the
+  evidence shows the coins, and it can hold on an honest play where the evidence doesn't. v2's read (`readsV2`) is `Verity.Sampled.coinsRead`'s, each release's coins where v2
   read any, and `Vocab.Logged` at it, where the play has no party beside SPOT's challenger (`logged_sampled_iff`),
   gives `Logged readsV2` (`logged_v2_of_vocab`); the reduction takes any `reads`.
 * **v2's records in what the prover sent** (`records`): the components' parameters and cases the composition decodes
@@ -123,18 +123,6 @@ theorem forall₂_ofRelease_iff : ∀ l l' : List Release, List.Forall₂ Read.O
       cases h
       exact .cons ((ofRelease_of_iff _ _).2 rfl) ((forall₂_ofRelease_iff _ _).2 rfl)
 
-/-- **`Vocab.Logged` is `Logged` at reads that show every coin.** -/
-theorem vocab_logged_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
-    (a : Subprotocol) (o : Exchange) :
-    V.Logged a o ↔ Logged (fun s => (V.coinsRead a s).map (·.map Read.ofRelease)) o := by
-  unfold Vocab.Logged Logged
-  constructor
-  · intro h log hlog
-    obtain ⟨l, hl, rfl⟩ := Option.map_eq_some_iff.1 (Option.mem_def.1 hlog)
-    exact (forall₂_ofRelease_iff l o.log).2 (h l (Option.mem_def.2 hl))
-  · intro h l hl
-    exact (forall₂_ofRelease_iff l o.log).1 (h _ (Option.mem_map_of_mem _ hl))
-
 /-- **A release as v2's check reads it** (`Verity.Sampled.coinsRead`): its frame, the bytes it answered, and its coins
 where it read them, a release whose coins it read none of having `[]`. -/
 def Read.ofV2 (x : Release) : Read := ⟨x.frame, x.answers, if x.coins.isEmpty then none else some x.coins⟩
@@ -159,6 +147,18 @@ theorem logged_sampled_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [F
     {o : Exchange} (h : V.devices o.params = []) :
     V.Logged .sampled o ↔ ∀ log ∈ V.coinsRead .sampled o.sent, log = o.log := by
   simp [Vocab.Logged, AuditorPins.reads, Vocab.logAt, h, spotLog]
+
+/-- **`Vocab.Logged` is `Logged` at reads that show every coin**, where the play has no party beside SPOT's challenger. -/
+theorem vocab_logged_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+    {o : Exchange} (h : V.devices o.params = []) :
+    V.Logged .sampled o ↔ Logged (fun s => (V.coinsRead .sampled s).map (·.map Read.ofRelease)) o := by
+  rw [logged_sampled_iff V h]
+  constructor
+  · intro h' log hlog
+    obtain ⟨l, hl, rfl⟩ := Option.map_eq_some_iff.1 (Option.mem_def.1 hlog)
+    exact (forall₂_ofRelease_iff l o.log).2 (h' l (Option.mem_def.2 hl))
+  · intro h' l hl
+    exact (forall₂_ofRelease_iff l o.log).1 (h' _ (Option.mem_map_of_mem _ hl))
 
 /-- **`Vocab.Logged` at v2's read gives `Logged readsV2`**: where the vocabulary's log at `.sampled` is v2's
 (`Deployed.coinsRead`) and the play has no party beside SPOT's challenger, a run whose whole log the check read is
@@ -258,15 +258,15 @@ theorem find_eq {β : Type} {q : β → Bool} : ∀ {l : List β} {a : β}, a �
       · exact absurd hq hq'
       · exact h
 
-/-- The challenger's key is the key of the samples v2's coins are read under. -/
 /-- The parameters v2 reads in `θ` are among the sampled components' that the pins are checked against. -/
 theorem mem_sampledParams {θ : ByteArray} {p : Spot.OneStageZk.Params} (h : ParamsAt θ p) :
     p ∈ sampledParams θ := by
   obtain ⟨ps, hps, x, hx, hp⟩ := h
-  have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := beq_iff_eq.1 (List.find?_some hx)
+  have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hx
   simp only [sampledParams, hps]
   exact List.mem_filterMap.2 ⟨x, List.mem_of_find?_eq_some hx, by simp [sampledAt, hid, hp]⟩
 
+/-- The challenger's key is the key of the samples v2's coins are read under. -/
 theorem key_of_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws}
     (h : oneStageZkSource p c = some d) : p.base.challenger.map (·.1) = some d.key := by
   unfold oneStageZkSource oneStageSource at h
