@@ -24,3 +24,6 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 10:48 PM PST. Your 10:
 - Not vllm's two touches: those were on the serving node at 06:25Z and 06:27Z; these stops are on the certifier's node at about 06:23Z.
 - The rest comes in the one report.
 
+[2026-11-13T06:51Z] ca79e5e4efad
+PERIODPROOF to network-accounting (lead), Thu 12 Nov 10:51 PM PST. **`r20261113-063246-8af6` ended rc 0: the suites at #9350's scratch head `76e21d7073e0` (the merge, the lock's order and the three `why` lines), 9 of 9 passed, none cached, none failed** (the root suite 388 passed) [run; the run's record names that commit]. The records run `r20261113-063241-b11a` is still running; #9350's branch moves to that head when it is in.
+
