@@ -30883,6 +30883,20 @@
     "Flock.FV3.uint": "1ac23222e67f6d80d0114374a4088da24daf3d7b1315e5239d849bb2606fce47"
    }
   },
+  "CoreComposites": {
+   "digest": "6cf557a1f7c288662d32cf91100885aab9866330f4c7b466d39e6ca426d1c9bf",
+   "definitions": {
+    "Core.Composites.Pins": "2f6e5a6899bee22632955bca64921516ee1be618c9dad2e3e8ba957575cc448e",
+    "Core.Composites.Pins.challenger": "a54362bae43ded493dd8615147fc3139f007c65d16d704ae63dd9bebf0bbd557",
+    "Core.Composites.Pins.sessions": "57c27ca9ee19037496b7c8e4592e205f76d449e5a58cbbd79a8b4e32b0f011e8",
+    "Core.Composites.UNPINNED": "d497a1efd1bd06315282e71fd3b01687c01c1bed6c29d94de3ced85a88cc0865",
+    "Core.Composites.atPins": "e26664a5a80f643e92c6981ece12a3061cde604e605f9a375ce7cac92729e53e",
+    "Core.Composites.holdPins": "7fdf1e37833b4dfabcc0725937359756bbc6d09856fe49deeae922888f0ce83f",
+    "Core.Composites.paramsPinned": "5dabe412fc2da4a0381829f3ea3bb8c646f047ff3fb5be72ebb8802f6f4533dd",
+    "Core.Composites.sampledAt": "515baeeadebfb7d2543769992c9997284e10bfc65d5297c4f983be484b302e88",
+    "Core.Composites.spotPinned": "7d740ba0eaad006137ee38aec6dc6e2f661afe7349a4972ff602f0f862109114"
+   }
+  },
   "CoreComposition.Blobs": {
    "digest": "279d1ddaee2aa1a223553edd5493d1f4071f155710fe079b4176c71dcc929c23",
    "definitions": {
@@ -57944,24 +57958,26 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.Device": {
-   "digest": "d487a74d1b011e5d45e00f25debae2a897a7b03fa8e6665fd4ba73f12911295b",
+   "digest": "45bdfa224134819aa6d178e5e4a816b224a50d0f6a69b3120ebc5df93fad0ead",
    "definitions": {
-    "Verity.Sampled.Device.Deployment": "9e72f8e883996efc988315b35ca2ca91438c92f2aa7662426d6895e7d77beffc",
-    "Verity.Sampled.Device.Deployment.closes": "adfb688c79182df14e392086488be833a3ee607ada5d7e60b00f201198e4eb82",
-    "Verity.Sampled.Device.Deployment.dev": "30916978218c29de2cbb474998d66dd0978c2065586de3ecc254a8810e91e853",
-    "Verity.Sampled.Device.Deployment.draws": "c8abb07b24d3b98ed1287e1333f7a348ebbfe39fc6ef159922567de3671140b6",
-    "Verity.Sampled.Device.Deployment.earlier": "c208df5a73106883ac7c5940c61d931a6f2622f77366972bc6a6eb6af6e4c162",
-    "Verity.Sampled.Device.Deployment.ledgerLines": "bc8822baed2027dd3f54f6e2647edd8f54afba0351fc385053b2bc64a2d16c2f",
-    "Verity.Sampled.Device.Deployment.opens": "1eb8a78f978912cd7b850349fdcc194fe30dd4f6fa163626125ddaca7a98630e",
-    "Verity.Sampled.Device.Deployment.pin": "9fa09742dcb5150f2ad1235f8181474e3bf5f66f54fb8c73ff4612d2ac974513",
-    "Verity.Sampled.Device.Deployment.pub": "e1a3550f103ad5d72974ef84a372d5a98e2f251cc565c66175ba749e58deac79",
-    "Verity.Sampled.Device.Deployment.run": "4c1a063d625f73cf58325077018e9fc071adbe5d6e01751ac58f84a42044b431",
+    "Verity.Sampled.Device.Challenger": "a6cd7acf6a33117a0ac2080c9bc82168be0830ac99085a132aa03c922e57fc44",
+    "Verity.Sampled.Device.Challenger.closes": "fe882d544929277398763e4018b7013acd9bb6ffb278de594b73ec42b2aba205",
+    "Verity.Sampled.Device.Challenger.draws": "3d9a8389e352168c2d6d686b51a10d168b728ca309f88bf090c0a8006342b843",
+    "Verity.Sampled.Device.Challenger.earlier": "c7b6d561f39e25e11a25f0cd319bb9b3c579b663728f167346bf0d3f036f8a76",
+    "Verity.Sampled.Device.Challenger.ledgerLines": "a1729dfcb8d3fa3c68e4414838b4d7ebd29e949aed496242c9536c28aa8d9d08",
+    "Verity.Sampled.Device.Challenger.opens": "984311091429660e9f56801df7f9d2ce5c53ea4cb568f787e9d5c697ef8cb6e3",
+    "Verity.Sampled.Device.Challenger.pin": "dbe178feb83d27f9beb3c2426a383ffceef93cf5694506834899d23802226f17",
+    "Verity.Sampled.Device.Challenger.run": "a7b9eb08f33782fc410775029441f71fef304db1788d90ac2e3543c8fa2f53a5",
+    "Verity.Sampled.Device.Challenger.sign": "4bf0000d2e77c757ac83662262d8b28553728ecbb4dc475a7a94fe907bf4ce24",
+    "Verity.Sampled.Device.Deployment": "bf9f08f709e14ac2f54f6e1163f45ad8be30207dcda4c9e37faf153795e8e619",
+    "Verity.Sampled.Device.Deployment.dev": "786135ad7536bcd5d6b7c10e3e3892c51a9fda37e03aacb188008c66a4b91698",
+    "Verity.Sampled.Device.Deployment.pub": "ac138fd59772a25e8e412a89dee35cc6035bf030198c9717a502c737d9f4e1aa",
     "Verity.Sampled.Device.Deployment.sessions": "567e7a2b4d152cd755dc0eb27177342be056be30ef2861f3edf65fd21c98a6d1",
-    "Verity.Sampled.Device.Deployment.setupAt": "b9bed744204bddda8ae9de702d09026766fd55a07332289e6d28a0b5c950221a",
+    "Verity.Sampled.Device.Deployment.setupAt": "460d4e1dbb19f07f8b4566399bd3069818596355bdef8cf7f220d5edb425ed63",
     "Verity.Sampled.Device.Deployment.setupOf": "baade9010319b617ca76079267c1d0df1ff29907c5a4bb0f4d0f4f5f176867be",
-    "Verity.Sampled.Device.Deployment.sign": "e9e60ede3b2aa0f6c1389acf6d0cb88a71bd495978ef5f932a819ae3928bf68a",
-    "Verity.Sampled.Device.Deployment.signatures": "bfc638cca0b0574b2ebadeb78665519d52427240f3cfe89a451b17f38575cfbb",
-    "Verity.Sampled.Device.Deployment.signer": "44c32c6bfeda55e73a68f6eaa947d60920f8f67d551410f05012e63929f3d056",
+    "Verity.Sampled.Device.Deployment.signatures": "27c57f5f49485f5cebd7dae24064a84f74b553dcaebc766e801023cefeed1938",
+    "Verity.Sampled.Device.Deployment.signer": "6be587b8ab4fdabde43378fd011e47979560b1693261d9f8b5cfaa0cd61e7ac4",
+    "Verity.Sampled.Device.Deployment.toChallenger": "5a57aa32fcdf167388c78732f25453b0d052db0dc70628afa1ed6ba48bd04299",
     "Verity.Sampled.Device.Fits": "86cea2c2b925a2440dc36ec60e0b1c784f2fb8c44f1db43796209c63c28d2a25",
     "Verity.Sampled.Device.Numbered": "808c06a1983103e62bf8522235ded3bbe68394ffdc7996bb676e0b008724b177",
     "Verity.Sampled.Device.PrintState": "50c569f2c509d28c0d88b767b8c140019b95fbd9dfd8c7d6284419de6e1c6b2e",
@@ -58017,14 +58033,14 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.Instance": {
-   "digest": "a65eb768201c0af623dba7582f889480ded7449a0fcd369c63701a558b9a7047",
+   "digest": "22ec86b8d4ab24af06dd1086763a9590a0457592154a64eda2240a295117c915",
    "definitions": {
     "Verity.Sampled.CostsRead": "88a00c16759b1918ca0772bac9a5dd223325c51cafa2be1559ec84b092959008",
-    "Verity.Sampled.Instance": "acbf485c934aae23b5ab0dba9304f87f5842126aa1676978309bf775697b0191",
+    "Verity.Sampled.Instance": "88c27c9944cd0d3bd3955d6162e350d8971675780c3ceac7dc17a598311508e4",
     "Verity.Sampled.Instance.Honest.base": "e99391a7b8e5327a6f7bb2d99343d53f1cedf7d4bc4ef530b9bbf35b1247f1c4",
     "Verity.Sampled.Instance.Honest.blocks": "815aa59235b3b6517d3253eeed56204736111f5c367c8079aab40013b5eec2b4",
     "Verity.Sampled.Instance.Honest.cost": "dc843da38e7150342177558368282265fc4933b8442cba4db547426deb098076",
-    "Verity.Sampled.Instance.Honest.deployment": "65968456ecebbd81f9b5c52028a5c2512a49bad1ff4d0b03d6515b34531c610b",
+    "Verity.Sampled.Instance.Honest.deployment": "0b1961ac60cf0112c10fe6912ee3af1e77a141fe9a2a559ce247b168ab60ea84",
     "Verity.Sampled.Instance.Honest.dev": "759f830adb84529c9caeb1883a405dd1ab4e0ba2fb78a649f9b8067ddd7f8500",
     "Verity.Sampled.Instance.Honest.inst": "1dde4be6daf2b0197bb8597483695f288931acf4c5d1bfec76b88e533d3da536",
     "Verity.Sampled.Instance.Honest.ofRun": "f403a01597a12225609cd04af343fc807a2e696d41892ba5089b0ec1ab2110ba",
@@ -58410,10 +58426,11 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "eab0603bef0e20e1ac2cb9fac3ea91d15e0291d62521ac951680c53f450311f3",
+   "digest": "4180dcac58e51329faf305f1badeb48b9a2335ef8fe02b4b52470c783d5850bc",
    "definitions": {
-    "Verity.Accepts": "05c4df56be1e14bc3d75e183df5fac28b514104ced6a064ade3af0316f8272b0",
+    "Verity.Accepts": "2b52de6c68f2482e5e6cc118e4f2d4404df152af14e95c9b71d243bc75d6a8b4",
     "Verity.AuditorPins.Designated": "0c27807d1edf7ced0527743d9eef4ec79edec0d079543caf2e546d46342932c3",
+    "Verity.AuditorPins.compiled": "480f0dcec11dda50f315b6341686c0e9119fe537fe256b86ff2fc02da9bddaba",
     "Verity.AuditorPins.reads": "abeb8f98f26b6522e348a9f7c02dd3999a86472a06efbcd06f75245acb040ade",
     "Verity.AuditorPins.spotKey": "1e3a2a61e808c367f51143bc59135b2d725c1894177365c5de5bd9d24636aab2",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -58590,11 +58607,11 @@
     "Verity.namedFile": "a89ad04269d6befbf1edde130d8f1af3ccfa53c2b990f0ca8a29826485f9cb9e",
     "Verity.namedFinder": "c48665428afa8d18fc1355a552b477afe189e04a69ee337df48f1c296deb9dba",
     "Verity.parsedConsts": "f9d2e428528841c9c7316d7f47d7a5d6ff8f2d2ebbe3c3f3cd8e3b75e6acead4",
+    "Verity.pinnedVerifier": "4043379357e2a0799c8d754381df9431e7c7740ecc215027edc79c75867fa37c",
     "Verity.play": "016c62e68e4bcdb48c6ef1f05e784362fcfefb1cb0603f3b9b355598687a0100",
     "Verity.releases": "8869b0edf60abb125cfaa3d452dc6dafba8bc54a8d3d355ea88108b1972b476e",
     "Verity.requestThen": "955fc6073baa33d3622565b6c4ce6b3d76bb721c4da7a945d5ea5c59c26fb0bd",
-    "Verity.sampledAt": "d7763f69cc06f61072bc6348b0e2ef2ac2b9fa7da839420325b60b5e505fd688",
-    "Verity.sampledParams": "cc88453b23c2d5fa66eb1bcc00f10452d408a4fb8482d761003033bb0f043faf",
+    "Verity.sampledParams": "b8d80bc7ac1fa6570fd7792252a7c2f5987568923d3920035148b78d3c8d4533",
     "Verity.sha512Msg": "3fb17014d068a5ee9446e95057ecee922f7236ff6db8a8a8167135c2f044a07b",
     "Verity.spotLog": "cdd6139b0078219f8fc5c8101fc25f3c42cf19e1b8d0ad9f5bfd5cfdf338ac86",
     "Verity.subprotocols": "166b3e753488aa75de4e0365502275fa91b6a6ee7697a77723db7610f6bfe09b",
