@@ -9,7 +9,7 @@ public import Proofs.Flock.SpotFlock.HeldOfFiles
 decides whether it builds a held copy, at the copies before SPOT's frame is set (`held₀`): `heldOf i it u` is `some`
 exactly where `heldOk i it u` holds (`heldOf_isSome`), since nothing `decided` reads is the frame (`decided_withFrame`).
 A form that refuses unless `heldOk` holds at the run of record's input and interior and the members' reference
-statements gets a held copy at every run it accepts, and with the run's population check `TwoHolds`
+statements gets a held copy at every run it accepts, and at an accepted run `TwoHolds`
 (`HeldOfRun.twoHolds_of_files`).
 
 ## What deciding it costs
@@ -92,7 +92,7 @@ theorem heldOf_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} (u : Unread) 
 
 /-- **The form's check of the held copies**: `heldOk` at the members' reference statements on the blobs
 (`refStmtsOf`), with the registered copies `u` gives of the rest (its reference statements are not read); false where
-one is missing. With the run's population check it gives `TwoHolds` (`HeldOfRun.twoHolds_of_files`). -/
+one is missing. At an accepted run it gives `TwoHolds` (`HeldOfRun.twoHolds_of_files`). -/
 def heldOkDesc (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input)
     (it : Spot.Run.Interior) (u : Unread) : Bool :=
   match refStmtsOf p bs with
