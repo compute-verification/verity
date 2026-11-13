@@ -126926,3 +126926,44 @@ ALL rc=0
 Each sibling check printed "no built module of its package that doesn't import … declares a name it does". This closes the first line of my 07:08Z "Not established". With `7ab0`, the three files the layout changed (`SessionCoins`, `SessionOpened`, `SessionRecord`) and the two tried beside them (`SessionDev`, `SessionCut`) each have a clean probe at `49dbe8d36f`. Nothing else in the 07:08Z entry changes. No run of mine is out; no file changed; STOP RULE kept.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed.
+
+## COUNT, Fri 13 Nov 07:12Z: ci's case on #9621 is NOT reachable today (the cited theorem takes 6 open premises on `main`); the guard is written and pushed, `cursor/proofs-count-guard-c41d` at `3d9bf269f1ad96416dc6acff61a76cd133b65b12`, its changed suites are out as `r20261113-071018-dd20` (expected about 07:20Z); no ready line yet, the pull request opens once #9621 is on `main`
+
+**In plain words, for Daniel.** The reviewer of the section that prints what a served run's audit showed saw that a run could one day be marked proved with nothing behind it but the audit's final answer: no proof checked, no check run. That cannot happen today, because the theorem the mark rests on still has open premises, and I ran it to be sure. I closed it anyway, as a small change of its own: a run is now marked proved only where its files count the Lean verifier's verdicts on the sampled proofs and the audit's own checks, all of them true. What today's rehearsal prints is unchanged. Nothing here ran on a served engine or a GPU.
+
+### The follow-up
+
+- Branch `cursor/proofs-count-guard-c41d`, one commit on #9621's head `13a60635abb2`: `3d9bf269f1ad96416dc6acff61a76cd133b65b12`, pushed [run: `git ls-remote`, 07:09Z]. Three files, 111 lines added, 13 removed.
+- The change is in `served_row.open_items`, the list `account` reads the mark from (the mark is `proved` only where the list is empty). The list gains [run: the tests below]:
+  - a line where the record counts no verdict of the Lean verifier on a sampled proof (no `lean-verify` kind, or one that counts no session);
+  - a line where it counts none of the driver's checks;
+  - a line naming each verdict kind or check it counts as not all true.
+- The third line is one step past ci's note, and I say so in the body: without it a record that counts 1 of 2 sampled proofs as accepted, beside an outcome that accepts and a second stage that says it held, was still marked `proved`. Say if you want it out; it is five lines and two test cases.
+- Tests, on my machine at that head, one file a command [run]: `tests/test_served_row.py` 25 passed (17 before), `tests/test_served_record.py` 9, `tests/test_exfiltration.py` 38, `tests/test_spot_status.py` 32; ruff clean.
+  - ci's case exactly (an outcome that accepts, held and complete; zero verdict kinds, zero checks; every lock entry closed, both holes closed): `run, not proved`. At #9621's head the same test reads `proved` [run: the test fails there, `'proved' == 'run, not proved'`]. Six neighbours beside it (no kinds; no `lean-verify`; `lean-verify` of no session; no checks; a proof not accepted; a check not true): each read `proved` at #9621's head and `run, not proved` now [run].
+  - The present form reads as before: a record that counts every kind and check the two-stage audit writes, all true, has the same six lines of what is open, pinned text for text; that test passes at both heads [run]. The section on the rehearsal's record prints the same text line for line before and after [run: diff of the two prints].
+- Changed suites on a node, your command with `--quick`, at `3d9bf269f1ad`: `r20261113-071018-dd20` on vy-nebius-cpu-14, launched 07:10Z, expected about 07:20Z. No `ulimit -Sv` is in it, nor in the launch line I have used for the suites since 04:00Z [read: my launch lines].
+
+### Is ci's case reachable today: no [run]
+
+- `main`'s lock (`2e99b1cf48b8`) gives the cited theorem, `Verity.Sampled.remote_soundness_deployedReady`, 6 open premises, so the mark is `run, not proved` for every record.
+- At #9621's head, on the tree as it is, a record made for the case (the rehearsal's with its verdicts and checks emptied, its outcome accepted and complete, a Definition's layout, nothing registered by the interior) is `run, not proved`, with the holes as the tree reads them and with both forced closed.
+- What was wrong of it today is smaller: that record printed "to fully proved: nothing in the run's own files or in its verdicts' lock entries". It now prints the two lines. No row reads as proved, so there is no finding for benchmarks. [derived]
+
+### Opening it
+
+- Not opened: #9621 is not on `main` (`gh pr view`, 07:11Z: open at `13a60635abb2`, ready and admitted; `main` is `2e99b1cf48b8`) [run].
+- The queue lands a pull request as a merge commit with its head as a parent (#9479's and #9662's heads are ancestors of `main`) [run: `git merge-base --is-ancestor`]. So once #9621 lands, this branch differs from `main` by its one commit, with no rebase. A rebase of a pushed branch needs a force-push, which your rules forbid, so I merge `main` in instead, run the suites at that head, open it with `research queue open` (`Lane proofs`, `Goal proofs/network-number-printed`) and give you the ready line. The body is drafted.
+
+### Also done
+
+- #9621's body has its `Goal proofs/network-number-printed` line (your 06:33Z ask); the head did not move [run: `research queue edit 9621`; `gh pr view`]. The goal is "One command prints exfiltration capacity", on track, the lane's [read: `research goals show`].
+- Point 3 of 05:57Z: #9640 is still open at `58a065ec1f7e`, ready and admitted [run, 07:11Z]. #9662 is on `main` since 06:45Z [run], so the one writer for the verdict's record can follow #9621.
+
+### Machine
+
+Replaced again before 07:00Z; the pen is retaken (07:00Z) and the worktree rebuilt from the pushed branches. Nothing was lost. This is the loop the 07:12Z entry names as holding the pen; that other loop's timer is spent and I set one of my own below.
+
+### What I wait on
+
+The run `r20261113-071018-dd20` (about 07:20Z); #9621 on `main`, to open the follow-up; #9640 on `main`; your word naming #9501's head.
