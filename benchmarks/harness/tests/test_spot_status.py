@@ -35,18 +35,23 @@ def _git(root: Path, *args: str) -> str:
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
     """A repository of three commits in a line (the base, the first fix, the second) and a side commit off the base,
-    with the fixes' data file naming the two fixes."""
+    each adding a file of its own, with the fixes' data file naming the two fixes."""
 
     root = tmp_path / "repo"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
     commits = {}
+
+    def commit(name: str) -> str:
+        (root / f"{name}.txt").write_text(f"the {name} commit's line\n")
+        _git(root, "add", f"{name}.txt")
+        _git(root, "commit", "-q", "-m", name)
+        return _git(root, "rev-parse", "HEAD")
+
     for name in ("base", "fix1", "fix2"):
-        _git(root, "commit", "-q", "--allow-empty", "-m", name)
-        commits[name] = _git(root, "rev-parse", "HEAD")
+        commits[name] = commit(name)
     _git(root, "checkout", "-q", "-b", "side", commits["base"])
-    _git(root, "commit", "-q", "--allow-empty", "-m", "side")
-    commits["side"] = _git(root, "rev-parse", "HEAD")
+    commits["side"] = commit("side")
     data = tmp_path / "spot_holes.json"
     data.write_text(json.dumps({"fixes": {REDRAWN: commits["fix1"], RECOMMITTED: commits["fix2"]}}))
     monkeypatch.setattr(S, "FIXES", data)
@@ -136,6 +141,8 @@ def test_a_hole_with_no_fix_declared_is_open(repo):
 
 #: a line a fix adds that counts toward its presence (8 characters or more, not a comment alone)
 FIX = "refuse_redraw(sample)"
+#: lines a fix removes (`OLD`) and moves within its file (`MOVED`)
+OLD, MOVED = "accept_redraw(sample)", "register(sample, salt)"
 
 
 @pytest.fixture
@@ -239,6 +246,46 @@ def test_a_merge_declared_as_the_fix_says_its_lines_are_all_it_brings(changes):
     assert got["why"].startswith(f"The fix's commit {merge[:12]} is a merge, so the lines it added are all it brings "
                                  "to its first parent, in 1 file: declare the commit whose first parent is the base its change "
                                  "landed on (its landing merge). ")
+
+
+def test_a_deletion_only_fix_is_closed_while_its_lines_stay_absent(changes):
+    """A fix that only deletes is decided by its removed lines alone: closed while they stay out, not known once one
+    is back."""
+
+    changes.commit(f"a\n{OLD}\n", "the hole")
+    fix = changes.commit("a\n", "fix: delete the redraw")
+    run = changes.commit("other\n", "later", "g.txt")
+    assert S.closes(changes.root, fix, run) == {"status": "closed", "why": None}
+    back = changes.commit(f"a\n{OLD}\n", "put the line back")
+    short = _git(changes.root, "rev-parse", "--short", back)
+    assert S.closes(changes.root, fix, back) == {"status": "not known", "why": (
+        f"1 of the 1 line the fix {fix[:12]} removed from f.txt is in f.txt again at the run's commit, among them "
+        f"`{OLD}`. {short} changed those lines since: if {short} keeps the fix, add it to this hole's commits in "
+        "spot_holes.json")}
+
+
+def test_a_fix_with_no_line_that_counts_is_never_closed(changes):
+    """Short lines, blank lines and comments alone leave nothing to look for, so the run's tree can't be told to hold
+    the fix."""
+
+    fix = changes.commit("a\nx = 1\n\n# a comment alone, long enough\n", "fix in short lines")
+    assert S.closes(changes.root, fix, fix) == {"status": "not known", "why": (
+        f"the fix {fix[:12]} adds no line this check can look for, and removes none (a line counts stripped, from 8 "
+        "characters, and not when it is a comment alone), so whether the run's tree holds it can't be told")}
+
+
+def test_a_hand_revert_restoring_a_removed_line_is_not_known(changes):
+    """Putting back a line the fix removed, with no revert's message and the fix's own line kept, is caught; a line the
+    fix only moved within the file isn't one it removed."""
+
+    changes.commit(f"{MOVED}\na\n{OLD}\n", "the hole")
+    fix = changes.commit(f"a\n{MOVED}\n{FIX}\n", "fix: replace the redraw")
+    assert S.closes(changes.root, fix, fix) == {"status": "closed", "why": None}
+    back = changes.commit(f"a\n{MOVED}\n{FIX}\n{OLD}\n", "restore the redraw by hand")
+    got = S.closes(changes.root, fix, back)
+    assert got["status"] == "not known"
+    assert got["why"].startswith(f"1 of the 1 line the fix {fix[:12]} removed from f.txt is in f.txt again at the "
+                                 f"run's commit, among them `{OLD}`.")
 
 
 def test_a_fix_whose_files_changed_elsewhere_reads_closed(changes):
