@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.EntryRoots
+public import Proofs.Flock.SpotFlock.PortsMember
 
 /-!
 # The width fact at the address map
@@ -20,6 +21,9 @@ cases of `holds_of_wiring` give:
 * a source bit at a port a wire names: the wiring map sends it to the same bit of the wire's writer's output port,
   as many words as the reader's port where each wire's reader port is like its writer's (`wiresAlike`), a condition
   the second stage's design decides on the registration.
+
+`widthFact_addressOf` states the same at one condition on the registration in place of both, `RowWidths`, for a
+registration whose wiring map is known.
 -/
 
 @[expose] public section
@@ -38,6 +42,15 @@ def BitsInPorts : Prop :=
       s.2.2.bit < 16 * ((memberCircuit h s.2.1).ports[portNamed h s.2.1 s.2.2.row]!).words) ∧
     ∀ y ∈ writtenBits h.ms,
       y.2.2.bit < 16 * ((memberCircuit h y.2.1).ports[portNamed h y.2.1 y.2.2.row]!).words
+
+/-- **Every wired row has one width**: at each bit `i` of a member `t` at row position `rp`, the gate the wiring map
+sends it to has a commitment position `(tw, rq)`, `rq`'s bit is inside the `16 w` bits of `tw`'s port of `rq`'s row,
+and that port has as many words as `t`'s port of `rp`'s row. It reads only the registration. -/
+def RowWidths : Prop :=
+  ∀ i t k rp, BitOf h t k i rp → ∃ tw rq, bitAtGate h (wireMap h i) = some (tw, rq) ∧
+    rq.bit < 16 * ((memberCircuit h tw).ports[portNamed h tw rq.row]!).words ∧
+    ((memberCircuit h tw).ports[portNamed h tw rq.row]!).words =
+      ((memberCircuit h t).ports[portNamed h t rp.row]!).words
 
 variable {h}
 
@@ -95,6 +108,16 @@ theorem widthAt_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i :
       (hB.2 _ hwm) rfl
 
 end CheckedRun
+
+variable (h) in
+/-- **The width, at the address map, where every wired row has one width** (`RowWidths`), the wiring map sending
+each gate it moves to a gate it leaves alone. -/
+theorem widthFact_addressOf (hω : ∀ j, wireMap h (wireMap h j) = wireMap h j) (hN : NeededBits h)
+    (hR : RowWidths h) : WidthFact h (addressOf h) := by
+  intro r hr i hi
+  obtain ⟨rp, hb⟩ := hN r hr i hi
+  obtain ⟨tw, rq, hw, hbit, hwords⟩ := hR i _ _ rp hb
+  exact CheckedRun.widthAt_of_target (portsMember h) hr hω hb hw hbit hwords
 
 /-- **The width, at the address map**: at every accepted run's checked unit, the place of each needed gate's address
 is as wide as the row of its port in the unit's session. -/
