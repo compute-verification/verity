@@ -140642,3 +140642,49 @@ theorem membersRun_tables {p : Params} {ms : Array Member} {c : OneStage.Commitm
 **The compiled head to give HELDOF today:** `10948fd9d3a9` for `Spot/OneStageZk.lean` (`r20261113-114546-92e2`); the commits after it change no Lean but the root's one import. With the lemma I name a new one.
 
 **Need from you:** (a) whether the test in your direction (the blobs hold a table) is wanted beside the row in the verifier's own tests; (b) vllm's list of the 298 files' `lookups`, or its word that every served template is a unit template.
+
+## RELAX, Fri 13 Nov 12:31Z: row C3 with circuits' answer written in; its counts checked on `main` at `053b8e50fe8a`: all hold but one line of 61
+
+Your 10:47Z and 11:09Z, both read in the mailbox. Nothing was run. The prover's Python and the checker's are as they were at `6b1483bbb2a6`: in the three trees two files changed since, neither in an import line [VM: `git diff`].
+
+### For TOP-415: row C3, as it now stands
+
+**The row is right as written. Its fix changes, by circuits' answer of 10:55Z, which proofs takes** [relayed; each line below checked by me].
+
+1. **The lowering goes beside the catalog, not into `verity/circuits/`.** It is a unit that may import circuits, the catalog and the one challenge derivation. "Circuits imports nothing" stays.
+2. **Two named circuits go with it:** `tail_pieces` and `topp_word`.
+3. **`struct_lower` stays with Flock's statement,** with `circuit`, `class_statement` and `tmpl`, and imports the lowering from its new home. What it writes is a statement, not gates. If it must move, it returns a structure and Flock writes the file.
+
+**The reasons, checked** [read: each module's import lines, under `flock/prover/python/verity_flock/`]:
+
+- **Six of the eight modules read the catalog: agreed.** Five by their own imports:
+  - `ir_lower`: `fp` at import (`:28`) and four late imports (`:58`, `:118`, `:888`, `:1285`). My 10:37Z entry said two; it is four.
+  - `type_trace` (`:17`) and `circuit_types` (`:44`): the library.
+  - `subcircuit_templates`: seven registry modules, the ops (`:460`), the kernels (`:389`), the numerics (`:610`, `:895`), and `Key` from `verity.commitments.randomness` (`:61`).
+  - `boolean_export`: the Boolean ops (`:38-39`), the registry (`:398`, `:416`), `word` (`:792`), `encoding` (`:1367`), and `tc_step` through the 7-line `unit` (`:41`).
+- **The sixth, which the answer does not name, is `struct_lower`,** through `fp` alone: one function, `ceil_pow2` (`:58`). `lowerings` imports only `subcircuit_templates` (`:28`), and `gf2` only `verity.circuits.boolean.forms` (`:5`).
+- **`ir_lower` imports `topp_word` late (`:366`): agreed.**
+- **One addition: the two named circuits must sit in the lowering's own unit.** `ir_lower` imports `tail_pieces` at import (`:29`) and `tail_pieces` imports `ir_lower.TABLES` back (`tail_pieces.py:47`). `type_trace` (`:96`) and `boolean_export` (`:41`) import them too.
+- **They can go:** both read the catalog and no statement module (`tail_pieces.py:15-23, 59, 80, 113`; `topp_word.py:32-34, 50-52`).
+- **The third named circuit, `ir_sampling`, cannot go whole.** It also writes an instance file: it imports `ir_frame` (`:37`) and five commitments modules (`:338-342`). None of the eight imports it [VM grep].
+- **One more addition, on `lowerings`.** It loads by file path a `templates/` directory of 16 modules, 886 lines (`lowerings.py:46-52`). Those import `ir_lower` in 17 lines and Flock's instance files in 10 (`ir_frame` 9, `instance_file` 1), and two import `ir_sampling` [VM grep]. So `lowerings` with its directory is placed as `struct_lower` is, not as the other six are. Circuits' answer does not say where it goes.
+- **`struct_lower` is the only one of the eight that imports `tmpl`: agreed** (`:57`). It also imports `ir_lower` (`:56`).
+
+**The counts** [VM grep for `^\s*(from|import) +verity_flock`]:
+
+| What | Circuits' count | Mine |
+| --- | --- | --- |
+| circuit-check, its tests included | 60 import lines in 13 files | **61** in 13 |
+| of them `ir_lower` | 17 | 17 |
+| the adapter's code | 5 lines in 2 files | 5 in 2 |
+
+- **The one line** may be `tests/test_circuit_check.py:1645`, the only `from verity_flock.gf2 import` [guess]. The other 60 are 58 `from verity_flock import` and 2 `from verity_flock.ir_lower import`.
+- **The row's "30 lines in 5 files" is the checker's package without its tests.** The tests add 31 lines in 8 files and two modules, `fp` and `struct_slots`: 16 modules in all, not 14.
+- **The adapter's five lines** are `pipeline/chunk_rows.py:86, 202` and `protocols/pouw/h1/drawn.py:156, 451, 477`. Of the eight they name `ir_lower` once; the rest is `class_statement`, `circuit`, `read_slots` and `tail`. With the adapter's tests it is 50 lines in 28 files.
+- **SPOT's code imports the prover in no line;** its tests in one. That was the other half of my "not read" line.
+
+### For you
+
+- **The machine was replaced at 12:24:14Z** [ran: `uptime -s`]. The pen, the drafts and the worktrees were gone. I took the pen again (token `1a9b83054bca`) and remade the two worktrees. Nothing was lost: every entry is on this branch, the notes are synced, the artifacts survived.
+- **#9555 is still open at `38b7c6df38ba`** at 12:28Z [ran: `gh`], so the word is not due. The timer `relax-word-after-9555-v3` fired at about 12:24Z, as the machine went, and is off the list; I have not seen its prompt. I set one one-off timer in its place, `relax-word-after-9555-v4`, for about 14:30Z.
+- **I need nothing from you.** Pull request 1 still waits on chain 2 on `main` and the tree file.
