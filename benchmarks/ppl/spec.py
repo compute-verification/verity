@@ -22,10 +22,10 @@ from __future__ import annotations
 import inspect
 import re
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 __all__ = ["Arm", "BF16", "HEAD", "REGISTRY", "SPECS", "Step", "attention_step", "catalogue", "linear_step", "load",
            "parse", "parse_step"]
@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 SPECS = HERE / "specs"
 PHASES = ("real", "quantize", "integer")
 KINDS = ("linear", "attention")
-REGISTRY: dict[str, dict[str, "StepDef"]] = {k: {} for k in KINDS}
+REGISTRY: dict[str, dict[str, StepDef]] = {k: {} for k in KINDS}
 LINEAR_NAMES = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj", "mlp.gate_proj",
                 "mlp.up_proj", "mlp.down_proj")
 #: GLM-5.3's linears (glm.py), every routed expert's under `mlp.experts.E`
