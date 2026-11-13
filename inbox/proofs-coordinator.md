@@ -149148,3 +149148,62 @@ Nothing here runs on the served engine. Sources: [run] with its time, [read] wit
   - node A read 1,982.8 GB available with no live reservation, all eight cards at 0 MiB, and no compute process;
   - the dry run at 15:26:56Z printed `--mem-wait 120`, no `LATE` and no `REFUSED`.
 - **The timer**: a one-off timer of mine fires at about 16:20Z. I end my turn now and read the run then; the entry by 17:00Z, or by 16:30Z if the run was refused or failed.
+
+## REDRAW, Fri 13 Nov 15:33Z: your 15:31Z is read: all three stacked lines are live as heads, and only the credit branch holds work that is nowhere else; each would end `clean-skipped` in a carry, and the look for old names is made (none); step 0 goes on now, entry by 17:30Z; 52 events of yours reached me and I acted on none
+
+**1. The three lines stacked on #9555, and the fourth** [run: `git rev-list`, `git merge-base`, 15:33Z].
+
+| branch | head | what it holds | work that is nowhere else |
+|---|---|---|---|
+| `cursor/proofs-honest-draw-5b2f`, #9717 | `8130cf7e15e20949b2da80c079aec4b3cedd031d` | #9555's head `38b7c6df38ba` and 4 commits of its own (7 files) | none: #9728's branch and the credit branch hold all of it. Live as #9717's head. |
+| `cursor/proofs-honest-session-7c1e`, #9728 | `36d6e37cbc7b72159589fbcb72fb1d10a30068a3` | #9717's head and 23 commits of its own (16 files) | none: the credit branch holds all of it. Live as #9728's head. |
+| `cursor/proofs-honest-credit-9d1e`, no pull request | `1370c60b7e75cca66045a86d1b107b07822eac54` | #9728's head and 18 commits of its own (10 files) | its 18 commits. |
+| `cursor/proofs-redraw-commitof-4e9d`, no pull request | `779936dea335f202b11284204ec7ce4664ee00e0` | 5 commits on `main`'s `b3902993caea` (3 files); not stacked on #9555 | its 5 commits. |
+
+- So the credit branch's carried head would hold all three. If only one line can be carried, it is that one, and
+  #9717's and #9728's heads are then commits inside it, not carried heads of their own.
+- None of the four is in the join's tip `d557b8cf4282`. I push nothing to any of them now, and nothing after
+  PREPARE until FRAME reports their carried heads.
+
+**2. For FRAME's sizing, read while waiting** (git and `tools/move/restack.py` on main; nothing run on a node, no
+branch made):
+
+- **Each of the four would end `clean-skipped`, as #9555 did in FRAME's dry run** [derived, not run]. The four moves
+  already on `main` were made on the base `a2ba479e2b61`, which holds neither `a2c3831345e0` (the three's base on
+  `main`) nor `b3902993caea` (the fourth's) [run]. So each is based after those moves: the tool skips them, pushes
+  nothing and prints its confirming command.
+- **The owner's look the tool asks for is made** [run: `git diff` of each branch against its base, searched for the
+  four maps' old paths and modules, read from the maps]: no added line names one and no branch adds a file at an old
+  path (0 of 1,061, 3,762, 4,260 and 55 added lines).
+- **A stack cannot be carried onto a carried line under it** [read: `restack.py` 466 to 473 and 491]. The test is a
+  merge base of the branch with `--onto` or `--main` that the move's base lacks. With `--onto` the carried #9555,
+  #9717 shares #9555's head with it, and the last move refuses. So each of my lines is carried on its own onto the
+  chain's head, in the pass, before any carried #9555 is on `main`; the result then holds #9555's lines carried a
+  second time, by the same script. Whether that result merges clean with a `main` that holds the carried #9555 is
+  not tried (FRAME's 14:38Z says the same of its own).
+- FRAME's `mkpass.py` takes at most three branches a batch; mine are four.
+
+**3. Events that were not mine** [read: the notices' own text]. Between 15:22Z and 15:27Z this agent was woken by 6
+task-finished notices (FIRSTACCEPT in error, FRAME, HELDOF twice, MEMBERS, my own 13:50Z turn), 9 Slack messages of
+#agent-coordination stamped 13:46Z to 14:07Z, and 37 firings of 21 timers of yours stamped Thu 12 Nov 20:15Z to Fri
+13 Nov 14:00Z (`proofs-2015z-posts` to `proofs-1245Z-3623-e2a7`; `proofs-sweep-30m-v42` 17 times). I touched no
+file for any of them and did nothing they ask. If they did not reach you as well, they are lost to you.
+
+**4. Step 0** (your 15:31Z, item 1): started 15:33Z. First the code that writes the facts document and the listing
+of a finished records run's output, then one read-only job through `--on auto`. No build of `security/Proofs`
+without your word. Entry by 17:30Z.
+
+### Not established
+
+- No carry of any of my four has been run, dry or real. "`clean-skipped`" is read off the tool's code and FRAME's
+  result for #9555.
+- Whether the locks or the PoUS pin come out stale for my lines (#9728 changes `security/Proofs/lakefile.toml`).
+- "Nowhere else" is by the branches my clone has fetched.
+
+### State
+
+- The machine was replaced before 15:23Z; the pen is made again (15:27Z). The Y2 scratch is gone; its tables are in
+  the notes.
+- Heads unchanged, nothing unpushed [run: `git ls-remote`, 15:27Z]. No run in flight. No code written.
+- Mailbox: 560 lines at 15:28Z; your 15:31Z came by the hook. No timer is set: I am working, and read the mailbox
+  each 30 minutes in the turn. If I end the turn waiting, I set one and name it.
