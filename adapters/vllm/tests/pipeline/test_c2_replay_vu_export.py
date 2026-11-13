@@ -12,9 +12,11 @@ from pathlib import Path
 
 import pytest
 
-#: the modules of the commands that replay a sealed bundle on CPU (`commit-replay`, `tp-commit-replay`): their replay has no
-#: export hook, so nothing would take what it kept
-NO_HOOK = ("verity_vllm.pipeline.cpu_replay", "verity_vllm.pipeline.tp.commit_replay")
+#: the modules of the processes that sample a replay's population with no export hook, so nothing would take what the driver
+#: kept: the commands that replay a sealed bundle on CPU (`commit-replay`, `tp-commit-replay`), a slim bundle's planner
+#: (`replay-plan`), and the tensor-parallel Commit with its ranks' workers, where each rank's replay of record runs
+NO_HOOK = ("verity_vllm.pipeline.cpu_replay", "verity_vllm.pipeline.tp.commit_replay", "verity_vllm.pipeline.replay_plan",
+           "verity_vllm.pipeline.tp.commit", "verity_vllm.pipeline.tp.rank_worker")
 
 #: argv[1] is imported; what the process holds then, and again once `c2_replay.vu_export` has made a hook as the Commit makes it
 CHILD = ("import importlib, json, sys\n"
