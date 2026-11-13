@@ -21,15 +21,19 @@ import hashlib
 import pickle
 import types
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.commit import step_rows as R  # noqa: E402
-from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
-from verity_vllm.commit.committer import native_host as nh  # noqa: E402
-from verity_vllm.commit.committer.pinned_pool import PinnedPool  # noqa: E402
+from verity_vllm.commit import step_rows as R
+from verity_vllm.commit.committer import native_collect as NC
+from verity_vllm.commit.committer import native_host as nh
+from verity_vllm.commit.committer.pinned_pool import PinnedPool
 
 RUN_ID = "plan-cache"
 PD, GEO = hashlib.sha512(b"program").digest(), hashlib.sha512(b"geo").digest()
@@ -355,6 +359,7 @@ class _Runner:
 
     def execute_model(self, scheduler_output, *a, **kw):
         com = self.committer
+        assert com is not None
         for name, t in self.tensors:
             com._acquire(name, t, com._cur)
 
@@ -366,7 +371,7 @@ class _Sched:
         self.req_ids = [f"r{i}" for i in range(len(kv))]
         self.num_scheduled_tokens = dict.fromkeys(self.req_ids, 1)
         self.total_num_scheduled_tokens = len(kv)
-        self.scheduled_new_reqs = []
+        self.scheduled_new_reqs: list[Any] = []
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
@@ -402,7 +407,7 @@ def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
     """One decode step's acquired tensors: token ids, per layer the qkv output, a hidden plane sized by every request's KV blocks
     (as the attention tap's) and the MLP output, then logits and sampled ids. The values are a function of the geometry."""
     ntok, seed = len(kv), sum(kv)
-    shapes = [("model.embed_tokens/in", torch.int32, (ntok,))]
+    shapes: list[tuple[str, Any, tuple[int, ...]]] = [("model.embed_tokens/in", torch.int32, (ntok,))]
     for layer in range(LAYERS):
         shapes += [(f"model.layers.{layer}.self_attn.qkv_proj", torch.bfloat16, (ntok, 3 * H)),
                    (f"fa2.m1/L{layer}/acc", torch.float32, (sum(-(-k // BN) for k in kv), 4)),

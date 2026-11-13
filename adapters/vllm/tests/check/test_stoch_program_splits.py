@@ -34,6 +34,8 @@ def test_unreadable_build_result_is_named(tmp_path: Path) -> None:
     assert splits == {"r0": 3, "r1": None, "r2": 3}
     assert len(unreadable) == 1
     assert unreadable[0].startswith(f"{b / 'build_request_b' / 'result.json'}: JSONDecodeError(")
+    (b / "build_request_b" / "result.json").write_text("[" * 200_000 + "]" * 200_000)      # nested past the parser's depth
+    assert _program_splits(b, wl)[1][0].startswith(f"{b / 'build_request_b' / 'result.json'}: RecursionError(")
 
 
 def test_a_workload_the_record_refuses_is_refused_by_name(tmp_path: Path) -> None:

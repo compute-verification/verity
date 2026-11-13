@@ -6,12 +6,18 @@ from __future__ import annotations
 import operator
 
 import torch
-
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import fa2_train as FT
-from verity_vllm.program.frontend.rules.training_emit import BF16, _batch, _shape, _TrainRule, aten
+
+from verity_vllm.program.frontend.rules.training_emit import (
+    BF16,
+    _batch,
+    _shape,
+    _TrainRule,
+    aten,
+)
 from verity_vllm.program.frontend.rules.training_views import _info
 from verity_vllm.program.frontend.strided_views import _tensor_type
 
