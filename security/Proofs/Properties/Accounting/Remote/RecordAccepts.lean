@@ -19,6 +19,10 @@ opening. The draw of one receipt among one is position 0 whatever the coin (`rec
 each have one leaf, so their roots are the leaves' digests (`zeroRoot`). The session's steps read the roots and coins
 only through their sizes (`run_accepts`, over any registration of one block, any coins and any root of 64 bytes), so no
 SHA-512 is evaluated.
+
+`lineHeld_accepted`: `Properties.RemoteAudit.Line.LineHeld`'s premises hold together with an accepted play. The record's
+one window is one group, its coin released at 0 and its root arriving at 1 (`groups_one`), so pass 0 runs over `[0, 1)`
+inside its span (`honestSchedule_one`), and `Subprotocol.lineHeldAtSubprotocol_honest` gives every premise.
 -/
 
 @[expose] public section
