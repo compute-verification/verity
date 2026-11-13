@@ -332,7 +332,6 @@
     {"file": "verity_vllm/pipeline/row_driver.py", "kind": "T201", "symbol": "Row.log", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/row_driver.py", "kind": "T201", "symbol": "Row.setup", "detail": "`print` found", "count": 5},
     {"file": "verity_vllm/pipeline/row_driver.py", "kind": "T201", "symbol": "Row.verdict", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/row_records.py", "kind": "UP031", "symbol": "served_shape", "detail": "Use format specifiers instead of percent format"},
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "T201", "symbol": "SingleRow.prepare", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/row_tp.py", "kind": "T201", "symbol": "TpRow.prepare", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/s8_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},

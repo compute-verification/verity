@@ -477,7 +477,7 @@ def served_shape(d: str) -> str:
         lp, t, cap = int(s["LP"]), int(s["T"]), int(s["cap_T"])
     except (OSError, ValueError, KeyError, TypeError):
         return ""
-    return "LP=%d T_r=%d cap_T=%d" % (lp, t, cap) if t > 0 and t != cap else ""
+    return f"LP={lp} T_r={t} cap_T={cap}" if t > 0 and t != cap else ""
 
 
 #: the query the row builds its manifest of record under: `query.required.QUERY_OF_RECORD`, spelt here because the row driver
