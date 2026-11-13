@@ -607,6 +607,23 @@ theorem stageWidth_le_fit_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ�
   simp only [SpotFlock.L]
   omega
 
+/-- **`FirstElems`' elements at the locator**: where the coins agree below what fits for stage 0 (`ElemAgrees`), they
+agree below some `u` whose `16 u` bytes hold the first stage's. -/
+theorem elems_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after : ByteArray} (hone : OneRoot ℓ₁ after log)
+    (hw : FreshWide log) {b : ByteArray}
+    (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₁ after log).flatten)
+    (hL : b.size ≤ SpotFlock.L) {c c' : FlockDeploy.Coin} (he : ElemsBelow (fitOf (stageLocate ℓ₁ ℓ₂) 0 [] log) c c') :
+    ∃ u, b.size ≤ 16 * u ∧ ElemsBelow u c c' :=
+  ⟨_, size_le_fit_first ℓ₁ ℓ₂ hone hw hb hL, he⟩
+
+/-- **`SecondElems`' elements at the locator**: as `elems_first`, at stage `j + 1` and its slice (`stageWidth`). -/
+theorem elems_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : List Verity.Release} {after : ByteArray}
+    (hone : OneRoot ℓ₂ after log) (hw : FreshWide log) {b : ByteArray}
+    (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₂ after log).flatten) (j : ℕ)
+    {c c' : FlockDeploy.Coin} (he : ElemsBelow (fitOf (stageLocate ℓ₁ ℓ₂) (j + 1) [] log) c c') :
+    ∃ u, stageWidth b j ≤ 16 * u ∧ ElemsBelow u c c' :=
+  ⟨_, stageWidth_le_fit_second ℓ₁ ℓ₂ hne hone hw hb j, he⟩
+
 /-- **`DevFirst` at the locator** (STAGECOINS's, at `draw` the first stage's draw): where the first stage's draw is the
 locator's family after one root (`StageDraws`). -/
 theorem devFirst_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange → Option (String × ByteArray)}
