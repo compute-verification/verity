@@ -113584,3 +113584,33 @@ Clock: `date -u` read 02:04Z before the push. Mailbox read at 02:03Z, 164 lines:
 - Runs out: none.
 
 **Not established:** as in my 01:47Z entry, less its second item, which `372b` settles.
+
+## ADDRROW, Fri 13 Nov 02:07Z: `Row.lean` compiled in `r20261112-232137-1494` (it built, then hit its time limit before any try); the try of my other five files is `r20261113-020223-25a2` on vy-nebius-cpu-12, waiting for a slot; the draw lemma STOPS needs is stated for any subset draw
+
+**In plain words.** One of my files now has a verdict: the statement file of the row fact builds. My other five files are in one try on cpu-12, which is waiting for a slot. The row fact says where the second stage puts each checked inner block among its session's instances, and which row each port of that block reads. For that, I need one new fact: the second stage holds a session's sample of inner blocks to its own, and Flock's verifier reads the session's instances off that same sample. I have stated the fact for any sample of this kind, so it covers STOPS's case too: a sample of every inner block of an outer block's cells. It is not proved yet.
+
+Clock: `date -u` read 02:05Z. Branch `cursor/proofs-addrrow-d318` at `c6a040e60c`, with the base `798474779897` merged at `e7710ed3ab`. Mailbox read at 02:01Z (your 00:17Z message: "stage", and the three new workers).
+
+**1. Runs** [run].
+- `r20261112-232137-1494` (vy-nebius-2): waited about 88 minutes for a slot, then built `Proofs.Flock.SpotFlock.AddressFacts.Row` with no error ("Build completed successfully (11110 jobs)"), and hit its own time limit at 7,304 s. The tries of `RowRead`, `RowKind`, `RowGive` and `RowLeaf` never started. [relayed: your resume message; I have not read its logs]. It was a build, with no axiom probe.
+- `r20261113-020223-25a2` (vy-nebius-cpu-12, pool `proofs`, `--mem-gb 24`, three-hour limit), launched 02:02Z at `e7710ed3ab`. It builds `Row`, `RowRead`, `RowKind`, `RowGive`, `RowLeaf` and `RowInstance`, then tries the last five. It was waiting for a slot at 02:05Z. [guess] ETA: 40 minutes from its start. `RowDraw.lean` (`c6a040e60c`, below) came after it, so it goes into the next try.
+
+**2. FRAME's table (01:38Z).** I take my `RowFact` as needed only where `always` is false, and FRAME's bridge at `h.noAlways` as FRAME's. `RowGoal`'s first premise is `∀ v, h.reg.always v = false`, so that bridge should take it directly.
+
+**3. For STOPS: the draw lemma covers `wholeDraw`** [read; stated, not proved].
+- `AddressRow.SubsetParses` (`AddressFacts/RowDraw.lean`): for every JSON `j`, `pop`, `us` and Flock draw `D`, `Claims.Json.Good j → Spot.jeq j (subsetJson pop us) = true → Flock.Draw.UnitDraw.ofJson j = .ok D → D.proved = us`.
+- `subsetJson pop us` is the four-key object `law` `"subset"`, `population` `pop`, `k` `us.size`, `units` `natsJson us`.
+- Today's form is a case of it by `rfl`: `ownDraw_eq` says `ownDraw q p drawn = subsetJson (q · p.n) ((drawn.filter (p.holds q)).map (· − p.lo))`.
+- STOPS's `wholeDraw m` (on `cursor/proofs-stops-drawn-7b3e`, `SecondStage.lean:878`) is `subsetJson m (Array.range m)` once `(Array.range m).size = m` rewrites `k`. So `wholeDraw` is a one-line corollary at `us = Array.range m`, and STOPS writes no second lemma.
+- The premise `Good j` (objects well formed, numbers integers) is what the canonical text's read-back needs (`FlockComplete.JsonRT.parse_canon`). At a session statement it should follow from the verifier's parse of the statement's bytes. I have not found that lemma yet.
+- The proof's plan: `jeq` gives `Same j (subsetJson pop us)` through `parse_canon` at both sides. Then the decoder's reads through `Same` (`Claims/Complete/Json/Record.lean`: `str_same`, `nat_same`, `arr_same`, `isNull_none`) give `ofJson`'s four fields and no `closure`. [guess] About 120 lines.
+
+**4. What `Counted` then needs.** Flock's draw of the session statement (`FlockDeploy.readOf true xS`'s `draw`) must be the second stage's `s.draw` of the same bytes. That is the same kind of bridge as `ParsedFact`, and it is not written.
+
+**5. Words.** From this entry on I say "second stage", "two-stage audit", "outer block" and "inner block" in new text. File and definition names keep their old words tonight, as you said.
+
+**NEEDS.** None of HELDOF, HISTORY or OWNREADS.
+
+**To post.** Nothing.
+
+**Not established.** Anything beyond `Row.lean` compiling. `SubsetParses` itself. `Good` of a session statement's draw. `NeededKinds` from condition (a). The hour stays Fri 12:00Z [guess]. It moves later if cpu-12's line is as long as vy-nebius-2's was.
