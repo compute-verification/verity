@@ -97,4 +97,76 @@ theorem replayProver_next (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : Veri
   simp only [SessionMsgs.replayProver, Messages.proverOf, Claims.OC.eval, hC, Option.bind_some,
     SessionMsgs.msgAtCase, hm, List.getD_eq_getElem?_getD]
 
+/-- **A prover that sends a session's messages is accepted** at the coins `r`, where the statement sets up (against `H`
+as at SHA-512), the messages fit the verifier's rounds, the record's roots, public words, statement, text and proof
+files fit their length words, and the masked verdict and the checks pass on the record's link message, its rounds and
+the last message. -/
+theorem run_acc_sessionMsgs (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+    (ω : Ω)
+    {spec : SessionSpec} {record : String} {proofs : Array ByteArray} {ms : List Claims.Msg} {lv : Live}
+    (hm : SessionMsgs.sessionMsgs spec x record proofs = some ms) (hlv : (liveOf spec record).toOption = some lv)
+    (hP : ∀ hist : List (Claims.Msg × Claims.Msg), hist.length + 1 ≤ ms.length →
+      ((P.next x hist ω).eval H).1 = ms.getD hist.length [])
+    (r : Fin ((V true).k x) → Coin) {s : Ins} {sts : Array Flock.Stmt}
+    (hs : setupOf true x = some (s, spec, sts)) (hsu : setupWith (Claims.hOf H) s.read = .ok (spec, sts))
+    (hk : ms.length ≤ (V true).k x)
+    (hr : lv.rootB.size < 2 ^ 64) (hp : lv.publics.size < 2 ^ 64) (hrb : ∀ b ∈ lv.rootB.toList, b.size < 2 ^ 64)
+    (hpb : ∀ b ∈ lv.publics.toList, b.size < 2 ^ 64) (hxs : x.length < 2 ^ 64) (hrec : record.toUTF8.size < 2 ^ 64)
+    (hps : proofs.size < 2 ^ 64) (hb : ∀ b ∈ proofs, b.size < 2 ^ 64)
+    (hv : verdictWith true (Claims.hOf H) spec (tabsOf sts) record proofs = .ok ())
+    (hc : checks true s spec x (lv.rootB.toList, lv.publics.toList) (Claims.coinSeq r 0)
+      (midsOf ms ((List.range ms.length).map (Claims.coinSeq r))) ⟨x, record, proofs⟩ = .ok ()) :
+    (Claims.run H P (V true) x ω r).out = .acc := by
+  obtain ⟨lv', mids, hlv', hmids, hms⟩ := SessionMsgs.sessionMsgs_some hm
+  rw [hlv] at hlv'
+  have e := Option.some.inj hlv'
+  subst e
+  obtain ⟨a, ha, hla⟩ := SessionMsgs.linkOf_sessionMsgs hm hlv hr hp hrb hpb
+  obtain ⟨b, hb', hfb⟩ := SessionMsgs.finalOf_sessionMsgs hm hxs hrec hps hb
+  have hms' :
+      ms = ((0 :: linkBody lv.rootB.toList lv.publics.toList) :: mids) ++ [Final.encode ⟨x, record, proofs⟩] :=
+    hms
+  have hlen : ms.length = ((0 :: linkBody lv.rootB.toList lv.publics.toList) :: mids).length + 1 := by
+    rw [hms', List.length_append, List.length_singleton]
+  have hah : a = 0 :: linkBody lv.rootB.toList lv.publics.toList := by
+    rw [hms', List.cons_append, List.head?_cons, Option.mem_def, Option.some.injEq] at ha
+    exact ha.symm
+  have hbf : b = Final.encode ⟨x, record, proofs⟩ := by
+    rw [hms', SessionMsgs.getLast?_cons_concat, Option.mem_def, Option.some.injEq] at hb'
+    exact hb'.symm
+  subst hah hbf
+  refine run_acc_replay H P x ω ((0 :: linkBody lv.rootB.toList lv.publics.toList) :: mids)
+    (Final.encode ⟨x, record, proofs⟩) ?_ r hs hsu (by omega) ?_ (List.cons_ne_nil _ _) hla hfb hv ?_
+  · intro hist hl
+    rw [hP hist (by omega), hms']
+  · intro m hm'
+    rcases List.mem_cons.1 hm' with rfl | hm'
+    · exact ⟨_, rfl⟩
+    · obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hm'
+      obtain ⟨hl, hall⟩ := SessionMsgs.mapM_some _ hmids
+      obtain ⟨c, -, hc'⟩ := Option.map_eq_some_iff.1 (hall i (by omega) hi)
+      exact ⟨_, hc'.symm⟩
+  · rw [hlen, hms'] at hc
+    exact hc
+
+/-- **The replaying prover is accepted** at the coins `r` on a play whose case gives template `t`'s session's messages
+at the statement `x`'s setup, under `run_acc_sessionMsgs`'s conditions. -/
+theorem run_acc_replayProver (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : Verity.Exchange) (t : ℕ)
+    (x : Claims.Msg)
+    {k : Case} {spec : SessionSpec} {record : String} {proofs : Array ByteArray} {ms : List Claims.Msg} {lv : Live}
+    (hC : C o = some k) (hmc : SessionMsgs.msgsAtCase k t = some ms)
+    (hm : SessionMsgs.sessionMsgs spec x record proofs = some ms) (hlv : (liveOf spec record).toOption = some lv)
+    (r : Fin ((V true).k x) → Coin) {s : Ins} {sts : Array Flock.Stmt}
+    (hs : setupOf true x = some (s, spec, sts)) (hsu : setupWith (Claims.hOf H) s.read = .ok (spec, sts))
+    (hk : ms.length ≤ (V true).k x)
+    (hr : lv.rootB.size < 2 ^ 64) (hp : lv.publics.size < 2 ^ 64) (hrb : ∀ b ∈ lv.rootB.toList, b.size < 2 ^ 64)
+    (hpb : ∀ b ∈ lv.publics.toList, b.size < 2 ^ 64) (hxs : x.length < 2 ^ 64) (hrec : record.toUTF8.size < 2 ^ 64)
+    (hps : proofs.size < 2 ^ 64) (hb : ∀ b ∈ proofs, b.size < 2 ^ 64)
+    (hv : verdictWith true (Claims.hOf H) spec (tabsOf sts) record proofs = .ok ())
+    (hc : checks true s spec x (lv.rootB.toList, lv.publics.toList) (Claims.coinSeq r 0)
+      (midsOf ms ((List.range ms.length).map (Claims.coinSeq r))) ⟨x, record, proofs⟩ = .ok ()) :
+    (Claims.run H (SessionMsgs.replayProver C o t) (V true) x () r).out = .acc :=
+  run_acc_sessionMsgs H _ x () hm hlv (fun hist _ => replayProver_next H C o t x hC hmc hist) r hs hsu hk hr hp hrb
+    hpb hxs hrec hps hb hv hc
+
 end Verity.SampledTwo.SessionReplay
