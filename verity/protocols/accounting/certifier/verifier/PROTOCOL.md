@@ -599,7 +599,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every window of the
   heavy trace's honest egress, served through the network certifier's own egress at r = 1, is accepted through it (37 windows
   of 16 buckets, `test_the_heavy_traces_honest_egress_is_accepted_through_its_order`, on
-  `verity/protocols/accounting/certifier/verifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the network
+  `verity/protocols/accounting/certifier/verifier/tests/fixtures/network-certifier-heavy-order.json`), and a permutation other than the network
   certifier's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
   In v4 the permutation is public with the map, in the named gap; at the target it is in the committed map's rows,
   which the compile slice's proof block holds to the advice. A server that admits in release order (a serve-openai
