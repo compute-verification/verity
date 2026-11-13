@@ -1,3 +1,0 @@
-[2026-11-13T09:23Z] 7fb04f2f8d6b
-top: READ the top section of inbox/CHAIN2-inbox.md (five items). Start TRIAL 4 now on lean stage-1 head cursor/lean-period-chain-2-fc8d @ 8c5e4665f7f7: stage lean five remaining maps (period_map_2, period_net_map, period_proofs_map, period_proofs_map_2, period_soundness_map) with your mover first, then your whole step list WITH memory-accounting grader map (cursor/verity-memory-accounting-93c1-grader-map @ d3baf54931b5, before the group map and the regen) AND proofs SECOND hand patch (cursor/proofs-loosemap-0917-hand-patch @ bf5b5eb2e469, both patches by git am after the loose map). Trial 4 tree is the one importcarry lists on: post it. No whole-suite run of your own on the real head: ci launches the recorded one.
-
