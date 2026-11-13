@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array
 from verity.definitions.ops.prims import const
@@ -32,7 +32,7 @@ M32 = W.M32
 class Emit:
     """A body under construction: constants deduplicated, and the word operations as calls."""
 
-    def __init__(self, B) -> None:
+    def __init__(self, B: Builder) -> None:
         self.B = B
         self._consts: dict[int, Coll] = {}
 
@@ -46,7 +46,7 @@ class Emit:
     def g(self, h: Half) -> Coll:
         return self.c(h) if isinstance(h, int) else h
 
-    def call(self, fn, *args: Half) -> Half:
+    def call(self, fn: PrimitiveDefinition, *args: Half) -> Half:
         if all(isinstance(a, int) for a in args):
             return fn.evaluate(*args)
         return self.B.call(fn, *(self.g(a) for a in args))
