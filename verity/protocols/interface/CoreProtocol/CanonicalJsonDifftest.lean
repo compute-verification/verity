@@ -7,8 +7,8 @@ public import CoreProtocol.Protocol
 /-!
 # The canonical reader's difftest: `Core.canonicalJson` under each JSON parser
 
-`core-canonical-json-difftest` serves `table` to the core difftest harness (`verity/difftest`), whose Python half
-(`verity/difftest/tests/test_canonical_json_port.py`) holds it to its mirror:
+`core-canonical-json-difftest` serves `table` to the core difftest harness (`tools/difftest`), whose Python half
+(`tools/difftest/tests/test_canonical_json_port.py`) holds it to its mirror:
 
 * `canonical-parsers` (`text`, bytes in lowercase hex): `{"core": A, "total": A}`, what `Core.canonicalJson` answers on
   those bytes when their text is read with Lean core's JSON parser and when it is read with the total one

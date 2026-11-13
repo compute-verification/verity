@@ -7,7 +7,7 @@ public import CoreProtocol.CanonicalJsonDifftest
 The executable's entry point (`lakefile.toml`'s `core-canonical-json-difftest`, not a default target: the difftest
 harness builds it by name). It reads one request a line on standard input, `{"fn": NAME, "input": JSON}`, for
 `canonical-parsers`, and prints one line for each: `{"output": JSON}`, `{"reject": REASON}` or `{"error": MESSAGE}`.
-`verity/difftest/tests/test_canonical_json_port.py` drives it against the Python mirror. -/
+`tools/difftest/tests/test_canonical_json_port.py` drives it against the Python mirror. -/
 
 @[expose] public section
 
