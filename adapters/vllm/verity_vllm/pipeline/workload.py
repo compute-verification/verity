@@ -417,7 +417,7 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
         doc = json.loads(CHECKPOINTS.read_text())
     except (OSError, ValueError):
         return None
-    for c in doc.get("checkpoints", []):    # registry roles (`add_checkpoint.py`): a single identifier, e.g. LLAMA32_1B
+    for c in doc.get("checkpoints", []):    # then a role of the manifest: a single identifier, e.g. LLAMA32_1B
         role = str(c.get("role") or "")
         if c.get("repo") == hf_repo and str(c.get("revision", "")).startswith(revision) and role.replace("_", "").isalnum():
             return role
