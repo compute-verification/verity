@@ -147892,3 +147892,63 @@ Nothing. ASSEMBLY: `cursor/proofs-honest2-join-6e17` at `552a41cb4df8` is six co
 ## To post
 
 Nothing.
+
+## GATHER, Fri 13 Nov 15:11Z: `2020` ENDED rc 0 at head `fc5c9053db63c6e5458888de2dd00db95619aee9`: `interior-parts` MOVES NO RECORD; no guarantee in any lock reads `Spot.Run.interiorSteps` or `Run.cellParts`; both regenerated locks are BYTE FOR BYTE `af1b`'s; `security/Proofs` PASSES; only `reads` differs from the tree, the same 8 and 9 entries
+
+**The head.** `cursor/proofs-gather-wired-layout-6a9b` is at `fc5c9053db63c6e5458888de2dd00db95619aee9`, unchanged since 13:57Z [run]. I fetched at 15:06Z: the remote tip is that commit, and TWOLEG's commit is not on it [run]. Your 14:18Z reached me at 15:05Z by the hook [run]. The two partial picks stay as they are, and I run no play through the compiled form [relayed: your 14:18Z, items 1 and 3].
+
+**The run** [run: `r20261113-135738-2020`, vy-nebius-cpu-11, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, at `fc5c9053db6`, ended 15:07:16Z, rc 0, 4,146 s, outcome `regenerated`].
+
+- **Which guarantees read the changed definitions of `Spot.Run`: none, in any lock** [run]. The printout has no line with `Spot.Run`, `interiorSteps` or `cellParts` [run: `rg` on its `stdout.log`]. `security/lean-audit.json` has no `reads["Spot.Run"]` record [read: the tree's lock and the regenerated one]. `security/Properties/lean-audit.json`'s `reads["Spot.Run"]` holds two definitions, `Spot.Run.digest?` and its private `hexDigit`, and the picks change neither [read].
+- **Deployed: none**, since no guarantee reads them [derived].
+- **`security/Proofs`: PASS**, four times, and no line with the word `escape` [run].
+- **Anything but `reads`: no** [run: `lockdiff.py` of each regenerated lock against the tree at `fc5c9053db6`]. `security/lean-audit.json`: 8 differences; `security/Properties/lean-audit.json`: 9; the same entries as `af1b`'s, all under `reads` [run].
+- **The regenerated locks are `af1b`'s, byte for byte** [run: `cmp`; SHA-256 `9e93ed88ce43…` and `49a3bc121d28…` in both runs' `OUTCOME` lines]. So what the pull request moves is what my 14:13Z entry listed: six `reads` records in two locks, no statement, premise or trust-gap entry [derived].
+- **What it means**: no listed guarantee says anything of `interior-parts` yet [derived]. The statements that will read it arrive with its proofs, on the join's side [guess: I have not read which listed statement `partsSizedAt_of_formAccepts` feeds].
+
+I did not commit the regenerated locks [run].
+
+The verdict lines are `af1b`'s word for word, which my 14:13Z entry has whole, but for five things: the run's id, the build slot (`build-1`), the seconds and the counts of files changed, the `OUTCOME` line's input keys, and one line, below [run: a diff of the two runs' verdict lines]. That line counts one declaration more than `af1b`'s 6146, which is `Run.cellParts` [derived].
+
+~~~text
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/verity/protocols/spot/verifier/lean: PASS  6147 declarations in 57 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+~~~
+
+The other package verdicts of `2020`, in order, each word for word but for the timings' dictionary [run]. The two `FAIL` lines are the first passes, where "every failure is a record difference", and each package is `PASS` after `--update` [run].
+
+~~~text
+lean-records: verity/protocols/spot/verifier/lean: check.py exit 0 in 136 s on /home/research/.cache/verity-check/lean-records/build-1 (18 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-135738-2020/lean-audit
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/verity/protocols/certifier/verifier/lean: PASS  1582 declarations in 11 modules; axioms propext, Classical.choice, Quot.sound; 4 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+lean-records: verity/protocols/certifier/verifier/lean: check.py exit 0 in 32 s on /home/research/.cache/verity-check/lean-records/build-1 (0 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-135738-2020/lean-audit/requirer-verity_protocols_certifier_verifier_lean
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/security/Proofs: PASS  209465 declarations in 4210 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/security: FAIL  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees; {…}; built in the sandbox; inline debt 319 (885 premises)
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees; {…}; built in the sandbox; inline debt 319 (885 premises)
+lean-records: security: check.py --update exit 0 in 2224 s on /home/research/.cache/verity-check/lean-records/build-1 (7 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-135738-2020/lean-audit/requirer-security
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/security/Properties: FAIL  3486 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees; {…}; built in the sandbox; inline debt 27 (128 premises)
+AUDIT /workspace/research/cache/verity-check-root/lean-records_build-1/security/Properties: PASS  3486 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees; {…}; built in the sandbox; inline debt 27 (128 premises)
+lean-records: security/Properties: check.py --update exit 0 in 1703 s on /home/research/.cache/verity-check/lean-records/build-1 (1 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-135738-2020/lean-audit/requirer-security_Properties
+~~~
+
+**The body's draft: two places changed** [run]. Under "Lock records that move", in place of the placeholder:
+
+~~~~markdown
+**`interior-parts` moves no record.** No guarantee in any lock reads `Spot.Run.interiorSteps` or `Run.cellParts`:
+`security/lean-audit.json` has no `reads["Spot.Run"]` record, and `security/Properties/lean-audit.json`'s holds
+`Spot.Run.digest?` and its private `hexDigit` only, which this pull request does not change. The records run at the
+head with `interior-parts` regenerates the same two locks, byte for byte, as the run at the head before it. So no
+listed guarantee says anything of this clause yet: the statements that will read it arrive with its proofs.
+~~~~
+
+Under "Checked", in place of "Records at this head: running" [run]:
+
+~~~~markdown
+- **Records, fast path, at this head**: the same verdicts, and the regenerated locks are byte for byte the ones of
+  the run before `interior-parts`; the verifier's package has one declaration more, `Run.cellParts`.
+  (`r20261113-135738-2020`.)
+~~~~
+
+**Not established, as at 14:13Z, with one thing relayed.** STAGECOINS reports the two-template play accepted by the compiled form on a scratch of the join's tip, my head and TWOLEG's rule B, with twenty templates running [relayed: STAGECOINS's 14:44Z line, `r20261113-143126-e3d5`]. I ran none of it and read none of its files [run]. The draft's "Not established" still says the form's run has not been made at this head; I change that line when STAGECOINS's entry is in and you say which tree's play the body cites [derived].
+
+**Out: nothing.** No run of mine is running [run]. One one-off timer is set, `gather-mailbox-1600z`, for about 16:00Z, only to run a command so that the hook delivers your word; say "no timer" and I end without one [run].
+
+**Standing lines** [run: fetched 15:06Z]. Friday's branches are unmoved: `cursor/proofs-gather-second-try-5a28` at `984cb027efa3`, `cursor/proofs-gather-served-select-b88b` at `496aa183544b`. No `main` merged, nothing rebased, nothing forced. No pull request and no mark. Nothing on Linear or Slack. Nothing launched with `--interior-trees`. The possible third clause is not written.
