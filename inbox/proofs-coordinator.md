@@ -149809,3 +149809,58 @@ Nothing.
 - That the rewritten flipped test fails on the stale data when run: `r20261113-154948-0852` says. Until then that half rests on FRAME's recorded verdicts.
 - That the nightly's own `check.py --opt-in`, inside a recorded check, passes: I ran its `suites.py` command inside a `research run`.
 - How many of the 10 workers fetched the 2.1 GB: the run's logs don't say, and I did not count it.
+
+## ASSEMBLY, Fri 13 Nov 15:53Z: THE JOIN'S TIP IS STILL `d557b8cf428`, NOT YET `a61b7adf0d83`: two of your three runs are rc 0 (`99b2`, `4b5e`), the third (`4752`, the whole `benchmarks/one_stage` suite) is still running; `security/Proofs` PASSES at the merge (`1722`) and all three packages PASS at `d557b8cf428` (`e37f`); MESSAGES's and HONEST2's heads are merged on top of the merge locally, unpushed, and being tried
+
+Your 15:34Z reached me at 15:47Z.
+
+**1. Your three runs, at `a61b7adf0d83`**
+
+| Run | Line | State |
+|---|---|---|
+| `99b2` | `Build completed successfully (11983 jobs).`, `lean-build: {"built": {"security/Proofs": 0}, "failed": {}, "skipped": {}}` | rc 0, ended 15:31:39Z |
+| `4b5e` | `passed  verity-vllm                  1268 passed, 150 skipped in 270 s on 3 workers`, then `passed  benchmarks/serve_tax         21 passed in 1 s` | rc 0, ended 15:32:44Z |
+| `4752` | none yet: the suite prints its line at its end | running since 15:25Z on 8 cpus of cpu-3; cap 16:55Z |
+
+- **So I have not fast-forwarded.** I do not know the suite's length: it has 68 test files and 17 slow marks.
+- To tell early, I launched `r20261113-155157-577d` (cpu-3, 15:52Z): the quick tier of the 18 test files that read `a5` or `sampler_capture`, with both sides' tests of `proof_server` (`test_a5_cards.py`, `test_a5_sessions.py`) and `test_two_stage_cost.py`. It is not your gate; I move the join on `4752` unless you say `577d` will do.
+
+**2. The other runs at the merge**
+
+- `1722`, so far: `AUDIT security/Proofs: PASS  210397 declarations in 4236 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees` (`check.py exit 0 in 1525 s`). **`security/Proofs` compiles whole at the merge.** Its two requirers are out.
+- `388b` (`sampled_two_small.sh`), rc 0, ended 15:33:15Z: `second rc=0`; `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`; `FORM_ON rc=0`; `FORM_OFF rc=1`; `second-tree rc=0`; `FORM_TREE rc=1`, by "on two windows the first session's log holds a coin tree's line". So the play made fresh at the merge is accepted with the switch on, refused by the shipped switch, and its negative play is refused by its own line.
+- `baa8` (`two_stage_small.sh`), rc 0, ended 15:32:52Z: `second rc=0`.
+- `db1e`, as sent: 66 passed.
+
+**3. The join's tip `d557b8cf428`: all its runs are in, rc 0**
+
+- `e37f` (14:50:12Z to 15:35:33Z), word for word:
+  - `AUDIT security/Proofs: PASS  210397 declarations in 4236 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, `check.py exit 0 in 1460 s`.
+  - `AUDIT security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees`, `check.py exit 0 in 582 s`.
+  - `AUDIT security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`, `check.py exit 0 in 657 s`.
+  - `OUTCOME {"outcome": "pass", …}`. Each `audit.json`: `passed: true`, `failed: []`, `regenerated: {}`, `lean-fast/v1`. The same one note (`Pouw.Dimension.Lifting.grid`) and `574 overrides, 337 without a reason`. No bookkeeping line.
+- `c23d`, rc 0: `JoinsAt` `lean exit 0`, 11 theorems; `JoinedCoupling`, 1; `JoinedForm`, 2. Each probe: none uses an axiom beyond the three.
+- `2fe7`, rc 0: SPOT's verifier's package, the certifier's verifier's and their requirers all PASS.
+
+**4. MESSAGES's and HONEST2's heads: merged locally on the merge head, not pushed** [local branch, worktree `~/wt/next`]
+
+- `7bc54b8b94c`: MESSAGES's `2658eaf78153`. No conflict. New: `SessionAsk.lean`, `LastSlot.lean`; changed: `SessionCoins`, `SessionOpened`, `PrefixFixed`; two roots.
+- `11a81972738`: HONEST2's `552a41cb4df8`. No conflict. New: `Honest/Checked.lean`; changed: `Honest/Any`, `Honest/AtHeldOf`, `PremisesAt`; one root.
+- `6bae773eb34`: the PoUS grader's pin. Roots clean, the same 17 names, the same 7 public edges.
+- Your item 3, by reading the two diffs: neither changes `refsAt_of_held`, `refsAt_of_accept`, `heldOfAt_or_collide`, `HeldOfAt`, `SentCollides`, `CouplingTargetTwo` or `joinedCoupling`. MESSAGES's takes `HeldOfAt A C` as a hypothesis (`two_le_rounds` and two more); it restates nothing.
+- Tried at `6bae773eb34`: `r20261113-155013-9d87` (cpu-2, 15:50Z): the build of the 91 `SampledTwo` files and eight `SpotFlock` files, then the nine changed files' axiom probes. About 16:10Z [guess].
+- Order when both gates are in: fast-forward the join to `a61b7adf0d83` and push; then, when `9d87` is rc 0, fast-forward it to `6bae773eb34` and push; then one records run.
+
+**5. The body's draft: one sentence struck, one line replaced**
+
+- **Struck:** the row `RefsAt` of my 12:48Z table: "not a field: `refsAt_of_held` gives it, or two sent blobs differ under one SHA-512, from `TablesHeldAt`…". It is the collision disjunct you name.
+- **Replaced:** item 3 of my 14:53Z list, "`HeldOfAt`'s descriptor premise (`DescAt`)". It now reads: `HeldOfAt` is a field of `JoinsAt`, a premise; nothing on the join discharges it.
+- [read] Nothing outside `RefsOfSent.lean` reads the three lemmas, and `joinedOfLaw` reads none of them.
+- With the two heads in, two more lines leave the draft: `0 < units (base h) x` (HONEST2's `checked_ne_nil_of_formAccepts` asks no count) and `LastSlotFree` as an open item (MESSAGES's lemma).
+
+**6. Other**
+
+- `main` has moved to `4ae17f7eafd7`. The merge holds `053b8e50fe8a` and I merge no more of it.
+- Not established: that the `one_stage` suite passes at the merge; that the two heads compile over the merge (`9d87`); the merge's last two packages in `1722`.
+
+To post: nothing. Heads: the join `d557b8cf428`; the merge branch `a61b7adf0d83`; local and unpushed `6bae773eb34`. Runs going on: `4752`, `577d`, `1722`, `9d87`. My timer is set again.
