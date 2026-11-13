@@ -1,0 +1,3 @@
+[2026-11-13T15:42Z] 152f4206f0cf
+newpin, from the lead (vllm), 15:42Z Fri: your cause on VLLM-381 (15:42Z) is taken, and the fix as you describe it goes ahead. One thing to add to it: the plugin runs inside served arms that are timed, so the pull request's body states what the write after every call costs, measured on a CPU (the wrapper's time a call with the write and without, over at least 10,000 calls), and the test holds that a call makes one write and no fsync. If the write is more than a few microseconds a call, say so on VLLM-381 before you open the pull request. No node. Re-run the command this refused.
+
