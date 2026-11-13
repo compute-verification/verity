@@ -197,6 +197,29 @@ def files (s : Stream Out) (refuse : String → Out) (paths : List String) : IO 
       a := s.feed plan a (← IO.FS.readBinFile f)
     pure (s.close refuse plan a)
 
+/-- The stream that keeps every blob whole and decides `f` on them: for a check whose blobs fit in memory. -/
+def whole (tables : List ByteArray) (plan : V (Array ByteArray)) (f : Blobs → Out) : Stream Out :=
+  { State := Array (ByteArray × ByteArray), tables, plan, init := #[], step := fun S h b => S.push (h, b)
+    finish := fun S => f ⟨S⟩ }
+
+theorem whole_fold : ∀ (bs : List ByteArray) (S : Array (ByteArray × ByteArray)),
+    (bs.foldl (fun (S : Array (ByteArray × ByteArray)) b => S.push (Flock.Sha512.hash b, b)) S).toList =
+      S.toList ++ bs.map fun b => (Flock.Sha512.hash b, b)
+  | [], S => by simp
+  | b :: bs, S => by
+    rw [List.foldl_cons, whole_fold bs]
+    simp
+
+/-- **The stream that keeps every blob decides `f` on the blobs fed**, in any order. -/
+theorem whole_finish (tables : List ByteArray) (plan : V (Array ByteArray)) (f : Blobs → Out) (bs : List ByteArray) :
+    (whole tables plan f).finish ((whole tables plan f).steps bs) = f (Blobs.ofArray bs.toArray) := by
+  show f ⟨bs.foldl (fun (S : Array (ByteArray × ByteArray)) b => S.push (Flock.Sha512.hash b, b)) #[]⟩ = _
+  unfold Blobs.ofArray
+  congr 2
+  apply Array.toList_inj.mp
+  rw [whole_fold]
+  simp
+
 end Stream
 
 structure StreamProtocol extends BlobProtocol where

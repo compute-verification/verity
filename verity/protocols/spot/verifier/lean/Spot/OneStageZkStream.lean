@@ -139,7 +139,7 @@ structure StepKept where
 /-- What is kept of `a.step bs r s` for any run `r`, on the blobs `bs`. -/
 def StepKept.of (a : StepAt) (bs : Core.Blobs) (s : RunFiles) : StepKept :=
   let base : StepKept := { opening := pure (), coinKey := none, files := pure (), rest := pure (),
-    found := (Json.null, Json.null), units := pure #[], rd := a.rd, programSha := a.programSha, want := a.want, s }
+    found := (Json.null, Json.null), units := pure #[], rd := a.rd, programSha := a.programSha, want := a.want, s := s }
   match bs.get s.record s!"session {s.name}'s record" with
   | .error e => { base with opening := .error e }
   | .ok rb =>
@@ -355,15 +355,10 @@ def oneNames (p : Params) (e : Evidence) : V (Array ByteArray) := do
     if !out.contains b then out := out.push b
   pure out
 
-/-- **Every other form's stream**: it keeps every blob and is `checkBlobs` on them. -/
+/-- **Every other form's stream**: it keeps every blob and is `checkBlobs` on them (`Core.Stream.whole`). -/
 def keepAll (p : Params) (c : OneStage.Commitment) (e : Evidence) (plan : V (Array ByteArray)) :
     Core.Stream (Core.Outcome OneStage.Public Core.Integrity) :=
-  { State := Array (ByteArray × ByteArray)
-    tables := pinned
-    plan
-    init := #[]
-    step := fun S h b => S.push (h, b)
-    finish := fun S => checkBlobs p c e ⟨S⟩ }
+  Core.Stream.whole pinned plan (checkBlobs p c e)
 
 def stream (p : Params) (c : OneStage.Commitment) (e : Evidence) :
     Core.Stream (Core.Outcome OneStage.Public Core.Integrity) :=
@@ -380,22 +375,10 @@ def protocol : Core.StreamProtocol :=
 per-member form (`keepAll_sound` proves it for every other). -/
 def StreamSound : Prop := protocol.Sound
 
-theorem keepAll_steps (p : Params) (c : OneStage.Commitment) (e : Evidence) (plan : V (Array ByteArray)) :
-    ∀ (bs : List ByteArray) (S : Array (ByteArray × ByteArray)),
-      bs.foldl (fun S b => (keepAll p c e plan).step S (Flock.Sha512.hash b) b) S =
-        S ++ bs.toArray.map fun b => (Flock.Sha512.hash b, b)
-  | [], S => by simp
-  | b :: bs, S => by
-    rw [List.foldl_cons, keepAll_steps p c e plan bs]
-    simp [keepAll]
-
 /-- **Every form but the per-member one's stream is `checkBlobs` on the blobs fed**, in any order. -/
 theorem keepAll_sound (p : Params) (c : OneStage.Commitment) (e : Evidence) (plan : V (Array ByteArray))
     (bs : List ByteArray) :
-    (keepAll p c e plan).finish ((keepAll p c e plan).steps bs) = checkBlobs p c e (Core.Blobs.ofArray bs.toArray) := by
-  have h := keepAll_steps p c e plan bs #[]
-  show checkBlobs p c e ⟨bs.foldl (fun S b => (keepAll p c e plan).step S (Flock.Sha512.hash b) b) #[]⟩ = _
-  rw [h]
-  simp [Core.Blobs.ofArray]
+    (keepAll p c e plan).finish ((keepAll p c e plan).steps bs) = checkBlobs p c e (Core.Blobs.ofArray bs.toArray) :=
+  Core.Stream.whole_finish _ _ _ bs
 
 end Spot.OneStageZk.Streamed
