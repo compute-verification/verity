@@ -73,10 +73,10 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 
 ## The reference: how independent the existing columns are
 
-The target names three executable columns of the finite-domain step: Python `verity.definitions.silicon.models`, Rust
-`tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
-casts). Reading them against Hawkeye's pinned simulator (`verity/definitions/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
-`utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
+Two columns of the finite-domain step are read here: Python `verity.definitions.silicon` (`term.py`, `models.py`) and Lean
+`security/Definitions/Core/TC/Spec.lean`. The Python is read against Hawkeye's pinned simulator
+(`verity/definitions/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
+`utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`), the Lean by what its header says:
 
 - `models.py` states its body is "a bit-exact pure-Python port of" the reference simulator at that commit. `models.group_sum` is the
   C++ `group_sum` statement for statement -- scan for the maximum exponent from the floor, align each term by
@@ -88,17 +88,15 @@ casts). Reading them against Hawkeye's pinned simulator (`verity/definitions/sil
   terms are skipped in the maximum (the C++ gives every zero the exponent `E_ZERO`, so the maximum is the same), and Python
   integers replace the `int32_t` with its `shift >= 32` guard (equal for every input the step forms; see
   `hawkeye_close.group_sum`).
-- `tc.rs` says it is "bit for bit as `veritor/core/silicon.py` models it and `lean/VeritorSpec/TC.lean` specifies it"; every
-  function's doc comment names the `silicon` function it ports, the bodies keep the Python's names (`max_exponent`, `total`,
-  `bit_length`, `rescale`) and order, and `shift_int`/`unshift_int` are documented as `TC.shiftInt`/`TC.unshiftInt`.
-- `TC.lean` says it is "bit for bit as `veritor/core/silicon.py` models it"; `groupSum` is the same statement sequence as
-  `foldl`s, `packFp32`'s docstring says it is written "with `+` and `%` where the Python uses `|` and `&`". `TCTotal.lean`
-  proves the total transcription agrees with it on finite inputs -- a theorem about two transcriptions.
+- `Spec.lean`'s header calls it "A transcription of `term.py`", of `models.py`'s `group_sum` and of `total.py`, "function for
+  function and branch for branch, on the Python functions' domain". `verity/definitions/evaluate/Evaluate/TC/Spec.lean` is, by
+  its own header, a copy of that file and of the `Pipeline.lean` beside it, "definition for definition". Neither body is read
+  against the Python here.
 
-Finding: the three columns are transliterations of one derivation -- the simulator's `group_sum`, ported once into Python and
-from there into Rust and Lean. Their agreement establishes transcription fidelity, not independent confirmation of the hardware
+Finding: the two columns are one derivation -- the simulator's `group_sum`, ported once into Python and, by the Lean's header,
+transcribed from there. Agreement between them shows transcription fidelity, not an independent confirmation of the hardware
 semantics. The independent evidence for the target is (i) the hardware captures (`verity/definitions/ops/tests/fixtures`, and the
-recorded probe runs below), (ii) the compiled pinned simulator itself, driven on the same cases by
+probe's recorded runs, by stage below), (ii) the compiled pinned simulator itself, driven on the same cases by
 `tests/reference/hawkeye_harness.cpp`, and (iii) the closed-form normalisation of log entry D3, a different formula shown equal
 to the successive shifts by an SMT proof over the whole reachable domain (`tests/reference/test_normalisation_d3.py`).
 
@@ -135,17 +133,12 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 #   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
 ~~~
 
-### Measured, with no run named here
-
-Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over
-1,076,644 transition-unit cases, 65,536 encodings, 131,072 products, 28 boundary groups, 3,170,304 + 88,602 D3 triples,
-18,337,790 adapter pairs, the compiled simulator on all 1,076,644 lines); wp1.probe.4090 (SUCCESS,
-result valid: 360/360 golden records, 25,698,304 sweep elements of which 12,065,535 with a nonzero accumulator, 0 mismatches
-against `silicon.tc_dot`); wp1.probe.a100 (NVIDIA A100 80GB PCIe sm_80, SUCCESS, result valid: the
-7,713 all-finite A100 special records (4,565 with a nonzero accumulator) replayed with 0 mismatches, the same sweep -- same seed,
-same 10 families -- 25,698,304 elements, 12,065,535 with a nonzero accumulator, 0 mismatches against `silicon.tc_dot`; D9's family
-`zero_acc_tiny_cancellation`: 163,533 elements would differ under a zero at -126 and 87,058 under -127, the hardware matched
-neither alternative on either device).
+The evidence store holds the recorded run of each of the three stages: the files its command writes and its result, whose
+validation passes only when every mismatch count is zero. wp1.exhaustive is the driver's steps a to g: the source-close
+evaluator, `silicon` and the compiled pinned simulator held to one another, and to every all-finite hardware record.
+wp1.probe.4090 and wp1.probe.a100 hold the hardware's words to `silicon.tc_dot`: the golden records replayed on the RTX 4090,
+the A100's all-finite special records replayed on the A100, and one finite sweep, same seed and families, on both. The sweep's
+family `zero_acc_tiny_cancellation` is the measurement behind log entry D9.
 
 ## The reference: the adapter and the wrapper's finalisation (D7)
 
