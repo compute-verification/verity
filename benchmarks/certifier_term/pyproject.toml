@@ -26,7 +26,7 @@ inputs = [
     "benchmarks/harness/verity_bench/settings.py",
     "verity/__init__.py",
     "verity/errors.py",
-    "verity/settings.py",
+    "tools/config/verity_config/verity_settings.py",
     "verity/claims",
     "verity/circuits",
     "verity/commitments",
