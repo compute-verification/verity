@@ -61,6 +61,7 @@ def test_eos_before_the_cap_with_exactly_one_lag_draw_at_prompt_len_plus_k_is_r5
     assert a["expected_executed_slots"] == {"n": 4, "first": 1, "last": 4} and a["rule"]["t_eos"] == 3
     assert a["lag_slot"]["measured"] is True and a["lag_slot"]["lag_slots_expected"] == 1 and a["lag_slot"]["bounded_by_cap"] is False
     assert a["lag_slot"]["draws"] == [{"slot": 4, "pos_expected": 12, "pos": 12, "step": 3, "pos_ok": True}]
+    assert a["lag_slot"]["profile_A"] == 1
     assert out["measured"].startswith("R5 MEASURED")
 
 

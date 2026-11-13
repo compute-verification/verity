@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import struct
 import sys
 from pathlib import Path
@@ -275,6 +276,19 @@ def test_the_programs_split_count_is_held_to_the_mask_kernels_at_every_row(tmp_p
     assert rep["reasons"][0] == "step 0 row 0 (a): the Build has no request Program for this request's shape -- its S is undeclared"
 
 
+def test_a_run_told_no_evaluator_walks_the_lane_and_one_told_no_reference_rows_walks_none_beside_the_rows(tmp_path):
+    run, manifest = _capture(tmp_path)
+    log, snapshots = run / "capture" / "log.jsonl.gz", run / "capture"
+    lane = SR.recompute_run(log, snapshots, workload=str(manifest), jobs=1)
+    assert (lane["summary"]["verdict"], lane["summary"]["rows"], lane["evaluator"]["name"]) == ("PASS", _tally(exact=6), "lane")
+    assert (lane["log"], lane["workload"], lane["build"]) == (str(log), str(manifest), None)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", lane["utc"])
+    rows = SR.recompute_run(log, snapshots, workload=str(manifest), jobs=1, evaluator="rows")
+    reference = rows["evaluator"]["reference"]
+    assert (rows["summary"]["verdict"], rows["evaluator"]["name"]) == ("PASS", "rows")
+    assert (reference["reference_evaluator"], reference["rows_requested"], reference["rows_checked"]) == (None, 0, 0)
+
+
 def test_a_build_result_that_cannot_be_read_fails_the_check_by_its_path_beside_one_that_declares_the_split_count(tmp_path):
     run, manifest = _capture(tmp_path)
     torn = run / "build_request1" / "result.json"
@@ -344,6 +358,12 @@ def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the
     assert rep["summary"]["verdict"] == "FAIL" and rep["summary"]["rows"]["mismatch"] + rep["summary"]["rows"]["exact-match"] == 6
     assert "a: manifest declares seed=8 but the run's header records seed=7" in rep["reasons"]
     assert "step 0 row 0 (a): the sampler kernels consumed seed=7 but the manifest declares seed=8" in rep["reasons"]
+
+
+def test_a_seed_is_held_to_the_header_s_as_an_integer(tmp_path):
+    """Two seeds that round to one fp32 disagree: only the temperature and the top-p are held at that width."""
+    rep = _recompute(*_capture(tmp_path, manifest_seeds={"b": 2 ** 24}, header_seeds={"b": 2 ** 24 + 1}))
+    assert rep["header_vs_manifest"] == ["b: manifest declares seed=16777216 but the run's header records seed=16777217"]
 
 
 def test_a_header_whose_temperature_and_top_p_are_the_manifest_s_as_fp32_agrees_with_it(tmp_path):
