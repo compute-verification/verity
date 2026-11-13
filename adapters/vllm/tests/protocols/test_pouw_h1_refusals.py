@@ -2,16 +2,22 @@
 under tables a prover committed consistently (`pouw_h1_requests.request_reason`, `slot_reason`), a round's row and coin
 (`round_reason`, `rounds_reason`), a record's calls (`tables_reason`), a window's coins and its sample
 (`pouw_h1_challenger.trusted_rounds_reason` and its sample session's checks), what H1's settings, its input ids, a static
-declaration and the gate's ``model-key`` answer are parsed from, and a hand-off's socket path
-(`pouw_h1_handoff.Holder`, `send_stream`)."""
+declaration and the gate's ``model-key`` answer are parsed from, a hand-off's socket path, its stream and its saved
+window (`pouw_h1_handoff.Holder`, `send_stream`, `client_of`, `resume`), a Pearl-C pass's salt session
+(`pouw_h1_challenger.salt_session_reason`), a period's weights and a value's held rows
+(`pouw_h1_served.register_weights`, `pouw_h1_registered.commit`), an unclosed window's trees
+(`pouw_h1_served_files.trees`), and the Commit's input ids and a named Commit record
+(`pouw_h1_commit.CommitTap.input_ids`, `reused`)."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import json
 import os
+import pickle
 import random
 import socket
+import threading
 from fractions import Fraction
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -24,10 +30,11 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.circuits.codec import canonical_json
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows
+from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows, salt_of, weights_root
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
@@ -45,9 +52,12 @@ import verity_vllm.protocols.pouw.h1.prover as PV
 import verity_vllm.protocols.pouw.h1.registered as NR
 import verity_vllm.protocols.pouw.h1.requests as RQ
 import verity_vllm.protocols.pouw.h1.served as SV
+import verity_vllm.protocols.pouw.h1.served_files as SF
 import verity_vllm.protocols.pouw.h1.static as ST
 import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
+from tests.protocols import test_pouw_h1_commit as TC
+from tests.protocols import test_pouw_pearl_c_served as PCS
 from tests.protocols.test_pouw_h1 import (
     KEY,
     SALT,
@@ -700,3 +710,208 @@ def test_a_hand_offs_socket_path_of_as_many_bytes_as_an_address_holds_carries_th
         fd = holder.take()
     assert fd is not None and holder.error is None and holder.path.is_socket()
     os.close(fd)
+
+
+def test_a_holder_handed_no_stream_or_another_message_takes_none_and_says_what_it_got(tmp_path, monkeypatch):
+    """A holder nobody connected to has no descriptor, and the error its listener ended with. One handed a message
+    that isn't the stream's, with a descriptor or with none, takes none, answers nothing and says what it was handed;
+    the descriptor it was handed it closes, so the stream's other end reads its end once the sender's copy is closed."""
+    monkeypatch.chdir(tmp_path)
+    idle = HO.Holder("idle")
+    assert idle.take() is None and idle.fd is None and idle.error
+    for name, message, sent in (("bare", b"x", 0), ("other", bytes(len(HO.STREAM)), 1)):
+        holder = HO.Holder(name)
+        other_end, stream = socket.socketpair()
+        with socket.socket(socket.AF_UNIX) as sender, other_end, stream:
+            sender.connect(name)
+            socket.send_fds(sender, [message], [stream.fileno()][:sent])
+            assert sender.recv(len(HO.TAKEN)) == b""
+            assert holder.take() is None and holder.fd is None
+            stream.close()
+            other_end.setblocking(False)
+            assert other_end.recv(1) == b""
+        assert holder.error == f"the hand-off carried {message!r} and {sent} descriptors, not the session's stream"
+
+
+@pytest.mark.parametrize("answer", [b"", b"given"], ids=["no-answer", "another-answer"])
+def test_a_stream_its_listener_does_not_answer_as_taken_is_refused(tmp_path, monkeypatch, answer):
+    """`send_stream` returns only once the holder answered that it has the stream: a listener that reads the hand-off
+    and closes, or answers anything else, is refused with its path."""
+    monkeypatch.chdir(tmp_path)
+    with socket.socket(socket.AF_UNIX) as listener, socket.socket() as stream:
+        listener.bind("s")
+        listener.listen(1)
+
+        def serve():
+            conn, _ = listener.accept()
+            with conn:
+                _message, fds, _flags, _address = socket.recv_fds(conn, len(HO.STREAM), 1)
+                for fd in fds:
+                    os.close(fd)
+                conn.sendall(answer)
+        served_by = threading.Thread(target=serve)
+        served_by.start()
+        client: Any = SimpleNamespace(_wire=SimpleNamespace(sock=stream))
+        with pytest.raises(OSError) as refused:
+            HO.send_stream(client, "s")
+        served_by.join()
+    assert str(refused.value) == "the holder at s didn't take the session's stream"
+
+
+def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_window_resumes(tmp_path):
+    """`client_of`, and so `suspend`, refuses a window whose coins are held in the serving process, and saves nothing;
+    `resume` refuses a file that isn't a saved window's before it reads the stream's descriptor."""
+    run = _driven()
+    for refuse in (lambda: HO.client_of(run), lambda: HO.suspend(run, tmp_path / "saved")):
+        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor host's session hands off$"):
+            refuse()
+    assert not (tmp_path / "saved").exists()
+    (tmp_path / HO.FILE).write_bytes(pickle.dumps({"schema": "another/v1"}))
+    with pytest.raises(ValueError) as refused:
+        HO.resume(tmp_path, -1)
+    assert str(refused.value) == f"{tmp_path}: not a {HO.SCHEMA} window"
+
+
+def test_an_unclosed_windows_trees_are_not_read_as_its_registered_values():
+    """A window's served trees are all committed at its close: before it, `pouw_h1_served_files` reads none of them."""
+    run = _driven(served=SV.Served(window=bytes(64)))
+    assert not run.closed
+    for read in (lambda: SF.trees(run), lambda: SF.reads_file(run, 0)):
+        with pytest.raises(ValueError, match="^t: the window isn't closed, so its tables aren't all committed$"):
+            read()
+
+
+def test_a_periods_weights_are_each_linears_int8_codes_and_scales_at_an_even_k():
+    """`register_weights` refuses an odd K, whose row isn't whole u16 words, and a weight that isn't its linear's
+    n × K int8 codes and n scales, naming the linear."""
+    circuit = hashlib.sha512(b"a declared Program").hexdigest()
+    codes: np.ndarray = np.zeros((3, 4), np.int8)
+    scales: np.ndarray = np.ones(3, "<f4")
+    period = SV.register_weights(circuit, [(3, 4)], {0: (codes, scales)}, KEY)
+    assert sorted(period.registered) == [4] and period.registered[4].leaves == 3
+    with pytest.raises(ValueError, match="^K = 5: a row's codes are whole u16 words$"):
+        SV.register_weights(circuit, [(3, 5)], {0: (np.zeros((3, 5), np.int8), scales)}, KEY)
+    for weight in ((codes.astype(np.int16), scales), (codes[:2], scales), (codes, scales[:2])):
+        with pytest.raises(ValueError, match="^linear 0's weight is not its 3 × 4 int8 codes and 3 scales$"):
+            SV.register_weights(circuit, [(3, 4)], {0: weight}, KEY)
+    with pytest.raises(ValueError, match="^linear 1's weight is not its 2 × 4 int8 codes and 2 scales$"):
+        SV.register_weights(circuit, [(3, 4), (2, 4)], {0: (codes, scales), 1: (codes, scales)}, KEY)
+
+
+def test_a_value_holds_one_row_for_each_of_its_rows():
+    """`pouw_h1_registered.commit` takes the rows a value holds only when there is one for each row it commits."""
+    circuit = hashlib.sha512(b"a declared Program").hexdigest()
+    words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    held = NR.commit(circuit, "v", words, KEY, 5, rows=NR.Rows(words, 3))
+    assert held.leaves == 3 and [list(row) for row in held.rows] == words.tolist()
+    for rows in (NR.Rows(words[:2], 2), [0, 1, 2, 3]):
+        with pytest.raises(ValueError, match=f"^{len(rows)} rows held for a value of 3$"):
+            NR.commit(circuit, "v", words, KEY, 5, rows=rows)
+
+
+def _salt_pass(tmp_path, monkeypatch, challenger, after=None):
+    """A Pearl-C pass over `test_pouw_pearl_c_served`'s weights, epoch 0, as its install records it, and its session on
+    a gate's ledger: reserved with the salt coin alone, opened on the epoch's root R, served by ``challenger``, its salt
+    coin taken after ``after`` (R unless given), closed by its client and ended. The pass, the gate, the session, R."""
+    gate = CH.Gate(PCS.PRIVATE, PCS.KEY)
+    session = PCS._GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, challenger)
+    weights = weights_root(PCS.ROOTS)
+    root = PS.epoch_open_root(weights, 0)
+    answer = session.open(PCS.SID, root.hex())
+    opening = LiveRecord(session.client, Wd.SALT).record(root if after is None else after)
+    session.client.close()
+    assert session.end() is None
+    coins = challenger.commitment
+    served_pass = {"scheme": PCS.SCHEME, "coin_source": "challenger", "weights_root": weights.hex(), "pass_index": 0,
+                   "coins": coins.to_json(), "salt_opening": opening.to_json(),
+                   "salt": salt_of(coins, opening.coin, weights).hex(), "session": PHC.carried(PHC.session_of(answer))}
+    return served_pass, gate, session, root
+
+
+def test_a_pearl_c_pass_is_held_to_a_hex_weights_root_and_to_coins_and_a_salt_coin_that_open(tmp_path, monkeypatch):
+    """`salt_session_reason` refuses a pass whose weights' root isn't 128 lowercase hex before it looks for a session,
+    one whose coins or salt opening don't parse, and one whose salt opening isn't the session's salt coin 0 opened
+    after its epoch's root: opened after another root, another coin of the epoch, or a coin that doesn't open."""
+    served_pass, gate, session, _root = _salt_pass(tmp_path, monkeypatch, PCS.salt_only(5))
+    ledger, fetch = gate.ledger(), {PCS.SID: session.tree}.get
+
+    def why(**edit):
+        return PHC.session_reason({**served_pass, **edit}, ledger, fetch)
+    assert why() is None
+    weights = served_pass["weights_root"]
+    for root in ("zz", weights.upper(), weights[:-2], None, 7):
+        assert why(weights_root=root) == "the pass's weights' root is not 128 lowercase hex, so no session was opened on it"
+    for coins in ({"bad": 1}, None):
+        assert why(coins=coins) == f"the pass's coins are malformed ({NO_COMMITMENT})"
+        assert why(salt_opening=coins) == f"the pass's coins are malformed ({NO_OPENING})"
+    opening = served_pass["salt_opening"]
+    for edit, said in (({"after": "00" * 64}, "coin was not opened after what the verifier recorded"),
+                       ({"index": 1}, f"coin is the epoch's {Wd.SALT} coin 1, not its {Wd.SALT} coin 0"),
+                       ({"label": Wd.ROUND}, f"coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.SALT} coin 0"),
+                       ({"coin": "00" * 64}, "coin does not open against the epoch's coin commitment")):
+        assert why(salt_opening={**opening, **edit}) == f"the pass's salt coin: {said}"
+
+
+def test_a_pearl_c_passs_session_signs_the_salt_coin_alone_and_logs_its_epochs_root_alone(tmp_path, monkeypatch):
+    """A session whose signed log shows its salt coin following another root than the pass's epoch's is refused, the
+    pass's own coins and salt agreeing with one another. So is a session whose challenger signed a round coin beside
+    the salt coin: the gate's own end entry says it released more than the one coin, and under an end entry that
+    claimed the salt coin alone the signed coins still say otherwise."""
+    for name in ("another-root", "a-round-beside"):
+        (tmp_path / name).mkdir()
+    served_pass, gate, session, root = _salt_pass(tmp_path / "another-root", monkeypatch, PCS.salt_only(6),
+                                                  after=bytes(range(64)))
+    assert PHC.session_reason(served_pass, gate.ledger(), {PCS.SID: session.tree}.get) == (
+        f"session {PCS.SID}'s signed log does not show the epoch root alone as the root its salt coin followed")
+    served_pass, gate, session, root = _salt_pass(tmp_path / "a-round-beside", monkeypatch,
+                                                  Wd.live_challenger(0, 1, CH.entropy(7)))
+    fetch, released = {PCS.SID: session.tree}.get, {Wd.ROUND: 0, Wd.SALT: 1}
+    assert PHC.session_reason(served_pass, gate.ledger(), fetch) == (
+        f"session {PCS.SID} released {released}, not its one salt coin: a refused pass")
+    claimed = PCS._ended_over(session.directory, Wd.SALT_FAMILIES, root.hex(), released={Wd.SALT: 1})
+    assert PHC.session_reason(served_pass, claimed, fetch) == (
+        f"session {PCS.SID}'s signed coins: the coin commitment's coins are not a Pearl-C salt session's: its salt "
+        "coin alone")
+
+
+@pytest.mark.parametrize("ids,said", [(lambda ids: [-1, *ids[1:]], f"an input id is not a u32 below {W.EMPTY_ID}"),
+                                      (lambda ids: [W.EMPTY_ID, *ids[1:]], f"an input id is not a u32 below {W.EMPTY_ID}"),
+                                      (lambda ids: ids * 9, f"{9 * sum(map(len, TC.PROMPTS.values()))} input ids, "
+                                                            f"past the Program's {TC.ROWS} slots")],
+                         ids=["negative", "the-empty-slots-word", "past-the-slots"])
+def test_step_0s_input_ids_in_the_commit_that_are_no_rows_of_token_ids_are_its_taps_refusal(tmp_path, monkeypatch, ids,
+                                                                                            said):
+    """Round 0's input-ids table is the window's own, its prompts' tokens, registered before step 0's forward. Step 0's
+    ids as the Commit acquired them that are no token ids, or more than the Program has slots, make no words to hold
+    it to: the tap refuses them by name, no table is the Commit's, and the window credits nothing."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
+    _record, run, tap = TC._window(tmp_path, monkeypatch, ids=lambda s, honest: ids(honest) if s == 0 else honest)
+    assert tap.refused == [f"step 0: {said}"] and run.served.refused == []
+    assert run.details["roots1"]["reason"] == f"roots1: the Commit's tap refused: step 0: {said}"
+    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
+
+
+def test_a_later_rounds_input_ids_that_are_no_token_ids_refuse_the_windows_served_trees(tmp_path, monkeypatch):
+    """After round 0 a round's input-ids table is built from the Commit's ids of its step: ids that are no token ids
+    make no table, the window's served trees are refused with the round's name, and the window credits nothing."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
+    _record, run, tap = TC._window(tmp_path, monkeypatch, ids=lambda s, honest: [-1, *honest[1:]] if s == 1 else honest)
+    assert run.served.refused == [f"round 1's input ids: an input id is not a u32 below {W.EMPTY_ID}"]
+    assert tap.refused == [] and sorted(run.served.ids) == [0]
+    assert run.details["roots1"]["reason"] == "roots1: the window's served trees were refused, so no table is the Commit's"
+    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
+
+
+def test_a_named_record_that_is_no_json_object_or_has_no_canonical_json_is_not_the_windows(tmp_path, monkeypatch):
+    """`reused` takes a named record that reuses the window's tables from its registration, and refuses by name one
+    that is no JSON object (a list of one, its canonical JSON in hex, none) and one canonical JSON can't hold."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
+    _record, run, _tap = TC._window(tmp_path, monkeypatch)
+    window = CT.registration(run, "12" * 64)
+    record = TC._reusing(window, lambda rec: rec)
+    assert CT.reused(run, window, record) is None
+    for named in ([record], canonical_json(record).hex(), None):
+        assert CT.reused(run, window, named) == "the named record is not a JSON object"
+    for value in (b"bytes", {1, 2}):
+        assert CT.reused(run, window, {**record, "query": value}) == (
+            f"the named record has no canonical JSON: Object of type {type(value).__name__} is not JSON serializable")
