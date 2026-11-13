@@ -4224,6 +4224,34 @@ def test_a_coordinator_is_relaunched_only_on_its_runs_read_then_and_showing_none
     assert (rec["action"], rec["owner"], rec["handle"], rec["run"]) == (action, "top", "circuits", "run-e9")
 
 
+def test_a_coordinator_whose_runs_read_at_the_relaunch_reach_none_that_started_gets_no_successor(tmp_path):
+    """A coordinator past its restarts is relaunched on a latest run the sweep read in ERROR at its start. By the time it
+    relaunches it has begun a run by itself, which lies behind as many runs cancelled on arrival as the relaunch may read
+    (`RUNS_PAGES` pages): none of those started, so its runs were not read back to one that did, and a coordinator buried
+    so is not one with no run going. No successor is launched beside it, and its record says its runs could not be read
+    afresh."""
+    api, clock, w, co, launched = relaunchable(tmp_path, status="IDLE", run="run-e1", state="ERROR")
+    for n in range(W.MAX_RESTARTS):
+        api._agents[0]["latestRunId"] = f"run-e{n + 1}"
+        api._runs[f"run-e{n + 1}"] = {"status": "ERROR"}
+        w.sweep(lambda r: None)
+        clock.t += W.RESTART_S
+    api._agents[0]["latestRunId"] = "run-e9"
+    api._runs["run-e9"] = {"status": "ERROR"}
+    arrivals = [f"run-x{i}" for i in range(W.RUNS_PAGE * W.RUNS_PAGES)]
+
+    def buried():
+        api._agents[0]["latestRunId"], api.older[co] = arrivals[0], [*arrivals[1:], "run-own", "run-e9"]
+        api._runs.update({"run-own": {"status": "RUNNING"}, **{i: {"status": "CANCELLED"} for i in arrivals}})
+    after(api, 1, buried)
+    w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["crashed"] * W.MAX_RESTARTS + ["erroring", "relaunch"] and launched == []
+    rec = records(tmp_path)[-1]
+    assert (rec["action"], rec["owner"], rec["handle"], rec["run"]) == (
+        f"not relaunched: its runs could not be read afresh (ValueError: none of its newest {len(arrivals)} runs started), "
+        "and no coordinator is launched beside one that may be running", "top", "circuits", "run-e9")
+
+
 @pytest.mark.parametrize("beside, action", [
     (None, "relaunched it from its handover note as bc-"),
     ("run-goal-2", "not relaunched: its run run-goal-2 reads RUNNING now, so it runs")])
