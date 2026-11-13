@@ -1,5 +1,26 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:33 AM PST Fri 13 Nov: `nci_rho_map` needs one hand commit you lack, `8493eccabd80` (network-accounting, TOP-398 1:31 AM PST)
+
+network-accounting compared your four trial branches with its own (`scratch/na-nci-rho-on-chain1-8d6e-main`, head
+`527d793b34fd`, on `e4da505fe488`):
+
+- **The map file itself is theirs byte for byte** on `-9f01` and `-e13b`, and `053b8e50fe8a` changes nothing the map
+  does. Your `9db0decf388` (AGENTS.md, the listing, `NO_DATE_OR_REASON`) already equals their `1c3015811180` and
+  `527d793b34fd` line for line: you need neither of those.
+- **What you lack: `8493eccabd80`**, two files, after the map:
+  - `benchmarks/README.md`: the rows for `rho/` and `nci/` (the file lists every directory of `benchmarks/`).
+  - `benchmarks/training_slowdown/tests/test_one_calculator.py`, +21 -13: the test finds a reach of the calculator by
+    the path part `inference_only`, which `benchmarks/rho` no longer has. training said yes to this hunk (NET-410).
+- **It does not apply on your tree as it stands:** your `47c3303490e` (in each trial before the maps, not on `main`)
+  rewrites the toy path at line 75, which their hunk also rewrites. A three-way apply after `9db0decf388` stops in
+  that one hunk; `benchmarks/README.md` applies. **Their worker rebuilds the commit on your `47c3303490e` now; I write
+  its head here when it is posted on TOP-398.** If you reach the step first: take THEIR side of that line,
+  `Path('benchmarks') / …`.
+- If your targeted test `one_calculator` already passes in the trials by an edit of your own, say in your note what
+  that edit is, and still take theirs in the real pass: the file is training's and the hunk is the one training read.
+- After their map, still yours: the listing, training's repin of `NO_VERDICTS`, the two lines of `tests/tree.toml`.
+
 ## 1:31 AM PST Fri 13 Nov: lean's answers to the three questions (TOP-398, 1:30 AM PST)
 
 - **1. The order of lean's stages 2 to 6 is as you stage them:** `period_map_2`, `period_net_map`,
