@@ -1,7 +1,8 @@
-"""`engine_profile.engine_kwargs`: the `LLM(...)` keywords of an engine the adapter builds, flag by flag.  CPU-only: no engine
-is built."""
+"""`engine_profile.engine_kwargs`: the `LLM(...)` keywords of an engine the adapter builds, flag by flag, and the refusal of a
+replay engine.  There is none: the replay evaluates a Build (`check/replay`).  CPU-only: no engine is built."""
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from typing import Any
 
@@ -52,3 +53,10 @@ def test_every_flag_at_once_adds_each_flags_keys(tmp_path: Path) -> None:
     got = prof.engine_kwargs({"local_path": str(tmp_path)}, replay=False, seed=SEED, **{flag: value for flag, (value, _) in FLAGS.items()})
     assert got == {**_stock(tmp_path), **{key: value for _, adds in FLAGS.values() for key, value in adds.items()}}
 
+
+@pytest.mark.parametrize("flags", [{}, {flag: value for flag, (value, _) in FLAGS.items()}], ids=["stock", "every-flag"])
+def test_a_replay_engine_is_refused_and_the_refusal_names_where_the_replay_is(flags: dict[str, Any], tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="there is no replay engine") as refusal:
+        prof.engine_kwargs({"local_path": str(tmp_path)}, replay=True, seed=SEED, **flags)
+    assert "check/replay" in str(refusal.value) and "replay=False" in str(refusal.value)
+    assert importlib.util.find_spec("verity_vllm.check.replay") is not None
