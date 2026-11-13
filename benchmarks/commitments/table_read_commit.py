@@ -4,7 +4,7 @@ r"""Serve-time hashing of DSA long rows' table reads: what serving's row-table c
 GPU, and its CPU twin's rate on one thread.
 
     research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
-        PYTHONPATH=.:../..:../../tools/research/src:../../verity/configuration/config && /workspace/jobs/venv312/bin/python3 \
+        PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && /workspace/jobs/venv312/bin/python3 \
         ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
 
 A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v1{V=2^17,H=576}``),
