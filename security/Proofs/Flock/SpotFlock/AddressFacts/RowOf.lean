@@ -114,10 +114,10 @@ theorem cellRow_some {rr : Spot.SecondStage.Rows} {c x : ℕ} (hc : cellRow rr c
   obtain ⟨y, hy, hif⟩ := Option.bind_eq_some_iff.1 hc
   have hif' : (if y < rr.per then some y else none) = some x := hif
   by_cases hlt : y < rr.per
-  · rw [if_pos hlt] at hif'
+  · rw [ite_eq_left hlt] at hif'
     cases hif'
     exact ⟨hy, hlt⟩
-  · rw [if_neg hlt] at hif'
+  · rw [ite_eq_right hlt] at hif'
     cases hif'
 
 /-- **The row the second stage holds a wired port's slot to**, at the slot `v` places into its part: its cell
@@ -184,19 +184,13 @@ theorem slotAt_link {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStage.Link
     (slotAt h t rp).pos = rp.leaf / h.reg.ns.getD t 0 * rr.per + x := by
   obtain ⟨-, -, -, h4⟩ := slotAt_link_shape hl
   have e1 : ((heldRows h (h.names.getD t "") rp.row).map (·.per)).getD 0 = rr.per := by
-    first
-      | exact (congrArg (fun o : Option Spot.SecondStage.Rows => (o.map (·.per)).getD 0) hrr).trans rfl
-      | simp only [hrr, Option.map_some, Option.getD_some]
+    exact (congrArg (fun o : Option Spot.SecondStage.Rows => (o.map (·.per)).getD 0) hrr).trans rfl
   have e2 : ((heldRows h (h.names.getD t "") rp.row).bind fun rows =>
       Spot.SecondStage.rowAt rows.runs (rp.leaf % h.reg.ns.getD t 0)).getD 0 = x := by
-    first
-      | exact (congrArg (fun o : Option Spot.SecondStage.Rows => (o.bind fun rows =>
-            Spot.SecondStage.rowAt rows.runs (rp.leaf % h.reg.ns.getD t 0)).getD 0) hrr).trans
-          ((congrArg (fun o : Option ℕ => o.getD 0) hx).trans rfl)
-      | simp only [hrr, Option.bind_some, hx, Option.getD_some]
-  first
-    | exact h4.trans (congrArg₂ (fun a b => rp.leaf / h.reg.ns.getD t 0 * a + b) e1 e2)
-    | rw [h4, e1, e2]
+    exact (congrArg (fun o : Option Spot.SecondStage.Rows => (o.bind fun rows =>
+        Spot.SecondStage.rowAt rows.runs (rp.leaf % h.reg.ns.getD t 0)).getD 0) hrr).trans
+      ((congrArg (fun o : Option ℕ => o.getD 0) hx).trans rfl)
+  exact h4.trans (congrArg₂ (fun a b => rp.leaf / h.reg.ns.getD t 0 * a + b) e1 e2)
 
 /-- At a port no link names, a row position's slot is sized and counts no units of its own, at the position's place
 in its cell on a stride of the member's inner blocks an outer block. -/
@@ -211,12 +205,12 @@ theorem slotAt_free_shape {t : ℕ} {rp : Spot.Bits.RowPos}
 theorem leavesAt_of_unsized (roots : List Msg) {s : Slot} (hs : s.sized = false) (e : Entry) :
     leavesAt roots s e = e.leaves := by
   unfold leavesAt
-  exact if_neg fun hc => absurd (hs.symm.trans hc) (by decide)
+  exact ite_eq_right fun hc => absurd (hs.symm.trans hc) (by decide)
 
 theorem leavesAt_of_sized (roots : List Msg) {s : Slot} (hs : s.sized = true) (e : Entry) :
     leavesAt roots s e = unitsAt roots s := by
   unfold leavesAt
-  exact if_pos hs
+  exact ite_eq_left hs
 
 /-- A slot of no units and no stride counts no units, under any roots. -/
 theorem unitsAt_of_flat (roots : List Msg) {s : Slot} (hu : s.units = 0) (hst : s.stride = 0) :
@@ -227,7 +221,7 @@ theorem unitsAt_of_flat (roots : List Msg) {s : Slot} (hu : s.units = 0) (hst : 
 theorem leafAt_of_flat (roots : List Msg) {s : Slot} (hu : unitsAt roots s = 0) (e : Entry) :
     leafAt roots s e = s.pos := by
   unfold leafAt
-  exact if_pos hu
+  exact ite_eq_left hu
 
 /-- **A sized slot under an outer block's roots**, of no units of its own, on a stride of `n`, at position `c`: where
 the first stage's record lists `q` blocks and `q · n` is positive, its leaf count is `q · n` and its leaf is `c`, `n`
@@ -523,10 +517,7 @@ theorem wired_reg (hS : Sits h) (hPR : PortReads) (hr : r.Ok h) {st : Roots} {re
     Spot.SecondStage.readOk_wired (own := ownOf h st rec draw r.c₀) (named := Spot.SecondStage.byTemplate rec)
       (p := partOf h r) (port := rp.row) (e := ej) (w := w) hl hwire hrd
   rw [writerOf_ownOf, htw] at hpw
-  have hpw' : partAt h (h.reg.sample (src r.c₀)).size tw = pw := by
-    first
-      | exact Option.some.inj hpw
-      | (simp only [Option.map_some] at hpw; exact Option.some.inj hpw)
+  have hpw' : partAt h (h.reg.sample (src r.c₀)).size tw = pw := Option.some.inj hpw
   have hN : h.reg.ns.getD tw 0 = rr.per := (congrArg Spot.SecondStage.Part.n hpw').trans hpn
   have hrr' : heldRows h (h.names.getD (templateOf h.ms r.u) "") rp.row = some rr := hrr
   obtain ⟨x', hcell, hu'⟩ := wireUnit_cell hwu

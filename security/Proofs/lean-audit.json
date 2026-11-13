@@ -187,6 +187,7 @@
   "Proofs.Flock.SpotFlock.AddressFacts.RowInstance",
   "Proofs.Flock.SpotFlock.AddressFacts.RowDraw",
   "Proofs.Flock.SpotFlock.AddressFacts.RowOf",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowParse",
   "Proofs.Flock.SpotFlock.AddressFacts.Width",
   "Proofs.Flock.SpotFlock.AddressFacts.WidthOf",
   "Proofs.Flock.SpotFlock.AddressFacts.BitsIn",
