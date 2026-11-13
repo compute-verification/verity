@@ -54,8 +54,8 @@ def test_git_merges_two_branches_that_each_register_a_fixture_with_the_driver(tm
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "check").mkdir(parents=True)
     (repo / "tools" / "verity" / "check" / "merge_map.py").write_text((ROOT / "tools/verity/check/merge_map.py").read_text())
-    (repo / ".gitattributes").write_text("fixtures/artifacts.json merge=fixture-map\n")
-    m = repo / "fixtures" / "artifacts.json"
+    (repo / ".gitattributes").write_text("artifacts.json merge=fixture-map\n")
+    m = repo / "artifacts.json"
     m.parent.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "merge.fixture-map.driver", "python3 tools/verity/check/merge_map.py %O %A %B %P")
@@ -67,7 +67,7 @@ def test_git_merges_two_branches_that_each_register_a_fixture_with_the_driver(tm
         _git(repo, "commit", "-q", "-m", name)
     _git(repo, "checkout", "-q", "a")
     _git(repo, "-c", "merge.fixture-map.driver=false", "merge", "--no-edit", "b", check=False)
-    assert _git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == ["fixtures/artifacts.json"]
+    assert _git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == ["artifacts.json"]
     _git(repo, "merge", "--abort")
     _git(repo, "merge", "--no-edit", "b")
     assert json.loads(m.read_text()) == {A: "f/a.json", B: "f/b.json", C: "f/c.json"}
