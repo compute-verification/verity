@@ -86,8 +86,8 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocols.reporting import PERIODS
-from verity.protocols.spot import plancheck
-from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.protocols.spot.prover import plancheck
+from verity.protocols.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
