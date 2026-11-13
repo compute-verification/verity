@@ -123,18 +123,18 @@ def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, 
     if C and not 0 < C < (int(lp) if dense else E):
         raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
                             (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
-    if edge and (wrapper != "request" or dense) or wrapper == "request" and not (int(t) >= 0 or edge and E > max(C, 0)):
+    if edge and (wrapper != "request" or dense) or wrapper == "request" and not (int(t) >= 0 or edge and max(C, 0) < E):
         raise Unexpressible(f"vocabulary cannot express: a {wrapper} to position {E} of a {LP}-token prompt" + (
             " with its rows a window's edge (a request's, on the sparse-attention decoder)" if edge else
             " (one that stops inside its prompt samples nothing: only a request a window leaves there has a Program, its rows the edge's)"))
-    resumed = wrapper == "request" and C >= int(lp)
+    resumed = wrapper == "request" and int(lp) <= C
     chunks = tuple(int(c) for c in chunks or ())
     if chunks and (wrapper != "request" or resumed or min(chunks) < 1 or sum(chunks) != min(int(lp), E) - C):
         raise Unexpressible(f"vocabulary cannot express: prefill chunks {list(chunks)} of a {wrapper} (a request's chunks are its "
                             f"{max(min(int(LP or 0), E) - C, 0)} prefill rows in turn, each at least one)")
     chunks = chunks if len(chunks) > 1 else ()
     passes = [M] if wrapper == "step" else [1] * (E - C) if resumed else [*(chunks or [min(int(lp), E) - C]), *[1] * max(int(t), 0)]
-    if wrapper == "request" and E < int(lp):
+    if wrapper == "request" and int(lp) > E:
         return resumed, chunks, passes, [False] * len(passes)
     return resumed, chunks, passes, [False] * max(len(chunks) - 1, 0) + [True] * (len(passes) - max(len(chunks) - 1, 0))
 

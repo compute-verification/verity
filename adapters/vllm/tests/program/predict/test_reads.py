@@ -64,7 +64,7 @@ AHEAD = {n for f in R.READS for n in f.ahead}
 def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     assert R.refusals() == []
     assert [(f.record, f.name) for f in R.READS if f.ahead] == [("request", "output_len"), ("request", "finish")]
-    assert AHEAD <= {f.name for f in fields(RequestUnit)}
+    assert {f.name for f in fields(RequestUnit)} >= AHEAD
     assert ("advice", "release") not in GATED, "the compiler never reads when an output was released"
 
 
@@ -148,7 +148,7 @@ def test_the_table_is_the_compilers_read_path(monkeypatch):
     monkeypatch.setattr(R, "_DECLARED", R._DECLARED - {("request", "finish")})
     with pytest.raises(R.UndeclaredRead, match=re.escape("the compiler reads request.finish")):
         plan_steps(_registered(), *_mixed())
-    assert IP._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
+    assert {f.name: f.inert for f in R.READS if f.role == "inert"} == IP._INERT
     assert set(IP._KNOWN) | set(IP._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
 
 
@@ -232,7 +232,7 @@ def _lengths(cut: WA.Advice, ingress: dict) -> list[tuple[int, int, str]]:
             continue
         m = body["max_tokens"]
         for L in sorted({c.state.kept + 1, m}):
-            for finish in ("length",) if L == m else ("abort",) + ("eos",) * (not body.get("ignore_eos")):
+            for finish in ("length",) if m == L else ("abort",) + ("eos",) * (not body.get("ignore_eos")):
                 if (L, finish) != (q.output_len, q.finish):
                     out.append((c.request, L, finish))
     return out

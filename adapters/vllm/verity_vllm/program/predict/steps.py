@@ -642,7 +642,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             try:
                 carry = carried.get(i)
                 LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len, carry)
-                if LP + T > max_pos:
+                if max_pos < LP + T:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {max_pos} positions" if bi else
                                         f"request {i}: positions to {LP + T - 1}, past the {max_pos} the model and the registered "
                                         f"max_model_len allow")

@@ -308,7 +308,7 @@ def _stops(body: dict = GREEDY) -> tuple[I1.Advice, dict]:
 def _spec(LP: int, T: int, m: int, finish: int | None = None, stops: tuple[int, ...] = (255,), M: int = 64) -> dict:
     """The length rule's config of a TINY request Program with outputs 1..T + 1 under max_tokens `m`, finishing as `_session` has
     it (on a stop id below `m` outputs, on length at `m`) unless `finish` (a `stop_rule.FINISH` code) says."""
-    f = finish if finish is not None else 2 if T + 1 == m else 1
+    f = finish if finish is not None else 2 if m == T + 1 else 1
     return SR.spec(stops, max_tokens=m, prompt_len=LP, max_model_len=M, outputs=T + 1, finish=f)
 
 

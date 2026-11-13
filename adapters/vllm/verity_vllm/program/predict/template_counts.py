@@ -136,8 +136,8 @@ class TemplateCounts(StepNeeds):
         bound = max([every] + [P.block[i] for P, ls in zip(passes, long) for i in ls])
         bound_last = max([every] + [P.block[i] for P, ls, X in zip(passes, long, last) for i in ls if i in X])
         first = int(self.C["FIRST_DENSE"])
-        body = Counter((L in net.indexers, L >= first) for L in range(NL - 1))
-        rep = {c: min(L for L in range(NL) if (L in net.indexers, L >= first) == c) for c in body}
+        body = Counter((L in net.indexers, first <= L) for L in range(NL - 1))
+        rep = {c: min(L for L in range(NL) if (L in net.indexers, first <= L) == c) for c in body}
         out: Counter[str] = Counter()
         pads: set[tuple[int, int, int]] = set()
 
@@ -178,14 +178,14 @@ class TemplateCounts(StepNeeds):
         mqa = launch.keys([] if own else keys, without=dense)
         kept = [min(n, TOPK) for n in mqa]
         splits = {} if own else dict(zip(kept, launch_num_splits(kept, int(self.tp.num_sms), TOPK, 0)))
-        fused = bool(self.net.settings["flashinfer"]) and M <= AR.fused_max_tokens(self.H, self.W)
+        fused = bool(self.net.settings["flashinfer"]) and AR.fused_max_tokens(self.H, self.W) >= M
         block = {i: N for N, rows in long_row_blocks(keys, TOPK) for i in rows}
         return _Pass(m, p, launch.tokens(1, sampled=True) if sampled else None, M, fused, keys, dense, own, mqa, splits, block, e)
 
     def _layer(self, L: int, P: _Pass, X: Sequence[int], bound: int, pads: set, final: bool = False) -> list[tuple[Need, int]]:
         """Layer L's calls in pass P that the Program keeps: the attention of its live query rows X (every row below the last
         layer), its index-K slots below position `bound`, then the norms and the MLP or MoE block."""
-        ffn = (lambda n: self._moe(P.M, n, L)) if L >= int(self.C["FIRST_DENSE"]) else (lambda n: self._mlp(P.M, n, L))
+        ffn = (lambda n: self._moe(P.M, n, L)) if int(self.C["FIRST_DENSE"]) <= L else (lambda n: self._mlp(P.M, n, L))
         out = self._attention(L, P, X, bound, pads)
         if not final:
             return out + self._reduce_norm(P.M, P.m) + ffn(P.m) + self._reduce_norm(P.M, P.m)
@@ -224,7 +224,7 @@ class TemplateCounts(StepNeeds):
                 out += [(self.kind("dsa_mqa_logits", N=Nb, H=IH, D=ID), 1), (self.kind("dsa_topk_mask_counted", N=N, TOPK=TOPK), 1),
                         (self.kind("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK), 1)]
                 pads.add((32, n, 1))
-                if N > Nb:
+                if Nb < N:
                     pads.add((32, PAD_SCORE, pad_words(TOPK)))
         if P.own:
             return out + self._dense(L, P, X) + [(fp8("o_w"), x)]
@@ -236,7 +236,7 @@ class TemplateCounts(StepNeeds):
                 N = long_row_keys(Nb, TOPK)
                 if self.table_reads:
                     out.append((self.kind("dsa_history_reads", V=Nb, TOPK=TOPK, H=KVL + R), 1))
-                elif N > Nb:
+                elif Nb < N:
                     out.append((self.kind("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R), 1))
                     pads.add((16, 0, pad_words(TOPK, KVL + R)))
                 else:

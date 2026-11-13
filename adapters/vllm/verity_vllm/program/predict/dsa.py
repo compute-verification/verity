@@ -380,7 +380,7 @@ class _Model:
         for L in range(net.NL):
             x, res = self.reduce_norm(self.attention(L, x, pos0), res, self.w[(L, "ln2")])
             nxt = self.w[(L + 1, "ln1")] if L + 1 < net.NL else self.w["norm"]
-            x, res = self.reduce_norm(self.moe(L, x) if L >= int(C["FIRST_DENSE"]) else self.mlp(L, x), res, nxt)
+            x, res = self.reduce_norm(self.moe(L, x) if int(C["FIRST_DENSE"]) <= L else self.mlp(L, x), res, nxt)
         return x
 
     def sample(self, row: Refs, event: int, pos: int, policy: _Stochastic | None = None) -> Coll:
@@ -418,7 +418,7 @@ class _Model:
         kernel where vLLM fuses (its FlashInfer all-reduce on and M within `fused_max_tokens`), else the all-reduce then the fused norm."""
         from verity.definitions.registry import tp_allreduce as AR
         M, N, W, s = self.launch.tokens(len(parts)), parts[0].count, self.net.world, self.net.settings
-        if s["flashinfer"] and M <= AR.fused_max_tokens(N, W):
+        if s["flashinfer"] and AR.fused_max_tokens(N, W) >= M:
             setting, _ = AR.served_route(s, M, N)
             c = AR.covered(setting, N, "fused", M) if setting else None
             if c is None:
@@ -558,7 +558,7 @@ class _Model:
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
                 N = long_row_keys(n, TOPK)
-                scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs
+                scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else logits.refs
                 mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
                 self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
             for Nb, rows in blocks:
@@ -568,7 +568,7 @@ class _Model:
                 ik, iks = logs["ik"].cut(Nb), logs["iks"].cut(Nb)
                 logits = [self.call(lg, iq[i][0].refs, iq[i][1].refs, ik, iks).refs for i in rows]
                 counts = [self.pad(32, keys[i], 1, 1) for i in rows]
-                tail = [self.pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
+                tail = [self.pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if Nb < N else []
                 fm = self.k("dsa_topk_mask_counted", N=N, TOPK=TOPK)
                 fs = self.k("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK)
                 masks = [self.call(fm, concat([s, *tail]) if tail else s, c).refs for s, c in zip(logits, counts)]
@@ -584,7 +584,7 @@ class _Model:
             N, hist = long_row_keys(Nb, TOPK), logs["latent"].cut(Nb)
             fr, rest = ((self.k("dsa_history_reads", V=Nb, TOPK=TOPK, H=KVL + R), ()) if self.table_reads else
                         (self.k("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R),
-                         (self.pad(16, 0, pad_words(TOPK, KVL + R), (N - Nb) * (KVL + R)),)) if N > Nb else
+                         (self.pad(16, 0, pad_words(TOPK, KVL + R), (N - Nb) * (KVL + R)),)) if Nb < N else
                         (self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), ()))
             for i in rows:
                 rows_of[i] = self.call(fr, self.topk[pos0 + i].refs, hist, *rest).refs
@@ -593,7 +593,7 @@ class _Model:
             kv = rows_of[i] if i in rows_of else logs["latent"].cut(n)
             if n > TOPK and i not in rows_of:
                 N = long_row_keys(n, TOPK)
-                if N > n:
+                if n < N:
                     kv = self.call(self.k("dsa_butterfly_rows_pad", T=n, N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv,
                                    self.pad(16, 0, pad_words(TOPK, KVL + R), (N - n) * (KVL + R))).refs
                 else:
