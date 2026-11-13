@@ -88,7 +88,7 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.kernels.tc import group_sum_total_batch
+from verity.circuits.kernels.tc import group_sum_total_batch
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.deepgemm_twins import (
@@ -103,15 +103,15 @@ from verity.definitions.numerics.fp8_moe_rows import (
     TWIN_DOT_OF,
     moe_expert_fp8_block_row,
 )
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import act as ACT
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8_moe as MO
 from verity.definitions.registry import fp8_moe_experts as MX
 from verity.definitions.registry import moe as MOE_R
 from verity.definitions.registry.fp8_moe import sm90_dot
-from verity.definitions.silicon.cast import e4m3_to_f32_word
-from verity.definitions.silicon.models import (
+from verity.circuits.silicon.cast import e4m3_to_f32_word
+from verity.circuits.silicon.models import (
     AMPERE_BF16_M16N8K16,
     HOPPER_BF16_M16N8K16,
 )
