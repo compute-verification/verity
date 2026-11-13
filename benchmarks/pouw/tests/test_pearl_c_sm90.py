@@ -228,7 +228,7 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
             self.log.append(("sync",))
 
     monkeypatch.setattr(sys, "path", list(sys.path))
-    monkeypatch.setitem(sys.modules, "run", RUN)
+    monkeypatch.setitem(sys.modules, "pearl_c_sm90_debit_run", RUN)
     monkeypatch.setattr(RUN, "Dev", Dev)
     deb = load("pearl_c_sm90_debit", POUW / "pearl_c_sm90" / "debit.py")
     rng = np.random.default_rng(7)
