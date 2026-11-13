@@ -134233,3 +134233,42 @@ Nothing.
 
 **Runs:** r20261113-093537-53f6 (12 tries, rc=0). r20261113-093027-daa4 failed in 1 s on `python: command not found`, my script's error; it was relaunched with `python3`.
 **Machine:** `--on auto` placed it on vy-nebius-cpu-1's research pool.
+
+## ASSEMBLY, Fri 13 Nov 10:03Z: THE JOIN COMPILES at `0df461b1b2` (`8f29`, rc 0, all four tries). Your 09:52Z is applied: ACCEPTS's `413f769e2d` and ADDRROW2's `7b4574d02e` are merged and row 10 is two fields. The join is `a37f2bb519`, NOT compiled: `r20261113-100020-1fe7` is out. The records run and the quick tier are out at `0df461b1b2`.
+
+**In plain words.** The compile of the head with `firstDrawn` gone and CUT, SESSIONOF2 and TWOLEG's scratch in passed. I sent the records run and the quick tier at that head, then took the two heads you named and split `partsHeldAt`, and sent one compile of that. One thing for you to read: how I wrote the two fields (section 3).
+
+**1. `r20261113-093801-8f29`** [run: its `stdout.log` and `status.json`]. vy-nebius-cpu-5, at `0df461b1b2`, 09:38:24Z to 09:54:55Z, rc 0, last line "ALL TRIES rc=0". Word for word:
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/JoinsAt.lean: lean exit 0 in 410 s", then "axiom probe: none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "JoinedCoupling.lean: lean exit 0 in 387 s", 1 theorem. "JoinedForm.lean: lean exit 0 in 61 s", 2 theorems.
+- "MemberChecks.lean: lean exit 0 in 132 s", 11 theorems.
+- So `hD' := firstDrawn_of _ hC'`, `sessionMatches` at the good accepts, CUT's `CutRoots.lean` and SESSIONOF2's five files compile on the join.
+
+**2. The two merges** [run], each with no conflict and its tree equal to the dry `git merge-tree`.
+- ACCEPTS's `413f769e2d` (`d78dd0fb6f`): `AcceptsTop.lean` alone, +22 −1: `PartsSizedAt` and `partsHeldAt_of_sized`.
+- ADDRROW2's `7b4574d02e` (`a7dc97c8f6`): `AddressFacts/RowPlace.lean` new, its root in the lakefile and the lock. `d2cae2a309` was never merged, so nothing is replaced.
+- After them: `lock_roots.py --check` adds nothing and finds nothing wrong; `dup_names.py` the same 17 names; the pin's line regenerated, `pins.py --stale` prints nothing; `pytest tests/test_lean_packages.py`, "35 passed, 3 warnings". Pushed as `a37f2bb519`.
+
+**3. Row 10 as written** [read: the diff of `JoinsAt.lean`]. 23 fields now: `partsHeldAt` is replaced by two.
+- `firstSized : ∃ K, SpotFlock.firstK A.h.reg.first = some K`.
+- `partsSizedAt : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K`.
+- `joinedOfLaw` takes `K` and `hK` from the first and passes `partsHeldAt_of_sized hK (h.partsSizedAt K hK)` where `h.partsHeldAt` stood.
+- **Why not your two fields letter for letter:** yours name a `K`, and `JoinsAt` has no `K` among its parameters; a `Prop` structure can't hold one as a field. `firstK` is a function, so at most one `K` satisfies the first field, and the second is then `PartsSizedAt A C K` at that one `K`: the same two premises. The other way is `K` as a new parameter of `JoinsAt`, `CouplesAt`, `joinedOfLaw`, `joinedCouplingOfLaw`, `joinedForm` and `joinedCoupling`. Say if you want that; I took the one that changes no signature.
+- No field is `PartsAre`.
+
+**4. Runs out** [run: each launch's lines].
+- `r20261113-095636-adf2`, vy-nebius-cpu-1, the records run of `security/Proofs` at `0df461b1b2`, `--mem-gb 72 --cwd clone`, launched 09:57Z. Expected end not known; I read it at 10:30Z.
+- `r20261113-095814-418d`, vy-nebius-cpu-14, the root suite's quick tier at `0df461b1b2`, launched 09:58Z.
+- `r20261113-100020-1fe7`, vy-nebius-cpu-11, at `a37f2bb519`: tries of `JoinsAt`, `JoinedCoupling`, `JoinedForm`, `AddressFacts/RowPlace`. Expected end about 10:17Z [guess: `8f29` took 16 minutes].
+
+**5. Next.** The 10:45Z entry: the table whole, the eight edges with a fix proposed for each, and these three runs' verdicts. I fix no edge before you rule.
+
+## NEEDS
+
+- **You:** section 3, only if you want `K` as a parameter.
+
+## Not established
+
+- That `a37f2bb519` compiles: `1fe7` decides. The last compiled head of the join is `0df461b1b2`.
+- That the records run or the quick tier passes at `0df461b1b2`.
+- HONEST2's `SampleBelow.lean` is not merged: HONEST2 has not named it compiled to me.
