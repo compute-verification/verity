@@ -34,6 +34,7 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
+from verity_vllm.errors import Refused
 from verity_vllm.protocols.remote_bandwidth import binder, remote
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
@@ -817,9 +818,11 @@ def test_a_registration_cut_off_is_a_refusal_only_when_the_verifier_refused(monk
     with pytest.raises(Wire.Closed, match="the peer closed the connection"):
         remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
     closing("refused: a live registration")
-    with pytest.raises(remote.Refused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
+    with pytest.raises(Refused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
         remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
-    assert (refused.value.verifier, refused.value.why) == ("10.0.0.7:7781", "refused: a live registration")
+    assert type(refused.value) is Refused and refused.value.reasons == (
+        "the verifier at 10.0.0.7:7781 refused the store's registration: refused: a live registration",)
+    assert str(refused.value) == refused.value.reasons[0]
     assert done == ["shutdown", "close"] * 2
 
 
@@ -1278,7 +1281,7 @@ def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
 
 def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reason():
     """One live registration a node (`audit.Registry`): a hello for a node whose registration the verifier holds live
-    is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
+    is answered `bye`, and `prove` raises `Refused` with the verifier's reason."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
     registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
@@ -1289,7 +1292,7 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     def prover() -> None:
         try:
             remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
-        except remote.Refused as e:
+        except Refused as e:
             raised.append(e)
 
     th = Prover(prover)
@@ -1299,7 +1302,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
             v.register()
         th.outcome()
     (e,) = raised
-    assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
+    assert e.reasons == (f"the verifier at {address} refused the store's registration: refused: {refused.value}",)
+    assert str(e) == e.reasons[0]
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
 
 
@@ -1316,17 +1320,18 @@ def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused
     def prover() -> None:
         try:
             remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
-        except remote.Refused as e:
+        except Refused as e:
             raised.append(e)
 
     th = Prover(prover)
     sock = th.accept(lsock)
     with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry, lifetime=1) as v:
-        with pytest.raises(ValueError, match="at least 2 windows"):
+        with pytest.raises(ValueError, match="at least 2 windows") as short:
             v.register()
         th.outcome()
     (e,) = raised
-    assert "at least 2 windows" in e.why and registry.drawn(b"test-node") == 0
+    assert e.reasons == (f"the verifier at {address} refused the store's registration: refused: {short.value}",)
+    assert registry.drawn(b"test-node") == 0
 
 
 FAILING = '''

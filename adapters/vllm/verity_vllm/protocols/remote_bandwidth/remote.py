@@ -64,6 +64,7 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 
 from verity_vllm import config
+from verity_vllm.errors import Refused
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
@@ -492,22 +493,14 @@ class DeviceEncoded(audit.Store):
         self.gates["blocks_checked"] += 1
 
 
-class Refused(RuntimeError):
-    """The verifier refused the store's registration, answering its hello with ``bye``: a node has one live
-    registration (`audit.Registry`), which only the verifier closes.  ``why`` is the verifier's reason."""
-
-    def __init__(self, verifier: str, why: str) -> None:
-        super().__init__(f"the verifier at {verifier} refused the store's registration: {why}")
-        self.verifier, self.why = verifier, why
-
-
 def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: bytes = b"verity-vllm/store",
           codec: rcodec.Codec = rcodec.DEFAULT, log: Callable[[str], None] = print, **kw: Any) -> list[dict]:
     """The prover's side of a remote session against the verifier at ``verifier`` (``HOST:PORT``): register the
     store, then run each session of ``plan`` (`ProverSide`'s modes: ``serve``, or ``servedrop:K``, which withholds the
-    first K blocks appended) as the verifier starts it.  Returns each session's result; raises `Refused` with the
-    verifier's reason if it refuses the registration.  A prover that fails drops the connection, so the verifier sees
-    the session end there."""
+    first K blocks appended) as the verifier starts it.  Returns each session's result; raises `Refused`, its one
+    reason the verifier's address and the verifier's reason, if it refuses the registration, answering the store's
+    hello with ``bye``: a node has one live registration (`audit.Registry`), which only the verifier closes.  A prover
+    that fails drops the connection, so the verifier sees the session end there."""
     host, port = address(verifier)
     prover = session_module("prover")
     wire = prover.wire
@@ -518,7 +511,7 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
             p.register(codec=codec)
         except wire.Closed as e:
             if str(e).startswith("refused"):
-                raise Refused(verifier, str(e)) from None
+                raise Refused(f"the verifier at {verifier} refused the store's registration: {e}") from None
             raise
         out = []
         for mode, fraction in p.plan:
