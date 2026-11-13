@@ -169,11 +169,32 @@ The records are in the evidence store, in the run files of the runs that carry
   `head`, `accepted` and `complete`. Which of the four verdicts it is, is its verdict's `format`; a verdict whose
   verifier's format the reader doesn't list reads as missing;
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
-  its head's digest, from which a class's count is read.
+  its head's digest, from which a class's count is read;
+- `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
+  changed) and `verdict`, the verifier's own, whose `format` says which of the four it is a control of;
+- `out/serve-registrations.jsonl`: each serve's registration, which the verdict records name by its digest and which
+  states the rate each sampled population is registered at.
+
+The reader holds what the rule charges below to two more things, which the rule doesn't read:
+
+- **A negative control.** An execution phase is held only where each verifier that accepted has, at the same commit,
+  a control of record that it refused: a run with the one thing changed that the verifier checks. The stop record's
+  owes `stop_word` (a stop word changed, the count off by one), the response tie's `id` (a released id changed), the
+  certified read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
+  changed). One control a verifier a commit serves every execution phase under that commit. A control at another
+  commit, by another verifier or of another thing serves none, and one the verifier did not refuse leaves it
+  without, whatever other it refused. The line names the verifier that lacks its control.
+- **The rate.** A class is held only where every block of the stop record's and the response tie's populations is
+  proved: the registration its verdicts name registers `rate:1/1` for both, and each of those two verdicts' records
+  says in `rate` that it ran at the registered rate. The rate is the registration's and never the verdict's own
+  word, so a verdict that states `rate:1/1` under a registration that says otherwise is refused by name, as is a
+  registration that was not handed or states no rate. Where a registration states the two rates is its writer's to
+  name; the reader holds it in one constant (`stop_verdicts.RATES`).
 
 The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
-accept and takes away no refusal: its records that are accepted and complete count for nothing, and everything else
-it holds is read as any run's, so superseding a run never raises what is held.
+accept and takes away no refusal: its records that are accepted and complete count for nothing, as do its controls
+that were refused, and everything else it holds is read as any run's, so superseding a run never raises what is
+held.
 
 The four verdicts count only as one class's: of one class, in one execution phase of a link, on one signed head,
 and of one serve under one registration, as their records name the two. Where each of the four was read and no
@@ -181,7 +202,8 @@ class that holds a row has them so, the answer holds nothing and its first line 
 with what the four differ in: the class, the execution phase, the head, the serve or the registration.
 
 An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
-its four verdicts. The answer is how many execution phases of a link are held (the document's `stop`'s
+its four verdicts, at the registered rate, each by a verifier with its control. The answer is how many execution
+phases of a link are held (the document's `stop`'s
 `held_phases`), and a row is charged by it:
 
 - a row's execution phases are its scope's over its monitoring period, never the ones a run kept a registration for;
