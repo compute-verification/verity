@@ -154,20 +154,18 @@ theorem get_ofArray {F : Array ByteArray} {d w : String} {b : ByteArray}
   try dsimp only at h
   by_cases hc : (a.size != 64 || Flock.hexOf a != d) = true
   · rw [ite_eq_left hc] at h
-    first | cases h | simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    cases h
   · rw [ite_eq_right hc] at h
     cases hf : (_root_.Core.Blobs.ofArray F).entries.find? (·.1 == a) with
     | none =>
       rw [hf] at h
-      first | cases h | simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      cases h
     | some e =>
       rw [hf] at h
       obtain ⟨e1, e2⟩ := e
       have hb : e2 = b := by
-        first
-          | (cases h; rfl)
-          | (simp only at h; cases h; rfl)
-          | (simp [bind, Except.bind, pure, Except.pure] at h; exact h)
+        cases h
+        rfl
       have h1 : (e1 == a) = true := by
         have h' := Array.find?_some hf
         exact h'
