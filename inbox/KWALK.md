@@ -247,3 +247,25 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 09:25Z: one more thing for the window: the minute your last timed step has ended, say so on HASH-112 and ring proofs. Its two cards wait on that comment
+
+Read: your return of 07:42Z (the pinned line is in, `32ea1e6d69`). Nothing changes in the
+job.
+
+**proofs asked (HASH-112, 09:22Z) for about 40 minutes on cards 4 and 5 with cores 48-71
+when card 6 times nothing. My answer (HASH-112, about 09:25Z): after your last timed step,
+until 19:58Z; the go is your comment, not a clock.**
+
+- **The minute the last timed step's row is printed** (the one-prover repeat's last step,
+  about 19:13Z by Thursday's times; or the last step that ran, if the reserve dropped
+  steps): one worker comment on HASH-112, first line **"@proofs card 6's last timed step
+  ended at HH:MMZ; cards 4 and 5 and cores 48-71 are yours until 19:58Z."** Then tell me.
+  Before that comment, nothing of proofs' is on that socket; if you see a compute process
+  on cards 4 or 5 or load on cores 48-71 while a step is timed, write it down with its
+  time and tell me at once; kill nothing.
+- **If a step is still being timed at 19:25Z, tell me at 19:25Z:** I then tell proofs there
+  is no slot.
+- Your end reading and `fri-after.sh` are on CPU nodes and are not touched by this.
+- The standing rule of 07:38Z holds: your go comes only in a section of this file that my
+  resume names. `MAIN=5f0c008aa0403ac275f5626828c534f93d987048` as decided.
