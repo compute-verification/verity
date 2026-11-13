@@ -810,6 +810,93 @@ leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__r
   }
 }
 
+// The leaf pass at 64 sketch rows: a CTA's shared memory is the packed signs and a warp's staging each, as
+// sketch64_receipts_kernel's (each lane's receipt stays in its registers).
+constexpr int LEAF64_WARPS = 8;
+constexpr size_t LEAF64_SHARED =
+    (size_t)SK64_SIGNS * sizeof(uint4) + (size_t)LEAF64_WARPS * 32 * SK64_ROWS * sizeof(int);
+
+// leaf_pass_kernel at 64 rows: the same claims, leaves, counts and receipts' store indices, block s of the claim's 32
+// leaves by reader.cu's sk64_tile_of (pk: the 32 KiB of reader.py's `pack64`) staged as sketch64_receipts_kernel
+// stages them, and each lane's receipt by sk64_receipt into its registers, from which it goes to the leaf's hash (and
+// to receipts[8 j], with `receipts`).
+__global__ void __launch_bounds__(32 * LEAF64_WARPS, 1)
+leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 *__restrict__ pk, u64 *leaves,
+                   u64 *receipts, unsigned *ctr, unsigned tiles_per, unsigned *started) {
+  extern __shared__ __align__(16) uint4 smem64[];
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
+  const uint4 *sg = smem64;
+  int *st = reinterpret_cast<int *>(smem64 + SK64_SIGNS) + warp * 32 * SK64_ROWS;
+  if (!threadIdx.x) atomicExch(started, 1u);
+  for (int i = threadIdx.x; i < SK64_SIGNS; i += blockDim.x) smem64[i] = __ldg(pk + i);
+  __syncthreads();
+  const u64 tiles = n / 32, nl = n / PER_LEAF;
+  for (;;) {
+    unsigned tile0 = 0;
+    if (!lane) tile0 = atomicAdd(ctr, (unsigned)PER_LEAF);
+    tile0 = __shfl_sync(~0u, tile0, 0);
+    if (tile0 >= tiles) break;
+    const u64 leaf0 = 2 * (u64)tile0, leaf = leaf0 + lane;
+    u64 x[8], w[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
+#pragma unroll 1
+    for (int s = 0; s < PER_LEAF; ++s) {
+      int acc[2][8][4];
+      sk64_tile_of<2>(acc, sg, [&](uint4 (&v)[2][2], int p) {
+#pragma unroll
+        for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+          for (int hi = 0; hi < 2; ++hi) {
+            const u64 l = leaf0 + 16 * mt + 8 * hi + g;
+            v[mt][hi] = l < nl ? ld_l2_256(data + (l * PER_LEAF + s) * (BLOCK / 16) + 4 * p + t)
+                               : make_uint4(0, 0, 0, 0);
+          }
+      }, lane);
+#pragma unroll
+      for (int mt = 0; mt < 2; ++mt) {
+        const int blk = 16 * mt + g;
+#pragma unroll
+        for (int nt = 0; nt < 8; ++nt) {
+          const int r = (8 * nt + 2 * t) ^ (8 * (g & 3));
+          *(int2 *)(st + blk * SK64_ROWS + r) = make_int2(acc[mt][nt][0], acc[mt][nt][1]);
+          *(int2 *)(st + (blk + 8) * SK64_ROWS + r) = make_int2(acc[mt][nt][2], acc[mt][nt][3]);
+        }
+      }
+      __syncwarp();
+      u64 y[8];
+      {
+        const uint4 *S = (const uint4 *)(st + lane * SK64_ROWS);
+        const int xs = 2 * (lane & 3);
+        sk64_receipt([&](int i) { return S[i ^ xs]; }, base + leaf * PER_LEAF + s, y);
+      }
+      __syncwarp();
+      if (receipts && leaf < nl) {
+#pragma unroll
+        for (int i = 0; i < 8; ++i) receipts[8 * (leaf * PER_LEAF + s) + i] = y[i];
+      }
+      if (s & 1) {
+#pragma unroll
+        for (int i = 0; i < 8; ++i) w[8 + i] = y[i];
+        sha::compress(x, w);
+      } else {
+#pragma unroll
+        for (int i = 0; i < 8; ++i) w[i] = y[i];
+      }
+    }
+    sha::compress_kw(x, kC.kw_xpad);
+    if (leaf < nl) {
+      u64 d[8];
+      hm96_leaf(base / PER_LEAF + leaf, x, d);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) leaves[8 * leaf + i] = d[i];
+    }
+    __threadfence();
+    __syncwarp();
+    if (lane < PER_LEAF && tile0 + lane < tiles) atomicAdd(ctr + 1 + (tile0 + lane) / tiles_per, 1u);
+  }
+}
+
 // The in-place pass (`rs_mapped_pass`) counts its tiles in groups of CONSUMER_READY_BLOCKS positions, the last group
 // what is left; mapped_pass_tile is pass_tile through the map.
 constexpr unsigned MAPPED_READY_TILES = CONSUMER_READY_BLOCKS / 32;
