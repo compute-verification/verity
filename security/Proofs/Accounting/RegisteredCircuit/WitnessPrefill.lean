@@ -75,7 +75,7 @@ namespace Accounting.SecurityProofs.RegisteredCircuitWitnessPrefill
 open Pous (pr)
 open scoped ENNReal
 open Accounting.SecurityProofs.RegisteredCircuitWitness (dec_div dec_mod dec_le dec_inj blk_lt tw tw_eq req req_lt
-  disjoint_ticks honestSession hashBudget circuitCarriers restricted property sum_ge gamma_bound)
+  disjoint_ticks honestRun hashBudget circuitCarriers restricted property sum_ge gamma_bound)
 
 /-! ## The KV pool -/
 
@@ -549,7 +549,7 @@ theorem deadlines {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
     (placement n P N τ val).Deadlines (passBind n P N) τ := by
   intro d
   refine ⟨fun w w' hw => ?_, fun w j j' hj => ?_⟩
-  · simp only [Requirement.Placement.windowTicks]
+  · simp only [Requirement.Placement.executionPhaseTicks]
     rw [Finset.disjoint_biUnion_left]
     intro j _
     rw [Finset.disjoint_biUnion_right]
@@ -609,8 +609,8 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     (val : ℕ → ℕ → ℕ) (hval : ∀ r i, val r i < 2 ^ tw)
     (hL : 0 < L) (hlink : ρ * 256 ≤ Lr * τ) (hq : N ≤ q) (hqr : N ≤ qr * τ) :
     (∀ s w η j pre, Assumptions.SketchHashBudget
-      ((((honestSession n P N ρ S (Lr * τ) q hlink hq).session s).window w η).device j pre) (qr * τ)) ∧
-    Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S (Lr * τ) q hlink hq).session
+      ((((honestRun n P N ρ S (Lr * τ) q hlink hq).session s).window w η).device j pre) (qr * τ)) ∧
+    Assumptions.CircuitCarriers (fun c y => (honestRun n P N ρ S (Lr * τ) q hlink hq).session
         (steer0 n P N ρ Ω Ca c y))
       (RateSketch.steeredStore enc choose (passLayout n P N ρ Ω Ca)) (passLayout n P N ρ Ω Ca)
       (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.IntDag Unit) (aud n P N) ∧
@@ -656,7 +656,7 @@ theorem applies (hG : Guarantees.RegisteredCircuitRequirement) (n P N ρ S q Xr 
     let Aud := aud n P N
     let layout := passLayout n P N ρ Ω Ca
     let steer := steer0 n P N ρ Ω Ca
-    let A := honestSession n P N ρ S (Lr * τ) q hlink hq
+    let A := honestRun n P N ρ S (Lr * τ) q hlink hq
     let W := wiring N
     let p := fun _ : RateSketch.StackedCoins Ω Ca T n P N ρ G => placement n P N τ val
     let ℓ := fun _ : RateSketch.StackedCoins Ω Ca T n P N ρ G => kvLayout n P N
@@ -817,12 +817,12 @@ theorem credit_eq {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j : 
   rw [held_eq val w j, other_eq val w j]
   exact max_eq_left (Nat.sub_le _ _)
 
-theorem credit_session {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
+theorem credit_run {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
     n * P * N * 32768 ≤ ∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) := by
   rw [Nat.mul_assoc (n * P)]
   exact sum_ge _ fun w j => (credit_eq val w j).ge
 
-theorem credit_window {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) :
+theorem credit_executionPhase {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) :
     P * N * 32768 ≤ ∑ j : Fin P, credit n P N τ val (passBind n P N w j) := by
   calc P * N * 32768 = ∑ _j : Fin P, N * 32768 := by
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
@@ -836,7 +836,7 @@ theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (h
       ((∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
   have h1 : ((n * P * N * 32768 : ℕ) : ℝ) ≤
       ((∑ w : Fin n, ∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) :=
-    Nat.cast_le.2 (credit_session val)
+    Nat.cast_le.2 (credit_run val)
   rw [show ((n * P * N * 32768 : ℕ) : ℝ) = (n : ℝ) * P * N * 32768 by norm_cast] at h1
   have h2 : (0 : ℝ) < n * P * N * 32768 := by positivity
   calc (0.0015 + γ) * (n * P * N * 32768) < 1 * (n * P * N * 32768) := mul_lt_mul_of_pos_right hγ h2
@@ -844,11 +844,11 @@ theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (h
     _ ≤ _ := h1
 
 /-- **Each window's threshold is positive at the honest prefill run** while `0.01 + γ < 1`. -/
-theorem window_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : Fin n) (hP : 0 < P) (hN : 0 < N)
+theorem executionPhase_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : Fin n) (hP : 0 < P) (hN : 0 < N)
     (hγ : 0.01 + γ < 1) :
     (0.01 + γ) * (P * N * 32768) < ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
   have h1 : ((P * N * 32768 : ℕ) : ℝ) ≤ ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) :=
-    Nat.cast_le.2 (credit_window val w)
+    Nat.cast_le.2 (credit_executionPhase val w)
   rw [show ((P * N * 32768 : ℕ) : ℝ) = (P : ℝ) * N * 32768 by norm_cast] at h1
   have h2 : (0 : ℝ) < P * N * 32768 := by positivity
   calc (0.01 + γ) * (P * N * 32768) < 1 * (P * N * 32768) := mul_lt_mul_of_pos_right hγ h2
