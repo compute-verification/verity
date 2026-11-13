@@ -158447,3 +158447,74 @@ Both tries took check slots at 19:18Z and 19:19Z and are running: the AlignedX t
 
 - [read: the notification] `proofs-1650Z-prf589-read`, set Thu 11:12Z, `firedAt` 2026-11-12T16:50:05Z, delivered to me at 19:52Z Fri. It asks its reader to resume FIXEDCOST to read `r20261112-110333-4c33`, to say on HASH-123 that card 7 is free, to write COUNT's mailbox, and to tell Daniel of the cell under 300 GB.
 - [read] FIXEDCOST's entry of Thu 17:17Z is that read (rc 0, the quarter statement 2.089 GPU-s against 2.569). I resumed no one, wrote on no issue and in no other mailbox, and sent Daniel nothing.
+
+## SERVEDCARD, Fri 13 Nov 19:52Z: the card retry ran: both EmbeddingRead_v1 reads at full, 1 warm and 4 timed sessions each, every session accepted by the proof server's verifier and by the Lean verifier on vy-nebius-cpu-4 (10 of 10)
+
+**What may be quoted on TOP-402, and its label.** Two figures only, each labelled "timed on a card of node A (an NVIDIA H200, SM 90), at `499739a84f`, a branch's tree (`cursor/prove-time-tmpl-unit-6e08`), not `main`":
+
+- `census:EmbeddingRead_v1{V=256,H=96}@full`: **0.781 s**, on card 4.
+- `census:EmbeddingRead_v1{V=256,H=4}@full`: **0.773 s**, on card 5.
+
+Each figure is the prover's own timer (`prove_total_s`). It is the median of 4 timed sessions, run after 1 warm session, for one statement of 4,096 blocks of that read. The proof server's verifier accepted all 5 sessions of each read [run r20261113-192855-3fea]. Nothing else in this entry is a card figure.
+
+Flock's Lean verifier then accepted all 10 kept sessions, 5 of each read, on a CPU node [run r20261113-193130-d238]. Its label, which must be quoted whole wherever "verified by Lean" is said, is "accepted on the provisional unit cover, units as stated, the Program not held to the circuit".
+
+At 19:00Z I checked and ended my turn with "ready", but I wrote no entry. The missing entry was my fault, not the timer's.
+
+**Check at the go** [read: node A, 19:28:04Z to 19:28:39Z]:
+
+- In `gpu-lease status`, cards 4, 5 and 6 read free.
+- Cards 4 and 5 showed 0 % and 0 MiB, and no card held a compute process.
+- The marker in `/workspace/tmp/proofs-tmplretry-499739a84f/.staged` read exactly `499739a84f181114806562cd1866109c02098bfa 2026-11-13T16:43:54Z units-sha256 88d4286849d162d3 staged 2`.
+
+**Fit** [derived]: at 19:28Z, 29 minutes were left to `KILL_AT` (19:57:00Z). Last night's sessions at full had a median of 0.58 s to 1.51 s, and the two reads run in parallel, one per card. So both reads fit whole, and I launched the go command as written: `STEPS=prove`, `CARDS=4,5`, `taskset -c 48-71`, `KILL_AT=1794599820`, `WARM=1`, `RUNS=4`.
+
+**The run** [run r20261113-192855-3fea, launched 19:28:55Z]:
+
+- 19:29:04Z: the start check passed.
+- `window.py prove` ran 2 groups under a 24-minute lease. It ended with exit 0 at 19:29:40Z: 2 statements started, 2 finished with exit 0, and both were kept (out/kept, 0.04 GB).
+- Each card was held 0 min 32 s.
+- The staged directory (3.0 GB) was removed at 19:29:40Z.
+
+The sessions, from `prove_total_all_s` in each group's `out/summary.json` [run]. Entry 0 is the warm session; entries 1 to 4 are the timed ones, whose median is the `prove_total_s` above:
+
+| read, at full | card | AND gates a block | warm (s) | timed 1, 2, 3, 4 (s) | median of timed (s) | a block (ms) |
+|---|---|---|---|---|---|---|
+| `EmbeddingRead_v1{V=256,H=96}` | 4 (`GPU-ff6e835b`) | 2,586,540 | 5.805 | 1.196, 0.893, 0.625, 0.669 | 0.781 | 0.191 |
+| `EmbeddingRead_v1{V=256,H=4}` | 5 (`GPU-034af4c0`) | 2,500,350 | 5.690 | 1.328, 0.656, 0.798, 0.748 | 0.773 | 0.189 |
+
+Notes on the table:
+
+- Both statements have `k_log` 23 and `unit_log` 22, 4,096 blocks each. "A block" is `prove_total_s` / 4,096, as `prove_time.py` computes it [derived].
+- The SM clock's mean was 1,980 MHz on both cards [run].
+- Why the warm session takes 5.7 s to 5.8 s is not measured.
+
+**The proof server's verifier** [run]: `"accepted": true` for all 5 sessions of each read in `summary.json`. Each group's job log reads `prove … exit 0: 10 "accepted":true "why":""`.
+
+**Nothing of ours on node A since 19:29:40Z** [read: node A]:
+
+- `out/cards-at-end.txt` is empty: no compute process was on cards 4 or 5 at the end.
+- At 19:30:08Z, `gpu-lease status` read 4 free and 5 free, and `/workspace/tmp/proofs*` was absent at 19:30:42Z.
+- I released the 19:13Z row of `calendars/node-a.md` as "RELEASED, RAN" at 19:33Z (notes 1c6ff853eb).
+
+**The Lean leg ran and accepted 10 of 10** [run r20261113-193130-d238, 19:31:30Z to 19:51:11Z]:
+
+- It runs on vy-nebius-cpu-4 (192 CPUs, 756 GiB; `--mem-gb 64`, timeout 7,200 s), a named node, not `auto`.
+- Its input is the card run's custody record (`art:ce93249614d7e32d47519d6a7538681d2650dad679e88f227d49ca050b8d225b`). The kit of `499739a84f18` was held to its sha256, and the verifier `flock-verify` and `flock-read-tmpl` built in 95 s.
+- Pass 1 began at 19:33:36Z. Each read's kept files equal the record: the H=4 read's are 25 files, 19,852,497 bytes.
+- Each read was restaged from this tree, and its circuit equals the kept one: H=4 has 334,366,869 bytes, pin `8372f70f9df7f6d0`; H=96 has 344,792,372 bytes, pin `9ceb3c55c89d0702`.
+- Pass 1 verified one kept session of each read, and pass 2 the other 4 of each.
+- The shard's last line is `done: 10 accepted of 10 sessions` at 19:51:11Z. Every row of `out/lean.tsv` reads `True` with the label "accepted on the provisional unit cover, units as stated, the Program not held to the circuit". The sessions are `l0000` to `l0004` of `-1568268` (H=4) and of `-1568275` (H=96).
+- Each verification took 29.6 s to 37.3 s of wall time at a 5.7 GiB to 5.8 GiB peak. These are CPU times on a shared pool machine, not card figures, and do not go in the table.
+- The node is done with it: the run's state is `done`.
+
+No timer of mine is set.
+
+For the table:
+
+| read, at full | `prove_total_s`, median of 4 timed after 1 warm | where | proof server's verifier | Lean |
+|---|---|---|---|---|
+| `census:EmbeddingRead_v1{V=256,H=96}` | 0.781 s | card 4 of node A (H200), at `499739a84f` (branch, not `main`) | accepted, 5 of 5 sessions | 5 of 5 accepted, "accepted on the provisional unit cover, units as stated, the Program not held to the circuit" (r20261113-193130-d238, vy-nebius-cpu-4) |
+| `census:EmbeddingRead_v1{V=256,H=4}` | 0.773 s | card 5 of node A (H200), at `499739a84f` (branch, not `main`) | accepted, 5 of 5 sessions | 5 of 5 accepted, the same label (r20261113-193130-d238, vy-nebius-cpu-4) |
+
+Card run: r20261113-192855-3fea, record `art:ce93249614d7e32d47519d6a7538681d2650dad679e88f227d49ca050b8d225b`. Lean leg: r20261113-193130-d238, record `art:83f11c4c528f8053744592710f7bcb9a06c12b94d14871d10c9a8d4f8fb6c6fc`. These are per-statement times on one card; no monitoring-period total is derived here.
