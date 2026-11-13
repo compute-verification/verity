@@ -114029,3 +114029,47 @@ STOP RULE: nothing listed changes; no verifier change.
 Not established: any of `NeededBitsHeld.lean` compiled; that `check_complete`'s hypotheses hold at a held member (they are the ones `scoped_facts` already reaches); the two missing pieces of the lowering fact.
 
 Heads: `cursor/proofs-neededbits-2597` at `fdad33da82`, pushed. Unpushed: nothing.
+
+## PERIODREAD, Fri 13 Nov 02:12Z: PR 3 is #9581; its executable builds and answers the difftest's two cases as the piece does
+
+Mailbox read at `bea8cf9117` (your 02:00Z word: #9537 marked, scratch `lean` yes, STOPS reads the statements).
+
+- **PR 3 is [#9581](https://github.com/compute-verification/verity/pull/9581)**, unmarked, `Lane proofs`, head `43fde9d04680e7522e8185da61be521408d79bcc`. No ready line: its records run and quick tier are not in.
+- **For STOPS: no statement changed since `f2889fd3ce`.** The two statement files differ from it in their title lines only ("SPOT's period") [read: `git diff f2889fd3ce..43fde9d046 -- security/Properties/Spot`, two lines].
+
+**What PR 3 gained since 01:55Z**, three commits:
+
+1. **The executable `sampled-proofs-period`** (`Spot/PeriodMain.lean`, one line: `Core.BlobProtocol.main` over `Spot.Period.protocol`), a `lean_exe` and default target of SPOT's verifier, its `exempt` line in that lock, one README sentence. The difftest asks it, through `serve`, the two cases it asks the piece on one-stage v2 itself, and holds its answer to the protocol's outcome for the reference's reject under the ledger's SHA-512.
+   - [run] `r20261113-020207-0c67`, rc 0, at `91d05f87f581`, on vy-nebius-2, waited 10 s: `lake build Spot sampled-proofs-period sampled-proofs-difftest` 504 jobs; `sampled-proofs-period id` prints `verity/sampled-proofs/period/v1`; both period difftests 24 passed in 130 s.
+   - It is asked no accept, as the check is not.
+2. **The premise sentence** ("Every committed window is presented"), one paragraph at the end of `IntegrityPeriod`'s docstring (`security/Proofs/Flock/EndToEnd/Period/Statement.lean:202-206`), which the two statements below it refer to. It says the three are of every sampling block of the period's run, that `Properties.Spot.Period.CommittedOnce` states what makes a record present every one, and that no statement reads the two together.
+   - No record moves [derived, not run: a record hashes the definition's expression, `check.py:1308` `module_digest` over the definitions' hashes; the records run will show it].
+   - It merges with #9373, which edits the two docstrings below: my hunk ends 13 lines above its first [read: #9373's diff; I did not merge the two].
+   - Cost: every module that imports that file builds again in the next records run.
+3. **Prose says SPOT** in the three titles I added. The older-name cap is a bookkeeping warning on this tree [read: `tests/test_retired_terms.py` on the VM, `'sampled-proofs': 564 > 507`; most of the excess is not this stack's].
+
+**One thing for your word: the executable's name.** `sampled-proofs-period` is the name you gave, and it follows the package's other executables. It adds 15 to the count of SPOT's older name. `spot-period` would add none. Say, and I rename it in one commit before the records run; default: I keep your name.
+
+**Runs, all on vy-nebius-2:**
+
+| run | what | state | waited |
+|---|---|---|---|
+| `r20261113-015344-d333` | PR 4's records, at `36dc4d568f` | SPOT's verifier PASS in 91 s, the certifier's PASS in 37 s; in `security` since 02:01Z [run] | 11 s |
+| `r20261112-232219-a005` | PR 2's quick tier | running since 00:56Z, prints only at its end; its timeout is 03:26Z | 28 min |
+| `r20261113-021125-efae` | PR 3's quick tier, at `43fde9d046` | launched 02:11Z | not read yet |
+
+- **Next records runs, one tree at a time:** PR 3's own when `d333` ends, then PR 4's on its final head.
+- **PR 4's branch** is at `95fe99986bbec1effa4df1745b5c0845c4d8a8a6`: PR 3's head merged in, pushed. `d333` is on the head before the merge, so it does not cover the executable or the docstring.
+
+**Not established**
+
+- That the lock edits pass `check.py`: `d333` has not reached `security/Properties`.
+- That the docstring moves no record: derived, not run.
+- Any accept through the executable.
+- The quick tier of PR 2 and of PR 3.
+- A second reader's verdict on the five statements.
+- The four cleanups of `61fb8dbce8c7` compile only in `d333`.
+
+**Can I pause:** soon. What I have left besides the three runs is PR 4's body and PR 2's body, which I write now and push to my scratch branch. After that I wait on `a005` (PR 2 opens on its pass) and `d333`, each more than 20 minutes away, and I end the turn with an entry naming heads and runs.
+
+**Pushed:** PR 3 `43fde9d04680`, PR 4 `95fe99986bbe`. Unpushed: nothing in the tree; the PR bodies under `/tmp` go to the scratch branch next.
