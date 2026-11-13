@@ -210,6 +210,17 @@ def engine(s: NodeMemory, at: int = 0):
     return step
 
 
+def answered(lsock: socket.socket, over: socket.socket) -> socket.socket | None:
+    """The connection made to ``lsock``, or None once ``over`` reads its stream's end and none was made: the side that
+    would connect is over, so none will come, and a bare ``accept()`` would wait for ever.  It waits on those two
+    events and on no clock, and closes both sockets."""
+    try:
+        return lsock.accept()[0] if lsock in select.select([lsock, over], [], [])[0] else None
+    finally:
+        lsock.close()
+        over.close()
+
+
 class Prover(threading.Thread):
     """The prover's side on a thread: ``prove()``, which connects to the test's listener.  `accept` answers that
     connection, and `outcome` what ``prove`` returned.  Each fails the test with what ``prove`` raised, where a bare
@@ -221,7 +232,7 @@ class Prover(threading.Thread):
         self.prove = prove
         self.returned: Any = None
         self.raised: str | None = None
-        # `over` reads the end of its stream once the thread is over, whatever ended it: the event `accept` waits on
+        # `over` reads the end of its stream once the thread is over, whatever ended it (`answered`)
         self.over, self._running = socket.socketpair()
 
     def run(self) -> None:
@@ -236,16 +247,12 @@ class Prover(threading.Thread):
     def accept(self, lsock: socket.socket) -> socket.socket:
         """Starts the thread and answers its connection to ``lsock``, which is closed either way."""
         self.start()
-        try:
-            connected = lsock in select.select([lsock, self.over], [], [])[0]
-            if not connected:
-                self.join()
-                pytest.fail("the prover ended before it connected: "
-                            + (f"it returned {self.returned!r}" if self.raised is None else f"it raised\n{self.raised}"))
-            return lsock.accept()[0]
-        finally:
-            lsock.close()
-            self.over.close()
+        sock = answered(lsock, self.over)
+        if sock is not None:
+            return sock
+        self.join()
+        raise pytest.fail.Exception("the prover ended before it connected: " + (
+            f"it returned {self.returned!r}" if self.raised is None else f"it raised\n{self.raised}"))
 
     def outcome(self) -> Any:
         """What ``prove`` returned, once the thread is over."""
@@ -875,10 +882,12 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
                               step_ms=step_ms)
     cs.store, cs.binder = served_store() if served else store(), Stats()
     seen: list = []
+    over, ended = socket.socketpair()
 
     def verify() -> None:
-        sock, _ = lsock.accept()
-        lsock.close()
+        sock = answered(lsock, over)
+        if sock is None:
+            return
         try:
             with verifying(sock, clock, windows=windows, window_ns=5, samples=4096, lifetime=2) as v:
                 v.register()
@@ -906,13 +915,37 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
         rec = cs.end()
     except BaseException:
         # a run that fails ends its audit run, so the verifier's thread ends with it and reaps its process
-        if cs._thread is not None:
-            if cs.record is None:
-                cs.end()
-            th.join()
+        if cs._thread is not None and cs.record is None:
+            cs.end()
         raise
-    th.join()
+    finally:
+        # the session is over: a verifier's thread it never connected to ends here (`answered`)
+        ended.close()
+        th.join()
+    if not seen:
+        pytest.fail(f"the Commit's session ended before it connected to its verifier: {rec['error']}")
     return rec, seen[0], cs, steps
+
+
+def test_a_commits_session_that_cannot_connect_fails_its_test_where_the_verifiers_thread_would_wait(tmp_path, monkeypatch):
+    """`lockstep`: a session whose prover cannot connect records why and its run goes on unaudited, so no connection
+    comes to the verifier's thread.  The helper ends that thread once the session is over, and fails the test with
+    what the session recorded; a run that fails as well raises as it did.  Each would wait for ever to join a thread
+    at ``accept()``."""
+    def unreachable(host: str, port: int) -> None:
+        raise ConnectionRefusedError("no verifier")
+
+    def stops(k: int) -> None:
+        raise ValueError(f"the run's step {k}")
+
+    monkeypatch.setattr(remote.session_module("prover").wire, "connect", unreachable)
+    with pytest.raises(pytest.fail.Exception) as failed:
+        lockstep(tmp_path, monkeypatch, 3)
+    assert str(failed.value) == ("the Commit's session ended before it connected to its verifier: "
+                                 "ConnectionRefusedError: no verifier")
+    assert json.loads((tmp_path / "remote_session.json").read_text())["run"] == {"steps": 3, "audited": 0, "unaudited": 3}
+    with pytest.raises(ValueError, match="^the run's step 0$"):
+        lockstep(tmp_path, monkeypatch, 3, each=stops)
 
 
 @pytest.mark.slow
