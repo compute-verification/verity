@@ -146,6 +146,20 @@ def _counted(lookup: Callable, cache: Path, repo: Path, e: UN.Entry) -> Any:
     return hit
 
 
+#: the registered roots (`targets._registered`) as this process's first plan from records cut them (`units.registered_entries`)
+_REGISTERED: list[list[Any]] = []
+
+
+def _registered(now: Callable[[], list[Any]]) -> list[Any]:
+    """The registered roots a plan from records cuts into `<registered>`'s entries: the ones the process's first such plan
+    had (``now``'s then).  `units.plan` makes each binding's roots before it looks its record up, and making them registers
+    Definitions, so after a plan that ended at a record that doesn't count ``now`` gives a longer list than the one the
+    records were stored over, whose entries list other roots: the session would take no record its build stored."""
+    if not _REGISTERED:
+        _REGISTERED.append(now())
+    return list(_REGISTERED[0])
+
+
 def _from_records(cache: Path, handed: bool = False) -> tuple[UN.Plan | None, str | None]:
     """The catalog's plan from the bindings' records (`units.plan`) when every binding's counts; else None and why: there is
     no record under this process's keys, one doesn't count or one is stale (the reason names the directory, as the one the
@@ -153,10 +167,11 @@ def _from_records(cache: Path, handed: bool = False) -> tuple[UN.Plan | None, st
     a binding in the process that calls it, which under xdist is every worker of the session at once, each holding what the
     heaviest binding's build holds.
     So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_recorded`) makes
-    them all.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses: holding
-    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records'
-    cache, unless handed, is marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session
-    removes nothing, which the runs that write the cache do (`cache.expire`)."""
+    them all; the plan after it cuts the registered roots as the one before did (`_registered`).  A target is taken as its
+    record describes it, as `cli._planned` takes a target whose result it reuses: holding each one to its descriptor
+    (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records' cache, unless handed, is
+    marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session removes nothing, which the
+    runs that write the cache do (`cache.expire`)."""
     if not handed:
         CC.mark(cache)
     with pytest.MonkeyPatch.context() as mp:
@@ -164,6 +179,7 @@ def _from_records(cache: Path, handed: bool = False) -> tuple[UN.Plan | None, st
         # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts
         mp.setattr(CC, "_ROOT", [cli.REPO.resolve()])
         mp.setattr(UN, "_lookup", functools.partial(_counted, UN._lookup))
+        mp.setattr(TG, "_registered", functools.partial(_registered, TG._registered))
         where = f"{cache}, the directory `CIRCUIT_CHECK_RECORDS` names," if handed else str(cache)
         try:
             plan = UN.plan(cache, cli.REPO)

@@ -62,7 +62,9 @@ sys.exit(does["rc"])
 #: two catalog tests over records of one binding (the registries unloaded), as ``want.json`` beside them says: its record
 #: counts from the start (``counts``), or only once `BUILDER` ran and exited 0; before that `units.plan` finds no record of
 #: this version (``plan`` ``none``) or one that misses.  A plan that goes on past the miss is where `units.plan` builds that
-#: binding in this process; the catalog without records is a stub that says it made one, and why
+#: binding in this process; the catalog without records is a stub that says it made one, and why.  A plan that reaches the
+#: binding makes its roots, which registers a Definition, as `units.plan` does before it looks a record up: a later plan
+#: that cuts the registered roots that leaves is one that takes no record the build stored
 RECORDS = '''
 import json
 import sys
@@ -72,9 +74,12 @@ from pathlib import Path
 import conftest
 import pytest
 
+from circuit_check import targets as TG
 from circuit_check import units as UN
 
 HERE = Path(__file__).parent
+REGISTERED = [0]
+TG._registered = lambda: list(REGISTERED)
 ENTRY = UN.Entry(("syn#_x_roots",), "_x_roots", "_x_roots", UN.key(("syn#_x_roots",), 0), [], record="r")
 PLAN = types.SimpleNamespace(entries=[ENTRY], calls=set(), derived=types.SimpleNamespace(ids=[], units={}, nodes={}))
 WANT = json.loads((HERE / "want.json").read_text())
@@ -91,6 +96,9 @@ def _lookup(cache, repo, e):
 def _plan(cache, repo, *a, **k):
     if WANT["plan"] == "none" and not _stored(cache):
         return None
+    if TG._registered() != [0]:
+        raise AssertionError("the plan cut other registered roots than the process's first plan, which the records are of")
+    REGISTERED.append(len(REGISTERED))
     if UN._lookup(cache, repo, ENTRY) is None:
         raise AssertionError("the plan went on past a record that doesn't count, to build its binding in this process")
     return PLAN
