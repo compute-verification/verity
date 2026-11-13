@@ -14,9 +14,11 @@ refuses nothing.  The records commit names each such change (`_changes`), and th
 A records commit is a lock commit: the records the run regenerated (`regenerated_locks`, from the store, else from its run dir
 on its node), each at its path in the tree (`lock_path`), committed on top of the candidate with a lock commit's message
 (`lock_message`: `Lock records regenerated for #N...`, each change to what a guarantee says with the owners of what it names,
-the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as `queue.IDENTITY`, and
+the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as the queue
+(`Queue.identity`: the author its repository's rules name, else `queue.IDENTITY`), and
 vouched for by the merge gate against the run (`unvouched`, `merge.regenerated_parent`), so post_train reads it as a lock
-commit; the loop tells the bookkeeping the run repaired (`bookkeeping_told`: to `lean` and each owner a warning names).  A run
+commit, and neither reads who made it; the loop tells the bookkeeping the run repaired (`bookkeeping_told`: to `lean` and
+each owner a warning names).  A run
 that regenerated nothing, or only the records the candidate holds, makes none, and the candidate is checked as built.  It is
 made in a scratch index, without a checkout or a ref.  The candidate is a staged batch, off main's chain; when the chain's top
 it goes onto is another base, its members are merged again there, and the records commit, made and vouched for on the staged
@@ -102,23 +104,24 @@ def bookkeeping_told(rid: str, into: str, tip: str, prs: str, lock: str, warned:
             f"for the next PR to fix: {shown}", ("lean", *owners))
 
 
-def start(driver: Landing, sha: str) -> dict | None:
-    """Launch candidate ``sha``'s records run (`Landing.launch_locks`, on `Landing.on`).  The record to keep
-    (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``) and when it launched (``at``).  None, logged, when it registered no run, or when ``driver``
-    launches nothing (a dry run, or its queue's shadow)."""
-    if not driver.on:
+def start(driver: Landing, sha: str, on: str = "") -> dict | None:
+    """Launch candidate ``sha``'s records run (`Landing.launch_locks`, on ``on``'s machines, else `Landing.on`).  The record to
+    keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``),
+    when it launched (``at``) and ``on`` when given, which its resend stays on (`resend_locks`).  None, logged, when it
+    registered no run, or when ``driver`` launches nothing (a dry run, or its queue's shadow)."""
+    if not (machines := on or driver.on):
         raise ValueError("a candidate's records run needs the queue's machines: build the Landing with drive.toml's `on` "
                          "(`research.queue.flags_at(repo, main).on`)")
-    what = f"train.sh {sha[:12]} {driver.on} --deferred {LEAN_STEP}, the records run of candidate {sha[:12]}"
+    what = f"train.sh {sha[:12]} {machines} --deferred {LEAN_STEP}, the records run of candidate {sha[:12]}"
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
-    rec, tail = driver._started(driver.launch_locks(driver.repo, sha, driver.on))
+    rec, tail = driver._started(driver.launch_locks(driver.repo, sha, machines))
     if rec is None:
         driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
         return None
     driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or 'launching'}")
-    return {**rec, "tip": sha, "at": driver.now()}
+    return {**rec, "tip": sha, "at": driver.now(), **({"on": on} if on else {})}
 
 
 def judge(driver: Landing, rec: dict | None) -> RecordsRun:
@@ -266,14 +269,14 @@ def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int],
                 "couldn't name what its records change of what a guarantee says")
     prs = " ".join(f"#{n}" for n in prs) or f"`{into}` {sha[:12]}"
     warned = bookkeeping_warnings(driver.q.store, rid, driver.fetch)
-    message = lock_message(prs, rid, into, sha, warned, files, changed)
-    made = _git(repo, "commit-tree", tree, "-p", sha, "-m", message, env=IDENTITY).stdout.strip()
+    message, identity = lock_message(prs, rid, into, sha, warned, files, changed), driver.q.identity
+    made = _git(repo, "commit-tree", tree, "-p", sha, "-m", message, env=identity).stdout.strip()
     if not made:
         raise QueueError(f"git commit-tree of {sha[:12]}'s records commit printed no commit")
     if why := unvouched(driver, rid, made):
         return why
     if onto is not None:
-        made = _carry(repo, made, onto, files, lock_message(prs, rid, into, sha, warned, files, changed, onto))
+        made = _carry(repo, made, onto, files, lock_message(prs, rid, into, sha, warned, files, changed, onto), identity)
     return made, files, bookkeeping_told(rid, into, sha, prs, made, warned) if warned else None
 
 
@@ -327,9 +330,9 @@ def lock_outcome(driver: Landing, rec: dict, states: dict, lost: bool) -> tuple[
 
 def resend_locks(driver: Landing, rec: dict, states: dict) -> tuple[str, dict | None, str]:
     """Launch lock run ``rec`` of ``rec["tip"]`` again, once, after its machine failed it (`lock_outcome`), on the machines
-    of `on` its runs (``states``) didn't run on (`Landing._elsewhere`): (where, the new launch's fields, which ``rec`` then holds
-    as a resend; None, with train.sh's output's tail, when it registered no run)."""
-    where = driver._elsewhere(states)
+    of its ``on`` (else `Landing.on`) its runs (``states``) didn't run on (`Landing._elsewhere`): (where, the new launch's
+    fields, which ``rec`` then holds as a resend; None, with train.sh's output's tail, when it registered no run)."""
+    where = driver._elsewhere(states, rec.get("on") or "")
     again, tail = driver._started(driver.launch_locks(driver.repo, rec["tip"], where))
     if again is not None:
         rec.update(**again, at=driver.now(), resend=True)

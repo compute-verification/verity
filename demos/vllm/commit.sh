@@ -40,7 +40,7 @@ fi
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; nvidia-smi -L; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 14d --priority high \
-  --why "PROVE-PATH: Llama-3.2-1B TP1 Commits of record with their sealed replay bundles, Builds and Matches" | tail -2
+  --why "PROVE-PATH: Llama-3.2-1B TP1 Commits of record with their sealed replay bundles (clear values, never published: the only copy), Builds and Matches" | tail -2
 
 row() {  # NAME ARGS...: one `verity-vllm row run` of the workload dir, its output in KEPT/NAME.out; prints its stages' verdict words
   local name=$1; shift
