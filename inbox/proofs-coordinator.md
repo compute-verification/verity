@@ -120995,3 +120995,46 @@ Nothing.
 Machine note [run]: at 04:46Z the machine was a fresh clone again. Nothing was lost; every head of mine was on the remote.
 
 Not established: that `HeldOfReads.lean` compiles on the moved base; that the line I suggest for `refHeaders` compiles or is the one FRAME means; `ReadsWf` at any real parameters; `OpensOwn` at any device; that any play is accepted, so that `binds_of_own` or anything composed over the form's accept is more than true and empty. The package's Lean check with its lock has run on none of my heads.
+
+## NEEDEDBITS, Fri 13 Nov 04:55Z: `OutputsWritten.lean` COMPILES on the new base (`r20261113-040920-80e2`, `85dd57e03fcf`): every bit of every output word of a member's unit is a written bit at an accepted design, with NO hypothesis left; `NeededBitsHeld.lean` built there too. FRAME: merge `85dd57e03fcf`, your line holds the copy that fails. All my pieces are compiled
+
+**In plain words.** The last fact I owed is through Lean. At a design the check accepts, each bit of each output word of a unit, of an inner block or an outer block alike, is one of the bits the members' programs write, so a wire that reads such a bit reads something a unit computed. It asks nothing beyond the accepted design: the condition I carried as a hypothesis two hours ago is now decided by FRAME's check and read off it. With it, every piece you gave me has compiled. The earlier try of the same file failed, but in a file of FRAME's that was already mended, not in mine.
+
+**Compiled** [run: `r20261113-040920-80e2`, vy-nebius-2, done, rc 0, at `85dd57e03fcf`]
+- "security/Proofs/Flock/SpotFlock/OutputsWritten.lean: lean exit 0 in 739 s" and "axiom probe: none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The seven: `outPortOf_at`, `covered_of_parse`, `written_of_word`, `outsComputed_of_two`, `outputsWritten_words_of_two`, `outputsWritten_of_two`, `outputsWritten_at_port`.
+- Its dependencies were built in the same run, not replayed, on the new base: "Build completed successfully (11360 jobs)", with `NeededBitsHeld` among the modules built. So `NeededBitsHeld.lean` compiles on the new base too. Its axiom probe is the one of `ab80` at `0a2a205017`; the file has not changed since [run: `git diff`, empty].
+- What the three public theorems say, each at `(h : Held) (hd : two h s = some d) (ht : t < h.ms.length) (hu : u < h.ms[t].2.size)`:
+  - `outputsWritten_of_two (ho : o < h.ms[t].1.outPorts.size) (hb : bit < 16 * (HmOut.outGroup h.ms[t].1 o).2.2.2) : ∃ x, (x, t, ⟨(h.ms[t].1.ports.getD (HmOut.nIn h.ms[t].1 + o) default).name, u, bit⟩) ∈ writtenBits h.ms`. This is the wording of your 02:43Z item (a).
+  - `outputsWritten_at_port (hq : HmOut.nIn h.ms[t].1 ≤ q) (hqs : q < h.ms[t].1.ports.size) (hb : bit < 16 * (HmOut.outGroup h.ms[t].1 (q - HmOut.nIn h.ms[t].1)).2.2.2)`: the same at a port index `q`.
+  - `outsComputed_of_two : OutsComputed h.ms[t].1`: your 02:43Z item (b) discharged, from FRAME's `outs_of_two`.
+
+**The try that failed, and why it says nothing of my file** [run: `r20261113-033047-0355`, failed, rc 1, at `d9f0c6183c12`]
+- "error: ../Proofs/Flock/SpotFlock/WiredCode.lean:153:8: `SpotFlock.rows_of_two` has already been declared", then "Some required targets logged failures: - Proofs.Flock.SpotFlock.WiredCode" and "error: build failed". That tree held FRAME's line at `8c37334cc716`, before FRAME's rename. `WiringOk.lean` imports `WiredCode.lean` and my `NeededBitsHeld.lean` imports `WiringOk.lean`, so Lean never reached my file. This is the risk my 03:32Z entry named for merging before `b8ff` had spoken.
+
+**For FRAME** [relayed from my run; FRAME's own run is `r20261113-041603-dd56`]
+- In `80e2` these files of yours were built on the new base at your `f00922d4e938`: `Code`, `Facts`, `Placement`, `WiringRows`, `WiredCode`, `WiringOk`, `ScopeOf`, `ScopeDesc`. So the rename to `namedRows_of_two` compiles, and `WiredCode.lean`'s second error at `8c37334cc716` (line 181, "Application type mismatch") went with it.
+- [run: `git merge-base --is-ancestor`] Your line at `58019817c4c8` holds my branch only as of `3f35084266`. Its copy of `OutputsWritten.lean` is the one before my mends: it stops at two statements and takes the hypothesis `hC`. `dd56` probes that copy and will report it failed. The head to merge is `85dd57e03fcf`; it is your `f00922d4e938` and my two files, and since then your line added only `RowAtFits.lean` and the guard, which my files do not import [run: `git diff --stat`].
+
+**Where my pieces stand** (each compiled, each on the three axioms)
+| Fact | Theorem | At |
+|---|---|---|
+| a checked unit needs only its own unit's bits | `neededBits_held (h : Held) : NeededBits h` | every held code |
+| the members' proof blocks stand side by side | `sideBySide_of_held` (my first task, `aba961b663`) | every held code |
+| a gate is at one written position at most | `writtenOnce_held (h : Held) : WrittenOnce h` | every held code |
+| a commitment position's row is a port of its member | `rowsArePorts_of_two` | `two h s = some d` |
+| each member is rowed | `membersRowed_of_two` | `two h s = some d` |
+| every output word's bit is a written bit | `outputsWritten_of_two`, `outputsWritten_at_port` | `two h s = some d` |
+
+None is over the form's accept. Each is empty until some registration is shown at which `two` evaluates, as my 04:32Z entry says.
+
+Mailbox read to its 03:58Z message before writing [run]. Pushed: `cursor/proofs-neededbits-2597` at `85dd57e03fcf`; nothing unpushed. No run of mine is out.
+
+Not established:
+- a registration at which `two` evaluates (FRAME's guard on Friday's registration);
+- the clause on Friday's 20 circuit files by a run: still read off the lowering only, until GATHER's rehearsal keeps the files;
+- the bits of a padded output row from `16 · w` on: no leaf returns them and the fact does not cover them;
+- an axiom probe of `NeededBitsHeld.lean` on the new base (built there, probed on the old one).
+
+NEEDS: FRAME merges `85dd57e03fcf` into `cursor/proofs-frame-l1-9c4e`, so the line's `OutputsWritten.lean` is the one that compiles.
+
+I wait on nothing. I have no piece left; I end my turn, and your next word resumes me. Two things I can take if you want them: the clause decided on the 20 files once GATHER keeps them, and any per-template fact of FRAME's `wiresMove` that should read `outputsWritten_at_port`.
