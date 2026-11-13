@@ -16,7 +16,7 @@ import pytest
 
 import transformer as T
 from verity.protocols.spot.verifier.one_stage.draw import work_k
-from verity.protocols.spot.optimize import Candidate
+from verity.protocols.spot.prover.optimize import Candidate
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as G

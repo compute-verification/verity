@@ -239,7 +239,7 @@ the count is fixed before the run and is part of the point; `plan` shows it (`se
 **Identity.** A point's identity is a digest of what its time depends on, and nothing else: its row's `type`, `n`,
 `pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda_toolkit`,
 `env` and `setup`, and the SHA-256 of every source file of the prover and of the scripts that build it (their flags)
-(`verity/protocols/flock/prover`, `verity/protocols/flock/pod`; no tests, no Markdown), of the timing script and of the
+(`verity/protocols/flock/prover`, `verity/protocols/flock/prover/pod`; no tests, no Markdown), of the timing script and of the
 setup script. It names no commit, so a commit that changes none of those times no point again, and neither does an edit
 to another row, to `admission`, to `staged` or to the spec's name. The driver and the toolkit are the spec's because
 the node can't be asked before the run: the node side reads both on the node, refuses a node whose versions aren't the
