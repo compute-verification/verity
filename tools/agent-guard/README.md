@@ -34,6 +34,14 @@ payload has it as a string, cut at 64 characters; never the command, a path or a
 to `.1` and started again. `inbox.py check`, `selftest` and `guard` read from it whether a shell hook has run for an agent,
 and `inbox.py turns` the model each of an agent's turns names there. Each VM's log is its own.
 
+Every rule of the shell hook reads a command as the shell runs it (`shell_hook.words_of`), typed or in what a carrier
+has run: a comment hides the rest of its own line and nothing after it, a `#` inside a word or a quoted string
+(`issue#12`, a URL's fragment) hides nothing, and a `\` at a line's end joins the next line to it, though never to a
+comment. Quotes are what Python's `shlex` takes for them, which leaves three things read otherwise than the shell reads
+them: a comment inside backticks runs to its line's end, a quote nested in a `$(...)` inside another ends that one, and
+a `$'...'` ends at an escaped quote inside it. A command `shlex` can't split, with a quote nothing closes and no `#`
+before it, is judged on its raw text.
+
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
