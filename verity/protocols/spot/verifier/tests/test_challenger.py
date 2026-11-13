@@ -496,8 +496,8 @@ def test_each_trees_link_is_opened_before_its_other_rounds():
     round after another tree's as a tree's first, so a tree whose rounds come again after another's is held to its
     link's stream again; that order is `members_order`'s to refuse. The lines that open no round are read past."""
     s, rep = C.CT.SESSION, "circuit/rep0"
-    root = C.canonical_json_text({"event": "root", "index": 0, "label": "draw", "received_at": 0, "root": "ab"})
-    release = C.canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "draw", "released_at": 0})
+    root = C.canonical_json_text({"event": "root", "index": 0, "label": "sample", "received_at": 0, "root": "ab"})
+    release = C.canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "sample", "released_at": 0})
     assert C.links_first([root, release])
     assert C.links_first([_tree("01"), _round("01", s), _round("01", rep), _close("01"), root, _tree("02"),
                           _round("02", s), _close("02")])
