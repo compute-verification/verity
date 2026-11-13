@@ -1,6 +1,6 @@
 # CIR-274 4b (DSAMOE): what the sparse lowering needs of serving's registrations
 
-Two drafts, written and not applied. Lines on `main` are at `origin/main` `8c11a1d5ab`; lines of the frame and of
+Two drafts, written and not applied. Lines on `main` are at `origin/main` `8ef93f0196`, which has #9375 (`1e4d5c993c`); lines of the frame and of
 `node_window_sparse.py` are at the families head `b5c74a0683`. Tags: [read] read in the file at that line; [inferred] not
 run.
 
@@ -11,7 +11,7 @@ the latent) and `W_UV` at `{B=8, K=512, N=256}` (the value up-projection), per r
 stored [B][K][N] (`W_UK_T` [NH][DN][L], `W_UV` [NH][L][DV], `check/fp8_ue8m0.py:16`), as [B][N][K]: one
 `strided_view(w, b K N, K, 1, N, N K)` a head (`dsa.py:457`), so leaf j = n K + k of head b is the field's word
 b K N + k N + n [read]. A `SLICES` unit (b, n) reads K words that are a column of the record, and `IF.Read`
-(`interface.py:517-531`: rows of the port's width at `base + Σ d_k step_k` of one parameter's leaf order) reads only runs.
+(`verity/commitments/windows/interface.py:534`, `Read`: rows of the port's width at `base + Σ d_k step_k` of one parameter's leaf order) reads only runs.
 Today the port is a free input under `weights`, B·N·M units of K words a node (`node_window_sparse.py:84-87`).
 
 **Name.** `f"{WR.weight_param(label, K)}/bnk"`, that is `weights/<label>@<K>/bnk`, with `label` the field's label in the
@@ -75,7 +75,7 @@ draft does not take it.
 - **Permuted, committed per window as a unit's rows, never registered:**
   - `pipeline/part_rows.py:189-190`: `W.reshape(E, U, c, K).transpose(1, 0, 2, 3)`;
   - `pipeline/kchunk_rows.py:112`: `W.reshape(E, N, -1, k)[:, :, P].transpose(1, 2, 0, 3)`;
-  - `serving_rows.py:546` and `window_rows.py:518`, both on activations.
+  - `serving_rows.py:546` and `window_rows.py:613`, both on activations.
 - **A permuted field of record:** `fp8_ue8m0.absorbed` (`check/fp8_ue8m0.py:92`) defines `W_UV` itself as kv_b_proj's
   rows transposed.
 
@@ -115,7 +115,9 @@ index of each part must also be the weights record's, as `w.label` already requi
 
 My declarations are `_table_reads` (`node_window_sparse.py:151-160`): for each block b of each expert stack's weight
 and scales, `IF.Table(param, param, 0, H, E)`, `w.b.params[param] = H * E`, the `root` and `domain` table reads of
-`param`, and an `IF.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, units)`. Serving's side is the
+`param`, and an opening `IF.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, units)`. On `main` the class is
+`IF.TableOpening` (`interface.py:660`), with the same fields, as `expert_rows.declarations` uses it (`expert_rows.py:336`).
+DENSE renames line 160 when main is merged into families. Serving's side is the
 registration `verity-vllm tp-register-tables` (`pipeline/expert_tables.py`), the record `records/expert_tables.py`, and
 a window committer under it (`expert_rows.committer`, `expert_rows.py:377`). Each assumption, and what on `main` it must
 agree with:
@@ -124,7 +126,7 @@ agree with:
 |---|---|---|
 | **parameter name** | `XR.table_param(label, H, block)` = `weights/<label>@<H>/b<block>/table`, `label` the weights record's field label (`node_window.py:153-156`) | `expert_rows.table_param` (`pipeline/expert_rows.py:67-70`), called by `expert_tables.tables_of` with the Program's weight field names (`expert_tables.py:75, 77`; fields from `weights_of_record.program_weight_fields`, `weights_of_record.py:320-326`), matched by `EXPERTS_RE` (`weights_of_record.py:90`) |
 | **row width** | weights H = n K / 2 (e4m3 pairs in u16 words); scales H = 2 K / G (f32 in two u16 words), K the weight's | `tables_of`: `n * K // 2` (`expert_tables.py:75`) and `2 * K` of the scale field's last dim, which is K / G (`expert_tables.py:77`); `table_words`' `.reshape(E, -1).view("<u2")` (`expert_rows.py:83`) |
-| **row count** | E rows, one an expert (`EmbeddingRead_v1{V=E, H}`), leaves H · E | `table_words` rows = E (`expert_rows.py:82-83`); `expert_rows.declarations`' `IF.Table(param, param, 0, leaves // E, E)` (`expert_rows.py:332`); the entry's `leaves` (`records/expert_tables.py:18`) |
+| **row count** | E rows, one an expert (`EmbeddingRead_v1{V=E, H}`), leaves H · E | `table_words` rows = E (`expert_rows.py:82-83`); `expert_rows.declarations`' `IF.Table(param, param, 0, leaves // E, E)` (`expert_rows.py:332`) and `IF.TableOpening` (`expert_rows.py:336`); the entry's `leaves` (`records/expert_tables.py:18`) |
 | **block rows n** | `_block_rows` (`node_window_sparse.py:140-148`): w13 n = 1, w2 n = 32, from `unit_templates` and `BLOCK_WORDS` = 4096; the registration is not read | the registration's `blocks` (`records/expert_tables.py:30`), set by `--block w13=n --block w2=n` (`expert_tables.py:245, 276`), whose docstring example is `--block w13=1 --block w2=32`; refused unless a power of two dividing N (`expert_tables.py:72-74`) |
 | **block order** | weight table b = each expert's rows [b n, (b + 1) n); scale table b' = G-block b', read by block b at b' = b n / G; blocks b < N / n, b' < N / G | `tables_of`' `range(N // n)` and `range(N)` of the scale field's NB (`expert_tables.py:75, 77`); `table_words`' `[:, block * n:(block + 1) * n, :]` and `[:, block, :]` (`expert_rows.py:82`) |
 | **root** | a table read of `param`'s `root` into the read's `root` port: the verifier's pin | the entry's `root` (`records/expert_tables.py:18, 50`), from `H1R.commit(...).entry()` (`expert_tables.py:146`; `protocols/pouw/h1/registered.py:278`); a window's committer commits under the same key, program and nonces (`expert_rows.committer`, `expert_rows.py:377-382`) |

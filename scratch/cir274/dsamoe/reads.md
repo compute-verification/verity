@@ -33,7 +33,7 @@ the 78-layer ones are in `census-78.md`.
 
 **What the patterns are.** Every lowered template that reads a slot's key does it through an `IF.Wire` from the
 router-slots unit's output `o<TOPK + k>`. A wire has one writer output (`interface.py`, `Wire`), and a table read's
-root, domain and opening each name one table (`IF.TableRead`, `IF.Opening`). So a contiguous run of read units shares
+root, domain and opening each name one table (`IF.TableRead`, and `IF.Opening`, which is `IF.TableOpening` on `main`). So a contiguous run of read units shares
 its slot k (through the wire) and its block b (through the table). The runs are (b, k), and that gives B·TOPK key wires
 per read template per node in either order: table-major `(b TOPK + k) T + t` (taken), or slot-major `(k B + b) T + t`,
 which would make the key wires one per slot and move the same B·TOPK into openings and roots (three entries a run instead
@@ -82,6 +82,7 @@ B·TOPK per read template per node, 12,096 at 4 layers: a `Piece` places writer 
 count comes from the wire's one output and the opening's one table. Cutting them takes a format change, neither the
 frame's nor this lane's: a wire whose writer output steps by a digit (`o<TOPK + k>` over k), or a table read and opening
 over a family of tables indexed by a digit. Either changes `interface.Wire` or `Table`/`Opening`, `check_wires`,
-`coalesce`, `ordered` and the Lean verifier's reading of them. At 78 layers the same ratio holds per MoE layer (see
-`census-78.md`). [the counts are measured; that the two-digit `Piece` yields TOPK per W node is inferred from
+`coalesce`, `ordered` and the Lean verifier's reading of them. At 78 layers (run `r20261113-025656-e215`, `census-78.md`), the key wires are 907,200 of 945,322 patterns
+(207.9 MB of the 308.7 MB description; `check_wires` 6.76 s with them, 0.67 s without), and `g` is 26,400. A two-digit
+`Piece` would give 1,200 `g` wires, so 920,122 patterns, 2.7 % fewer. [the counts are measured; that the two-digit `Piece` yields TOPK per W node is inferred from
 `_slots`, not built]
