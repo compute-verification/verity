@@ -9,12 +9,13 @@ public import Proofs.Accounting.RateAudit.Witnesses
 For `BoundReceiptLink` and `BoundReceiptLinkInteractive`, at one block of one bit, one-bit tile outputs, no link,
 no tile work, no slack (`λ = 0`), one sampled block and `m = 0`, where the hypothesis on `m` holds (`0 < 1`):
 
-* **The honest lemma** (`<guarantee>_honest`): the node whose GPU is the rate audit's honest device
+* **The honest lemma** (`<guarantee>_honest`): some node, the one whose GPU is the rate audit's honest device
   (`Rate.Completeness.honest`, which tags every block under the tile outputs it holds) and whose rest does nothing
-  (`BoundReceipt.idleNode`) is accepted, within one mix query's compute and no tile work, with its footprint at the
+  (`BoundReceipt.idleNode`), is accepted, within one mix query's compute and no tile work, with its footprint at the
   floor, with probability 1; as an interactive node (`InteractiveNode.ofNode`) it also has `QueryDetermined`.
-* **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, the node that reads nothing
-  (`BoundReceipt.blankNode`) is short of the floor with probability 1, above the error `2^-1` at two-bit receipts.
+* **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, some node, one that reads
+  nothing (`BoundReceipt.blankNode`), is short of the floor with probability 1, above the error `2^-1` at two-bit
+  receipts.
 -/
 
 @[expose] public section
@@ -90,24 +91,27 @@ theorem link_error_lt :
   simp only [t1, t2, t3, zero_add, add_zero]
   exact ENNReal.inv_lt_one.2 ENNReal.one_lt_two
 
-/-- **`BoundReceiptLink`'s honest lemma**: the node whose GPU tags every block and whose rest does nothing, at one block
-of one bit, is accepted within one mix query's compute and no tile work, with its footprint at the floor, with
-probability 1. -/
+/-- **`BoundReceiptLink`'s honest lemma**: some node, the one whose GPU tags every block and whose rest does nothing,
+at one block of one bit, is accepted within one mix query's compute and no tile work, with its footprint at the floor,
+with probability 1. -/
 theorem BoundReceiptLink_honest :
-    pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 1 1 =>
-        idleNode.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ idleNode.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
-          idleNode.tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          ¬ idleNode.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 1 1 1 (1 - 0) 0) = 1 :=
-  pr_one fun x => idleNode_event x.1 x.2.1.1 x.2.1.2 x.2.2
+    ∃ n : Node 1 1 1 1 0 0 1 0 0,
+      pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 1 1 =>
+          n.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ n.compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
+            n.tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            ¬ n.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 1 1 1 (1 - 0) 0) = 1 :=
+  ⟨idleNode, pr_one fun x => idleNode_event x.1 x.2.1.1 x.2.1.2 x.2.2⟩
 
-/-- **`BoundReceiptLink`'s nontrivial lemma**: with the check accepting everything, the node that reads nothing is
-within its compute and tile work and short of the floor on every coin, above the error `2^-1`. -/
+/-- **`BoundReceiptLink`'s nontrivial lemma**: with the check accepting everything, some node, one that reads nothing,
+is within its compute and tile work and short of the floor on every coin, above the error `2^-1`. -/
 theorem BoundReceiptLink_nontrivial :
-    ¬ pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 2 1 =>
-        True ∧ blankNode.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧ blankNode.tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          blankNode.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 (1 - 0) 0)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + 2 * ((1 : ℕ) : ℝ≥0∞) / 2 ^ 2 +
-        ((Nat.choose 0 (1 - 0) : ℕ) : ℝ≥0∞) / 2 ^ 0 + ((Nat.choose 0 (0 + 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+    ∃ n : Node 1 1 1 2 0 0 0 0 0,
+      ¬ pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 2 1 =>
+          True ∧ n.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧ n.tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            n.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 (1 - 0) 0)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + 2 * ((1 : ℕ) : ℝ≥0∞) / 2 ^ 2 +
+          ((Nat.choose 0 (1 - 0) : ℕ) : ℝ≥0∞) / 2 ^ 0 + ((Nat.choose 0 (0 + 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+  refine ⟨blankNode, ?_⟩
   have hev : ∀ x : Store 1 1 × BoundReceipt.Coins 1 1 1 2 1,
       True ∧ blankNode.compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧ blankNode.tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
         blankNode.footprint x.1 x.2.1.1 x.2.1.2 * 1 < floor 1 0 0 0 0 0 1 (1 - 0) 0 := fun x =>
@@ -118,27 +122,30 @@ theorem BoundReceiptLink_nontrivial :
 /-- **`BoundReceiptLinkInteractive`'s honest lemma**: `BoundReceiptLink_honest`'s node, as a node whose answers
 ignore the mix, has `QueryDetermined` and passes as it does there, with probability 1. -/
 theorem BoundReceiptLinkInteractive_honest :
-    (InteractiveNode.ofNode idleNode).QueryDetermined ∧
-      pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 1 1 =>
-          ((InteractiveNode.ofNode idleNode).under x.2.1.2).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
-            ((InteractiveNode.ofNode idleNode).under x.2.1.2).compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
-            ((InteractiveNode.ofNode idleNode).under x.2.1.2).tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-            ¬ ((InteractiveNode.ofNode idleNode).under x.2.1.2).footprint x.1 x.2.1.1 x.2.1.2 * 1 <
-              floor 1 0 0 0 1 1 1 (1 - 0) 0) = 1 :=
-  ⟨InteractiveNode.ofNode_queryDetermined idleNode, pr_one fun x => by
+    ∃ n : Node 1 1 1 1 0 0 1 0 0,
+      (InteractiveNode.ofNode n).QueryDetermined ∧
+        pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 1 1 =>
+            ((InteractiveNode.ofNode n).under x.2.1.2).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
+              ((InteractiveNode.ofNode n).under x.2.1.2).compute 1 1 x.1 x.2.1.1 x.2.1.2 ≤ 1 ∧
+              ((InteractiveNode.ofNode n).under x.2.1.2).tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+              ¬ ((InteractiveNode.ofNode n).under x.2.1.2).footprint x.1 x.2.1.1 x.2.1.2 * 1 <
+                floor 1 0 0 0 1 1 1 (1 - 0) 0) = 1 :=
+  ⟨idleNode, InteractiveNode.ofNode_queryDetermined idleNode, pr_one fun x => by
     rw [InteractiveNode.under_ofNode]
     exact idleNode_event x.1 x.2.1.1 x.2.1.2 x.2.2⟩
 
 /-- **`BoundReceiptLinkInteractive`'s nontrivial lemma**: `BoundReceiptLink_nontrivial`'s node, as a node whose
 answers ignore the mix, with the check accepting everything, above the error `2^-1`. -/
 theorem BoundReceiptLinkInteractive_nontrivial :
-    ¬ pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 2 1 =>
-        True ∧ ((InteractiveNode.ofNode blankNode).under x.2.1.2).compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          ((InteractiveNode.ofNode blankNode).under x.2.1.2).tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
-          ((InteractiveNode.ofNode blankNode).under x.2.1.2).footprint x.1 x.2.1.1 x.2.1.2 * 1 <
-            floor 1 0 0 0 0 0 1 (1 - 0) 0)
-      ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + 2 * ((1 : ℕ) : ℝ≥0∞) / 2 ^ 2 +
-        ((Nat.choose 0 (1 - 0) : ℕ) : ℝ≥0∞) / 2 ^ 0 + ((Nat.choose 0 (0 + 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+    ∃ n : Node 1 1 1 2 0 0 0 0 0,
+      ¬ pr (fun x : Store 1 1 × BoundReceipt.Coins 1 1 1 2 1 =>
+          True ∧ ((InteractiveNode.ofNode n).under x.2.1.2).compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            ((InteractiveNode.ofNode n).under x.2.1.2).tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
+            ((InteractiveNode.ofNode n).under x.2.1.2).footprint x.1 x.2.1.1 x.2.1.2 * 1 <
+              floor 1 0 0 0 0 0 1 (1 - 0) 0)
+        ≤ (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + 2 * ((1 : ℕ) : ℝ≥0∞) / 2 ^ 2 +
+          ((Nat.choose 0 (1 - 0) : ℕ) : ℝ≥0∞) / 2 ^ 0 + ((Nat.choose 0 (0 + 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 := by
+  refine ⟨blankNode, ?_⟩
   have hev : ∀ x : Store 1 1 × BoundReceipt.Coins 1 1 1 2 1,
       True ∧ ((InteractiveNode.ofNode blankNode).under x.2.1.2).compute 0 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
         ((InteractiveNode.ofNode blankNode).under x.2.1.2).tileWork 1 x.1 x.2.1.1 x.2.1.2 ≤ 0 ∧
