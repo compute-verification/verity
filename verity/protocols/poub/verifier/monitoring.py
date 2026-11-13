@@ -1,7 +1,7 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + ⌈W/g⌉·s/2^64 (δ₀
-the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 the sample term, the session's openings coins at its `samples` s
+the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 the draw term, the session's openings coins at its `samples` s
 each, `LineHeldAtComponent`'s).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
@@ -14,7 +14,7 @@ adaptive prover.
   at least T − M + 1 sessions certify their `q_bytes`: the period certifies at least (T − M + 1)·`q_bytes`, and at most
   (M − 1)/T of its sessions are uncovered.
 - **Per window** (`per_window`): the session's openings bound at δ/T instead of δ₀ (`pooled.bound` of its windows),
-  so that every one of the T sessions certifies that much at once, except with δ + T·(eps − δ₀), each session's sample
+  so that every one of the T sessions certifies that much at once, except with δ + T·(eps − δ₀), each session's draw
   term once.
 
 Both leave out (`EXCEPT`) each session's Σ_t adv_t, its windows' PRF advantages (SHA-512 stream as PRF: not priced,
@@ -33,7 +33,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-# The count bound is the wipe's too, held in pous: PoUB may import pous, and pous not it.
+# The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
 from verity.protocols.pous.verifier.wipe_monitoring import block_count, short_sessions
 from verity.protocols.reporting import DELTAS, PERIODS
 
@@ -69,14 +69,14 @@ def pooled_step(t: int, q_bytes: int, eps: Fraction, delta: Fraction) -> dict[st
             "bound": f"{float(bound):.3g}", "statement": STATEMENT["name"]}
 
 
-def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction, sample_term: Fraction) -> dict[str, Any]:
+def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction, draw_term: Fraction) -> dict[str, Any]:
     """Each of `t` sessions at δ/t: its openings' pooled bound at that δ, the reads it certifies and the period's total,
-    except with δ and each session's `sample_term` (its eps less its δ₀)."""
+    except with δ and each session's `draw_term` (its eps less its δ₀)."""
     b = pooled.bound(windows, delta / t)
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
     each = (sum(u for u, _ in windows) - wrong) * codec.BLOCK_BYTES
     return {"q_bytes_each": each, "q_bytes": t * each, "at": f"δ/T = {delta}/{t} a session",
-            "except_with": f"δ + T·(eps − δ₀) = {float(delta + t * sample_term):.3g}"}
+            "except_with": f"δ + T·(eps − δ₀) = {float(delta + t * draw_term):.3g}"}
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:
@@ -90,7 +90,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
                        "why": f"the session wasn't accepted ({answer.get('reason')}), so it certifies nothing to pool"}
     o = _observed(answer)
     eps = Fraction(o["eps"])
-    sample_term = eps - Fraction(answer["profile"]["delta"])
+    draw_term = eps - Fraction(answer["profile"]["delta"])
     periods = {}
     for name, seconds in PERIODS:
         per_machine, t = block_count(seconds, window_s), block_count(seconds, window_s, machines)
@@ -101,7 +101,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
             continue
         for d in DELTAS:
             row[str(d)] = {"pooled": pooled_step(t, o["q_bytes"], eps, d),
-                           "per_window": per_window(t, o["windows"], d, sample_term) if not o["gaps"] else None}
+                           "per_window": per_window(t, o["windows"], d, draw_term) if not o["gaps"] else None}
         periods[name] = row
     return head | {"observed": o, "periods": periods,
                    "scaled": [f"the sessions: {machines} machines, one session every {window_s} s each",
@@ -112,7 +112,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.protocols.poub.verifier.monitoring",
                                  description=__doc__.split("\n\n")[0])
-    ap.add_argument("answer", type=Path, help="the session's core answer, or a bandwidth.json carrying it")
+    ap.add_argument("answer", type=Path, help="the session's core answer, or a leg's bandwidth.json carrying it")
     ap.add_argument("--machines", type=int, required=True)
     ap.add_argument("--window-s", type=int, required=True)
     ap.add_argument("--deployment", default=None, help="the deployment's name, recorded beside its numbers")
