@@ -44,7 +44,7 @@ stamp() { echo "$(date -u +%FT%TZ) $*" >> "$DIR/stamps.txt"; }
 rm -f "$DIR/stamps.txt"
 stamp start
 PY=${PY:-/workspace/cp/venv312/bin/python}
-export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then

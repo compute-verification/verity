@@ -83,7 +83,7 @@ workers = 14
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
-          "verity/configuration/config/verity_config",
+          "tools/config/verity_config",
           "verity/protocols/spot/verifier/__init__.py",
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/definitions/kernels", "verity/definitions/private_circuits",
