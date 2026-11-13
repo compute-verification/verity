@@ -65,6 +65,11 @@ def not_run(raised: Exception) -> Record:
             "why": f"oracle compare not run: {raised!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(raised)[:300]}
 
 
+def renamed(text: str) -> str:
+    """``text`` of the Match record with its two requests under `M.WORKLOAD`'s ids."""
+    return text.replace(U0, "a").replace(U1, "b")
+
+
 def match_record(tmp_path: Path, *, view: bool) -> tuple[str, Record, dict[tuple[int, str], bytes]]:
     """The Match record of the module docstring, its two requests under `M.WORKLOAD`'s ids; with ``view``, one more fold instance
     whose one output view is `VIEW`.  Returns the record's directory, its binding map and the committed bytes that equal it."""
@@ -77,12 +82,13 @@ def match_record(tmp_path: Path, *, view: bool) -> tuple[str, Record, dict[tuple
             f.write(json.dumps({"node": 0, "step": 0, "event": 99, "pattern": "x", "spec": "X_v1{}", "row": 0, "rows": 8, "name": "t=0/other",
                                 "hint": "model.other/model.other.weight", "request": request, "position": 0, "operand_views": [],
                                 "output_views": [VIEW]}) + "\n")
+    for path in (instances, Path(d) / "capture" / "tokens.json"):
+        path.write_text(renamed(path.read_text()))
     log = Path(d) / "capture" / "log.jsonl.gz"
-    for path, opened in [(instances, open), (Path(d) / "capture" / "tokens.json", open), (log, gzip.open)]:
-        with opened(path, "rt") as f:
-            text = f.read()
-        with opened(path, "wt") as f:
-            f.write(text.replace(U0, "a").replace(U1, "b"))
+    with gzip.open(log, "rt") as f:
+        text = f.read()
+    with gzip.open(log, "wt") as f:
+        f.write(renamed(text))
     return d, bmap, committed
 
 
