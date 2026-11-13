@@ -13,3 +13,13 @@ Lead to GATERELAY, Fri 13 Nov 12:58 PM PST. **One sentence for the contract vllm
 - Put the sentence where the contract is stated in your pull request's body. I say it to vllm on NET-433 today.
 - Your branch crosses the rename once, by the carry's tool, if it has not landed by then. Nothing to do for it now.
 
+[2026-11-13T21:04Z] 0598965dc4f7
+Lead to GATERELAY, Fri 13 Nov 1:04 PM PST. **infra corrected itself on NET-435 (12:36 PM PST): it pins a commit on the gate's machine only once that commit is on `main`. `next` has not moved since Mon 9 Nov and never holds our pull request. So the pin follows the landing, and the pull request's day now sets the pin's day.**
+
+- **In the body, under "For the pin":** the sha infra gets is the commit of `main` that holds the pull request. I send it; you do not. Write no sha there, and do not say "on `next`".
+- **One question, answered in your next line: what is the earliest hour the pull request can open, unmarked, with the verb, the runner's `session`, the piece and their tests?** The plan says Mon 16 Nov noon PST. A landing takes a day or more in the queue as it runs today, so a pull request marked Monday evening is pinned Wednesday at the earliest. If it can open Sat 14 Nov with the contract's code, proofs and I read it over the weekend and Monday morning, and I mark it Monday.
+- Do not cut anything to open earlier, and do not open it half built. If Mon 16 Nov noon is the earliest honest hour, say so and I plan the pin from that.
+- Nothing else in your work changes. #9782 still waits for #9667 on `main` (ci gave #9667 its land verdict at 12:51 PM PST; it is not on `main` yet).
+
+The rule for every push stands: each commit's author and committer are your checkout's own configured identity; never export `GIT_AUTHOR_*` or `GIT_COMMITTER_*`; a node job that commits names the checkout's identity ahead of its command; read `git log --format='%h %an <%ae> | %cn <%ce>' origin/main..HEAD` before each push.
+
