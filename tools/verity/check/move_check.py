@@ -1415,7 +1415,7 @@ TOKEN_CHAR = re.compile(r"[^\s\"'`()\[\]{}<>,;=]")
 
 def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) -> tuple[str, dict] | None:
     """The word map a move with `scope = "prose"` renames by (``path``, else the `Move:` line of HEAD's message), as BASE has
-    it; None for any other move."""
+    it, its words in `[words]` or all scoped to files (`[[words_in]]` under an empty `[words]`); None for any other move."""
     if path is None:
         m = MOVE_LINE.search(git("log", "-1", "--format=%B", head, cwd=cwd).decode(errors="replace"))
         path = m and m.group(1)
@@ -1423,7 +1423,7 @@ def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) 
         data = tomllib.loads(base.text(path) or "") if path else {}
     except tomllib.TOMLDecodeError as e:
         raise SystemExit(f"move-check: the move's word map {path} doesn't parse at BASE: {e}") from e
-    return (path, data) if data.get("scope") == "prose" and data.get("words") else None
+    return (path, data) if data.get("scope") == "prose" and (data.get("words") or data.get("words_in")) else None
 
 
 class Terms:

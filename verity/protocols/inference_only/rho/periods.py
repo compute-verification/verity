@@ -16,9 +16,9 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
   beside the headline (`sensitivities`);
 * **its parts**: the citations of the bound that sets it, by kind (`KINDS`), each assumption with its standing at
   the block that binds;
-* **what is scaled**: a serving block's local minimum is a per-server-window bound (one server between two wipes,
-  onsite; one server over the period, remote), its cuts' statements are per serving block, and the bound sums them over
-  every server and window; the dark leaves are one pool, `ε_dark` of the fleet, and the uncertified routes are shares of
+* **what is scaled**: a server block's local minimum is a per-server-window bound (one server between two wipes,
+  onsite; one server over the period, remote), its cuts' statements are per server block, and the bound sums them over
+  every server and window; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
   each server's capacity, neither a per-window bound;
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
@@ -126,7 +126,7 @@ def parts(r: Result, reg: Registry) -> dict:
 
 
 def scaled(r: Result) -> dict:
-    """The serving blocks the bound sums a per-server-window bound over, and the share of the bound that isn't one."""
+    """The server blocks the bound sums a per-server-window bound over, and the share of the bound that isn't one."""
     s, part = r.scenario, r.scenario.regime.partition(r.scenario.context)
     phi = s.context.location.phi
     blocks = [{"name": b.name, "count": b.count, "seconds": b.gates / phi,
@@ -134,7 +134,7 @@ def scaled(r: Result) -> dict:
     terms = analysis.attribution(r)
     return {"blocks": blocks,
             "per_window_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ("serving", "inference")),
-            "dark_share": math.fsum(t.share for t in terms if t.name == "dark"),
+            "unreg_share": math.fsum(t.share for t in terms if t.name == "unregistered"),
             "routes_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ROUTES)}
 
 
@@ -292,9 +292,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                            for b in sc["blocks"])
         counts = "; ".join(f"{g['where']}, {g['period']}: {fmt(b['count'])} of one server × "
                            f"{operating.human(b['seconds'])}" for g in group for b in g["scaled"]["blocks"])
-        out += [(f"| scaled | {sc['per_window_share']:.1%} of the slowdown's rate: each serving block's local minimum is a "
+        out += [(f"| scaled | {sc['per_window_share']:.1%} of the slowdown's rate: each server block's local minimum is a "
                 f"per-server-window bound ({blocks}), summed over the blocks ({counts}) |"),
-                (f"| not scaled | the dark pool {sc['dark_share']:.1%} (`ε_dark` of the fleet, one pool), the "
+                (f"| not scaled | the unregistered pool {sc['unreg_share']:.1%} (`ε_unreg` of the fleet, one pool), the "
                 f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`) |"),
                 "| what sets it | " + ", ".join(f"{t['name']} {t['share']:.1%}" for t in x["attribution"]) + " |", ""]
     out += ["## The premises, ranked", "",
