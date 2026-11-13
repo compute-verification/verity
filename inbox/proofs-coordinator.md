@@ -144233,3 +144233,453 @@ Not established:
 
 To post: nothing. Head pushed: `761e99eaeb9` on `cursor/proofs-stagecoins-scripts-af4a`; nothing unpushed. No run of mine is going on.
 
+
+## REDRAW, Fri 13 Nov 13:50Z: point 4, statements first: none of the five says more of an accepted read (two are the same propositions as before); the gain is in what one-stage accepts, which no statement says; the reader's module has 31 + 4 listed readers, one deployed; STOPDRIVER's finding is not touched; "one family a digest" can be stated over `drawCoins`, "one family a boundary record" cannot
+
+Text only. Nothing was built, nothing was run on a node, no branch of mine moved. The machine was replaced before
+this turn: `~/wt/.pen` and every `/tmp` worktree were gone; the pen was made again at 13:32Z and its owner line is
+mine. The four heads on the remote are the ones my 13:11Z entry names, with no commit I did not make. [run] The
+mailbox has 532 lines, read to its end (the 12:54Z message). [run]
+
+Read at: #9728's head `36d6e37cbc7b`; the join's branch `cursor/proofs-join-42b8` at `4e986e339ad2`; STOPDRIVER's
+12:40Z and 13:18Z entries in this file. The readers of each module are from the report of my records run
+`r20261113-112700-682b` (exit 0), fetched again; it built `ae6df4b23cfc`, a commit of the credit branch that
+differs from #9728's head in no file of the reader or of the statements. [run]
+
+### STOP RULE
+
+**Three lines of my 13:05Z sizing say more than I had read. I correct them here.**
+
+1. "Five records move." Of the five, only `FamilyOneCommitment` has a record of its own in a lock, and only
+   `Draws` and `FamilyOneCommitment` are in a `reads` group. `DrawnByDevice`, `ReadsChallenger` and
+   `CoinsFromLog` are in no lock as a record: two are `frozen` lines of the Properties lock's `shape`
+   ("unstated ... a draft statement"), one is nowhere. [read]
+2. What I did not say and should have: the function under them is read far more widely than the five. The
+   module `Spot.ChallengerDraw` is read by 31 listed guarantees in the Properties lock (4 `@proofs`, 27
+   `@soundness`), among them the deployed `Verity.remote_soundness_of_subprotocols`, and by 4 in the security
+   lock. [run] Point 4 changes `drawCoins`, `coinsReason` and `DRAW_FORM` there and deletes four more.
+3. "`DrawnByDevice` and `FamilyOneCommitment` gain `∀ main` ... conclusions unchanged" reads as if they then said
+   more. They do not: each is the same proposition as before (below). The verifier refuses more; these statements
+   do not say so.
+
+**No listed guarantee is false or empty by what I read.** [read] **No statement in `security/Definitions` or
+`security/Properties` concludes anything from the pin or from main's first-parent line.** [run: a search for
+`firstParentReason`, `pinnedSession`, `pinsReason`, "first-parent" in both trees finds nothing] So nothing listed
+can say what point 4 buys, before or after it.
+
+### The reader, as it is and as it would be
+
+`verity/protocols/spot/verifier/lean/Spot/ChallengerDraw.lean` 55 to 63 and 92 to 96. [read]
+
+As it is:
+
+```lean
+def drawCoins (key : ChallengerKey) (window label : String) (after : ByteArray) (coins : Json) : V ByteArray := do
+  unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
+  let (c, roots) ← trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+    (getD coins "pins") (getD coins "main") (getD coins "session")
+  ...
+
+def coinsReason (key : ChallengerKey) (main coins : Json) (window label : String) (after read : ByteArray) :
+    Option String :=
+  match drawCoins key window label after coins with
+  | .error why => some why
+  | .ok stream => if !sameMain main (getD coins "main") then some COINS_MAIN else startReason stream read
+```
+
+As it would be:
+
+```lean
+def drawCoins (key : ChallengerKey) (main : Json) (window label : String) (after : ByteArray) (coins : Json) :
+    V ByteArray := do
+  unless keys? coins == some #["ledger", "pins", "segment", "session"] do throw DRAW_FORM
+  let (c, roots) ← trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+    (getD coins "pins") main (getD coins "session")
+  ...
+
+def coinsReason (key : ChallengerKey) (main coins : Json) (window label : String) (after read : ByteArray) :
+    Option String :=
+  match drawCoins key main window label after coins with
+  | .error why => some why
+  | .ok stream => startReason stream read
+```
+
+- What `main` does in the reader: one comparison. `pinnedSession` (`ChallengerSession.lean` 898 to 902) calls
+  `firstParentReason session pinned main` (883 to 894), which refuses unless `main` is a list of 40-digit names
+  that holds the commit the ledger's open line pins. It does not choose the session (the ledger and `window` do),
+  the family (`label`) or the digest (`after`). [read]
+- The two readers are one function: for evidence `coins₄` of the four keys, the new reader at `main` is the old
+  reader at `coins₄` with `main` put in. [derived] The old evidence of five keys is refused in form by the new
+  reader, and the new evidence by the old.
+- What the verifier gains is in the callers. `OneStage.coinsOf` (`OneStage.lean` 475 to 481) and v2's `treesOf`
+  (`OneStageZk.lean` 674 to 677) today pass the evidence's own `main`. So today a one-stage audit accepts a session
+  whose pinned commit is on any list the evidence names; after, only one pinned on the list its parameters name.
+  Under one verifier's list, every run accepted after is accepted today, and not the other way. [derived]
+- The stream's run (`Run.coinsCode`, `Run.lean` 186) and the stop audit's `across` (`RecordAcross.lean` 132) read
+  through `coinsReason` and accept exactly what they accept today: `sameMain` holds only when the two copies are
+  the same list of strings (`mainLines?`, 75 to 85), and then they are the same value. [derived]
+- PoUW's check does not change: `PouwCheck.Rounds` (70) and `PouwCheck.Credit` (329) call `trustedSessionOf`
+  with `main` as their own argument already. [read]
+
+### The five, side by side
+
+All in `security/Properties/Challenger.lean` at `36d6e37cbc7b`. In each pair the first block is as it is.
+
+**1. `DrawnByDevice`** (377 to 387)
+
+```lean
+def DrawnByDeviceAt (read : ChallengerKey → String → String → ByteArray → Json → Flock.V ByteArray) : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    read key w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
+        Break dev key label coins
+
+def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
+```
+
+```lean
+def DrawnByDeviceAt (read : ChallengerKey → Json → String → String → ByteArray → Json → Flock.V ByteArray) :
+    Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after : ByteArray) (coins : Json)
+      (ξ : ByteArray),
+    read key main w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
+        Break dev key label coins
+
+def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
+```
+
+- **What the new one says that the old did not: nothing.** The copy of main's history is now named as the
+  reader's argument, as the key is, where before it was quantified inside `coins`.
+- **More or less of an accepted read: the same.** The conclusion is word for word the old one. `Break` reads the
+  evidence only through `signatures` (161 to 183) and `readHashed` (280 to 305), and neither reads `main`. [read]
+  With the two readers one function, each statement gives the other. [derived, not built]
+- **Locks.** No record of its own. The Properties lock's `shape.frozen` holds a line for it: "unstated:
+  Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and
+  label, or the fixed finder findBreak outputs a break ... a draft statement, which gets a guarantee entry once
+  the one theorem reads it". That line stays true. It is in no `reads` group of either lock. [read]
+- **Deployed readers: none**, and no listed reader at all. [read]
+- Beside it: `drawnByDevice_nontrivial` (`security/Proofs/Properties/Challenger.lean` 79, not listed) takes a
+  reader of six arguments in place of five.
+
+**2. `FamilyOneCommitment`** (419 to 424)
+
+```lean
+def FamilyOneCommitment : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    drawCoins key w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+        ∀ r ∈ s.roots label, r = after) ∨
+        Break dev key label coins
+```
+
+```lean
+def FamilyOneCommitment : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after : ByteArray) (coins : Json)
+      (ξ : ByteArray),
+    drawCoins key main w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+        ∀ r ∈ s.roots label, r = after) ∨
+        Break dev key label coins
+```
+
+- **What the new one says that the old did not: nothing**, for the same reason as `DrawnByDevice`.
+- **More or less of an accepted read: the same.** [derived, not built]
+- **Locks.** Listed in `security/Properties/lean-audit.json` as the guarantee
+  `Properties.Challenger.Drawn.familyOneCommitment`, owner `@proofs`, no premise of any kind; under `witnesses`
+  with `familyOneCommitment_honest` and `familyOneCommitment_nontrivial`; under `shape.properties` as
+  `{"function": "Spot.Challenger.drawCoins", "outcome": "accept"}`. The definition is in that lock's `reads`
+  group `Properties.Challenger`. It is in no other lock. [read]
+- **What of it moves.** The definition's hash in `reads`. The honest lemma's own record: its statement names
+  the reader, so it gains `main` among what exists (the honest session's own list of one commit). [read] The
+  nontrivial lemma's text does not change: it is stated at the conclusion alone (96 to 99). Whether the
+  guarantee's own `unfolded_hash` moves I have not shown. [guess: yes]
+- **Deployed readers: none.** The group `Properties.Challenger` has four readers in the Properties lock: this
+  guarantee, its `…Read` twin and their two nontrivial lemmas. [run] The Properties lock's `deployed` has six
+  names and none of these. [read]
+- Its twin `FamilyOneCommitmentRead` (435 to 442) keeps its text to the letter: it is over `coinsReason`, whose
+  signature does not change. It says the same of the same accepted reads. [derived] Its docstring's
+  "(`{ledger, main, pins, segment, session}`, its `main` held to the caller's)" becomes the four keys.
+
+**3. `Draws`** (448 to 452)
+
+```lean
+structure Draws where
+  key : ChallengerKey
+  window : String
+  label : String
+  after : ByteArray
+```
+
+```lean
+structure Draws where
+  key : ChallengerKey
+  main : Json
+  window : String
+  label : String
+  after : ByteArray
+```
+
+- **What the new one says that the old did not:** the copy of main's history is among what a sample's challenges
+  are read under, "all of it the verifier's" in the structure's own words, beside the key, the window, the family
+  and the digest.
+- **More or less of an accepted read:** it is a structure, not a statement; it says nothing of a run by itself.
+- **Locks.** In the security lock's `reads` group `Properties.Challenger`, as `Draws`, `Draws.key` and
+  `Draws.label`, with `oneStageSource` and `oneStageZkSource`, which build it. Not in the Properties lock's
+  group. [read]
+- **Deployed readers: none.** That group's readers in the security lock are
+  `Verity.Sampled.remote_soundness_deployedReady` and its honest lemma, owner `@soundness`. [run] Neither is among
+  the security lock's 14 `deployed` names. [read] They read it through `records : List (Draws × Json)` and
+  `Binds` (`security/Proofs/Properties/Verity/Sampled/Binding.lean` 169 to 179, 861). [read]
+- A choice: put `main` last and the projections `key` and `label`, which the lock reads, keep their places.
+  [guess: fewer hashes move]
+
+**4. `ReadsChallenger`** (457 to 462)
+
+```lean
+structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
+  source : P.Params → P.Commitment → Option Draws
+  record : P.Evidence → Json
+  decode : ByteArray → L.Coins
+  reads : ∀ p c d, source p c = some d → ∀ e ξ, L.coins p c e = .ok ξ →
+    ∃ raw, drawCoins d.key d.window d.label d.after (record e) = .ok raw ∧ decode raw = ξ
+```
+
+```lean
+structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
+  source : P.Params → P.Commitment → Option Draws
+  record : P.Evidence → Json
+  decode : ByteArray → L.Coins
+  reads : ∀ p c d, source p c = some d → ∀ e ξ, L.coins p c e = .ok ξ →
+    ∃ raw, drawCoins d.key d.main d.window d.label d.after (record e) = .ok raw ∧ decode raw = ξ
+```
+
+- **What the new one says that the old did not:** a protocol that reads through the challenger's reader reads it
+  under a copy of main's history that its parameters and commitment fix (`source` takes nothing else), where
+  before that copy was in `record e`, the evidence. The old docstring's "read from them alone, never from the
+  evidence" was silent on that copy; the new one is true of it.
+- **More or less of an accepted read:** it is what is asked of a protocol, not a statement of a run. It asks
+  more: one-stage as it is on #9728's head meets the old one and not the new.
+- **Locks: in none.** Not a guarantee, not in a `reads` group, not in `shape`. [read] Its two instances,
+  `oneStageReads` (505 to 509) and `oneStageZkReads` (533 to 538), are in none either. [read]
+- **Deployed readers: none.**
+
+**5. `CoinsFromLog`** (470 to 478)
+
+Its text does not change by a letter; `R` and `d` change type under it.
+
+```lean
+def CoinsFromLog : Prop :=
+  ∀ (P : Core.Protocol) (L : Core.Live P) (R : ReadsChallenger P L) (dev : History) (a b e : ByteArray),
+    (P.answer a b e).verdict = .accept →
+      ∃ p c ev ξ, (Core.canonicalJson a >>= P.params) = .ok p ∧ P.commitment b = .ok c ∧ P.evidence e = .ok ev ∧
+        (P.answerAt L a b ξ e).verdict = .accept ∧
+        ∀ d, R.source p c = some d →
+          (∃ s ∈ dev.runs d.key.pub, OpensOn dev d.key.pub d.window s.id ∧
+            R.decode (s.released d.label d.after) = ξ) ∨
+          Break dev d.key d.label (R.record ev)
+```
+
+- **What the new one says that the old did not: nothing in its conclusion**, which never names `d.main`. It
+  speaks of the protocols that meet the new `ReadsChallenger`.
+- **More or less of an accepted run: the same of each, and of fewer.** For one-stage and its v2, the runs
+  accepted after point 4 are among those accepted today, and of each it says what it said: the challenges are
+  the ones a run of the device released, or a break. [derived]
+- **Locks.** No record of its own. A `shape.frozen` line of the Properties lock: "unstated: an accepted answer is
+  the live answer at the coins the challenger's device released, or a break ... a draft statement". It stays
+  true. In no `reads` group. [read]
+- **Deployed readers: none.**
+
+### What moves in the locks, and who reads it
+
+How a lock answers a changed definition, from the one case I have: the `commitOf?` change, read by four
+guarantees of the security lock, moved two lines there, the definition's hash and its group's digest; no reader's
+own record moved (`git diff 36d6e37cbc7b 1370c60b7e75 -- security/lean-audit.json`). [run] The check's review
+names every reader beside the changed definition ("definition ..., read by ...: changed"). [read: `682b`'s report]
+
+| `reads` group | changes there | readers, Properties lock | readers, security lock |
+| --- | --- | --- | --- |
+| `Spot.ChallengerDraw` | `drawCoins`, `coinsReason`, `DRAW_FORM`; `COINS_MAIN`, `sameMain`, `mainLines?`, `commitName?` go | 31, one deployed | 4, none deployed |
+| `Spot.OneStage` | `Params`, `Params.challenger`, `paramsParsed`, `coinsOf` | 30, one deployed | 5, one deployed |
+| `Spot.OneStageZk` | `treesOf` | 29, one deployed | 4, none deployed |
+| `Spot.ChallengerTrees` | `trustedTreesOf` | 26, one deployed | 4, none deployed |
+| `Properties.Challenger` | `FamilyOneCommitment`; `Draws`, `oneStageSource` | 4, none deployed | 2, none deployed |
+
+- [run] The deployed reader in the Properties lock is the same one in each row:
+  `Verity.remote_soundness_of_subprotocols`, owner `@soundness`, whose `trust_gap` lists
+  `Verity.Vocab.InferenceOnlySound`, `PouwSound` and `SpotSound`. It reaches the reader through the compiled
+  check of remote's sampled subprotocol (`component`, `security/Properties/Verity/Game.lean` 184 to 194). [read]
+- [run] The 31 of the first row: `familyOneCommitment`, `familyOneCommitmentRead` and their honest lemmas
+  (`@proofs`); `Properties.Remote.SecurityProofs.acceptComplies`, `acceptInferenceOnly` and its nontrivial lemma,
+  `Properties.Spot.SecurityProofs.tablesRegistered`, and 23 named `Verity.*` (`@soundness`).
+- [run] The 4 of the security lock: `Flock.SecurityProofs.RecursiveAuditC3` (`@proofs`) and
+  `Verity.Sampled.remote_soundness_deployedReady` with its honest and nontrivial lemmas (`@soundness`).
+- [run] The deployed reader of `Spot.OneStage` in the security lock is `Flock.SecurityProofs.SampledKSLiveV5`.
+  Its statement names `OneStage.drawnFrom` and `coveredDesign` (`security/Proofs/Flock/Bridge/V5/Statement.lean`
+  313 to 316), which take the registration's verifier and not `Params`; point 4 changes neither. [read]
+- So the notice ruling 4 of Thursday 22:41Z foresaw goes to `@soundness` more than to us: 27 of their listed
+  guarantees read a module point 4 changes, one of them deployed, and the texts of none of them change. [derived]
+
+### What none of the five says, and the statement that would
+
+Point 4 buys one fact: the session a read accepts ran a commit on the list the caller holds. None of the five
+concludes it, and nothing in `security/` does. If soundness wants it stated, it is a sixth, of this shape:
+
+```lean
+def PinnedOnMain : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after : ByteArray) (coins : Json)
+      (ξ : ByteArray),
+    drawCoins key main w label after coins = .ok ξ →
+      (∃ line ∈ dev.ledger key.pub, ∃ e cs, ledgerEntry? line = some e ∧ e.kind = "open" ∧
+          getD (getD e.body "window") "root" = .str w ∧ main = .arr cs ∧ getD e.body "pinned" ∈ cs) ∨
+        Break dev key label coins
+```
+
+- [guess] A sketch: I have not read where the open line keeps `pinned`, and I have written no proof.
+- [derived] Of today's reader the same sentence can only be said of the evidence's own list, which the prover
+  writes. This is the one statement whose content differs before and after point 4.
+- I do not propose to add it in point 4's pull request unless you say so.
+
+### STOPDRIVER's sections (ii) and (iv)
+
+**Does point 4 help, hurt or not touch the finding: it does not touch it.**
+
+- [read] The finding is that the family and the first session's root reach the reader as parameters that a
+  driver writes from the hand-off. Point 4 changes neither argument, who writes it, or what is compared with it:
+  after it `drawCoins` still finds the one session the ledger opens on the caller's `window` and still requires
+  the segment's label to be the caller's `label` (55 to 62). A play that reserved two families and names the one
+  it prefers passes the new reader exactly as it passes the old.
+- [read] `FamilyOneCommitment`, old or new, says of that play what STOPDRIVER's (iv) says: it is true at the
+  family named and silent on a second family of the same session.
+- **Where it helps, a little.** It is the same mend for a third value. On the join's branch the compiled
+  two-stage form reads `main` from the first stage's evidence in three places (`SampledTwo.lean` 298, 413, and
+  through `OneStageZk.coinsOf`), and its module docstring says so and names the cure: "the verifier's own copy, as
+  a parameter, is the open fix" (36 to 38). [read] Point 4 is that fix. And unlike the family and the root, the
+  drivers hold `main` from the verifier's own command line, not from the hand-off: `two_stage.py` requires
+  `--main` on both commands (1174, 1203 at #9728's head). [read] So after point 4 the parameters' `main` can be
+  the verifier's own word even where the family and the root are not yet.
+- **Where it crosses the finding's fix: the same lines.** Point 4 widens `OneStage.Params.challenger` (99) from
+  a pair of key and label to three values, and with it the parser (`exactly ch #["key", "label"]`, 364),
+  `oneStageSource`, and on the join's branch `inputOf` (`p.boundary.challenger.map (·.2)`, 297),
+  `interiorUnshown` (`| some (k, label), some w`, 409) and `sampled_two_case.assemble`
+  (`"challenger": {"key": key, "label": ...}`, 67 and 70). STOPDRIVER's refusal compares
+  `p.boundary.challenger`'s label at `inputAt`. [read] Whichever lands second is rewritten over the other. It
+  hurts no statement.
+- [read] The join's branch does not hold #9728's head, so its three reads of the evidence's `main` are refused
+  as `NO_MAIN` once point 4 is under it, until they read the parameters'.
+
+**Is there a statement over `drawCoins` that says "a session's record has one family a boundary record": not in
+those words; two nearby ones can be stated.**
+
+- [read] Why not in those words: `drawCoins` is handed no record. It holds 64 bytes (`after`) and a label. From a
+  digest alone no reader can tell which record it is of, or that two digests are of records over one boundary
+  record. STOPDRIVER's 12:40Z entry says the same of the signed log. That sentence belongs where the record is
+  held, which is the form: STOPDRIVER's refusal at `inputAt`.
+- [read] What `drawCoins` does hold: `trustedSessionOf` hands it `(c, roots)`, where `c.families` is the layout
+  the session signed before any challenge opened, and `roots` is every family of that layout with every root the
+  whole log shows (`releasedRootsOf`, `ChallengerSession.lean` 236 to 262, over the log held to its close, 279
+  to 285). It reads one entry, `roots.find? (·.1 == label)` (63).
+
+**A. One family a digest.** No new argument. One more refusal in the reader, over what it already holds:
+
+```lean
+  unless roots.all (fun (l, rs) => l == label || !rs.contains after) do throw FAMILY_ALONE
+```
+
+```lean
+def FamilyAlone : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after : ByteArray) (coins : Json)
+      (ξ : ByteArray),
+    drawCoins key main w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+        (∀ r ∈ s.roots label, r = after) ∧
+        ∀ l, l ≠ label → after ∉ s.roots l) ∨
+        Break dev key label coins
+```
+
+- In words: in the session the read is from, no family but the one read shows a challenge released after the
+  digest read after.
+- [read] It is false of the reader as it is, which has no such step.
+- [derived] Its proof would be `FamilyOneCommitment`'s with one more line: that proof already shows the log read
+  is the device's own, whole, so the `roots` the reader checked are the run's for every family. Not written.
+- [derived] What it closes of STOPDRIVER's table (12:40Z): "same directory twice", where `draw/0` and `draw/1`
+  both follow D_b `1fd1…` and `draw/2` and `draw/3` both follow D_s `c9c3…`; and the class's half of "two stop
+  records", where `draw/0` and `draw/1` both follow `1fd1…`.
+- [derived] What it does not close: a play with one family for the class and one for each of two stop records,
+  where each digest has one family; and a session on another root.
+- [read] There is a like step on the join's branch already: `interiorUnshown` reads another family's roots from
+  `trustedSessionOf` and refuses a challenge of it after one digest (`SampledTwo.lean` 400 to 416).
+
+**B. The signed layout is the caller's list.** A new argument, the families the verifier expects of the session:
+
+```lean
+  unless c.families.map (·.1) == families do throw LAYOUT_NAMED
+```
+
+```lean
+def LayoutNamed : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w : String) (families : List String) (label : String)
+      (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    drawCoins key main w families label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+        s.families.map (·.1) = families) ∨
+        Break dev key label coins
+```
+
+- In words: the session's record, signed before any challenge opened, reserves the families the caller lists and
+  no other. With a caller that lists one family for each boundary record it holds, this is the sentence asked
+  for. That the list is one a record is the caller's to hold, not the reader's.
+- [derived] It closes every row of the table but the other root, where the caller lists rightly.
+- [read] Its price: every caller names every family of its window's session. One-stage's session can hold the
+  seed salt's family beside the sample's (`seedSaltOf`, 126 to 130, reads the same window). [relayed] The
+  one-stage command's ranks share one session, a family each (STOPDRIVER (i)). The pieces and the mirror change
+  form again.
+
+**Which I would state, and what neither does.**
+
+- [derived] Neither replaces STOPDRIVER's refusal. With the family a function of the record and the root the
+  record's own run, a spare family gains the prover nothing, and two stop records of one layout name one label,
+  which one layout cannot hold twice (`Challenger.lean` 83). [relayed: (iv), "What follows from it"]
+- [derived] A adds something only where the parameters are written after the play and the caller holds no
+  record: the stream's run and `across`. Where parameters are fixed before the session opens, a spare family's
+  challenges are never read, and A adds nothing.
+- I can state A in point 4's pull request or in one of its own: about three lines of the reader, the mirror, one
+  refusal's cases, and the proof's extra line. [guess] B I would not start without soundness asking for it.
+
+### Not established
+
+- Nothing was built. Every "the same proposition" above is derived by reading `signatures`, `readHashed`,
+  `firstParentReason`, `sameMain` and `keys?`; no Lean states or proves it.
+- The report gives readers by module, not by definition. That the deployed
+  `Verity.remote_soundness_of_subprotocols` reads `drawCoins` itself, and not only its module, is read off its
+  statement's path through `component`, not off a record. Whether `SampledKSLiveV5` reads `OneStage.Params` or
+  `coinsOf` is not shown either way.
+- The readers were recorded at `ae6df4b23cfc`, not at #9728's head; I checked only that the two differ in no
+  file of the reader or the statements.
+- Which hashes move (`familyOneCommitment`'s `unfolded_hash`, the projections of `Draws`): guessed from one
+  earlier diff. Only a records run shows it.
+- Whether the 27 `@soundness` guarantees' proofs change beyond the 16 files my 13:05Z sizing counted: not
+  followed. `Verity.Sampled.remote_soundness_deployedReady`'s text does not name the reader. [read] Whether its
+  `keyOf` needs a twin for `main` I did not follow.
+- A and B: no proof written. That no honest flow releases two families after one digest (v2's sample then link,
+  the command's ranks, the seed salt) is read from the Lean callers only; I did not read the challenger's Python
+  or run a flow against A. Two classes whose records are equal byte for byte would be refused by A.
+- That a device's run in the model has distinct labels: the reader's parser requires it of the record
+  (`Challenger.lean` 83); `Run.commitment` does not. A's proof would have to carry it across. Not written.
+- `PinnedOnMain` is a sketch.
+- The join's branch was read at `4e986e339ad2` in the places named; I did not read whether it has moved, or
+  STOPDRIVER's part 2 branch.
+- Who holds the parameters' `main` to the verifier's own checkout in the compiled one-stage audit of record: I
+  read the command's flag (`a5.py` 1779, 1802), not the path from it to the parameters' file.
+
+### State
+
+- Heads on the remote, unchanged: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e2` (#9717),
+  `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b` (#9728), `cursor/proofs-honest-credit-9d1e` `1370c60b7e75`,
+  `cursor/proofs-redraw-commitof-4e9d` `779936dea335`. [run] Nothing is unpushed: this turn wrote no code.
+- No run in flight, no timer set. No merge of `main`, no rebase. The boundary line is as it was.
+- Decision 1's sentence for the credit pull request's body is drafted in my note: the public tree then has
+  `DrawWithheld` and its proof without its honest lemma `drawWithheld_honest`; it becomes public with
+  `security/Proofs/Properties/Challenger/Withheld.lean`, which needs the three private imports under the
+  challenger's proof files cut (PoUS's memory challenger's attest tree, PoUB's schedule, the onsite composites).
+- I wait for your word: on the texts from soundness, and "carry" with FRAME's steps, not before 15:00Z.
