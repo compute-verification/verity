@@ -2161,9 +2161,9 @@ def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_pat
 #: Llama-3.2-1B's cut linears as vLLM serves them: its layers, and a layer's four in its forward's order, each (n, k):
 #: qkv_proj, o_proj, gate_up_proj and down_proj (hidden 2,048, intermediate 8,192, q's 2,048 rows with k's and v's 512 each)
 LLAMA32_1B = (16, ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)))
-#: the window class of the run of record r20261106-165116-614b: its slots, prompt ids and outputs
+#: the window class of the run of record: its slots, prompt ids and outputs
 #: (`window_class.WindowClass`), so 4 rounds under its fixed load
-CLASS_614B = (4, 32, 4)
+RECORD_CLASS = (4, 32, 4)
 
 
 def timed(f):
@@ -2173,11 +2173,11 @@ def timed(f):
     return out, time.perf_counter() - start
 
 
-def record_size_passes(tmp_path: Path, seed: int = 614) -> list[Path]:
-    """The manifests of a served run of the run of record 614b's size, one a round of class `CLASS_614B`'s fixed load
+def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
+    """The manifests of a served run of the run of record's size, one a round of class `RECORD_CLASS`'s fixed load
     (`window_class.PearlTables`: round 0 every slot's prompt, 128 rows, and each later round a row a slot, 4 rows of the 16
     its A commits), each calling `LLAMA32_1B`'s 64 cut linears at their real (n, k), weight 4·layer + linear and call
-    index 64·round + call: 4 passes, 256 calls, 64 weights, the served instance of 614b's scheme (`H100_SCHEME`, 64 x 64
+    index 64·round + call: 4 passes, 256 calls, 64 weights, the served instance of the run of record's scheme (`H100_SCHEME`, 64 x 64
     tiles), one epoch under one salt coin, no row excluded.
 
     Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
@@ -2186,7 +2186,7 @@ def record_size_passes(tmp_path: Path, seed: int = 614) -> list[Path]:
     minutes of ChaCha20 here. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written (the
     manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
     layers, linears = LLAMA32_1B
-    slots, prompt, outputs = CLASS_614B
+    slots, prompt, outputs = RECORD_CLASS
     s, rng = PPD.scheme_of(H100_SCHEME), np.random.default_rng(seed)
     shapes = {len(linears) * layer + j: nk for layer in range(layers) for j, nk in enumerate(linears)}
 
@@ -2234,7 +2234,7 @@ def record_size_passes(tmp_path: Path, seed: int = 614) -> list[Path]:
 
 @pytest.mark.slow
 def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weights(tmp_path, capsys):
-    """At the run of record 614b's size (`record_size_passes`: class (4, 32, 4), 4 passes of Llama-3.2-1B's 64 cut linears,
+    """At the run of record's size (`record_size_passes`: class (4, 32, 4), 4 passes of Llama-3.2-1B's 64 cut linears,
     256 calls, each weight at its real (n, k)), the producer's W at version 2 (`pearl_c.window.record`) registers 576
     values: the 512 the run of record's version-1 W did, then each of the 64 weights' B rows once, at its n rows of K
     words. `tie` accepts it on its 576 tables with every weight tied, each ``pearl-b/<w>`` the root its passes' epochs
@@ -2295,7 +2295,7 @@ def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weig
 
     written = len(json.dumps(w, indent=1)) + 1
     with capsys.disabled():
-        print(f"\nW v2 at 614b's size: {len(names)} values (512 of 256 calls, 64 weights' B rows), {written:,} bytes as "
+        print(f"\nW v2 at the run of record's size: {len(names)} values (512 of 256 calls, 64 weights' B rows), {written:,} bytes as "
               f"`window.write` writes it ({len(json.dumps(w, separators=(',', ':'))):,} compact), "
               f"{written - len(json.dumps(PWR.record(mans, version=1), indent=1)) - 1:,} more than its v1; verify_run.tie on "
               f"4 passes {seconds * 1e3:.1f} ms")

@@ -529,7 +529,7 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
 
 
 def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
-    """At the run of record 614b's size (`test_pearl_c_vllm.record_size_passes`: class (4, 32, 4), 4 passes of
+    """At the run of record's size (`test_pearl_c_vllm.record_size_passes`: class (4, 32, 4), 4 passes of
     Llama-3.2-1B's 64 cut linears, 256 calls, a served instance's 64 x 64 tiles, each root an hm96 root over fake row
     digests), the Lean's verdict with no draw, held to the producer's version-2 W (`pearl_c.window.record`), is the
     Python's: it accepts tied to W on its 576 tables, 64 of them the weights' B rows. It refuses, in the Python's words
@@ -557,7 +557,7 @@ def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
         got = same(exe, paths, 0, tie=w, test_instance=False)
         assert (got["verdict"], got["reason"], got["tie"], got["commitment"]) == ("reject", why, None, None), got
     with capsys.disabled():
-        print(f"\nLean pouw-pearlplus at 614b's size, no draw, tied to W v2 (576 values): {seconds:.2f} s")
+        print(f"\nLean pouw-pearlplus at the run of record's size, no draw, tied to W v2 (576 values): {seconds:.2f} s")
 
 
 @pytest.mark.skipif(not settings.RECORDED, reason="POUW_PEARLPLUS_RECORDED names no recorded run")
