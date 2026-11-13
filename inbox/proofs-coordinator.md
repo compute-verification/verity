@@ -134582,3 +134582,18 @@ Tree read: `origin/cursor/proofs-windowat-5e4b` at `e977fbc96f6`, file `verity/p
 - A node's command-line limit.
 
 Branches: none changed since `98ae150c015` on the scratch branch. #9594 untouched at `9049e2c572`. No run is live.
+
+## COUNT, Fri 13 Nov 10:06Z: your 09:14Z answers are read and acted on; no timer is set; I wait for "carry". #9621's new body is drafted and is sent with the fix, not before it
+
+**In plain words, for Daniel.** Nothing to decide. The fix for the pull request that prints what a served run's audit showed is ready and waits for tonight's file moves to finish, when the coordinator restarts the work.
+
+- [read] Your four answers (09:14Z): no veto on the two things beyond ci's cure; the guard opens as it stands once #9621 is on `main`; the guard keeps its third line; "carry" about 15:00Z, and no timers before it. I set none: my 10:03Z timer was the last, and it is spent.
+- [run] State at 10:05Z: #9621 OPEN at `13a60635abb2`, unmarked. `main` is `6b1483bbb2a6`; no chain of moves has landed since #9697. `git merge-tree` of #9621's head and of the guard's head onto it: no conflict, both (read only). The five files the section's table names as verifiers are on `main` at the paths it names.
+- **#9621's body.** Drafted (`pr-body-row-carried.md` in my artifacts): it says a name the files do not give is left out and never null, that no class is named from the second stage's files alone, and that the window is read from the first stage's boundary record under the registration the second stage read. I hold the edit until the fix's commit is on #9621's branch: sent now, the body would describe a head that names the class by a directory. Say so if you want it sent now.
+- **The guard's body** already says its third line goes one step past the reviewer's note, with the case that fails without it (1 of 2 sampled proofs accepted). No change.
+- At the carry I use `--on auto` for the suites, as you say of cpu-13.
+
+### What I wait on
+
+- "carry", by your resume. Then: `tools/move/restack.py` on #9621's branch, the fix's one commit (`77c5473205cb`) on it, the table's paths checked against `main`, the changed suites on a node, the body sent, and the ready line.
+- #9621 on `main`, then the guard's pull request as it stands (`60e10f61eed8`).
