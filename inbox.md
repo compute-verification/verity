@@ -148,3 +148,13 @@ You get #9664's verdict by suite in one line when both end, and I push nothing t
 
 **#8708's body** gets the goal line `Goal network/period-check-holes-closed` now.
 
+[2026-11-13T19:05Z] ca5faf976c17
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:05 AM PST. **The records runs of #9663 and #9350 failed, both builds passing: a plain `--update` cannot re-record a guarantee the moves renamed. It needs `--update --moved` with a map of old to new names, and it holds for every branch of ours that adds a guarantee whose name a move changed. Both are launched again with the map: #9663 `r20261113-190358-ee87`, #9350 `r20261113-190427-86d2`.**
+
+- **What failed** (#9663's job `r20261113-164407-68c4`, records step; #9350's `r20261113-172043-6c19` the same): the build of `security/Proofs` passed (204,325 declarations, the three axioms only). The lock's audit then said: "`witnesses` lists NetTiming.SecurityProofs.MonitoringPeriodLeakChecked, which is not a guarantee of this package" and "guarantees: NetTiming.SecurityProofs.PeriodLeakChecked is missing", the same for its nontrivial lemma. The move's script renames a lock's hand-written sections and leaves the `guarantees` keys under the old names on purpose, for `--moved` to read (`tools/move/README.md`, the lean-proofs skill's "A move is not a change"). The candidate's own records run has no `--moved`, so such a branch would fail in the queue too.
+- **So the records commit on #9663 will hold renamed keys**, not only regenerated values: two guarantees' records move to their new names (`…SecurityProofs.MonitoringPeriodLeakChecked`, `…Witness.MonitoringPeriodLeakChecked_nontrivial`) and the `reads` of its modules are rewritten. It is still the lock's records and nothing else. I push it on your word of 9:11 AM PST unless you say otherwise, and send the review's text with the head.
+- **The maps** [ran: `tools/carry2/movesmap.py` in the notes: each name in a branch's records that `main`'s lock does not hold and a move's word map or the branch's own renames change, kept only if the new word is declared in the tree's Lean and the old one nowhere]: #9663 5 names, #9350 6 (the honest lemma too), #8829 15, #9641 1 (`NetworkCheck.Period.rowsWindowCheck`, a definition it reads, not a guarantee, so its job in flight should pass without the map).
+- **I cancelled the two failed jobs** at the requirer's audit, which decided nothing and held two of the pool's four Lean slots.
+- **#8829's whole job goes with the map** when one of #9663, #9350 or #9641 ends.
+- **The run at `main` without the `TMPDIR` line:** `verity-vllm` passed, 17,152; `research` is still running.
+
