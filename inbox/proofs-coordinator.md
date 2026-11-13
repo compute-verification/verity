@@ -125511,3 +125511,30 @@ Nothing new compiled since `r20261113-051428-7214` and `r20261113-051449-dfaa` [
 - **The bridge from `parse_canon`'s `Same` to `ledgerEntry?`, as it stands** (the figure you asked for comes with the first compiled step lemma; this is the count so far). [run] Written: the two writers agree and nothing escapes (356 lines), the record read through `Same` (138 lines), the assembly `ledgerEntry_some_of_steps` (in `Steps.lean`). [guess] Still to write, 350 to 550 lines: the length bound on a line holding a deployed LMS signature in hex, the body's reads through `Same` (about twenty fields), `Record.unsigned` through `Same` for the signed message, the forward lemma for `event` on the log's three lines. [guess] Fri 20 Nov holds if the first tries show the scripts carry over with small fixes; I say so, or not, at the first compiled lemma.
 - [run] No walk scripts are mine (your 05:50Z, item 2); my runs ask 64 GB (records) and 16 GB (one file's try).
 - **Unpushed:** nothing. **I wait on:** `r20261113-054723-4bcf`.
+
+## SERVEDCARD, Fri 13 Nov 06:36Z: the Lean leg's rehearsal launched (`r20261113-063506-2823`), waiting on cpu-14 for 240 GB of memory; the kit is in the store
+
+- [run] The kit: `git archive --prefix=verity-0803d3669786/ 0803d36697868861ec37c71fd656789911c719a4 | gzip -n`, 63,950,196 bytes, sha256 `e63b0a7e6447713467559c879faf8a4364835b599ffa8e88b092e8e4c2e2fe73`. It is in the store, preserved and checked on the remote, as `art:7fe64883b55e42f7c6e01283cafe40f586ae57c8d19d6e9a48e7f1b108f75551` (kind `kit/v1`, which the store doesn't know yet and stored anyway).
+- [run] The kept sessions come from each proving run's custody record, the `run_record` in its `.custody` on node A, every one preserved:
+  - `r20261113-035634-1c43`: `art:ae7d6d57a67deb1da616cd38a75e4caf050120c24612d64bc67413e2a6f0008d`;
+  - `r20261113-043823-9759`: `art:82c6beab64e47d9837c25c2cf67319c837efb0c00add3cf82349cec8ffc3de65`;
+  - `r20261113-044114-51aa`: `art:46a7db21217957182c2694d8831943102775873bb8fb7ca2c15fdcfb7802ddbb`.
+
+  The first record lists 594 files, 257 MB of them under `out/kept`.
+- [run] `lean-shard.sh` in the lane's notes (synced `f5a23da891`) now:
+  - fetches the kit by its `art:` id and refuses to run unless its sha256 is `KIT_SHA256`;
+  - unpacks it and restages and verifies from that tree;
+  - fetches each statement's `out/kept/NAME/` from the record of `RECORDS` that lists it, and holds every file to the sha256 the record lists (`out/kept.tsv`);
+  - builds `flock-read-tmpl` beside the verifier, because the census reads stage only with it.
+
+  Tried here, without the build: the kit came back with that sha256, and `BatchedGemm` K=512's 25 kept files (18.8 MB) matched their record.
+- [run] The rehearsal, `r20261113-063506-2823`, was launched at 06:35Z from `main` at `b843a10af4` through `research run --on auto --cwd source --store-read --mem-gb 240 --cpus 16 --timeout 21600`. Its two statements are `BatchedGemm_v2{B=1,K=512,…}@full` (k_log 22) first, then `SparseMlaHeadBlock_v2{…,FIRST=false,…}@full` (k_log 27).
+  - It spilled to vy-nebius-cpu-14's research pool. Node 2 takes no `--on auto` job until Sat 02:00Z, and cpu-6, the node with the most free memory (388 GB), has all four slots held.
+  - At 06:35Z its free slot r15 was blocked on memory: 197 GB free against the 240 GB asked. It waits there up to 4 hours, and the 6 hours count from taking the slot.
+- [read] Why 240 GB: the head block's staging at full peaked at 203 GB, measured on node A on Tue 10 Nov and again from `main` on Thu 12 Nov, 5,125 CPU-seconds (`units.py`'s `MEASURED`, type 1). 240 GB is 203 GB plus 18%.
+- [guess] The Lean verifier runs after the restage ends. In the CPU rehearsal it peaked at 2.3 GiB on a 532 MB circuit; on the head block's 12.2 GB circuit, if that grows linearly, about 53 GiB, below the restage's peak.
+- [guess] When it ends: from taking the slot, about 1.5 h for the head block's restage, then five sessions at perhaps 10 to 20 minutes each, so 3 to 4 hours. The k_log 22 statement's verdict comes in the first half hour.
+
+Next: items 4 and 5 now, the launch file once the rehearsal's numbers are in (by Fri 10:00Z, as ordered).
+
+For the table: kit `art:7fe64883…75551` (sha256 `e63b0a7e…2fe73`); Lean rehearsal `r20261113-063506-2823` on cpu-14, waiting for 240 GB, then about 3 to 4 hours.
