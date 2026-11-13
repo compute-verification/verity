@@ -129020,3 +129020,46 @@ Two helpers beside them: `oneTable_of_shape` (a statement in the masked scope wh
 **Not established.** That either file compiles (`cfb5` decides). That `--siblings` finds no clash for the eight new names. The corollaries over `JoinsAt`.
 
 Branches: `cursor/proofs-sessionof2-7c3a` at `ea29e4e1d1`, pushed. `cursor/proofs-sessionof-5c1e` at `521933e143` and `cursor/proofs-sessionof-9b17` at `b611ff18e0`, untouched. Runs: `r20261113-075819-cfb5` running on vy-nebius-cpu-1.
+
+## FIRSTACCEPT, Fri 08:03Z: the real run: no launch; path (a) needs three things that are not mine
+
+**FIRSTACCEPT: the real run.** I launched nothing. The run needs a second audit of a window that was already audited, and one step of it may not fit a node.
+
+**The kept serve** (from VLLM-269's comments; I asked serving nothing):
+- The serve is `r20261112-101803-fbc8` on `vy-dc-h200-3`, at `69655a037c6a`. The audit is `r20261112-120044-297f` on cpu-6. [relayed]
+- The audit drew 298 members under `stratified:1`, took 16.5 h at a peak of 452 GiB, and Lean accepted all 298 sessions. Its challenges came from the gate. [relayed]
+- The serve's directory is kept on cpu-6 alone, to 25 Nov, under vllm's word. [relayed]
+- At `69655a037c6a`, a5 writes no per-member case, and the compiled check has no `refusal` entry. So the kept audit holds no case to run it on. [read]
+- Its sessions did not run on the window's challenger session. The served harness sets neither `FLOCK_CHALLENGER` nor `--deployed-key`, at the serve's commit or at #9594's. So a case built from those sessions would be refused for a missing challenger or trees, not by the switch alone. [read, derived]
+
+**Which entry reaches `checkMembersAt`.**
+- It is `sampled-proofs-one-stage-zk refusal PARAMS COMMITMENT EVIDENCE [BLOB ...]` (`Spot/MembersRefusal.lean`, already on `main`). [read]
+- It reads either form (`paramsEitherOfJson`, `evidenceEitherOf`) and runs `checkBlobs`. It prints `MULTI_REFUSED` exactly where every check before the switch passed, and it never exits 0. [read]
+- `protocol` (`check`) refuses the per-member form at parsing. [read]
+- From Python, `one_stage.members.case_refusal(case)` runs it, and `ALL_PASSED` is its answer when only the switch refuses. [read]
+- My driver runs it with no change to what the verifier accepts. [read]
+  - At #9594's commit, `records_audit.py audit --challenger local --deployed-key` with `FLOCK_CHALLENGER=1` on one rank puts each member's sessions on the window's challenger session (`window_trees`). It closes each tree (`closes_trees`) and writes `case-v2-members.json` with the challenger (`case_coins` under `member_trees`).
+  - `test_audit_two_members` asserts `case_refusal(case) == ALL_PASSED` on a two-member test window. [read; I did not check that it ran in my run 1374]
+
+**What a real run needs, and from whom.**
+1. **The vllm lead's word, and yours, to audit Thursday's window a second time.** VLLM-269 says "A served run is opened for audit once. No retries", and AGENTS.md says nothing resamples. A second draw with fresh challenges over values whose first audit is known is a resample, even as a run of no record. The gate also opens a root once, so this second audit can only be local. [read, derived]
+2. **cpu-6, from infra, with vllm's word to read the kept directory.** The window's values are only there, and `--on auto` cannot place a run on the node that holds them. Copying is out of scale: the serve needed 772,388 inodes. The audit took 16.5 h and 452 GiB of 540 GB; with a deployed key, about 17 h. [relayed, guess]
+3. **A check that the refusal step fits.** `refusal` reads every sampled member's circuit file and session files into one process (`refusalMain`, `readBinFile` per blob). 17 of Thursday's circuits are 8 to 32 GB of text each, so that one process likely holds well over 200 GB before Lean's own overhead. Reading blobs lazily, or one statement at a time, changes the verifier's executable; that is your decision and Daniel's. [read, guess]
+
+A smaller step, if a second audit is ruled out: the served harness's audit step at #9594's commit, run once on a CPU node on a stand-in window (`rehearsal_window.py`), with `FLOCK_CHALLENGER=1 --challenger local --deployed-key`. It would show the served path's case refused by `MULTI_REFUSED` alone, with no served values. It is about an hour on `--on auto`. I have not launched it; it needs your yes. [guess]
+
+**My part of MEMBERS's list, once the switch exists.**
+- **Sessions on the window's challenger session.** a5 has this on `main` (`window_trees`, one rank). The served harness (`served_verdicts.sh` v3c, vllm's) must pass `FLOCK_CHALLENGER=1` to the audit. [read]
+- **The key.** It must be at W = 1, H = 20: local with `--deployed-key`, or the gate's key record at those parameters. I have not read the gate's record's W and H. [read, guess]
+- **The case's fields.**
+  - a5 writes `case-v2-members.json` and says "nothing here reads it as a case" (`write_case`).
+  - Once it accepts, it needs the sampled proofs' one-stage form beside it, as `case-sampled.json` is for one statement (`case_with_form`). Today that form is written for a one-member draw only.
+  - The composite's `verity/sampled-proofs/v1` case (vllm's `served_cases.py`) must read it; today it is missing at a draw of several members. [read]
+- **Memory.** The accepting check reads all sampled blobs in one process (item 3 above).
+- **#9594** stays unmarked, and I merge no `main` into it. I carry it with `restack.py` when you say. If it lands after the other four, the split of `OneStageZk.lean` is mine. [read]
+
+**For TOP-415.** The first real run that the per-member form refuses by its switch alone is not launched. Today's only kept serve of the small model was audited on Thursday. A second audit of it would be a second draw over a served window, which our rules forbid without the owner's word. It also needs the node holding the served values for about 17 hours. And the one check that reaches the per-member form reads every sampled circuit at once, more than 200 GB on that window. The tools for the run are in place on `main`, and #9594 is ready for it. A two-member test window already shows the per-member form refused by its switch alone. What remains is a decision on the second audit, the node, and how the check reads large circuits.
+
+**Not established.** That the refusal step fits in memory on Thursday's window. That a5 at #9594's commit reads the window that `69655a037c6a`'s serve wrote; the one-stage verifier's code differs by about 5,400 lines between them. That `test_audit_two_members` ran, rather than skipped, in run 1374. The gate key's W and H.
+
+Branches: `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594), pushed, untouched. Runs: none launched.
