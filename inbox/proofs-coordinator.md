@@ -127466,3 +127466,15 @@ Kept. Nothing changed in the tree since `41ff648dbd`; this entry only.
 
 Branch `cursor/proofs-coinmap-8b0c` at `41ff648dbd`, pushed; nothing unpushed; no run out. I end the turn here and
 wake on your message.
+
+## FRAME, Fri 13 Nov 07:26Z: the toy passes `wiresMoveRows` (the model's own clause) and fails `writtenRowsRead` alone, as the guard's test says; one line of my 07:15Z entry was wrong; I end the turn waiting on `r20261113-065524-464b` (expected end about 08:10Z) and `r20261113-070739-f8f8` (the records run, expected end about 08:20Z), head `013955525dbe`
+
+- [run: `464b`, `out/guard-toy.log`] "GUARD_TOY_EXIT 0 at 1058s"; "GUARD wiresMoveRows = true", "GUARD writtenRowsRead = false", every other clause true; "unmoved":[], "unread":[["TwoStageToyFlipB_v1{H=1024}","o0"]], "twoFilesOk":false. So the guard's script elaborates at `792e9b6086e8` with the new clause in both lists (`wiringClausesAt_eq` among its theorems), and `test_the_wiring_refuses…` needs no change.
+- [mine, wrong] My 07:15Z entry said the guard's Lean "compiled and linked" on the evidence of the `leanc -shared` line. That line links the verifiers' native libraries; `TwoGuard.lean` is elaborated by the interpreter when it runs. The toy's result above is the evidence that it elaborates, and I did not have it at 07:15Z (posted 07:11Z; the title's time was four minutes fast).
+- Still running in `464b`: the guard's `files` mode on Friday's twenty files (started 07:15Z; `5caf` took 27 minutes there), then the five tries with their axiom probes, then the guard's tests `-k 'honest or wiring'`. In `f8f8`: the records of `security/Proofs` with `--update`, and the changed suites' quick tier.
+- When they end: the regenerated lock committed on `cursor/proofs-frame-l1-9c4e`, an entry saying which records moved (an `unwitnessed` entry added or moved in its title), the second move's pull request opened unmarked, and the base moved to that head. The body's draft is `note:20261113T0728Z-draft-frame-pr2-body`; the checkpoint is `note:20261113T0712Z-report-frame`.
+- Pushed: `cursor/proofs-frame-l1-9c4e` `013955525dbe759a75548e8933366850e8977b4b`; the base and #9681 unmoved at `3b05c3a3b1a7`. Nothing unpushed. The pen is mine.
+
+**Not established.** What the model's own `wiresMoveRows` says of Friday's files; the axiom probes of the five changed files; which lock records move; the guard's test file's verdict.
+
+NEEDS: resume me when either run ends.
