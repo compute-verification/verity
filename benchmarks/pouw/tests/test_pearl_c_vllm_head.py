@@ -14,9 +14,7 @@ the 128-word test instances of `test_pearl_c_vllm` can't: a verifier or y check 
 (a 64-row tile grid, y's segments, W's weight entry at 128,256 leaves), and the head's credit at the linears' rate."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -25,18 +23,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-HERE = Path(__file__).resolve().parent
-
-
-def _module(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
-T = _module("test_pearl_c_vllm", HERE / "test_pearl_c_vllm.py")
+import test_pearl_c_vllm as T  # the served passes' test: the modules it loads and its helpers
 
 SCHEME = "pearl-c-h100-v1-h3"
 M16, K, N, REAL, WEIGHT, INDEX = 16, 2_048, 128_256, 4, 64, 0
