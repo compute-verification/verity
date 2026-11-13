@@ -112738,3 +112738,19 @@ Nothing.
 
 - That `main`'s scan refuses *every* such log: derived, and run on two logs.
 - The refusal: not written yet. Its Lean is next, then its try.
+
+## MAJORITY, Fri 01:43Z: r20261113-010608-780b's records audit failed on the base's `SampledTwo/Steps.lean`, not on my files; I cancelled it, merged TWOLEG's new head `99da2b9189`, and the records run is again in r20261113-014235-7384 on vy-nebius-cpu-11
+
+The records run failed before it reached the lock. It has to build the whole proofs package, and one of TWOLEG's base files, `SampledTwo/Steps.lean`, did not build at the head I had merged. So it says nothing yet about whether a listed recursive statement moved. TWOLEG's newer head fixes that file's imports, so I merged it and launched the run again.
+
+**1. The failure.** [run] `r20261113-010608-780b` on vy-nebius-cpu-11, at `e00ab95ce5`, waited 24 minutes for a slot (memory on the node was oversubscribed), then ran `--records security/Proofs`. That command audits `security/Proofs`, then `security` and `security/Properties` with it. Building `security/Proofs` failed at one module, `Proofs.Properties.Verity.SampledTwo.Steps`, with "Unknown identifier" errors at lines 30 to 46 for `OneStage.Public`, `OneStage.Commitment`, `OneStageZk.Run`, `OneStage.commitmentOf`, `OneStageZk.coinsOf` and `OneStageZk.membersRun`. [read] Those names live in `verity/protocols/spot/verifier/lean/Spot/OneStage.lean` on `main`, which the base at `b04e0a9fd9` had not merged yet. The base at `99da2b9189` has merged it, and has `structure Public` at `OneStage.lean:117`. Every other module the build reached was built or cached, mine among them. I cancelled the run after its first audit, because the rest of it ran on the same tree.
+
+**2. The new run.** [run] My branch is now at `65810fa781`, with `99da2b9189` merged. [read] The merge leaves `MajorityBound` unchanged; it renames `CoinsRead` to `CoinsAgree` in the projection's pieces, which my files don't read. Both of my lakefile roots are still there. [run] `r20261113-014235-7384` on vy-nebius-cpu-11 runs `--records security/Proofs` (no `--update`), then `--try SampledTwo/Majority.lean --siblings`. Because the base merged `main`, its build also rechecks my three files.
+
+**STOP RULE.** None so far.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** The lock check. Whether my three files still elaborate after `main` came in through the base: [guess] they should, since none of their imports changed text in the merge, but the new run decides it. Pushed head: `65810fa781`; nothing is left unpushed.
