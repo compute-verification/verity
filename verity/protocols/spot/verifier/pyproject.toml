@@ -19,7 +19,7 @@ untraced = [
 ]
 # Test-only: the Lean-evaluated exfiltration vectors record the sha256 of the soundness package's files they were generated
 # from (tests/lean/generate.sh), and a test compares them with the tree. The catalog's Definitions register their kernels
-# (verity.definitions.kernels) lazily. test_proofs.py fetches its fixture through Flock's `verifier/ci.py`, whose child
+# (verity.circuits.kernels) lazily. test_proofs.py fetches its fixture through Flock's `verifier/ci.py`, whose child
 # `python -m research data fetch` imports the research files listed last.
 inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
@@ -31,7 +31,7 @@ inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoTable.lean",
           "security/Definitions/Claims/SamplingTwo.lean",
           "security/Proofs/lake-manifest.json",
-          "security/Proofs/lean-toolchain", "verity/circuits", "verity/definitions/kernels",
+          "security/Proofs/lean-toolchain", "verity/circuits", "verity/circuits/kernels",
           "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
           "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py",

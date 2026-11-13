@@ -270,7 +270,7 @@ def _program(a: argparse.Namespace) -> Any:
 
     if a.model == "tiny":
         from verity.definitions.registry import b1
-        from verity.definitions.tiny import TINY
+        from verity.circuits.tiny import TINY
         return Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2))
     return one_call(resolver(a.resolver, "--definition")(a.definition))
 
@@ -278,7 +278,7 @@ def _program(a: argparse.Namespace) -> Any:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--model", choices=["tiny"], help="the tiny Serve_v1 Program (`verity.definitions.tiny`, 38 Calls)")
+    src.add_argument("--model", choices=["tiny"], help="the tiny Serve_v1 Program (`verity.circuits.tiny`, 38 Calls)")
     src.add_argument("--definition", help="a registered Definition id, as a one-Call Program (bound by --resolver)")
     ap.add_argument("--resolver", default=None, help="MODULE:FUNC (MODULE may be a .py path): FUNC(id), the registered "
                     "Definition an id names")
