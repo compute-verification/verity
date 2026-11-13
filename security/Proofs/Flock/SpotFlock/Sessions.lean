@@ -191,7 +191,53 @@ theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage 
   have e : stmtAt h m₂ t = xs.getD t (h.xS₀ t) := by unfold stmtAt; rw [hx]
   rw [e]
   simp only [stmtOkAt, hp, Bool.and_eq_true, beq_iff_eq]
-  exact ⟨⟨⟨⟨hok.1.1.1, hok.1.1.2⟩, hall.1.1⟩, hall.1.2⟩, hall.2⟩
+  exact ⟨⟨⟨⟨hok.1.1.1.1, hok.1.1.1.2⟩, hall.1.1⟩, hall.1.2⟩, hall.2⟩
+
+/-- **The statement check holds the run's records to the registrations' names** (`recordsOk`). -/
+theorem recordsOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) : recordsOk h x m₁ = true := by
+  obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
+    cases hp : parse h x with
+    | none => simp [stmtOk, hp] at hok
+    | some s => exact ⟨s, rfl⟩
+  obtain ⟨xs, hx⟩ : ∃ xs, stmtsOf m₂ = some xs := by
+    cases hx : stmtsOf m₂ with
+    | none => simp [stmtOk, hp, hx] at hok
+    | some xs => exact ⟨xs, rfl⟩
+  simp only [stmtOk, hp, hx, Bool.and_eq_true] at hok
+  exact hok.1.2
+
+/-- **Names that pass `namesEq` are `want`'s, each once.** -/
+theorem namesEq_spec {got : Option (List String)} {want : List String} (he : namesEq got want = true) :
+    ∃ ns, got = some ns ∧ ns.Nodup ∧ ∀ v, v ∈ ns ↔ v ∈ want := by
+  cases got with
+  | none => simp [namesEq] at he
+  | some ns =>
+    simp only [namesEq, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, List.contains_iff_mem] at he
+    exact ⟨ns, rfl, he.1.1, fun v => ⟨he.1.2 v, he.2 v⟩⟩
+
+/-- **A record that names its registration's names** has the registration's ports as its roots' ports and the
+registration's registered values as its registered values, each a string named once. -/
+theorem recordOk_spec {rec : Lean.Json} {n : Names} (hr : recordOk rec n = true) :
+    (∃ ps, namesAt rec "roots" "port" = some ps ∧ ps.Nodup ∧ ∀ p, p ∈ ps ↔ p ∈ n.ports) ∧
+      ∃ vs, namesAt rec "registered" "value" = some vs ∧ vs.Nodup ∧ ∀ v, v ∈ vs ↔ v ∈ n.values := by
+  simp only [recordOk, Bool.and_eq_true] at hr
+  exact ⟨namesEq_spec hr.1, namesEq_spec hr.2⟩
+
+/-- **The records `recordsOk` passes**: the run's statement and round 1's record decode, and each names its
+registration's names. -/
+theorem recordsOk_spec {x m₁ : Msg} (hr : recordsOk h x m₁ = true) :
+    ∃ st rec, decode x = some st ∧ jsonMsg m₁ = some rec ∧ recordOk st.record h.boundaryNames = true ∧
+      recordOk rec h.interiorNames = true := by
+  unfold recordsOk at hr
+  cases hd : decode x with
+  | none => simp [hd] at hr
+  | some st =>
+    cases hj : jsonMsg m₁ with
+    | none => simp [hd, hj] at hr
+    | some rec =>
+      simp only [hd, hj, Bool.and_eq_true] at hr
+      exact ⟨st, rec, rfl, rfl, hr.1, hr.2⟩
 
 section At
 

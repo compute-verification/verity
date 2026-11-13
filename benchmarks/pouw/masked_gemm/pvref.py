@@ -19,8 +19,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import duo_receipts, words  # noqa: E402
-from sref import fold, noise, sigma  # noqa: E402
+from mref import duo_receipts, words
+from sref import fold, noise, sigma
 
 ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
 HD = 128

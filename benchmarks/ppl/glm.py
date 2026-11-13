@@ -14,15 +14,24 @@ the shared expert's and each routed expert's gate_up and down (named `mlp.expert
 rows routed to it, as HF calls it. Attention steps and calibration are refused."""
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import torch
 import torch.nn.functional as F
 from matmul import MM, Run, run_chain
+
+if TYPE_CHECKING:
+    from gates import Gates
+    from model import Collect, Config
+
+__all__ = ["GlmLayer", "check_reference", "dequant"]
 
 BLOCK = 128
 FP32_KEEP = ("mlp.gate.e_score_correction_bias",)
 
 
-def dequant(codes: torch.Tensor, s: torch.Tensor, dtype=torch.float32) -> torch.Tensor:
+def dequant(codes: torch.Tensor, s: torch.Tensor, dtype: torch.dtype = torch.float32) -> torch.Tensor:
     """E4M3 codes (their bytes, n x k) times their per-(128 x 128)-block FP32 scales, in `dtype`: FP32 rounds the
     product once (RN32), float64 holds it exactly (4 + 24 significant bits)."""
     n, k = codes.shape
@@ -49,7 +58,7 @@ class GlmLayer:
     #: RMSNorm's default eps, which HF's MLA norms take (only the layer norms read rms_norm_eps)
     LORA_EPS = 1e-6
 
-    def __init__(self, cfg, li: int, tensors: dict, device):
+    def __init__(self, cfg: Config, li: int, tensors: dict, device: torch.device | str):
         self.cfg, self.li, self.g = cfg, li, cfg.glm
         p = f"model.layers.{li}."
         self.codes: dict = {}
@@ -67,7 +76,7 @@ class GlmLayer:
 
     # ------------------------------------------------------------ weights
 
-    def weight32(self, name: str, dtype=torch.float32) -> torch.Tensor:
+    def weight32(self, name: str, dtype: torch.dtype = torch.float32) -> torch.Tensor:
         """A linear's weight in FP32 (`dtype` float64: exact): an expert's gate_up is its gate's rows, then its up's."""
         if name.startswith("mlp.experts.") and name.endswith(".gate_up_proj"):
             e = name[:-len(".gate_up_proj")]
@@ -80,7 +89,7 @@ class GlmLayer:
     def weight(self, name: str) -> torch.Tensor:
         return self.weight32(name).to(torch.bfloat16)
 
-    def linear(self, name: str, x: torch.Tensor, run: Run | None, collect=None) -> torch.Tensor:
+    def linear(self, name: str, x: torch.Tensor, run: Run | None, collect: Collect | None = None) -> torch.Tensor:
         if collect is not None:
             raise ValueError("GLM-5.3: no arm reads calibration statistics")
         steps = run.steps_for("linear", name) if run is not None else []
@@ -93,7 +102,7 @@ class GlmLayer:
 
     # ------------------------------------------------------------ the layer
 
-    def forward(self, h: torch.Tensor, cos, sin, run: Run | None = None, collect=None) -> torch.Tensor:
+    def forward(self, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, run: Run | None = None, collect: Collect | None = None) -> torch.Tensor:
         c, g = self.cfg, self.g
         if run is not None and (run.steps_for("qk", "qk") or run.steps_for("pv", "pv")):
             raise ValueError("GLM-5.3: attention runs in bf16 (MLA); an arm's steps reach its linears")
@@ -128,7 +137,7 @@ class GlmLayer:
         x = rms_norm(h, self.t["post_attention_layernorm.weight"], c.eps)
         return res + (self.moe(x, run, collect) if self.sparse else self.mlp("mlp.", x, run, collect))
 
-    def mlp(self, p: str, x: torch.Tensor, run, collect) -> torch.Tensor:
+    def mlp(self, p: str, x: torch.Tensor, run: Run | None, collect: Collect | None) -> torch.Tensor:
         m = F.silu(self.linear(p + "gate_proj", x, run, collect)) * self.linear(p + "up_proj", x, run, collect)
         return self.linear(p + "down_proj", m, run, collect)
 
@@ -152,7 +161,7 @@ class GlmLayer:
             w /= w.sum(dim=-1, keepdim=True) + 1e-20
         return idx, w * g["routed_scaling_factor"]
 
-    def moe(self, x: torch.Tensor, run, collect) -> torch.Tensor:
+    def moe(self, x: torch.Tensor, run: Run | None, collect: Collect | None) -> torch.Tensor:
         shape = x.shape
         flat = x.view(-1, shape[-1])
         idx, w = self.route(flat)
@@ -186,7 +195,7 @@ def hf_state(layer: GlmLayer) -> dict:
     return sd
 
 
-def check_reference(gates, cfg, snapshot, layer: GlmLayer, h: torch.Tensor, cos, sin, out: torch.Tensor) -> None:
+def check_reference(gates: Gates, cfg: Config, snapshot: Path, layer: GlmLayer, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, out: torch.Tensor) -> None:
     """The engine's bf16 layer output equals HF's `GlmMoeDsaDecoderLayer` on the same input and weights, bit for bit,
     with HF's own causal mask, indexer (so its top-k covers every key) and RoPE tables."""
     try:

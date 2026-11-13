@@ -369,3 +369,6 @@ def schedule(head: Header, steps: Iterable[Step], appends: Sequence[tuple[int, i
         tuple(tuple((write[j], free.get(j)) if j in write else None for j in range(first, first + count))
               for first, count in appends),
         tuple(passes))
+
+
+__all__ = ["Change", "Header", "MemoryMapError", "Replay", "Step", "Written", "dumps", "parse", "schedule"]

@@ -72,7 +72,10 @@ def test_margin_reads_the_named_vector() -> None:
     assert ri.base > cur.base + 1e-4 and ri.worst > ri.base + 5e-4
     d = E.design("dither-2s-licpw-redux-l32", data)
     e = E.eps(d, RT._single(E.machine("", data), "JI90_0", 1.02), 1.22, data, operands="free", credit="floor")
-    live = lambda m: {k for k, v in m.folds.items() if v > 1e-9}
+
+    def live(m):
+        return {k for k, v in m.folds.items() if v > 1e-9}
+
     assert live(e.cheat) and live(e.cheat) <= set(d.counted_routes), "the cheater's fold there is counted"
     assert live(e.baseline) and not live(e.baseline) & set(d.counted_routes), "♭'s is built"
     assert e.machine_eps == pytest.approx(0.00613, abs=5e-5)
@@ -94,14 +97,16 @@ def test_b200_issue_bound_is_robust() -> None:
 
 def test_least_filler_holds_the_margin_on_the_h200() -> None:
     """The H200 LI design leaks above its floor under the 2% margin (the lane route opens); the cheapest
-    verified FFMA filler a word brings the joint worst back to the floor. least_filler finds that add-on; a design that
-    already holds the margin needs none."""
+    verified FFMA filler a word brings the joint worst back to the floor. least_filler finds that add-on, and none
+    when its sweep's `limit` is below it; a design that already holds the margin needs none."""
     data = device("sm_90")
     lf = RT.least_filler("dither-2s-li-l32", data)
     assert lf.base_worst > lf.core + 1e-3, "the design as built leaks above the floor"
     assert lf.per_word is not None and lf.per_word > 0.0
     assert lf.core <= RT.margin_audit("dither-2s-li-l32", data).base + 1e-6, "the filler restores the margin to the floor"
     assert lf.mix == {"FFMA": 1}
+    short = RT.least_filler("dither-2s-li-l32", data, limit=lf.per_word - 0.005)
+    assert short.per_word is None and short.core > lf.core, "no filler up to a limit below the least one holds it"
 
 
 def test_a100_uniform_datapath_is_an_open_gap() -> None:

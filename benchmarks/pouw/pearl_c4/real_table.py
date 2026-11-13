@@ -1,8 +1,8 @@
 """`real.py`'s summaries as one table per linear: admission (D-NF over the split unit, non-finite rows, the screened share),
-and each linear's tiles' replayed debit split by item as a share of the cap at ρ = 1/400, with the tiles over the cap at
-ρ = 1/400 and at a tighter ρ (a tile's cap scales with ρ, so it is over at ρ' when its ratio exceeds ρ'/ρ).  The first and
-the last layer's ``down_proj`` are flagged.  Per model, the share of MACs over the cap at both ρ: each linear's MACs
-(m·n·k over the split unit) times the fraction of its sampled tiles over the cap.
+and each linear's tiles' replayed inert work split by item as a share of the inert-work bound at ρ = 1/400, with the
+tiles over the bound at ρ = 1/400 and at a tighter ρ (a tile's bound scales with ρ, so it is over at ρ' when its ratio
+exceeds ρ'/ρ).  The first and the last layer's ``down_proj`` are flagged.  Per model, the share of MACs over the bound at
+both ρ: each linear's MACs (m·n·k over the split unit) times the fraction of its sampled tiles over the bound.
 
   python real_table.py SUMMARY.json... [--rho 1/1000] [--json OUT] [--manifest CAPTURE_MANIFEST.json]
 """
@@ -17,7 +17,7 @@ from fractions import Fraction
 from pathlib import Path
 
 RHO = Fraction(1, 400)
-#: The debit's items (F1′ is `split`, F2 `int8`); `two_four` is the retired item 1, which summaries replayed before F1′
+#: The inert work's items (F1′ is `split`, F2 `int8`); `two_four` is the retired item 1, which summaries replayed before F1′
 #: carry in their place.
 TERMS = ("split", "int8", "two_four", "identity", "dead_pairs", "forming", "subgrid", "windows")
 
@@ -25,10 +25,10 @@ TERMS = ("split", "int8", "two_four", "identity", "dead_pairs", "forming", "subg
 def x_files(summary: dict, manifest: Path | None = None) -> dict[str, str]:
     """Each linear's X file: the capture's manifest for a directory (or ``manifest``, a copy of it, where the capture
     isn't), ``<name>.npy`` for an npz."""
-    cap = Path(summary["capture"])
-    if cap.suffix != ".npz" and manifest is None and (cap / "manifest.json").exists():
-        manifest = cap / "manifest.json"
-    if cap.suffix == ".npz" or manifest is None:
+    capture = Path(summary["capture"])
+    if capture.suffix != ".npz" and manifest is None and (capture / "manifest.json").exists():
+        manifest = capture / "manifest.json"
+    if capture.suffix == ".npz" or manifest is None:
         return {name: name + ".npy" for name in summary["tiles"]}
     return {name: e["file"] for name, e in json.loads(manifest.read_text())["inputs"].items()}
 
@@ -55,8 +55,8 @@ def rows(summaries: list[dict], rho: Fraction, manifest: Path | None = None) -> 
                 "w_rows": w.get("rows"), "w_dnf_fail_split": w.get("dnf_fail_split"), "w_non_finite": w.get("non_finite"),
                 "tiles": len(tiles), "debited": len(debited), "rejected": sum(bool(t.get("rejected")) for t in tiles),
                 "max_ratio": max((t["ratio"] for t in debited), default=None),
-                "over_cap": sum(t["ratio"] > 1 for t in debited),
-                "over_cap_tight": sum(t["ratio"] > float(rho / RHO) for t in debited),
+                "over_bound": sum(t["ratio"] > 1 for t in debited),
+                "over_bound_tight": sum(t["ratio"] > float(rho / RHO) for t in debited),
                 "mean_share": {term: sum(d[term] for d in split) / len(split) for term in TERMS} if split else None,
                 "tile_shares": split, "screened_only_elements": [t["debit"]["counts"].get("screened_only_elements")
                                                                   for t in debited]})
@@ -68,21 +68,21 @@ def rows(summaries: list[dict], rho: Fraction, manifest: Path | None = None) -> 
 
 
 def mac_shares(table: list[dict]) -> dict[str, dict]:
-    """Per model, the share of its measured linears' MACs whose sampled tiles are over the cap (at 1/400 and at the tighter
+    """Per model, the share of its measured linears' MACs whose sampled tiles are over the bound (at 1/400 and at the tighter
     ρ) or rejected: each linear weighs the fraction of its tiles by its MACs."""
     out: dict[str, dict] = {}
     for r in table:
         if not r["tiles"]:
             continue
-        acc = out.setdefault(r["model"], {"linears": 0, "tiles": 0, "macs": 0, "over_cap": 0.0, "over_cap_tight": 0.0,
+        acc = out.setdefault(r["model"], {"linears": 0, "tiles": 0, "macs": 0, "over_bound": 0.0, "over_bound_tight": 0.0,
                                           "rejected": 0.0})
         acc["linears"] += 1
         acc["tiles"] += r["tiles"]
         acc["macs"] += r["macs"]
-        for key in ("over_cap", "over_cap_tight", "rejected"):
+        for key in ("over_bound", "over_bound_tight", "rejected"):
             acc[key] += r["macs"] * r[key] / r["tiles"]
     for acc in out.values():
-        for key in ("over_cap", "over_cap_tight", "rejected"):
+        for key in ("over_bound", "over_bound_tight", "rejected"):
             acc[key] = acc[key] / acc["macs"] if acc["macs"] else None
     return out
 
@@ -91,18 +91,18 @@ def markdown(table: list[dict], rho: Fraction) -> str:
     def pct(v):
         return "" if v is None else f"{100 * v:.2f}%"
 
-    head = ("| Linear | X D-NF fail (split) | X screened | W D-NF fail (split) | Tiles | Max debit/cap | "
-            + " | ".join(TERMS) + f" | Over cap at 1/400 | Over cap at {rho} |")
+    head = ("| Linear | X D-NF fail (split) | X screened | W D-NF fail (split) | Tiles | Max inert work/bound | "
+            + " | ".join(TERMS) + f" | Over the bound at 1/400 | Over the bound at {rho} |")
     lines = [head, "|" + "---|" * (head.count("|") - 1)]
     for r in table:
         name = r["linear"] + (f" (**{r['flag']}**)" if r.get("flag") else "")
         share = r["mean_share"] or {}
         lines.append(f"| {name} | {r['x_dnf_fail_split']}/{r['x_rows']} | {pct(r['x_screened_share'])} | "
                      f"{r['w_dnf_fail_split']}/{r['w_rows']} | {r['debited']}/{r['tiles']} | {pct(r['max_ratio'])} | "
-                     + " | ".join(pct(share.get(t)) for t in TERMS) + f" | {r['over_cap']} | {r['over_cap_tight']} |")
+                     + " | ".join(pct(share.get(t)) for t in TERMS) + f" | {r['over_bound']} | {r['over_bound_tight']} |")
     lines.append("")
     for model, acc in mac_shares(table).items():
-        lines.append(f"- {model}: over the cap on {pct(acc['over_cap'])} of MACs at 1/400 and {pct(acc['over_cap_tight'])} "
+        lines.append(f"- {model}: over the bound on {pct(acc['over_bound'])} of MACs at 1/400 and {pct(acc['over_bound_tight'])} "
                      f"at {rho}; rejected tiles on {pct(acc['rejected'])} ({acc['tiles']} tiles over {acc['linears']} "
                      "linears, each linear's share its sampled tiles' fraction weighted by m·n·k)")
     return "\n".join(lines) + "\n"

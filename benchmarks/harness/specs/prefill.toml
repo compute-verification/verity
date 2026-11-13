@@ -1,0 +1,8 @@
+schema = "verity-bench/vllm-sweep/v0"
+id = "prefill"
+batches = [32]
+prompt_tokens = [1024]
+traffic = ["prefill-heavy"]
+
+[output_tokens]
+prefill-heavy = 1

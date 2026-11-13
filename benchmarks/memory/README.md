@@ -43,7 +43,9 @@ verity bench memory --loopback                both processes on this machine, on
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
 0. A session that wasn't accepted, or a run that left no verifier's record, prints no number and exits 1; a command
-line or a run that can't be read exits 2.
+line or a run that can't be read exits 2. The text's first line says how the number's error reads: δ + Σ_t adv_t
+(SHA-512 stream as PRF: not priced, not assumed), δ the session's in its verifier's ledger. The result's `error`,
+below, says the same words in its unit, that number the δ.
 
 Beside the number it prints two references, each read from its run in the store with the run's date and card: the
 state bound of a PoUS session over its card's memory (its record's `s_bits`, S₀ = ⌊ρ·|C|⌋: a lower bound on the

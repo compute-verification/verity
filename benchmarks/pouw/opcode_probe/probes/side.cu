@@ -177,15 +177,15 @@ struct Side {
   }
 };
 
-__host__ __device__ constexpr bool clustered(int s) { return s == S_DSM_ST4 || s == S_DSM_RED; }
+__host__ __device__ constexpr bool uses_dsm(int s) { return s == S_DSM_ST4 || s == S_DSM_RED; }
 
 template <int S, bool SIDE_ON>
 __device__ __forceinline__ void honest_side(const OpArgs& a) {
   extern __shared__ __align__(128) unsigned char sb[];
   const int w = threadIdx.x >> 5;
   Honest h(a.mode);
-  Side s(a, w - HW, blockDim.x / 32 - HW, sb, clustered(S));
-  if constexpr (clustered(S)) cluster_sync();
+  Side s(a, w - HW, blockDim.x / 32 - HW, sb, uses_dsm(S));
+  if constexpr (uses_dsm(S)) cluster_sync();
   OP_BEGIN_STOP
   if (w < HW) {
     OP_LOOP(it) { h.step(); }
@@ -196,20 +196,20 @@ __device__ __forceinline__ void honest_side(const OpArgs& a) {
     s.template finish<S>();
   }
   OP_END_STOP
-  if constexpr (clustered(S)) cluster_sync();
+  if constexpr (uses_dsm(S)) cluster_sync();
   OP_SINK(h.fold() ^ s.acc)
 }
 
 template <int S>
 __device__ __forceinline__ void side_alone(const OpArgs& a) {
   extern __shared__ __align__(128) unsigned char sb[];
-  Side s(a, threadIdx.x >> 5, blockDim.x / 32, sb, clustered(S));
-  if constexpr (clustered(S)) cluster_sync();
+  Side s(a, threadIdx.x >> 5, blockDim.x / 32, sb, uses_dsm(S));
+  if constexpr (uses_dsm(S)) cluster_sync();
   OP_BEGIN
   OP_LOOP(it) { s.template trip<S>((uint32_t)it); }
   s.template finish<S>();
   OP_END
-  if constexpr (clustered(S)) cluster_sync();
+  if constexpr (uses_dsm(S)) cluster_sync();
   OP_SINK(s.acc)
 }
 

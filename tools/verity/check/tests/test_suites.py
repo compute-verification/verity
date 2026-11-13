@@ -140,7 +140,8 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
 def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
     _member(tmp_path, "odd", "odd", None)
     S = _suites(monkeypatch, tmp_path)
-    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    found = S.foreign({"odd": "odd"}, dict(os.environ))
+    assert found == "odd's package from nowhere (its build configuration declares none)"
     (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
     (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
     assert S.importable({"odd": "odd"}) == {"odd": "odd"}
@@ -233,6 +234,25 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     (tmp_path / "pkg" / ".lake" / "cache").mkdir()
     keys.append(S.key(suite, {}, {}, []))
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
+
+
+def test_a_suites_bound_stretches_for_fewer_workers_than_it_was_measured_on(tmp_path, monkeypatch):
+    """verity-vllm's 14,400 s holds for the 5 workers its 10,000 s was measured on; a whole check on an 11-core slot ran it on 3
+    and killed it at 14,400 s, short of the 16,700 s 3 workers take. Its bound follows the workers it gets, never below its own."""
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+    pyproject.write_text(head + "timeout_s = 14400\ntimeout_workers = 5\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    assert suite.timeout_workers == 5
+    assert [S.bound(suite, n) for n in (3, 2, 5, 16)] == [24000.0, 36000.0, 14400.0, 14400.0]
+    assert S.bound(S.Suite("x", "x", (), ()), 2) == S.SUITE_TIMEOUT_S, "undeclared: the fixed bound, whatever the workers"
+    for bad in ("timeout_s = 60\ntimeout_workers = 0\n", "timeout_s = 60\ntimeout_workers = 2.5\n", "timeout_workers = 5\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="timeout_workers"):
+            S.discover()
 
 
 def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
@@ -1236,6 +1256,24 @@ def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
     assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
 
 
+def test_a_suite_on_fewer_workers_than_its_bound_holds_for_runs_to_the_stretched_bound(tmp_path):
+    """The run applies `bound` with the workers the suite got: the hanging suite declares 0.25 s on 4 workers, runs on 1, and is
+    killed at 1 s."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.25\ntimeout_workers = 4\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts")
+    assert p.returncode == 1 and "TIMED OUT: still running after 1 s, so its process group was killed" in p.stdout, p.stdout
+
+
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
     S = _suites(monkeypatch, tmp_path)
     n = S.oom_kills()
@@ -2157,6 +2195,38 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
     assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
     assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
         "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
+    """circuit_check's workers each build its catalog before any test runs, so their count bounds its run; a share by last
+    durations (`shared_lanes`) left it a few, behind verity/definitions' larger one or after a run that reused most of its
+    passes. Declaring `workers`, it has a lane of its own with that many wherever its share gives it fewer, up to half the
+    processes and half the GB at its worker_gb, and the others split the rest as before."""
+    S = _suites(monkeypatch, tmp_path)
+    cc = S.Suite("cc", "cc", (), (), parallel=True, worker_gb=8, workers=14)
+    defs, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("defs", "a", "b"))
+    seconds = [300.0, 900.0, 200.0, 100.0]
+    [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
+    assert shared.suites == [cc, a, b] and S.wide_workers(cc, shared.procs, shared.gb) == 13
+    lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
+    assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
+    longest = [3000.0, *seconds[1:]]
+    assert S.wide_lanes([cc, defs, a, b], longest, 88, 260.0) == S.shared_lanes([cc, defs, a, b], longest, 88, 260.0), \
+        "a share that gives it as many already is as it was"
+    assert S.wide_lanes([cc, defs], seconds[:2], 20, 260.0)[0] == S.Lane([cc], 10, 80.0), "at most half the processes"
+    assert S.wide_lanes([cc, defs], seconds[:2], 88, 100.0)[0] == S.Lane([cc], 6, 48.0), "at most half the GB at its worker_gb"
+    assert S.wide_lanes([cc, defs], seconds[:2], 40, None) == [S.Lane([cc], 14, None), S.Lane([defs], 26, None)]
+    assert S.wide_lanes([cc], [300.0], 88, 260.0) == [S.Lane([cc], 88, 260.0)], "alone, all of them"
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\n'
+    pyproject.write_text(head + "parallel = true\nworkers = 14\n")
+    _git(tmp_path, "init", "-q")
+    assert [s.workers for s in S.discover()] == [14]
+    for bad in ("parallel = true\nworkers = 1\n", "parallel = true\nworkers = 2.5\n", "workers = 14\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="workers"):
+            S.discover()
 
 
 def _line_end(S, lanes, cost) -> float:

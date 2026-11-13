@@ -44,7 +44,7 @@ def public_key(secret: bytes, height: int = 3) -> bytes:
     return lms.public_key(_key(secret, height))
 
 
-def TestSigner(secret: bytes, height: int = 3, directory: str | Path | None = None) -> mc.LmsSigner:  # noqa: N802
+def TestSigner(secret: bytes, height: int = 3, directory: str | Path | None = None) -> mc.LmsSigner:
     """2^`height` one-time keys from `secret`; each `sign` uses the next, and one past the last is refused."""
     key = _key(secret, height)
     path = _fresh("pous-test-signer-", directory) / "leaf-state.json"

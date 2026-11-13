@@ -27,7 +27,7 @@ import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-from verity.protocols.poub.verifier import p2, p2_party  # noqa: E402
+from verity.protocols.poub.verifier import ledger, p2, p2_party  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -69,6 +69,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     assert Fraction(q["eps"]) == Fraction(1, 2**40) + Fraction(sum(a["profile"]["draws"]), 2**64)
     assert 0 < Fraction(q["gamma"]) == 1 - Fraction(q["q_bytes"] * 10**9, 10**9 * q["span_ns"]) < 1
     assert a["profile"]["scope"].startswith("beside the served window") and a["profile"]["gamma_terms"]
+    assert a["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": q["q_bytes"], "unit": "bytes"}
     served = json.loads((tmp_path / "honest" / "bandwidth" / "served.json").read_text())
     assert served["served"] == {"window": 0, "serve_dir": str(serve), "steps": [0, 3], "requests": 1}

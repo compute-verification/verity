@@ -20,6 +20,7 @@ from verity.circuits.ports import In, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, coll_concat
 from verity.circuits.types import Array, RecordType, Value
+from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import core_check as CC
@@ -179,7 +180,6 @@ def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds
     ``blocks`` a unit, and each unit reads its own row of each; its statement's public row is `PUBLIC_J10R`, and
     `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the execution phase's slot and
     its K. Every K's unit is in one form: an execution phase mixing J10-R's and today's is refused."""
-    from verity.protocols.pouw.prover.circuit import h1tile as H
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit_j10r)
     tp = P.evaluate(prog, HW.query(prog))
@@ -627,7 +627,6 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
     assert [n for n, _t in smoke.signature()[0]] == list(HW.TILE_PARAMS)
     assert [n for n, _t in smoke.signature()[1].fields] == list(HW.OUTPUTS) and smoke.signature()[1].fields[1][1].leaves == 1
     assert HW.tile_unit(14336, (32, 32)).bindings["TILE"].bindings["EXACT"].bindings["K"] == 14336
-    from verity.protocols.pouw.prover.circuit import h1tile as H
     for d in (H.PouwH1Tile5, H.PouwH1Tile6):
         j10r = HW.tile_unit(64, (4, 8), d)
         assert [n for n, _t in j10r.signature()[0]] == list(HW.TILE_PARAMS_J10R)
@@ -735,7 +734,7 @@ def _leaf_window():
     return HW.program(LEAF_LINEARS, CALLS, HW.slot(5, LEAF), LEAF, prefix="h1/w/", unit=lambda k: unit(k, LEAF))
 
 
-def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
+def test_a_sampled_leafs_statements_read_its_tiles_rows_at_its_place():
     """Each of a sampled leaf's statements reads its value's leaf-local row (`leaf_lanes.reads`) past the leaf's `place` in
     that value, proofs' ``place`` in `PouwWindow.Lanes.ownOf`: lane l's A row at slot s is the tile's A row
     ``rowOf l s`` where `table_reads` has it, its B row at slot t the tile's ``colOf l t``, its record the tile's, and its
@@ -765,7 +764,7 @@ def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
     assert HW.table(prog, HW.RECEIPTS, 4) == "h1/w/receipt@4"
 
 
-def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
+def test_a_sampled_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
     """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
     the call's A, z and receipt tables bind the execution phase's open root and the weights' b/<K> none, each at its table's rows
     and width (`_shapes`: the receipts one row a unit of the call, a row the tile's receipt); the partials take the given
@@ -959,7 +958,7 @@ def _j10r_window():
                       unit=lambda k: bind(ChunkTileJ10r if W.chunks(k) > 1 else TestTileJ10r, K=k, R=LEAF[0], C=LEAF[1]))
 
 
-def test_a_j10r_windows_drawn_leaf_reads_its_chunk_rows_carries_and_ok_rows_at_its_place():
+def test_a_j10r_windows_sampled_leaf_reads_its_chunk_rows_carries_and_ok_rows_at_its_place():
     """Under J10-R a sampled leaf at a chunked K is its lanes' chunks (`leaf_lanes`' J10-R leaf): chunk c of lane l reads
     its A and B rows' chunk c, the tile's own chunk rows (`table_reads`' leaf n row + c), what chunk c - 1 handed on, and
     its statement's ok row, and the combine every ok row; the carries and ``oks`` are the leaf's own from row 0, like
@@ -1026,8 +1025,6 @@ def test_a_j10r_leafs_statements_are_v5s_lane_chunks_and_combine_v2():
     """Over J10-R's PouwH1Tile_v5 at a chunked K, `leaf_unit` derives each lane chunk (`h1zy.lane_chunk` at
     `weights.chunks`(K)) and the combine (`PouwH1Combine_v2`), and refuses a whole lane there and a chunk past the
     lane's; at a whole K a lane and no chunk. v1's leaf stays refused at a chunked K."""
-    from verity.protocols.pouw.prover.circuit import h1tile as H
-
     def fake(k, d):
         unit = HW._chunked(k, HW.tile_unit(k, (32, 32), d))
 
