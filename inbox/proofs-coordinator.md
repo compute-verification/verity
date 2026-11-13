@@ -141865,3 +141865,55 @@ Way 1's run (`1e35`, at `af527bdbbbf`) is on the same branch below these and is 
 - That the lock's check accepts B's `∀ _ : Nonempty w.EndΩ, …` as part of the two named assumptions' premises and not as a new premise. I ran no lock check and changed no lock.
 - Under B, that `MemberForm/Reads.lean` fails as it does under A. I did not rebuild it. B changes nothing below it that A did not, except three files of `Joint/V5`, so I expect the same 3 errors [derived].
 - Whether soundness wants `Window.hcls` stated with `Flock.Guarantees.sampleEnded src law nJ ω = true`, as the scratch has it, or in its own words.
+
+
+## SESSIONOF2, Fri 13 Nov 12:58Z: the repeat clears the stand-in's row (+0.5% in seconds, peak ×0.97), so the switch goes on; the other owners' four lines are below
+
+The row that decides whether every protocol may read its JSON with the parser a proof can follow is now read on six
+more runs, and it passes: the new parser is half a percent slower on the whole check of 300 members and uses no more
+memory. The 3.2% of the first run was the node. By your 12:33Z word I write on. The two other things you asked for
+by 13:00Z (Thursday's whole verification seconds, and where the added time goes) are not in this entry; they follow
+in the next one.
+
+**The six runs of `r20261113-120926-e2a7`** (vy-nebius-cpu-7, 12:09:26Z to 12:50:25Z, rc 0, FIRSTACCEPT's tree
+`9683ae5e92` with and without the two lines, v2's `refusal` on a regenerated stand-in window of 300 members, 308
+files of 134,877,163 bytes; texts 486,327 / 570,724 / 849,966 bytes), in the order they ran: `[run]`
+
+| run | parser | seconds | peak, kB |
+|---|---|---|---|
+| 0 | total | 309.0 | 710,180 |
+| 1 | core | 306.4 | 738,140 |
+| 2 | core | 305.8 | 737,216 |
+| 3 | total | 307.7 | 717,896 |
+| 4 | total | 307.1 | 682,100 |
+| 5 | core | 306.9 | 709,484 |
+
+- Means: core 306.37 s, total 307.93 s: **+1.57 s, +0.51%**. `[derived]` The widest pairing (run 0 against run 2) is
+  +3.2 s, +1.05%; the narrowest (run 4 against run 5) is +0.2 s. `[derived]` Every pairing is under 2%.
+- Peak: the largest is core's, 738,140 kB, against total's 717,896 kB: ×0.97. `[run]`
+- All six answers are the per-member form's refusal, one SHA-256, the same as `fee5`'s four. `[run]`
+- The gap keeps its sign (total slower in every pairing) and is still above the 0.16 to 0.23 s that the bytes read
+  account for. The first run of each job is its slowest (run 0 here, core's 312.6 s in `fee5`), which is part of it.
+  `[derived]` The rest, about 1 s in 307, I have not explained.
+- `fee5`'s four runs, for the record, on another node: core 312.6 and 309.0 s, total 321.4 and 319.9 s.
+
+**The other owners' lines, to copy.** With them the branch `cursor/proofs-sessionof2-parser-defe` (`dc91f31f56fe`)
+should pass the Lean check; without them it fails it. None is compiled by me.
+
+1. PoUS, `security/Proofs/Properties/Pous/Component.lean:98`, in the private `canonicalJson_ok`:
+   `cases hp : Lean.Json.parse s with` becomes `cases hp : Flock.JsonParse.parse s with`. One token. The proof
+   unfolds `Core.canonicalJson` at `:89`, so it names the parser the body calls. `[read]`
+2. The interface, `verity/protocols/interface/lean-audit.json`, three lines: `[read]`
+   - `:3` `"roots": ["CoreProtocol", "CoreProtocol.PeriodDifftest"]` gains `"CoreProtocol.CanonicalJsonDifftest"`;
+   - `exempt` gains `"CoreProtocol.CanonicalJsonDifftestMain": "the core-canonical-json-difftest server's entry
+     point, one line: Difftest.serve of Core.CanonicalJsonDifftest.table, which
+     verity/difftest/tests/test_canonical_json_port.py drives against the Python mirror; audited under
+     CoreProtocol.CanonicalJsonDifftest"`;
+   - `layers["CoreProtocol.Protocol"].imports`, now `["Lean.Data.Json", "Base.Bytes", "Base.Canon"]`, gains
+     `"Base.JsonParse"`.
+3. Records, on your word only: `Core.canonicalJson`'s hash and `CoreProtocol.Protocol`'s digest in
+   `security/lean-audit.json` and `security/Properties/lean-audit.json`. No other read definition's hash moves. `[read]`
+
+STOP RULE: nothing. NEEDS: nothing new. To post: nothing. Not established: that line 1 compiles as written (the
+total parser is marked irreducible; the proof rewrites with `hp` and does not unfold it, so I expect it to) `[guess]`;
+the 1 s. Heads unchanged: `cursor/proofs-sessionof2-parser-defe` `dc91f31f56fe`.
