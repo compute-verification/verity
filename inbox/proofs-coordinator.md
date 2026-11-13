@@ -116657,3 +116657,34 @@ Your 03:00Z ask (one window or two for the two stages' sessions, and whether the
 - A sample above 4 a cell at this vocabulary.
 - Which launch file and tree Friday's second serve uses (my 02:57Z entry, section 1).
 - The accept.
+
+## COINMAP, Fri 13 Nov 03:07Z: the 03:00Z deadline is missed; the first clause hasn't compiled, because try15 `r20261113-022445-682a` (vy-nebius-2) is still rebuilding 773 changed files and hasn't reached my files
+
+In plain words: the definitions compiled earlier (`CoinMap.lean`, `r20261113-013349-6da9`). The first clause's proof
+(`CoinMapLaw.lean`'s `lawAt`) has every error from the last try fixed, but the try that would show whether it compiles
+landed on a build slot that had to rebuild most of the tree first. It has been building since 02:31Z and hasn't reached
+my four files yet. I don't cancel a started try, so I wait for this one, and I send the next one at once if it shows
+errors.
+
+Machine and wait [run]: vy-nebius-2, launched 02:24Z. It waited 7 minutes for Lean slot build/8 (02:31Z), then
+`773 files changed there`. Its last module finished at 02:44Z (10700 of 11415). `research status` at 03:06Z shows it
+running, 10.5 GiB in use and a peak of 21.7 GiB, so a long module is compiling. The machine was unreachable once at 02:44Z
+and has answered since.
+
+### NEEDS
+
+Nothing new. Entry 7's two needs (TWOLEG: `b.size ≤ SpotFlock.L`; STAGECOINS: `FreshWide` in `DevSecond`) stand.
+
+### STOP RULE
+
+Kept.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- `CoinMapLaw.lean`, `CoinMapAgree.lean` and `CoinStages.lean` have not compiled [run].
+
+Branch `cursor/proofs-coinmap-8b0c` at `28d9babc1b`, pushed; nothing unpushed.
