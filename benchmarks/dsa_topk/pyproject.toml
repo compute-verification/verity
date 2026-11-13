@@ -11,4 +11,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/c
           "verity/circuits/kernels/tc.py", "verity/definitions/__init__.py", "verity/definitions/evidence.py",
           "verity/definitions/evidence.json", "verity/definitions/registry/__init__.py",
           "verity/definitions/registry/dsa_topk.py", "verity/definitions/registry/prims.py",
-          "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon"]
+          "verity/circuits/ops", "verity/circuits/silicon"]
