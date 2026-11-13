@@ -905,7 +905,7 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Compose.ExecutionPhasePlay.EveryWindow": {
+  "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase": {
    "owner": "@compute-accounting",
    "digest": "19de4d95e501636b06b44f3f2b8d4f466291377913266366ee89e7ebe5d629d5",
    "issue": "LEAN-186",
