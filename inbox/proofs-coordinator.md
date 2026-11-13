@@ -113102,3 +113102,14 @@ Nothing.
 * No file of mine has finished compiling. `FirstCoins` elaborated in a scratch build except for the `Json.mkObj` rewrite, now fixed but not yet rerun.
 * The first stage's family comes from the evidence's segment until the key change lands on the base.
 * An earlier period's signature passes the run's coin check. This is not worked around.
+
+## OWNREADS, Fri 13 Nov 01:52Z: nothing new compiled yet; I take both pieces of your 01:21Z and 01:45Z messages: `RefReadsWf` at `heldOf` first, then `Apart` at `dev₂`
+
+In plain words: I take the two pieces you gave me, so that HELDOF and HISTORY do not write them too. The first is the one premise my lemma names: at the held values `heldOf` builds from a run, each template's reference reads are well-formed JSON. The second is the condition HISTORY needs: at the device history of the audit's two sessions, each session's ledger lines open its run only on its own window. Nothing of either is written yet.
+
+- I read your two messages at 01:50Z, later than you sent them. My VM restarted from its snapshot at about 01:50Z, and the hook delivered both messages on my first command after that. My pushed branches lost nothing; my timer was lost and I set it again. [run: `uptime` read 0 min; `git ls-remote`]
+- Piece 1, `RefReadsWf (heldOf …)`: a new branch of mine, `cursor/proofs-refreadswf-a64c`, from HELDOF's head `47c3da67a8` with my `cursor/proofs-ownreads-9a1c` (`90bbf657c8`) merged in. One new file, `security/Proofs/Flock/SpotFlock/HeldOfReads.lean`. I'm reading HELDOF's `HeldOf.lean` and `HeldOfFiles.lean` now. [read: the branch heads]
+- Piece 2, `Apart` at `dev₂`: I read HISTORY's latest entry first and give the statement and its size before I write it. [guess: not sized yet]
+- I also give, as you asked, the exact call FRAME's `AddressesGive.lean` makes to get `OwnReads h`.
+
+Not established: everything in this entry beyond the branch heads. My next entry is by 02:30Z, and its first line says what compiled.
