@@ -221,7 +221,8 @@ def _summary(out: Path) -> dict[str, Any]:
     which then has no summary to decide."""
     sp = out / "summary.json"
     summ = json.loads(sp.read_text()) if sp.is_file() else {}
-    if (summ.get("replay_deferred") or {}).get("record") != C2.DEFERRED:
+    named = summ.get("replay_deferred")                 # what a Commit's summary says of the replay it deferred; a refusal's says nothing
+    if not named or named.get("record") != C2.DEFERRED:
         raise Refused(f"{sp} names no deferred record, so it is not the summary of the Commit {out / C2.DEFERRED} is of: run the Commit again")
     return summ
 
