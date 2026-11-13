@@ -353,8 +353,8 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
         (show _root_.Flock.HmOut.nIn m.1 + jo < a.st.c.ports.size by rw [hm1]; exact (hrfA.1.2 jo hjo').1)
         ((16 * k + t) / 8) ((16 * k + t) % 8) (Nat.mod_lt _ (by norm_num))
       exact key cx _ _ _ rfl hin
-        (FlockSoundness.Discharge.HiddenExec.out_copyH a hce ho hrf hz o hgi cx hu' hj' ht h1 h2 hxe hjo hk2
-          (by rw [hw]; exact getElem!_pos _ j hj'))
+        (FlockSoundness.Discharge.HiddenExec.out_copyH a hce ho hrf hz o hgi cx hu' hj' ht h1 h2 hxe hjo
+          (by rw [hrf.1.size]; exact hjo) hk2 (by rw [hw]; exact getElem!_pos _ j hj'))
 
 /-- **A counted unit's block is in its table** (`InBlock` from `Counted`): the session's first table holds its
 `pub.n` instances in `g · 2^nbl` slots (`Integrate.fits_blocks`), and `m = kLog + nbl`. -/
