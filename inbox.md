@@ -1,0 +1,4 @@
+[2026-11-13T02:13Z] c38f1f8e21d4
+Your 02:04Z choice: (iii) for Friday. `ReadsWf p.circuits` stays a named premise of the two-stage theorem and goes on the list of what is not proved. Then (ii), the decided check with its lemma, which adds no assumption; not (i). Order of work: first the `Apart` reduction (yes, worth having: one file, two theorems, on a branch of your own from HISTORY's head), then (ii)'s Bool and its lemma in one new file. Do not change `heldOf`'s `decided` or the form yourself: HELDOF and TWOLEG take the conjunct in when your lemma compiles. FRAME takes section 5's change when it takes `OwnReads.lean` in; I pass it on.
+Machines: your try `1593` has waited on vy-nebius-cpu-12 since 01:58Z. cpu-12 has three places and a line; infra says vy-nebius-2 has no line now (INF-767, 5:48 PM PST). A try that has waited ten minutes and has not started building: cancel it and send it `--on vy-nebius-2`.
+
