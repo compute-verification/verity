@@ -49,15 +49,5 @@
  "verity.definitions.registry.boolean_flashmla.circuit-check#_model_roots:FlashMlaBlock_v2": 3.35,
  "verity.definitions.registry.boolean_dsa_norm.circuit-check#_model_roots:TritonBlockRMSNorm_v2": 3.27,
  "verity.protocols.accounting.poub.verifier.commitments.gates.block_check.circuit-check#_block_check_roots": 3.21,
- "<registered>:4": 3.07,
- "verity.protocols.accounting.pouw.prover.circuit.h1zy.circuit-check#_pouw_roots": 2.44,
- "verity.definitions.registry.boolean_dsa_ds_mla.circuit-check#_model_roots:DsaLatentRowDsMla_v2/small": 2.32,
- "verity.definitions.registry.boolean_dsa_norm.circuit-check#_model_roots:DsaRMSNormSumSq_v2": 2.31,
- "verity.protocols.accounting.pouw.prover.circuit.h1tile.circuit-check#_pouw_roots": 2.25,
- "verity.protocols.accounting.pouw.prover.circuit.seeds.circuit-check#_pouw_roots": 2.22,
- "verity.definitions.registry.boolean_sparse_mla_split.circuit-check#_model_roots:SparseMlaSplit_v2": 2.16,
- "verity.commitments.gates.embedding.circuit-check#_embedding_roots": 2.1,
- "verity.definitions.registry.boolean_dsv4_qnorm_insert.circuit-check#_model_roots:Dsv4QNormRopeKvInsert_v2": 2.08,
- "verity.definitions.registry.boolean_mhc.circuit-check#_model_roots:MhcPreBigFuseBroadcast_v2": 2.04,
- "verity.definitions.registry.boolean_sparse_mla.circuit-check#_model_roots:SparseMla_v2": 2.03
+ "<registered>:4": 3.07
 }
