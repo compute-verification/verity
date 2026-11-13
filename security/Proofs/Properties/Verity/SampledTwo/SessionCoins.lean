@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.Reading
+public import Proofs.Flock.SpotFlock.Sessions
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.Moves
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
@@ -31,10 +32,11 @@ is the device's release for that round (`coinsRead_sessions`), and that the stat
   round on the elements the read's releases for it carry.
 * **The premise** (`InteriorLogged`, the cut's): on an accepted play whose log the check read is the device's, the read
   log is the play's log after releases that open and sample no coin tree.
-* **The statements** (`CoinsReadSome`, `coinsRead_sessions`, `stmtReadsNone`). `CoinsRead` asks the coin read to equal
-  the device's release at every read round; at a session's round the check reads no coin where the evidence shows an
-  opening without its coins, so the statement here is that wherever the check read a coin it is the device's release,
-  which is what `projection_of` uses of `CoinsRead`.
+* **The statements** (`CoinsReadSome`, `coinsRead_sessions`, `coinsAgree_sessions`, `stmtReadsNone`). `CoinsRead` asks
+  the coin read to equal the device's release at every read round; at a session's round the check reads no coin where
+  the evidence shows an opening without its coins, so the statement here is that wherever the check read a coin it is
+  the device's release. That gives `CoinsAgree` at the sessions' rounds (`coinsAgree_of_some`), which is what
+  `ProjectionOf` takes.
 
 That the coin read is the session's own tree's round, the coin its record gives the round, is `located_own`, from the
 members' check on the read (`MembersAccepted`, through `Verity.Sampled.MemberForm.members_read`); that the locator puts at
@@ -851,7 +853,7 @@ theorem located_own (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : Memb
   rw [List.nil_append] at hloc
   unfold locOf at hloc
   obtain ⟨t', j', i, s, c, rec, -, hj', hn, hrf, hrec, hcoins⟩ := H.own hT hR rfl he hloc
-  obtain ⟨rfl, rfl⟩ := off_sep (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (fun u => rfl) hj hj' hn
+  obtain ⟨rfl, rfl⟩ := off_sep (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (SpotFlock.off_succ A.h) hj hj' hn
   exact ⟨_, rec, hS, hrec, ⟨i, s, c, hrf⟩, hcoins⟩
 
 /-- **One release a round**: where the form's acceptance gives the members' check on the log the check read, the
@@ -862,6 +864,22 @@ theorem located_one (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : Memb
   obtain ⟨label, after, ξ, lines, trees, records, hT, hR, hMR, -⟩ := hM o hacc l hl
   obtain ⟨tree, H⟩ := membersHeld_of hT hR hMR
   unfold locOf
-  exact H.one hT hR (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (fun u => rfl) n
+  exact H.one hT hR (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (SpotFlock.off_succ A.h) n
+
+/-! ## The agreement the projection reads -/
+
+/-- **The coin read agrees as the device's release does**, wherever the coin read is the device's release. -/
+theorem coinsAgree_of_some {A : Live₂} {Rd : Reading A} {Acc Good : Exchange → Prop} {g : Group}
+    (h : CoinsReadSome A Rd Acc Good g) : CoinsAgree A Rd Acc Good g :=
+  fun o hA hG i hr hg c hc _ hd => hd c (h o hA hG i hr hg c hc)
+
+/-- **The sessions' coins agree as the device's releases do** (piece: the sessions' coins, as `ProjectionOf` takes
+it): `CoinsAgree` at the sessions' rounds, at the form's reading over `withCoins`, from the coin map's `DevLocal` and
+the cut's `InteriorLogged`. -/
+theorem coinsAgree_sessions (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+    (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop)
+    (hdev : DevLocal A (locOf A tab) dev) (hlog : InteriorLogged C Good) :
+    CoinsAgree A (formReading A C (withCoins A C tab dev Ms) dev) (FormAccepts C) Good .sessions :=
+  coinsAgree_of_some (coinsRead_sessions A C Ms tab dev Good hdev hlog)
 
 end Verity.SampledTwo.SessionCoins
