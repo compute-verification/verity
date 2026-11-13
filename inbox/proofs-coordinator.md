@@ -145950,3 +145950,31 @@ None now. I wait on HELDOF's compiled head for the discharge.
 - That the provers sending a record's messages are accepted round by round (what `sessionsRun` needs beyond the tie): not found, not written.
 - `Fx`, `raw`, `ctx` at the form, `FixedBefore`'s body from `session_prefix_fixed_form`, `Explains`, `ShowsStrings`: not started; the word on the whole is due Sat 02:00Z and is next.
 - No merge of `main`, no rebase, on any branch of mine.
+
+## [2026-11-13T14:20Z] ACCEPTS: for GATHER, the verifier's side of `interior-parts` is exactly the five commits GATHER picked at 14:13Z, two of them by their `Run.lean` part alone, which is right; the commit that takes `partsSizedAt` out of `JoinsAt` is written off `757ef18fdc67` and NOT COMPILED, its try `93d5` is out
+
+Your 13:35Z reached me at 14:15Z: my turn had ended at 13:30Z and the hook delivers on my next command. So this line is 40 minutes late.
+
+**The line for GATHER** [read: `git log --stat f3462236a6e..66a637cb91a`]. Of my nine commits on `cursor/proofs-accepts-partsfit-37e3`:
+- **The verifier's side, five commits:**
+  - `b7288fb7d6d` and `9777a8781dd`: the Lean clause and `cellParts`, in `Spot/Run.lean`. Each also edits `AcceptsTop.lean`, the proofs' file. Only the `Run.lean` part of each is the verifier's.
+  - `ccf2242d3e1`: the Python mirror, `service.py` alone.
+  - `4286a9e44dd` and `66a637cb91a`: the model and the difftest's rows, `test_difftest.py` alone.
+- **Proofs only, four commits:** `50bca2d38dd`, `cf7f02ac690`, `c60474f2325`, `e432c092cdd`, each `AcceptsTop.lean` alone; and the `AcceptsTop.lean` part of the first two above.
+- GATHER's 14:13Z pick is this list, with the two part-picks done as I would ask [read: its table]. It says `Spot/Run.lean` and `service.py` at its head are the same blobs as at mine [relayed: GATHER, 14:13Z].
+
+**Item 3, so far.**
+- ASSEMBLY named `757ef18fdc67` (14:06Z). Branch `cursor/proofs-accepts-partsout-3153` is off it, with one commit, `dd528bb7b6d3`, pushed, **not compiled**.
+- The commit changes `JoinsAt.lean` alone [read: the diff]: the field `partsSizedAt` and its docstring are gone, `joinedOfLaw` takes `PartsHeldAt` from `partsHeldAt_of_accepts h.heldOfAt (partsSizedAt_of_formAccepts h.heldOfAt)`, and the module docstring lists the lemma among the theorems. No statement but `JoinsAt`'s own changes: `joinedOfLaw`, `joinedForm` and `CouplesAt` read it by name.
+- The files that read `JoinsAt` are three, in one chain [read: the imports]: `JoinsAt.lean`, `JoinedCoupling.lean`, `JoinedForm.lean`. The try is of the top one, which builds the other two: `r20261113-141902-93d5` (cpu-14), launched 14:19Z.
+- The join's tip has moved since to `ff6ea109e06` (HELDOF's merge). `git merge-tree` of `dd528bb7b6d3` against it is clean, and that merge touches none of the four files [derived].
+
+## STOP RULE
+I name the head when `93d5` ends rc 0, and a second try of `JoinsAt.lean` gives its own axiom probe. If either fails for a reason that is not my line, I say which file and stop.
+
+## NEEDS
+Nothing.
+
+## Not established
+- That the commit compiles.
+- No lock names `JoinsAt` but as a root of `security/Proofs` [read: `rg` over the three locks], so no record should move; no records run says it.
