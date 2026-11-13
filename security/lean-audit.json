@@ -29621,11 +29621,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV2": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29634,11 +29634,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29654,10 +29654,10 @@
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29804,9 +29804,9 @@
     "∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets d P δ) F → instLENat.le (NetTiming.faultyBits C P F) β": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
     "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -46922,7 +46922,7 @@
    }
   },
   "MemoryChallenger.WipeProtocol": {
-   "digest": "4a3969860af91e177118e69a25a964bab2037b01a7b3b7225b048b7dc0733248",
+   "digest": "b9bec8d0e908b0541e1119a108a429a965cb41e45e7c0e8e1e0491aaf7ab2e5e",
    "definitions": {
     "MemoryChallenger.WipeProtocol.EPS": "3531a8db9b9865dca0216151f8cd12d96646f4f742bffc1f22bcf747a9ab0383",
     "MemoryChallenger.WipeProtocol.EXPERIMENTAL": "dda750b69b6a3dce5216ff99221e1a320df9f6ebbc871ff9f1a844fcd1e41ab0",
@@ -46949,7 +46949,7 @@
     "MemoryChallenger.WipeProtocol.Public.toJson": "2d56369132b68dddb856b3e5b42dad607562ee5f31a4fdb2ccbc01ad006e5be3",
     "MemoryChallenger.WipeProtocol.UNIT_BITS": "c4b7d4e610401af58c38eda64d2115b264377f918ad6ecfaa4372534dcda1ba8",
     "MemoryChallenger.WipeProtocol.certify": "072ab9c2de8386c35209c9cde07faef7acffe6fe24cf7b643ba447c1edfe6c8a",
-    "MemoryChallenger.WipeProtocol.check": "6854462762a92938193180d91a4148f7ef37d2dec4e8007edc2045abfd496f24",
+    "MemoryChallenger.WipeProtocol.check": "b38a26e3a22a8989f734174689a399c413b75704c3af3e3f883d3cd8f30254b1",
     "MemoryChallenger.WipeProtocol.decodeCommitment": "70a5253e2776f0a06ea1a8fe30555ae0f605646a6a1cf1bbacbf9d218b0d278f",
     "MemoryChallenger.WipeProtocol.decodeEvidence": "066012f7df43bb9e7edcb607272b8dadf02496c5a9b2e4e426966e38e2d8eb6f",
     "MemoryChallenger.WipeProtocol.decodeParams": "893750fef1fb7a4ad238fac7bc4e864fc226fba03048b40b6c6fb183faf57676",
@@ -46960,12 +46960,14 @@
     "MemoryChallenger.WipeProtocol.memoryBits": "e3db7869d85dbda0befcefa074fb025c0ad1904bffb010fa10348a96b74260c7",
     "MemoryChallenger.WipeProtocol.mkProtocol": "1ef346d63f26cc061cfa2480be577c0d42d709d5818508427afbe5abcf072714",
     "MemoryChallenger.WipeProtocol.outsideBits": "ff895eefb5cb61ce41e8ea0e9ecba4149e6cc022c53cbbfbe419fa2fc8b504df",
-    "MemoryChallenger.WipeProtocol.profileJson": "e04be875ba1cbaf11613a7df1450a03340e84d388e058fa2a0d6347b50449e7f",
+    "MemoryChallenger.WipeProtocol.profileJson": "4d8597e28044557da2cc8f513025811b6f81078885457e5a375499b175040bff",
     "MemoryChallenger.WipeProtocol.protocol": "bf874585a67c80848e44e7fc4749789d46e55bd571c5490488b00b8b8b81c174",
     "MemoryChallenger.WipeProtocol.ratio": "c777dbab595c379dcb0f151dfc26f99db623ed03640bfffac3e44ef11a319248",
     "MemoryChallenger.WipeProtocol.ratioOf": "ead0d9b00b59e4cbd2917faf07df7214127f4fd9d9db0f0d0aa7246f28db7f44",
     "MemoryChallenger.WipeProtocol.ratioSearch": "d28316fceffcd02b4774b9e8642791c0980c3619418182e598841a2adb0270f5",
     "MemoryChallenger.WipeProtocol.samples": "7a145ac3840232f5e62e20ad5f71db9989984c8bc67b8f5d18d1db9c447713e0",
+    "MemoryChallenger.WipeProtocol.uncounted": "f8377fb93b754c89929752667d6ddf7f8c7952761a1135e168b6ec01fbf67126",
+    "MemoryChallenger.WipeProtocol.writerGap": "dc84c1538f781c772179c3c885505b72a9ab41a3aa99a84eeabb420701cb3c66",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.hexJ": "d1ca30893491681448632d04d8023bdb929531cf409e6162a2124e8a2d1deb9f",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.natJ": "e8727017f342ed9865812bb9541059197bd40dd29953092439507393e12349aa"
    }
