@@ -5,7 +5,7 @@
     ... -- python3 benchmarks/two_stage/tests/guard_node.py --pytest [PYTEST ARGS]
 
 It holds the node's `build` Lean slot and its tree as `lean_changed.py --try` does (the slot, the tree's lock, the sync of
-`Security/Proofs`' closure from this checkout, the tree's kept dependencies) and builds the two modules the script imports
+`security/Proofs`' closure from this checkout, the tree's kept dependencies) and builds the two modules the script imports
 there. Then, still holding them, it runs the script in Lean's interpreter (`lake env lean --run`) with the code of Flock's
 verifier and SPOT's (`NATIVE`) loaded as native code, linked into one shared library from their
 archives, which the interpreter calls in place of interpreting them: interpreted, one setup of a statement takes minutes.
@@ -30,19 +30,19 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "verity" / "lean"))
 import lean_changed as LC  # noqa: E402
 
-PKG = "Security/Proofs"
+PKG = "security/Proofs"
 MODULES = ("Proofs.Flock.SpotFlock.Code", "Proofs.Flock.SamplingGeneric.TwoAt")
 #: the libraries run natively: SPOT's verifier and every library it imports, none of which imports
 #: Mathlib (VStar and Flock import each other, so they link together, which Lake's per-library shared libraries can't)
-NATIVE = ("flock_verifier/VStar", "flock_verifier/Flock", "core_protocol/CoreProtocol", "verity_difftest/Difftest",
-          "lms/Lms", "core_spot/Spot")
+NATIVE = ("core_base/Base", "core_circuits/Circuits", "core_commitments/Commitments", "flock_verifier/VStar",
+          "flock_verifier/Flock", "core_protocol/CoreProtocol", "verity_difftest/Difftest", "lms/Lms", "core_spot/Spot")
 #: the interpreter's thread stack, in KiB (`lean --tstack`): reserved, and touched only as deep as the parsers recurse. Every
 #: thread of Lean's gets one, so the script runs with one worker (`--threads=1`), or the node refuses the reservations.
 TSTACK_KIB = 128 << 20
 
 
 def runner(tree: Path, lake: str) -> Path | None:
-    """`twoguard` under ``tree``'s `Security/Proofs/.lake/twoguard/`: the script in the interpreter with `NATIVE` loaded;
+    """`twoguard` under ``tree``'s `security/Proofs/.lake/twoguard/`: the script in the interpreter with `NATIVE` loaded;
     None when they don't build or link."""
     rc, text = LC.build(PKG, tree, lake, sandbox=LC.sandboxed(), cmd=["query", *(f"{lib}:static.export" for lib in NATIVE)])
     archives = [line for line in text.splitlines() if line.endswith(".a.export")]
@@ -117,7 +117,7 @@ def main(argv: list[str]) -> int:
             LC.mark(tree, package=PKG, phase="deps")
             deps = LC.LA.COMMON.cache_dir() / "lean-deps"
             if not ((tree / PKG / ".lake" / "packages").is_dir() and PKG not in links) and \
-                    not LC.link(PKG, tree, deps, links, print, copy=True):
+                    not LC.link(PKG, tree, deps, links, print):
                 print(f"guard-node: {PKG}: no dependencies kept on this node")
                 return 2
             LC.write_links(tree, links)

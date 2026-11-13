@@ -56,7 +56,7 @@ from types import SimpleNamespace
 FORMAT = "grader-handover/v1"
 READ = "grader-products/v1"
 #: the capture of training's slowdown code the grader reads beside (its `capture.products.CAPTURE`)
-CAPTURE = "4.12.9"
+CAPTURE = "4.23.0"
 THE_CODE = "training's slowdown code"
 #: its package, which sits in `benchmarks/training_slowdown`
 PACKAGE = "training_slowdown"
@@ -80,7 +80,7 @@ class Refused(ValueError):
 # -- the hand-over -------------------------------------------------------------------------------------------------------
 
 def _annotations_digest(desc: dict) -> str:
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
 
     return hashlib.sha512(canonical_json(desc.get("annotations", {}))).hexdigest()
 
@@ -90,7 +90,7 @@ def write_handover(out: Path, step, structure, *, run: str, checkpoints: list[tu
     """Write a lane's hand-over to directory `out`: the run's step Program (`step_program` at the run's batch shape
     `step_batch`), the same step at `structure_batch`, the run record (its id and each checkpoint's steps), theta as
     registered (the step Program's theta) and the frontend commit both were derived at. Returns handover.json's path."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -139,7 +139,7 @@ def _batch_ok(step: list, structure: list) -> None:
 def _input_names(decoded, role: str) -> list[str]:
     """The names of a decoded Program's input nodes, which its encoding doesn't hold: the program function's inputs as its
     `correspondence` annotation names them, each one input node, the root's first."""
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.program import is_input
 
     nodes = decoded.root.body.nodes
     names = decoded.annotations["correspondence"].get("inputs")
@@ -155,8 +155,8 @@ def load_handover(path: Path) -> Handover:
     """The hand-over at `path` (its directory or its handover.json), checked: its format and fields, each Program file's
     digest and annotations against the record, both Programs a frontend step (`step_program`'s annotations), theta as
     registered, and two batch shapes that tell the token dims apart. Raises `Refused` with the fix."""
-    from verity.ml.circuits.codec import decode_program, program_digest
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import decode_program, program_digest
+    from verity.circuits.defs import REGISTRY
     # registers the Definitions the frontend's rules lower to, which a decoded step calls by id
     import verity_vllm.program.frontend.train_step  # noqa: F401
 
@@ -227,7 +227,7 @@ def load_handover(path: Path) -> Handover:
 def load_slowdown_code(directory: Path, commit: str) -> SimpleNamespace:
     """Training's slowdown code from `directory`, the one its package (`PACKAGE`) sits in (`benchmarks/training_slowdown`), at
     `commit`: checked against the checkout's HEAD where `directory` is in a git checkout (`checked`), else taken as named.
-    Returns the modules the grader calls (`opnames`, `formalism`, `capture.products` as `products`), its version and the
+    Returns the modules the grader calls (`opnames`, `work`, `capture.products` as `products`), its version and the
     commit. Refuses a directory without it, another commit, the package already loaded from another directory in this
     process, and another capture."""
     d = Path(directory).resolve()
@@ -248,7 +248,7 @@ def load_slowdown_code(directory: Path, commit: str) -> SimpleNamespace:
         sys.path.insert(0, str(d))
     pkg = importlib.import_module(PACKAGE)
     mods = {m: importlib.import_module(f"{PACKAGE}.{p}") for m, p in (
-        ("opnames", "opnames"), ("formalism", "formalism"), ("products", "capture.products"))}
+        ("opnames", "opnames"), ("work", "work"), ("products", "capture.products"))}
     if mods["products"].CAPTURE != CAPTURE:
         raise Refused(f"the grader reads beside capture {CAPTURE}, and {THE_CODE} at {commit} captures with "
                       f"{mods['products'].CAPTURE}: update the grader to its capture first")
@@ -276,7 +276,7 @@ def _dtype_width(dtype: str | None) -> int:
 
 
 def _leaf_parts(refs):
-    from verity.ml.circuits.refs import Concat
+    from verity.circuits.refs import Concat
 
     if isinstance(refs, Concat):
         for p in refs.parts:
@@ -288,7 +288,7 @@ def _leaf_parts(refs):
 def _ref_nodes(refs, logs: dict | None = None) -> set:
     """The root nodes `refs` reads. With `logs`, a `Concat` cut from a `PartLog` (`prefix`: a causal attention's rows, each
     call's the call before's plus one) reads the log's parts once over all its cuts (`_log_nodes`)."""
-    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+    from verity.circuits.refs import Affine, Concat, Explicit, Strided
 
     if isinstance(refs, Concat):
         got, start = set(), 0
@@ -397,7 +397,7 @@ def _instances(nd) -> int:
 
 
 def _first_node(refs) -> int:
-    from verity.ml.circuits.refs import Affine, Explicit, Strided
+    from verity.circuits.refs import Affine, Explicit, Strided
 
     p = next(iter(_leaf_parts(refs)))
     return p.idx if isinstance(p, (Affine, Strided)) else p.items[0][1] if isinstance(p, Explicit) else p[0][1]
@@ -437,7 +437,7 @@ class Cells:
     and the operands' and the outputs' word widths, from the cell Definition's signature."""
 
     def __init__(self, p: _Program) -> None:
-        from verity.ml.circuits.codec import descriptor_id
+        from verity.circuits.codec import descriptor_id
 
         self.p = p
         P, S = len(p.layout["params"]), len(p.layout["scalars"])
@@ -529,10 +529,10 @@ def boolean_prices(prims: dict) -> dict[str, dict]:
     """Each primitive's Boolean price, by id: its Boolean version (`definitions.boolean.boolean_version`) and that circuit's
     ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why.
     Inputs (`program.is_input`) are left out: they are bound, not computed, and `priced` counts no input class."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
-    from verity.ml.circuits.program import is_input
-    from verity.ml.definitions.boolean import boolean_version
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.evaluation.bits import compile as compile_bits
+    from verity.circuits.program import is_input
+    from verity.definitions.boolean import boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):
@@ -574,10 +574,10 @@ def priced(cen: dict, prices: dict) -> dict:
 
 
 def circuit_size(program) -> dict:
-    """|C|: the step Program's census (`verity.ml.circuits.census`) at the Boolean prices of the primitives it calls
+    """|C|: the step Program's census (`verity.definitions.circuits.census`) at the Boolean prices of the primitives it calls
     (`boolean_prices`): its gates and ANDs by root callee class, and the word gates of the primitives with no Boolean
     version, which it leaves out."""
-    from verity.ml.circuits.census import census
+    from verity.definitions.circuits.census import census
     from verity_vllm.program.frontend.train_step import primitives
 
     return priced(census(program), boolean_prices(primitives(program)))
@@ -640,7 +640,7 @@ def against(result: dict, trace: dict, code) -> dict:
     """The circuit's matrix products (`read`'s) beside the slowdown code's product rows of the same step (`trace`,
     `load_trace`), by (phase, op, batch, m, k, n): on each side the products' count, N, O, operand widths, token dims and
     gates. The trace's widths are those its capture passes; its O has each output at its Definition's output width b_y, as
-    the slowdown code's `he_of_rows` reads it from `formalism.HE_BITS` (the narrower operand's width for a Definition it
+    the slowdown code's `he_of_rows` reads it from `work.HE_BITS` (the narrower operand's width for a Definition it
     doesn't list); its gates are each product's MACs at its gates a MAC (`gates_per_mac`), as its |C| prices them. The
     circuit's are as it wires and prices them. `agree` says which of count, N, O, widths and token dims match at every key;
     `C` holds both sides' |C| and their ratio: the step's, each op's products', all products' and the rest's (the step's
@@ -668,7 +668,7 @@ def against(result: dict, trace: dict, code) -> dict:
         e = side(_key(r["phase"], r["op"], r["dims"]), "trace")
         e["count"] += r["count"]
         if all(r["affected"]):
-            b_y = code.formalism.HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)[1]
+            b_y = code.work.HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)[1]
             e["N"] += r["count"] * r["macs"]
             e["O"] += r["count"] * r["outputs"] * b_y
         e["gates"] += r["count"] * r["macs"] * r["gates_per_mac"]

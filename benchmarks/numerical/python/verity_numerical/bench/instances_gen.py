@@ -2,7 +2,7 @@
 
 Everything here is deterministic from string labels (:class:`Rng`), the 24 seed captures and the pinned Hugging Face
 revision of ``Qwen/Qwen2.5-1.5B``; :mod:`verity_numerical.bench.instances` drives it and owns the byte layout.  The
-relation is never restated here: expected words come from ``verity.ml.circuits.silicon.models`` (the target's executable
+relation is never restated here: expected words come from ``verity.definitions.silicon.models`` (the target's executable
 definition) and are cross-checked against ``verity_numerical.reference.hawkeye_close`` by the driver.
 
 Contents, in order: the hash-stream RNG; BF16/FP32 word helpers; the seeds (the 24 real K=1536 GEMM coordinates of
@@ -29,9 +29,9 @@ from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 
-from verity.ml.circuits.silicon import models as S, term as T
-from verity.ml.circuits.silicon.cast import f32_to_bf16_word
-from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.definitions.silicon import models as S, term as T
+from verity.definitions.silicon.cast import f32_to_bf16_word
+from verity.definitions.silicon.errors import InvalidArtifact
 
 from verity_numerical.reference import hawkeye_close as H
 
@@ -46,23 +46,26 @@ __all__ = [
     "HF_REPO",
     "HF_REVISION",
     "HF_URL",
+    "K",
     "MISTAKES",
+    "Mistake",
     "PIPELINE",
+    "REJECT_CLASSES",
     "REPO_FIXTURE_DIR",
     "ROWS_PER_X",
+    "Rng",
     "SEED_NAMES",
     "STEP",
     "STEPS",
-    "TU_FAMILIES",
-    "K",
-    "Mistake",
-    "Rng",
     "Safetensors",
     "Seed",
+    "TU_FAMILIES",
+    "TU_PER_FAMILY",
     "bf16",
     "bf16_pow2",
     "chain_accs",
     "epilogue",
+    "evaluate_mistakes",
     "generate_corner",
     "generate_tu_corner",
     "hawkeye_step",
@@ -71,7 +74,9 @@ __all__ = [
     "is_finite_f32",
     "load_seeds",
     "non_sticky_tc_dot",
+    "pack_u16",
     "plan_real",
+    "read_u16",
     "tensor_of",
     "variant_chain",
 ]
@@ -83,7 +88,6 @@ STEPS = K // STEP
 PIPELINE = S.AMPERE_BF16_M16N8K16
 
 BF16_ONE = 0x3F80
-BF16_MAX = 0x7F7F
 BF16_INF = 0x7F80
 F32_INF = 0x7F800000
 
@@ -243,7 +247,7 @@ def hawkeye_step(c: int, a: Sequence[int], b: Sequence[int], silicon_word: int) 
 # --- seeds ----------------------------------------------------------------------------------------------------------------------
 
 EXPERIMENT_ID = "B1-b3eba618b1b5-20260907T1731Z"
-REPO_FIXTURE_DIR = "verity/ml/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
+REPO_FIXTURE_DIR = "verity/definitions/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
 SEED_FAMILIES = ("qkv_proj", "o_proj", "gate_up_proj", "lm_head")
 PHASES = ("decode", "prefill")
 #: Seed order: id 0 of ``vu-k1536`` is ``qkv_proj_decode_0`` (the target's K=1536 conformance vector).

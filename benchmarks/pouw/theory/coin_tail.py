@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The lead's coin-branch tail (`Tail.coinTail_le`, Security/Proofs/Pouw/Lead/Tail/Repeats.lean), checked against the
+"""The lead's coin-branch tail (`Tail.coinTail_le`, security/Proofs/Pouw/Lead/Tail/Repeats.lean), checked against the
 coins as the layout draws them: a word is a prefix sum over steps, and the tag weights `G` (one set a column), the
 step-0 bits `a₁` (a row's) and the tag bits `b` (a row's and step's) are shared across blocks.
 

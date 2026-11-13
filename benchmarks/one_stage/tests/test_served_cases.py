@@ -1,4 +1,4 @@
-"""served_cases.py: sampled proofs' one-stage v1 case (onsite's), remote's sampled proofs case (`verity/sampled-proofs/v1`:
+"""served_cases.py: one-stage v1's case (no composite's), the sampled proofs case (`verity/sampled-proofs/v1`:
 v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
 same record, Pearl+'s run case from the parts its piece wrote, its commitment naming that record, and with ``--v2`` its
@@ -40,19 +40,19 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import weights as PW
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as DR
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import proofs as PF
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
-from verity.ml.crypto import lms
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import weights as PW
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as DR
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
+from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -371,6 +371,25 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     assert refused == [{"protocol": SAMPLED, "reason": "no v2 case: ValueError: this audit's are plain"}], refused
     assert sorted(p.name for p in private.iterdir()) == ["inference-only", "sampled-proofs-v1", "scratch"]
     assert not (tmp_path / "sampled.seen").exists()
+
+
+def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
+    """Where the tree leaves the inference-only policy out (the public release: no module `SC.POLICY`, which names the
+    policy's Lean package and the Python its check is held to), the inference-only case is refused saying so, never
+    skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
+    package is refused the same way."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    private = tmp_path / "private"
+    monkeypatch.setattr(SC, "POLICY", "a_module_this_tree_leaves_out")
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", private,
+                                  "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
+    assert [r["protocol"] for r in refused] == [INF] and "is not on this tree" in refused[0]["reason"], refused
+    assert sorted(p.name for p in private.iterdir()) == ["sampled-proofs", "sampled-proofs-v1", "scratch"]
+    assert not (tmp_path / "reg.seen").exists()
+    with pytest.raises(SC.Refused, match="is not on this tree"):
+        SC.build(*SC.INFERENCE_ONLY_LEAN)
 
 
 @lean
@@ -931,7 +950,7 @@ def test_a_usage_error_exits_64(capsys, argv):
 
 #: the H200's declared target (`pins/NVIDIA_H200.json`), at which V2 serves the 4,32,4 class
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
-#: `integrations/vllm`'s tests' TINY Llama, at whose caps (64 positions) the 4,32,4 class's 36 fit
+#: `adapters/vllm`'s tests' TINY Llama, at whose caps (64 positions) the 4,32,4 class's 36 fit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256,
         "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}

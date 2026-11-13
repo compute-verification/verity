@@ -1,9 +1,11 @@
-"""`zk_cost.py overhead` divides by `verity.hardware.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
+"""`zk_cost.py overhead` divides by `verity.hardware.cards.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
 132 SMs x 4096 MACs at the 1830 MHz tensor clock, the data sheet's 1,979 dense FP8 TFLOPS, and never the 1980 MHz SM clock's
 1.0705e15. Toy records of one served type, staged at two sizes and proved warm by the dev arm, give a known marginal second
 a block, so its h is fixed by the peak alone. A served type's size of 2 proves its probe's staging rather than staging the
 same 2 instances again. Passes prove each type's sizes in ABBA order, a session's CPU seconds are its own rather than its
-processes', and `overhead` fits each part of a session, a CPU node's with no card."""
+processes', and `overhead` fits each part of a session, a CPU node's with no card. Each Lean verdict is recorded and
+reported as what happened: accepted, refused for `NO_PROGRAM` alone once `Zk.verify` passed, or failed, and a refusal is
+never counted as an acceptance."""
 from __future__ import annotations
 
 import argparse
@@ -14,12 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from verity import hardware
+from verity.hardware import cards
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import zk_cost as Z
 
 K, FIXED_S, MARGINAL_S = 6144, 2.0, 1e-3
+PUBLIC_INPUTS = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"
 
 
 def _records(out: Path, sizes: tuple[int, ...] = (1024, 2048)) -> None:
@@ -38,23 +41,69 @@ def _records(out: Path, sizes: tuple[int, ...] = (1024, 2048)) -> None:
 
 
 def test_the_h200_e4m3_peak_is_the_data_sheets_at_the_tensor_clock():
-    card = hardware.load("h200-sxm-141gb")
-    peak = hardware.rate(card, fmt="e4m3")
+    card = cards.load("h200-sxm-141gb")
+    peak = cards.rate(card, fmt="e4m3")
     assert peak == 132 * 4096 * 1830 * 10**6
     assert float(peak) == pytest.approx(9.8945e14, rel=1e-4)
-    assert hardware.rate(card, fmt="e4m3", mhz=1980) == 132 * 4096 * 1980 * 10**6
+    assert cards.rate(card, fmt="e4m3", mhz=1980) == 132 * 4096 * 1980 * 10**6
 
 
 def test_overhead_divides_a_blocks_seconds_by_the_cards_rate(tmp_path):
     _records(tmp_path)
     assert Z.overhead(argparse.Namespace(out=str(tmp_path), card="h200-sxm-141gb", run="r-test")) == 0
     (t,) = json.loads((tmp_path / "overhead.json").read_text())["types"].values()
-    peak = float(hardware.rate(hardware.load("h200-sxm-141gb"), fmt="e4m3"))
+    peak = float(cards.rate(cards.load("h200-sxm-141gb"), fmt="e4m3"))
     assert t["peak_mac_per_s"] == peak
     dev = t["arms"]["dev"]
     assert dev["marginal_s"] == pytest.approx(MARGINAL_S) and dev["fixed_s"] == pytest.approx(FIXED_S)
     assert dev["overhead_marginal"] == pytest.approx(MARGINAL_S / (K / 9.8945e14), rel=1e-4)
     assert dev["overhead_marginal"] == pytest.approx(MARGINAL_S * peak / K, rel=1e-9)
+
+
+@pytest.mark.parametrize("verdict, outcome, said, rc", [
+    ({"accepted": True, "why": ""}, "accepted", "accepted", 0),
+    ({"accepted": False, "why": Z.NO_PROGRAM}, "NO_PROGRAM", "Zk.verify passed, then refused for NO_PROGRAM", 0),
+    ({"accepted": False, "why": PUBLIC_INPUTS}, "FAIL", "FAILS", 1)])
+def test_a_served_sessions_record_keeps_leans_verdict_and_counts_no_refusal_as_an_acceptance(
+        tmp_path, monkeypatch, capsys, verdict, outcome, said, rc):
+    (tmp_path / "records").mkdir()
+    (tmp_path / "points").mkdir()
+    (tmp_path / "plan.json").write_text(json.dumps([{"unit": "gq:K=384", "tag": "gq-k384", "c": 2, "k": 2,
+                                                     "stage_dir": str(tmp_path), "pub": "pub.bin", "partition": None}]))
+    (tmp_path / "records" / "prove.jsonl").write_text(json.dumps(
+        {"unit": "gq:K=384", "tag": "gq-k384", "c": 2, "k": 2, "arm": "dev", "mode": "warm", "rep": 0, "accepted": True,
+         "sessions": [str(tmp_path / "s0")], "dir": str(tmp_path / "points")}) + "\n")
+    monkeypatch.setattr(Z, "timed", lambda cmd, fo, fe, **kw: (
+        0, {"wall_s": 1.0, "user_s": 0.5, "sys_s": 0.1, "maxrss_kb": 1}, [(0.5, "VERDICT " + json.dumps(verdict))]))
+    # a served type's session is verified without a Program: it holds when Zk.verify passed, and only Lean's accepting it
+    # counts as an acceptance
+    assert Z.verify(argparse.Namespace(out=str(tmp_path), lean="lean")) == rc
+    (rec,) = Z.read_jsonl(tmp_path / "records" / "verify.jsonl")
+    assert (rec["accepted"], rec["why"], rec["zk_verify_passed"]) == (verdict["accepted"], verdict["why"], rc == 0)
+    assert "passes" not in rec and Z.lean_outcome(rec) == outcome
+    out = capsys.readouterr().out
+    assert f"gq:K=384 c=2 k=2 dev: {said}" in out
+    n = {"accepted": 0, "NO_PROGRAM": 0, "FAIL": 0} | {outcome: 1}
+    assert (f"Lean accepted {n['accepted']} of 1 sessions, refused {n['NO_PROGRAM']} for NO_PROGRAM alone and failed "
+            f"{n['FAIL']}") in out
+
+
+def test_overhead_reports_each_lean_verdict_as_what_happened(tmp_path):
+    _records(tmp_path)
+    tag = f"fp8-coord-k{K}"
+    base = {"unit": f"fp8-coord:K={K}", "tag": tag, "arm": "dev", "c": 2048, "k": 2048, "user_s": 1.0, "sys_s": 0.1}
+    verdicts = [{"accepted": True, "why": None, "zk_verify_passed": True},
+                {"accepted": False, "why": Z.NO_PROGRAM, "passes": True},   # kept before zk_verify_passed was
+                {"accepted": False, "why": PUBLIC_INPUTS, "zk_verify_passed": False}]
+    (tmp_path / "records" / "verify.jsonl").write_text("".join(json.dumps(base | v) + "\n" for v in verdicts))
+    assert Z.overhead(argparse.Namespace(out=str(tmp_path), card="h200-sxm-141gb", run="r-test")) == 0
+    (t,) = json.loads((tmp_path / "overhead.json").read_text())["types"].values()
+    assert [{x: v[x] for x in ("accepted", "zk_verify_passed")} for v in t["arms"]["dev"]["lean"]] == [
+        {"accepted": True, "zk_verify_passed": True}, {"accepted": False, "zk_verify_passed": True},
+        {"accepted": False, "zk_verify_passed": False}]
+    assert not any("passes" in v for v in t["arms"]["dev"]["lean"])
+    row = next(x for x in (tmp_path / "overhead.md").read_text().splitlines() if x.startswith(f"| {tag} | Fp8"))
+    assert row.endswith("| accepted,NO_PROGRAM,FAIL |")
 
 
 def test_overhead_refuses_a_card_that_isnt_the_runs_gpu(tmp_path):

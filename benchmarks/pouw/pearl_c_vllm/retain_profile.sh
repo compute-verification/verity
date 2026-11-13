@@ -24,7 +24,7 @@ mkdir -p "$OUT" "${SCRATCH_ROOT:=/workspace/tmp}" || exit 1
 S=$(umask 077; mktemp -d -p "$SCRATCH_ROOT" retain-profile.XXXXXX) || exit 1
 R=$(umask 077; mktemp -d -p "${PASSES_ROOT:-$SCRATCH_ROOT}" retain-passes.XXXXXX) || { rm -rf "$S"; exit 1; }
 trap 'rm -rf "$S" "$R"' EXIT
-SPEC=${SPEC:-benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
+SPEC=${SPEC:-benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
 LOADS=${LOADS:-prefill:32:1024:1:8192 prefill2k:32:1024:1:2048 decode:32:64:64:8192 mixed:64:256:16:4096}
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-/workspace/cp/venv312} HF_HUB_OFFLINE=1 GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-retain}
 # shellcheck source=/dev/null
@@ -82,7 +82,7 @@ for load in $LOADS; do
     extra=(--no-retain); retained "$name" unretained-profiled; extra=()
   fi
   if [ -n "${SEED:-}" ] && [ -n "${OLD_SRC:-}" ]; then
-    retained "$name" old "PYTHONPATH=$OLD_SRC/integrations/vllm:$PYTHONPATH"
+    retained "$name" old "PYTHONPATH=$OLD_SRC/adapters/vllm:$PYTHONPATH"
     "$VENV/bin/python" -c 'import json, sys; a, b = (json.load(open(f)) for f in sys.argv[1:]); d = sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k)); print(f"{sys.argv[1]} vs old: {len(a)} and {len(b)} files, {len(d)} differ", d[:8])' \
       "$OUT/$name-retained-digests.json" "$OUT/$name-old-digests.json"
   fi

@@ -59,14 +59,14 @@ sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
 import run as L  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
 
 RC = L.RC
 EXPECT = {"tampered-zy": "REJECT", "other-call-a": "REJECT"}
@@ -86,9 +86,9 @@ def _window(path: str):
     each K's template held to the descriptor's by its descriptor id (which names every binding, so the 870 MB descriptor
     is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
     the template at K, as a served window's verifier derives it."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
     layout, why = CR.layout_of(raw)
@@ -118,7 +118,7 @@ def _data_port(port: str) -> bool:
 def extract(a) -> None:
     import pickle
 
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import prover as PV
@@ -126,17 +126,17 @@ def extract(a) -> None:
 
     t0 = time.time()
     doc = json.loads(Path(a.calls).read_text())
-    drawn = json.loads(Path(a.drawn).read_text())
+    sampled = json.loads(Path(a.drawn).read_text())
     commits = doc["commitment"]
     root = commits["session"]["root"]
     steps, psalt = int(commits["steps"]), PHC.program_salt_of(commits).hex()
-    if drawn["window"] != root:
-        raise SystemExit(f"the drawn units are window {drawn['window'][:16]}...'s, not {root[:16]}...")
+    if sampled["window"] != root:
+        raise SystemExit(f"the sampled proof blocks are window {sampled['window'][:16]}...'s, not {root[:16]}...")
     if (why := PHC.manifest_reason(doc)) is not None:
         raise SystemExit(f"REFUSED: {why}")
     raw = _descriptor(a.descriptor)
     program = hashlib.sha512(raw).hexdigest()
-    if program != drawn["circuit"]:
+    if program != sampled["circuit"]:
         raise SystemExit("the descriptor is not the circuit the window's period committed")
     layout, why = CR.layout_of(raw)
     if why is not None:
@@ -146,9 +146,9 @@ def extract(a) -> None:
     roots: dict[str, list[str]] = {}
     for e in entries:
         roots.setdefault(e["value"], []).append(e["root"])
-    mine = sorted((u for u in drawn["units"] if u["k"] == a.k), key=lambda u: u["unit"])
+    mine = sorted((u for u in sampled["units"] if u["k"] == a.k), key=lambda u: u["unit"])
     if not mine:
-        raise SystemExit(f"the draw selected no unit at K = {a.k}: {sorted({u['k'] for u in drawn['units']})}")
+        raise SystemExit(f"the sample holds no unit at K = {a.k}: {sorted({u['k'] for u in sampled['units']})}")
     unit = mine[0]
     u, c = unit["unit"], unit["call"]
     reg, why = CR.registered_file(program, layout, shape, c, roots, root, steps, psalt)
@@ -206,7 +206,7 @@ def extract(a) -> None:
     with os.fdopen(fd, "w") as f:
         json.dump(out, f)
     pub = {**{x: out[x] for x in ("window", "program", "draw_root", "k", "unit", "served_rows", "other")},
-           "drawn": len(drawn["units"]), "drawn_at_k": [x["unit"] for x in mine],
+           "drawn": len(sampled["units"]), "drawn_at_k": [x["unit"] for x in mine],
            "entries": {p: v["entry"] for p, v in ports.items()},
            "reads": {p: v["opening"]["position"] for p, v in ports.items()}, "checks": checks,
            "seconds": round(time.time() - t0, 1)}
@@ -264,7 +264,7 @@ class Served:
     leaf: L.Leaf
     roots: tuple
     registration: str
-    draw: str
+    sample: str
     tree: G.Registered
     record: dict
     ports: dict

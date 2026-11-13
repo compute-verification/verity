@@ -7,35 +7,66 @@
     python3 tools/move/layout.py --resolve M  the name module M has after the move (for readers of recorded data)
 
 It is idempotent and reruns on any later main: a file still at an old path moves, a reference to an old path or module is
-rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it fails when a tracked file under a
-retired directory has no destination, so a file that lands on main later gets a row in the map rather than a guess.
+rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it stops, with an exit of its own
+(`NO_ROW`) and each file's name, when a tracked file under a path the map retires ([retired]) has no row, so the file gets
+a row rather than a guess: in the map when it is main's, and when an open branch adds it, in the branch's rows file.
+
+The rows file of `NAME.toml` is `NAME.rows.toml` beside it, a file the branch commits, with [paths] alone. It is read
+after the map: a row there moves its file, or every file under its directory, and rewrites each reference to it, as a row
+of the map does, and the module renames it implies are derived, not declared. The script deletes the rows file once it has
+read it, so the moved tree holds none, and leaves its rows out of `moves.json`, which records the move's own. It refuses
+(exit 1) a rows file that would change what the map says: a row for a path the map sends elsewhere or deletes, a directory
+row over a path the map names, a module the map renames another way; and a row no tracked file is at or under.
+
+A text file is one with no NUL in its first 8 KiB. One of more than `TEXT_LIMIT` bytes is not read, and the move stops and
+names it rather than leave its lines as they were, until the map excludes it; a Lean lock is read whatever its size.
 
 What it rewrites, in every tracked text file the map doesn't exclude:
-- paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`),
-  ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`), ones relative to an old package
+- paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`, and
+  after each prefix the map lists as standing for the root: [rewrite] root_prefixes, `/opt/vy-verifier/current/`),
+  ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`; a Lake requirement's `path` and
+  a manifest's `dir` however written, `composition` too, a package inside the requiring one), ones relative to an old package
   root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), the
   `Path(__file__).parents[N]` anchors of a moved file, and a shell script's paths from its own directory
-  (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path);
-- modules: import statements (split when their names now live in different modules, made absolute when a relative one no
-  longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`, `module:attr`, docs). A
-  module whose own row keeps its name (a [paths] row with old == new) stays where it is when its package moves;
+  (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path or its own
+  directory). A path below a directory the map splits that names no tracked file (a file a test makes up, a build's
+  output) follows the directory's [tokens] row;
+- lists of paths (a Python list, tuple or set of strings, a TOML or JSON array, the objects of `git rev-parse`, the
+  members of `tar`): an entry that names what has no one place after the move, a directory the map splits or empties or
+  a file it deletes, becomes the fewest directories and files that hold where the list's files went and no others; and
+  where the list named the `__init__.py` of a package the move deletes, the package levels above those. A list of
+  strings with an entry of one name that no path of the tree ends in holds names (suites, a command's words), and a
+  directory's in it is one more: it follows the [tokens] row, which [split] must acknowledge;
+- modules: import statements (split when their names now live in different modules, each statement keeping the comment
+  that ended a one-line import, and one of them the lines a longer import went on over, as written; made absolute when a
+  relative one no longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`,
+  `module:attr`, docs). A module whose own row keeps its name (a [paths] row with old == new) stays where it is when its
+  package moves;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
-A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
+A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. A
+Lake package's path to another package that named one before the move names one after it, or the move stops (exit 1). An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
-its name alone between quotes or backticks is rewritten in every file but Rust and Lean. Where a key is made of another
+its name alone between quotes or backticks is rewritten in every file but Rust and Lean; a name that is a key in some
+file and the directory in another is listed for the files where it is the directory ([rewrite] words_in:
+`{glob = [directories]}`). Where a key is made of another
 word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the file (`{glob = [directories]}`): there the
 name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
-it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
-moves recorded there.
+it moves. A `.py` file moved below a package root from a package, or from outside every package to a directory that is
+not run by path (`tests/`, `lean/`), gets an `__init__.py` in each directory from it up to the root; and an `__init__.py`
+left where a package held more and now holds only such files is deleted with the package. It appends [paths] to research's
+`moves.json` (once), each row whose path the tree has, and never rewrites the moves recorded there.
 
-It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
-with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
+It fails on a rewritten reference to a directory the map splits across destinations (`verity/ml/flock/` to
+`verity/protocols/flock/prover/` with its `verifier/` to `verity/protocols/flock/agreement/`): the rewrite follows the
+larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
-with the reason; one that no longer occurs is an error too.
+with the reason; one that no longer occurs is an error too. Where the file means another part, the row names it
+(`"old file: old directory" = { to = "verity/protocols/flock/agreement", why = "..." }`), and the file's references to
+the directory go there.
 """
 from __future__ import annotations
 
@@ -43,6 +74,7 @@ import argparse
 import ast
 import bisect
 import fnmatch
+import functools
 import hashlib
 import json
 import os
@@ -58,20 +90,39 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 _ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
+#: the largest text file the rewrite reads, a Lean lock apart, which it reads whatever its size
 TEXT_LIMIT = 4 << 20
+LOCK = "lean-audit.json"
 #: old paths that the move empties, when the map has no [retired]; a tracked file left under one has no row in the map
 RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/direct/", "backends/ligero-verify/",
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
            "benchmarks/ir_call/")
+#: the exit when a tracked file under a retired path has no row: stderr then holds the fix in its first line and each
+#: file on a line of its own, indented by two spaces (`restack.py` reads both)
+NO_ROW = 3
+#: what a map's rows file is named by, beside the map: `NAME.rows.toml` for `NAME.toml`
+ROWS_SUFFIX = ".rows.toml"
 #: a dotted name ending in one of these is a file name (`verity_pouw.json`), not a module
 MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [paths], for reading a tool from an older tree
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: the Lake files that name other packages' directories, each from its own: a lakefile by a requirement's `path`, a
+#: manifest by a path package's `dir` (`lake_dirs` reads them, `lake_spans` finds them in the text)
+LAKE_FILES = ("lakefile.toml", "lake-manifest.json")
+_LAKE_PATH = re.compile(r'[ \t]*path[ \t]*=[ \t]*"(?P<p>[^"\\\n]+)"')
+_LAKE_PACKAGE = re.compile(r"\{[^{}]*\}")
+_LAKE_DIR = re.compile(r'"dir"\s*:\s*"(?P<p>[^"\\\n]+)"')
+#: a distribution's directory as `uv.lock` writes it: a package's `source` and a `requires-dist` or manifest entry
+_LOCK_SOURCE = re.compile(r'\b(editable|virtual|directory) = "([^"\n]+)"')
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
-SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
-                       r'(?P<rel>(?:/[\w.\-]+)+)')
+_SH_DIRNAME = r'\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\)'
+_SH_REL = r"(?P<rel>(?:/[\w.\-]+)+)"
+SH_ANCHOR = re.compile(rf"(?P<head>{_SH_DIRNAME}){_SH_REL}")
+#: a variable a shell script sets to its own directory (`here=$(cd "$(dirname "$0")" && pwd)`)
+SH_HERE = re.compile(r'(?:^|[;\s])(?P<v>[A-Za-z_]\w*)=(?P<q>"?)\$\(cd\s+"\$\(dirname\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\)"'
+                     r"\s+&&\s+pwd(?:\s+-P)?\)(?P=q)(?=[;\s]|$)", re.M)
 #: a variable a shell script sets to its own path (`SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")`)
 SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*)=(?P<q>"?)'
                      r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
@@ -79,11 +130,74 @@ SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*
 SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
 #: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
 SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
+#: what stands for the root before a path from it: what closes a placeholder or a command (`{ROOT}/`, `<tree>/`,
+#: `$(pwd)/`), a shell variable, the home's checkout, a pod's. `tools/verity/check/move_check.py` reads a path as this does.
+ROOT_PREFIX = r"[})>]/|\$\{?\w+\}?/|~/(?:verity/)?|/workspace/"
+
+
+def root_prefix_ok(x) -> bool:
+    """Whether a map may list `x` as standing for the root before a path ([rewrite] root_prefixes)."""
+    return isinstance(x, str) and x.endswith("/") and x.strip("/") != ""
+
+
+def root_prefix(more=()) -> str:
+    """The pattern of what stands for the root before a path: `ROOT_PREFIX`, and each prefix of `more` as it is written,
+    where no longer path holds it."""
+    return "|".join([ROOT_PREFIX, *(rf"(?<![\w.\-/]){re.escape(x)}" for x in more)])
+#: an entry of a list that is one path: a git revision before it (`HEAD:`), `/` or all below it (`/**`) after it
+ENTRY = re.compile(r"(?P<pre>(?:HEAD:)?)(?P<p>[\w\-][\w.\-]*(?:/[\w.\-]+)*)(?P<post>/\*\*|/)?")
+_STRING = r'"(?:[^"\\\n]|\\.)*"|\'[^\'\\\n]*\''
+#: a TOML or JSON array of strings that is a key's value, with the comments between them
+ARRAY = re.compile(rf"[=:]\s*(\[\s*(?:(?:#[^\n]*|(?:{_STRING})(?:\s*,)?)\s*)*\])")
+#: the shell commands whose words are a list of paths: `git rev-parse`'s objects (`HEAD:path`) and `tar`'s members. Any
+#: other command's word may be the one directory it takes (`cd`, a destination), so no list is read there.
+SH_LIST = re.compile(r"(?<![\w.\-/])(?P<cmd>git\s+rev-parse|tar)(?=[ \t])(?P<args>[^|;&()\n]*)")
+#: where `_covers` took an entry out of a list, until the list is closed up around it
+GONE = "\ue002"
+#: a pyproject's `members`: the workspace's distributions, each the directory its `pyproject.toml` is in
+MEMBERS = re.compile(r"(^\s*members\s*=\s*\[)(?P<body>[^\]]*)(\])", re.M)
+#: directories whose Python is run by path and is no module of the package around it
+BY_PATH = {"tests", "lean"}
 
 
 def is_shell(path: str, text: str) -> bool:
     """A shell script: `*.sh`, or a file whose first line is a shell's `#!`."""
     return path.endswith(".sh") or re.match(r"#!\S*(?:/|\s)(?:ba|da|z)?sh\b", text) is not None
+
+
+def lake_dirs(name: str, text: str) -> list[str]:
+    """The directories of other packages that a Lake file named `name` holds, as written and in the file's order: a
+    lakefile's path requirements, a manifest's path packages. Empty for any other file and for an empty one. A Lake file
+    that doesn't parse raises `ValueError`: its paths can't be read, so nothing can say they still name their packages."""
+    if name not in LAKE_FILES or not text.strip():
+        return []
+    if name == "lakefile.toml":
+        held, key, kind = tomllib.loads(text).get("require", []), "path", None
+    else:
+        data = json.loads(text)
+        held, key, kind = data.get("packages", []) if isinstance(data, dict) else [], "dir", "path"
+    return [e[key] for e in (held if isinstance(held, list) else [])
+            if isinstance(e, dict) and isinstance(e.get(key), str) and (kind is None or e.get("type") == kind)]
+
+
+def lake_spans(name: str, text: str) -> list[tuple[int, int]]:
+    """Where `text` writes each of `lake_dirs`, in the forms Lake's files have: a `path` line of a `[[require]]` table, and
+    the `dir` of a flat object whose `type` is `path`. A requirement written another way is in `lake_dirs` alone, so the
+    rewrite leaves it and the check after the rewrite still reads it."""
+    spans = []
+    if name == "lakefile.toml":
+        table, at = "", 0
+        for line in text.splitlines(keepends=True):
+            if line.lstrip().startswith("["):
+                table = line.split("#")[0].strip()
+            elif table == "[[require]]" and (m := _LAKE_PATH.match(line)):
+                spans.append((at + m.start("p"), at + m.end("p")))
+            at += len(line)
+    elif name == "lake-manifest.json":
+        for package in _LAKE_PACKAGE.finditer(text):
+            if re.search(r'"type"\s*:\s*"path"', package.group(0)) and (m := _LAKE_DIR.search(package.group(0))):
+                spans.append((package.start() + m.start("p"), package.start() + m.end("p")))
+    return spans
 
 
 def sh_ref(ref: str) -> str:
@@ -96,11 +210,35 @@ def sh_self_names(text: str) -> set[str]:
     return SH_OWN | {m.group("v") for m in SH_SELF.finditer(text)}
 
 
+def sh_here_names(text: str) -> frozenset[str]:
+    """The variables a shell script sets to its own directory (`SH_HERE`) and nowhere sets again."""
+    return frozenset(v for m in SH_HERE.finditer(text) if len(re.findall(rf"(?:^|[;\s]){(v := m['v'])}=", text, re.M)) == 1)
+
+
+@functools.cache
+def sh_anchor(here: frozenset[str] = frozenset()) -> re.Pattern:
+    """A path a shell script names from its own directory: after `$(dirname "$0")` (`SH_ANCHOR`, whose `ref` is the name
+    read), or after a variable of `here` (`$here/../..`), which the script set to that directory."""
+    if not here:
+        return SH_ANCHOR
+    names = "|".join(sorted(map(re.escape, here)))
+    return re.compile(rf"(?P<head>{_SH_DIRNAME}|\$(?:\{{(?:{names})\}}|(?:{names})(?!\w))){_SH_REL}")
+
+
 def git(root: Path, *args: str, check: bool = True) -> str:
     r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
     if check and r.returncode:
         raise SystemExit(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout
+
+
+class NoRow(SystemExit):
+    """Tracked files under a path the map retires that no row moves (`files`, every one; the message a caller that lets
+    it through exits with names the first of them)."""
+
+    def __init__(self, files: list[str]):
+        super().__init__("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(files[:50]))
+        self.files = files
 
 
 # ---------------------------------------------------------------------------------------------------------------- the map
@@ -126,6 +264,8 @@ class Layout:
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
         self.words = {w.rstrip("/") for w in rw.get("words", [])}
+        #: per file glob, more such directories, each a name that is ours in those files and a key in others ([rewrite] words_in)
+        self.words_in = {g: {w.rstrip("/") for w in ws} for g, ws in rw.get("words_in", {}).items()}
         #: per file glob, moved directories whose name is ours there also as the last word of a double-quoted string
         #: ([rewrite] word_ends: `"INLINE Security"`, a key made of another word and the package's path)
         self.word_ends = {g: {w.rstrip("/") for w in ws} for g, ws in rw.get("word_ends", {}).items()}
@@ -134,6 +274,12 @@ class Layout:
         self.drop = set(data.get("drop", {}).get("paths", []))
         #: "old file: old directory" -> why the file's reference to a directory the map splits may follow the larger part
         self.split = dict(data.get("split", {}))
+        #: of those rows, the ones that name the part the file means by the directory (`{ to = "new directory", why = "..." }`)
+        self.split_to = {k: v["to"].rstrip("/") for k, v in self.split.items() if isinstance(v, dict)}
+        #: what stands for the root before a path, beyond `ROOT_PREFIX` ([rewrite] root_prefixes: a pod's install directory)
+        self.root_prefixes = rw.get("root_prefixes", [])
+        if bad := [x for x in self.root_prefixes if not root_prefix_ok(x)]:
+            raise SystemExit(f"[rewrite] root_prefixes: each is what a path is written after, ending in `/`: {bad}")
 
     # paths
     def file(self, p: str) -> str | None:
@@ -200,6 +346,10 @@ class Layout:
         """Whether file `where` is one in which `word`, a moved directory's name, is ours as a string's last word too."""
         return any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.word_ends.items())
 
+    def ours(self, word: str, where: str) -> bool:
+        """Whether `word`, a moved directory's name alone between quotes, is the directory in file `where`."""
+        return word in self.words or any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.words_in.items())
+
     def excluded(self, *paths: str) -> bool:
         def hit(pats, p):
             return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
@@ -225,12 +375,81 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
 
 
+def module_there(old: str, new: str, root: str, tracked) -> bool:
+    """Whether the `.py` file moved from `old` to `new`, below the package root `root`, is a module of that package: it was a
+    package's (its directory had an `__init__.py`, among the `tracked` files), or it was outside every package (no
+    `__init__.py` at or above its directory) and lands outside each directory run by path (`BY_PATH`)."""
+    if posixpath.join(posixpath.dirname(old), "__init__.py") in tracked:
+        return True
+    return not any(f"{d}/__init__.py" in tracked for d in _ancestors(old)) and not BY_PATH & set(new[len(root) + 1:].split("/")[:-1])
+
+
 def braces(token: str) -> list[str]:
     """Each path a brace list names: `a/{x,y/z}.py` is `a/x.py` and `a/y/z.py`; a token with no list is itself."""
     m = re.search(r"\{([^{}]*)\}", token)
     if not m:
         return [token]
     return [e for alt in m.group(1).split(",") for e in braces(token[:m.start()] + alt + token[m.end():])]
+
+
+def parsed(text: str) -> ast.Module | None:
+    """`text` as Python; None where it doesn't parse, and a reader then finds nothing in it."""
+    try:
+        return ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
+
+
+def lists(path: str, text: str) -> list[tuple[str, tuple[int, int], list[tuple[int, int]]]]:
+    """The lists `text` holds whose entries may each be a path, as (what parts one entry from the next, the list's span,
+    each entry's span). In Python a list, tuple or set of nothing but string literals and `*names`; in TOML and JSON an
+    array of strings; either only as a value of its own: one that is an entry of another, or whose entries an assignment
+    binds to names one by one, is a record. In a shell script the words of a command that takes a list (`SH_LIST`:
+    `HEAD:path` after `git rev-parse`; after `tar` a word that is no option's value)."""
+    out = []
+    if path.endswith(".py"):
+        if (tree := parsed(text)) is None:
+            return out
+        lines, starts = text.splitlines(keepends=True), [0]
+        for line in lines:
+            starts.append(starts[-1] + len(line))
+
+        def offset(lineno: int, col: int) -> int:
+            return starts[lineno - 1] + len(lines[lineno - 1].encode("utf-8")[:col].decode("utf-8", "replace"))
+        many = (ast.List, ast.Tuple, ast.Set)
+        records = {id(e) for node in ast.walk(tree) if isinstance(node, many) for e in node.elts}
+        records |= {id(node.value) for node in ast.walk(tree)
+                    if isinstance(node, ast.Assign) and any(isinstance(t, many) for t in node.targets)}
+        for node in ast.walk(tree):
+            if not isinstance(node, many) or id(node) in records or not all(
+                    isinstance(e, ast.Starred) or isinstance(e, ast.Constant) and isinstance(e.value, str) for e in node.elts):
+                continue
+            entries = []
+            for e in node.elts:
+                if isinstance(e, ast.Constant) and e.lineno == e.end_lineno:
+                    a, b = offset(e.lineno, e.col_offset), offset(e.end_lineno, e.end_col_offset)
+                    if text[a] in "\"'" and text[a + 1:b - 1] == e.value:
+                        entries.append((a + 1, b - 1))
+            if entries:
+                out.append((", ", (offset(node.lineno, node.col_offset), offset(node.end_lineno, node.end_col_offset)), entries))
+    elif path.endswith((".toml", ".json")):
+        for m in ARRAY.finditer(text):
+            at = m.start(1)
+            out.append((", ", m.span(1), [(at + s.start() + 1, at + s.end() - 1)
+                                          for s in re.finditer(rf"#[^\n]*|{_STRING}", m[1]) if s[0][0] != "#"]))
+    elif is_shell(path, text):
+        for m in SH_LIST.finditer(text):
+            entries, before = [], ""
+            for w in re.finditer(r"\S+", m["args"]):
+                a, b = m.start("args") + w.start(), m.start("args") + w.end()
+                if b - a > 1 and text[a] == '"' == text[b - 1]:
+                    a, b = a + 1, b - 1
+                rev = text.startswith("HEAD:", a)
+                if rev if m["cmd"] != "tar" else not rev and (not before.startswith("-") or before == "-" or "=" in before):
+                    entries.append((a, b))
+                before = w[0]
+            out.append((" ", m.span("args"), entries))
+    return out
 
 
 def derived_modules(layout: Layout) -> dict[str, str]:
@@ -269,6 +488,24 @@ def alternation(words) -> str:
     return regex(trie)
 
 
+def oversize(src: Path) -> bool:
+    """Whether `src` is left unread for its size alone: more than `TEXT_LIMIT` bytes of text (no NUL in its first 8 KiB) that
+    is no Lean lock. A move never leaves such a file as it is without saying so: it stops and names it (`refuse_unread`)."""
+    if src.name == LOCK or src.stat().st_size <= TEXT_LIMIT:
+        return False
+    with open(src, "rb") as f:
+        return b"\0" not in f.read(8192)
+
+
+def refuse_unread(unread: dict[str, int]):
+    """Stop a move that would leave `unread` (path -> bytes, the text files `oversize` names) with every line as it was."""
+    if unread:
+        raise SystemExit(f"text files over {TEXT_LIMIT} bytes, which the move would leave unread, with every path and name in "
+                         "them as it was:\n" + "".join(f"  {p} ({n} bytes)\n" for p, n in sorted(unread.items()))
+                         + "exclude in the map one that names nothing the move changes, or raise TEXT_LIMIT in "
+                         "tools/move/layout.py")
+
+
 # ------------------------------------------------------------------------------------------------------------- the run
 
 class Run:
@@ -280,7 +517,9 @@ class Run:
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
+        self.leftover: list[str] = []               # the `__init__.py` files left alone in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
+        self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
@@ -289,6 +528,18 @@ class Run:
         """File `path` (new) refers to old `directory`, which the map splits, by a reference the rewrite changes (`what`)."""
         self.note("approximate directory paths", what)
         self.splits.setdefault(f"{self.old_of.get(path, path)}: {directory.strip('/')}", what)
+
+    def _part(self, path: str, directory: str, new: str | None = None, approx: bool = False) -> tuple[str | None, bool]:
+        """Where file `path`'s (new) reference to old `directory` goes, and whether [split] must acknowledge it: `new` and
+        `approx` as the map's rows give them, unless the file's [split] row names the part the file means by the
+        directory (`to`), a directory that a file of `directory` goes to or below."""
+        key = f"{self.old_of.get(path, path)}: {directory}"
+        to = self.L.split_to.get(key)
+        if to is None:
+            return new, approx
+        if not any(self.new_of[f].startswith(to + "/") for f in self._under(directory)):
+            raise SystemExit(f"[split] \"{key}\" names {to}, where no file of {directory} goes: name a directory one goes to or below")
+        return to, True
 
     def unacknowledged_splits(self) -> tuple[list[str], list[str]]:
         """The split references [split] doesn't acknowledge, and the acknowledgements no reference needs any more."""
@@ -327,14 +578,28 @@ class Run:
                 continue
             moves.append((p, new))
         if left:
-            raise SystemExit("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(left[:50]))
+            raise NoRow(left)
         clash = Counter(n for _, n in moves)
         dup = [n for n, c in clash.items() if c > 1] + [n for _, n in moves if n in self.tracked_old and self.L.file(n) is None]
         if dup:
             raise SystemExit("two files would land at one path:\n  " + "\n  ".join(sorted(set(dup))[:50]))
         self.old_dirs = {posixpath.dirname(p) for p in tracked}
         self.old_dirs |= {d for p in (*tracked, *fetched) for d in _ancestors(p)}
+        self.leftover = self._leftover(tracked, dict(moves))
         return moves
+
+    def _leftover(self, tracked: list[str], dest: dict[str, str]) -> list[str]:
+        """Each `__init__.py` that stays in a directory which held more and, after the move, holds nothing but such files,
+        or below one: the package is gone, and a file that only marked it goes with it ([create] keeps one it names)."""
+        before = sorted(tracked)
+        after = sorted({dest.get(p, p) for p in tracked if p not in self.L.drop} | set(self.L.data.get("create", {})))
+
+        def only_marks(files: list[str], d: str) -> bool:
+            lo, hi = bisect.bisect_left(files, d + "/"), bisect.bisect_left(files, d + "0")
+            return all(f.endswith("/__init__.py") for f in files[lo:hi])
+        return [p for p in before if p.endswith("/__init__.py") and dest.get(p, p) == p and p not in self.L.drop
+                and p not in self.L.data.get("create", {})
+                and any(only_marks(after, d) and not only_marks(before, d) for d in _ancestors(p))]
 
     def move(self, moves: list[tuple[str, str]]):
         landing = {n for _, n in moves}
@@ -349,11 +614,14 @@ class Run:
             dst.parent.mkdir(parents=True, exist_ok=True)
             os.rename(self.root / aside.get(old, old), dst)
         if not self.dry:
-            for p in self.dropped:
+            for p in (*self.dropped, *self.leftover):
                 (self.root / p).unlink()
         self.changes["files dropped"] = len(self.dropped)
+        for p in self.leftover:
+            self.note("`__init__.py` left alone in a package the move empties, deleted", p)
         if not self.dry:
-            for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped)}, key=len, reverse=True):
+            for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped, *self.leftover)},
+                            key=len, reverse=True):
                 for a in [d, *_ancestors(d)]:
                     try:
                         (self.root / a).rmdir()
@@ -362,14 +630,15 @@ class Run:
         self.changes["files moved"] = len(moves)
 
     def create(self):
-        """[create] files, and an `__init__.py` in each new directory between a moved package module and its root."""
+        """[create] files, and an `__init__.py` in each new directory between a module moved into a package (`module_there`)
+        and its root."""
         made = dict(self.L.data.get("create", {}))
         for new, old in self.moved.items():
-            if not new.endswith(".py") or not self._exists_old(posixpath.join(posixpath.dirname(old), "__init__.py")):
+            if not new.endswith(".py"):
                 continue
             root = next((d for d in sorted(self.L.new_roots.values(), key=len, reverse=True)
                          if new.startswith(d + "/")), None)
-            if root is None:
+            if root is None or not module_there(old, new, root, self.tracked_old):
                 continue
             d = posixpath.dirname(new)
             while d and (d == root or d.startswith(root + "/")):
@@ -396,10 +665,13 @@ class Run:
 
     def index(self, moves: list[tuple[str, str]]):
         dest = dict(moves)
-        kept = self.tracked_old - set(self.dropped)
+        kept = self.tracked_old - {*self.dropped, *self.leftover}
         self.new_files = {dest.get(p, p) for p in kept}
         self.old_of = {dest.get(p, p): p for p in kept}
-        self.new_dirs = {d for p in self.new_files for d in _ancestors(p)}
+        self.new_of = {o: n for n, o in self.old_of.items()}
+        self.kept = sorted(kept)
+        self.holds = Counter(d for p in self.new_files for d in _ancestors(p))     # directory -> the files the moved tree has in it
+        self.new_dirs = set(self.holds)
         mods = set()
         for p in self.new_files | set(self.L.data.get("create", {})):
             if p.endswith(".py"):
@@ -425,6 +697,8 @@ class Run:
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
                        for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
+        lake_before = {p: self._lake_packages(self.old_of.get(p, p), self._read(p) or "", self.tracked_old)
+                       for p in self.new_files if posixpath.basename(p) in LAKE_FILES}
         created = set(self.L.data.get("create", {}))
         for p in sorted(self.new_files - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
             if p == "pyproject.toml":
@@ -442,6 +716,18 @@ class Run:
         for p, before in lean_before.items():
             if self._lean_records(self.texts.get(p) or self._read(p)) != before:
                 raise SystemExit(f"{p}: the rewrite would change a guarantee or reads record")
+        lost = []
+        for p, before in sorted(lake_before.items()):
+            after = self._lake_packages(p, self._read(p) or "", self.new_files)
+            lost += [f"  {p}: {after[i][0]} (it named {was})\n" for i, (_, was) in enumerate(before)
+                     if was is not None and i < len(after) and after[i][1] is None]
+        if lost:
+            raise SystemExit("the move would leave a Lake package's path to another package naming no package, so neither "
+                             "it nor what requires it would build:\n" + "".join(lost)
+                             + "each is a file the map excludes from the rewrite ([rewrite] exclude: take it out), a package "
+                             "the map deletes ([drop]: take the requirement out first, in a change of its own), or a "
+                             "requirement written in a form `lake_spans` doesn't find (write it as a `path` line of a "
+                             "`[[require]]` table)")
         registered = {v for k, v in json.loads(self._read("fixtures/artifacts.json") or "{}").items()
                       if k.startswith("art:") and isinstance(v, str)}
         for p in sorted(registered & set(self.texts)):
@@ -491,11 +777,15 @@ class Run:
         return json.dumps([d.get("guarantees"), d.get("reads")], sort_keys=True)
 
     def _read(self, p: str) -> str | None:
+        """The text of `p` as it will be written, or None for a file that isn't text (a NUL in its first 8 KiB, or not UTF-8)
+        or is over `TEXT_LIMIT` and no Lean lock: one `oversize` names goes to `unread`, unless the map excludes it."""
         if p in self.texts:
             return self.texts[p]
         src = self.root / (p if not self.dry else self.old_of.get(p, p))
         try:
-            if src.stat().st_size > TEXT_LIMIT:
+            if (size := src.stat().st_size) > TEXT_LIMIT and src.name != LOCK:
+                if oversize(src) and not self.L.excluded(old := self.old_of.get(p, p), p):
+                    self.unread[old] = size
                 return None
             raw = src.read_bytes()
         except OSError:
@@ -508,11 +798,18 @@ class Run:
             return None
 
     def rewrite(self, path: str, old: str, text: str) -> str:
+        out, covers = self._covers(path, text)
+        out = self._rewrite(path, old, out)
+        for mark, entries in covers.items():
+            out = out.replace(mark, entries)
+        return out
+
+    def _rewrite(self, path: str, old: str, text: str) -> str:
         out = text
         if posixpath.basename(path) == ".gitignore":
             out = self._gitignore(path, out)
         else:
-            out = self._paths(path, old, out)
+            out = self._lake_paths(path, old, self._paths(path, old, out))
         if path.endswith(".py"):
             out = self._anchors(path, old, out)
             out = self._joins(path, old, out)
@@ -530,12 +827,139 @@ class Run:
         self.changes[kind] += n
         self.files_changed[path][kind] += n
 
+    # covers -------------------------------------------------------------------------------------------------------
+
+    def cover(self, olds) -> dict[str, str]:
+        """For each of the files `olds` (old paths the move keeps), the directory or file of the moved tree that stands for
+        it in their cover: the fewest directories and files that hold these files and no others. A directory stands for
+        its files when every file the moved tree has in it is one of them (an `__init__.py` the move creates counts as
+        none): the topmost such, named at its lowest level that holds them all."""
+        news = {o: self.new_of[o] for o in olds}
+        mine = Counter(d for n in news.values() for d in _ancestors(n))
+        out = {}
+        for o, n in news.items():
+            up = list(_ancestors(n))
+            top = next((d for d in reversed(up) if mine[d] == self.holds[d]), None)
+            out[o] = n if top is None else next(d for d in up if self.holds[d] == self.holds[top])
+        return out
+
+    def _parts(self, d: str) -> bool:
+        """Whether old path `d` stands for no one place after the move: a directory the map splits (a row says where it goes,
+        and not every file of it keeps its place below there) or empties (no row, and the moved tree has no file there), or
+        a file the move deletes."""
+        if d not in self.old_dirs:
+            return d in self.dropped or d in self.leftover
+        new, approx = self.L.directory(d)
+        if new is None:
+            return approx and d not in self.new_dirs
+        return any(self.new_of[f] != new + f[len(d):] for f in self._under(d))
+
+    def _covers(self, path: str, text: str) -> tuple[str, dict[str, str]]:
+        """In a list of paths (`lists`), an entry that names what stands for no one place after the move (`_parts`) becomes
+        where its files went: the directories and files of the moved tree that hold the files the list's entries held, all
+        of them together, and no others (`cover`). Each is written once, at the first such entry that held a file of it,
+        with what the entry had around its path, and one that an entry the list keeps already holds is not written. The
+        first entry that names a package's `__init__.py` the move deletes becomes the package levels above the entries
+        the move wrote anew (`_levels`), those no entry holds: the list named the levels above what it holds, and an
+        import still runs each. An entry left with nothing to write goes, and a line left empty goes with it. A directory
+        with a row, and another entry of the list above or below it, is not read so: such a list names levels, and the
+        row says which the directory is. Neither is a workspace's `members`, each one distribution's directory, which
+        `_members` keeps, nor any list of a file under a `tests/` directory, where a list is as often the files of a
+        stand-in tree as the tree's own and nothing in it says which. Nor is a list of strings (Python, TOML, JSON) with
+        an entry of one name, no `/` in it, that no path of the tree ends in: its entries are names (suites, each named
+        by its distribution or else by its directory; a command's words), a directory's among them is the name of one
+        thing, and the other rewrites send it where the `[tokens]` row says, which `[split]` must acknowledge. A name
+        some path ends in is a pattern for those paths (`lean-audit.json` in a gate), a path the tree no longer has is
+        still a path, and a shell command of `SH_LIST` says itself that its words are paths: those lists are read as
+        before. Returns the text with a mark where each rewritten
+        entry was, and what each mark stands for, so that no later rewrite reads the new paths as old ones."""
+        if not hasattr(self, "_parts_re"):
+            names = [p for p in (*self.old_dirs, *self.dropped, *self.leftover) if self._parts(p)]
+            self._parts_re = re.compile(alternation(names)) if names else None
+            self._last_names = {posixpath.basename(p) for p in (*self.known_old, *self.old_dirs)}
+        if self._parts_re is None or "tests" in path.split("/")[:-1] or not self._parts_re.search(text):
+            return text, {}
+        edits, marks = [], {}
+        members = {m.start("body") - 1 for m in MEMBERS.finditer(text)} if posixpath.basename(path) == "pyproject.toml" else ()
+        strings = path.endswith((".py", ".toml", ".json"))
+        for sep, (start, _), spans in lists(path, text):
+            if start in members:
+                continue
+            formed = [(a, b, m) for a, b in spans if (m := ENTRY.fullmatch(text, a, b))]
+            if strings and any("/" not in m["p"] and m["p"] not in self._last_names for _, _, m in formed):
+                continue
+            named = [(a, b, m) for a, b, m in formed
+                     if (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
+            names = {m["p"] for _, _, m in named}
+            # entries one above the other name levels, not the files below them: those are left to the other rewrites
+            # where a row gives the directory a place, and one whose [split] row names the part the file means is that part
+            todo = {p for p in names if self._parts(p) and not self._part(path, p)[0] and not (
+                p in self.old_dirs and self.L.directory(p)[0] is not None and any(
+                    q.startswith(p + "/") or p.startswith(q + "/") for q in names))}
+            if not todo:
+                continue
+            files = {p: self._under(p) for p in names}
+            cover = self.cover({f for fs in files.values() for f in fs})
+            held = [self._part(path, p, *self.L.path(p, p in self.old_dirs))[0] or p for p in names - todo]
+
+            def new(parts) -> list[str]:
+                return [c for c in sorted(parts) if not any(c == h or c.startswith(h + "/") for h in held)]
+            written = {}
+            for a, b, m in named:
+                if m["p"] in todo:
+                    written[a] = new({cover[f] for f in files[m["p"]]})
+                    held += written[a]
+            if (lost := next((a for a, _, m in named if m["p"] in self.leftover), None)) is not None:
+                written[lost] = new({level for c in held if c not in names for level in self._levels(c)})
+            for a, b, m in named:
+                if m["p"] not in todo:
+                    continue
+                parts = written[a]
+                q = text[a - 1] if text[a - 1] in "\"'" and text[b:b + 1] == text[a - 1] else ""
+                self._count(path, "list entries covered")
+                self.note("list entries written as where their files went", f"{path}: {m[0]} -> {' '.join(parts) or 'nothing'}")
+                if parts:
+                    marks[mark := f"\ue000{len(marks)}\ue001"] = (q + sep + q).join(
+                        m["pre"] + c + ((m["post"] or "") if c in self.new_dirs else "") for c in parts)
+                    edits.append((a, b, mark))
+                else:
+                    edits.append((a - len(q), b + len(q), GONE))
+        out = text
+        for a, b, s in sorted(set(edits), reverse=True):
+            out = out[:a] + s + out[b:]
+        if GONE in out:
+            if path.endswith(".json"):                  # JSON takes no comma before the bracket that closes a list
+                while (less := re.sub(rf",\s*{GONE}(?=\s*\])", "", out)) != out:
+                    out = less
+            lines = []
+            for line in out.split("\n"):
+                if GONE in line:
+                    for around in (rf"{GONE}[ \t]*,[ \t]*", rf"(?<=\S)[ \t]+{GONE}", rf"{GONE}[ \t]*"):
+                        line = re.sub(around, "", line)     # with its comma; else with the space before it; else alone
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                lines.append(line)
+            out = "\n".join(lines)
+        return out, marks
+
+    def _levels(self, p: str) -> list[str]:
+        """The `__init__.py` of each package directory above path `p` of the moved tree, where `p` is in a package."""
+        def package(d: str) -> bool:
+            return f"{d}/__init__.py" in self.new_files or f"{d}/__init__.py" in self.texts
+        return [f"{d}/__init__.py" for d in _ancestors(p) if package(d)] if package(posixpath.dirname(p)) else []
+
+    def _under(self, p: str) -> list[str]:
+        """The files the move keeps that old path `p` names: itself, or those below it."""
+        lo, hi = bisect.bisect_left(self.kept, p + "/"), bisect.bisect_left(self.kept, p + "0")
+        return self.kept[lo:hi] or [f for f in (p,) if f in self.new_of]
+
     # paths --------------------------------------------------------------------------------------------------------
 
     def _paths(self, path: str, old: str, text: str) -> str:
         if not hasattr(self, "_path_re"):
             alts = alternation(self.L.prefixes())
-            self._path_re = re.compile(rf"(?P<pre>[}})>]/|\$\{{?\w+\}}?/|~/(?:verity/)?|/workspace/)?(?P<p>{alts})(?![\w\-]|\.\w)"
+            self._path_re = re.compile(rf"(?P<pre>{root_prefix(self.L.root_prefixes)})?(?P<p>{alts})(?![\w\-]|\.\w)"
                                        rf"(?P<rest>(?:/[\w.\-*{{}},]*)*)")
             self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<v>)(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)"
                                       r"|(?P<v2>\$\{?\w+\}?/)(?P<p2>(?:\.\./)+[\w.\-]+(?:/[\w.\-]+)*/?)")
@@ -555,7 +979,7 @@ class Run:
                 token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                ours = token in self.L.words            # [rewrite] words: a name no key or run directory shares
+                ours = self.L.ours(token, path)         # [rewrite] words: a name no key or run directory shares
                 lone = before in ("\"'`" if ours else "\"'") and after == before
                 last = before == " " and after == '"' and self.L.ends(token, path)      # [rewrite] word_ends
                 if not last and (not lone or path.endswith((".rs", ".lean")) or path.endswith(".py") and not ours):
@@ -587,7 +1011,7 @@ class Run:
             full = f"{self.L.old_roots[name]}/{rest}".rstrip("/")
             if self.L.kept(full, path) or not (full in self.known_old or full in self.old_dirs):
                 return token
-            new, approx = self.L.path(full, full in self.old_dirs)
+            new, approx = self._part(path, full, *self.L.path(full, full in self.old_dirs))
             if new is None:
                 return token
             out = self._short_form(new)
@@ -618,6 +1042,37 @@ class Run:
             text = self._plain_re.sub(plain, text)
         return text
 
+    def _lake_paths(self, path: str, old: str, text: str) -> str:
+        """A Lake file's paths to other packages that `_paths` takes for no path: a requirement's `path` or a path
+        package's `dir` written as one word (`composition`: a package inside this one's directory), or with a `/` and no
+        leading `./` in a file that stays, where `_paths` reads only a moved file's."""
+        for a, b in reversed(lake_spans(posixpath.basename(path), text)):
+            token = text[a:b]
+            if token.startswith(".") or ("/" in token and path != old):
+                continue
+            new = self._map_relative(token, path, old)
+            if new is None or new == token:
+                continue
+            self._count(path, "relative paths")
+            self.note("relative paths rewritten", f"{path}: {token} -> {new}")
+            text = text[:a] + new + text[b:]
+        return text
+
+    def _lake_packages(self, path: str, text: str, files: set[str]) -> list[tuple[str, str | None]]:
+        """Each directory Lake file `path` names (`lake_dirs`), as written, with the package's directory among `files`, or
+        None where that holds no lakefile. A Lake file that doesn't parse stops the move: its paths can't be checked."""
+        try:
+            dirs = lake_dirs(posixpath.basename(path), text)
+        except ValueError as e:
+            raise SystemExit(f"{path}: not a Lake file the mover can read ({e}), so it can't say that the paths it holds "
+                             "to other packages still name them after the move: fix the file first, in a change of its "
+                             "own") from e
+        out = []
+        for d in dirs:
+            at = posixpath.normpath(posixpath.join(posixpath.dirname(path), d))
+            out.append((d, at if {f"{at}/lakefile.toml", f"{at}/lakefile.lean"} & files else None))
+        return out
+
     def _short_form(self, new: str) -> str:
         """A new path as a package-relative one when it lands under a new root, else root-relative."""
         for name, d in sorted(self.L.new_roots.items(), key=lambda kv: -len(kv[1])):
@@ -636,7 +1091,7 @@ class Run:
             head, tail = "/".join(parts[:i]), "/".join(parts[i:])
             if not head:
                 return None
-            new, approx = self.L.path(head, True)
+            new, approx = self._part(path, head, *self.L.path(head, True))
             if "{" in tail and "*" not in t and (each := self._brace_list(t, tail, new, path)):
                 return each + ("/" if slash else "")
             if new is None:
@@ -649,7 +1104,13 @@ class Run:
                 self.note("approximate directory paths", f"{path}: {token} -> {new}/{tail}")
             return f"{new}/{tail}" + ("/" if slash else "")
         is_dir = t in self.old_dirs or slash or (t not in self.known_old and self.L.file(t) is None)
-        new, approx = self.L.path(t, is_dir)
+        new, approx = self._part(path, t, *self.L.path(t, is_dir))
+        if new is None and (k := self._below_split(t)):
+            new = self._part(path, k, self.L.tokens[k])[0] + t[len(k):]
+            self.split_reference(path, k, f"{path}: {token} -> {new}")
+            self.note("paths that name no tracked file, below a directory the map splits, sent where its [tokens] row goes",
+                      f"{path}: {token} -> {new}")
+            return new + ("/" if slash else "")
         if new is None:
             if approx:
                 self.note("unmapped directory paths", f"{path}: {token}")
@@ -657,6 +1118,22 @@ class Run:
         if approx:
             self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
+
+    def _below_split(self, t: str) -> str | None:
+        """The directory with a `[tokens]` row that `t` is a path below, where `t` names nothing the tree tracks and its
+        first name below that directory is none the tree has there: no file or directory, and up to its first `.` no
+        file's name before its suffix (`circuits/boolean/forms` is in `boolean.py`, which has its own row). What is left
+        is a file of a test's own tree, or the start of a name a variable ends (`verity/ml/flock/flock-$p.patch`). Such a
+        path follows the row, as a reference to the directory does."""
+        k = next((k for k in sorted(self.L.tokens, key=len, reverse=True) if t.startswith(k + "/")), None)
+        if k is None or t in self.known_old or t in self.old_dirs:
+            return None
+        first = f"{k}/{t[len(k) + 1:].split('/')[0]}"
+        stem = f"{k}/{t[len(k) + 1:].split('/')[0].split('.')[0]}."
+        at = bisect.bisect_left(self.kept, stem)
+        if first in self.old_dirs or first in self.tracked_old or at < len(self.kept) and self.kept[at].startswith(stem):
+            return None
+        return k
 
     def _brace_list(self, t: str, tail: str, new: str | None, path: str) -> str | None:
         """Brace list `t` (`flock/{tool.py,verifier/tool.py}`) as a list of its paths, each mapped alone, where every one
@@ -695,7 +1172,7 @@ class Run:
         if not (target in self.known_old or is_dir):
             return None
         if is_dir:
-            new_target, approx = self.L.directory(target)
+            new_target, approx = self._part(path, target, *self.L.directory(target))
             if new_target is None:
                 new_target = target            # it stays, though part of it may move
                 if approx and path != old:
@@ -768,9 +1245,7 @@ class Run:
 
     def _aliases(self, old: str, text: str) -> dict[str, str]:
         """The names this file binds to modules by importing them: {local name: old module name}."""
-        try:
-            tree = ast.parse(text)
-        except SyntaxError:
+        if (tree := parsed(text)) is None:
             return {}
         me, pkg, out = module_name(old, self.L.old_roots), old.endswith("__init__.py"), {}
         for node in ast.walk(tree):
@@ -869,12 +1344,13 @@ class Run:
 
     def _sh_anchors(self, path: str, old: str, text: str) -> str:
         """`$(dirname "$0")/../..` in a shell script, or after `${BASH_SOURCE[0]}` or a variable the script sets to its own
-        path (`SH_SELF`): the path it names from the script's directory, from the script's new place."""
+        path (`SH_SELF`), and `$here/../..` after a variable it sets to its own directory (`SH_HERE`): the path it names
+        from the script's directory, from the script's new place."""
         names = sh_self_names(text)
         here_old, here_new = posixpath.dirname(old), posixpath.dirname(path)
 
         def fix(m: re.Match) -> str:
-            if sh_ref(m.group("ref")) not in names:
+            if m.group("ref") is not None and sh_ref(m.group("ref")) not in names:
                 return m.group(0)
             rel = m.group("rel")[1:]
             target = posixpath.normpath(posixpath.join(here_old, rel))
@@ -893,7 +1369,7 @@ class Run:
                     self.note("shell anchors to a directory that splits", f"{path}: {m.group(0)} (was {target})")
                 new_target = new_target or target
             else:
-                if path != old:
+                if path != old and (m.group("ref") is not None or rel.startswith("../")):   # `$here/out.json` goes with the script
                     self.note("shell anchors not recomputed", f"{path}: {m.group(0)} (names {target}, not in the tree)")
                 return m.group(0)
             if path == old and new_target == target:
@@ -904,7 +1380,7 @@ class Run:
             self._count(path, "shell anchors")
             return f"{m.group('head')}/{new_rel}"
 
-        return SH_ANCHOR.sub(fix, text)
+        return sh_anchor(sh_here_names(text)).sub(fix, text)
 
     _JOIN = re.compile(r"""(?P<chain>(?:(?P<q>["'])[\w.\-]+(?P=q)\s*/\s*)*(?P<q2>["'])[\w.\-]+(?P=q2))""")
 
@@ -923,7 +1399,7 @@ class Run:
             if len(segs) == 1:
                 return chain                            # `run / "census"`: one word names a run's own directory as often as ours
             if not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
-                    or joined in dict(self.L.dirs) or joined in self.L.tokens):
+                    or joined in dict(self.L.dirs) or joined in self.L.tokens or self._below_split(joined)):
                 return chain
             new = self._map_token(joined, path)
             if new is None or new == joined:
@@ -939,7 +1415,7 @@ class Run:
             segs = [m.group("first"), *re.findall(r"""["']([\w.\-]+)["']""", m.group("rest"))]
             joined = "/".join(segs)
             if len(segs) == 1 or not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
-                                      or joined in dict(self.L.dirs) or joined in self.L.tokens):
+                                      or joined in dict(self.L.dirs) or joined in self.L.tokens or self._below_split(joined)):
                 return m.group(0)
             new = self._map_token(joined, path)
             if new is None or new == joined or new.strip("/") == ".":
@@ -997,7 +1473,11 @@ class Run:
                     if isinstance(node, ast.ImportFrom) else _replace_names(src, old_mod, new_mod)
             else:
                 indent = " " * node.col_offset
-                new_src = ("\n" + indent).join(_wrap(s, indent) for s in rep)
+                # each statement a one-line import splits into keeps the comment that ended the line (a linter's `noqa`), which
+                # the last already has; the lines an import went on over stay with the statement that has their names
+                comment = re.match(r"[ \t]*#[^\n]*", text[b:]) if "\n" not in src else None
+                parts = _continued(src, rep, indent) or [_wrap(s, indent) for s in rep]
+                new_src = ((comment[0] if comment else "") + "\n" + indent).join(parts)
             if new_src != src:
                 edits.append((a, b, new_src))
         out = text
@@ -1256,7 +1736,7 @@ class Run:
         return _add_inputs(out, ["verity"], first=True)
 
     def _members(self, text: str, add: list[str] = ()) -> str:
-        m = re.search(r"(^\s*members\s*=\s*\[)(?P<body>[^\]]*)(\])", text, re.M)
+        m = MEMBERS.search(text)
         if not m:
             return text
         items = re.findall(r'"([^"]+)"', m.group("body"))
@@ -1292,12 +1772,29 @@ class Run:
             if old.endswith("/"):
                 return any(p.startswith(old) for p in self.tracked_old) or any(p.startswith(new) for p in self.new_files)
             return old in self.tracked_old or new in self.new_files
-        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands
-        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if here(o, n)}}
+        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands; a row
+        # of a branch's rows file is no row of the move: an entry that differed by branch would conflict where two land
+        own = self.L.data.get("rows", ())
+        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if o not in own and here(o, n)}}
         if entry not in doc["moves"]:
             doc["moves"].append(entry)
             self.texts[path] = json.dumps(doc, indent=2) + "\n"
             self._count(path, "layout moves recorded")
+
+    def lock(self):
+        """Name each moved distribution by its new directory in `uv.lock`. `uv lock` doesn't: where a map moves a
+        distribution and no member's name changes, it reads the locked one's metadata at the old directory and fails
+        (`Distribution not found at`), and so does `uv sync` on the moved tree."""
+        if (text := self._read("uv.lock")) is None:
+            return
+        def moved(m: re.Match) -> str:
+            if (new := self.L.file(f"{m.group(2)}/pyproject.toml")) is None:
+                return m.group(0)
+            self._count("uv.lock", "distribution directories")
+            return f'{m.group(1)} = "{posixpath.dirname(new)}"'
+        new = _LOCK_SOURCE.sub(moved, text)
+        if new != text:
+            self.texts["uv.lock"] = new
 
     # ---------------------------------------------------------------------------------------------- writing
 
@@ -1367,6 +1864,25 @@ def _wrap(stmt: str, indent: str, width: int = 120) -> str:
     head, _, names = stmt.partition(" import ")
     inner = indent + "    "
     return f"{head} import (\n" + "".join(f"{inner}{n.strip()},\n" for n in names.split(",")) + f"{indent})"
+
+
+def _continued(src: str, stmts: list[str], indent: str) -> list[str] | None:
+    """The statements `stmts` that the `from` import `src` splits into, where `src` goes on over more lines (in brackets
+    or after `\\`): those lines are kept as they were, after the one statement whose names end with theirs as written,
+    which goes last. None when `src` is one line or no one statement has them."""
+    first, _, rest = src.partition("\n")
+    names = [n.strip() for line in rest.split("\n") for n in re.sub(r"#.*|[()\\]", "", line).split(",") if n.strip()]
+    bracket = first.count("(") == 1 and ")" not in first
+    if len(stmts) < 2 or not names or "#" in first or bracket == first.rstrip().endswith("\\"):
+        return None
+    for i, stmt in enumerate(stmts):
+        head, _, mine = stmt.partition(" import ")
+        mine = [n.strip() for n in mine.split(",")]
+        if mine[-len(names):] == names:
+            lead = ", ".join(mine[:-len(names)])
+            line = f"{head} import ({lead}{',' * bool(lead)}" if bracket else f"{head} import {lead}{', ' * bool(lead)}\\"
+            return [*(_wrap(t, indent) for t in stmts[:i] + stmts[i + 1:]), f"{line}\n{rest}"]
+    return None
 
 
 def _replace_names(src: str, old: str, new: str) -> str:
@@ -1519,6 +2035,66 @@ def load(path: Path) -> Layout:
     return Layout(tomllib.loads(path.read_text()))
 
 
+def rows_path(map_path: Path) -> Path:
+    """The rows file of the map at `map_path`: beside it, `NAME.rows.toml` for `NAME.toml`."""
+    return map_path.with_name(map_path.name.removesuffix(".toml") + ROWS_SUFFIX)
+
+
+def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
+    """The map `data` with the rows of `rows_file`, a tracked file of the checkout at `root`, read after it: [paths] gains
+    each row the map lacks ([rows] names them), [modules] is what the paths now imply, and [drop] gains the rows file itself,
+    which is spent once read. It refuses a rows file that is not the checkout's own, that holds more than [paths], or a row
+    of which changes what the map alone says or moves nothing."""
+    tracked = {p for p in git(root, "ls-files", "-z").split("\0") if p}
+    here = rows_file.resolve()
+    rel = here.relative_to(root).as_posix() if here.is_relative_to(root) else None
+    if rel not in tracked:
+        raise SystemExit(f"{rows_file}: a rows file is its branch's own, committed beside the map in the checkout that moves")
+    try:
+        doc = tomllib.loads(rows_file.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise SystemExit(f"{rows_file}: {e}") from e
+    rows = doc.get("paths", {})
+    if set(doc) - {"paths"} or not isinstance(rows, dict):
+        raise SystemExit(f"{rows_file}: a rows file holds [paths] alone, not {sorted(set(doc) - {'paths'}) or 'a key named paths'}: "
+                         "what else a move needs is its map's")
+    lay = Layout(data)
+    named = [k.rstrip("/") for k in (*data["paths"], *data.get("tokens", {}), *lay.drop)]
+    bad = []
+    for old, new in rows.items():
+        o, is_dir = old.rstrip("/"), old.endswith("/")
+        if not isinstance(new, str) or not o or not new.strip("/") or is_dir != new.endswith("/"):
+            bad.append(f'{old!r} = {new!r}: a file to a file, or a directory to a directory, each ending in "/"')
+            continue
+        if data["paths"].get(old) == new:           # the map's own row, said again
+            continue
+        if not (any(p.startswith(old) for p in tracked) if is_dir else old in tracked):
+            bad.append(f"{old!r}: no tracked file is {'under' if is_dir else 'at'} it")
+            continue
+        if is_dir:                                  # where the map alone sends it ("": it deletes it), and what it names there
+            to = next((f"{n}{o[len(k):]}/" for k, n in lay.dirs if o == k or o.startswith(k + "/")), None)
+            under = sorted(k for k in named if k == o or k.startswith(o + "/"))
+        else:
+            to, under = "" if old in lay.drop else lay.file(old), []
+        if to == "":
+            bad.append(f"{old!r}: the map deletes it")
+        elif to is not None and to != new:
+            bad.append(f"{old!r} = {new!r}: the map sends it to {to!r}")
+        elif to is None and under:
+            bad.append(f"{old!r}: the map names {len(under)} path{'s' * (len(under) != 1)} at or under it ({under[0]}"
+                       f"{', ...' * (len(under) > 1)}), so it speaks for that directory: give each file a row of its own")
+    own = {o: n for o, n in rows.items() if data["paths"].get(o) != n}
+    merged = {**data, "paths": {**data["paths"], **own}, "rows": sorted(own),
+              "drop": {"paths": sorted(lay.drop | {rel})}}
+    if not bad:
+        modules = derived_modules(Layout(merged))
+        bad = [f"module {k}: the map renames it {v}, and these rows {modules.get(k) or 'not at all'}"
+               for k, v in sorted(data.get("modules", {}).items()) if modules.get(k) != v]
+    if bad:
+        raise SystemExit(f"{rows_file}: rows that change what the map says, or move nothing:\n  " + "\n  ".join(bad))
+    return {**merged, "modules": modules}
+
+
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
@@ -1568,8 +2144,17 @@ def main(argv: list[str] | None = None) -> int:
     if not a.dry_run and not a.no_lock and (why := unpinned_uv(root)):
         raise SystemExit(f"{why}: put the pinned uv first on the PATH, or pass --no-lock")
     base = git(root, "rev-parse", "HEAD").strip()
+    if (rows := rows_path(a.map)).is_file():
+        layout = Layout(with_rows(layout.data, rows, root))
     run = Run(root, layout, a.dry_run)
-    moves = run.plan()
+    try:
+        moves = run.plan()
+    except NoRow as e:
+        print(f"no row for {len(e.files)} tracked file{'s' * (len(e.files) != 1)} under a path the map retires: give each a "
+              f"row, in the map when main tracks the file, else in {rows} on the branch that adds it ([paths], \"old path\" = "
+              f"\"new path\", a directory ending in \"/\"; committed, it is read after the map), or delete the file\n  "
+              + "\n  ".join(e.files), file=sys.stderr)
+        return NO_ROW
     run.index(moves)
     for old, new in moves:
         if old.endswith(".py") and (mo := module_name(old, layout.old_roots)) and (mn := module_name(new, layout.new_roots)):
@@ -1578,6 +2163,7 @@ def main(argv: list[str] | None = None) -> int:
     run.move(moves)
     run.create()
     run.rewrite_all()
+    refuse_unread(run.unread)
     unacknowledged, stale = run.unacknowledged_splits()
     if a.report_splits:
         for x in unacknowledged:
@@ -1587,10 +2173,13 @@ def main(argv: list[str] | None = None) -> int:
                          + "".join(f"  {x}\n" for x in unacknowledged)
                          + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
     run.record()
+    run.lock()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
                           and mo != module_name(n, layout.new_roots))
     run.changes["modules renamed"] = renamed_modules
+    if "rows" in layout.data:
+        run.changes[f"rows read from {rows}"] = len(layout.data["rows"])
     if not a.dry_run:
         git(root, "add", "-A")
         if moves:
@@ -1616,6 +2205,10 @@ def main(argv: list[str] | None = None) -> int:
         a.report.write_text(json.dumps({"base": base, "changes": run.changes, "notes": run.notes,
                                         "files": {p: dict(c) for p, c in sorted(run.files_changed.items())},
                                         "moves": dict(moves)}, indent=1, sort_keys=True))
+    if "uv lock failed" in run.notes:
+        print("`uv lock` failed, so uv.lock doesn't match the moved tree and `uv sync` fails on it: fix what uv names "
+              "above and run the move again", file=sys.stderr)
+        return 1
     return 0
 
 

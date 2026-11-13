@@ -1,8 +1,6 @@
 {
   "rule": "lane text in prose (tests/lint/test_repo_lane_text.py)",
   "entries": [
-    {"file": "benchmarks/pouw/h1_prove/h1unit.py", "count": 1},
-    {"file": "tools/research/src/research/remote.py", "count": 14},
-    {"file": "tools/verity/check/pod_setup.sh", "count": 4}
+    {"file": "tools/research/src/research/remote.py", "count": 1}
   ]
 }

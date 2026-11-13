@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 DC = Path(__file__).resolve().parents[1] / "dc"
+MODEL_DATA = Path(__file__).resolve().parents[2] / "machine_model" / "data"
 
 
 def _load(name: str):
@@ -291,8 +292,8 @@ def test_device_census_is_well_formed():
     import tomllib
     census = _load("census")
     note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
-    named = tomllib.loads((DC.parent / "machine_model" / "data" / "citations.toml").read_text())
-    devices = DC.parent / "machine_model" / "data" / "devices"
+    named = tomllib.loads((MODEL_DATA / "citations.toml").read_text())
+    devices = MODEL_DATA / "devices"
     dirs = sorted(p for p in devices.iterdir() if p.is_dir()) if devices.exists() else []
     for d in dirs:
         with open(d / "census.csv", newline="") as f:
@@ -483,7 +484,7 @@ def test_uniform_write_census_is_idempotent(tmp_path):
     import shutil
     un, census = _load("uniform"), _load("census")
     dev = tmp_path / "sm_90"
-    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    shutil.copytree(MODEL_DATA / "devices" / "sm_90", dev)
     res = {"up": {"rate": 0.5, "by": "uz_64i", "cycles": 1.96}, "uniform_alone": {"uz_64i": 0.5}, "violations": [],
            "rows": {"UP": {"c": 1.96}, "issue": {"c": 1.0, "limit": 1.2, "set_by": "uh_64i"},
                     "JI90_0": {"c": 0.5}, "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
@@ -517,7 +518,7 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"
-    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    shutil.copytree(MODEL_DATA / "devices" / "sm_90", dev)
     run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
     with open(dev / "census.csv", newline="") as f:
         before = list(csv.DictReader(f))
@@ -562,7 +563,7 @@ def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tm
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"
-    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    shutil.copytree(MODEL_DATA / "devices" / "sm_90", dev)
 
     def lines():
         with open(dev / "census.csv", newline="") as f:

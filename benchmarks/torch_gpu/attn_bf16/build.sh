@@ -21,12 +21,12 @@ ship_toolchain
 ship_stage benchmarks/torch_gpu/attn_bf16
 for ARCH in sm_90a sm_120a; do
   ship_cubin_flags "$ARCH"
-  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/attn_bf16.$ARCH.cubin" "$SRC/benchmarks/torch_gpu/attn_bf16/attn_bf16.cu" \
+  "$SHIP_NVCC" "${FLAGS[@]}" -o "$OUT/attn_bf16.$ARCH.cubin" "$SRC/benchmarks/torch_gpu/attn_bf16/attn_bf16.cu" \
     2> "$OUT/ptxas.$ARCH.txt" \
     || { cat "$OUT/ptxas.$ARCH.txt" >&2; exit 1; }
   "$CUDA/bin/cuobjdump" -sass "$OUT/attn_bf16.$ARCH.cubin" > "$OUT/attn_bf16.$ARCH.sass"
   python3 "$HERE/sass_gate.py" "$ARCH" "$OUT/ptxas.$ARCH.txt" "$OUT/attn_bf16.$ARCH.sass" "$OUT/sass.$ARCH.json"
-  echo "nvcc ${FLAGS[*]} -o attn_bf16.$ARCH.cubin attn_bf16.cu" >> "$OUT/toolchain.txt"
+  echo "ship_nvcc ${FLAGS[*]} -o attn_bf16.$ARCH.cubin attn_bf16.cu" >> "$OUT/toolchain.txt"
 done
 [ -n "${CUBIN_ONLY:-}" ] && exit 0
 cd "$ROOT"

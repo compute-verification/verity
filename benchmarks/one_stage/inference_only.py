@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its declared circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `NciCheck.Count`'s rule (`verity/core/protocols/network/nci/lean/NciCheck/Count.lean`), against a policy the run
+by `NciCheck.Count`'s rule (`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -90,7 +90,7 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
-NCI_PACKAGE = ROOT / "verity/core/protocols/network/nci/lean"
+NCI_PACKAGE = ROOT / "verity/protocols/inference_only/verifier/nci/lean"
 NCI_REFERENCE = NCI_PACKAGE / "scripts" / "nci_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
@@ -170,7 +170,7 @@ PRICES = ("BitAtx{W}_v1", price)
 def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
     """The gate table over the primitives ``fns`` reach: `definitions.boolean.gate_table`'s, each primitive it can't
     price priced by `price` where it can be, and the keys of the rest."""
-    from verity.ml.definitions import boolean as BL
+    from verity.definitions import boolean as BL
 
     table, unpriced = BL.gate_table(fns)
     priced, left = {}, []
@@ -243,7 +243,7 @@ def weight_pins(params: Sequence[str]) -> dict[str, str]:
 def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> dict[str, Any]:
     """A circuit record's block class: its session Definition's digest and key, m slots and positions, gates by
     `table_of`'s table and fresh bits at ``pins`` and ``roots`` (`block_counts`), and the table."""
-    from verity.ml.circuits import codec, partition_v2 as PV2
+    from verity.circuits import codec, partition_v2 as PV2
     from verity_vllm.program.predict import block_counts as BC
 
     try:
@@ -280,7 +280,7 @@ def session_work(cls: Any, model: str) -> dict[str, int]:
 def capacity(work: int, lease_min: int, utilization: Fraction, clock: str = CLOCK) -> dict[str, Any]:
     """n: the sessions of ``work`` θ-MACs the card serves in ``lease_min`` minutes at ``utilization``, rounded up to the
     public grid, with its inputs."""
-    from verity.ml.circuits import partition_v2 as PV2
+    from verity.circuits import partition_v2 as PV2
 
     rate = 4096 * 132 * SS.CLOCKS_MHZ[clock] * 10**6
     if work <= 0 or lease_min <= 0 or not 0 < utilization <= 1:
@@ -373,8 +373,8 @@ def _reference():
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int) -> dict[str, Any]:
     """`NciCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
     Program, `population.population_program`) with no θ, its block that Definition."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.population import population_program
+    from verity.circuits import codec
+    from verity.circuits.population import population_program
     from verity_vllm.program.predict import block_counts as BC
 
     fn, m, _ = BC.session(doc)
@@ -585,7 +585,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     pol = json.loads(a.policy.read_text()) if a.policy.is_file() else None
     doc = json.loads(a.circuit.read_text()) if a.circuit.is_file() else None
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
     from verity_vllm.program.predict.window_weights import WeightsRegistration
 
     pins = (dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)

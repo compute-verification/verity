@@ -1,5 +1,5 @@
 """Replay recorded served_zk windows through the window's Lean port (`pouw-window-difftest`) and its Python mirror
-(`verity.core.protocols.pouw.window`), each against what the run recorded.
+(`verity.protocols.pouw.verifier.window`), each against what the run recorded.
 
   python replay_window.py OUT [--runs DIR ...] [--add DIR ...]    OUT/replay-window.json and one line on stdout
 
@@ -37,13 +37,13 @@ from typing import Any, Callable
 
 import verity_difftest as D
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import window as Wd
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 
 REPO = Path(__file__).resolve().parents[3]
-LEAN = REPO / "verity/core/protocols/pouw/lean/window"
+LEAN = REPO / "verity/protocols/pouw/verifier/lean/window"
 EXE = "pouw-window-difftest"
 SIDES = ("request", "other")
 NULL = ("output", "null")
@@ -271,7 +271,7 @@ class SideReplay:
         self.control("root-sibling", not up(0, leaf(0, rows[0], salts[0]), [sib, *paths[0][1:]]))
         self.control("root-index", not up(1, leaf(0, rows[0], salts[0], at=1), paths[1]))
 
-    def draw(self, rows: list[str]) -> None:
+    def sampled(self, rows: list[str]) -> None:
         if self.side != "request":
             return
         summary = load(self.out / "summary.json") if (self.out / "summary.json").is_file() else {}
@@ -296,7 +296,7 @@ class SideReplay:
             rows = list(base["rows"])
             self.breaks(base)
             self.root(rows)
-            self.draw(rows)
+            self.sampled(rows)
         return {"layout": "entry rows" if current else "older", "checks": self.checks, "controls": self.controls}
 
 

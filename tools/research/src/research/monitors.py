@@ -1,8 +1,8 @@
 """Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
 One registry (MONITORS) and one runner. Node 2's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
 monitors and writes each incident once when it opens and once when it clears; the relay on the control pod
-(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store or Slack) and posts both sets to
-#agent-alerts. Every Nebius machine runs the `machine`
+(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store, Slack or the pod's own files, as
+the guard that `main`'s nightly check gave an outcome does) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
 the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
 recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
@@ -615,16 +615,23 @@ def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
 
 def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
-    which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
-    read that fails, or every node unreachable, is the monitor's error."""
+    which the nodes can't): one incident per node and kind.  A node whose null device isn't the character device 1,3 with mode
+    666 is a page of its own, with the command that repairs it: every redirect to /dev/null fails there for a user who isn't
+    root.  A node ssh can't connect to (a stopped VM) is skipped; any other read that fails, or every node unreachable, is the
+    monitor's error."""
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
+    broken = []
     for n, rep in sorted(reps.items()):
         if "error" in rep:
             continue
+        if null := rep.get("null_device"):
+            broken.append(Finding(f"{n}:null-device", f"*{n}: {null['what']}*. Repair it on the node: `{null['fix']}`.",
+                                  severity="page", cleared=f"*Cleared:* {n}'s null device is the character device 1,3 with "
+                                                           "mode 666 again."))
         for e in rep["entries"]:
             if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
                 groups.setdefault((n, e["state"]), []).append(e["path"])
@@ -632,8 +639,9 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
                 groups.setdefault((n, "restart"), []).append(e["path"])
         for p in rep["strays"]:
             groups.setdefault((n, "stray"), []).append(p)
-    return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
-                    + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
+    return broken + [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
+                             + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".")
+                     for (n, kind), ps in sorted(groups.items())]
 
 
 def asks(ctx: Ctx) -> list[Finding]:
@@ -735,69 +743,55 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
 
 
-#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` an after-landing run passed
-DRIVE_STATE = "root/.research/queue/verity.state.json"
-DRIVE_LOG = "data/drive/drive.log"
-UNVERIFIED_S = 3 * 3600
+#: the verified queue's decision log on the control pod (the live loop's `--log`), its last line's `at` the last decision
 VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
-DRIVE_TICK_STALE_S = 30 * 60
-TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
-
-
-def drive_ticking(ctx: Ctx) -> bool:
-    """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
-    `_behind` alarm speaks for a main left unverified."""
-    try:
-        with open(ctx.root / DRIVE_LOG, "rb") as f:
-            f.seek(max(0, f.seek(0, 2) - (1 << 20)))
-            ticks = TICK_RE.findall(f.read())
-    except OSError:
-        return False
-    return bool(ticks) and ctx.now - datetime.strptime(ticks[-1].decode(), "%Y-%m-%dT%H:%M:%SZ").replace(
-        tzinfo=timezone.utc).timestamp() < DRIVE_TICK_STALE_S
+UNVERIFIED_S = 3 * 3600
 
 
 def unverified_main(ctx: Ctx) -> list[Finding]:
-    """`main` has carried commits no after-landing run verified for over 3 h (hundreds of PRs can land on an unverified main for
-    days with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
-    main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
-    committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
-    GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
-    hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
-    main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
-    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
-
-    Since main moves only through the verified queue (drive stopped for good), its decisions file
-    (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
-    `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
-    if (decisions := ctx.root / VQUEUE_DECISIONS).exists():
-        lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
-        last = json.loads(lines[-1]).get("at") if lines else None
-        since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
-        if (behind := ctx.now - since) < UNVERIFIED_S:
-            return []
-        hours = int(behind // 3600)
-        return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
-                        f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
-    if drive_ticking(ctx):
-        return []
-    state = json.loads((ctx.root / DRIVE_STATE).read_text())
-    verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
-    if not verified:
-        raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
-    repo = os.environ.get("RESEARCH_DEPLOY_REPO") or "/data/watchers/repo"
-    ctx.sh(["git", "-C", repo, "fetch", "-q", "origin", "main"], timeout=120)
-    landed = [ln.split() for ln in ctx.sh(["git", "-C", repo, "log", "--first-parent", "--format=%H %ct",
-                                           f"{verified}..FETCH_HEAD"], timeout=60).splitlines() if ln.strip()]
-    if not landed:
-        return []
-    since = float(landed[-1][1])
+    """The verified queue, the one path `main` moves by, has decided nothing for over `UNVERIFIED_S`: a loop stopped or stuck,
+    and every marked PR waits with nobody outside ci told. Timed from its decisions file's (`VQUEUE_DECISIONS`) last
+    decision, else the file's own time; one event per further hour, to ci and top, until the queue decides again. A queue
+    that decides is ci's, which it rings itself; a file this can't read is the monitor's own finding, in time."""
+    decisions = ctx.root / VQUEUE_DECISIONS
+    lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+    last = json.loads(lines[-1]).get("at") if lines else None
+    since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
     if (behind := ctx.now - since) < UNVERIFIED_S:
         return []
     hours = int(behind // 3600)
-    return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
-                    f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
-                    owners=("ci", "top"))]
+    return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                    f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
+
+
+#: the control pod's nightly loop's state (infra/control/nightly_check.py): `last`, its newest outcome and when it was read;
+#: `since`, when the loop first ran there; `night`, the one in progress
+NIGHTLY_STATE = "data/watchers/nightly-check.json"
+NIGHTLY_SILENT_S = 36 * 3600
+
+
+def nightly_check(ctx: Ctx) -> list[Finding]:
+    """`main`'s nightly uncached check has given no outcome for 36 h. The control pod's `nightly-check` loop
+    (infra/control/nightly_check.py) starts one a day and keeps its newest outcome in its state (`NIGHTLY_STATE`): passed,
+    contradicted, failed, or an error, which is an outcome too, since the loop posts each itself. Timed from when that outcome
+    was read, or from the loop's first pass there while it has none; a pod whose loop never wrote its state is found as well."""
+    path = ctx.root / NIGHTLY_STATE
+    if not path.exists():
+        return [Finding("absent", f"*The nightly check of `main` isn't running*: the control pod has no `/{NIGHTLY_STATE}`, "
+                        "which its `nightly-check` loop writes on its first pass.",
+                        cleared="*Cleared:* the nightly check's loop runs on the control pod.")]
+    state = json.loads(path.read_text())
+    last, night = state.get("last") or {}, state.get("night") or {}
+    if not (since := last.get("at") or state.get("since")):
+        raise RuntimeError(f"/{NIGHTLY_STATE} names neither a last outcome nor when its loop first ran")
+    if (silent := ctx.now - calendar.timegm(time.strptime(since, STAMP))) < NIGHTLY_SILENT_S:
+        return []
+    was = (f"its last was `{last.get('outcome')}` at {since}, of `{str(last.get('commit'))[:12]}`"
+           + (f" (run `{last['run']}`)" if last.get("run") else "") if last else f"its loop has run since {since} and none has ended")
+    now = (f" The one in progress, of {night.get('day')}, is `{night.get('phase')}`"
+           + (f" (run `{night['run']}`)" if night.get("run") else "") + "." if night and night.get("phase") != "done" else "")
+    return [Finding("silent", f"*The nightly check of `main` has given no outcome for {int(silent // 3600)} h*: {was}.{now}",
+                    cleared="*Cleared:* the nightly check of `main` gave an outcome.")]
 
 
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
@@ -1106,6 +1100,10 @@ BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
 # a log's first failing line: the first line matching the first of these that any line matches, else its last line
 FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL(?:ED)?\b|\bfailed\b|Error\b|Traceback")
+#: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
+RATCHET_LINES = 40
+#: the check's jobs and their owners
+CI_TOML = "tools/verity/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
 # "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
@@ -1113,6 +1111,7 @@ FAILED_READER = r'''
 import fcntl, json, os, re, subprocess, time
 A = json.loads(__ARGS__)
 PICK = [re.compile(p) for p in A["pick"]]
+RATCHET = re.compile(A["ratchet"]["re"], re.M)
 SUITE = re.compile(r"^(passed|failed|reused|skipped)\s+(\S+)\s")
 
 
@@ -1135,6 +1134,14 @@ def first_failing(p):
             if rx.search(ln):
                 return ln.strip()[:300]
     return next((ln.strip()[:300] for ln in reversed(lines) if ln.strip()), None)
+
+
+def ratchet_failed(p):
+    try:
+        with open(p, errors="replace") as f:
+            return [m[0] for m in RATCHET.finditer(f.read(A["log_bytes"]))][:A["ratchet"]["max"]]
+    except OSError:
+        return []
 
 
 def failed_suite(p):
@@ -1189,7 +1196,8 @@ for n in names:
     st = load(os.path.join(d, "status.json"))
     last = (st.get("transitions") or [{}])[-1]
     # a stopped step found nothing: another step failed, or the run was cancelled (check.py's `stopped`)
-    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped", "stopped")), None)
+    ran = steps(os.path.join(d, "steps.jsonl"))
+    bad = next((s for s in ran if s.get("status") not in ("passed", "skipped", "stopped")), None)
     suite = failed_suite(os.path.join(d, "stdout.log")) if bad is None else None
     if suite:
         bad = {"step": "suite " + suite[0], "ended_utc": last.get("ended_utc") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
@@ -1206,6 +1214,10 @@ for n in names:
     if bad is not None:
         row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"), suite=bad.get("suite", False),
                    line=bad.get("line") or (first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None))
+    # the ratchet gate's lines, though another step failed first: each change it fails is a lane to ring
+    gate = next((s for s in ran if s.get("step") == A["ratchet"]["step"] and s.get("status") == "failed"), None)
+    if gate is not None:
+        row["ratchet"] = ratchet_failed(os.path.join(d, gate["log"])) if gate.get("log") else []
     if sha and os.path.isdir(cwd):
         try:
             r = subprocess.run(["git", "-C", cwd, "log", "--first-parent", "--format=%s", "-n", "40", sha],
@@ -1238,9 +1250,12 @@ print(json.dumps({"rows": rows, "waiting": waiting}))
 
 
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
+    from .reds import RATCHET_FAILED_RE, RATCHET_STEP
+
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
-            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S}
+            "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S,
+            "ratchet": {"step": RATCHET_STEP, "re": RATCHET_FAILED_RE.pattern, "max": RATCHET_LINES}}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
@@ -1273,13 +1288,18 @@ def train_prs(subjects: list[str]) -> list[int]:
     return out
 
 
+def _pr(ctx: Ctx, n: int) -> dict:
+    """PR ``n``'s state and head branch (`gh pr view`)."""
+    return json.loads(ctx.sh(["gh", "-R", REPO_SLUG, "pr", "view", str(n), "--json", "headRefName,state"], timeout=30))
+
+
 def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     """(number, branch) of each open PR the run checks: a train's, else the PR whose head it is."""
     gh = ["gh", "-R", REPO_SLUG, "pr"]
     if nums := list(dict.fromkeys(train_prs(row.get("subjects") or []))):
         out = []
         for n in nums:
-            pr = json.loads(ctx.sh([*gh, "view", str(n), "--json", "headRefName,state"], timeout=30))
+            pr = _pr(ctx, n)
             if pr.get("state") == "OPEN":
                 out.append((n, pr.get("headRefName") or ""))
         return out
@@ -1289,21 +1309,47 @@ def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     return [(p["number"], p.get("headRefName") or "") for p in got]
 
 
+def _jobs(ctx: Ctx, sha: str | None) -> list:
+    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    import tomllib
+
+    def at(ref: str) -> list:
+        return tomllib.loads(ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw",
+                                     f"repos/{REPO_SLUG}/contents/{CI_TOML}?ref={ref}"], timeout=30)).get("job") or []
+
+    try:
+        return at(sha or "main")
+    except RuntimeError:
+        return at("main")
+
+
 def _hm(utc: str | None) -> str:
     return f"{utc[11:16]}Z" if utc and len(utc) >= 16 else "?"
 
 
 def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None:
     """The post for one failed check run, or None for one nobody needs telling about: cancelled by hand before any step failed
-    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result)."""
+    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result).  It
+    rings, first who acts (`reds.red_owners`), the lane of each open PR the run checks and, of a failed ratchet gate, of each
+    merge its log says the gate fails (`reds.ratchet_prs`, open or not), then the owner ci.toml at the run's commit gives the
+    failed step's job and the ratchet gate's (`reds.job_owner`), then the lander."""
+    from .reds import RATCHET_STEP, job_owner, ratchet_prs, red_owners
+
     if row.get("class") == "CANCELLED_MANUAL" and (row.get("step") is None or DRIVE_LANDED_CANCEL in (row.get("why") or "")):
         return None
     if not train_prs(row.get("subjects") or []) and not any(i in row.get("by", "") for i in agent_ids(reg, LANDER)):
         return None
     try:
         prs, unread = _open_prs(ctx, row), ""
+        gate = [(n, _pr(ctx, n).get("headRefName") or "") for n in ratchet_prs("\n".join(row.get("ratchet") or ()))]
     except Exception as e:  # noqa: BLE001  (the lander still hears of it)
-        prs, unread = [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
+        prs, gate, unread = [], [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
+    jobs = [j for j in (row.get("step"), RATCHET_STEP if "ratchet" in row else None) if j]
+    try:
+        table = _jobs(ctx, row.get("sha")) if jobs else []
+    except Exception as e:  # noqa: BLE001  (the lanes and the lander still hear of it)
+        table, unread = [], unread + f" Its jobs' owners are unread ({type(e).__name__}: {str(e)[:120]})."
+    owners = [job_owner(table, j) for j in jobs]
     run, clean = row["run"], lambda s: (s or "").replace("`", "'")
     if row.get("step"):
         going = " (the run goes on)" if row.get("state") == "running" else ""
@@ -1313,13 +1359,19 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
         how = "was killed" if row.get("state") == "cancelled" or (row.get("rc") or 0) > 128 else f"ended rc {row.get('rc')}"
         what = (f"*Check `{run}` {how} on {machine}* at {_hm(row.get('ended'))}, before any step failed "
                 f"({row.get('class') or 'unclassified'}): {clean(row.get('why')) or 'no reason recorded'}.")
-    lanes = [lane_of(reg, b) for _, b in prs]
+    lanes, named = [lane_of(reg, b) for _, b in prs], [lane_of(reg, b) for _, b in gate]
+
+    def listed(pairs: list[tuple[int, str]], hs: list[str | None]) -> str:
+        return ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(pairs, hs)) + "."
+
     if prs:
-        what += f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: " + \
-            ", ".join(f"#{n} `{b}`" + ("" if h else " (no lane in the registry)") for (n, b), h in zip(prs, lanes)) + "."
+        what += (f" {'Train' if train_prs(row.get('subjects') or []) else 'PR'} at `{(row.get('sha') or '?')[:9]}`: "
+                 + listed(prs, lanes))
+    if gate:
+        what += f" `{RATCHET_STEP}` fails " + listed(gate, named)
     infra = () if row.get("step") else ("infra",)
-    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*(h for h in lanes if h), LANDER, *infra])),
-                   thread=MERGE_THREAD)
+    rung = (h for h in red_owners([*lanes, *named], owners) if h)
+    return Finding(f"{machine}:{run}", what + unread, owners=tuple(dict.fromkeys([*rung, LANDER, *infra])), thread=MERGE_THREAD)
 
 
 def on_main(ctx: Ctx, sha: str | None) -> bool:
@@ -1355,7 +1407,8 @@ def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str
 def failed_checks(ctx: Ctx) -> list[Finding]:
     """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
-    PR it checks (the handle its branch suffix names in the registry) and the lander. One still running whose step failed is
+    PR it checks (the handle its branch suffix names in the registry), of each merge a failed ratchet gate fails, the owner of
+    the failed job and the lander (`failed_check`). One still running whose step failed is
     cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
@@ -1467,9 +1520,16 @@ MONITORS: list[Monitor] = [
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
     Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
-            "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
-            "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
+            "Read the end of the live loop's decision log (`/data/vqueue/live/decisions.jsonl`) and its output on the control "
+            "pod: start a loop that stopped again, or fix what a stuck one fails on each tick. It rings again each hour until "
+            "the queue decides again.",
             every_s=600, events=True, unread_s=3600),
+    Monitor("nightly-check", "infra", "warn", "relay", nightly_check,
+            "On the control pod, read /data/watchers/log/nightly-check.log (each pass says what it did) and status.json (is "
+            "the loop up); a run in progress is `research status RUN`. A loop the supervisor doesn't run is deployed by "
+            "infra/control/README.md's watchers steps; one stuck on a run that never ends gives it up an hour past the run's "
+            "timeout. The log's `launch:` line is the command, to run a night by hand.",
+            every_s=600, for_s=1800, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

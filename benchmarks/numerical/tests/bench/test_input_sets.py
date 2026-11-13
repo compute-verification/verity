@@ -2,12 +2,13 @@
 
 Captured and synthetic sets are interchangeable: the eight captured row 101 manifests (``data/captured-101/manifests``)
 identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
-seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the IR evaluator; a synthetic
+seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the evaluator; a synthetic
 set of each template has the captured layout and provenance fields and verifies the same way."""
 from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +19,7 @@ from verity_flock import synthetic as SY
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 
-DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "ml" / "flock" / "tests" / "data" / "captured-101"
+DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "flock" / "prover" / "tests" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
 CENSUS = Path(__file__).resolve().parents[3] / "census"
@@ -148,23 +149,23 @@ def test_evaluation_targets_equal_the_definitions():
     """Heads evaluate through a batch Definition that has a kernel; each equals the head's gate reference, and the captured
     vLLM GEMM step (core's AmpereBF16TcDot16_v2 since the re-baseline re-key; the retired _v1 evaluated the same function) equals the
     kernel."""
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.defs import REGISTRY, bind
-    from verity.ml.circuits.ops import gemm
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.defs import REGISTRY, bind
+    from verity.definitions.ops import gemm
 
     key = SY.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
-        draws = [sub.draw(key, j) for j in range(n)]
-        for d in draws:
+        instances = [sub.draw(key, j) for j in range(n)]
+        for d in instances:
             st = d.instance_statics
             args = [d.inputs[p.name][None, :] for p in sub.inputs]
             ref = evaluate_batch(sub.definition(**st), *args, kernel="reference").reshape(-1)
             via = np.asarray(sub.evaluate({p.name: [d.inputs[p.name]] for p in sub.inputs}, [st])[sub.outputs[0].name][0])
             assert np.array_equal(ref, via.astype(ref.dtype))
     sub = TM.subcircuit("gemm-coordinate", K=64)
-    draws = [sub.draw(key, j) for j in range(64)]
-    x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
-    from verity.ml.definitions.registry import prims as VP
+    instances = [sub.draw(key, j) for j in range(64)]
+    x, w = np.stack([d.inputs["x"] for d in instances]), np.stack([d.inputs["w"] for d in instances])
+    from verity.definitions.registry import prims as VP
     assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
     ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
     assert np.array_equal(ref, evaluate_batch(sub.target(), x, w))
@@ -194,9 +195,9 @@ FP8 = sorted(TM.GEMM_FP8)
 
 @pytest.mark.parametrize("sem", FP8)
 def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
-    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity.ml.circuits.silicon model the backends chain with (ADA_E4M3_M16N8K32,
-    HOPPER_E4M3_K32), from the IR reference (verity.ml.kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
-    from verity.ml.circuits.silicon import models
+    """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity.definitions.silicon model the backends chain with (ADA_E4M3_M16N8K32,
+    HOPPER_E4M3_K32), from the IR reference (verity.definitions.kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
+    from verity.definitions.silicon import models
 
     sub = TM.subcircuit("gemm-coordinate", K=64, semantics=sem, tile=4)
     s = IS.InputSet.open(G.generate(sub, 12, 5, tmp_path)["path"])
@@ -218,8 +219,8 @@ def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
 
 def test_nvfp4_sets_hold_the_models_accumulator(tmp_path):
     """NVFP4 (sm120): y is models.BLACKWELL_SM120_NVF4's chain over the E2M1 codes and UE4M3 block-16 scales, from the IR reference
-    verity.ml.kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
-    from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4 as M
+    verity.definitions.kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
+    from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4 as M
 
     sid = "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4"
     sub = TM.parse_subcircuit_id(sid)
@@ -270,6 +271,35 @@ def test_suite_digests_only(tmp_path, monkeypatch):
     assert [s["content_digest"] for s in full] == [s["content_digest"] for s in lean]
     assert sorted(p.name for p in Path(lean[0]["path"]).iterdir()) == ["index.json", "manifest.json"]
     assert set(G.SUITES["101"][0][1]) == {"K", "semantics"} and len(G.SUITES["101"]) == 10
+
+
+def test_a_suite_reports_each_finished_set_to_its_caller_and_prints_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setitem(G.SUITES, "tiny", [("rope-head", {"D": 8}, 5), ("silu-mul", {"I": 8}, 3)])
+    seen = []
+    sets = G.suite("tiny", 9, tmp_path / "said", done=seen.append)
+    assert seen == sets and len(sets) == 2
+    assert capsys.readouterr().out == ""
+    assert G.main(["--suite", "tiny", "--seed", "9", "--out", str(tmp_path / "cli")]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [json.loads(line)["content_digest"] for line in lines[:2]] == [s["content_digest"] for s in sets]
+
+
+def test_a_sets_source_commit_is_the_callers_else_the_checkouts_head_else_none(monkeypatch):
+    def git(code, out):
+        return lambda cmd, **kw: subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
+
+    head, named = "0123456789abcdef0123456789abcdef01234567", "89abcdef0123456789abcdef0123456789abcdef"
+    monkeypatch.setattr(G.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(G.subprocess, "run", git(0, head + "\n"))
+    monkeypatch.setenv("RESEARCH_SOURCE_COMMIT", named)
+    assert G._versions()["git_head"] == named
+    monkeypatch.delenv("RESEARCH_SOURCE_COMMIT")
+    assert G._versions()["git_head"] == head
+    monkeypatch.setattr(G.subprocess, "run", git(128, "HEAD\n"))
+    assert G._versions()["git_head"] is None
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    monkeypatch.setattr(G.subprocess, "run", None)
+    assert G._versions()["git_head"] is None
 
 
 def test_cli(tmp_path, capsys):

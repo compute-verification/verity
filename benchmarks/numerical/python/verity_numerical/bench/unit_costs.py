@@ -1,4 +1,4 @@
-"""Front F6's per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
+"""The per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
 (``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit samples, and the unit's public
 work weight.
 
@@ -19,7 +19,7 @@ an earlier inventory. :func:`reconcile` sets circuits' F3 unit figures beside th
 
 **Gates and nonzeros (generic).** A unit type's subcircuit is its census template bound at the census parameters
 (``bench.templates.subcircuit``), and its circuit is that Definition lowered whole, piece by piece, by Flock's generic
-lowering (``verity_flock.ir_lower.lower``) into ``verity.ml.circuits.boolean.forms.Circuit`` with CSE, the builder Flock's
+lowering (``verity_flock.ir_lower.lower``) into ``verity.circuits.boolean.forms.Circuit`` with CSE, the builder Flock's
 units use. ``counts()`` gives the live cone's committed input bits, ANDs, output copies and ``nnz_AB`` (the nonzeros of A and
 B); C = I adds one nonzero per AND row, so a unit's Flock nonzeros are ``nnz_AB + ands``. Table reads (``lookups``) are not
 ANDs; their tables and widths are listed.
@@ -34,8 +34,8 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the sampling design is read off builds at every V in
-  :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
+- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the counts' recurrence is read off builds at every
+  V in :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
 - ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_law`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
   the first block's fit alone. Not exact.
@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The sample is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.ml.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.protocols.pouw.prover.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -65,8 +65,10 @@ import ast
 import json
 import math
 import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from fractions import Fraction
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import census
@@ -88,8 +90,8 @@ AFFINE: dict[str, tuple[str, Callable[[Mapping[str, Any]], tuple[int, ...]]]] = 
     "moe-sum": ("H", lambda p: (16, 32, 48, 64)),
     "gumbel-top-p-token-select": ("V", lambda p: (64, 128, 192, 256)),
 }
-#: token-select's V − 1 ArgmaxStep scan: the sampling design (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
-#: checked against an exact build at SCAN_CHECK
+#: token-select's V − 1 ArgmaxStep scan: its counts' recurrence (:func:`argmax_scan_law`) is read off builds at every V in
+#: SCAN_POINTS and checked against an exact build at SCAN_CHECK
 SCAN_POINTS = tuple(range(2, 140))
 SCAN_CHECK = 1030
 #: templates whose Definition has a structured reduction (chunks, thread blocks): built only at the census parameters
@@ -108,7 +110,7 @@ BLOCK_CHECKS = (1, 2)
 
 def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The subcircuit's Definition lowered whole into a CSE'd forms Circuit: ``counts()`` plus the live table reads by table."""
-    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.circuits.evaluation.reference import resolve, signature_of
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
@@ -148,8 +150,6 @@ def _key(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | 
 def run_builds(jobs: Iterable[tuple], n_jobs: int, fn: Callable[[tuple], tuple] = _build_job) -> dict[tuple, dict[str, Any]]:
     """Each build in its own spawned process (a build's forms are only freed with its process, and two registered lowerings
     register kernels that collide); a worker that dies (the OOM killer) raises BrokenProcessPool rather than hanging."""
-    from concurrent.futures import ProcessPoolExecutor
-
     jobs = list(dict.fromkeys(jobs))
     if n_jobs <= 1:
         return dict(fn(j) for j in jobs)
@@ -234,7 +234,7 @@ def registered_costs(types: Sequence[UnitType], n_jobs: int, log: Callable[[str]
 def argmax_step() -> dict[str, Any]:
     """token-select has no registered lowering. Its scan's middle ArgmaxStep as one unit, the carry (best, best_i, i) as cut
     words like gumbel's registered lane: the layout a cut lowering would give per step (the first and last steps differ)."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
@@ -261,7 +261,7 @@ def argmax_step() -> dict[str, Any]:
 
 def _layout(d: Any) -> dict[str, int]:
     """A Boolean Definition laid out whole as one unit (CSE'd forms Circuit): rows, ANDs, nnz_a, nnz_b."""
-    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.circuits.evaluation.reference import resolve, signature_of
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
@@ -282,11 +282,11 @@ TREES = {"token-select-greedy": "TokenSelectStage", "gumbel-top-p-token-select":
 
 def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
     """The argmax tree over V logits (``sampling_boolean.stages``): each stage is separable
-    (``verity.ml.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
+    (``verity.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
     laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
-    from verity.ml.circuits.cut import separable
-    from verity.ml.circuits.evaluation.reference import resolve
-    from verity.ml.definitions.registry import sampling_boolean as SB
+    from verity.circuits.cut import separable
+    from verity.circuits.evaluation.reference import resolve
+    from verity.definitions.registry import sampling_boolean as SB
 
     members: list[dict[str, Any]] = []
     memo: dict[str, dict[str, int]] = {}
@@ -345,8 +345,8 @@ CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 3
 
 
 def _f32mul() -> dict[str, Any]:
-    from verity.ml.circuits.boolean.forms import Circuit
-    from verity.ml.circuits.ops.boolean import attention as AT
+    from verity.circuits.boolean.forms import Circuit
+    from verity.definitions.ops.boolean import attention as AT
     from verity_flock import ir_lower
 
     out: dict[str, Any] = {}
@@ -463,7 +463,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
 # --- the sample --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.ml.protocols.pouw.circuit.plan import record_k
+    from verity.protocols.pouw.prover.circuit.plan import record_k
 
     return record_k(epsilon, delta)
 
@@ -973,8 +973,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--reuse", help="an earlier run's unit-costs.json: take its subcircuit results instead of building")
     ap.add_argument("--retree", help="an earlier run's unit-costs.json: only re-price its samplers at the argmax tree (retree)")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
     if a.retree:
         inv = json.loads(Path(a.retree).read_text())
         inv["retreed"] = a.retree

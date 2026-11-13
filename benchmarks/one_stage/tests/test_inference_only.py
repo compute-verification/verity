@@ -29,10 +29,10 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
-from verity.ml.definitions import boolean as BL  # noqa: E402
-from verity.ml.definitions.registry.catalog import load  # noqa: E402
-from verity.ml.definitions.registry.sampling import bit_at  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.definitions import boolean as BL  # noqa: E402
+from verity.definitions.registry.catalog import load  # noqa: E402
+from verity.definitions.registry.sampling import bit_at  # noqa: E402
+from verity.commitments.windows import interface as IF  # noqa: E402
 from verity_vllm.program.predict import block_counts as BC  # noqa: E402
 
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'

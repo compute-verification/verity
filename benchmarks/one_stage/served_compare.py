@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKLOADS = ROOT / "integrations" / "vllm" / "workloads"
+WORKLOADS = ROOT / "adapters" / "vllm" / "workloads"
 #: the circuit's values W registers: each linear's A rows and its y rows
 PEARL_VALUES = ("pearl-a/", "pearl-y/")
 VERDICTS = ("PHI", "BUILD", "CUT")

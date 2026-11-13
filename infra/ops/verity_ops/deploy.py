@@ -4,8 +4,8 @@ pods/nebius/deploy.toml lists every file that infra's loops, timers and services
 comes from, who owns it (a Slack handle), and the patterns (`managed`) under which nothing else should live.
 
   research deploy drift [--on N ...] [--ref origin/main] [--json] [--no-fetch]
-  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch]
-  research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch]
+  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch] [--login USER]
+  research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch] [--login USER]
 
 `drift` reads each node over ssh, as `research run --on` reaches it (a node whose `staged` says why its machine doesn't exist
 yet only when named with --on; `install` takes it as any other), and gives each entry one state:
@@ -26,8 +26,12 @@ as a backup) to <the record's directory>/attic/<when>/<path>, refusing a file a 
 that setup script, and drift checks only that it exists. A file of a tree that isn't installed is `missing` but leaves drift
 clean (an install of the tree adds it), unless the tree is `required`: what runs from it can't run without it. A node whose trust
 store (/etc/ssl/certs) still holds a distrusted CA root (DISTRUSTED_ROOTS) lists it as `root`, with the upgrade that removes it.
-Exit 0 when every entry is ok, nothing strays and no distrusted root is trusted, else 1. A node marked `admin = true` is reached only by an admin login (vy-admin, whose key only
+A node whose null device isn't the character device 1,3 with mode 666 lists it as `null`, with the command that repairs it:
+every redirect to /dev/null fails there for a user who isn't root.
+Exit 0 when every entry is ok, nothing strays, no distrusted root is trusted and the null device is whole, else 1. A node marked `admin = true` is reached only by an admin login (vy-admin, whose key only
 Daniel and infra's lead hold, never the research key the relays use), so drift reads it only when `--on` names it.
+`install` and `attic` write as root, so on a node whose lock-out took root from `research` (pods/nebius/lockout) they take
+`--login vy-admin`: the same node, reached as that user instead of the one its registry entry names.
 
 `install` takes files only from a commit that an origin branch holds (a branch, a PR's head, `main`; never the working tree), so
 every installed byte is in a pushed commit. Each file is written beside the old one and renamed over it with the old one's owner
@@ -49,6 +53,7 @@ import base64
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -76,10 +81,12 @@ CERTS = "/etc/ssl/certs"       # the system trust store, which Python, git, gh a
 # 20260816 removes them, and the Nebius images ship with apt's daily timers off, so nothing on a node upgrades it unasked.
 DISTRUSTED_ROOTS = ("emSign_ECC_Root_CA_-_G3", "Comodo_AAA_Services_root")
 TRUST_FIX = "sudo apt-get update && sudo apt-get install -y --only-upgrade ca-certificates 'libnss3*'"
+NULL = "/dev/null"             # the character device 1,3 with mode 666: what a shell's `2>/dev/null` opens for writing
 
 # Runs on the node (stdlib): each path's git blob, mtime, the oldest start of a process whose argv names it and every such
 # process's start and service (its cgroup's last component, `systemd:NAME` or `user-systemd:NAME`, else null), the files the
-# managed patterns and trees hold, the record's last line per path, and the trust store's files that name a distrusted root.
+# managed patterns and trees hold, the record's last line per path, the trust store's files that name a distrusted root, and
+# the null device's mode and device numbers (or why it can't be read).
 PROBE = r'''
 import glob, hashlib, json, os, sys
 req = json.loads(sys.argv[1])
@@ -145,8 +152,13 @@ try:
     distrusted = sorted(n for n in os.listdir(req["certs"]) if any(r in n for r in req["distrusted"]))
 except OSError:
     distrusted = []
+try:
+    st = os.stat(req["null"])
+    null = [st.st_mode, os.major(st.st_rdev), os.minor(st.st_rdev)]
+except OSError as e:
+    null = f"{type(e).__name__}: {e}"
 print(json.dumps({"files": files, "found": sorted(found), "procs": procs, "running": running, "record": record,
-                  "distrusted": distrusted}))
+                  "distrusted": distrusted, "null": null}))
 '''
 
 # On the node as root: append lines to the record, owned as the directory above the record's.
@@ -356,7 +368,8 @@ def origin_branches(commit: str, repo: Path = REPO, most: int = 3) -> list[str]:
     return [b for b in r.stdout.split() if b.startswith("origin/") and b != "origin/HEAD"][:most] if r.returncode == 0 else []
 
 
-def ssh_runner(project: str = PROJECT) -> Runner:
+def ssh_runner(project: str = PROJECT, login: str | None = None) -> Runner:
+    """Runs a command on a node over ssh, as the user its registry entry names, or as `login`."""
     from research import remote
 
     def run(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
@@ -364,7 +377,7 @@ def ssh_runner(project: str = PROJECT) -> Runner:
             t = remote.ssh_host_target(remote.resolve_machine(node, project))
         except remote.Refused as e:
             raise (Unreachable if released(node) else RuntimeError)(f"{node}: {e}") from None
-        return remote.ssh_run(remote.ssh_argv(t["host"], t["port"] or 22, user=t["user"]), argv, stdin=stdin, timeout=300)
+        return remote.ssh_run(remote.ssh_argv(t["host"], t["port"] or 22, user=login or t["user"]), argv, stdin=stdin, timeout=300)
     return run
 
 
@@ -386,7 +399,7 @@ def released(node: str) -> bool:
 
 def probe(node: Node, paths: list[str], run: Runner) -> dict:
     req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record,
-           "certs": CERTS, "distrusted": DISTRUSTED_ROOTS}
+           "certs": CERTS, "distrusted": DISTRUSTED_ROOTS, "null": NULL}
     r = run(node.name, ["python3", "-c", PROBE, json.dumps(req)], None)
     if r.returncode != 0:
         err = r.stderr.decode(errors="replace").strip()
@@ -395,8 +408,27 @@ def probe(node: Node, paths: list[str], run: Runner) -> dict:
     return json.loads(r.stdout)
 
 
+def null_fault(seen: list[int] | str) -> dict | None:
+    """What is wrong with the null device the probe read (its `[st_mode, major, minor]`, or why it couldn't be read) and the
+    command that repairs it, {"what", "fix"}; None for the character device 1,3 with mode 666."""
+    path = NULL
+    remake = f"sudo rm -f {path} && sudo mknod -m 666 {path} c 1 3"
+    if isinstance(seen, str):
+        return {"what": f"{path} can't be read ({seen})", "fix": remake}
+    mode, major, minor = seen
+    if not stat.S_ISCHR(mode) or (major, minor) != (1, 3):
+        kind = f"the character device {major},{minor}" if stat.S_ISCHR(mode) else \
+            "a directory" if stat.S_ISDIR(mode) else "a regular file" if stat.S_ISREG(mode) else "no character device"
+        return {"what": f"{path} is {kind}, not the character device 1,3", "fix": remake}
+    if stat.S_IMODE(mode) != 0o666:
+        return {"what": f"{path} has mode {stat.S_IMODE(mode):o}, not 666: a redirect to it fails for every user but root",
+                "fix": f"sudo chmod 666 {path}"}
+    return None
+
+
 def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
-    """One node's report: {"commit", "entries": [{path, src, owner, state, detail, restart}], "strays": [...]}."""
+    """One node's report: {"commit", "entries": [{path, src, owner, state, detail, restart}], "strays": [...], "distrusted":
+    [...], "null_device": null_fault's}."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     want = expected(node, commit, repo)
     generated = [e.path for e in node.entries if e.by]
@@ -473,7 +505,8 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 strays.remove(p)
                 entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, "tree": t.path, "detail":
                                 f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"})
-    return {"commit": commit, "entries": entries, "strays": strays, "distrusted": seen.get("distrusted", [])}
+    return {"commit": commit, "entries": entries, "strays": strays, "distrusted": seen.get("distrusted", []),
+            "null_device": null_fault(seen["null"])}
 
 
 def render(node: str, ref: str, rep: dict) -> str:
@@ -498,6 +531,8 @@ def render(node: str, ref: str, rep: dict) -> str:
         lines.append(f"  stray    {p}")
     for c in rep.get("distrusted", []):
         lines.append(f"  root     {CERTS}/{c}  (a distrusted CA root: {TRUST_FIX})")
+    if null := rep.get("null_device"):
+        lines.append(f"  null     {null['what']}  ({null['fix']})")
     return "\n".join(lines)
 
 
@@ -507,7 +542,7 @@ def _tree_missing(e: dict) -> bool:
 
 
 def clean(rep: dict) -> bool:
-    return not rep["strays"] and not rep.get("distrusted") and all(e["state"] in ("ok", "held") and not e["restart"] for e in rep["entries"] if not _tree_missing(e))
+    return not rep["strays"] and not rep.get("distrusted") and not rep.get("null_device") and all(e["state"] in ("ok", "held") and not e["restart"] for e in rep["entries"] if not _tree_missing(e))
 
 
 def unit_name(run: str) -> str | None:
@@ -683,6 +718,9 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     a.add_argument("--ref", default="origin/main")
     a.add_argument("--by", required=True, help="who moves them: goes into the node's record")
     a.add_argument("--apply", action="store_true", help="move them (else only say what would move)")
+    for p in (i, a):
+        p.add_argument("--login", metavar="USER", help="the ssh user (default: the node's registry entry's); vy-admin on a node "
+                                                       "whose lock-out took root from research")
     for p in (d, i, a):
         p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first")
     # argparse leaves a positional that follows an option unmatched, and subparsers rule out parse_intermixed_args
@@ -699,7 +737,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         if r.returncode:
             print(f"research deploy: git fetch in {repo} failed, so REF may be stale: {r.stderr.strip()[-300:]}", file=sys.stderr)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
-    run = run or ssh_runner()
+    run = run or ssh_runner(login=getattr(ns, "login", None))
     if ns.cmd == "drift":
         reps, rc = {}, 0
         for name in ns.node or sorted(n for n, nd in nodes.items() if not nd.admin):

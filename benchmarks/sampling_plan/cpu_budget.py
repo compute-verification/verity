@@ -28,8 +28,8 @@ from collections.abc import Sequence
 from math import ceil, log
 from pathlib import Path
 
-from verity.core.protocols import reporting
-from verity.ml.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+from verity.protocols import reporting
+from verity.commitments.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`reporting`)
 DELTAS = tuple(map(float, reporting.DELTAS))

@@ -30,15 +30,21 @@ W's) accept it. With the flipped row they accept W' and an R' written by hand af
 only the reader's proof refuses it.
 
 **Lean** (opt-in as the records, on a machine with Lean's toolchain): `served_cases.py --serve-dir` on a serve dir under H1's tie (V3c's
-audit's v1 case of R, H1's log of W then R, and PoUW's period case of one window naming R) writes the three cases, and
+audit's v1 case of R, H1's log of W then R, and PoUW's period case of one window naming R) writes three cases: one-stage
+v1's, and those of two of remote's three subprotocols, the inference-only policy's and the period's.
 `sampled-proofs-one-stage check` (whose log record reader takes W and whose R1-R7 accept R) and `inference-only check`
 accept theirs, each naming R's digest, and the period's window names R (`served_cases.period_case`, the record tie remote
-checks); `composite.py remote` composes them. The v1 case's verdict of record is an accepting stand-in reporting R's
-tables' roots as their readers opened them (the proof blocks' proofs aren't run here), and its period has no H1 window's
-proofs, so PoUW's period Lean refuses it and remote rejects with that refusal. Remote checks its tie only once every piece
-accepts (`Core.Composition.holdTies`), so here the tie is `served_cases`' check, not remote's: remote's own tie, and remote
-accepting all three, are a served window's. A period naming W is refused by `served_cases` before any composite. With the
-flipped row, one-stage's Lean accepts R' on the log [W'] and refuses it on [W].
+checks). The v1 case's verdict of record is an accepting stand-in reporting R's tables' roots as their readers opened them:
+the proof blocks' proofs aren't run here, so the audit holds no case of one-stage v2, the audit on the proofs themselves.
+That is the only case remote's third subprotocol, sampled proofs, takes (`VStar.Recursive.Sampled` refuses one-stage v1's,
+whose verdicts are the evidence's own), so `served_cases` refuses to write it. `composite.py remote` on the two cases the
+serve dir has of remote's subprotocols rejects naming sampled proofs missing: a composition answers no subprotocol's case
+while one has none (`Core.Composition.run`), so remote reads neither the policy's case nor the period's, whose Lean
+refuses it for want of an H1 window's proofs, and holds no tie, which it does only where no subprotocol rejects
+(`Core.Composition.holdTies`). So no test here hands remote a whole composition: the tie is `served_cases`' check, not
+remote's, and remote carrying a subprotocol's refusal, holding its own tie and accepting all three are a served window's.
+A period naming W is refused by `served_cases` before any composite. With the flipped row, one-stage's Lean accepts R' on
+the log [W'] and refuses it on [W].
 """
 from __future__ import annotations
 
@@ -68,11 +74,11 @@ from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import served as SV
 from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registered as G, registration as REG
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.windows import interface as IF, rows as CS
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.circuits.codec import canonical_json
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -101,6 +107,8 @@ RECORDS = pytest.mark.skipif(not settings.REMOTETIE, reason="VERITY_PROVE_PATH_R
                              "toy's 11,252 proof blocks and builds the Lean verifiers that check them, a few minutes")
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
+#: why `served_cases` writes no sampled proofs case from the toy's audit (`served_cases.v2_case`)
+NO_V2_CASE = "no v2 case: the audit's a5 writes no case-v2.json (a5.case_v2)"
 
 
 def _bf16(x) -> np.ndarray:
@@ -430,8 +438,8 @@ def lean(toy, written, tmp_path_factory) -> SimpleNamespace:
     one = _one_stage()
     SC = one.SC
     exes = SimpleNamespace(v1=SC.build(*SC.V1_LEAN), policy=SC.build(*SC.INFERENCE_ONLY_LEAN),
-                           period=SC.build(ROOT / "verity/core/protocols/pouw/lean/check", "pouw-period"),
-                           remote=SC.build(ROOT / "verity/core/protocols/remote", "remote"))
+                           period=SC.build(ROOT / "verity/protocols/pouw/verifier/lean/check", "pouw-period"),
+                           remote=SC.build(ROOT / "verity/protocols/remote/verifier", "remote"))
     W, R = toy.h1.W, written.R
     serve = _serve(one, tmp_path_factory.mktemp("serve"), _v1_case(one, toy, written, W, R), W, R, exes.period)
     out = io.StringIO()
@@ -447,52 +455,61 @@ def _answer(lean, id: str) -> dict:
     return json.loads((lean.private / lean.one.SC.DIRS[id] / "answer.json").read_text())
 
 
-def _remote(lean, out: Path, period: Path) -> tuple[int, dict]:
-    """`composite.py remote` on the policy's case, ``period`` and one-stage's case: its exit and remote's Lean answer."""
+def _remote(lean, out: Path, period: Path) -> tuple[int, dict, list[str]]:
+    """`composite.py remote` on the cases the serve dir has of remote's subprotocols, the policy's and ``period`` (its
+    sampled proofs case is not written): its exit, remote's Lean answer and the subprotocols the composite names missing."""
     SC = lean.one.SC
-    cases = [lean.private / SC.DIRS[SC.INFERENCE_ONLY], period, lean.private / SC.DIRS[SC.V1]]
+    cases = [lean.private / SC.DIRS[SC.INFERENCE_ONLY], period]
     with contextlib.redirect_stdout(io.StringIO()):
         rc = lean.one.C.main(["remote", *(x for c in cases for x in ("--cases", str(c))), "--private-out",
                               str(out / "private"), "--public-out", str(out / "public"), "--exe", str(lean.exes.remote)])
-    return rc, json.loads((out / "private" / "answer.json").read_text())
+    return (rc, json.loads((out / "private" / "answer.json").read_text()),
+            json.loads((out / "public" / "composite.json").read_text())["missing"])
 
 
 @pytest.mark.slow
 @RECORDS
 def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(toy, written, lean, tmp_path):
-    """`served_cases` writes the three cases from the serve dir. One-stage's Lean accepts R on the log [W] (its log record
-    reader takes W, and its R1-R7 accept R chained right after W with each table an output value of W's), and the
-    policy's Lean accepts its case, whose log is H1's through W; both name R's digest. The period names R as its window's
-    Commit record (`served_cases.period_case`), and its Lean refuses it for want of an H1 window's proofs, so remote
-    rejects with that refusal, before any tie of its own."""
+    """`served_cases` writes three cases from the serve dir and refuses a fourth, so it exits 1. One-stage's Lean accepts R
+    on the log [W] (its log record reader takes W, and its R1-R7 accept R chained right after W with each table an output
+    value of W's), and the policy's Lean accepts its case, whose log is H1's through W; both name R's digest. The period
+    names R as its window's Commit record (`served_cases.period_case`), and its Lean refuses it for want of an H1 window's
+    proofs. The fourth is remote's sampled proofs case, one-stage v2's: the toy's audit ran no proof, so it holds none.
+    Remote, on the policy's case and the period's, rejects naming sampled proofs missing: it reads no subprotocol's case
+    while one has none. So its answer here is that refusal and not the period's, and this test does not check that remote
+    carries a subprotocol's refusal or holds its own tie."""
     SC, d = lean.one.SC, REG.digest(written.R)
-    assert (lean.rc, [(c["protocol"], c["verdict"]) for _, c in lean.lines]) == (0, [
-        (SC.V1, "accept"), (SC.INFERENCE_ONLY, "accept"), (SC.PERIOD, "reject")]), lean.lines
+    assert (lean.rc, [(head, c["protocol"], c.get("verdict")) for head, c in lean.lines]) == (1, [
+        ("CASE", SC.V1, "accept"), ("NOT_WRITTEN", SC.SAMPLED, None), ("CASE", SC.INFERENCE_ONLY, "accept"),
+        ("CASE", SC.PERIOD, "reject")]), lean.lines
+    assert lean.lines[1][1]["reason"] == NO_V2_CASE, lean.lines[1]
     for id in (SC.V1, SC.INFERENCE_ONLY):
         got = _answer(lean, id)
         assert (got["protocol"], got["commitment"], got["verdict"]) == (id, d, "accept"), got
     policy = json.loads((lean.private / SC.DIRS[SC.INFERENCE_ONLY] / "case.json").read_text())
     assert policy["params"]["log"] == [toy.h1.W] and policy["commitment"] == canonical_json(written.R).hex()
-    period = _answer(lean, SC.PERIOD)
     assert SC.period_case(lean.private / SC.DIRS[SC.PERIOD], d)[2] == "reject"
-    rc, got = _remote(lean, tmp_path, lean.private / SC.DIRS[SC.PERIOD])
-    assert (rc, got["verdict"], got["reason"]) == (1, "reject", f"{SC.PERIOD} reject: {period['reason']}"), got
+    rc, got, missing = _remote(lean, tmp_path, lean.private / SC.DIRS[SC.PERIOD])
+    assert (rc, got["verdict"], got["reason"], missing) == (1, "reject", f"params: {SC.SAMPLED} is missing",
+                                                            [SC.SAMPLED]), got
 
 
 @pytest.mark.slow
 @RECORDS
 def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, tmp_path):
     """A period whose window names H1's W as its Commit record is refused by `served_cases` (remote's record tie) before any
-    composite. Handed to remote anyway, beside the policy's and one-stage's cases on R, it rejects with the period's own
-    refusal, which stands before any tie."""
+    composite. Handed to remote anyway, beside the policy's case on R, it is rejected as the period naming R is: remote
+    names sampled proofs missing, whose case the toy's audit doesn't write, and reads no subprotocol's case while one has
+    none. So its answer here is that refusal and not the period's, nothing of remote's tells the two periods apart on
+    this toy, and `served_cases`' refusal is the only check here that a period naming W goes no further."""
     SC = lean.one.SC
     period = tmp_path / "pouw-period"
     _period(lean.one, lean.exes.period, period, [toy.h1.W])
     with pytest.raises(SC.Refused, match="remote's record tie rejects it"):
         SC.period_case(period, REG.digest(written.R))
-    refused = json.loads((period / "answer.json").read_text())
-    rc, got = _remote(lean, tmp_path / "remote", period)
-    assert (rc, got["verdict"], got["reason"]) == (1, "reject", f"{SC.PERIOD} reject: {refused['reason']}"), got
+    rc, got, missing = _remote(lean, tmp_path / "remote", period)
+    assert (rc, got["verdict"], got["reason"], missing) == (1, "reject", f"params: {SC.SAMPLED} is missing",
+                                                            [SC.SAMPLED]), got
 
 
 @pytest.mark.slow

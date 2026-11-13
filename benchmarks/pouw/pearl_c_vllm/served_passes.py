@@ -228,7 +228,7 @@ def seeded(label: str):
 def seed_install(pouw: dict) -> None:
     """`serve --seeded`: the PoUW settings' in-process challenger drawing from `seeded` coins, and the hm96 salt key the
     install's weight commitment takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
-    from verity.core.protocols.pouw.coins import Challenger
+    from verity.protocols.pouw.verifier.coins import Challenger
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     pouw["coins"] = Challenger(0, seeded("coins"))
@@ -514,7 +514,7 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
-        from verity.core.protocols.spot.one_stage import registration as REG
+        from verity.protocols.spot.verifier.one_stage import registration as REG
         from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
         try:

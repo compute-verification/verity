@@ -18,11 +18,13 @@ import pytest
 
 from verity_config import Admission
 
-from verity_bench import jobs
+from verity_bench import jobs, steady_spec
 from verity_bench.cli import _parser, main
 from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.presets import (
+    FORMER_SPECS,
     GPUS,
+    SOURCE_ROOT,
     SPEC_ROOT,
     Sweep,
     SweepPoint,
@@ -148,6 +150,9 @@ def test_every_toml_spec_strictly_loads():
     loaded = []
     for path in sorted(SPEC_ROOT.glob("*.toml")):
         if path.name == "pyproject.toml":   # the specs' own suite
+            continue
+        if steady_spec.is_steady(path):
+            assert steady_spec.load_spec(path).id == path.stem
             continue
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
@@ -319,7 +324,7 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     pythonpath, argv = ran.stdout.splitlines()
-    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
+    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/adapters/vllm"]
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
@@ -510,7 +515,27 @@ def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
     for argv in (workload, wrapped):
         params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
         assert key == {"identity": item.identity}
-        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml"
+
+
+def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
+    """A command written while the specs had a directory of their own names a file there. It loads as the spec of that
+    name, a steady-state spec's path resolves the same way, and its points record the path the spec has now."""
+
+    from verity_bench import served_table, steady_spec
+    from verity_bench.vllm import presets
+
+    name = "llama31-8b-fp8-1gpu"
+    former = SOURCE_ROOT / FORMER_SPECS / f"{name}.toml"
+    assert presets.former_name(former) == presets.former_name(f"{FORMER_SPECS}/{name}.toml") == name
+    assert presets.former_name(name) is None and presets.former_name(tmp_path / f"{name}.toml") is None
+    assert presets.former_name(f"not-{FORMER_SPECS}/{name}.toml") is None
+    assert load_spec(former) == load_spec(name) and resolve_spec(former) == resolve_spec(name)
+    assert steady_spec.spec_path(former).samefile(SPEC_ROOT / f"{name}.toml")
+    assert jobs._relative_spec(former, SOURCE_ROOT) == served_table.spec_path(name)
+    assert (SOURCE_ROOT / served_table.spec_path(name)).samefile(SPEC_ROOT / f"{name}.toml")
+    with pytest.raises(Exception, match="no benchmark spec"):
+        load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
 
 
 def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
@@ -1011,8 +1036,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
 
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1046,7 +1071,7 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
     adapter's refusals accept it."""
 
-    from verity.core.protocols.pouw import verifier
+    from verity.protocols.pouw.verifier import verifier
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1074,7 +1099,7 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
     (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins drawn (the server
     draws each window's); an unset ``$`` value is refused, naming it."""
-    from verity.core.protocols.pouw import verifier
+    from verity.protocols.pouw.verifier import verifier
     from verity_vllm.pipeline import serve_pearl as SPL
 
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
@@ -1152,7 +1177,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.core.protocols.pouw.salt import epoch_open_root
+    from verity.protocols.pouw.verifier.salt import epoch_open_root
 
     from verity_bench.vllm import runner
 

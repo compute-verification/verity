@@ -100,7 +100,7 @@ declared Program serve-openai wrote (``h1/window-program.json.gz``), the period 
 the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`); with ``--lean-answers`` its
 verifier runs take the answers another step kept there by key (`answers.Answers`). The verdict says whether the
-window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
+window meets the two premises of `security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
 ``pearlplus``: PoUW's development piece under POUW=pearlplus (`served_pearlplus.sh`, POUW_CMD's default then), from Pearl+'s
@@ -148,7 +148,8 @@ on, and the wipe's the one its ``served.json`` names. They go into the window re
 with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
-(`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
+(`block_record.leg`) is its subprotocol's error, and so is a bandwidth answer whose profile names no term its error leaves
+out (``named_terms``). `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
 the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
 here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
@@ -157,9 +158,11 @@ product drops is ``dropped`` in the report (`dropped_row`, whatever its piece le
 ``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
 onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
-(`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
-record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
-with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
+(`terms`: when its weights were held and their share of the checkpoint, where its profile says, each δ of the block
+record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside
+it, `error_said`); PoUW's development piece reads ``development run, credits nothing`` with core's refusal of the
+window's credit.
+Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
 is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
@@ -209,7 +212,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interfaces"):
+for _p in (Path(__file__).resolve().parent, ROOT / "benchmarks" / "one_stage" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -770,7 +773,7 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line; with
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
     a root once, ever."""
-    from verity.core.protocols.spot import challenger as CH
+    from verity.protocols.spot.device import challenger as CH
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
@@ -1074,14 +1077,14 @@ def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
                      inputs: Mapping[str, str], python: str) -> dict[str, Any]:
-    """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
+    """`pouw_h1_gpu.py --check-challenger` (run by `python` in adapters/vllm, so ``tests`` is that package's) of the
     window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
     ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
             "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
             *(x for kv in inputs.items() for x in kv)]
-    p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
+    p = subprocess.run(argv, cwd=ROOT / "adapters" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
         return json.loads((out / "pouw_h1_challenger.json").read_text())
@@ -1190,8 +1193,8 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `out`, with main's first-parent line `main` (`remote.main_lines`), each pass's manifest held by
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
-    from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     coins = served.get("coins") or {}
@@ -1242,10 +1245,10 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the draw's
     origin, its session and None or the first refusal; a node's draw has no session and no refusal here (the compose
     refuses it, `pearlplus_live_draw`)."""
-    from verity.core.protocols.pouw import salt as PS
-    from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.spot import challenger as Ch
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
@@ -1308,7 +1311,8 @@ def coin(record: Path, out: Path, run: str | None, research: Sequence[str] | Non
          put: Callable[..., Any] = subprocess.run, run_dir: Path | None = None) -> dict[str, Any]:
     """The verifier's coin record `record` (`served_passes.py verify`'s ``DIR/coin.json``, written before any replay)
     published the moment it is drawn: copied to ``out/coin.json``, then put in the evidence store as `COIN_KIND` through
-    `research` (default the ``research`` command, else this Python's ``-m research``), its meta the run `run` and the run
+    `research` (default the command the shared setting ``RESEARCH`` names, else this Python's ``-m research``), its meta
+    the run `run` and the run
     commitment the coin was drawn on. The put asks ``--preserve`` first; where that fails (a job's node holds no store
     write key) the record goes in the node's own store, under the same content-addressed id, which a put of the run's
     custody copy of ``out/coin.json`` under the same kind and meta preserves. A piece publishes one coin: a record other
@@ -1329,7 +1333,9 @@ def coin(record: Path, out: Path, run: str | None, research: Sequence[str] | Non
     out.mkdir(parents=True, exist_ok=True)
     copy.write_bytes(raw)
     if research is None:
-        found = shutil.which("research")
+        from verity_config.settings import SHARED
+
+        found = shutil.which(SHARED.RESEARCH)
         research = [found] if found else [sys.executable, "-m", "research"]
     meta = json.dumps({"run": run, "commitment": rec["commitment"]}, sort_keys=True)
 
@@ -1438,7 +1444,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`)."""
     import served_shares as SS
-    from verity.core.protocols.spot.one_stage import registration as REG
+    from verity.protocols.spot.verifier.one_stage import registration as REG
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
@@ -1531,7 +1537,7 @@ def check_answer(a: Any) -> dict[str, Any]:
     """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
     the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
     reason and neither. Anything else is a ValueError, which the row reports as the subprotocol's error."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.protocols.pouw.verifier import core_check as CC
 
     try:
         CC.answer_of(a)
@@ -1628,9 +1634,9 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
     first reserve of lane `lane` after its Pearl-C period `period` closed, withheld with a draw session's layout alone,
     and the one session opened on C, so a prover who draws again under another session holds a draw no compose takes;
     and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`), the record's source that coin."""
-    from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.spot import challenger as Ch
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -1709,8 +1715,8 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
 
     The answer is Pearl+'s, its work the Lean's, its profile the reference's with the lane, pin, period, session and the
     Lean verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -1912,13 +1918,23 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
         outside = (profile.get("outside") or {}).get("bytes") or {}
         out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
                    + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
-    if leg:
-        no = [d for d, x in leg["at"].items() if not x["holds"]]
-        if no:
-            from verity_e2e_demo import block_record as BR
-            out.append(f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with "
-                       f"{_ratio(Fraction(leg['error']), BR.DELTAS)}")
-    return out
+    return out + (error_said(leg) if leg else [])
+
+
+def error_said(entry: Mapping[str, Any]) -> list[str]:
+    """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
+    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
+    for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
+    quantity is established at every δ."""
+    from verity_e2e_demo import block_record as BR
+
+    named = entry.get("named_terms")
+    error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
+    no = [d for d, x in entry["at"].items() if not x["holds"]]
+    if no:
+        return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
+    return [f"its error reads {error}"] if named else []
 
 
 def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str,

@@ -16,10 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import arm as A  # noqa: E402
-import ledger as L  # noqa: E402
-import price_twins as P  # noqa: E402
-import verify as V  # noqa: E402
+import arm as A
+import ledger as L
+import price_twins as P
+import verify as V
 
 RUN, COMMIT = "r20260930-170000-abcd", "0123456789abcdef0123456789abcdef01234567"
 PREFILL, DECODE = "m8192-n8192-k8192", "m32-n8192-k8192"
@@ -148,7 +148,7 @@ def test_a_variant_is_named_by_its_sources_digest_in_any_order_and_a_changed_sou
 def test_the_variant_and_the_groups_are_verity_pouw_serving_s_when_it_is_importable(tmp_path):
     S = L.serving()
     if S is None:
-        pytest.skip("verity.core.protocols.pouw.serving (#567) isn't on this tree yet")
+        pytest.skip("verity.protocols.pouw.verifier.serving (#567) isn't on this tree yet")
     v = variant(tmp_path)
     kv = S.KernelVariant(family="pearl-c", device="sm120", schemes=frozenset(v["schemes"]), schedules=frozenset(v["schedules"]),
                          shapes=S.ShapeRule(), source_sha256=v["source_sha256"], binary_sha256=v["binary_sha256"],
@@ -280,7 +280,7 @@ end Pouw.Guarantees.PearlC
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
     """The audit and its Lean root, `G`'s source in the audit's definitions tree when ``recorded``, else in its proofs tree."""
-    lean = tmp_path / "Security"
+    lean = tmp_path / "security"
     tree = "Definitions" if recorded else "Proofs"
     (lean / tree / "Pouw" / "Guarantees").mkdir(parents=True)
     (lean / tree / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
@@ -644,6 +644,8 @@ def test_measured_refusal_follows_panel_append():
             "metrics": {"sm_clock": {"arm": [2090.0], "base": [2091.0]}}}
     assert L.measured_refusal(meta) is None
     assert "predates" in L.measured_refusal(meta | {"gates": {"version": "pouw-gates/1"}})
+    for unversioned in ({"version": "pouw-gates"}, {"version": "pouw-gates/two"}, {}):
+        assert "gate version 0 predates" in L.measured_refusal(meta | {"gates": unversioned})
     assert "naming the run" in L.measured_refusal(meta | {"verify": meta["verify"] | {"negative_control": "REJECT other"}})
     assert "doesn't name the run" in L.measured_refusal(meta | {"verify": meta["verify"] | {"transcript": "elsewhere"}})
     assert "SM clocks" in L.measured_refusal(meta | {"metrics": {"sm_clock": {"arm": [2090.0], "base": []}}})

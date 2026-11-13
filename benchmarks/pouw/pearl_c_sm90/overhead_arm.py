@@ -38,9 +38,13 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from arm import GateResult, OperandSet, Shape, Work
 
 HERE = Path(__file__).resolve().parent
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
@@ -89,7 +93,7 @@ def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
                           f"(window.eps_at), and {PINNED.name} states no window of record")
     if w["card"] != card:
         raise ValueError(f"the window of record ({w['basis']}) ran on the {w['card']}, not the {card}")
-    from verity.core.protocols.pouw import window as Wd
+    from verity.protocols.pouw.verifier import window as Wd
 
     eps = Wd.eps_at(w["k"], Fraction(delta), w["credited"], w["work"], 1)
     return {"epsilon": float(eps), "delta": float(delta),
@@ -101,7 +105,7 @@ def pinned() -> dict:
     return json.loads(PINNED.read_text())["cubin"]
 
 
-def cubin_of(sent: str | None, out_dir: Path, build=None) -> tuple[Path, str]:
+def cubin_of(sent: str | None, out_dir: Path, build: Callable[[Path], Path] | None = None) -> tuple[Path, str]:
     """The cubin the arm loads and how it came: the file `sent` names (``$VERITY_BENCH_CUBIN``'s, ``sent``), else one
     `build` (default `build_dev`) makes in `out_dir` (``development``)."""
     if sent:
@@ -181,7 +185,7 @@ class PearlPlus:
                         "upload), the pass's bookkeeping and B's screen run once, in prepare",
                 "verifier": verifier()}
 
-    def domain(self, shape) -> str | None:
+    def domain(self, shape: Shape) -> str | None:
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         bad = PPD.refusals(SERVED, {0: (shape.n, shape.k)})
@@ -194,12 +198,12 @@ class PearlPlus:
             return f"a pass screens at most {PPD.FLAG_ROWS} rows"
         return None
 
-    def work(self, shape):
+    def work(self, shape: Shape) -> Work:
         """The call's W_ref and credit at its m₁₆ rows (the scheme's `wref` and `credit_of`), the chain's FP8 MACs, A's
         rows (FP32 words) and the tile leaves (C̃ and U, FP32 words, over the m₁₆ rows a partial row tile has) the call
         hashes, and B's rows its weight side does."""
         from arm import Work
-        from verity.core.protocols.pouw.protocol import Shape as Unit
+        from verity.protocols.pouw.verifier.protocol import Shape as Unit
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         s, m = PPD.scheme_of(SERVED), m16(shape.m)
@@ -208,19 +212,19 @@ class PearlPlus:
                     unit=UNIT, hashed_bytes={"a_rows": 4 * m * shape.k, "tile_leaves": 8 * m * shape.n},
                     weight_hashed_bytes={"b_rows": 4 * shape.n * shape.k})
 
-    def prepare(self, dev, shape, flags: frozenset[str], operands) -> _Call:
+    def prepare(self, dev: Any, shape: Shape, flags: frozenset[str], operands: OperandSet) -> _Call:
         key = (operands.b.ptr, shape.m, shape.n, shape.k)
         if key not in self._held:
             self._held[key] = _Held(self, key, operands, shape)
         return _Call(self._held[key], shape, "hash" in flags, operands)
 
-    def gate(self, dev, call: _Call, shape, flags: frozenset[str]):
-        from arm import Gate
+    def gate(self, dev: Any, call: _Call, shape: Shape, flags: frozenset[str]) -> GateResult:
+        from arm import GateResult
 
         dev.sync()
-        return Gate(*call.check())
+        return GateResult(*call.check())
 
-    def dump(self, dev, call: _Call, shape, out: Path) -> None:
+    def dump(self, dev: Any, call: _Call, shape: Shape, out: Path) -> None:
         call.retain(Path(out))
 
     # ---- the device ---------------------------------------------------------------------------------------------------
@@ -284,9 +288,9 @@ class _Held:
 
     def __init__(self, arm: PearlPlus, key: tuple, operands, shape):
         import torch
-        from verity.core.protocols.pouw import verifier as PV
-        from verity.core.protocols.pouw.audit import weights_root
-        from verity.core.protocols.pouw.coins import Challenger
+        from verity.protocols.pouw.verifier import verifier as PV
+        from verity.protocols.pouw.verifier.audit import weights_root
+        from verity.protocols.pouw.verifier.coins import Challenger
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         self.arm, self.key, self.users = arm, key, 0
@@ -409,8 +413,8 @@ class _Call:
         """The pass the launch wrote, ended as a retained served pass ends, into `out`, and the epoch's coin commitment
         beside it."""
         import torch
-        from verity.core.protocols.pouw.protocol import Matmul
-        from verity.core.protocols.pouw.protocol import Shape as Unit
+        from verity.protocols.pouw.verifier.protocol import Matmul
+        from verity.protocols.pouw.verifier.protocol import Shape as Unit
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         if not self.hashing:

@@ -29,6 +29,8 @@ KINDS: dict[str, str] = {
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
     "fleet-samples/v1": "one UTC day of the fleet's 5-minute usage samples (pods/nebius/fleet.py, samples-YYYYMMDD.jsonl), put "
                         "once the day is over: the usage record's second copy, off the control pod; payload file",
+    "goals-dump/v1": "the Goals page as `research goals show --json` prints it, the list of its goals: what `research velocity` "
+                     "compares two of; meta {taken (UTC, YYYYMMDDTHHMMZ), what, by}; payload file goals-<taken>.json",
     "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
                                "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
                                "{notes_commit, files, bytes, note}",
@@ -43,6 +45,8 @@ KINDS: dict[str, str] = {
     "run-files/v1": "the files a result.json pointed at, as one tree",
     "run-record/v1": "every file of a run dir (stdout.log, stderr.log, launcher.log, job.json, status.json, outputs; markers excluded) as one "
                      "tree, named by its attempt as outputs.run_record: the run's custody on the remote (store.custody); meta {run_id, files, bytes}",
+    "run-file/v1": "one file of a run's out/, put by the run's runner while its workload ran (`research run-preserve`, "
+                   "store.run_preserve): payload file; meta {run_id, path (run-dir relative)} over whatever the workload's --meta gave",
     "node-data/v1": "a path of a node's working set, preserved by `research keep --preserve` (research.retention): payload its file or "
                     "tree; meta {path, node, owner}; its retention record names the id",
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
@@ -62,11 +66,11 @@ KINDS: dict[str, str] = {
     "lean-review/v1": "a `check.py --update` run's audit.json (tools/verity/lean): per package its review, statement_changes, and the guarantees "
                       "and reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> may name it, "
                       "as a record nothing waits on",
-    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/ml/flock/verifier/upstream-build.sh): "
+    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/flock/agreement/upstream-build.sh): "
                                "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
-                               "binaries}, pinned by verity/ml/flock/verifier/upstream.json",
+                               "binaries}, pinned by verity/protocols/flock/agreement/upstream.json",
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
-                                 "{arts}, pinned by verity/ml/flock/verifier/upstream.json",
+                                 "{arts}, pinned by verity/protocols/flock/agreement/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "circuit-check-report/v1": "a `circuit-check --out` report (tools/verity/circuit_check): payload file circuit-check.json; meta "
                                "{targets, failures}; a subcircuit catalog's counts cite its targets",
@@ -89,7 +93,7 @@ KINDS: dict[str, str] = {
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",
-    # vLLM integration (integrations/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
+    # vLLM integration (adapters/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-config-record/v1": "a row of the circuit database (verity_vllm.records): payload file = config_record.json "
@@ -134,7 +138,7 @@ KINDS: dict[str, str] = {
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
                                     "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
                                     "request, the first divergence)",
-    "challenger-ledger/v1": "the auditor host's challenger ledger (benchmarks/live_challenger/auditor.py, publish.sh): payload "
+    "challenger-ledger/v1": "the auditor host's challenger ledger (verity/composite/device/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
     "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
@@ -153,11 +157,11 @@ KINDS: dict[str, str] = {
     "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
-    "verifier-run/v1": "one run of the verifier host's PoUB verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/poub/device/live_verifier/host.py, vy-auditor-1): "
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
-    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (examples/h200/m3bundle.py build), what "
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step, what "
                           "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
                           "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
                           "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "

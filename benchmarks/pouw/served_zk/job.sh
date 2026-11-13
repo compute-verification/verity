@@ -72,7 +72,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
+export PYTHONPATH=$SRC:$SRC/verity/configuration/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/flock/prover/python:$SRC/verity/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -88,8 +88,8 @@ jq_() { "$PY" -c "import json, sys; d = json.load(open(sys.argv[1])); print(eval
 mkdir -p "$OUT/request" "$OUT/other"
 # the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-{ (cd "$SRC/verity/core/protocols/pouw/lean/check" && lake build pouw-check pouw-check-difftest) \
-  && (cd "$SRC/verity/core/service/spot" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
+{ (cd "$SRC/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check pouw-check-difftest) \
+  && (cd "$SRC/verity/protocols/spot/verifier/lean" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
   || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
 log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
@@ -151,7 +151,7 @@ if [ "$V1" != True ]; then
     "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
   expect coins-pass SAME "${v:-ERROR}"
 fi
-WR=$("$PY" -c "import json, sys; from verity.core.protocols.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
+WR=$("$PY" -c "import json, sys; from verity.protocols.pouw.verifier.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
 expect coin-salt OPENED "$REPLY"
@@ -308,7 +308,7 @@ opencheck open-foreign-proof REJECT request "$U0" "$OUT/other-tile/pub.bin" "$OU
 opencheck open-foreign-commit REJECT other "$OU" "$OUT/u$U0/pub.bin" "$OUT/other-tile/opening.json" --undrawn
 s=$(ls -d "$W/u$U0"/sessions/*/ 2>/dev/null | tail -1)
 if [ -n "$s" ]; then
-  ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $LEAN verify --zk --circuit $W/u$U0/circuit.txt \
+  ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $(verifier_env) $LEAN verify --zk --circuit $W/u$U0/circuit.txt \
       --statement verity/flock-circuit --public $OUT/other-tile/pub.bin --session $s" > "$OUT/u$U0/lean-foreign-pub.out" 2> "$OUT/u$U0/lean-foreign-pub.err" ) &
   BG+=($!)
 fi

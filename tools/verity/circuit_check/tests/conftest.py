@@ -4,9 +4,10 @@ circuit-check's catalog (`Catalog`: `targets.suite()` and what its roots reach) 
 that asks for it (the `catalog` or `suite` fixture): when collection ends, before any test runs, as circuit-check builds it
 (`targets.suite()` grows as tracing registers Definitions, so a later build would list more targets).  It is made from the
 catalog bindings' records (`circuit_check.units`): handed ones (`CIRCUIT_CHECK_RECORDS`) or else the ones `check`'s
-circuit-check keeps (`RECORDS`), and a handed record that doesn't count fails the session by name (`_from_records`).  Without
-handed records and with none that counts, each binding is built in a process of its own, as many at once as the session has
-workers (or this process CPUs) and their memory holds at `heavy.json`'s peaks (`_budget`, `units.built_apart`): under xdist, by
+circuit-check keeps (`RECORDS`), and only when every binding's record counts: this process builds no binding a record misses
+(`_from_records`), and a handed record that doesn't count fails the session by name.  Without handed records, unless every
+one counts, each binding is built in a process of its own, as many at once as the session has workers (or this process CPUs)
+and their memory holds at `heavy.json`'s peaks (`_budget`, `units.built_apart`): under xdist, by
 the first worker that asks, which writes what each binding reaches beside the workers' basetemps (`MANIFEST`), while the others
 wait on its lock and then take that (`units.from_manifest`).  Every process makes the catalog's roots itself, and each suite
 target the first time a test reads it (`Suite`), from its id or from its binding's record (`units.make`).  A test that asks for
@@ -116,7 +117,7 @@ _UNMARKED: list[str] = []
 
 
 class _Missed(Exception):
-    """A handed binding's record doesn't count."""
+    """A binding's record doesn't count."""
 
 
 def _counted(lookup: Callable, cache: Path, repo: Path, e: UN.Entry) -> Any:
@@ -127,9 +128,16 @@ def _counted(lookup: Callable, cache: Path, repo: Path, e: UN.Entry) -> Any:
 
 def _from_records(cache: Path, handed: bool = False) -> Catalog | None:
     """The catalog from the bindings' records (`units.plan`), each suite target made when it is read (`units.make`); None when
-    no record counts or one is stale, but with ``handed`` records, a `pytest.UsageError` naming why, before any binding they
-    miss is built here.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses:
-    holding each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches."""
+    there is no record of this version, one doesn't count or one is stale, but with ``handed`` records, a `pytest.UsageError`
+    naming why.  Either way before any binding they miss is built here: `units.plan` builds such a binding in the process that
+    calls it, which under xdist is every worker of the session at once, each holding what the heaviest binding's build holds.
+    So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_apart`) makes
+    them all.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses: holding
+    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records'
+    cache, unless handed, is marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session
+    removes nothing, which the runs that write the cache do (`cache.expire`)."""
+    if not handed:
+        CC.mark(cache)
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
@@ -137,8 +145,7 @@ def _from_records(cache: Path, handed: bool = False) -> Catalog | None:
         # the records were made traced, so a function they read (a kernel's) is named by its module's digest, which
         # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts
         mp.setattr(CC, "_ROOT", [cli.REPO.resolve()])
-        if handed:
-            mp.setattr(UN, "_lookup", functools.partial(_counted, UN._lookup))
+        mp.setattr(UN, "_lookup", functools.partial(_counted, UN._lookup))
         try:
             plan = UN.plan(cache, cli.REPO)
             why = None if plan is not None else "they hold no record of this circuit-check's version (`cache.version`)"

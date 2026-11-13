@@ -1,6 +1,6 @@
 # PoUW benchmarks
 
-The measuring side of `verity/core/protocols/pouw`: Pearl-C's kernels on the RTX PRO 6000 Blackwell (sm_120), their
+The measuring side of `verity/protocols/pouw/verifier`: Pearl-C's kernels on the RTX PRO 6000 Blackwell (sm_120), their
 harness, the served vLLM path and its audits, and the CPU accounting. How a kernel is designed, gated, timed and landed is
 the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 
@@ -15,7 +15,6 @@ names a path the tree doesn't have.
 
 ~~~bash
 uv run python benchmarks/pouw/contents.py   # what is here, from contents/
-uv run python benchmarks/pouw/gamma.py      # CPU
 ~~~
 
 Served claims (`pearl_c_vllm/`) are measured against graphed stock FP8: stock vLLM `quantization="fp8"` compiled with its

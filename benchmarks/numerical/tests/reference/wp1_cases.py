@@ -9,13 +9,13 @@ import random
 from pathlib import Path
 from typing import NamedTuple
 
-from verity.ml.circuits.silicon.term import Term
+from verity.definitions.silicon.term import Term
 from verity_numerical.reference.hawkeye_close import E_ZERO, Gfloat, is_finite_bf16, is_finite_fp32
 
 ROOT = Path(__file__).resolve().parents[4]
-GOLDEN = ROOT / "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
+GOLDEN = ROOT / "verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
 SPECIAL = {
-    device: ROOT / f"verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/{device}/mma_special.reduced.json.gz"
+    device: ROOT / f"verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/{device}/mma_special.reduced.json.gz"
     for device in ("a100", "4090")
 }
 
@@ -142,7 +142,9 @@ def structured_cases() -> list[Case]:
 
     out = []
     xs = list(BF16_WORDS.values())
-    neg = lambda w: w ^ 0x8000
+    def neg(w: int) -> int:
+        return w ^ 0x8000
+
     one, minus_one = BF16_WORDS["1"], BF16_WORDS["-1"]
     zero = [0] * 16
     for acc in FP32_WORDS.values():
@@ -184,7 +186,7 @@ def _random_fp32(rng: random.Random, exp_lo: int, exp_hi: int) -> int:
 
 
 def random_cases(n: int, seed: int) -> list[Case]:
-    """``n`` random all-finite cases in six equally weighted mixtures (uniform encodings; magnitudes clustered so the products and
+    """``n`` random all-finite cases in six equally weighted mixtures (uniform encodings; magnitudes close together so the products and
     the accumulator interact; zero accumulator; subnormal-heavy; near overflow; cancellation-heavy with a random accumulator)."""
 
     rng = random.Random(seed)
@@ -232,7 +234,7 @@ def boundary_groups() -> list[tuple[str, list[Gfloat]]]:
     """Named ``group_sum`` inputs at the edges: maximal shifts, truncation to zero, exact cancellation, near overflow, subnormal
     accumulators, the all-zero group, the single-term group."""
 
-    p = lambda sign, e, sig: Gfloat(sign, e, sig)
+    p = Gfloat
     top = 65025 << 9  # 255 * 255 << 9: the largest product significand
     groups = [
         ("all zero", [p(False, E_ZERO, 0)] * 9),

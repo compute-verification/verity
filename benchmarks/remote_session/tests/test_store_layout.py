@@ -26,13 +26,13 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.protocols.poub.verifier import store as rstore  # noqa: E402
 
 import engine  # noqa: E402
 import prover  # noqa: E402
 import store_layout as sl  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.poub.verifier.session import wire  # noqa: E402
 from test_session import P512, run  # noqa: E402
 
 ROLE = "synthetic-bf16"
@@ -94,6 +94,24 @@ def test_a_store_registered_as_the_layout_lays_it_out_is_accepted_and_bound(ckpt
     assert rec["payload_key"] == got["key"].hex() and rec["host_blocks"] == 2 and rec["blocks"] == 16
     assert got["regions"] == tuple((x["kind"], x["tier"], x["first"], x["blocks"]) for x in store.regions())
     assert rec["lean"] == {"regions": [list(x) for x in got["regions"]], "expected_root": rec["expected_root"]}
+
+
+def test_the_nodes_layout_names_a_host_tier_in_several_segments_as_the_one_region_the_binding_takes(ckpt):
+    """The serving node's store holds its host tier in a segment a GPU; its layout (`store_layout.regions`) names that
+    tier as one region, the store's own regions, which the binding takes. A region a host segment is refused, and a
+    store with no host tier has no host region."""
+    b = binding(ckpt)
+    store = rstore.Store(b.arena, 2, 7, 2)
+    n, base, on_host = [7, 7, 1, 1], [0, 7, 14, 15], [False, False, True, True]
+    layout = sl.regions(n, base, on_host, [6, 6])
+    assert layout == store.regions()
+    key = bytes(range(32))
+    root = rstore.expected_root(store, NODE, key, b.digests)
+    assert b.hold(NODE, 16, root, key, verifier.regions_of(layout, 16)) == verifier.regions_of(store.regions(), 16)
+    a_segment = layout[:-1] + [{"kind": "filler", "tier": "host", "first": base[q], "blocks": n[q]} for q in (2, 3)]
+    with pytest.raises(rstore.Refused, match="the hello's layout .* is not the pinned model synthetic-bf16's"):
+        b.hold(NODE, 16, root, key, verifier.regions_of(a_segment, 16))
+    assert sl.regions(n[:2], base[:2], on_host[:2], [6, 6]) == rstore.Store(b.arena, 2, 7).regions()
 
 
 def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, ValueError | None, list[str]]:

@@ -14,7 +14,7 @@ A task is one of:
                 compiled, dependencies included (the distinct `M` of its `lean-audit/**/build*.log` lines `Built M (t)`), against
                 the modules of the packages it audited (each package's `AUDIT P: ... in N modules` line, once), the rest of which it
                 restored or replayed. A records run without that result (cancelled or killed) is unfinished: counted, not timed.
-  lean-audit, lean-suites, lean-build, lean-changed
+  lean-audit, lean-suites, lean-build
                 one such step of a recorded check (`check.py`'s result: `check/v1`, a shard's or a deferred run's), its `seconds`,
                 which for `lean-audit` include its wait for a Lean audit slot. One check.py audits a step's packages together, so a
                 `lean-audit` step counts once in its kind and once under each package it audited (its result's `reuse`, the
@@ -40,7 +40,8 @@ from pathlib import Path
 from typing import Callable
 
 from .queue import FAST_KIND, LEAN_AUDIT_STEP
-from .queue_stats import ts
+from .queue_stats import pct, ts
+from .run_times import slot_wait
 
 HOURS, OVER_MIN = 24.0, 15.0
 #: how long before the window the attempts read may start: a task that ended in it started at most this long before it
@@ -50,7 +51,7 @@ READ_JOBS = 32
 CHECK = "tools/verity/check/check.py"
 RECORDS = re.compile(r"lean_changed\.py --records (\S+)")
 SUITES_STEP = "lean-suites"
-STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build", "lean-changed")
+STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build")
 KINDS = ("records", *STEPS)
 WORK = re.compile(r"^lean-records: (\S+): check\.py (?:--dev-cache )?exit -?\d+ in (\d+) s", re.M)
 AUDITED = re.compile(r"^AUDIT (\S+): (?:PASS|FAIL)\s+\d+ declarations in (\d+) modules", re.M)
@@ -67,20 +68,8 @@ def clock() -> datetime:
     return datetime.now(UTC)
 
 
-def pct(vals: list[float], q: float) -> float:
-    vals = sorted(vals)
-    return vals[min(len(vals) - 1, round(q * (len(vals) - 1)))]
-
-
 def _node(ex: dict) -> str | None:
     return ex.get("machine") or (ex.get("remote") or {}).get("machine") or ex.get("host")
-
-
-def _since(slot: dict) -> float:
-    """A check slot's wait (`slot.json`: took less since), 0 without one."""
-    if not (isinstance(slot, dict) and slot.get("took") and slot.get("since")):
-        return 0.0
-    return max((ts(slot["took"]) - ts(slot["since"])).total_seconds(), 0.0)
 
 
 def records_task(rid: str, doc: dict, meta: dict | None, paths: list[str], read: Callable[[str], bytes]) -> dict:
@@ -100,7 +89,7 @@ def records_task(rid: str, doc: dict, meta: dict | None, paths: list[str], read:
             slot = json.loads(read("slot.json"))
         except ValueError as e:
             task["note"] = f"slot.json unreadable ({e}): its check-slot wait counts as 0"
-    wall, check_wait = float(ex.get("wall_s") or 0.0), _since(slot)
+    wall, check_wait = float(ex.get("wall_s") or 0.0), slot_wait(slot)
     work = [int(s) for _, s in WORK.findall(out)]
     work_s = float(sum(work)) if work else max(wall - check_wait, 0.0)
     modules = {p: int(n) for p, n in AUDITED.findall(out)}

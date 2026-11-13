@@ -35,7 +35,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   hold, as is a schedule the class doesn't serve and a response that isn't id-form.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
   link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
-* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.ml.commitments.advice`, each
+* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.commitments.advice`, each
   tree's root in the registration): ``state``, G·T leaves, leaf t S_{t−1} and leaf 0 the empty state, the rows a
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog<j>`` for each lane j < NR, lane j's slot entries
@@ -86,7 +86,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
+  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names each lane's
+  ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
+  publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
+  `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
+  this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
@@ -177,34 +181,35 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import warden_zk as WZ  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
-from verity.ml.circuits.boolean import trace as TR  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Tuple  # noqa: E402
-from verity.ml.commitments import advice as ADV  # noqa: E402
-from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402
-from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,  # noqa: E402
+from verity.circuits import boolean as BL  # noqa: E402
+from verity.circuits.boolean import trace as TR  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
+from verity.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
+from verity.circuits.types import Array, Tuple  # noqa: E402
+from verity.commitments import advice as ADV  # noqa: E402
+from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.merkle import CommitmentDomain  # noqa: E402
+from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf,  # noqa: E402
                                            sha512_row_seg_digest)
-from verity.ml.crypto import lms  # noqa: E402
-from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
-from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
-from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as REG, registration as RG  # noqa: E402
-from verity.core.protocols.spot.one_stage.draw import stratum_k  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.certifier.prover import egress as EG, ingress_scan as IS  # noqa: E402
+from verity.protocols.certifier.verifier import io_tie as IT, warden as W  # noqa: E402
+from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA, id_request  # noqa: E402
+from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.protocols.spot.device import coins as CC
+from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.protocols.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
 
-_TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/scan_traffic.py"
+_TRAFFIC = HERE.parents[1] / "verity/protocols/certifier/verifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
 traffic = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
@@ -758,7 +763,7 @@ def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list
     """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb
     proof blocks (``<descriptor id>/c<j>``, block b slot j·nb + b's entry, the window's slots lane-major), its rows and
     salts that member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then
-    their salts, `verity.ml.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
+    their salts, `verity.commitments.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
     its registration's ``roots`` name and to the scan's lane j ``entries``."""
     nb, NE = len(entries[0]), IS.entry_bits(cls)
     ms = [m for m in win.get("members") or () if str(m.get("template", "")).startswith(SELECT_ENTRY + "{")]
@@ -1137,7 +1142,12 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
 def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: Path) -> SimpleNamespace:
     """A round's Program and partition (`members_of`'s templates and counts) and each template's stager, every output
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
-    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
+    of the slot entries each unit's (`entry_reads`), and its ``prog<j>``, one a lane, the values it names tied
+    (``tied``): every `EVERY` units read one slot entry of each lane, the output of the block that registered it,
+    which `NetworkCheck.Period`'s rows form ties to the scan (`progTied`, `wired`), so R8 lets them through and the
+    registration verdict publishes them (`rests_on_period_check`): the round's acceptance rests on that period
+    check, which refuses the block round's stand-in; every other round's a population of its templates, which names
+    none."""
     defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T), lanes=cls.NR)
     counts = counts_of(members)
     nb = G * T // cls.EVERY
@@ -1167,7 +1177,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
+                           program_file=out / "program.json", tied=lane_kinds(cls) if templates == TEMPLATES else ())
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
@@ -1319,7 +1329,7 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
               ("leaf_layer", "the leaf layer over the members' public files"),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
     check = S.Check(tuple(PA.program_digest(Program(u)) for u in units), pg.query,
-                    proof_deadline=float(MEMBER_DEADLINE_S * len(members)))
+                    proof_deadline=float(MEMBER_DEADLINE_S * len(members)), tied=pg.tied)
     spec = S.Spec(tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)), law, check,
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(root))
     counts: dict[str, int] = {}
@@ -1430,7 +1440,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     member with no unit sampled runs no session. Member j's session listens on ``port + j``, or with ``port`` 0 on a
     port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An accepted audit carries its
     charge terms (`charge_terms`) and each member's cost per sampled proof block; on the challenger's coins, the outcome
-    of record is the stream's (`coins_outcome`)."""
+    of record is the stream's (`coins_outcome`). Every outcome carries the tied values R8 let through
+    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1467,11 +1478,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
-                                      work_table=table).to_json()}
+                                      work_table=table, tied=pg.tied or None).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
-    res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
+    res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()},
+                 "rests_on_period_check": checks["registration"].get("rests_on_period_check", [])}
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
     if not all(v["ok"] for v in checks.values()):
@@ -1633,12 +1645,13 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
     return out
 
 
-def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
+def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
     `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0); else a reject naming
-    ``reason``."""
+    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
+    its registration's R8 let through when there are any (``rests``, the registration verdict's
+    ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
         return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
@@ -1651,7 +1664,8 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) 
     wrong = AU.wrong_units(reg, draw, delta)
     return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
             "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"])},
+                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
+                       **({"rests_on_period_check": list(rests)} if rests else {})},
             "reason": None, "verdict": "accept"}
 
 
@@ -1665,7 +1679,7 @@ def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tupl
                     if v and k.startswith("lean-verify/"))
     failed = "; ".join(f"check {c}: {', '.join(codes or ())}" for c, codes in sorted((res.get("failed") or {}).items()))
     reason = f"{what} refused: " + (why or failed or f"audit {res.get('audit')}, outputs {res.get('opened')}")
-    return reg, window_answer(reg, record, delta, reason)
+    return reg, window_answer(reg, record, delta, reason, res.get("rests_on_period_check") or ())
 
 
 def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: dict | None = None) -> dict:

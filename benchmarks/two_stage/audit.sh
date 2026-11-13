@@ -6,32 +6,34 @@
 #     bash benchmarks/two_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
 #   TWO_ARGS="--n 8 --q 4" passes audit.py more; FLOCK_CHALLENGER=1 gives each session a challenger of its own, audited
-#   at the sessions' end (in Lean too, which builds SPOT's difftest)
+#   at the sessions' end (in Lean too, which builds SPOT's difftest); TWO_GUARD=0 keeps no <case>/guard/ under $OUT, for
+#   a run whose guard nobody reads: the export (guard.py) is nearly all of a run's records, each template's circuit
+#   several times over, and it is what guard_node.py and `guard.py pack` read, so the default keeps it
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/ml/flock; } | tee "$O/machine.txt"
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/pod HEAD:verity/protocols/flock/agreement HEAD:verity/protocols/flock/tool.py; } | tee "$O/machine.txt"
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
 # under FLOCK_CHALLENGER=1 each session's challenger is audited in Lean too (the difftest's challenger pieces)
 SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
-{ (cd verity/core/service/flock && lake build flock-verify flock-firewall) \
-    && (cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD); } > "$O/build-lean.log" 2>&1 &
+{ (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) \
+    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier $SPD); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${TWO_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # the challenger session's pin is held to main's first-parent line: a run's clone has the shipped tree as its origin, which
 # holds main as its own main or origin/main
@@ -39,6 +41,7 @@ UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW
 { git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } > "$O/fetch-main.log" 2>&1 \
   && git rev-list --first-parent refs/remotes/origin/main > "$O/main.txt" || { tail -5 "$O/fetch-main.log"; exit 4; }
+GUARD=(); [ "${TWO_GUARD:-1}" = 0 ] && GUARD=(! -path './guard/*')
 rc=0
 for c in ${TWO_CASES:-honest altered}; do
   flags=(); [ "$c" = altered ] && flags=(--altered)
@@ -48,7 +51,7 @@ for c in ${TWO_CASES:-honest altered}; do
   grep '^TWO ' "$O/$c.log" || tail -20 "$O/$c.log"
   mkdir -p "$O/$c"
   (cd "$W/$c" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' \
-     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' -print0 \
+     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' "${GUARD[@]}" -print0 \
      | xargs -0 -r -I{} cp --parents {} "$O/$c/")
 done
 exit $rc

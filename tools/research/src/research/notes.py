@@ -1762,7 +1762,7 @@ def _same_repo(a: Path, b: Path) -> bool:
 def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
     """`git push origin <branch>` for the lane's branch, from its worktree when there is one.  Never `main` (one merger), never
     --force: a rejected push says to integrate origin's commits first.  Run in the notes clone itself, it lands `lanes/<lane>/`
-    on the notes' main with `notes_sync.sync` instead (RESEARCH_NOTES_TOKEN's route): a lane branch of the notes is read by
+    on the notes' main with `notes_sync.sync` instead (the notes token's route): a lane branch of the notes is read by
     nobody.  -> (one line, exit code)."""
     if repo is not None and _same_repo(repo, root):
         from . import notes_sync  # noqa: PLC0415

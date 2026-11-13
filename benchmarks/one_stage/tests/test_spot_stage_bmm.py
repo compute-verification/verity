@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import bf16_gemm_check as BC
 
 ROOT = Path(__file__).resolve().parents[3]
 B, K, N, PADDED, TOKENS, PREFILL = 2, 32, 16, 8, 6, 3

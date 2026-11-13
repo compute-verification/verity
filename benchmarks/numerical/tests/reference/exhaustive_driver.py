@@ -32,8 +32,9 @@ from collections import Counter
 from multiprocessing import Pool
 from pathlib import Path
 
-from verity.ml.circuits.silicon import models as S, term as T
-from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.definitions.silicon import models as S, term as T
+from verity.definitions.silicon.errors import InvalidArtifact
+from verity_numerical import settings
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import (
     Case,
@@ -370,7 +371,7 @@ def main() -> int:
                     failures.append(f"{name}.{k}={value[k]}")
     summary["failures"] = failures
     (out / "wp1_exhaustive.json").write_text(json.dumps(summary, indent=1))
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = settings.RESEARCH_RUN_ID
     if run_id:
         result = {
             "schema": "research/result/v0.1",

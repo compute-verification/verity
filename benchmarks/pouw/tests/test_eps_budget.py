@@ -76,24 +76,24 @@ def test_the_designs_reproduce_skips_figures():
     (dither-2s-fill's filler takes ♭ from 17.221 to 34.000 and halves its share). Dither-1S binds at 8B 32K decode:
     QKᵀ's one-sided strip is 2L of its d = 128 products a word."""
     two = design("dither-2s")
-    for sums, eps in (("vsum", 0.0032750), ("vfold", 0.0029227)):
+    for sums, want in (("vsum", 0.0032750), ("vfold", 0.0029227)):
         q = E.design_skip(replace(two, sums=sums), vector="VF3q-16")
-        assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(eps, rel=1e-4), sums
+        assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(want, rel=1e-4), sums
     assert E.design_skip(replace(two, sums="vsum")).eps_time == pytest.approx(0.0036468, rel=1e-4)
-    for name, eps, ctx, phase in (("dither-2s", 0.0032546, 2048, "prefill"),
-                                  ("dither-2s-fill", 0.0016511, 2048, "prefill"),
-                                  ("dither-2s-pv", 0.0024783, 2048, "prefill"),
-                                  ("dither-c", 0.0034120, 8192, "prefill"),
-                                  ("dither-c-peel", 0.0041746, 2048, "prefill"),
-                                  ("co-dither-l16", 0.0015656, 2048, "prefill"),
-                                  ("dither-1s", 0.1230973, 32768, "decode")):
+    for name, want, ctx, phase in (("dither-2s", 0.0032546, 2048, "prefill"),
+                                   ("dither-2s-fill", 0.0016511, 2048, "prefill"),
+                                   ("dither-2s-pv", 0.0024783, 2048, "prefill"),
+                                   ("dither-c", 0.0034120, 8192, "prefill"),
+                                   ("dither-c-peel", 0.0041746, 2048, "prefill"),
+                                   ("co-dither-l16", 0.0015656, 2048, "prefill"),
+                                   ("dither-1s", 0.1230973, 32768, "decode")):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, phase), name
-        assert q.eps_time == pytest.approx(eps, rel=1e-4) and q.credit == "floor", name
+        assert q.eps_time == pytest.approx(want, rel=1e-4) and q.credit == "floor", name
 
 
 def test_the_registry_skip_is_eps_budgets_number():
-    """One ε_skip a design on each device: its `[skip]` in benchmarks/pouw/machine_model/data/designs/ (sm_120) or
+    """One ε_skip a design on each device: its `[skip]` in benchmarks/machine_model/data/designs/ (sm_120) or
     data/devices/sm_NN/designs/ is design_skip's, to the three figures the registry writes."""
     for dev in devices():
         data = device(dev)
@@ -122,7 +122,7 @@ def test_a_skip_at_another_vector_is_eps_budgets_number_there():
     assert seen >= 9
 
 
-def test_each_device_prices_its_own_floor_and_the_same_skippable_work():
+def test_each_device_prices_its_own_floor_and_the_same_free_compute():
     """♭ on each device's own Π (`prices`): SPEC's 19.049 and 19.183 on VF3q-16, the LI designs' 5.961 (H200) and 4.035
     (B200), and each variant's own, dither-2s-fill's with its 4.5 filler instructions a word. The peel's tail is Π's
     price of the checked kernels' instructions where that exceeds 1.57 of ♭'s MACs, as on the H200 and B200, whose
@@ -236,9 +236,9 @@ def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
     monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
     monkeypatch.setattr(E, "pv_ts", E.pv_ts.__wrapped__)
-    for m, c, eps, ratio in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
+    for m, c, low, ratio in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
         e, r = E.pv_ts(m, c, 0, sink=False)
-        assert eps <= e < eps + 1e-4 and r == pytest.approx(ratio, abs=1e-4)   # the zero-instance routes add < 0.01%
+        assert low <= e < low + 1e-4 and r == pytest.approx(ratio, abs=1e-4)   # the zero-instance routes add < 0.01%
 
 
 def test_smaller_p_blocks_cost_more_eps_and_gamma():
@@ -260,7 +260,10 @@ def test_decode_hides_the_edit_under_dram_and_the_zero_weight_gap_is_reported():
         assert E.decode_dram(m, c) > 1
 
 
+@pytest.mark.slow
 def test_main_writes_both_tables(tmp_path):
+    """`main` end to end: both tables, every design on every device, written as Markdown and JSON. The tests above each
+    hold one figure; only this one renders the tables and runs the command line."""
     assert E.main(["--md", str(tmp_path / "t.md"), "--json", str(tmp_path / "t.json")]) == 0
     text = (tmp_path / "t.md").read_text()
     assert "| dither-1s (Dither-1S) |" in text and "dither-2s: ε_skip MAC / time, γ" in text and "| **whole** |" in text

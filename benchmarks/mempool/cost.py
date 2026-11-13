@@ -58,10 +58,10 @@ import pool_ram as PR
 import stream as ST
 from pool_ram import RP
 
-from verity.core.protocols.certifier.head_check import ands
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.commitments.gates import block_key as BK
-from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v6 as V6
+from verity.protocols.certifier.verifier.head_check import ands
+from verity.circuits.defs import REGISTRY, bind
+from verity.definitions.commitments.gates import block_key as BK
+from verity.protocols.certifier.prover import cache_step_v3 as V3, compile_slice_v6 as V6
 
 MUL = 2187
 SHA_BLOCK = 58120
@@ -290,13 +290,16 @@ def _drop_traces() -> None:
 
 def unit_cost(st: dict[str, Any], memo: dict, rss: dict[str, float] | None = None) -> dict[str, dict[str, float]]:
     """ANDs of CompileSlice_v6 and PoolWindow_v1 at statics `st`: each part's ANDs times its calls, and for the pool window
-    SHA-512 over its checked witness; `memo` holds each part's ANDs across calls (`head_check.ands`), so each part's
-    trace is dropped once it is counted. `rss`, if given, gets the process's peak resident GiB after each part."""
+    SHA-512 over its checked witness; `memo` holds each part's ANDs across calls (`head_check.ands`, by the part's id), so
+    a part is counted once and its trace is dropped once it is counted. `rss`, if given, gets the process's peak resident
+    GiB after each part."""
     out: dict[str, dict[str, float]] = {}
     for unit, ps in V6.parts(**st).items():
         out[unit] = {}
         for term, (p, n) in zip(UNIT_TERMS[unit], ps, strict=True):
-            out[unit][term] = n * ands(p, memo)
+            if p.id not in memo:
+                memo[p.id] = ands(p)
+            out[unit][term] = n * memo[p.id]
             _drop_traces()
             if rss is not None:
                 rss[f"{unit}: {term}"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20

@@ -15,7 +15,7 @@ Arms:
   stack     the same kernels over codec words only (`stack.py`, ``--wt-lib`` a WT_RECEIPT build at a full-slot field,
             ``--reader-lib``, ``--paged-lib``): every linear's fused decode + GEMM + sketch-sha512 receipts and each decode
             step's receipt tree on the device, the lm_head's BF16 rows as words, the KV cache as words (encoded on append,
-            decoded in attention); greedy tokens and log-probs equal pstack's bit for bit (`compare.py`)
+            decoded in attention); greedy tokens and log-probs equal pstack's bit for bit (`stack_compare.py`)
 
 Each arm runs the engine in compilation mode 0 with full CUDA graphs for decode, or with ``--compiled`` as vLLM serves by
 default (torch.compile, piecewise and full graphs; the fused linear is the opaque op ``ve_enc::linear``, and vLLM's activation
@@ -28,7 +28,7 @@ graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, e
 gives the same partial sums bit for bit (encoded against plain at every capture size), the plain sums agree with a float
 product, the encoded store decodes to the payloads on the device and in `codec.py` (`wide.py`, `codec_tensor/wide.py`),
 and (encoded arms) no FP8 or plain fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
-(`gate`), which `compare.py` requires to be bit-identical between plain and encoded arms (token ids and log-probs).
+(`gate`), which must be bit-identical between plain and encoded arms (token ids and log-probs).
 
 A decode step's time is the interval between two consecutive scheduler updates that both scheduled exactly B decode tokens
 for B requests (`update_from_output`), the median over the point's steady decode; prefill is not timed.
@@ -622,7 +622,7 @@ def main() -> None:
         from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
         window = {}
         if args.store_window:
-            from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
+            from verity.protocols.poub.verifier.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}

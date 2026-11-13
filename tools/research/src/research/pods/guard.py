@@ -71,11 +71,13 @@ SUPERVISED_ENV = "RESEARCH_GUARD_SUPERVISED"
 
 
 class RunPodAPI:
-    """The three provider calls the guard makes; tests substitute an object with the same methods."""
+    """The three provider calls the guard makes; tests substitute an object with the same methods.  The pod list is REST's, and
+    GraphQL's when REST gives no answer (`runpod.pods`: RunPod counts the two apart), so a spent REST count does not blind the
+    guard: it tallies and decides as before.  A termination is REST's alone, and one it refuses is tried again each poll."""
 
     def pods(self) -> list[dict[str, Any]]:
         from . import runpod
-        return runpod._request("GET", "/pods") or []
+        return runpod.pods()
 
     def terminate(self, pod_id: str) -> None:
         from . import runpod

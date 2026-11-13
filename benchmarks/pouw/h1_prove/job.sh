@@ -50,7 +50,7 @@ export HZ_CONFIGS=h1 HZ_MEM_GB=${H1_MEM_GB:?} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk
 H=$SRC/benchmarks/pouw/h1_prove
 K=${H1_K:-4096} COLS=${H1_COLS:-0} DRAW=${H1_DRAW:-8} TOKENS=${H1_TOKENS:-16} LAYER=${H1_LAYER:-0}
 HUB=${H1_HUB:-/workspace/hf/hub}
@@ -158,7 +158,7 @@ lean_check() {   # lean_check TAG D PUB STATEMENT_ID REGISTERED: the verifier's 
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return; }
   while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
-  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt --statement $sid \
+  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt --statement $sid \
     --public $pub $BOUND --registered $reg --session $s" > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 }
 log "lean: $par at a time, cap $cap GB each"
@@ -176,7 +176,7 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ] && [ -n "$HREG" ]; then
     [ -d "$s" ] || continue
     c=$(basename "$s"); pub=$HD/pub.bin; [ -e "$s/pub.bin" ] && pub=$s/pub.bin
     while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
-    $TIME "$OUT/lean/st-$c.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $HD/circuit.txt \
+    $TIME "$OUT/lean/st-$c.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $HD/circuit.txt \
       --statement verity/flock-circuit+seed-injection --public $pub $BOUND --registered $HREG \
       --session $s" > "$OUT/lean/st-$c.out" 2> "$OUT/lean/st-$c.err" &
   done

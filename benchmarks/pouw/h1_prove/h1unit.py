@@ -19,7 +19,7 @@ prover and the verifier of `run.py` share.
 * **The ok row** is a row of known content, registered by the verifier: the value ``ok`` (`OK_VALUE`, `register_ok`),
   row u unit u's, is the one word 1 (`OK`) under a public salt (`ok_salt`) at every unit of the execution phase, and the unit's
   ``ok`` port (o1) is a port of the verifier's ``--registered`` file (`registered_reads`), named at its known content
-  (`known_ok`: flock-verify computes ``ok``'s root from those rows and refuses the file at another, `check_known`), so
+  (`known_ok`: the Lean verifier computes ``ok``'s root from those rows and refuses the file at another, `check_known`), so
   Lean opens each instance's ok row against that root at the unit's position, and a proof it accepts is one whose unit
   computed 1
   (`Accounting.Guarantees.TS.CheckedSessionSound`'s port named ``ok`` in the circuit and in ``own``). A record that is
@@ -67,18 +67,18 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.ml.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
@@ -120,7 +120,7 @@ FLAT, STRUCTURAL = "flat", "structural"
 
 def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
-    netlist in the file); ``structural``, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
+    circuit description in the file); ``structural``, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
     `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another layout mode
     (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier takes either with its
     ``--registered`` reads: the statement check and the knowledge-soundness form read a templated statement's template
@@ -280,12 +280,12 @@ def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
 # -- the registered values: each call's tables and the weights' b/<K> -------------------------------------------------------
 
 
-def value_words(name: str, tile: tuple[int, int] = TILE) -> int:
+def value_words(name: str) -> int:
     """A registered value's row width in 16-bit leaves: an A table ``a/<K>@<c>`` and ``b/<K>`` K/2 + 2 (`h1zy.ROW`), a z
     table ``zy@<c>`` 3 R C (`h1zy.RECORD`), ``ok`` one (`OK`)."""
     if name == OK_VALUE:
         return len(OK)
-    return 3 * tile[0] * tile[1] if name.startswith("zy") else int(name.split("/")[1].split("@")[0]) // 2 + 2
+    return 3 * TILE[0] * TILE[1] if name.startswith("zy") else int(name.split("/")[1].split("@")[0]) // 2 + 2
 
 
 def bound_root(name: str, window_root: str) -> str | None:
@@ -312,7 +312,7 @@ def register_ok(program: str, window: str, population: int, window_root: str) ->
 
 
 def known_ok(window: str, population: int) -> dict:
-    """The known content of ``window``'s ``ok`` rows as flock-verify's ``--registered`` file names it under a port's
+    """The known content of ``window``'s ``ok`` rows as the Lean verifier's ``--registered`` file names it under a port's
     ``known`` key (`Registered.KNOWN_KEY`, `Flock/RegKnown.lean`): row u the one word 1 (`OK`) and its public `ok_salt`, so
     the verifier computes ``ok``'s root itself and refuses a file whose ``ok`` root is another (
     `Accounting.Guarantees.TS.HeldSessionSound`)."""
@@ -323,7 +323,7 @@ def check_known(program: str, window_root: str, port: str, entry: dict) -> str |
     """Why a ``--registered`` port entry named at known content (``entry["known"]``, `known_ok`) is refused, or None: its
     rows are ``row/v2`` rows of 16-bit leaves, as many as its leaves, each of its words under a 192-byte salt, and its root
     is the root of their registration (`register` under the execution phase Program's digest ``program`` and the execution phase's open root
-    ``window_root``): `Registered.checkKnown`, flock-verify's check of ``--registered``, which roots them at the entry's
+    ``window_root``): `Registered.checkKnown`, the Lean verifier's check of ``--registered``, which roots them at the entry's
     domain as given, where this also holds that domain to the execution phase's."""
     rows, salts = entry["known"]["rows"], entry["known"]["salts"]
     schema, bits = entry.get("row_schema"), entry.get("word_bits", G.WORD_BITS)
@@ -355,7 +355,7 @@ def registered_levels(program: str, name: str, bcs: list[bytes], window_root: st
 def verify_registered(program: str, name: str, leaves: int, root: bytes, index: int, bc: bytes, sibs: list[str],
                       window_root: str) -> bool:
     """``bc`` is row ``index`` of the registered value ``name`` under ``root``, in the execution phase whose open root is
-    ``window_root``: the check flock-verify ``--registered`` makes of each table row (`registered.verify_read`)."""
+    ``window_root``: the check the Lean verifier makes of each table row under ``--registered`` (`registered.verify_read`)."""
     return G.verify_read(registered_domain(program, name, leaves, window_root), root, index, bc,
                          bytes.fromhex("".join(sibs)), V2)
 
@@ -369,7 +369,7 @@ def registered_reads(program, tp, call: int, roots: dict[str, str], window: str,
     unit of the call reads in the verifier's own Program (``program``, ``tp`` its template partition; ``prog`` its
     digest), None at every other unit; and the ok port (o1), which reads the verifier's own ``ok`` (`register_ok`, its
     root ``roots[OK_VALUE]``, its domain binding ``window_root`` too) at the unit's row of the Program's output, named at
-    its known content (`known_ok` of the execution phase ``window``), which flock-verify holds the root to. The one place h1_prove
+    its known content (`known_ok` of the execution phase ``window``), which the Lean verifier holds the root to. The one place h1_prove
     derives it."""
     if OK_VALUE not in roots:
         raise ValueError(f"the verifier registers its ok rows ({OK_VALUE}) beside the window's values, and holds no root of them")
@@ -454,7 +454,7 @@ class Shape:
 
     @cached_property
     def layout(self):
-        from verity.ml.protocols.pouw.circuit import h1tile as H
+        from verity.protocols.pouw.prover.circuit import h1tile as H
         return H.Layout(self.r, self.c, self.k)
 
     @property
@@ -493,7 +493,7 @@ class Shape:
 
     def unit(self):
         """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
-        from verity.ml.protocols.pouw.circuit import h1tile as H
+        from verity.protocols.pouw.prover.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
@@ -609,7 +609,7 @@ def path(lv, index: int) -> list[str]:
 
 
 def verify(dom: CommitmentDomain, root: bytes, index: int, bc: bytes, sibs: list[str]) -> bool:
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.protocols.pouw.verifier import core_check as CC
     return CC.verify_path(dom, root, index, leaves_one(dom, index, bc), [bytes.fromhex(s) for s in sibs])
 
 
@@ -623,8 +623,8 @@ def _frame(ports: list, set_name: str, n: int, bcs: dict[str, list[bytes]]) -> d
     """`circuit.statement`'s frame-v3 entry over given ``b || c`` (the verifier's: it never holds a row) of ``n`` instances,
     each port's tree over its table's rows."""
     from verity_flock import circuit as FC
-    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.ml.commitments.frame_v3 import Port as FPort
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.commitments.frame_v3 import Port as FPort
     bind, doms = {}, {}
     for p in ports:
         bind[p.name] = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name, "lo": 0, "hi": int(n), "port": p.name, "schema": p.schema})
