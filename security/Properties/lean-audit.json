@@ -1404,7 +1404,7 @@
   },
   "Pous.Period.SecurityProofs.periodCapacity": {
    "honest": ["Pous.Period.SecurityProofs.periodCapacity_honestInstance"],
-   "nontrivial": "Pous.Period.SecurityProofs.periodCapacity_nontrivial"
+   "nontrivial": "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty"
   },
   "Pous.Period.SecurityProofs.periodHeldDeployed": {
    "honest": ["Pous.Period.SecurityProofs.periodHeldDeployed_honest"],
@@ -3985,7 +3985,7 @@
   "Pous.Period.SecurityProofs.periodCapacity_honestInstance": {
    "owner": "@memory-accounting"
   },
-  "Pous.Period.SecurityProofs.periodCapacity_nontrivial": {
+  "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty": {
    "owner": "@memory-accounting"
   },
   "Pous.Period.SecurityProofs.periodHeld": {
