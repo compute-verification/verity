@@ -57,7 +57,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Flock.SpotFlock.AddressFacts.CopyOut", "Proofs.Flock.SpotFlock.AddressFacts.PortsOnceOf",
   "Proofs.Flock.SpotFlock.AddressFacts.OfRuns", "Proofs.Flock.SpotFlock.AddressFacts.Connected",
   "Proofs.Flock.SpotFlock.Honest.Instance", "Proofs.Flock.SpotFlock.Honest.Wiring",
-  "Proofs.Flock.SpotFlock.Honest.Written", "Proofs.Flock.SpotFlock.Honest.Runs", "Proofs.Flock.SpotFlock.Honest.Sits",
+  "Proofs.Flock.SpotFlock.Honest.Sits",
   "Proofs.Flock.SpotFlock.SampleBelow", "Proofs.Flock.SpotFlock.AddressFacts.Row",
   "Proofs.Flock.SpotFlock.AddressFacts.RowRead", "Proofs.Flock.SpotFlock.AddressFacts.RowKind",
   "Proofs.Flock.SpotFlock.AddressFacts.RowGive", "Proofs.Flock.SpotFlock.AddressFacts.RowLeaf",

@@ -88,15 +88,14 @@ theorem filesReplay_oneLayout (ms : Spot.Bits.Members) (ns : Array ℕ) (gs : �
     filesReplay ms ns (oneLayout gs) = filesReplay ms ns (oneLayout (0, 0)) := rfl
 
 /-- **A boundary registration of one unit, sampled `subset:1`**, with the facts the two-stage design reads of it: its
-population is one unit, its layout is one proof block and its first stage's design is `subset:1`, which Flock reads
-as a uniform `1`-subset with no closure map; and the names the boundary and interior registrations' records must name
-(`boundaryNames`, and `interiorPorts` for the interior record's ports, which registers no value). -/
+layout is one proof block and its first stage's design is `subset:1`, which Flock reads as a uniform `1`-subset with
+no closure map; and the names the boundary and interior registrations' records must name (`boundaryNames`, and
+`interiorPorts` for the interior record's ports, which registers no value). -/
 structure Bnd where
   g : Reg
   gs : ℕ × ℕ
   boundaryNames : Names
   interiorPorts : List String
-  units : Spot.Partition.units g.program g.query = .ok 1
   layout : Spot.Slots.layout g.program g.query = .ok (oneLayout gs)
   design : slotDesign g.rule g.program g.query g.table = .ok design1
   firstK : firstK g = some 1
