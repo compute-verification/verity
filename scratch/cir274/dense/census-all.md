@@ -25,7 +25,13 @@ Every number below is read from those JSONs; [inferred] marks the rest.
   - 5,137,384 units in 105 templates and 13,238 wire patterns.
   - It settled and passed `check_wires` / `check_inputs` in 18.9 s, at a peak of 0.813 GiB.
 
-| family | units | templates | wire patterns (as reader) |
+By the family that emitted them, from the frame's `census`:
+
+- **templates:** a template two families emit counts in each, so the column sums to 111 against 105 distinct.
+- **wires:** the builder's wires before `merged()`, by the reader's family. They sum to 19,158 against 13,238
+  patterns after the merge.
+
+| family | units | templates | builder wires (as reader) |
 |---|---|---|---|
 | AllGather | 16 | 1 | 2 |
 | AllReduceMnnvl | 32 | 1 | 0 |
