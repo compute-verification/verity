@@ -118042,3 +118042,44 @@ Nothing.
 - The rest as at 03:35Z.
 
 Branch `cursor/proofs-assembly-992e` at `1a80621ef6`, pushed. Nothing is left unpushed [run].
+
+## GATHER, Fri 13 Nov 03:38Z: your 03:32Z word is taken: nothing changed, opened or launched for the one challenger or the kept files; `b025`'s `audit/case-v2-members.json` is nowhere on vy-nebius-2 (no); both reruns' 45-minute limit covers the first print but not the changed copies, so both are relaunched with room; tonight's serve on cards has one launch, at 06:00Z
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `671dd73cce63074b543d8a77239f250d9e73edf0`, the head I stand behind, rehearsed at that code by `7b90` and `b025`. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`. Neither moved. [run: `git ls-remote`, 03:35Z]
+
+**In plain words.** Friday runs as rehearsed, `--challenger local` in each command, and I built nothing for the withdrawn work. The file TWOLEG asked about is gone from the node. The two reruns over Friday-size kept files each printed the same outcome as the try, with the class's figure on `b025`'s; their limit was too short for the three changed copies, so I relaunched both. Serving has not served the class yet.
+
+### 1. Your 03:32Z word
+
+- **Taken.** No tree changed, no branch opened, nothing launched on a node for the 03:12Z or the 03:25Z message. It reached me between 03:33Z and 03:35Z. [run: `date -u` before and after the hook's delivery]
+- **`b025`'s `audit/case-v2-members.json`: no.** The job's scratch (`/workspace/tmp/tmp.C4JYys94Ba`) and its tree are gone, and no copy over 50 MB is under the node's scratch or the run's directory. What is kept is its line in `second/large.txt`: 115,661,619 bytes, SHA-512 `48c105f8568dd888…`. [run: `ls` and `find` on vy-nebius-2, 03:29Z]
+- **The same file at the small vocabulary is kept:** `240a`'s `second/audit/case-v2-members.json`, 2.4 MB (8 of 8, 32 a cell, V = 2,560). Its `params.challenger` is `null` and its `blobs` name scratch paths. [run: the fetched file's keys, 03:24Z]
+- **What I had done for the withdrawn messages before your word came:** reading, and one build on this VM, which I stopped at. From `240a`'s kept files I built its 20 reference circuit files again: each has the digest `240a`'s params name, and they are 1,129,410,495 bytes in all, 56.5 MB each. Nearly all of each file is the two hash circuits every file carries (256,002 and 246,786 lines); the template's own circuit is 17,154 lines. It took 41 s and peaked at 1.19 GB, over the 1 GB I hold work on the VM to. The same at Friday's size I did not launch, so that size is not known. [run: 03:33Z, `reference-circuits.py` outside the tree; deleted the files after]
+
+### 2. Three facts from that reading, for the run after Friday (nothing built)
+
+- **Serving's launch already keeps everything the later checks read.** Its `second` launcher moves the command's whole `--out` (every `circuit.txt` and `audit/case-v2-members.json` with it) to the node's private directory when `KEEP_WORK=1` is set, and tonight's line and its Friday-shape rehearsal set it; `first`'s `--out` is under the run's `out/`. Only my rehearsal's script drops them (`two_stage_small.sh:82–89`: no `circuit.txt`, nothing over 63 MiB). I have not read Friday's own launch line. [read 03:34Z: serving's notes `tools/second_served.sh:90`, `s20_tonight.sh:66`, `friday_shape_rehearsal.sh:172`, `twostage_first.sh:48`]
+- **One challenger means one machine.** A `loopback:` challenger itself writes each session's copy into the command's `--out/challenger` (`challenger_party.py:76`), so it and both commands run on one machine as one user, and it outlives the first command. Serving runs the two commands as two jobs on two hosts today. [read; relayed: serving on VLLM-300, 03:18Z]
+- **A development key (W = 4, H = 5) is good for six sessions:** a session takes five of its 32 one-time keys (the ledger's `reserve`, `open` and `end`, the session's record and its close). [run: the signatures' key numbers in `b025`'s two ledgers, 0 to 4 in each, 03:26Z; derived]
+
+### 3. The reruns over the kept files (vy-nebius-2)
+
+- **`r20261113-023437-3243`, over `c6bd`'s:** ended 03:25:49Z by its limit (`STAGE_TIMEOUT`), with the first print done and kept: the same outcome and outcome record digest (`8f7a563d…`) as the try printed, both registrations and both samples the same, refused by `two-stage-form` alone. Peak 10.6 GiB. Its three changed copies did not finish. [run: `research status` and its `out/second-again.json`, 03:35Z]
+- **Why:** each print is one whole run of the Lean verifier over the try's records, 16.5 minutes at Friday's size (02:40:53Z to 02:57:20Z). Four prints need about 66 minutes, and the launch gave 45. [run: the files' times; derived]
+- **`r20261113-030038-1a73`, over `b025`'s at `671dd73cce`:** first print the same as the try (`7b8b2178…`), refused by the form alone. It was running at 03:35Z and its limit falls at about 03:49Z, before its changed copies end. [run; derived: started 03:01:05Z, limit 2,882 s]
+- **The class's figure, from `1a73`'s first print:** at most 219 of 10,240 inner blocks incorrect at δ = 1/2 (2.1%) and 710 at δ = 1/10 (6.9%), with 8 of 8 outer blocks sampled and 4 of 64 inner blocks a cell. It is the verifier's own profile on the rebuilt stream, printed under "not established: the accept is withheld", and equals my 01:50Z table. Made-up logits, CPU node, nothing served. [run]
+- **Relaunched at 03:37Z, 120 minutes and 20 GB each,** with the script outside the tree now printing each changed copy as it ends: `r20261113-033702-b73a` over `b025`'s kept files at `671dd73cce`, and `r20261113-033712-d94c` over `c6bd`'s at `496aa183`. Expected ends about 04:50Z. [run: the launches; guess: the end]
+
+### 4. Serving's serve on cards (Linear, read 03:21Z and 03:35Z)
+
+- **No served class yet.** Serving's worker has one launch tonight: submitted by 05:50Z, starting between 06:00Z and 06:01Z only if all eight cards and the lease are free, off the cards by 06:13Z, at tree `1536ba03d3`. Its line may read a failure with the serve's exit 0 and no capture; the class is then still kept for serving's second worker. If tonight gives nothing, Fri 12:25Z. [read: VLLM-412, comments of 03:03Z and 03:27Z]
+- **So the class count is still serving's word alone,** and the earliest I can read one is after 06:13Z. [derived]
+- **Serving's made-up class at Friday's shape, through its own launcher,** launched 03:19Z on vy-nebius-cpu-3 (96 GB, 200 minutes, `rate:1/2`, k = 1, `KEEP_WORK=1`); it may wait in that pool's line. [read: VLLM-300, 03:19Z; relayed]
+- **Your 03:32Z withdrawal is on VLLM-300;** I read no reply to it. [read 03:35Z]
+- **The estimate stands as given at 03:03Z;** nothing since measures the engine.
+
+### 5. Not established
+
+- That each changed copy is refused at Friday's size (`b73a`, `d94c` running).
+- A class count from a serve; anything on the engine or on cards in my runs.
+- The size of the 20 reference circuit files at Friday's size.
