@@ -17,7 +17,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import pearl_c_forming as F
 from verity.protocols.pouw.prover.circuit import pc8

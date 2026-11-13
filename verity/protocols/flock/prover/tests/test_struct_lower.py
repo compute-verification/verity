@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 from verity.circuits.boolean import forms as F
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops import prims as OP
-from verity.definitions.ops.fp32 import F32Mul
-from verity.definitions.ops.boolean import gemm as GB
-from verity.definitions.ops.boolean import scalar as SB
+from verity.circuits.ops import prims as OP
+from verity.circuits.ops.fp32 import F32Mul
+from verity.circuits.ops.boolean import gemm as GB
+from verity.circuits.ops.boolean import scalar as SB
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
 from verity_flock import ir_lower as IL

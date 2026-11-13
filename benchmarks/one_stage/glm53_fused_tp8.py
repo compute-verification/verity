@@ -33,7 +33,7 @@ def templates() -> list[str]:
     (`serving_rows.unit_templates`), its fused block of n rows."""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.gates.embedding import read
-    from verity.definitions.call_scope import spec_base, spec_statics
+    from verity.circuits.call_scope import spec_base, spec_statics
     from verity_vllm.pipeline import serving_rows as SRW
 
     out = []

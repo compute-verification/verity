@@ -24,4 +24,4 @@ inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py", "tools/research/src/research/store",
           "tools/config/verity_config",
-          "verity/definitions/__init__.py", "verity/definitions/silicon"]
+          "verity/definitions/__init__.py", "verity/circuits/silicon"]

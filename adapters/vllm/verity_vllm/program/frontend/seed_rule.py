@@ -45,7 +45,7 @@ from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Value
 from verity.commitments.gates import sha512 as H
 from verity.commitments.gates.lms import Sha512Compress
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 from verity.definitions.registry.sampling import bit_at
 
 from verity_vllm.engine import served_seed
