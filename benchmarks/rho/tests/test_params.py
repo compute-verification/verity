@@ -8,7 +8,7 @@ import pytest
 from rho import params
 from rho.params import Param, Registry
 
-from verity.protocols.spot.verifier import profile
+from verity.protocols.proofs.spot.verifier import profile
 from verity.protocols import reporting
 from verity.circuits import partition_v2
 

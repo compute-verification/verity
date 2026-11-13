@@ -1,6 +1,6 @@
 """The advice code: the advice coded as tightly as the leak accounting allows.
 
-The advice (I1 v0, `verity/protocols/certifier/verifier/advice.py`) is everything serving made unpredictable, and its
+The advice (I1 v0, `verity/protocols/accounting/certifier/verifier/advice.py`) is everything serving made unpredictable, and its
 length is the leak, charged as `A_c` in the certifier's accepted-runs bound
 (`Properties.NetworkCertifier.EncardAcceptedObservationsLe`: at most `#Ac · #Σ_sync^W · D^(W·T)` observation
 sequences). This module codes
@@ -148,7 +148,7 @@ class StepAdvice:
 
 @dataclass(frozen=True, slots=True)
 class Advice:
-    """I1 v0 (`verity/protocols/certifier/verifier/advice.py`): `release` holds one egress bucket per kept output,
+    """I1 v0 (`verity/protocols/accounting/certifier/verifier/advice.py`): `release` holds one egress bucket per kept output,
     in step then row order. The advice module's classes, read by attribute name, work in its place (`as_advice`)."""
 
     requests: tuple[RequestAdvice, ...]

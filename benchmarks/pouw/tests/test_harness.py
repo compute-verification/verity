@@ -26,7 +26,7 @@ import schedule as S
 import shapes as SH
 import torch_baselines as TB
 
-from verity.protocols.pouw.verifier import serving
+from verity.protocols.accounting.pouw.verifier import serving
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 
