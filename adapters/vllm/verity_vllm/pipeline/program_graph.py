@@ -40,7 +40,7 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
 from verity.definitions.encoding import encode_specialization, word_values
 from verity.definitions import word as word_query
-from verity.definitions.registry.catalog import specialization as _specialization
+from verity_vllm.query.program_view import specialization as _specialization
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-program-graph/v1"

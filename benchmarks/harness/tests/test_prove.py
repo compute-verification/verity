@@ -1561,10 +1561,10 @@ def registered(block: str) -> str:
     """The id of the Definition the tree registers as a census type's Boolean version, asked of the registry itself."""
 
     from verity.definitions import boolean
-    from verity.definitions.call_scope import spec_base, spec_statics
-    from verity.definitions.registry.catalog import specialization
+    from verity.definitions.call_scope import spec_base, spec_statics, specialization
+    from verity.definitions.registry.catalog import load
 
-    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block))).id
+    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block), load()[0])).id
 
 
 def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():

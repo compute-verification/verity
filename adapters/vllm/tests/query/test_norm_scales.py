@@ -14,7 +14,7 @@ from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
-from verity.definitions.registry import catalog
+from verity_vllm.query import program_view as PV
 
 W = "model.model"
 H = 8
@@ -186,12 +186,12 @@ def test_word_check_sees_the_tapped_scale_as_committed():
 
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 64, "EPS": 1e-05}, "definition": "RMSNormTriton_v1{N=64,EPS=1e-05}", "calls": 3,
          "where": "model.layers.0.input_layernorm"}
-    plain = W_.check_calls([g], specialize=catalog.specialization)
+    plain = W_.check_calls([g], specialize=PV.specialization)
     assert "acquired_interior_words" not in plain and plain["committed_interior_words"] == 3, "without a tap the output is unchanged"
-    tapped = W_.check_calls([g], acquired=NS.TAP_WORDS, specialize=catalog.specialization)
+    tapped = W_.check_calls([g], acquired=NS.TAP_WORDS, specialize=PV.specialization)
     assert tapped["ok"] and tapped["acquired_interior_words"] == 3 and tapped["groups"][0]["acquired_interior_words"] == 3
     with pytest.raises(W_.QueryRuleViolation, match="interior-not-acquired"):
-        W_.check_calls([g], acquired={"RMSNormTriton_v1": 2}, specialize=catalog.specialization)
+        W_.check_calls([g], acquired={"RMSNormTriton_v1": 2}, specialize=PV.specialization)
 
 
 def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch):
