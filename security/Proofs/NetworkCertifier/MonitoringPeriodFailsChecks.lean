@@ -1,9 +1,9 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PeriodFails
-public import Proofs.NetworkCertifier.PeriodCheckedChecks
-public import Proofs.NetworkCertifier.PeriodCheckedExclusion
-public import Proofs.NetworkCertifier.PeriodFails
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
+public import Proofs.NetworkCertifier.MonitoringPeriodCheckedChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion
+public import Proofs.NetworkCertifier.MonitoringPeriodFails
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -47,7 +47,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 `PeriodLeakFails`, `PeriodLeakFailsAtMost` and `PeriodLeakCharged` let the operator's moves and the registered values
 follow the network certifier's fail cells, and pay for it: a factor `failPatterns cap j` on the count, or a charge
 under weights on the number of failures (`KraftWeights`). These checks are at the monitoring period of one placed
-window that `Proofs.NetworkCertifier.PeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
+window that `Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
 record format `bitFmt` of one connection of one cell with no data, under the one schedule `oneSched`, with the secret
 whether the server's end is late for its bucket (`bitArr`). There the connection fails exactly when the bit is set
 (`bit_isSome`), the client reads the bit off the fail cell (`bit_dec`), and the window's record holds it (`bit_obs`).
@@ -56,7 +56,7 @@ registers the window at both secrets (`bit_registers`) and both meet the good ev
 
 **The factor is met** (`PeriodLeakFailsAtMost_factor_met`). Every premise of `PeriodLeakFailsAtMost` holds there at
 one connection of cap 1 and at most one failure, and the two secrets are counted: against `#Θ · windowsCount = 1`
-the count fails, and the statement's factor there is 2 (`failsFactor_one`). So the count of `PeriodLeakChecked`
+the count fails, and the statement's factor there is 2 (`failsFactor_one`). So the count of `MonitoringPeriodLeakChecked`
 does not hold at an operator that follows the fail pattern, and no smaller factor does at this period. It drops no
 premise: it is a lemma about the factor, and no exclusion.
 
@@ -66,7 +66,7 @@ premise: it is a lemma about the factor, and no exclusion.
 against `T = 1`. `PeriodLeakCharged_nontrivial` is that count alone.
 
 **The premises together** (`PeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
-connection, where `PeriodLeakChecked_honest` has `PeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
+connection, where `PeriodLeakChecked_honest` has `MonitoringPeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
 one (`kraftWeights_halves`). The lemma shows that the premises hold together and nothing more: the toy code's
 verifier rejects every run and the period has no window and no connection, so it shows nothing about a failure, a
 window's check or a run that passes, and where a window is placed and a run is accepted every premise but the weights'
@@ -116,14 +116,14 @@ theorem bit_registers (z : Bool) (i : Fin 1) :
 
 /-- **The window is good at the bit's record**, at any registered values. -/
 theorem bit_good (z : Bool) (ρ : ℕ → Bool) (i : Fin 1) :
-    WindowGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅) (fun _ _ => True ∧ True) 1
+    ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅) (fun _ _ => True ∧ True) 1
       (posStmt false) ρ posTops (posX z) ⟨[]⟩ ((recordingCode bitFmt oneSched (bitArr z)).2 i) := by
   rw [bit_obs]
   exact pos_good id z ρ
 
 /-- The channel of the bit over the one registered parameter, as a finite set of parameters. -/
 theorem bit_channel :
-    PeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) ((({()} : Finset Unit) : Set Unit))
+    MonitoringPeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) ((({()} : Finset Unit) : Set Unit))
       (Set.univ : Set Bool) (fun _ => oneSched) id (fun v => failedAt0 (v ()))
       fun p => (recordingCode bitFmt p.1 (bitArr p.2)).1 :=
   ⟨fun _ _ => ⟨rfl, (), by simp, rfl⟩, fun z _ => bit_dec z⟩
@@ -156,14 +156,14 @@ theorem PeriodLeakFailsAtMost_factor_met :
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
         (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧
-      PeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) {()} (Set.univ : Set Bool) (fun _ => oneSched) id
+      MonitoringPeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) {()} (Set.univ : Set Bool) (fun _ => oneSched) id
         (fun v => failedAt0 (v ())) (fun p => (recordingCode bitFmt p.1 (bitArr p.2)).1) ∧
       (∀ (z : Bool) (i : Fin 1) (s : AuditStatement), (posL Bool).parse (posX z) = some s →
         CertifierRegisters id (posL Bool).commit notLay 1 (fun _ _ => [(failCell oneSched (bitArr z) ()).isSome]) s
           (posTops s) ((recordingCode bitFmt oneSched (bitArr z)).2 i)) ∧
       ¬ {z : Bool | z ∈ (Set.univ : Set Bool) ∧ failCount (failCell oneSched (bitArr z)) ≤ 1 ∧
             FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) ∧
-            ∀ i : Fin 1, WindowGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
+            ∀ i : Fin 1, ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
               (fun _ _ => True ∧ True) 1 (posStmt false) (fun _ => false) posTops (posX z) ⟨[]⟩
               ((recordingCode bitFmt oneSched (bitArr z)).2 i)}.encard ≤
           ({()} : Set Unit).encard * ((windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
@@ -204,7 +204,7 @@ theorem PeriodLeakCharged_nontrivial :
               (({()} : Finset Unit).card * windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
                 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0)) : ℕ) : ℚ≥0) ≤
             (1 : ℚ≥0) * ((1 : ℕ) : ℚ≥0) ∧
-          ∀ i : Fin 1, WindowGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
+          ∀ i : Fin 1, ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
             (fun _ _ => True ∧ True) 1 (posStmt false) (fun _ => false) posTops (posX z) ⟨[]⟩
             ((recordingCode bitFmt oneSched (bitArr z)).2 i)}.encard ≤ ((1 : ℕ) : ℕ∞) := fun hc => by
   have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
@@ -226,7 +226,7 @@ theorem PeriodLeakCharged_kraft_exclusion :
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
         (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧
-      PeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) ((({()} : Finset Unit) : Set Unit))
+      MonitoringPeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) ((({()} : Finset Unit) : Set Unit))
         (Set.univ : Set Bool) (fun _ => oneSched) id (fun v => failedAt0 (v ()))
         (fun p => (recordingCode bitFmt p.1 (bitArr p.2)).1) ∧
       (∀ (z : Bool) (i : Fin 1) (s : AuditStatement), (posL Bool).parse (posX z) = some s →
@@ -238,7 +238,7 @@ theorem PeriodLeakCharged_kraft_exclusion :
                 (({()} : Finset Unit).card * windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
                   (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0)) : ℕ) : ℚ≥0) ≤
               (1 : ℚ≥0) * ((1 : ℕ) : ℚ≥0) ∧
-            ∀ i : Fin 1, WindowGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
+            ∀ i : Fin 1, ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
               (fun _ _ => True ∧ True) 1 (posStmt false) (fun _ => false) posTops (posX z) ⟨[]⟩
               ((recordingCode bitFmt oneSched (bitArr z)).2 i)}.encard ≤ ((1 : ℕ) : ℕ∞) := by
   refine ⟨⟨true⟩, le_rfl, posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl,
@@ -264,7 +264,7 @@ theorem kraftWeights_halves (N : ℕ) : KraftWeights (fun j => (2⁻¹ : ℚ≥0
 
 set_option synthInstance.maxSize 1024 in
 /-- **`PeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
-`PeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
+`MonitoringPeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
 finite set, the network certifier's registration at every window (`CertifierRegisters`, which the charged form takes
 as a premise), of which the period has none, and the weights `2^-(j+1)` on the number of failures, which sum to at
 most one (`kraftWeights_halves`). The premises hold together there, and the lemma shows nothing more. The toy code
@@ -272,7 +272,7 @@ parses no statement and its verifier rejects every run, so no run passes there, 
 connection: it covers no run with a failure, and holds no window's placement, check or registration to anything. Where
 a window is placed and a run is accepted, the window's placement (`WindowsPlaced`), its check's pinning
 (`CheckedUnique`), its registration (`CertifierRegisters`), the read-back of a format with a connection
-(`RecordFormat.ReadsBy`) and its channel (`PeriodChannelReg`) are not shown here, with or without a failure; the
+(`RecordFormat.ReadsBy`) and its channel (`MonitoringPeriodChannelReg`) are not shown here, with or without a failure; the
 weights' sum alone is shown at every number of connections. -/
 theorem PeriodLeakCharged_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
@@ -286,7 +286,7 @@ theorem PeriodLeakCharged_honest :
         ((Fin.elim0 : Fin 0 → Claims.Sampling.Partition) i)
         ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).design trivLay 1 ∅ fun _ => True ∧ True) ∧
       noFormat.ReadsBy (fun (_ : Unit) _ c => c.elim) (fun _ _ => True) ∧
-      PeriodChannelReg noFormat (fun (_ : Unit) _ => True) (((Finset.univ : Finset Unit) : Set Unit))
+      MonitoringPeriodChannelReg noFormat (fun (_ : Unit) _ => True) (((Finset.univ : Finset Unit) : Set Unit))
         (Set.univ : Set Unit) (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ => ())
         (fun p => (recordingCode noFormat p.1 fun c => c.elim).1) ∧
       (∀ (i : Fin 0) (s : Claims.Sampling.AuditStatement),

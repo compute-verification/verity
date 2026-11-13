@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PeriodFails
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
 public import Proofs.Properties.NetworkPeriod
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset

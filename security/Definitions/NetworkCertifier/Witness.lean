@@ -16,7 +16,7 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `trivLay`: one link of one slot with no gate, at which `SampledAuditAccepted`'s conclusion fails;
 * `notLay`: step `t`'s ingress is the input, and its egress slot's presence gate the input's negation, at which the
   leak bounds fail;
-* `certOps`: the network certifier's openings, the input and its negation both `true`, at which `PeriodLeakAccepted`'s
+* `certOps`: the network certifier's openings, the input and its negation both `true`, at which `MonitoringPeriodLeakAccepted`'s
   bound fails;
 * `obs0`, `obs1`: one step of one link of one slot, with no frame and with an empty frame;
 * `honestI P a`: the honest certifier at the Program `P` under the advice `a`, which records and puts on the wire `P`'s
@@ -34,7 +34,7 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections), one window of ten
   buckets, whose schedule is `fxQueueSched`;
 * `noFormat`: the record format of a network certifier with no connection over a monitoring period of no execution
-  phases, at which `PeriodLeakChecked`'s honest lemma states its period's premises.
+  phases, at which `MonitoringPeriodLeakChecked`'s honest lemma states its period's premises.
 
 The lemma that drops its read-back is stated at a network certifier of one connection of one cell with no data
 (`Cell := Empty`), over a monitoring period of one window of one step:

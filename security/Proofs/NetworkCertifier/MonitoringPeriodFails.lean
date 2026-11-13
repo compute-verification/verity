@@ -1,7 +1,7 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PeriodFails
-public import Proofs.NetworkCertifier.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
+public import Proofs.NetworkCertifier.MonitoringPeriodChecked
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 
 `periodLeakFails`, `periodLeakFailsAtMost` and `periodLeakCharged` are `Guarantees.PeriodLeakFails`,
 `Guarantees.PeriodLeakFailsAtMost` and `Guarantees.PeriodLeakCharged`. Each is `periodLeakChecked` applied once a fail
-pattern and summed over the patterns, so each rests on what `Guarantees.PeriodLeakChecked` rests on and, for the
+pattern and summed over the patterns, so each rests on what `Guarantees.MonitoringPeriodLeakChecked` rests on and, for the
 charged form, on the weights' sum.
 
 **At one pattern.** `checked_at_pattern` is `periodLeakChecked` at the secrets of `Zs` whose run has the fail pattern
@@ -78,7 +78,7 @@ theorem failPatterns_const {κ : Type} [Fintype κ] (c j : ℕ) :
   unfold failPatterns
   rw [Finset.sum_congr rfl h, Finset.sum_const, Finset.card_powersetCard, Finset.card_univ, smul_eq_mul]
 
-/-- Every number of failures: `PeriodLeakAccepted`'s factor for the cells. -/
+/-- Every number of failures: `MonitoringPeriodLeakAccepted`'s factor for the cells. -/
 theorem failPatterns_sum {κ : Type} [Fintype κ] (cap : κ → ℕ) :
     ∑ j ∈ Finset.range (Fintype.card κ + 1), failPatterns cap j = ∏ c, (cap c + 1) := by
   unfold failPatterns
@@ -199,14 +199,14 @@ theorem checked_at_pattern
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H)
     (htap : ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
       (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s)
       ((run tap (schedOf z, srvOf z)).2 i)) (φ : Conn → Option ℕ) :
     (∀ z ∈ Zs, failCell (schedOf z) (arr (srvOf z)) = φ →
-        (∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ φ i) tops
+        (∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ φ i) tops
           (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)) →
         ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
           ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈
@@ -215,7 +215,7 @@ theorem checked_at_pattern
               (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r) δ
               (op φ i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
       {z | failCell (schedOf z) (arr (srvOf z)) = φ ∧ z ∈ Zs ∧
-          ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ φ i) tops
+          ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ φ i) tops
             (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
         Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
   have hφ := (periodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
@@ -239,7 +239,7 @@ theorem periodLeakFails : Guarantees.PeriodLeakFails := by
     schedOf srvOf dec hch x wit tops hb).1, fun htap => ?_⟩
   refine (Set.encard_le_encard ?_).trans
     (encard_failsExactly_le cap j (fun z => failCell (schedOf z) (arr (srvOf z)))
-      (fun φ => {z | z ∈ Zs ∧ ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj
+      (fun φ => {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj
         (sw i) (ρ φ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}) _ fun φ =>
       (checked_at_pattern H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
         ρ op arr f tap run htrust rd allows hread Θ Zs
@@ -264,7 +264,7 @@ theorem periodLeakFailsAtMost : Guarantees.PeriodLeakFailsAtMost := by
   refine (Set.encard_le_encard (t := ⋃ i ∈ Finset.range (j + 1),
     {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = i ∧
       FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
-      ∀ w, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw w)
+      ∀ w, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw w)
         (ρ (failCell (schedOf z) (arr (srvOf z))) w)
         tops (x z w) (wit z w) ((run tap (schedOf z, srvOf z)).2 w)}) ?_).trans ?_
   · rintro z ⟨hz, hj, hb', hg⟩
@@ -284,7 +284,7 @@ theorem periodLeakCharged : Guarantees.PeriodLeakCharged := by
         FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
         ((failPatterns cap j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
           w j * (T : ℚ≥0) ∧
-        ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+        ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
           (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)})
       (fun j => failPatterns cap j * (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β))
       (fun j => ?_) fun j hne => ?_)

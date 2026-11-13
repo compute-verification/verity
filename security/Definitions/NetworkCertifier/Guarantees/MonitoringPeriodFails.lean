@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # The leak over a monitoring period with each failure charged as it happens
 
 A connection the network certifier fails (`failCell`) is the server's move, neither the operator's nor advice, so
-`PeriodLeakChecked`'s operator and registered values, fixed before the period, cannot hold where it fell. These
+`MonitoringPeriodLeakChecked`'s operator and registered values, fixed before the period, cannot hold where it fell. These
 statements let both follow the run's fail pattern, each connection's fail cell or none, and pay for it by counting the
 patterns:
 
@@ -90,10 +90,10 @@ open scoped NNRat
 set_option linter.unusedVariables false
 
 /-- **The leak over a monitoring period, each failure charged as it happens: exactly `j` failures.**
-`PeriodLeakChecked`, where each window's operator and registered values may follow the network certifier's fail cells
+`MonitoringPeriodLeakChecked`, where each window's operator and registered values may follow the network certifier's fail cells
 over the period (`op φ i` and `ρ φ i`, `φ` the fail cell of each connection, `failCell`): the secrets whose run
-fails exactly `j` connections, each below its cap, and whose every window meets `WindowGoodChecked`, number at most
-`failPatterns cap j` times `PeriodLeakChecked`'s count. At `j = 0` the factor is one.
+fails exactly `j` connections, each below its cap, and whose every window meets `ExecutionPhaseGoodChecked`, number at most
+`failPatterns cap j` times `MonitoringPeriodLeakChecked`'s count. At `j = 0` the factor is one.
 
 `op` and `ρ` are bound before the secrets and read the fail pattern alone: a window's operator and registered values
 are fixed for each pattern before the run, so they carry nothing of the secret beyond the pattern, which the factor
@@ -118,7 +118,7 @@ def PeriodLeakFails : Prop :=
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) (cap : Conn → ℕ)
     (j : ℕ),
@@ -137,26 +137,26 @@ def PeriodLeakFails : Prop :=
           ((run tap (schedOf z, srvOf z)).2 i)) →
         {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) = j ∧
             FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
-            ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+            ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
               ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
           ((failPatterns cap j : ℕ) : ℕ∞) *
             (Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
-/-- **The leak over a monitoring period, each failure charged as it happens.** `PeriodLeakChecked`, where each
+/-- **The leak over a monitoring period, each failure charged as it happens.** `MonitoringPeriodLeakChecked`, where each
 window's operator and registered values may follow the network certifier's fail cells over the period (`op φ i` and
 `ρ φ i`, `φ` the fail cell of each connection, `failCell`), bound before the secrets and reading the pattern alone:
 
-* each window's audit has `PeriodLeakChecked`'s bound;
+* each window's audit has `MonitoringPeriodLeakChecked`'s bound;
 * where at every window's statement the network certifier registers its observations at that window's operator at the
-  run's fail pattern (`CertifierRegisters`), for the secrets whose every window meets `WindowGoodChecked` at the
+  run's fail pattern (`CertifierRegisters`), for the secrets whose every window meets `ExecutionPhaseGoodChecked` at the
   registered values of the run's fail pattern:
   * **held**: the cells the client receives are read from the windows' records under a registered parameter of `Θ`,
     and each window's record is a sequence its registered Program accepts with a valid run (`AccSeqsChecked`), on a
     run with failed connections as on one with none;
   * **counted**: those whose run fails at most `j` connections, each below its cap, number at most
     `(Σ_{i ≤ j} failPatterns cap i) · #Θ · windowsCount`. The factor is one at `j = 0` and `∏_c (cap c + 1)`,
-    `PeriodLeakAccepted`'s factor for the cells, at every connection.
+    `MonitoringPeriodLeakAccepted`'s factor for the cells, at every connection.
 
 `Conn` is every connection slot of the period, over all its links, and `j` the period's failures: one factor for the
 period, under one logarithm. -/
@@ -180,7 +180,7 @@ def PeriodLeakFailsAtMost : Prop :=
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) (cap : Conn → ℕ)
     (j : ℕ),
@@ -197,7 +197,7 @@ def PeriodLeakFailsAtMost : Prop :=
       ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
           (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s)
           ((run tap (schedOf z, srvOf z)).2 i)) →
-        (∀ z ∈ Zs, (∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+        (∀ z ∈ Zs, (∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
               ((run tap (schedOf z, srvOf z)).2 i)) →
             ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
@@ -209,7 +209,7 @@ def PeriodLeakFailsAtMost : Prop :=
                   (op (failCell (schedOf z) (arr (srvOf z))) i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
           {z | z ∈ Zs ∧ failCount (failCell (schedOf z) (arr (srvOf z))) ≤ j ∧
               FailsBelow cap (failCell (schedOf z) (arr (srvOf z))) ∧
-              ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+              ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
                 (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
                 ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
             ((∑ i ∈ Finset.range (j + 1), failPatterns cap i : ℕ) : ℕ∞) *
@@ -218,7 +218,7 @@ def PeriodLeakFailsAtMost : Prop :=
 /-- **The charge a period's failures pay, as one that adds over periods.** Under weights `w` on the number of failed
 connections that sum to at most one (`KraftWeights`) and finitely many registered parameters `Θ`, a run that fails `j`
 connections is charged `log2 (failPatterns cap j · #Θ · windowsCount / w j)` bits. For every `T`, the secrets whose
-every window meets `WindowGoodChecked` and whose run is charged at most `log2 T` bits number at most `T`: the number of
+every window meets `ExecutionPhaseGoodChecked` and whose run is charged at most `log2 T` bits number at most `T`: the number of
 failures is the sender's choice, and the weight charges for it, so the charges of two periods add. -/
 def PeriodLeakCharged : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -240,7 +240,7 @@ def PeriodLeakCharged : Prop :=
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Finset Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannelReg f allows (Θ : Set Par) Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannelReg f allows (Θ : Set Par) Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (hb : D.commit.Binds H) (cap : Conn → ℕ)
     (w : ℕ → ℚ≥0) (hw : KraftWeights w (Fintype.card Conn)) (T : ℕ),
@@ -251,7 +251,7 @@ def PeriodLeakCharged : Prop :=
           ((failPatterns cap (failCount (failCell (schedOf z) (arr (srvOf z)))) *
               (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
             w (failCount (failCell (schedOf z) (arr (srvOf z)))) * (T : ℚ≥0) ∧
-          ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
+          ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
             (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
             ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤ (T : ℕ∞)
 

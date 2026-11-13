@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.PeriodConditions
+public import Definitions.NetworkCertifier.MonitoringPeriodConditions
 public import Proofs.NetworkCertifier.Warden
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -41,7 +41,7 @@ The network certifier's cells on a connection are a function of the link's `r` a
 bucket, and three things of its lane: its length, the data it released and its fail cell (`lanesView_laneRecord`). So
 a record format that writes those three for every connection (`LengthsRows`, a layout with its read) reads back under
 a registered parameter that holds `r`, `D` and the rule that gives the admissions from the lanes' lengths
-(`LengthsRows.readsBy`): the instance of `RecordFormat.ReadsBy` that `PeriodLeakChecked` and the failure forms take
+(`LengthsRows.readsBy`): the instance of `RecordFormat.ReadsBy` that `MonitoringPeriodLeakChecked` and the failure forms take
 at the lengths rows.
 
 What a layout has to give is `LengthsRows.read_write`: the three fields of every connection come back from the rows

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.SampledAuditAccepted
@@ -50,7 +50,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The leak through the network certifier over a monitoring period, with the checked inputs left out
 
-`periodLeakChecked` is `Guarantees.PeriodLeakChecked`, in two steps, each over the checked form of what it reads.
+`periodLeakChecked` is `Guarantees.MonitoringPeriodLeakChecked`, in two steps, each over the checked form of what it reads.
 
 **Each window's bound.** On the audit's scope, the sampling relation at a trace that agrees with the network certifier
 wherever both open a gate gives the leak relation at the network certifier's rows with a valid run, where the run at
@@ -64,7 +64,7 @@ only where `Compiled.KS` fails, the trace disagrees with a passing opening of th
 collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or one of the two checks misses on that run,
 which `CheckedWitness` at `certifierRun` bounds (`periodChecked_first`).
 
-**The count.** A window that meets `WindowGoodChecked`, whose observations the network certifier registers, has them
+**The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network certifier registers, has them
 among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_windowGoodChecked`). A period's
 records whose every window is such a sequence, each window's operator reading the windows before it, are, at the
 incorrect sets they are accepted with, runs over the empty pool that restart at no window, which `encard_carried_le`
@@ -76,7 +76,7 @@ at `reg ∪ chk` (`encard_periodChecked_le`). The client's view reads back from 
 `rLeakCertifier_of_rLeakCertifierChecked` and `rLeakCertifierChecked_of_rLeakCertifier` move between the leak relation
 at the network certifier's rows and its checked form, the second at a check every run passes;
 `RecordFormat.readsBy_read` reads every record format back under its own schedule as the parameter. They carry
-`PeriodLeakAccepted` to its instance of this statement.
+`MonitoringPeriodLeakAccepted` to its instance of this statement.
 -/
 
 @[expose] public section
@@ -213,7 +213,7 @@ theorem mem_accSeqsChecked_of_windowGoodChecked {H : Msg → Msg} {D : Compiled 
     (hP₀ : D.partition s₀ = some P₀) {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)}
     {op : ℕ → List (Obs L K S) → List Bool} {x : Msg} {w : Wit} {o : List (Obs L K S)}
     (htap : ∀ s, D.parse x = some s → CertifierRegisters H D.commit (lay s) (k s) op s (tops s) o)
-    (h : WindowGoodChecked H D L K S lay k δ reg valid Dj s₀ ρ tops x w o) :
+    (h : ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj s₀ ρ tops x w o) :
     (lay s₀).Fits s₀.prog (k s₀) ∧
       o ∈ AccSeqsChecked s₀.prog P₀ s₀.design (lay s₀) (k s₀) (AsReg s₀.prog (lay s₀) (k s₀) (reg s₀) ρ)
         (valid s₀) δ op Dj := by
@@ -231,7 +231,7 @@ theorem mem_accSeqsChecked_of_windowGoodChecked {H : Msg → Msg} {D : Compiled 
   exact ⟨hfits, hmem⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The held and counted parts of `Guarantees.PeriodLeakChecked`**, at one check `valid`: a good secret's view is read
+/-- **The held and counted parts of `Guarantees.MonitoringPeriodLeakChecked`**, at one check `valid`: a good secret's view is read
 from the windows' records under a registered parameter, each record a sequence its registered Program accepts with a
 valid run (`mem_accSeqsChecked_of_windowGoodChecked`), so the good secrets are decoded from the views `rd` reads off
 `Θ` and the records `encard_periodChecked_le` counts. -/
@@ -250,21 +250,21 @@ theorem periodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : �
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Zt) (schedOf : Zt → CertifierSchedule Conn) (srvOf : Zt → Srv)
     (dec : (Conn → List (ℕ × CellView Cell)) → Zt)
-    (hch : PeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
+    (hch : MonitoringPeriodChannelReg f allows Θ Zs schedOf srvOf dec fun p => (run tap p).1)
     (x : Zt → Fin n → Msg) (wit : Zt → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
     (htap : ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
       (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s) ((run tap (schedOf z, srvOf z)).2 i)) :
-    (∀ z ∈ Zs, (∀ i, WindowGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
+    (∀ z ∈ Zs, (∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
           ((run tap (schedOf z, srvOf z)).2 i)) →
         ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
           ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈
             AccSeqsChecked (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i))
               (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) δ
               (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
-      {z | z ∈ Zs ∧ ∀ i, WindowGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
+      {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
           ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
         Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
-  have hheld : ∀ z ∈ Zs, (∀ i, WindowGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
+  have hheld : ∀ z ∈ Zs, (∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
         ((run tap (schedOf z, srvOf z)).2 i)) →
       ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
         ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈
@@ -277,7 +277,7 @@ theorem periodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : �
     rw [htrust (schedOf z, srvOf z)]
     exact (hread θ _ hal hfit (arr (srvOf z))).symm
   refine ⟨hheld, ?_⟩
-  set G := {z | z ∈ Zs ∧ ∀ i, WindowGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
+  set G := {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg valid Dj (sw i) (ρ i) tops (x z i) (wit z i)
     ((run tap (schedOf z, srvOf z)).2 i)} with hG
   rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
   · rw [he, Set.encard_empty]
@@ -392,7 +392,7 @@ theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S 
     funext ℓ
     exact rowOf_congr fun σ g hg => (hv1 g (not_unread_of_out (hfit.1 t ht ℓ σ g hg).1)).trans (hv2 g)
 
-/-- **Each window's bound**: the first part of `Guarantees.PeriodLeakChecked`. An accepted run whose extracted witness
+/-- **Each window's bound**: the first part of `Guarantees.MonitoringPeriodLeakChecked`. An accepted run whose extracted witness
 is not in the leak relation at the network certifier's rows with a valid run is outside the sampling relation, which
 `Compiled.KS` bounds, or disagrees with a passing opening of the network certifier, a collision
 (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or has a run at those rows that one of the two checks
@@ -449,10 +449,10 @@ namespace NetTiming
 open Claims Claims.Sampling
 
 /-- **The leak through the network certifier over a monitoring period, with the checked inputs left out**:
-`Guarantees.PeriodLeakChecked`, from each window's bound at the network certifier's rows with a valid run
+`Guarantees.MonitoringPeriodLeakChecked`, from each window's bound at the network certifier's rows with a valid run
 (`TapProof.periodChecked_first`) and the held and counted parts at the two checks together
 (`periodChecked_second`). -/
-theorem periodLeakChecked : Guarantees.PeriodLeakChecked := by
+theorem periodLeakChecked : Guarantees.MonitoringPeriodLeakChecked := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk ρ op
     Conn Cell Srv Dev Zt Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb
   exact ⟨fun m hm h₁ h₂ Ω _ _ P =>
