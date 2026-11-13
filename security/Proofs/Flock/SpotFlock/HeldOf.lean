@@ -53,7 +53,7 @@ the run's input does not decide and are taken as named hypotheses:
 
 namespace SpotFlock.HeldOf
 
-open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs
+open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs SpotFlock.RunsAs.Round2
 open Lean (Json)
 
 /-! ## What the run does not read -/
@@ -100,7 +100,7 @@ def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array ℕ ×
   | _ => none
 
 /-- **The requests of a boundary layout**: its proof blocks that are a unit's (an input slot is none). -/
-def requests (l : Spot.Slots.Layout) : ℕ := (l.blocks.filter fun b => b.unit.isSome).size
+def requests (l : Spot.Slots.SlotOrder) : ℕ := (l.blocks.filter fun b => b.unit.isSome).size
 
 /-- **Each template's units**: `n_t` a request over `r` requests, for `T` templates. -/
 def unitsOf (r : ℕ) (ns : Array ℕ) (T : ℕ) : List (Array ℕ) :=

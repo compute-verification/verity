@@ -66,7 +66,7 @@ theorem two_eq (h : Held) (s : AuditStatement) : two h s = twoAt h.reg h.ms h.k 
 /-- **What `decided` reads of the copies `heldOf` builds**, at the boundary registration `first`, the cells `c` and the
 layout `l`. -/
 def decidedAt (it : Spot.Run.Interior) (xs : List Msg) (first : Reg) (c : Array ℕ × Array ℕ)
-    (l : Spot.Slots.Layout) : Bool :=
+    (l : Spot.Slots.SlotOrder) : Bool :=
   xs.length == it.circuits.size &&
     decide ((List.range (msOf xs (unitsOf (requests l) c.1 it.circuits.size)).length).map fun t =>
       (it.circuits.map (·.1)).toList.getD t "").Nodup &&
@@ -91,7 +91,7 @@ theorem isSome_keep (u : Unread) (it : Spot.Run.Interior) (h : Held) : (keep u i
   split <;> simp_all
 
 theorem decided_held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) (first : Reg)
-    (c : Array ℕ × Array ℕ) (l : Spot.Slots.Layout) (hz : ∀ t, zkOk (refStmt u.xs t) = true) :
+    (c : Array ℕ × Array ℕ) (l : Spot.Slots.SlotOrder) (hz : ∀ t, zkOk (refStmt u.xs t) = true) :
     decided u it (withFrame (held₀ i it u first c.1 c.2 (requests l) hz) u.c₀) = decidedAt it u.xs first c l := rfl
 
 theorem heldOf_isSome (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) :
