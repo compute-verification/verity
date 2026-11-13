@@ -19,13 +19,13 @@ other lengths (`closeBytes_ne_record`, `closeBytes_ne_ledger`). Equal digests ar
 two the finder hashes (`eq_or_break`). A close's string names its record's message, its session's id, its chain and its
 end (`closeBytes_inj`), a record's its host and its commitment's tagged digest (`recordBytes_inj`), and a chain its
 lines (`chain_bind`), each step's string being the previous digest, 64 bytes, then the line's field.
-A commitment's identity bytes name it (`Commitment.canon_inj`). So `sessionOf_run` concludes that the
+A commitment's identity bytes name it (`Commitment.canon_inj`). So `challengePhaseOf_run` concludes that the
 commitment, the roots and the session id `challengePhaseOf` returns are those of a run of the device under the key whose client
 closed it, read from that run's own release log, which is the session's log, or the finder outputs a break
-(`sessionOf_bound` without the log).
+(`challengePhaseOf_bound` without the log).
 
 `challengePhaseOf`'s, `challengePhaseNamed`'s and `drawCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
-`sessionNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
+`challengePhaseNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
 -/
 
 @[expose] public section
@@ -328,7 +328,7 @@ theorem releasedRootsOf_ok_spec (c : LiveCommitment) (log : List String) :
 set_option maxHeartbeats 4000000 in
 /-- What `challengePhaseOf` read when it accepts: its record, its close and the close's message, whose signature verifies under
 the key, its log's lines, which chain to the close's chain, a session its client closed, and the roots its log shows. -/
-theorem sessionOf_read {key : ChallengerKey} {record log close : Json} {res : LiveCommitment × Roots × String}
+theorem challengePhaseOf_read {key : ChallengerKey} {record log close : Json} {res : LiveCommitment × Roots × String}
     (h : challengePhaseOf key record log close = .ok res) :
     ∃ (r : ChallengerRecord) (c : ChallengerClose) (m : ByteArray) (ls : Array Json) (lines : List String),
       ChallengerRecord.ofJson record = .ok r ∧ ChallengerClose.ofJson close = .ok c ∧
@@ -353,29 +353,29 @@ theorem sessionOf_read {key : ChallengerKey} {record log close : Json} {res : Li
         exact none_of_forall (by subst_vars; assumption),
       by assumption, rfl⟩
 
-theorem sessionOf_ok_spec (key : ChallengerKey) (record log close : Json) :
+theorem challengePhaseOf_ok_spec (key : ChallengerKey) (record log close : Json) :
     ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? a => ⌜challengePhaseOf key record log close = .ok a⌝⦄ := ok_spec _
 
 -- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record and files
 set_option maxHeartbeats 1000000 in
 /-- `challengePhaseNamed` returns what `challengePhaseOf` returns of the session's files. -/
-theorem sessionNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ sid, challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid) := by
   refine of_triple (Q := fun r => ∃ sid,
     challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid)) ?_ h
   clear h
-  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, sessionOf_ok_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, by assumption⟩
 
 /-- `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session the ledger pins. -/
-theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
+theorem trustedChallengePhaseOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
     {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
     ∃ a, pinnedChallengePhase ledger window key pins main = .ok a ∧ challengePhaseNamed a key session = .ok r := by
   unfold trustedChallengePhaseOf at h
   exact bind_ok.1 h
 
-theorem trustedSessionOf_ok_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
+theorem trustedChallengePhaseOf_ok_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
     ⦃⌜True⌝⦄ trustedChallengePhaseOf ledger window key pins main session
       ⦃⇓? a => ⌜trustedChallengePhaseOf ledger window key pins main session = .ok a⌝⦄ := ok_spec _
 
@@ -399,7 +399,7 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ) ?_ h
   clear h
-  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedSessionOf_ok_spec, challengerStream_ok_spec]
+  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_ok_spec, challengerStream_ok_spec]
   all_goals first
     | exact ⟨_, _, by assumption, by assumption⟩
     | (intro h; exact ⟨_, _, by assumption, h⟩)
@@ -651,7 +651,7 @@ theorem utf8_size_le (s : String) : s.toUTF8.size ≤ 4 * s.length := by
   have := Char.utf8Size_le_four c
   omega
 
-theorem session_size {s : String} (h : isChallengePhaseId s = true) : s.toUTF8.size ≤ 512 := by
+theorem challengePhase_size {s : String} (h : isChallengePhaseId s = true) : s.toUTF8.size ≤ 512 := by
   have hl : s.length ≤ 128 := by
     unfold isChallengePhaseId at h
     simp only [Bool.and_eq_true, decide_eq_true_eq] at h
@@ -679,14 +679,14 @@ theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJ
 finder outputs a break: the commitment, the roots and the session id `challengePhaseOf` returns from the record's session
 files are a run's of the device under the key, a run its client closed, the roots the ones that run's own release log
 shows, and the session's log is that run's lines. -/
-theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
+theorem challengePhaseOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
       releasedRootsOf c s.log = .ok roots ∧
         ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
       Break dev key label coins := by
-  obtain ⟨r, cl, m, ls, lines, hr, hcl, hm, hv, hlog, hls, hch, hend, hroots, hres⟩ := sessionOf_read h
+  obtain ⟨r, cl, m, ls, lines, hr, hcl, hm, hv, hlog, hls, hch, hend, hroots, hres⟩ := challengePhaseOf_read h
   have hc : c = r.commitment := congrArg Prod.fst hres
   have hsid0 : sid = cl.session := congrArg (fun x => x.2.2) hres
   subst hc hsid0
@@ -705,7 +705,7 @@ theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
       have hrsize : rm.size = 64 := by rw [hrmd]; exact hash_size _
       have hrssize : rs.size = 64 := by rw [hrsd]; exact hash_size _
       obtain ⟨rfl, hsid', hchain, hended⟩ :=
-        closeBytes_inj hrsize hrssize (session_size hsid) hchs (logChain_size _) he
+        closeBytes_inj hrsize hrssize (challengePhase_size hsid) hchs (logChain_size _) he
       have hRr : recordBytes (ident key.pub) r.host d ∈ readHashed key label coins ++ deviceHashed dev key.pub :=
         List.mem_append_left _ (mem_readHashed_record hr (record_mem_recordHashed hd))
       have hRs : recordBytes (ident key.pub) s.host ds ∈ readHashed key label coins ++ deviceHashed dev key.pub :=
@@ -743,29 +743,29 @@ theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
   · exact .inr b
 
 /-- **A session `challengePhaseOf` accepts from a sample's record is a run the device closed**, or the finder outputs a break:
-`sessionOf_run` without the log. -/
-theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
+`challengePhaseOf_run` without the log. -/
+theorem challengePhaseOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
       releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins := by
-  rcases sessionOf_run (dev := dev) (label := label) h with ⟨s, hs, hc, hid, he, hr, -⟩ | b
+  rcases challengePhaseOf_run (dev := dev) (label := label) h with ⟨s, hs, hc, hid, he, hr, -⟩ | b
   · exact .inl ⟨s, hs, hc, hid, he, hr⟩
   · exact .inr b
 
 /-- **A sample `drawCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
 commitment and the roots its segment's coins are read against are a run's of the device under the key, a run its client
 closed, the roots the ones that run's own release log shows. -/
-theorem drawCoins_session {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
+theorem drawCoins_challengePhase {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
       ((∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.ended = none ∧ releasedRootsOf c s.log = .ok roots) ∨
         Break dev key label coins) := by
   obtain ⟨c, roots, ht, hs⟩ := drawCoins_ok h
-  obtain ⟨a, -, hn⟩ := trustedSessionOf_ok ht
-  obtain ⟨sid, ho⟩ := sessionNamed_ok hn
+  obtain ⟨a, -, hn⟩ := trustedChallengePhaseOf_ok ht
+  obtain ⟨sid, ho⟩ := challengePhaseNamed_ok hn
   refine ⟨c, roots, hs, ?_⟩
-  rcases sessionOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, -, he, hr⟩ | b
+  rcases challengePhaseOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, -, he, hr⟩ | b
   · exact .inl ⟨s, hs', hc, he, hr⟩
   · exact .inr b
 
