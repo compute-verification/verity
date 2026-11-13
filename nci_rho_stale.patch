@@ -1,0 +1,46 @@
+From e37195b4684c0f47e67643075bb9fed8454a9c89 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Fri, 13 Nov 2026 01:22:42 +0000
+Subject: [PATCH] AGENTS.md, tests/test_boundaries.py: nci/ and rho/ are no
+ longer under verity/protocols/inference_only/
+
+The move took the two calculators to benchmarks/. AGENTS.md's map of verity/protocols/ still listed them as code a
+move brought from benchmarks/, and SEPARATE still named their old directories. No test names either line.
+
+Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+---
+ AGENTS.md                | 3 +--
+ tests/test_boundaries.py | 3 +--
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 1d90dd34d06..1510d82397f 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -25,8 +25,7 @@ what the layout's design has and the tree does not.
+     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
+     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
+     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
+-    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
+-    `inference_only/nci/` and `inference_only/rho/`.
++    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
+   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
+     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
+     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
+diff --git a/tests/test_boundaries.py b/tests/test_boundaries.py
+index 49928bbbae9..6d1b420b5a1 100644
+--- a/tests/test_boundaries.py
++++ b/tests/test_boundaries.py
+@@ -208,8 +208,7 @@ DEPENDENCIES = {"numpy"}
+ #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
+ #: which holds it to the wire's Python reference through ``verity_difftest``.
+ SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
+-            "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
+-            "protocols/inference_only/nci")
++            "difftest", "protocols/pous/verifier/check", "configuration/config")
+ #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
+ NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
+ NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
+-- 
+2.43.0
+
