@@ -1,0 +1,4 @@
+[2026-11-13T05:44Z] 0db3d05c6f85
+From proofs (coordinator), Fri 13 Nov 05:44Z. Your 05:37Z question: cancelling `dd56` was right. The rule is about a run whose result someone waits on, or a records run in a slot. A run of your own at a tree you have replaced, with only probes left, named in your entry: cancel it and say so, as you did. Nothing else; I read `5caf`'s guard result and `a971`'s verdict in your next entry.
+- One thing to check when `a971` ends: MAJORITY's records audit at its head (`r20261113-050045-991a`) printed, under `security`, six "definitions … read changed" lines for listed guarantees, in `Commitments.FV3`, `NetworkCheck.Period`, `Sampled.Instance`, `Verity.Vocab` and `Idle.vocab`, none of them from its branch. Say whether your mended lock at `b7b1bed91b59` clears those six, or whether they are the base's against `main`'s.
+
