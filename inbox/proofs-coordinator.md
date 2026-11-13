@@ -139340,3 +139340,133 @@ NEEDS: whoever owns the join's honest plays should know that the kept `241e` cas
 To post: nothing. Head pushed: `a013df7279`; nothing unpushed. No run of mine is going on. Every theorem over the form's accept is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test.
 
 Not established: which join merge brought the `second-inputs` refusal of the kept cases; that no lock record moves (no records run); the `--logits` play at the join's tip without my commit (not run).
+
+## TWOLEG — 11:57Z Fri 13 Nov — the play of twenty at GATHER's layout with B is accepted by the compiled form, switch on, nothing set aside; compiled head `2fc7e4b0ba0`; the property's statement
+
+(My last entry's title says 11:16Z; it was pushed at 11:13Z. `e8f4` ended at 11:29:15Z and I read it at 11:46Z,
+seventeen minutes late: I was on the build and did not look.)
+
+**1. `e8f4`: accepted.** Run `r20261113-105152-e8f4`, vy-nebius-cpu-1, 10:52:16Z to 11:29:15Z, rc 0.
+
+- **Tree:** `ad80d756489`, a local commit shipped by `--source` and on no pushed branch: GATHER's layout trial
+  `70ca0eda5df` (the head of `cursor/proofs-gather-wired-layout-6a9b`) with one commit on it, the pick of
+  `80ced2eac7d` (B, its last step through the copied definition `interiorChecks`).
+- **The play:** `benchmarks/one_stage/sampled_two_small.sh` with `SMALL_ARGS="--inline --units 20 --v 2560 --logits"`,
+  the command of GATHER's leg of twenty. An interior of twenty members: 59 ports, 59 roots in 40 trees, no `registered`
+  key in the interior record; rule two-stage, replay `rate:2/6`, k 1; the first stage's sample is units 0 and 4 of 6.
+- **`sampled-two-on check`** (the form's whole check with the switch on, the script's own executable, on the case's
+  parameters, commitment, evidence and 100 blobs): **accept**, protocol `verity/sampled-proofs/two-stage/v1/switch-on`:
+  40 units drawn, 40 proved, the level `unit` of 160 under a stratified draw of 40 strata, δ 1/2.
+- **`sampled-two check`** (the shipped switch) on the same files: reject, at the last step, its reason the run of
+  record.
+- The script's negative case (a first session whose log holds a coin tree's line): refused with `FIRST_TREE`.
+- **The difftest** on the kept case (`VERITY_SAMPLED_TWO_CASE`): 66 passed.
+- On the same case, a what-if executable of the form with today's reads at the last step: reject, `the audit's checks
+  failed: registered`; with B's reads: accept. So the reads were the one refusal left.
+
+**What was set aside: nothing in the check.** Every step of the form ran as written. What is not on the join: GATHER's
+layout trial (its commit says "trial, for a run only") and B. The switch is on only in the test's executable.
+
+**One thing short of the text that will land:** the executable that accepted calls `interiorChecks`, the copied body.
+The direct call (`cf1d6fe6b37`) is `Record.checks` at the same arguments. Two runs close that, both at `39fe9e351f6`
+(local: `ad80d756489` and the pick of `cf1d6fe6b37`): the same play of an interior of twenty members, afresh
+(`r20261113-114947-e089`, vy-nebius-cpu-11, launched 11:50Z), and the form's check on GATHER's own kept case of twenty
+members from `r20261113-104757-9a9e` (`r20261113-115118-0ba5`, vy-nebius-cpu-7, launched 11:51Z). GATHER's run at
+`70ca0eda5df` alone was refused in both legs (an interior of two members and one of twenty) with `the interior's
+audit: the audit's checks failed: registered`, switch on and off: B alone, as expected.
+
+**2. Compiled head: `2fc7e4b0ba0`** on `cursor/proofs-scratch-twoleg-ownreads-ad71` (pushed 11:49Z; no pull request,
+no lock, nothing on the join). Four commits on `326deb5ebcf`:
+
+- `cf1d6fe6b37`: `interiorChecks` is deleted; `secondChecked` calls `Record.checks` at
+  `Record.lessOwnReads rec_ (Record.ownRegistered rec_ (Record.sessionRegistered e.verdicts))`, the expression step 4
+  hands it (`Record.lean:371`). The negative `#guard`: a record with port `t/p` at root `aa`; a read of `t/p` at `aa`
+  gives no `registered` failure, a read at `bb` fails `registered`.
+- `1d9b136a0eb`, `107b23ee8cd`, `2fc7e4b0ba0`: the joining lemma, two files under
+  `security/Proofs/Flock/SpotFlock/RunsAs/` (`OwnReadsOut.lean`, `OwnReadsOfCheck.lean`).
+
+Build: `r20261113-113635-103b`, vy-nebius-cpu-11, rc 0, `lean-build: {"built": {"security/Proofs": 0,
+"verity/protocols/recursion/verifier/recursive": 0}, "failed": {}, "skipped": {}}`: the form (so the `#guard` holds),
+the 17 sinks that read it, and both new files. `OwnReadsOut.lean` alone with the axiom probe:
+`r20261113-112535-b05d`, vy-nebius-cpu-11, "none of its 8 theorems uses an axiom beyond propext, Classical.choice and
+Quot.sound". `OwnReadsOfCheck.lean` is built, not yet probed.
+
+**Where the files are, and why.** The proofs package lists its roots; a module under
+`Proofs/Properties/Verity/SampledTwo/` is unknown to lake until it is a root in `lakefile.toml` and in the lock
+(`r20261113-112535-810e` failed on exactly that, in 24 s). Under `RunsAs/` both files sit below an existing root, so
+the scratch branch touches no lakefile and no lock. Neither is imported by an umbrella yet; at the join `RunsAs.lean`
+imports both.
+
+**The statements, stronger than at 11:13Z.** Three theorems (text in `OwnReadsOut.lean`):
+
+- `accepted_ownReads`: at an accepted two-stage run, EVERY read the verdicts report for the interior record's own
+  values has a null root or is `HeldRead` (one statement's read that passed `readOk`, at the second-stage statement
+  check that returned no code). No hypothesis that the read was left out.
+- `accepted_leftOut`: a read `Record.lessOwnReads` takes out names a port of the interior record at that port's root,
+  and is `HeldRead` unless that port's root prints as null. This is the statement about the function both steps call.
+- `leftOut_of_check`: the same at the form's accept (`acceptedTwo_of_check`), at the run of record's input.
+
+The link-named case is a named case in `OwnReadsOut.lean`'s module docstring.
+
+**3. The property of `secondChecked`, stated (order 2).** `UnitsProved`'s six clauses at the reads the registered
+check is handed, `opened`, a parameter; `UnitsProved c e` is this at `openedRoots c.record e.verdicts`, by `Iff.rfl`:
+
+~~~lean
+def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × Json))) : Prop :=
+  e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+  Receipt c e ∧
+  (∀ served, e.served = some served →
+    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
+  (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+    ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
+  ((field? c.record "registered").isSome ∨ opened.isSome → SameRoots (opened.getD #[]) (Record.registeredRoots c.record))
+
+theorem unitsProved_at (c : Commitment) (e : Evidence) :
+    UnitsProved c e ↔ UnitsAt c e (openedRoots c.record e.verdicts)
+
+/-- What `secondChecked` accepts. -/
+theorem secondChecked_units (h : SampledTwo.secondChecked v delta c m law e = .accept pub prof) :
+    (∃ law', Registered v c.record law') ∧ Drawn e.draw (getD c.record "population") law ∧
+      UnitsAt c e (Record.lessOwnReads c.record (openedRoots c.record e.verdicts)) ∧ VerdictsAccept e.verdicts
+~~~
+
+The last clause is the one sketched at 11:13Z. The proof is `recordChecks_nil`'s at any `opened` (`checks_ok` already
+takes `opened` as a variable), then `secondChecked`'s three refusals and `verdictOf_accept`. `UnitsAt` sits with the
+theorem on the scratch branch; its home at the join is `security/Properties/Spot.lean` beside `UnitsProved`. No listed
+statement's text or reads move. Not yet compiled; it goes into the 13:00Z head if it closes.
+
+**4. The two readings (order 3), as named premises.** One `Prop` each, premises of `accepted_ownReads_form`, which
+restates `leftOut_of_check` at step 5's own reading (`c₂.record`, `r.out`):
+
+~~~lean
+def RecordReadSame : Prop := ∀ p c ξ e bs c₂ ξ₂ r i it,
+  SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) → i.interior = some it → it.record = c₂.record
+def VerdictsReadSame : Prop := ∀ p c ξ e bs c₂ ξ₂ r i,
+  SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) →
+    Record.sessionRegistered i.verdicts = Record.sessionRegistered r.out
+~~~
+
+- **The verdicts' half is mine and is not short.** Three pieces: that every verdict of `r.out` is a JSON object with a
+  well-formed map (through `membersRun`, `runMembers`, `stepMember`, `runFrom`, `step`, `push` to `verdictJson`, a
+  `Json.mkObj`; no lemma today says anything of `r.out`'s members); that `stamped` sets only the keys `sessions`,
+  `public_header_sha512`, `session_tables`, `registered_sha512` and `unit_draw`, so the three keys `sessionRegistered`
+  reads (`of_record`, `accepted`, `registered`) are untouched; and that `sessionRegistered`'s loop reads only those
+  three. Designed, lemma names checked against the toolchain; writing it now. If it is not closed by 13:00Z it stays a
+  named premise and I say what is left.
+- **The record's half after the parser switch, in two lines.** `c₂.record` is then `Flock.JsonParse.parse` of the text
+  `String.fromUTF8?` gives back from `(Flock.canon e.record).toUTF8`, and `j₂` is `readBack e.record`,
+  `Flock.JsonParse.parse (Flock.canon e.record)`: one value after one rewrite (`FlockComplete.fromUTF8?_toUTF8`) and
+  unfolding `commitmentOf`, `canonicalJson` and `readBack`; not by `rfl`. `canonicalJson`'s ASCII check and both
+  canonical checks only refuse and neither re-prints, so nothing else separates them. Today only a test joins the two
+  parsers.
+
+**A question on order 3's docstring.** It asks for "a docstring with owner and date" on each premise. AGENTS.md keeps
+owners, dates and issue ids out of the tree (comments and docstrings included); a lock's `open` entry is where an open
+premise's issue and due date live, and the scratch branch has no lock. So each docstring says what the premise says
+and that it is open; owner (proofs) and date (Mon 16 Nov 6 PM PST) are here and go into the lock's `open` entry when B
+goes to the join. Overrule me if the docstring is to carry them.
+
+**5. The null-root side (order 5):** not dropped yet. It needs a lemma that an accepted run's interior record has no
+port whose root prints as null; I have not found one, and I look at R3's refusal after the verdicts' half.
+
+Next: the property's proof and the verdicts' half, one build; `e089` and `0ba5` when they end.
