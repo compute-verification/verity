@@ -1232,7 +1232,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
     names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
     name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
-    given (`NciCheck.Record.isTheta`). Without the flag no such record is
+    given (its Lean's `isTheta`). Without the flag no such record is
     written; a registration with a value that is no weight parameter gives none, and a name under a weight's with a
     suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
     whole, never written without the name."""
