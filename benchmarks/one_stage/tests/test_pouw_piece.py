@@ -93,6 +93,25 @@ def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
     assert json.loads((out / "case.json").read_text())["params"] == p and p["sessions"] != []
 
 
+def test_a_period_piece_names_the_registration_all_or_none(tmp_path):
+    """Without --head and --place the period runs alone, its parameters naming no head, place or sessions, and is
+    accepted with an answer that names none of them; one of the two without the other is refused."""
+    case = pouw_period_cases.instance(random.Random(0), "honest")
+    p, ev = case["params"], json.loads(bytes.fromhex(case["evidence"]))
+    args = ["--key", str(_json(tmp_path / "k.json", p["key"])), "--main", str(_lines(tmp_path / "main.txt", p["main"])),
+            "--name", p["name"], "--ledger", str(_lines(tmp_path / "ledger.jsonl",
+                                                        json.loads(bytes.fromhex(case["commitment"])))),
+            "--pins", str(_lines(tmp_path / "pins.jsonl", ev["pins"])),
+            "--windows", str(_json(tmp_path / "w.json", ev["windows"]))]
+    out = tmp_path / "alone"
+    assert P.main(["period", "--out", str(out), *args]) == 0
+    got = json.loads((out / "answer.json").read_text())
+    assert got["verdict"] == "accept" and not {"registration_head", "place", "part"} & set(got["public"])
+    assert json.loads((out / "case.json").read_text())["params"] == {k: p[k] for k in PC.ALONE_KEYS}
+    with pytest.raises(SystemExit):
+        P.main(["period", "--out", str(tmp_path / "half"), "--head", p["head"], *args])
+
+
 def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
     return ["--key", str(_json(tmp_path / "k.json", d["key"])), "--main", str(_lines(tmp_path / "main.txt", d["main"])),
             "--name", d["name"], "--head", pouw_period_cases.HEAD, "--place", pouw_period_cases.PLACE,

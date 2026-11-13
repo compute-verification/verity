@@ -25,7 +25,9 @@ challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy
 first), the name of the period it credits (a string), the id the registration log registered the period's device under
 (a nonempty string, the id of a device in the Site's locations, whose compute is the Site part the period accounts for)
 and the ordered ids of the sessions the challenger's ledger opened for the period's windows (each window's and its
-sample's, `sessionId?`; the empty list names none).
+sample's, `sessionId?`; the empty list names none). The registration's three (`head`, `place`, `sessions`,
+`Registered`) come all or none: parameters with none of them, `{"key", "main", "name"}` (`aloneKeys`), run the period
+alone, against no registration log, and parameters with some but not all are refused (`KEYS_FORM`).
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
 period's open commits the period's circuit, its sample K, its table rows T, its weights' root and model and its fixed
@@ -42,16 +44,17 @@ window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit no
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
 `Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`.
 Last it reads the sessions period's close lists (`ledgerSessions`) and refuses (`sessions: why`) a ledger it can't read
-them from, and a session the parameters don't list or that repeats one before it (`sessionsRefusal`). It never leaves a
-period undecided.
+them from, and, where the parameters name the registration, a session they don't list or that repeats one before it
+(`sessionsRefusal`). It never leaves a period undecided.
 
 **Public**, on acceptance (`Published.toJson`), what `account` reads: `Credit.PeriodCredit.toJson`, each window's
 credited calls, its credited served work, the K the period's open committed, the δ (`Credit.DELTA`) and each window's
-ε at it; beside it the parameters' `registration_head`, `place` and challenger `key`, the `part` of the device at
-`place` the period accounts for (`PART`, its compute, so the Site part it accounts for is (`place`, compute)), and from
-the ledger the close's
-open `roots` in its order and the period's span: the period-open's `start` and its `length` to its close inclusive, in
-ledger entries, as the ledger carries no clock reading on either.
+ε at it; beside it the parameters' challenger `key`, and from the ledger the close's open `roots` in its order and the
+period's span: the period-open's `start` and its `length` to its close inclusive, in ledger entries, as the ledger
+carries no clock reading on either. Where the parameters name the registration, it also publishes their
+`registration_head` and `place`, and the `part` of the device at `place` the period accounts for (`PART`, its compute,
+so the Site part it accounts for is (`place`, compute)); a period run alone publishes none of the three, so no account
+read against a registration head counts it.
 
 **Profile**: the period's name and its number of windows.
 
@@ -70,15 +73,23 @@ open Flock (V)
 def protocolId : String := "verity/pouw/period/v1"
 def commitmentTag : String := "verity/pouw/period/ledger/v1"
 def paramsKeys : List String := ["head", "key", "main", "name", "place", "sessions"]
+/-- The keys of a period's parameters run alone, against no registration log: `paramsKeys` without the
+registration's. -/
+def aloneKeys : List String := ["key", "main", "name"]
 def evidenceKeys : List String := ["pins", "windows"]
 
-structure Params where
+/-- What a period's parameters name of the registration log it is accounted against, all or none: its head, the id
+its device is registered under, and the sessions the challenger's ledger opened for the period's windows. -/
+structure Registered where
   head : String
+  place : String
+  sessions : List String
+
+structure Params where
   key : Json
   main : Json
   name : String
-  place : String
-  sessions : List String
+  registered : Option Registered
 
 structure Commitment where
   ledger : Json
@@ -99,15 +110,24 @@ def SESSIONS_FORM : String :=
   "sessions is not a list of the ids of the sessions the challenger's ledger opened for the period (1 to 64 of " ++
   "[A-Za-z0-9._:-] each, the first alphanumeric)"
 
-def paramsOf (j : Json) : V Params := do
-  unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
-  let some name := str? (get j "name") | throw "name is not a string"
+def KEYS_FORM : String :=
+  s!"keys are not {", ".intercalate paramsKeys}, or {", ".intercalate aloneKeys} alone: head, place and sessions " ++
+  "come all or none"
+
+def registeredOf (j : Json) : V Registered := do
   let some head := (str? (get j "head")).filter (fun h => (Credit.digest? (.str h)).isSome) | throw HEAD_FORM
   let some place := (str? (get j "place")).filter (· != "") | throw PLACE_FORM
   let some sessions := (match get j "sessions" with
       | .arr a => a.toList.mapM fun s => (str? s).filter sessionId?
       | _ => none) | throw SESSIONS_FORM
-  pure { head, key := get j "key", main := get j "main", name, place, sessions }
+  pure { head, place, sessions }
+
+def paramsOf (j : Json) : V Params := do
+  let ks := keys j
+  unless ks == some paramsKeys || ks == some aloneKeys do throw KEYS_FORM
+  let some name := str? (get j "name") | throw "name is not a string"
+  let registered ← if ks == some paramsKeys then some <$> registeredOf j else pure none
+  pure { key := get j "key", main := get j "main", name, registered }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let ledger ← Core.canonicalJson b
@@ -253,22 +273,25 @@ def spanOf (ledger : Json) (name : String) : Option Span := do
 /-- The part of the registered hardware at its place a period accounts for: the device's compute. -/
 def PART : Core.Account.Part := .compute
 
-/-- What an accepted period publishes: its credit, the registration head, place and challenger key of its parameters,
-the part it accounts for (`PART`), and from the ledger its close's open roots and its span, the period-open's seq and
-the entries from it to its close. -/
+/-- What an accepted period publishes: its credit, its parameters' challenger key, from the ledger its close's open
+roots and its span (the period-open's seq and the entries from it to its close), and, all or none as its parameters
+name them, their registration head and place (`registered`, head then place) with the part it accounts for there
+(`PART`). -/
 structure Published where
   credit : Credit.PeriodCredit
-  head : String
-  place : String
+  registered : Option (String × String)
   key : Json
   roots : List String
   start : Nat
   length : Nat
 
 def Published.toJson (p : Published) : Json :=
-  (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("registration_head", .str p.head),
-    ("place", .str p.place), ("part", .str PART.name), ("key", p.key),
+  let own := (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("key", p.key),
     ("roots", Json.arr (p.roots.map Json.str).toArray), ("start", Lean.toJson p.start), ("length", Lean.toJson p.length)]
+  match p.registered with
+  | none => own
+  | some (head, place) => own.mergeObj <| Json.mkObj [("registration_head", .str head), ("place", .str place),
+      ("part", .str PART.name)]
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published Profile :=
   match form p.name e.windows with
@@ -279,9 +302,10 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published 
     | .ok pc =>
       match ledgerSessions c.ledger p.name, spanOf c.ledger p.name with
       | some got, some s =>
-        match sessionsRefusal p.name p.sessions got with
+        match p.registered.bind fun r => sessionsRefusal p.name r.sessions got with
         | some why => .reject s!"sessions: {why}"
-        | none => .accept ⟨pc, p.head, p.place, p.key, s.roots, s.start, s.stop + 1 - s.start⟩
+        | none => .accept ⟨pc, p.registered.map fun r => (r.head, r.place), p.key, s.roots, s.start,
+            s.stop + 1 - s.start⟩
             { period := p.name, windows := pc.windows.length }
       | _, _ => .reject s!"sessions: period {p.name}'s close in the auditor's ledger lists no session ids to read"
 
@@ -323,7 +347,13 @@ private def wellFormed : ByteArray := paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[\"s
 private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".toUTF8 "{}".toUTF8).reason
 
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
-#guard reason "{}".toUTF8 == some "params: keys are not head, key, main, name, place, sessions"
+#guard reason "{}".toUTF8 == some s!"params: {KEYS_FORM}"
+#guard KEYS_FORM == "keys are not head, key, main, name, place, sessions, or key, main, name alone: head, place and " ++
+  "sessions come all or none"
+-- the registration's fields come all or none: parameters naming some of them are refused, and none runs alone
+#guard reason s!"\{\"head\":\"{HEAD}\",\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 == some s!"params: {KEYS_FORM}"
+#guard reason "{\"key\":null,\"main\":[],\"name\":\"p\",\"sessions\":[]}".toUTF8 == some s!"params: {KEYS_FORM}"
+#guard reason "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 == some "evidence: keys are not pins, windows"
 #guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[]" "1") == some "params: name is not a string"
 #guard reason (paramsWith "\"ab\"" "\"gpu0\"" "[]" "\"p\"") == some s!"params: {HEAD_FORM}"
 #guard reason (paramsWith s!"\"{HEAD.toUpper}\"" "\"gpu0\"" "[]" "\"p\"") == some s!"params: {HEAD_FORM}"
@@ -352,12 +382,15 @@ private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".
 #guard sessionsNamed "{}" "[]".toUTF8 == none
 
 -- the account reads what an accepted period publishes: its head, place, work with its ε, and its span's entries
-private def published : Json :=
-  Published.toJson ⟨⟨[[0], [1, 2]], [10, 20], 4, Credit.DELTA, [some (1 / 2), none]⟩, HEAD, "gpu0", .null,
-    ["r0", "r1"], 3, 5⟩
-private def accepted : Core.Answer :=
-  { protocol := protocolId, verdict := .accept, reason := none, digest := none, published := some published,
-    profile := none }
+private def credit : Credit.PeriodCredit := ⟨[[0], [1, 2]], [10, 20], 4, Credit.DELTA, [some (1 / 2), none]⟩
+private def published : Json := Published.toJson ⟨credit, some (HEAD, "gpu0"), .null, ["r0", "r1"], 3, 5⟩
+private def answered (j : Json) : Core.Answer :=
+  { protocol := protocolId, verdict := .accept, reason := none, digest := none, published := some j, profile := none }
+private def accepted : Core.Answer := answered published
+-- a period run alone publishes no head, place or part, so the account reads no head of it
+#guard (account.head.bind (·.read (answered (Published.toJson ⟨credit, none, .null, ["r0", "r1"], 3, 5⟩)))) == none
+#guard ["registration_head", "place", "part"].all fun k =>
+  ((Published.toJson ⟨credit, none, .null, [], 0, 1⟩).getObjVal? k).toOption.isNone
 #guard account.Formed
 #guard (account.head.bind (·.read accepted)) == some (.str HEAD)
 #guard (account.amounts.map fun m => (m.place.bind (·.read accepted), m.key.read accepted)) ==

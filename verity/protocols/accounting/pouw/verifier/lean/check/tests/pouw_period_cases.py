@@ -19,8 +19,10 @@ from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.accounting.pouw.verifier import salt as PS
 
-FRAMING = ["params-missing", "params-extra", "params-head", "params-place", "params-sessions", "sessions-unlisted",
-           "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
+FRAMING = ["params-missing", "params-extra", "params-head", "params-place", "params-sessions", "params-partial",
+           "alone", "sessions-unlisted", "ledger-object", "evidence-missing", "evidence-extra", "evidence-list"]
+#: the parameters' keys that name the registration, all or none
+REGISTERED = ("head", "place", "sessions")
 FORMS = ["form-pass", "form-not-h1", "form-per-unit", "form-v6", "form-strata"]
 NAMES = credit_cases.PERIOD_NAMES + FRAMING + FORMS
 COVERED = {"j10r": True, "nks": 1, "tile": 5}
@@ -84,6 +86,12 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
             case["params"]["place"] = rng.choice(["", None, ["gpu0"]])
         case "params-sessions":
             case["params"]["sessions"] = rng.choice([None, "s0", ["-s0"], ["s" * 65], [1]])
+        case "params-partial":
+            for k in rng.sample(REGISTERED, rng.randint(1, len(REGISTERED) - 1)):
+                del case["params"][k]
+        case "alone":
+            for k in REGISTERED:
+                del case["params"][k]
         case "sessions-unlisted":
             ss = case["params"]["sessions"]
             del ss[rng.randrange(len(ss))]

@@ -2,8 +2,9 @@
 
     pouw_piece.py v1 --out DIR [--exe PATH] (--params P --registration R --answer A | --serve-run SERVE_DIR --window K)
     pouw_piece.py period --out DIR [--exe PATH] [--lean-answers DIR]
-                         (--key F --ledger F --pins F --main F --name NAME --head HEX --place ID --windows F
-                          | --serve-run SERVE_DIR --window K [--pouw DIR --key-sha512 HEX --head HEX --place ID
+                         [--head HEX --place ID]
+                         (--key F --ledger F --pins F --main F --name NAME --windows F
+                          | --serve-run SERVE_DIR --window K [--pouw DIR --key-sha512 HEX
                                                               --main F --statements F --live-evidence F])
 
 ``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
@@ -13,8 +14,10 @@ system's answer cites), its evidence the service's answer for it (``--answer``).
 (`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{head, key, main, name, place,
 sessions}`` (the registration log's head the period is accounted against, ``--head``; the challenger key it pins,
 ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its copy of main's
-first-parent history, ``--main``, one commit a line; the period, ``--name``; the Site location its work ran on,
-``--place``; the sessions the ledger's close of the period lists, `close_sessions`), its commitment the auditor's ledger
+first-parent history, ``--main``, one commit a line; the period, ``--name``; the id the registration log registered
+its device under, ``--place``; the sessions the ledger's close of the period lists, `close_sessions`; the head, place
+and sessions all or none, `registration`: without ``--head`` and ``--place`` the period runs alone, against no
+registration log), its commitment the auditor's ledger
 (``--ledger``, its lines), its evidence ``{pins, windows}`` (the host's pins log, ``--pins``, its lines; each window's
 evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s form). Windows carrying their
 statements' proof files instead (`credit.PERIOD_KEYS`, the sampled calls' ``statements`` and the live ``statements``) are
@@ -37,7 +40,7 @@ leaves the protocol out and Lean's verdict on the product names it missing. It p
 open|close`) holding window K's session and its sample's alone (``--cap 2``); its ledger, pins log and both sessions
 as PoUW's served piece fetched them from the gate (``--pouw``, ``pieces/pouw``: ``ledger.jsonl``, ``pins.jsonl``,
 ``session/<id>/out``), the
-key in that session pinned by ``--key-sha512`` (the auditor's); ``--main``, ``--head`` and ``--place``; the declared Program
+key in that session pinned by ``--key-sha512`` (the auditor's); ``--main``; the declared Program
 (``h1/window-program.json.gz``); and the sampled calls' statements (``--statements``, a JSON list) and the live evidence
 (``--live-evidence``, ``h1_prove/live.py evidence``'s), from the proving runs (`period_inputs`).
 
@@ -222,10 +225,11 @@ def proved(key: Any, ledger: list[str], pins: list[str], main: list[str], name: 
     return out, reference
 
 
-def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Path, head: str, place: str,
-                  statements: Path | None, live: Path | None) -> tuple[dict, list[str], list[str], list[dict]]:
-    """Period ``verity/pouw/period/v1``'s params (the verifier's `head` and `place` among them, its sessions the
-    close's), ledger, pins log and windows (`credit.PERIOD_KEYS`, statements) from a
+def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Path, head: str | None,
+                  place: str | None, statements: Path | None,
+                  live: Path | None) -> tuple[dict, list[str], list[str], list[dict]]:
+    """Period ``verity/pouw/period/v1``'s params (the verifier's `head` and `place` with the close's sessions, or none
+    of them, `registration`), ledger, pins log and windows (`credit.PERIOD_KEYS`, statements) from a
     served run's kept records (module docstring), or Missing naming the first record or leg it lacks: the closed
     period ``period.json`` names holding window `k` alone, its record, the session, ledger and pins PoUW's served piece
     fetched (`pouw`), the declared Program, and the sampled calls' `statements` and the `live` evidence."""
@@ -278,8 +282,13 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
                              json.loads(live.read_text()), draw_directory=draw)
-    return ({"head": head, "key": key.to_json(), "main": lines(main), "name": name, "place": place, "sessions": listed},
+    return ({"key": key.to_json(), "main": lines(main), "name": name, **registration(head, place, listed)},
             ledger, lines(pouw / "pins.jsonl"), [ev])
+
+
+def registration(head: str | None, place: str | None, sessions: list[Any]) -> dict:
+    """The period parameters' registration fields, all or none: none (a period run alone) without a head."""
+    return {} if head is None else {"head": head, "place": place, "sessions": sessions}
 
 
 def close_sessions(ledger: list[str], name: str) -> list[Any]:
@@ -306,8 +315,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     for f in ("params", "registration", "answer", "key", "ledger", "pins", "main", "windows"):
         ap.add_argument(f"--{f}", type=Path)
     ap.add_argument("--name")
-    ap.add_argument("--head", help="period: the head of the registration log the period is accounted against")
-    ap.add_argument("--place", help="period: the Site location the period's work ran on")
+    ap.add_argument("--head", help="period, with --place: the head of the registration log the period is accounted "
+                                   "against; without both the period runs alone")
+    ap.add_argument("--place", help="period, with --head: the id the registration log registered the period's "
+                                    "device under")
     ap.add_argument("--pouw", type=Path, help="period: PoUW's served piece directory (pieces/pouw)")
     ap.add_argument("--key-sha512", help="period: the SHA-512 of the auditor's challenger key, the verifier's pin")
     ap.add_argument("--statements", type=Path, help="period: the drawn calls' statements, a JSON list")
@@ -318,7 +329,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = None if a.lean_answers is None else A.Answers(a.lean_answers, by="the period check")
     protocol = V1 if a.protocol == "v1" else PERIOD
     given = (["params", "registration", "answer"] if protocol == V1
-             else ["key", "ledger", "pins", "main", "name", "head", "place", "windows"])
+             else ["key", "ledger", "pins", "main", "name", "windows"])
+    if (a.head is None) != (a.place is None):
+        ap.error("period takes --head and --place together (the registration's, all or none), or neither to run alone")
     if a.serve_run is not None:
         if a.window is None:
             ap.error("--serve-run takes --window")
@@ -326,9 +339,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             why = (v1_missing if protocol == V1 else period_missing)(a.serve_run, a.window)
         elif not (a.key_sha512 and a.main):
             ap.error("period --serve-run with --pouw takes --key-sha512 and --main (the verifier's own)")
-        elif not (a.head and a.place):
-            why = ("the verifier names no registration head or place for the period (--head, --place): its answer "
-                   "publishes the account of the work on that place against that head")
         else:
             try:
                 params, ledger, pins, windows = period_inputs(a.serve_run, a.window, a.pouw, a.key_sha512, a.main,
@@ -344,8 +354,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error(f"{a.protocol} takes --serve-run and --window, or {', '.join('--' + f for f in given)}")
     if protocol == PERIOD:
         ledger = lines(a.ledger)
-        params = {"head": a.head, "key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main),
-                  "name": a.name, "place": a.place, "sessions": close_sessions(ledger, a.name)}
+        params = {"key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main), "name": a.name,
+                  **registration(a.head, a.place, close_sessions(ledger, a.name))}
         return period_piece(a.out, params, ledger, lines(a.pins), json.loads(a.windows.read_text()), a.exe, run)
     params = json.loads(a.params.read_text())
     commitment = canonical(json.loads(a.registration.read_text()))

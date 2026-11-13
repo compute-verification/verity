@@ -22,8 +22,8 @@
 # env: served_verdicts.sh's (H1_GATE, H1_KEY_SHA512, MAIN_FILE, PY), drawn.sh's and live.sh's (H1_CIRCUITS, H1_MODEL,
 #      H1_CHECKPOINT or H1_WEIGHTS, H1_DRAWN_MEM_GB, H1_ZK_SERVER_GB, H1_MEM_GB, H1_DRAW_K, ...)  HZ_CACHE (both jobs'
 #      builds, default /workspace/research/cache/pouw-hidden-zk)  FLOCK_VERIFY (default the tree's, which
-#      served_verdicts.sh builds)  VERIFIER_TMP (default /tmp)  POUW_HEAD, POUW_PLACE (the registration head and Site
-#      location the period's answer accounts its work against and on; without both, step 4's case is missing)
+#      served_verdicts.sh builds)  VERIFIER_TMP (default /tmp)  POUW_HEAD, POUW_PLACE (the registration head and the id
+#      it registered the period's device under, both or neither: without them the period runs alone)
 # Its lines name no window. Exit 0 once step 3 wrote the piece; a failed step 1, 2 or 4 leaves its evidence or the
 # period's case out, which step 3's piece and served_composite.sh then name.
 set -uo pipefail

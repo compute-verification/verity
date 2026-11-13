@@ -429,7 +429,9 @@ private def credited : Core.Protocol where
   commitment := PouwCheck.Period.commitmentOf
   evidence := PouwCheck.Period.evidenceOf
   digest := PouwCheck.Period.Commitment.digest
-  check p _ _ := .accept ⟨⟨[[0]], [0], 1, PouwCheck.Credit.DELTA, [none]⟩, p.head, p.place, p.key, [], 0, 1⟩ ⟨p.name, 1⟩
+  check p _ _ := .accept
+    ⟨⟨[[0]], [0], 1, PouwCheck.Credit.DELTA, [none]⟩, p.registered.map fun r => (r.head, r.place), p.key, [], 0, 1⟩
+    ⟨p.name, 1⟩
   publicJson := PouwCheck.Period.Published.toJson
   profileJson := PouwCheck.Period.profileJson
 
