@@ -8,8 +8,9 @@ description: >
   own transcript, interleaved cuBLASLt and CUTLASS baselines, ε at both FP32 prices), recording every attempt with its
   hypothesis and reason, hooking a variant into vLLM (KernelVariant, GateRecord), sharing node 2 (gpu-lease, the fill
   queue) with other kernel lanes, and leaving the tooling better. Use when writing or tuning a CUDA or PTX kernel, a
-  mainloop, forming or an epilogue, running benchmarks/pouw/harness (bench.py, verify.py, sass_gate.py), adding a panel
-  row (panel.py), timing against a baseline, installing a kernel in vLLM, or starting or taking over a kernel lane.
+  mainloop, forming or an epilogue, running benchmarks/pouw/harness (bench.py, verify.py) or the SASS gate
+  (verity/protocols/accounting/pouw/prover/sass_gate.py), adding a panel row (panel.py), timing against a
+  baseline, installing a kernel in vLLM, or starting or taking over a kernel lane.
 ---
 
 # Kernel engineering
