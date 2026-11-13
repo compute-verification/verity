@@ -5,13 +5,14 @@ from __future__ import annotations
 import types
 
 import pytest
-from verity.definitions import word as W
 
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 
+#: the module the policies cut a Call's graph with, as one of them names it: a stand-in put in it is the one all three read
+W = SP.W
 SITE = "model.layers.1.mlp"
 SHARED = "ScaledMmFp8BlockSharedScale_v1"
 ROUTER = {"E": 8, "TOPK": 2, "VPT": 8}
