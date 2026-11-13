@@ -472,7 +472,8 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         for path in sorted(glob.glob(str(d / "build_*" / "result.json"))):
             w = os.path.basename(os.path.dirname(path))
             try:
-                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.loads(Path(path).read_text())
+                with open(path) as f:
+                    results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(f)
             except (OSError, ValueError) as e:
                 unreadable.append(f"{os.path.relpath(path, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,
