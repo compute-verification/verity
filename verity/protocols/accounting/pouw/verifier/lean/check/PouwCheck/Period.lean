@@ -271,8 +271,10 @@ def spanOf (ledger : Json) (name : String) : Option Span := do
   let roots ← ws.toList.mapM fun w => str? (get w "root")
   pure ⟨o.seq, c.seq, roots⟩
 
-/-- The part of the registered hardware at its place a period accounts for: the device's compute. -/
-def PART : Core.Account.Part := .compute
+/-- The name of the part of the registered hardware at its place a period accounts for: the device's compute,
+`account`'s part (`Core.Account.Part.name`, held to it below). A string, so what the check publishes reads nothing of
+`CoreProtocol.Account`. -/
+def PART : String := "compute"
 
 /-- What an accepted period publishes: its credit, its parameters' challenger key, from the ledger its close's open
 roots and its span (the period-open's seq and the entries from it to its close), and, all or none as its parameters
@@ -292,7 +294,7 @@ def Published.toJson (p : Published) : Json :=
   match p.registered with
   | none => own
   | some (head, place) => own.mergeObj <| Json.mkObj [("registration_head", .str head), ("place", .str place),
-      ("part", .str PART.name)]
+      ("part", .str PART)]
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published Profile :=
   match form p.name e.windows with
@@ -320,7 +322,7 @@ orders periods and covers no tick. The Site part an accepted answer accounts for
 off the answer. -/
 def account : Core.Account :=
   { protocol := protocolId, head := some (.published "registration_head")
-    amounts := [{ metric := "work", part := PART, place := some (.published "place"), key := .published "work",
+    amounts := [{ metric := "work", part := .compute, place := some (.published "place"), key := .published "work",
                   unit := Core.Account.macs, side := .verified,
                   time := .steps (.run (.published "start") (.published "length")) ⟨0, 1⟩,
                   series := some (.published "key"), share := some (.published "eps"), error := .published "delta",

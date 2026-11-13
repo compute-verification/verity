@@ -40,7 +40,7 @@ KEYS_FORM = (f"keys are not {', '.join(PARAMS_KEYS)}, or {', '.join(ALONE_KEYS)}
 HEAD_FORM = "head is not the registration log's head (a SHA-512 digest, 128 lowercase hex)"
 PLACE_FORM = ("place is not the id the registration log registered the period's device under "
               "(a nonempty string)")
-#: `PouwCheck.Period.PART`'s name: the part of the device at ``place`` a period accounts for, its compute
+#: `PouwCheck.Period.PART`: the name of the part of the device at ``place`` a period accounts for, its compute
 PART = "compute"
 CHALLENGE_PHASES_FORM = ("sessions is not a list of the ids of the sessions the challenger's ledger opened for the "
                          "period (1 to 64 of [A-Za-z0-9._:-] each, the first alphanumeric)")
