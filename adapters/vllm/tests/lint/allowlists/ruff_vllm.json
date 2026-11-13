@@ -522,7 +522,6 @@
     {"file": "tests/engine/rope_cache_gpu.py", "kind": "B023", "symbol": "main", "detail": "Function definition does not bind loop variable `best`"},
     {"file": "tests/engine/test_int8_producers.py", "kind": "I001", "symbol": "test_add_norm_quant_is_the_definitions_twin", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_long_row.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_serve_day.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serve_pearl.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_rows_bits.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/predict/test_weights_tie.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},

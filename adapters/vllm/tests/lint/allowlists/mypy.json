@@ -507,8 +507,6 @@
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "var-annotated", "symbol": "test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts", "detail": ""},
     {"file": "tests/pipeline/test_boundary_tables.py", "kind": "has-type", "symbol": "test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables", "detail": "", "count": 4},
     {"file": "tests/pipeline/test_boundary_tables.py", "kind": "misc", "symbol": "test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables", "detail": "", "count": 2},
-    {"file": "tests/pipeline/test_serve_day.py", "kind": "attr-defined", "symbol": "test_without_day_nothing_is_declared", "detail": ""},
-    {"file": "tests/pipeline/test_serve_day.py", "kind": "func-returns-value", "symbol": "test_the_day_reaches_the_tie_through_serve_h1s_arm", "detail": ""},
     {"file": "tests/pipeline/test_serve_offloop.py", "kind": "union-attr", "symbol": "test_off_the_loop_the_committer_is_installed_once_and_stays_on_between_windows", "detail": "", "count": 3},
     {"file": "tests/pipeline/test_serve_pearl.py", "kind": "operator", "symbol": "test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loads", "detail": "", "count": 7},
     {"file": "tests/pipeline/test_serve_pearl.py", "kind": "union-attr", "symbol": "Run.end", "detail": "", "count": 7},
