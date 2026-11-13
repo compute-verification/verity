@@ -19,7 +19,8 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
   at the first and the second setup's at the second, with both setups' ledger lines.
 * **The device printed the log** (`printsTwo_dev₂`, `binds_dev₂`): each run prints its part
   (`Sampled.Device.prints_dev`, `holds_dev`), and where each setup's ledger opens its run's id only on its own window
-  (`Apart`), no run prints the other part's window. `binds_dev₂` is `Binds` at the history, from `CutHeld.binds_of_accepts`.
+  (`Apart`), no run prints the other part's window. `binds_dev₂` is `Binds` at the history, from
+  `CutHeld.binds_of_accepts`.
 * **The history holds both runs** (`holdsTwo_dev₂`): `PrintsTwo` speaks of the runs the history holds, and holds of a
   history holding none. On two windows, where the first session's releases hold no tree's hello (`NoHello`), each part
   fits its setup's layout (`Sampled.Device.Fits`) and each printed run reads as coin trees (`TreesRead`), the history
