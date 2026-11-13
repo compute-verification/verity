@@ -46,7 +46,7 @@ STEADY_POINT = Tool(
         "benchmarks/one_stage/server_rate.py",
         "benchmarks/served_units/stage.py",
         "tools/config/**",
-        "verity/protocols/flock/pod/**",
+        "verity/protocols/flock/prover/pod/**",
         "verity/protocols/flock/prover/**",
     ],
     key_params=["identity"],
