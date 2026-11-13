@@ -3,6 +3,20 @@
 A turn starts on a new machine with a new clone on `main`; only what is pushed survives. Commit and push to
 `cursor/circuits-cir263-scratch-6f04` before every turn ends. Nothing goes to the PR branch except reviewed code changes.
 
+**State at Fri 13 Nov 16:02Z: Friday's row is done and the worker has returned to the coordinator. Sections 1 to 3 are
+history. What is left waits on the coordinator's word (the carry across the layout moves comes first, with
+`tools/move/restack.py`, never a rebase or a merge of `main`): section 4's bindings, checks and the PR.**
+
+- The captures of record, node A, card 0, cores 0-9, at PR head `ce09de03c318f40d29efbec7cca2536a8b7cf735`, each sealed with
+  `ok` true: eh_proj `r20261113-154513-8180` (digest `41442bea4181...`, 27,389,952 words compared, 0 differ; split 2 at M 105
+  and 192, contiguous-f32-forward the only fit); eh_norm `r20261113-155013-668e` (digest `5584f173348e...`, 25,165,824 words,
+  0 differ); indexer_logits `r20261113-155125-8b02` (digest `253714da690d...`, 290,933 comparisons, 0 differ). The full
+  figures are in `checkpoint.md`, `comment-row-fri.md` (posted on CIR-263 at 16:00Z) and `pr-body.md`. The fetched runs are
+  under `~/.research/runs/` on the worker's VM and on node A under `/workspace/research/runs/`; `research fetch RUN --all`
+  brings one back.
+- A capture of record stays of record after the carry only with the PR body saying it ran at `ce09de03c3` and what differs
+  since (`pr-body.md` has the placeholder).
+
 - PR branch: `cursor/circuits-cir263-draft-layer-kernels-6f04`, head `ce09de03c318f40d29efbec7cca2536a8b7cf735` (four commits
   over `920597d5ca7f`, the head the first row's lease ran at): the three captures are registered properties (schema ids in
   `verity_vllm/records/mtp_captures.py`); the split-K probe separates strided from contiguous at K 12288, 2 splits, bf16;
@@ -81,10 +95,8 @@ checkpoint, and return to the coordinator before changing any Definition or bind
 
 ## 4. After the captures
 
-- Fill `comment-draft.md`'s placeholders (run ids, rows, words compared, words that differ, routes, splits), lead with the
-  result in bold, and post by Sat 14 Nov 02:00Z:
-  `research msg linear comment CIR-263 --file /tmp/cir263-scratch/scratch/cir263/comment-draft.md --worker DRAFTKERNELS`
-  (from /agent/repos/verity with `uv run -q --project tools/research`). Then return to the coordinator.
+- Done: the row's comment (`comment-row-fri.md`) is on CIR-263 since Fri 16:00Z, and the worker returned to the coordinator.
+  Everything below waits on the coordinator's word, after the carry.
 - eh_proj's routes give the splits: add `Gemm_v2{K=12288,N=6144,DOT=HopperBF16WgmmaDot16_v1}` and `CublasSplitKGemm_v1` at each
   split seen to `mtp_draft.circuit-check.py`, run `jobs/cc_pins.sh` with `--cwd clone`, apply its pins diff, rerun
   `repository` and then `verity-vllm` (`jobs/suite.sh NAME`, one run at a time, `--on auto --cwd source --wait`), then the
