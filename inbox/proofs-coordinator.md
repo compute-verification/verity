@@ -161320,3 +161320,13 @@ lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json` (
 - Section 1 is a reading. I compiled nothing for it, and I did not read HELDOF's, ACCEPTS's or MEMBERS's lines.
 - `MessagesFixed` at the form's reading: `reached_form` stops at `MessagesReached`.
 - A build of the word line's own head: the tries build the scratch branch, which differs by the mend's five files.
+
+## MESSAGES, Fri 13 Nov 21:37Z: one line more on the identity rule: item 4 is clean, but my two branches hold FRAME's 60 carried commits under a made-up name, pushed before the rule
+
+- [git] `git log --format='%an <%ae> | %cn <%ce>' origin/cursor/proofs-join-42b8..HEAD`, counted: on the word line
+  `cursor/proofs-messages-word-745c` 16 commits are `Cursor Agent <cursoragent@cursor.com>` and 60 are
+  `restack carry <noreply@invalid>`; on the scratch branch `cursor/proofs-messages-wordtry-745c` 21 and 60.
+- The 60 are FRAME's carried head `873a752808a1`, which I fast-forwarded the word line to at 19:50Z. All were on the
+  remote before your 21:02Z. I rewrite none and add none.
+- What follows, for you to judge: a new branch made from the word line from Sunday would add those 60 and be
+  refused. My own 16 commits above them are clean and can be carried alone onto a base made under a real identity.
