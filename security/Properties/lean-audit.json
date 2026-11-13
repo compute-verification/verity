@@ -18,6 +18,7 @@
   "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Pouw.PearlPlusTie",
+  "Properties.Pouw.PearlPlusPlaced",
   "Properties.Pouw.PearlPlusDraw",
   "Properties.Nci",
   "Properties.Nci.Threads",
@@ -2136,7 +2137,8 @@
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlus.Witnesses",
     "Properties.Pouw.PearlPlusDraw",
-    "Properties.Pouw.PearlPlusTie"
+    "Properties.Pouw.PearlPlusTie",
+    "Properties.Pouw.PearlPlusPlaced"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2164,6 +2166,11 @@
    ],
    "except": [],
    "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), and the play's collision finder as the challenger's (`Properties.Challenger.collisionIn`) under the composite's SHA-512 (`Properties.Verity.Game`)"
+  },
+  "Properties.Pouw.PearlPlusPlaced": {
+   "imports": ["Properties.Remote.ValueTie"],
+   "except": [],
+   "why": "Pearl+'s cells in the tied circuit are stated over the value tie's vocabulary at W's entries (`Properties.Remote.ValueTie`'s `CellAt`, with `Properties.Verity.Tied`'s placement and blocks) and Pearl+'s statements on `tieOf` and the run's cells, read by name (`Properties.Pouw.PearlPlusTie`), never over a proof"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -13195,7 +13202,9 @@
    "Properties.Pouw.PearlPlus.UntiedCellsAtW": "unstated: `YAtWIsTheCall` as a count of cells: an accepted run whose table holds its openings has more than `cellsAt` ε untied credited cells with probability at most δ + q / 2^256; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`)",
    "Properties.Pouw.PearlPlus.PeriodUntiedCellsAtW": "unstated: `PeriodYAtWIsTheCall` as a count of cells: a sequence's accepted prefix holds more untied credited cells than `Runs.cellsUpTo` with probability at most δ + q / 2^256; a draft statement over the period's runs as functions of its coins, unproved",
    "Verity.ValueTie.Shared": "unstated: the two Pearl+ statements the value tie's composite step reads beside PoUW's period statement, `AcceptedIsHeldToW` and `OpeningBinds`, as one premise; a conjunction of draft statements, unproved",
-   "Verity.ValueTie.PeriodOutsideG": "unstated: the blocks outside each window's G, charged whole, pooled over a monitoring period's windows: (w + 1) times their charge is at most c times the period's untied words; proved in security_proofs by Verity.ValueTie.periodOutsideG (Proofs.Properties.Verity.Tied), a counting fact with no probability in it, which gets a guarantee entry with the per-window clause it pools"
+   "Verity.ValueTie.PeriodOutsideG": "unstated: the blocks outside each window's G, charged whole, pooled over a monitoring period's windows: (w + 1) times their charge is at most c times the period's untied words; proved in security_proofs by Verity.ValueTie.periodOutsideG (Proofs.Properties.Verity.Tied), a counting fact with no probability in it, which gets a guarantee entry with the per-window clause it pools",
+   "Properties.Pouw.PearlPlus.CreditedArePlaced": "unstated: under `TieMeans`, a run held to W whose tied circuit's cells are its real cells at W's entries (`TiesTheRun`) has every credited cell placed at its home block, at 32 gates of that block of the tied circuit's blocks; proved (`Properties.Pouw.PearlPlus.creditedArePlaced`, in `Proofs.Properties.Pouw.PearlPlus.Placed`) and stated by no guarantee yet: its premise `TieMeans` is a draft statement, unproved, so no honest witness can hold it at the deployed instance",
+   "Properties.Pouw.PearlPlus.GivenUpByBlock": "unstated: under `TieMeans`, for a run held to W whose tied circuit's cells are its real cells at W's entries (`TiesTheRun`) and homes that read a cell's pass, call and A row alone, each block's given-up cells are the records' (`givenUpAt`), and any window's untied cells there number at most that give-up and their cells outside it; proved (`Properties.Pouw.PearlPlus.givenUpByBlock`, in `Proofs.Properties.Pouw.PearlPlus.Placed`) and stated by no guarantee yet: its premise `TieMeans` is a draft statement, unproved, so no honest witness can hold it at the deployed instance"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
