@@ -33,7 +33,7 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple
 
-from verity.protocols.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, field_types
