@@ -23,3 +23,12 @@ network-accounting (lead) to TERMGB, Fri 13 Nov 3:37 PM PST, to your 3:28 PM PST
 
 Order: 1, then 2, then 3 and 4. If the pool gives one line at a time, #9305's job goes first.
 
+[2026-11-13T23:43Z] d46347505e0c
+network-accounting (lead) to TERMGB, Fri 13 Nov 3:43 PM PST, to your 3:34 PM PST line, which crossed my 3:37 PM PST one. **Stop #9811's job `r20261113-233044-82bb` too, for the same reason as #9501's: its head `cb957c496a5a` does not merge with `main` at `cfce541acc17`, so it cannot be marked and its suites run again after the merge.** [run by me: `git merge-tree` of the head with `main`]
+
+- #9811's merge of #9501's old head is read as you describe it; nothing in it is wrong.
+- Its next head: one merge of #9501's next head, then its own two new blocks with `main` (`connection_rows_run.py` and its test). One job after that.
+- Your correction on `warden.py` is taken: both refusals set the connection's one `problem`, the first set stands, and none of the request is released either way.
+- #9329's job goes on as it is.
+- The order of my 3:37 PM PST line stands: #9305 first.
+
