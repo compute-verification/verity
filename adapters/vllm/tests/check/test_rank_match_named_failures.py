@@ -193,6 +193,47 @@ def test_a_failed_provenance_counts_the_mismatches_it_lists_where_it_states_no_c
                                          '9 stored tensors do not digest to their recorder rows, first {"rank": 1, "k": 0}']
 
 
+BOUND = {"pass": True, "collectives_checked": 2, "recorder_sha256": {"0": "h0", "1": "h1"}, "tensors_digested": 8}
+DIGESTS = {0: "h0", 1: "h1"}
+NO_MAPPING = [["pass"], "PASS", 1, True, [], "", 0]
+OTHER_TYPES = [   # (what the record states in place of a count or of its list of mismatches, the error the check raises)
+    ({"collectives_checked": "two"}, ValueError), ({"collectives_checked": [2]}, TypeError),
+    ({"fused_norm_unfused_left_to_commit": "none"}, ValueError), ({"tensors_digested": "eight"}, ValueError),
+    ({"pass": False, "mismatches": {"step": 0}}, KeyError), ({"pass": False, "mismatches": 3}, TypeError),
+]
+
+
+@pytest.mark.parametrize("provenance", NO_MAPPING, ids=[repr(p) for p in NO_MAPPING])
+def test_a_provenance_that_is_no_mapping_raises_and_is_never_a_pass(provenance):
+    """Today's answer, held and not judged: the check reads the record as a mapping, and only `None` is no record.  Any other
+    value, an empty one too, raises before a verdict is written."""
+    colls, recorder = _world()
+    with pytest.raises(AttributeError, match=f"'{type(provenance).__name__}' object has no attribute 'get'"):
+        RM.cross_rank_check(colls, recorder=recorder, provenance=provenance, recorder_sha256=DIGESTS)
+
+
+@pytest.mark.parametrize(("stated", "error"), OTHER_TYPES, ids=[repr(s) for s, _ in OTHER_TYPES])
+def test_a_provenance_whose_counts_are_no_numbers_or_whose_mismatches_are_no_list_raises(stated, error):
+    """Today's answer, held and not judged.  A count given as digits in text is read as the number."""
+    colls, recorder = _world()
+    with pytest.raises(error):
+        RM.cross_rank_check(colls, recorder=recorder, provenance={**BOUND, **stated}, recorder_sha256=DIGESTS)
+    as_text = dict(BOUND, collectives_checked="2", tensors_digested="8")
+    assert RM.cross_rank_check(colls, recorder=recorder, provenance=as_text, recorder_sha256=DIGESTS)["verdict"] == "PASS"
+
+
+def test_an_empty_provenance_record_fails_by_name_on_everything_it_does_not_state():
+    colls, recorder = _world()
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance={}, recorder_sha256=DIGESTS)
+    assert res["failed"] == ["provenance"] and _fails(res, "provenance") == [
+        "provenance FAIL: 0 mismatches, first null",
+        "provenance checked 0 collectives (+0 unfused fused-norm calls left to the Commit), the folds state 2 (steps stored: None)",
+        "provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or an older tp2_match)",
+        "provenance digested 0 stored tensors, 8 required (part + out, every rank, every common (step, k))"]
+    res = RM.cross_rank_check(colls, recorder=recorder, provenance=dict(BOUND, recorder_sha256=["h0", "h1"]), recorder_sha256=DIGESTS)
+    _only(res, "provenance", "provenance record carries no recorder_sha256: not bound to any recorder rows")
+
+
 # --- commit_binding -----------------------------------------------------------------------------------------------------------
 
 def _match_dir(tmp_path: Path, world: int = 2) -> tuple[Path, dict, dict[int, list[dict]]]:
