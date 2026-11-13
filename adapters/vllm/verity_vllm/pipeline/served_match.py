@@ -159,7 +159,8 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
     from verity_vllm.acquire import served as SV
 
     configs = src.launch_configs()
-    json.dump(configs, open(f"{out}/launch_configs.json", "w"), indent=1)
+    with open(f"{out}/launch_configs.json", "w") as f:
+        json.dump(configs, f, indent=1)
     graphs = glob.glob(os.path.join(facts["cache_dir"], "**", "computation_graph.py"), recursive=True)
     if len(graphs) != 1:
         raise UsageError(f"{len(graphs)} computation_graph.py under {facts['cache_dir']}: one split graph is required")
@@ -170,10 +171,12 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
               max_num_seqs=facts["max_num_seqs"], device=device_of(facts))
     if facts.get("moe"):
         kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs, "cc": facts["cc"]}
-        json.dump(kw["moe"], open(f"{out}/moe.json", "w"), indent=1)
+        with open(f"{out}/moe.json", "w") as f:
+            json.dump(kw["moe"], f, indent=1)
     build = SV.build(dirs["inductor"], routes={}, **kw)
     routes = SV.probe_routes(build["routes_missing"])
-    json.dump(routes, open(f"{out}/routes.json", "w"), indent=1)
+    with open(f"{out}/routes.json", "w") as f:
+        json.dump(routes, f, indent=1)
     return SV.build(dirs["inductor"], routes=routes, **kw)
 
 
