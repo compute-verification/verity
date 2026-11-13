@@ -125265,3 +125265,49 @@ All relayed from serving's comments. [read: VLLM-412 at 06:24Z, its 06:08Z and 0
 ### Still due
 
 - The final head in an entry's title when `1822` ends, then one reprint over its kept files.
+
+## RUNSAS, Fri 06:35Z: the one-stage leg has NOT the fault: its layout (`slotAt`, alternating reps) only orders the period's cuts, and every round is placed in its rep stream by name and count, never by position, down to V5's custody; `FlockDeploy.custody` is on a route of lemmas nothing listed uses, which does not read `slotAt`
+
+In plain words: the one-stage leg numbers a session's rounds the same alternating way as the two-stage join, but it never uses that number to say which recorded round a coin is. Each round says which rep stream it belongs to, and is appended there. The session's verifier on this leg also reads the record stream by stream, by name. So the order of rounds the device logs and the order the verifier reads them in are joined through each round's stream, and nothing makes rep 0's round 1 meet rep 1's round 0. The one place where the deployed verifier's run-order custody appears in this leg is a separate set of lemmas that no listed guarantee uses, and they do not read the layout. All of this is from reading `main` at `b843a10af4`; I built nothing and edited nothing.
+
+**a. Where the leg uses the layout** [read].
+- `Instance.constructionsAt` (`Sampled/Instance.lean:613–620`) builds the listed guarantee's constructions from `readingAt A.tables A.layout …` and `decodersAt (reg A) A.layout`. `remote_soundness_deployedReady` (`Sampled/OpensAt.lean:270`) concludes at `I.constructionsAt K₀ .remote …`. These are the only users of `Live.layout` (with `CountsLayout`, `MovesLayout`, `MovesReach`, `RootB` and `SpecTie` proving facts about them).
+- What `A.layout j` decides is which frame of the play is round `j`'s, not which recorded coin it is. `slotRound` (`Sampled/Readings.lean:42–46`) picks, for `.rep t r k`, an opening "of its stream named `t/rep<r>`, after `k` openings of that stream" (`openedOf pre i s = k`). That picks a stream by name and a round by its count within the stream; `j` is only the cut's index.
+- What it decodes: `slotSub` (`Sampled/Decoders.lean:554–556`) turns slot `.rep t r _` and the message into `SubmitJ` with `tab := t`, `rep := r`.
+
+**b. Following that route to the session's verifier: no premise and no definition forces rep 0 round 1's coins to equal rep 1 round 0's** [read].
+- The projection (`roundsP`, `Sampled/Project.lean:180–186`) takes the next stop in the play's own order, decodes its submission `s`, and appends the round to stream `(s.tab, s.rep)` by `addRoundJ` (`Flock/Soundness/Discharge/Tables/Sim.lean:53–55`, `upd rs j r (rs j r ++ [rd])`). The live session it plays is `liveSession` (`Sim.lean:97`), through `liveOfZJ` (`Composed/DefsJ.lean:405–408`), which `Live.game` reads (`Sampled.lean:359`).
+- This leg's session verifier is not `FlockDeploy.V`. Its custody is V5's `RecordsLiveZKJA` (`Composed/DefsJA.lean:178–188`), which holds each stream it finds by its name `table/rep r` to `s.rounds.toList = o.reps j r`. It does not zip in run order. `Live.hCust` (`Sampled.lean:302`) proves it at the leg's writer with no premise.
+- The remaining premises read streams by name and count too: `LogOpensRecorded` (`Instance.lean:625`) is `OpenedRecorded` (`Sampled/RecordRounds.lean:64`), "before each opening of a coin tree's stream, the log opens that stream fewer times than the rounds the record gives it". `recordRound`, `roundIn` and `openedOf` all take a stream name and a count.
+- `FlockDeploy.V true` and its `custody` enter the one-stage leg only in the sampling record (`Sampled/Record.lean`, `Record.V`). Its premise `LiveCoins` (`Record/Accepts.lean:129–134`) is `FlockDeploy.custody` at the run's own messages and coins, `cs.drop (DRAW_ROUNDS + 1)`, in run order. No file of that route reads `slotAt`, `Live.layout`, `readingAt` or `decodersAt` (`git grep` over `Sampled/Record*`: none). The two layouts never meet: the only file that uses both `FlockDeploy` and `A.layout` is `SpecTie.lean`, and it uses `FlockDeploy` only for `JsonEquiv` (line 44).
+
+**c.** Does not arise, since (b) is no. For the record, the guarantee and what nothing listed uses [read: `security/lean-audit.json`, `security/Proofs/lean-audit.json`].
+- The listed guarantee on this leg is `Verity.Sampled.remote_soundness_deployedReady` (owner @soundness, with `_honest` and `_nontrivial`). Its open premises are `Instance.LogOpensRecorded`, `RegisteredFiles`, `SessionRegistered`, `SessionsReady`, `Vocab.PouwSound` and `Vocab.InferenceOnlySound`. None reads `slotAt` or `FlockDeploy.custody`. No guarantee in either lock reads `Verity.Sampled.Record.*`, `FlockDeploy.custody`, `Verity.Sampled.slotAt` or `Live.layout`; `security/Proofs/lean-audit.json` lists none at all.
+- `Record.LiveCoins` is taken only by `acc_of_pass` (`Record/Accepts.lean:648`) and `units_of_pass`, `refOk_of_accepts`, `pass_of_accepts` (`Record/Pass.lean:153–241`). `ks_record` (`Record/KS.lean`) is used nowhere else. These are lemmas nothing listed uses [derived, `git grep`].
+- A caution for soundness, not the fault: `remote_soundness_deployedReady_honest` (`OpensAt.lean:284`) is witnessed at `Instance.Honest.inst ⊤ fun _ => none`, an instance that runs no session. Its honest lemma therefore never exercises a session with rounds. A fault of this kind on this leg would not have shown up there; it is the reading above, not the witness, that says the leg has none.
+
+**d. The lines that make the one-stage leg consistent** [read]. The device log and the session are joined by a placing map, not by equal positions:
+- `slotRound`'s `openedOf pre i s = k` with the stream named `t/rep<r>` (`Readings.lean:44–46`),
+- `slotSub`'s `⟨⟨t, h⟩, r, …⟩` (`Decoders.lean:555`),
+- `addRoundJ rs s.tab s.rep` (`Project.lean:185`),
+- `RecordsLiveZKJA`'s `find? (·.name == table/rep r) … s.rounds.toList = o.reps j r` (`DefsJA.lean:186–188`).
+
+The alternating `slotAt` survives only as the index of the period game's cuts, where any injective numbering does (`Live.layout_injective` is all `readingAt_unique` asks, `Readings.lean:120`).
+
+**A tiny check of (b)** [not run, as you said]. It shows that the decoded round at layout position 2 goes to rep 1's stream, wherever it falls in the run:
+```lean
+example (m : Claims.Msg) :
+    (Verity.Sampled.slotSub 1 (Verity.Sampled.slotAt 2) m).map (fun s => (s.tab.val, s.rep.val)) = some (0, 1) := by
+  simp [Verity.Sampled.slotSub, Verity.Sampled.slotAt]
+```
+With `addRoundJ_self`/`addRoundJ_ne` (`Sim.lean:63–69`) it then lands in `o.reps 0 1` and never in `o.reps 0 0`.
+
+Not established: that SESSIONCOINS's fix to the two-stage join is right; that `FlockDeploy.custody`'s run order matches the honest prover's order on the sampling record route (that route is unlisted, and the order is the deployed verifier's own); anything on the join or any branch.
+
+STOP RULE: nothing changed. A read of `main`: no build, no edit, no lock touched.
+
+NEEDS: nothing.
+
+To post: nothing (the leg has not the fault).
+
+Loops: new machine (up 06:27Z). Pen made 06:27Z and removed as this turn ends. My branch is unchanged at `e019992865`.
