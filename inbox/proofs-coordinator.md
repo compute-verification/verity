@@ -142769,3 +142769,131 @@ Same run `6a3c`, k = 8,192, n = 8,192. The tile pays 5 mends a planted group-wor
 2. **The second witness.** It is owed after this rating. It would witness the cap test failing by mends alone, which stays true of the cap test whatever the terms become, but its tile is planted to today's `ForcedZero`, which this rating says must change. I do the second read of #9577 first (most of it is done) and start the witness after it unless you say wait.
 
 Mailbox read at 13:13Z; nothing newer than 12:00Z.
+
+## GATHER, Fri 13 Nov 13:20Z: NEW HEAD `faaa93a07807665e57d3b50fc155147a3bd465c5`; `3f16` ENDED: FIVE `reads` RECORDS MOVE IN TWO LOCKS, NOT THREE, and two deployed guarantees read them; the clause is in and NO PLAY TRIPS IT; `InsideOf.lean` COMPILES on a merge with the join's tip
+
+**The head.** `cursor/proofs-gather-wired-layout-6a9b` is at `faaa93a07807665e57d3b50fc155147a3bd465c5`, pushed 13:08Z [run]. It is `9d1718a32d6` plus three commits, nothing rebased and nothing forced [run]:
+
+- `31bfe877a35`, "Round 2 refuses a wire whose reader's port a link names": the clause, its lemma, the Python twin and one difftest case.
+- `538c159e7f5`: the join's `07319646f70`, picked with `git cherry-pick -x` as one commit of its own.
+- `faaa93a0780`, "Difftest: two designs whose link and wire name one port are refused": the two negative cases.
+
+I fetched before each push, and each time the remote tip was my own last push: no other worker's commit is on the branch [run].
+
+**1. `3f16`'s printout** [run: `r20261113-122806-3f16`, vy-nebius-cpu-1, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, at scratch `e4ab33e4db2` = `9d1718a32d6` plus the pick, so R3 without the clause].
+
+In plain words: the run ended `failed` for two reasons [run]. One is R3's record differences, which are mine and expected [derived]. The other is two tactics of `JpWalk.lean` that the proofs' lock does not list, which my base has and my commits do not touch [run].
+
+- **CORRECTION: five `reads` records move, in two locks. I said three.** [run] I left out `reads["Spot.OneStage"]`, in both locks. It moves because the parameters' parser, `Spot.OneStage.paramsParsed`, now takes the key `wired` in a `ports` entry [read: `OneStage.lean`, the `exactly v (if getD v "wired" matches .str _ then …)` line].
+  - `security/lean-audit.json`: `reads["Spot.OneStage"]` and `reads["Spot.Registration"]`.
+  - `security/Properties/lean-audit.json`: `reads["Properties.Spot"]`, `reads["Spot.OneStage"]` and `reads["Spot.Registration"]`.
+- **Two deployed guarantees read a changed definition** [derived: the printout's lists against each lock's `deployed`]:
+  - `Flock.SecurityProofs.SampledKSLiveV5` reads `Spot.OneStage.paramsParsed`.
+  - `Verity.remote_soundness_of_subprotocols` reads `Spot.OneStage.paramsParsed`, `Spot.Registration.check` and the two new definitions, `wiredHeld` and `wiredOk`.
+- **Nothing but `reads` moves.** I compared the records the run wrote with the tree's locks: 6 differences in `security/lean-audit.json` and 9 in `security/Properties/lean-audit.json`, every one under `reads` [run: the two `lean-audit.json` files under `lean-audit/requirer-security*/`]. So no guarantee's statement, premise or trust-gap entry changes [derived].
+- **How many guarantees read each** [run: counted from the lines below]: in `security`, 5 read `paramsParsed` and 9 read `Registration.check`. In `security/Properties`, 5 read `Properties.Spot.R3`, 30 read `paramsParsed` and 29 read `Registration.check`.
+
+The verdict lines, word for word but for one cut: each `AUDIT` line's dictionary of timings is written `{…}`. Left out: the lines about staging, sampling, unread definitions and heartbeat overrides, and each deployed guarantee's own trust-gap line. The whole printout is the run's `stdout.log`, 1,246 lines (`research fetch r20261113-122806-3f16`) [run].
+
+~~~text
+AUDIT /workspace/research/home-cache/verity-check/lean-records/build-1/verity/protocols/spot/verifier/lean: PASS  6145 declarations in 57 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+lean-records: verity/protocols/spot/verifier/lean: check.py exit 0 in 66 s on /home/research/.cache/verity-check/lean-records/build-1 (21 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit
+AUDIT /workspace/research/home-cache/verity-check/lean-records/build-1/verity/protocols/certifier/verifier/lean: PASS  1582 declarations in 11 modules; axioms propext, Classical.choice, Quot.sound; 4 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+lean-records: verity/protocols/certifier/verifier/lean: check.py exit 0 in 33 s on /home/research/.cache/verity-check/lean-records/build-1 (0 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-verity_protocols_certifier_verifier_lean
+AUDIT /workspace/research/home-cache/verity-check/lean-records/build-1/security/Proofs: FAIL  209465 declarations in 4210 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; {…}; built in the sandbox; inline debt 0 (0 premises)
+  escape: SpotFlock.RecordNames.jpBody (opaque, in Proofs.Properties.Verity.SampledTwo.JpWalk) is compiled code no proof sees; list it under `escapes` with the reason, or remove it
+  escape: SpotFlock.RecordNames.walkGoal (opaque, in Proofs.Properties.Verity.SampledTwo.JpWalk) is compiled code no proof sees; list it under `escapes` with the reason, or remove it
+audit: /workspace/research/home-cache/verity-check/lean-records/build-1/security/lean-audit.json: every failure is a record difference; /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security/audit-security/lean-audit.json is the record `--update` writes
+AUDIT /workspace/research/home-cache/verity-check/lean-records/build-1/security: FAIL  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees; {…}; built in the sandbox; inline debt 319 (885 premises)
+  guarantees: definitions in Spot.OneStage that Flock.SecurityProofs.RecursiveAuditC3, Flock.SecurityProofs.SampledKSLiveV5, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial read changed (changed: Spot.OneStage.paramsParsed)
+  guarantees: definitions in Spot.Registration that Flock.SecurityProofs.RecursiveAuditC3, Flock.SecurityProofs.SampledKSTwo, Flock.SecurityProofs.SampledKSTwo_honest, Flock.SecurityProofs.SpotExfilTwo, Flock.SecurityProofs.SpotFirstHitTwo, Flock.SecurityProofs.SpotKSTwo, Verity.Sampled.remote_soundness_deployedReady, Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial read changed (changed: Spot.Registration.check; new: Spot.Registration.wiredHeld, Spot.Registration.wiredOk)
+  trust gap: 35 premises outside their trust over the 14 deployed guarantees, 26 distinct:
+audit: guarantees, the definitions they read, or listed compile-time code changed in /workspace/research/home-cache/verity-check/lean-records/build-1/security: say so in the PR; the landing message shows the changes above (review.txt in each package's reports)
+AUDIT: FAIL (/workspace/research/home-cache/verity-check/lean-records/build-1/security, /workspace/research/home-cache/verity-check/lean-records/build-1/security/Proofs); reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security
+lean-records: security: check.py exit 1 in 1338 s on /home/research/.cache/verity-check/lean-records/build-1 (232 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security
+lean-records: security requires verity/protocols/spot/verifier/lean, and its records fail on this build, not only on record differences, which take a person (reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security)
+audit: /workspace/research/home-cache/verity-check/lean-records/build-1/security/Properties/lean-audit.json: every failure is a record difference; /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security_Properties/audit-Properties/lean-audit.json is the record `--update` writes
+AUDIT /workspace/research/home-cache/verity-check/lean-records/build-1/security/Properties: FAIL  3486 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees; {…}; built in the sandbox; inline debt 27 (128 premises)
+  guarantees: definitions in Properties.Spot that Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Properties.Spot.digestIsRecord's read changed (changed: Properties.Spot.R3; new: Properties.Spot.WiredIs)
+  guarantees: definitions in Spot.OneStage that Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Properties.Spot.digestIsRecord's, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial read changed (changed: Spot.OneStage.paramsParsed)
+  guarantees: definitions in Spot.Registration that Properties.Remote.SecurityProofs.acceptComplies, Properties.Remote.SecurityProofs.acceptInferenceOnly, Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial, Properties.Spot.SecurityProofs.tablesRegistered, Properties.Spot.acceptMeans, Properties.Spot.bernoulliBounds, Verity.coins_couple, Verity.coins_couple_honest, Verity.coins_couple_nontrivial, Verity.remote_soundness_of_subprotocols, Verity.remote_soundness_of_subprotocols_honest, Verity.remote_soundness_of_subprotocols_nontrivial, Verity.soundness_at_of_componentBounds, Verity.soundness_at_of_componentBounds_honest, Verity.soundness_at_of_componentBounds_nontrivial, Verity.soundness_at_of_targets, Verity.soundness_at_of_targets_honest, Verity.soundness_at_of_targets_nontrivial, Verity.soundness_of_subprotocols, Verity.soundness_of_subprotocols_honest, Verity.soundness_of_subprotocols_nontrivial, Verity.soundness_of_upFront, Verity.soundness_of_upFront_honest, Verity.soundness_of_upFront_nontrivial, Verity.target_of_periods, Verity.target_of_periods_honest, Verity.target_of_periods_nontrivial, Verity.wipe_target, Verity.wipe_target_nontrivial read changed (changed: Spot.Registration.check; new: Spot.Registration.wiredHeld, Spot.Registration.wiredOk)
+  trust gap: 30 premises outside their trust over the 6 deployed guarantees, 26 distinct:
+audit: guarantees, the definitions they read, or listed compile-time code changed in /workspace/research/home-cache/verity-check/lean-records/build-1/security/Properties: say so in the PR; the landing message shows the changes above (review.txt in each package's reports)
+AUDIT: FAIL (/workspace/research/home-cache/verity-check/lean-records/build-1/security/Properties, /workspace/research/home-cache/verity-check/lean-records/build-1/security/Proofs); reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security_Properties
+lean-records: security/Properties: check.py exit 1 in 732 s on /home/research/.cache/verity-check/lean-records/build-1 (0 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse; reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security_Properties
+lean-records: security/Properties requires verity/protocols/spot/verifier/lean, and its records fail on this build, not only on record differences, which take a person (reports in /workspace/research/runs/r20261113-122806-3f16/lean-audit/requirer-security_Properties)
+lean-records: OUTCOME {"outcome": "failed", "package": "verity/protocols/spot/verifier/lean", "passes": {"cd7f042af8fd3f727cb907e6349955d5eb1253e95eb190f1ee5896f944a90757": "verity/protocols/spot/verifier/lean", "f06dad54065f30653e6816116e92c60498896074f81ea58ba0aa5164ec98661f": "verity/protocols/certifier/verifier/lean"}, "records": {"security": {"inputs_key": "1a7c7c11c5656ab7497306d971d727ccfdbc08bbb6bff3e626ee02b8c9ce3204", "outcome": "failed"}, "security/Proofs": {"inputs_key": "75d89d98aa3589eff843e81eb660d0395a06493003cfec7644e8916c53fe37c5", "outcome": "failed"}, "security/Properties": {"inputs_key": "6d26c14e17c14f47119fdfd7279c309823f4d73b9bcac914deb3b4945f3bc6cd", "outcome": "failed"}, "verity/protocols/certifier/verifier/lean": {"inputs_key": "f06dad54065f30653e6816116e92c60498896074f81ea58ba0aa5164ec98661f", "outcome": "pass"}, "verity/protocols/spot/verifier/lean": {"inputs_key": "cd7f042af8fd3f727cb907e6349955d5eb1253e95eb190f1ee5896f944a90757", "outcome": "pass"}}}
+~~~
+
+`security/Proofs` is audited twice, once beside each of the two packages, and prints the same three lines the second time [run].
+
+- **The two `escape` lines are the base's** [run: `git diff 654e34d42be HEAD`]. Neither `JpWalk.lean` nor `security/Proofs/lean-audit.json` differs between my base and my head, and that lock has no entry for `jpBody` or `walkGoal`. The join lists both in `65a6f23f426`, "security/Proofs lock: list jpBody and walkGoal under escapes", one file, three lines added.
+- **The build itself passed**: `security/Proofs` built whole, 209,465 declarations in 4,210 modules, so the join's mend cures `f5e2`'s error [run].
+- **NEEDS, one word:** should I pick `65a6f23f426` onto the trial branch too, the same way? Without it every records run at my head fails on `security/Proofs` for those two lines [derived]. I have not done it [run].
+
+**2. The clause** (`31bfe877a35`).
+
+- **Where it sits, exactly as compiled** [read: `SecondStage.lean:756-760`]:
+
+  ~~~lean
+  | some ws => ws.all fun w =>
+    ps.any (fun p => p.template == w.template && placed own p w.port) &&
+      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
+      ((linkOf own w.writer w.wport).isNone && (linkOf own w.template w.port).isNone) &&
+      decide (posOf ps w.writer < posOf ps w.template)
+  ~~~
+
+  It is the second half of the third term: the old third term, "no link names the writer's port", became a pair in its own brackets [read]. The chain parses as `((A && B) && (C && D)) && E` [derived]. After `simp only [Bool.and_eq_true]` the five facts are: the reader's part `h1.1.1.1`, the writer's rows `h1.1.1.2`, the writer's port unlinked `h1.1.2.1`, **the reader's port unlinked `h1.1.2.2`**, the order `h1.2` [run: the lemma's own proof uses `h1.1.2.2` and compiles].
+- **So neither proof that reads by position changes.** `AddressRow.wiresOk_reader` reads `h1.1.1.1` and `wiresOk_writer` reads `h1.1.1.2`, as before; neither needs one more `.1` [run: both files compile, below]. `WiredCode.lean:111`'s "fourth clause" is still the order, counting the pair as one [read].
+- **The refusal word:** `second-wires`, the code `wiresOk` already refuses by; no new code [read]. Its reason gains "or a link names the port that reads it, " in Lean and in Python [read].
+- **The lemma: `Spot.SecondStage.wiresOk_unlinked`**, in `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean`, after `designFailures_ne_nil` [read]:
+
+  ~~~lean
+  theorem wiresOk_unlinked {ps : Array Part} {own : Own} (hok : wiresOk ps own = true) {w : Wire}
+      (hw : w ∈ own.wires.getD #[]) : linkOf own w.template w.port = none
+  ~~~
+
+- **ONE DIFFERENCE from what I wrote at 12:33Z, and from ADDRROW2's statement: it concludes `= none`, not `.isNone = true`.** [read] I chose `= none` because the six lemmas that take this fact take it in that form (`readOk_wired`, `check_ok_wired`, and four in `ReadWays.lean`, `RowLeaves.lean` and `RowOf.lean`) [read]. ADDRROW2's `wiresUnlinked` wants `.isNone`, which is `Option.isNone_iff_eq_none.2 (Spot.SecondStage.wiresOk_unlinked hok hw)` [guess: my proof uses `.1` of the same lemma; `.2` is not tried]. If you would rather have `.isNone = true`, say so: it is one line and one more try.
+- **The tries at `31bfe877a35`**, all on vy-nebius-cpu-1 [run]:
+  - `Spot/SecondStage.lean --siblings` (`r20261113-123914-4d3f`): "lean exit 0 in 4 s"; "none of its 31 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  - `RunsAs/Top.lean` (`c544`): "lean exit 0 in 320 s", 4 theorems, the same axiom line.
+  - `InsideOf.lean` (`9450`): "lean exit 0 in 518 s", 7 theorems, the same axiom line.
+  - `AddressFacts/RowLeaves.lean` (`2752`): "lean exit 0 in 592 s", 10 theorems, the same axiom line.
+- **The plays at `31bfe877a35`** [run: `r20261113-123920-c000`, vy-nebius-cpu-3, `out/rc.txt`]:
+  - `the Lean package of the sampled proofs verifier, whole, rc=0` ("Build completed successfully (530 jobs).")
+  - `two templates, inputs committed, rc=0`
+  - `twenty templates, inputs committed, rc=0`
+  - `the toy end to end, rc=0`
+  - `windows and wiring tests, rc=0` (93 passed); `the registration and per-member form Python tests, rc=0` (85 passed); `the toy tests, rc=0` (10 passed).
+  - Both plays print `round_two = {"ok": true, "codes": []}` [run]. **No play trips the clause** [run].
+  - Its difftest line was `rc=1`: "1 failed, 125 passed, 2 skipped", the one being `test_the_recorded_public_files_pass_the_population_check`, "not fetched". That launcher does not fetch the recorded fixtures; the failure is not the clause's [run].
+- **The whole difftest at the pushed head** [run: `r20261113-125953-66ad`, vy-nebius-cpu-7, `head.txt` = `faaa93a0780…`]: `the Lean package of the sampled proofs verifier, whole, rc=0`; `the recorded fixtures fetched, rc=0`; `the difftest of the sampled proofs verifier, rc=0`, "127 passed, 2 skipped in 183.43s".
+- **The Python tests at `31bfe877a35`** [run: `r20261113-125039-a0dd`, vy-nebius-cpu-1]: `the verifier two-stage and served-select Python tests, rc=0` (151 passed); `the one-stage second-stage and driver tests, rc=0` (36 passed).
+- **What the plays do not show.** The play's round two is the Python twin's check (`two_stage.round_two`), not the compiled Lean's [read]. The compiled clause is held to the twin by the difftest: the two-template example with and without the added link, and the four designs of item 3 [run: `66ad`]. The compiled verifier on a kept case of twenty is the form's run, which uses `--interior-trees`; I did not launch it [run].
+- **Why twenty passes** [run: a local derivation, no check]: greedy select at K = 20 derives 21 links and 19 wires, and no wire's reader port or writer port is one a link names. At K = 2 it is 3 and 1; at K = 1, 2 and 0.
+
+**3. The two negative cases** (`faaa93a0780`, `test_round_two_refuses_a_design_whose_link_and_wire_name_one_port`).
+
+- I did not copy ADDRROW2's JSON files: I built the same four designs in the difftest's own builder, so that Lean and Python each derive them from a Definition [read]. They have the links and wires of `cases.json` at `6dd041406c14`, but for the names: my template is `CoreSpotOutNamed_v0` where theirs is `CoreSpotNamed_v0`, and my plain chain's reader is the test file's `ID8` [read: both].
+- `o0-chain`: a template whose one parameter is named `o0`, called on `PAIR`'s output. Both sides derive the return's link and the wire at `o0`, and the design is refused, `["second-wires"]` [run].
+- `same-both`: **my call is to feed it whole, so it does not depend on the decoder.** The test takes the design `plain-both` derives and moves its wire, and the wire's rows, onto `a`, the port its link names: refused, `["second-wires"]` [run]. The docstring says a Definition with two parameters of one name is the decoder's to refuse, so #9376 landing changes nothing here [derived].
+- The two plain twins pass the design: `["second-statements"]` alone, since the cases carry no statements [run].
+- **The clause is what refuses them** [run: local, the Python twin at the scratch tree without the clause]: without it both designs pass the design check.
+
+**4. The merge with the join's tip `4e986e339ad24a9885d38ac61c10199bd460d4fd`.**
+
+- `git merge-tree` of `faaa93a0780` with it: **one conflict, `benchmarks/one_stage/a5.py`**, and no Lean file [run]. It is my `member_form` against the join's `bound_reads`, which is my own mend `552354cbe19` there [read].
+- **`InsideOf.lean` compiles on the merge** [run: `r20261113-130138-140e`, vy-nebius-cpu-3, at scratch merge `882822b9c0535b2945c12bc0cc9b85db821ca860`]: "lean exit 0 in 417 s"; "none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- **So does `AddressFacts/RowLeaves.lean`**, whose text on the merge is the join's (two lines differ from mine) [run: `r20261113-130138-753e`]: "lean exit 0 in 383 s"; 10 theorems, the same axiom line.
+- Two limits. The scratch merge is of `538c159e7f5`, one commit before the head; that commit changes only `tests/test_difftest.py`, so the Lean is the same [derived]. And each run is `lean_changed.py --try` (the file's imports built, then the file), not `--build`; no file that imports them was compiled [run]. The merge is in a detached worktree on my VM, with `a5.py` taken from my side, and is pushed nowhere [run].
+- On the merge only those two files, beside the lemma itself, take `wiresOk` apart [run: `rg 'unfold .*wiresOk'`]. ADDRROW2's `wiresUnlinked` (`RowWires.lean:179`) is over the auditor's copies and does not read it [read].
+
+**5. Still running.**
+
+- `r20261113-130414-af1b`, vy-nebius-cpu-7, launched 13:04Z: the records run for the clause, at scratch `e41590644bb` = the head plus the pick of `65a6f23f426`, on no branch [run]. It says which guarantees read `reads["Spot.SecondStage"]`. So far the verifier's package passes at 6,146 declarations, one more than before [run]. Expected end about 13:45Z [guess]; my timer `gather-clause-records-af1b-1345z` reads it.
+
+**Standing.** Friday's two branches are unmoved: `984cb027efa3` and `496aa183544b` [run: fetched 13:08Z]. No pull request, no mark, no main merged, nothing rebased, nothing on Linear or Slack, and nothing launched with `--interior-trees` [run].
+
+**NEEDS.**
+1. Pick `65a6f23f426` onto the trial branch, yes or no (item 1).
+2. `wiresOk_unlinked` as `= none` (as pushed) or as `.isNone = true` (item 2).
