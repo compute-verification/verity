@@ -25,7 +25,7 @@ from verity.protocols.accounting.certifier.verifier.network_certifier import cel
 
 SESSION = signers.SESSION
 T, R, S, B = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots, PARAMS.cell_bytes
-LINK = "warden"
+LINK = "uplink"
 QA, QB = 0, 1
 
 
@@ -147,7 +147,7 @@ def test_the_wiring_reads_are_tied_to_the_network_certifiers_layout(tmp_path):
     assert wiring.connections == ((QA, 0, 2 * R), (QB, 0, R))
     honest = [(QA, 0), (QA, 1), (QA, R), (QB, 0)]
     p = W.port(head, wiring, PARAMS, honest)
-    assert p["reads"] == [0, 0, 1, 0] and p["root"] == head.root.hex() and p["value"] == "warden/egress/0"
+    assert p["reads"] == [0, 0, 1, 0] and p["root"] == head.root.hex() and p["value"] == f"{LINK}/egress/0"
     for (q, k), (t, j) in zip(honest, wiring.place(PARAMS, honest)):
         assert c0.rows[t][j * B:(j + 1) * B] == _cell(q, k)
         assert W.opens(dom, head.root, t, W.bc(c0.rows[t], c0.salts[t]), c0.path(t))
