@@ -1,11 +1,11 @@
-"""A tensor-parallel window's collective sites at a grain C-Flock proves (`sites_circuit`): each request's W rank Programs'
+"""A tensor-parallel window's collective sites at a grain Flock proves (`sites_circuit`): each request's W rank Programs'
 producers of a partial, the units combining them and the calls that read a combine's output, with each site's binding
 (`program.tp_binding`) as wires. Row p of every combine unit's parts, cut W ways, is rank p's partial row there, and every
 read of a combine's output is the output row of the unit that computes it.
 
 A wired row is committed under its writer's salt (`wiring.salts`), so a peer row and its writer's output are one public
 string. A peer row that isn't its writer's output is a wrong block of the window (`wiring.check`, and `check_drawn` on the
-units a sample draws), never a free input: `interface.input_count` counts every peer row wired.
+units a sample samples), never a free input: `interface.input_count` counts every peer row wired.
 
 **Units** (`grain.lower`). A site's units are:
 * its producers' units, per rank;
