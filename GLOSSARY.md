@@ -250,7 +250,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "proof service" | proof system |
 | "audit coin"; "the audit" as a step | challenger's coins; verification phase |
 | "prover" for the party: "the prover's node, machine, host or site", "a machine the prover doesn't control", "nothing the prover runs or hosts", "prover-controlled", "prover hardware", "the prover system" | the developer: the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware ("prover" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover in a soundness statement) |
-| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.configuration.deploy` keep the word) | onsite or remote, the list of protocols a configuration names, the Lean's `Composite` |
+| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.runtime` keep the word) | onsite or remote, the list of protocols a configuration names, the Lean's `Composite` |
 | "composite protocol" (the Lean's `Composite` keeps its name) | compose, over onsite's or remote's list; protocol soundness is stated per configuration |
 | "named premise", and "premise" for a named `Prop`: "the card premise" | assumption, or a proposed assumption until a lock lists it: the card assumption ("premise" stays for a theorem's hypothesis) |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
