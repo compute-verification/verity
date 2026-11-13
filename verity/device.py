@@ -114,11 +114,11 @@ ways_out(node, "node0")            # (Way('node0/eth0', 400000000000, True), Way
 ~~~
 
 `CARDS` and `NODES`, the directories the sheets are in, are `hardware/cards/` and `hardware/nodes/` beside the `verity`
-package's directory, the first of this file's parents so named. The readers of card files (`skus`, `load_card`) and of
-node files (`node_kinds`, `load_node`) take `directory`, and every reader of the node files that reads a card file
-(`load_node`, `leaves`, `ways_out`) takes `cards_directory`, the directories the files are in, so that a reader whose
-copy of them is elsewhere names where it is; `None` is `CARDS` for a card file and `NODES` for a node file, read when
-the reader is called.
+package's directory, the first of this file's resolved parents so named. The readers of card files (`skus`,
+`load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and every reader of the node files that
+reads a card file (`load_node`, `leaves`, `ways_out`) takes `cards_directory`, the directories the files are in, so
+that a reader whose copy of them is elsewhere names where it is; `None` is `CARDS` for a card file and `NODES` for a
+node file, read when the reader is called.
 
 Stdlib, the wire (`verity.channel`) and `verity.errors` only.
 """
@@ -951,9 +951,10 @@ def check(log: Registration, auditor: Auditor) -> Site:
 
 # --- the card files and the node files ---------------------------------------------------------------------------------
 
-_PACKAGE = next(p for p in Path(__file__).parents if p.name == "verity")
-"""The `verity` package's directory, the first of this file's parents so named: the sheets are in the top-level
-`hardware/` beside it, whatever this file's depth in the package."""
+_PACKAGE = next(p for p in Path(__file__).resolve().parents if p.name == "verity")
+"""The `verity` package's directory, the first of this file's resolved parents so named: the sheets are in the
+top-level `hardware/` beside it, whatever this file's depth in the package, and wherever a link to the package that
+imported it is (a `research run` job imports `verity` through one)."""
 CARDS = _PACKAGE.parent / "hardware" / "cards"
 CARD_KINDS = ("gpu", "host", "server", "timebase")
 MARKS = ("ceiling", "measurement", "premise", "placeholder")
