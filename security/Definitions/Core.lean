@@ -12,6 +12,7 @@ public import Definitions.Core.Game
 public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
 public import Definitions.Core.Challenger
+public import Definitions.Core.Party
 public import Definitions.Core.Decisive
 public import Definitions.Core.Scalar
 public import Definitions.Core.Prims
@@ -40,7 +41,8 @@ the ones here.
   `Formalism` (`(c, k)`-partitions and local description length).
 * What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
   (the registered hardware and its registration).
-* Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
+* Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Party` (the
+  auditor's devices as parties, their pins and sessions), `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
   model).

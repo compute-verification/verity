@@ -141,6 +141,11 @@ CANONICAL["Record"] = ("verity/protocols/interface/CoreProtocol/Record.lean::Cor
 CONCEPTS += ("Extractor", "Simulator")
 CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
 CANONICAL["Simulator"] = (f"{CORE}Interaction.lean::Claims.Simulator",)
+#: The auditor's devices as parties of a play, their pins and the deployment's pins.
+CONCEPTS += ("AuditorParty", "AuditorPin", "AuditorPins")
+CANONICAL["AuditorParty"] = (f"{CORE}Party.lean::Verity.AuditorParty",)
+CANONICAL["AuditorPin"] = (f"{CORE}Party.lean::Verity.AuditorPin",)
+CANONICAL["AuditorPins"] = (f"{CORE}Party.lean::Verity.AuditorPins",)
 #: What a second declaration of a concept loses, said in its failure.
 WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
                     "can open a hiding commitment to any trace, so it meets any contract",
