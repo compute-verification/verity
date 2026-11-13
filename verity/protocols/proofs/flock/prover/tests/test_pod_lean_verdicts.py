@@ -701,14 +701,18 @@ def test_a_composed_and_refused_run_records_the_refusal(tmp_path, capsys):
 
 def test_a_refused_forced_retry_passes_the_step_and_records_a_refusal(tmp_path, capsys):
     """85's RETRY passes the step when Lean refuses the composition for the retry: the exit is 0 and the record says
-    refused, so the exit is not Lean's acceptance of the recursive statement."""
+    refused, so the exit is not Lean's acceptance of the recursive statement. The record's reason names the retry, then
+    gives Lean's own."""
     binary, h, parts = _three(tmp_path)
     _challenger(tmp_path, [("L0", 0), ("L0-retry", 0), ("alg-p0", 1), ("L1", 2)])
     (tmp_path / "retried.txt").write_text("L0\n")
     rc = LV.main(["--compose", binary, str(tmp_path), *parts])
-    assert rc == 0 and capsys.readouterr().out.splitlines()[-1] == "lean: 3/3 accepted"
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted"
+    leans = LV.why_of(next(x for x in out if x.startswith("lean compose (RETRY=L0")).split("): ", 1)[1])
     record = _composition(tmp_path)
-    assert (record["composed"], record["accepted"]) == (True, False) and "a part is never retried" in record["why"]
+    assert (record["composed"], record["accepted"]) == (True, False) and "a part is never retried" in leans
+    assert record["why"] == f"a forced retry of L0 (RETRY=L0): {leans}"
 
 
 @pytest.mark.parametrize("ran, why", [

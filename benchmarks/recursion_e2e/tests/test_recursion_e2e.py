@@ -404,7 +404,7 @@ def test_a_composed_and_accepted_run_is_an_accepted_recursive_run(tmp_path: Path
     assert c["step"] == "lean" and c["ok"] is True and c["note"] == "" and c["extra"] == {"composed": True, "accepted": True}
     h = doc["headline"]
     assert (h["complete"], h["parts_ok"], h["composed"], h["not_composed"], h["ok"]) == (True, True, True, None, True)
-    assert "Verdict: one whole recursive run, accepted." in RT.markdown(doc)
+    assert h["refused"] is None and "Verdict: one whole recursive run, accepted." in RT.markdown(doc)
 
 
 def test_a_composed_and_refused_run_is_not_accepted(tmp_path: Path) -> None:
@@ -415,8 +415,25 @@ def test_a_composed_and_refused_run_is_not_accepted(tmp_path: Path) -> None:
     assert c["ok"] is False and c["note"] == "refused: " + why and c["extra"] == {"composed": True, "accepted": False}
     h = doc["headline"]
     assert doc["steps"]["lean"] == ["0", "0"] and "compose" in doc["summary"]["not_ok"]
-    assert (h["complete"], h["parts_ok"], h["composed"], h["ok"]) == (True, False, True, False)
-    assert "Verdict: one whole recursive run, **not accepted**" in RT.markdown(doc)
+    assert (h["complete"], h["parts_ok"], h["composed"], h["ok"], h["refused"]) == (True, False, True, False, why)
+    assert f"Verdict: one whole recursive run, **not accepted**: Lean refused its recursive statement ({why})." in RT.markdown(doc)
+
+
+RETRIED = "a forced retry of L0 (RETRY=L0): part 0: 2 sessions opened in the run record: a part is never retried"
+
+
+@pytest.mark.parametrize("left", [
+    {"composed": True, "accepted": False, "why": RETRIED},
+    'lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
+    '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}',
+], ids=["the step's record", "a step log from before the record"])
+def test_a_forced_retry_is_not_accepted_and_the_table_names_the_retry(tmp_path: Path, left) -> None:
+    """85's RETRY proves a part again on purpose and Lean refuses the composition for it: the lean step exits 0 and the
+    run is not an accepted recursive run, with the retry as the reason in the headline and in the table's line."""
+    doc = RP.read(whole(tmp_path, left))
+    h = doc["headline"]
+    assert doc["steps"]["lean"] == ["0", "0"] and (h["composed"], h["ok"], h["refused"]) == (True, False, RETRIED)
+    assert f"Verdict: one whole recursive run, **not accepted**: Lean refused its recursive statement ({RETRIED})." in RT.markdown(doc)
 
 
 @pytest.mark.parametrize("why", ["1 of V*'s 3 parts run", "no interactive-run record: its parts are not shown to be one run"])

@@ -219,6 +219,12 @@ def why_of(line: str) -> str:
         return ""
 
 
+def forced_retry(part: str) -> str:
+    """What the composition's record says first of a run whose part ``part`` was proved again on purpose (85's RETRY):
+    the reason it is not an accepted recursive run, whatever Lean answered."""
+    return f"a forced retry of {part} (RETRY={part})"
+
+
 def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str]],
              results: dict[str, tuple[bool, bool, bool, str]]) -> tuple[bool, dict]:
     """The V* parts composed by Lean (`compose`): the honest ones must compose, and each forgery, its every part put in
@@ -245,6 +251,7 @@ def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str
         j = part_of(d, retried) if (d / f"own-{retried}.txt").exists() else None
         why = why_of(line)
         ok = accepted is False and j is not None and why.startswith(f"part {j}: ") and "a part is never retried" in why
+        record["why"] = f"{forced_retry(retried)}: {why or line}"
         print(f"lean compose (RETRY={retried}, part {j}: refused as retried, a negative control): {line}"
               f"{'' if ok else '  <- FAILS'}")
     else:

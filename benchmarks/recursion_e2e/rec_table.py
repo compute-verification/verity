@@ -98,7 +98,8 @@ def markdown(doc: dict[str, Any]) -> str:
 def verdict(h: dict[str, Any], modes: Any) -> str:
     """The table's verdict from a result's headline. "accepted" only for a whole run whose parts passed and whose recursive
     statement Lean composed and accepted. A run that passed on its parts without that is said to be so, with its oprove
-    modes and the reason; so is a headline from before ``composed``, which records no composition."""
+    modes and the reason; so is a headline from before ``composed``, which records no composition. A run whose
+    composition Lean refused is not accepted, with Lean's reason: a forced retry's names the retry."""
     if h.get("ok") and h.get("composed") is True:
         return "one whole recursive run, accepted"
     if h.get("parts_ok", h.get("ok")) and h.get("composed") is not True:
@@ -107,7 +108,9 @@ def verdict(h: dict[str, Any], modes: Any) -> str:
         return (f"one whole run, its outer proofs accepted and its recursive statement {how}, so not an accepted recursive "
                 f"run (oprove modes {modes}" + (f": {why}" if why else "") + ")")
     if h.get("complete"):
-        return "one whole recursive run, **not accepted** (see ok and the steps' exits)"
+        why = h.get("refused")
+        return "one whole recursive run, **not accepted**" + (
+            f": Lean refused its recursive statement ({why})" if why else " (see ok and the steps' exits)")
     return "**not a whole recursive run**: some of " + ", ".join(RP.E2E_STEPS) + " did not run"
 
 

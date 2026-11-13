@@ -183,7 +183,7 @@ def lean_split(p: Path) -> dict[str, float]:
     return {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "session_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
 
 
-_COMPOSE = re.compile(r"^lean compose(?: \(RETRY=[^)]*\))?: (.*?)(?:  <- FAILS)?$", re.M)
+_COMPOSE = re.compile(r"^lean compose(?: \(RETRY=([^,)]*)[^)]*\))?: (.*?)(?:  <- FAILS)?$", re.M)
 
 
 def composition(o: Path) -> dict[str, Any] | None:
@@ -207,12 +207,14 @@ def composition(o: Path) -> dict[str, Any] | None:
 
 def logged_composition(step_log: str) -> dict[str, Any] | None:
     """A lean step's composition from its log (job.sh's ``step.log``): the step's ``lean compose`` line on the honest
-    parts, which says they were not composed, or carries Lean's ``REC-COMPOSE`` line, or says why Lean gave none. None
+    parts, which says they were not composed, or carries Lean's ``REC-COMPOSE`` line, or says why Lean gave none; a
+    forced retry's line (85's RETRY) names its part, which the reason then starts with, as the step's record does. None
     without that line."""
     m = _COMPOSE.search(step_log)
     if not m:
         return None
-    line = m.group(1)
+    retried, line = m.group(1), m.group(2)
+    forced = f"a forced retry of {retried} (RETRY={retried}): " if retried else ""
     if line.startswith("REC-COMPOSE "):
         try:
             v = json.loads(line.removeprefix("REC-COMPOSE "))
@@ -220,8 +222,8 @@ def logged_composition(step_log: str) -> dict[str, Any] | None:
             log.debug("a step log's REC-COMPOSE line isn't JSON, read as no answer (%s)", e)
             v = None
         if isinstance(v, dict):
-            return {"composed": True, "accepted": v.get("accepted"), "why": v.get("why")}
-    return {"composed": "is not composed" not in line, "why": line}
+            return {"composed": True, "accepted": v.get("accepted"), "why": forced + str(v.get("why") or "")}
+    return {"composed": "is not composed" not in line, "why": forced + line}
 
 
 def compose_row(cs: list[dict[str, Any] | None]) -> Row:
@@ -689,8 +691,9 @@ def headline(rows: list[Row], s: dict[str, Any], steps: dict[str, list[str]]) ->
     """Whether the run is one whole recursive run (``complete``: every step of ``E2E_STEPS`` ran), whether its parts passed
     (``parts_ok``: it is whole, every invocation exited 0, no row refused or unrun, and every flipped coin refused),
     whether Lean composed V*'s parts into the recursive statement (``composed``, `compose_row`'s; ``not_composed`` is why
-    not), and whether it is an accepted recursive run (``ok``: its parts passed and Lean accepted the composition), with
-    the numbers a reader looks for first. A run that passed on its parts with no composition is not ``ok``."""
+    not; ``refused`` is Lean's reason where it refused the composition, a forced retry among them), and whether it is an
+    accepted recursive run (``ok``: its parts passed and Lean accepted the composition), with the numbers a reader looks
+    for first. A run that passed on its parts with no composition is not ``ok``."""
     complete = all(steps.get(x) for x in E2E_STEPS)
     neg = {r.stage[len("negative inner-"):]: r.ok for r in rows if r.step == "negative" and r.stage.startswith("negative inner-")}
     parts_ok = (complete and all(rc == "0" for v in steps.values() for rc in v) and not s.get("not_ok")
@@ -700,6 +703,7 @@ def headline(rows: list[Row], s: dict[str, Any], steps: dict[str, list[str]]) ->
     mode = next(iter(k for k in s.get("pipeline", {}) if k.startswith("outer prove")), None)
     return {"complete": complete, "ok": parts_ok and c is not None and c.ok is True, "parts_ok": parts_ok, "composed": composed,
             "not_composed": None if composed is True else c.note if c else f"no record of the composition ({COMPOSITION})",
+            "refused": c.note.removeprefix("refused: ") if c is not None and c.ok is False else None,
             "pipeline_sum_s": s.get("pipeline_sum_s"), "pipeline": s.get("pipeline"),
             "outer": s.get("outer"), "outer_mode": mode, "slowest": s.get("slowest"), "negative_refused": neg or None,
             "forged_refused": forged(rows) or None}
