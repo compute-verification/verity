@@ -138965,3 +138965,72 @@ Clock: `date -u` read 11:47Z. Pen: mine. No file changes, no run.
 - **One thing I did not write as soundness worded it.** The docstrings say the clause is a second check of what `SecondStage.readOk_wired` gives and that where the parameters come from is the composite's to hold, not R3's [read: the tree at `450ee78950a`]. They do not cite `DeclaredIsParams`: no file of the tree at the tip or of `origin/main` declares or names it [run: `git grep DeclaredIsParams origin/main` and `rg` over the worktree at 11:47Z, no match]. A docstring naming a declaration that does not exist would be a dead pointer [derived]. When it is declared, tell me its full name and I add it in both docstrings [run].
 - **Pushing with another worker on the branch.** From now I fetch the branch before every push and never force; if the difftest in `b99b` fails I mend on top of whatever the tip then is [run].
 - Mailbox read at 11:49Z: newest section is yours of 11:45Z [run]. Records run `r20261113-114241-f5e2` (vy-nebius-cpu-8) is still running; its printout comes word for word in the next entry [run].
+
+## MEMBERS, Fri 13 Nov 11:50Z: the summary is written: `Spot/CircuitKept.lean` compiled at `10948fd9d3a9`; `Spot/OneStageZk.lean` with every layer compiled at the same head; suites `7a94`: the accept repeats with the kept pass
+
+Your 11:24Z and 11:40Z mail are read. Switch head pushed: `10948fd9d3a9` (nothing unpushed).
+
+**1. Suites `r20261113-110236-7a94`** [run, vy-nebius-cpu-7, at `96193ee1080b`, rc 1 for one test]
+- `benchmarks/one_stage`: passed, 1046 tests, none skipped. `test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case` passed, so **the accept repeats with the kept pass** (the pass as compiled at `bac046004bb6`). The two served-cases tests pass with `96193ee1080`'s fix.
+- `verity-core-composition`: passed, 28 tests.
+- `verity-core-sampled-proofs`: 326 passed, 1 failed: `test_members_twin.py::test_the_one_row_run_here_where_the_twin_is_not_leans`, the base's (WINDOWAT's tree has `sampledHeld` without #9576's change to that file; it goes at the carry). The two tests I mended pass.
+- Your wording for 14:00Z ("the compiled per-member check accepted a case of two members on the real prover's files, on the switch's branch, in a test") is right in every word [read: the test's docstring]. Two things it does not say, so that nobody reads more: the window is a tiny one (two templates of one proof block each, both members sampled), and the challenger is a development session on the same machine, its key the session's own. The same test rejects the case with one proof file changed.
+
+**2. The summary: written, and its Flock part compiled** [run `r20261113-114504-f320`, vy-nebius-cpu-2: `Spot/CircuitKept.lean` at `10948fd9d3a9`, exit 0, 12 theorems, only `propext`, `Classical.choice`, `Quot.sound`]
+- The three lemmas you asked to see first, as compiled (`own` is the caller's check of the circuit alone, `templateOk` for v2):
+```lean
+theorem checkOf_kept (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
+    (publicInputs registered : Bool) (own : Circuit → V Unit) :
+    ProvedScope.checkOf parsed tags zk publicFile count publicInputs registered =
+      checkOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile)
+        tags zk publicFile count publicInputs registered
+theorem portsOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (zk : Bool) (count : Nat)
+    (own : Circuit → V Unit) :
+    PortRoots.checkOf parsed tags publicFile =
+      portsOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile)
+theorem filesOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (zk : Bool) (count : Nat)
+    (own : Circuit → V Unit) :
+    KsScope.filesOf parsed tags publicFile count =
+      filesOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile)
+        tags publicFile
+```
+- **`HmIn.loadPublic` on a shared-row file closes by unfolding**: `HmIn.loadPublic tags (bare c) pi file = HmIn.loadPublic tags c pi file := rfl`, and the same for `ProvedScope.publicOf`, `HmOut.loadPublic`, `HmRow.loadPublic`, `PortRoots.loadedWhy` and `KsScope.collidesT`. So "no public-file check reads a row" is checked by the kernel, not only read. No hour was spent on it.
+
+**3. The summary's API, for FIRSTACCEPT's step** (`Spot.CircuitKept`, `open Flock`; at `10948fd9d3a9`. It differs from `29ef15c438b` in one thing: the three checks take the public file's one load, `loadOf`)
+```lean
+def bare (c : Circuit) : Circuit            -- nets, wires, leavesIn, leavesOut, leafCuts emptied
+structure Kept where
+  c : Circuit                               -- bare c
+  rules : Except String Unit                -- the scope's and wire order's verdict of the circuit alone
+  own : V Unit                              -- the caller's check of the circuit alone
+  rows : Bool                               -- PortRoots.rowsOk c
+  named : Bool                              -- (Registered.dupName c).isSome
+  unit : Option String                      -- KsScope.unitWhy tags count c
+  inputs : V HmIn.Ports                     -- HmIn.parse c
+def keptOf (tags : Tags) (zk : Bool) (count : Nat) (own : Circuit → V Unit) (c : Circuit) : Kept
+def loadOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : V Public
+def checkOf (k : V Kept) (pub : V Public) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
+    (publicInputs registered : Bool) : Except String Unit
+def portsOf (k : V Kept) (pub : V Public) : Except String Unit
+def filesOf (k : V Kept) (pub : V Public) (tags : Tags) (publicFile : ByteArray) : Except String Unit
+theorem keptOf_g : parsed.toOption.map (·.g) = (parsed.map (keptOf tags zk count own)).toOption.map (·.c.g)
+```
+- From a file to its summary, as v2 calls it (`Spot.OneStageZk.fileOf`): `(Flock.ProvedScope.circuitOf tags circuitB tables).map (CircuitKept.keptOf tags true 1 templateOk)` with `tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1`. `fileOf tags0 tables bs d : FileKept` holds that beside the blob, the META's lookups and the tags; `Member.filesOn m tags0 tables fk pk slice bs` is one member's files on it. The step can call both as they are.
+
+**4. What the pass now does once, in commits of their own on the switch's branch, all compiled at `10948fd9d3a9`** (each under `membersFiles = membersFilesKept`; `Blobs.get` unchanged; no statement, lock or root touched)
+| commit | what | once a |
+|---|---|---|
+| `8ffb6e98784` | `Spot/CircuitKept.lean`: the summary and the three checks on it | |
+| `964b626605e` | the blobs' lookup tables; a circuit file's blob, its META's lookups, its tags, its parse, the circuit's own verdicts; the summary kept, the parse dropped; `KeptParses.after`'s scan gone | run; file |
+| `89e34d206ce` | a member's public file loaded once for the three checks that load it (it was three loads a member) | member |
+| `5499991129a` | one proof rewritten: the kernel's check of a whole-term `rfl` ran out (run `r20261113-113631-142f`) | |
+| `10948fd9d3a` | a program parsed and hashed once for the members in a row that read it, by its bytes | run of equal programs |
+- **A finding the tables' hoist removes** [derived, read: `tablesOf`]: `tablesOf bs` scans every blob for each of the four pinned tables and hex-encodes each blob's digest to compare. It was called three to four times a member. At 102,781 members and 100,000 to 200,000 blobs that is over 10¹¹ hex encodings, hours to days by any rate; FIRSTACCEPT's 300 members could not show it (few blobs). It is once a run now.
+- **What cannot be shared without a condition** [read]: `readsRegistered programJ`, `Partition.strata` at the member's query, and `printedSize partition` are keyed by a JSON value, and Lean's `Json` has no equality that decides `=`. They stay once a member; each is the size of the program's description, none reads a circuit's row.
+- **Not done**: an index around `Blobs.get` for the member's public file (`bs.get` scans the blobs once a member: about 10¹⁰ digest compares at Thursday's size, minutes by guess, each a `memcmp`). Say if you want it before the row of item 5.
+
+**5. Your 14:00Z line**: no word of it is wrong. With vllm's 21.93 GB for the largest file the streamed figure is that file and its parse, so about 150 GB, inside your "about 160 GB, a guess". The summaries kept for the whole run add 298 times a META's size, which FIRSTACCEPT is measuring.
+
+**6. The cost row** (`benchmarks/verifier_cost/`, N members of one file against one member): not started. It needs a case of N members of one circuit file, which FIRSTACCEPT's driver makes and no tree of mine has. Say whether I take the driver from FIRSTACCEPT's head (which) or FIRSTACCEPT writes the row.
+
+**Tries** [run]: `Sampled/Record/Pass.lean` at `6825733d3bfa` exit 0 (`r20261113-110041-4813`); `Sampled/Record/KS.lean` at `8ffb6e987844` exit 0 (`r20261113-113252-42e6`). `Spot/OneStageZk.lean` at `10948fd9d3a9` exit 0, 44 theorems, only the three axioms (`r20261113-114546-92e2`, vy-nebius-cpu-7). Suites at that head: `r20261113-114947-5f94` on vy-nebius-cpu-9, launched 11:49Z, due about 12:25Z: the first run of the compiled check with the summary on the real prover's files. The queue goes on with the files that import it, one try at a time.
