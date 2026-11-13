@@ -49,9 +49,9 @@ inputs = ["verity/protocols/poub/prover/remote_session/prover.py", "verity/proto
           "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/randomness", "verity/difftest/lean",
+          "verity/commitments/randomness", "verity/circuits/difftest",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
-          "verity/difftest/python",
+          "tools/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
           # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product

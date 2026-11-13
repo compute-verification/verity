@@ -14,7 +14,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier", 
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
           # the difftest the replay module imports
-          "verity/difftest/python",
+          "tools/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/claims/__init__.py", "verity/protocols/spot",
           # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its
