@@ -1,5 +1,6 @@
 """What SPOT[Flock]'s two-stage Lean model (`SpotFlock.stmtOk`) reads of a run of the two-stage toy, and the auditor's
-copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads them.
+copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads them. A run of another design exports
+the same at its own `Design`.
 
 `export` writes, from a run's ``--out`` (`audit.py`) and its stream:
 
@@ -45,7 +46,9 @@ import struct
 import sys
 import tarfile
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 #: `Flock/Lookup.lean`, whose `MUFU_TABLES` Flock's Lean verifier reads from its `--archive` by SHA-512, in its order
@@ -160,24 +163,43 @@ def ref_sample(q: int, n_t: int, k: int) -> dict:
     return {"k": size, "law": "subset", "population": q * n_t, "units": list(range(size))}
 
 
-def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int) -> dict:
-    """The guard's inputs for the run at ``run_out`` on ``stream`` (its boundary registration at ``order``), with ``n``
-    spans, ``q`` replay blocks sampled and ``k`` proof blocks a cell: written to ``out``; -> ``held.json``'s object."""
+@dataclass(frozen=True)
+class Design:
+    """What `export` reads of a run's design, each fixed before the run: the boundary window (its program the replay
+    Definition's, its query and work table the first stage's), the reference interior window of the sampled replay
+    blocks with no run in it (its members in template order, its partition and program the sessions'), the replay
+    Definition, and each template's units a replay block."""
+    boundary: Any
+    reference: Any
+    replay: Any
+    cells: tuple[int, ...]
+
+
+def toy_design(n: int, q: int) -> Design:
+    """The toy's (`toy.py`), for ``n`` spans and ``q`` replay blocks sampled."""
     import toy as T
+    return Design(T.boundary_window(n, q), T.interior_window("00" * 64, range(q)), T.REPLAY, tuple(T.N_T))
+
+
+def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int, design: Design | None = None) -> dict:
+    """The guard's inputs for the run at ``run_out`` on ``stream`` (its boundary registration at ``order``), with ``n``
+    spans, ``q`` replay blocks sampled and ``k`` proof blocks a cell, at ``design`` (the toy's where none is given):
+    written to ``out``; -> ``held.json``'s object."""
     from verity.protocols.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
     from verity.commitments.windows.rows import expected_ports
 
     out.mkdir(parents=True, exist_ok=True)
     entry = stream._entries[order]
-    bw, ref = T.boundary_window(n, q), T.interior_window("00" * 64, range(q))
+    design = design or toy_design(n, q)
+    bw, ref = design.boundary, design.reference
     first = {"rule": stream.spec.selection.to_json(), "program": encode_program(bw.program), "query": dict(bw.query),
              "work_table": None if bw.work_table is None else dict(bw.work_table), "closure": None}
     ran = {"rule": stream.spec.selection.to_json(), "program": encode_program(entry.program), "query": dict(stream.query),
            "work_table": None if entry.work_table is None else dict(entry.work_table), "closure": None}
     if canonical_json(first) != canonical_json(ran):
         raise ValueError("the boundary window's select input is not the one the run's first stage read")
-    replay, key = bw.program, descriptor_id(T.REPLAY)
+    replay, key = bw.program, descriptor_id(design.replay)
     links = SS.replay_links(replay, key, {"roots": [{"port": p} for p in expected_ports(bw)]})
     brec = json.loads((run_out / "boundary" / "registration.json").read_text())
     if links != SS.replay_links(replay, key, brec):
@@ -197,7 +219,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     part, prog = json.dumps(ref.partition, sort_keys=True).encode(), canonical_json(encode_program(ref.program))
     names, base = [m.template for m in ref.members], 0
     vus = []
-    for n_t in T.N_T:
+    for n_t in design.cells:
         vus.append(list(range(base, base + n * n_t)))
         base += n * n_t
     query = stream.spec.check.query
@@ -213,7 +235,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
         raise ValueError("the reference window's partition or program is not the one the sessions were verified under")
     stmts = []
     params = json.loads((run_out / "proofs.json").read_text())["templates"]
-    for t, (m, n_t) in enumerate(zip(ref.members, T.N_T)):
+    for t, (m, n_t) in enumerate(zip(ref.members, design.cells)):
         d = run_out / "references" / f"m{t}"
         reads = params[t].get("registered")
         tables = sorted((d / "tables").glob("*.u32")) if (d / "tables").is_dir() else []
