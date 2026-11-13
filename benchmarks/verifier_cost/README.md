@@ -208,17 +208,20 @@ through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmp
 same staged statement (stmt-base.jsonl).
 
 `flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
-members in turn (`verify-members`, which reads the run's program once) against a process a member (`verify`). Per spec,
-`one_stage/m1_unit.py` stages, proves and verifies one statement bound to its program, and `flock_members.py` hands that
-member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
-are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
-first member, which pays the one read, and as a later member, with the memory the kept process holds between members
-(`rss_kb`: its resident memory at each `MEMBER` line). Every process runs under the verifier's allocator setting, as its
-Python callers start it (`proofs.verifier_env`), unless the job's environment sets a value of its own, and
-`members.json` records the value (`env`). Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s
-alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and none of its figures
-counts. The target is a later member's wait with nothing of the program's in it: what is left reads the member's own
-circuit and public file.
+members in turn (`verify-members`, which reads the run's program once and hands each member the circuit file the member
+before it read) against a process a member (`verify`). Per spec, `one_stage/m1_unit.py` stages, proves and verifies one
+statement bound to its program, and `flock_members.py` hands that member in `FM_MEMBERS` times each way, pinned to one
+core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers are a member's `before_check_ms` (the verifier's own
+`inputs:` and `setup:` stage lines) alone, as the kept process's first member, which pays the one read, and as a later
+member, with the memory the kept process holds between members (`rss_kb`: its resident memory at each `MEMBER` line).
+Every process runs under the verifier's allocator setting, as its Python callers start it (`proofs.verifier_env`),
+unless the job's environment sets a value of its own, and `members.json` records the value (`env`). Its guard: each
+kept member's `VERDICT` lines are byte for byte `verify`'s alone, every member is accepted and the kept process exits
+0; a run that fails it exits nonzero and none of its figures counts. The target is a later member's wait
+with nothing of the program's in it, and nothing of a circuit file it shares with the member before it but the file's
+bytes read and compared. `FM_ORDER` (the members by their spec's index, `0,0,1,0`) adds the specs' members in one kept
+process: a member whose circuit file is another than the one before's pays for its own, and the process's peak RSS
+says what the change of file holds at once.
 
 ~~~sh
 research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \

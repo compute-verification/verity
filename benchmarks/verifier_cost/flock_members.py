@@ -1,14 +1,19 @@
 """The Lean verifier's seconds a member of a run before its first check: one process a member (`verify`) against one
-kept process for them all (`verify-members`, which reads the run's program once).
+kept process for them all (`verify-members`, which reads the run's program once and hands each member the circuit file
+the member before it read).
 
-    python3 benchmarks/verifier_cost/flock_members.py --lean BIN --argv FILE --out DIR [--members 3] [--rounds 2] [--core C]
+    python3 benchmarks/verifier_cost/flock_members.py --lean BIN --argv FILE [--argv FILE ...] --out DIR
+        [--members 3 | --order 0,0,1,0] [--rounds 2] [--core C]
 
 FILE holds one `verify` call, an argument a line, `verify` first: a member's call as its caller makes it, with the run's
 `--program` (and `--archive` where the call names its files by digest). The member is handed in `--members` times over.
 `verify-members` takes that as so many members, each a call of its own (one `verify` call would refuse the second for
-its reused coin key), so each costs what a member with that program and a statement of that size costs. A round is the
-members alone, a process each, then the kept process on the same argument lists, a line a member, the next written once
-the last is answered; the rounds alternate so both ways see the node's load, which each row records.
+its reused coin key), so each costs what a member with that program and a statement of that size costs. With several
+calls, `--order` names the members by their call's index: a member whose call is another than the one before's has
+another circuit file, and the kept process's peak RSS says what the change of file holds at once. The kept program is
+the first member's. A round is the members alone, a process each, then the kept process on the same argument lists, a
+line a member, the next written once the last is answered; the rounds alternate so both ways see the node's load, which
+each row records.
 
 Per member and way, from the verifier's own stage lines on standard error: `inputs_ms` (its files read, hashed and
 parsed before any session), `setup_ms` (its session's statement set up), `before_check_ms`, their sum, the seconds a
@@ -24,9 +29,10 @@ so `members.json` records the value the processes ran under (`env`); figures und
 
 The guard, without which no figure counts: each kept member's `VERDICT` lines are byte for byte those `verify` printed
 for it alone in the same round, its `MEMBER` line carries that exit status and its index, every member is accepted,
-and the kept process exits 0. `DIR/members.json` (`verity/flock-members/v1`) has the rows, the kept processes, the
-guard's failures and `summary`, the medians a way: alone, the kept process's first member, and its later members.
-Exit 3 when the guard fails, after the file is written.
+and the kept process exits 0. `DIR/members.json` (`verity/flock-members/v2`) has the rows, each with its call's index,
+the kept processes, the guard's failures and `summary`, the medians a way: alone, the kept process's first member, its
+later members whose call is the one before's (`kept_later`) and those whose call is another (`kept_changed`). With
+several calls a median mixes them, and the rows are what to read. Exit 3 when the guard fails, after the file is written.
 """
 from __future__ import annotations
 
@@ -43,7 +49,7 @@ from pathlib import Path
 
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import VERIFIER_ENV, verifier_env
 
-SCHEMA = "verity/flock-members/v1"
+SCHEMA = "verity/flock-members/v2"
 STAGE = re.compile(r"^(.+): (\d+) ms$")
 ONCE = ("--archive", "--program")
 
@@ -143,47 +149,55 @@ def median(xs: list[float]) -> float | None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--lean", required=True, help="the Lean verifier's executable")
-    ap.add_argument("--argv", required=True, help="one verify call, an argument a line, `verify` first")
+    ap.add_argument("--argv", required=True, action="append", help="one verify call, an argument a line, `verify` first")
     ap.add_argument("--out", required=True)
     ap.add_argument("--members", type=int, default=3)
+    ap.add_argument("--order", default=None,
+                    help="the members, by their call's index among --argv (default: the first, --members times)")
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--core", type=int, default=None, help="pin every process to this core (default: the last it may use)")
     a = ap.parse_args()
-    argv = Path(a.argv).read_text().splitlines()
-    if not argv or argv[0] != "verify":
-        sys.exit(f"flock_members: {a.argv} is not a verify call")
-    args = argv[1:]
-    once = once_a_run(args)
+    calls = []
+    for f in a.argv:
+        argv = Path(f).read_text().splitlines()
+        if not argv or argv[0] != "verify":
+            sys.exit(f"flock_members: {f} is not a verify call")
+        calls.append(argv[1:])
+    order = [int(x) for x in a.order.split(",")] if a.order else [0] * a.members
+    if not order or not all(0 <= c < len(calls) for c in order):
+        sys.exit(f"flock_members: --order {a.order} names a call that is not among the {len(calls)} given")
+    n = len(order)
+    once = once_a_run(calls[order[0]])
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     core = a.core if a.core is not None else max(os.sched_getaffinity(0))
     cmd = ["taskset", "-c", str(core), a.lean]
     env = verifier_env()
-    line = json.dumps(args).encode() + b"\n"
+    lines = [json.dumps(calls[c]).encode() + b"\n" for c in order]
     rows: list[dict] = []
     processes: list[dict] = []
     failures: list[str] = []
     for r in range(a.rounds):
         singles = []
-        for i in range(a.members):
+        for i, c in enumerate(order):
             load = os.getloadavg()[0]
-            one = alone(cmd, args, f"{out}/r{r}.alone{i}", env)
+            one = alone(cmd, calls[c], f"{out}/r{r}.alone{i}", env)
             got = stages(Path(f"{out}/r{r}.alone{i}.err").read_text(errors="replace"))
             if len(got) != 1:
                 failures.append(f"round {r}: member {i} alone printed {len(got)} `inputs:` lines, not 1")
             if one["exit"] != 0:
                 failures.append(f"round {r}: member {i} alone exited {one['exit']}: only an accepted member is timed")
             singles.append(one)
-            rows.append({"round": r, "way": "alone", "member": i, "load": load, **(got[0] if got else {}),
+            rows.append({"round": r, "way": "alone", "member": i, "call": c, "load": load, **(got[0] if got else {}),
                          **{k: one[k] for k in ("wall_s", "exit", "max_rss_kb")}})
             print(f"FM {json.dumps(rows[-1])}", flush=True)
         load = os.getloadavg()[0]
-        process, answers = kept(cmd, once, [line] * a.members, f"{out}/r{r}.kept", env)
+        process, answers = kept(cmd, once, lines, f"{out}/r{r}.kept", env)
         got = stages(Path(f"{out}/r{r}.kept.err").read_text(errors="replace"))
         processes.append({"round": r, "load": load, **process})
         print(f"FM {json.dumps({'way': 'kept-process', **processes[-1]})}", flush=True)
-        if process["exit"] != 0 or process["closed"] or len(answers) != a.members or len(got) != a.members:
-            failures.append(f"round {r}: the kept process exited {process['exit']} with {len(answers)} of {a.members} members "
+        if process["exit"] != 0 or process["closed"] or len(answers) != n or len(got) != n:
+            failures.append(f"round {r}: the kept process exited {process['exit']} with {len(answers)} of {n} members "
                             f"answered and {len(got)} `inputs:` lines" + (f"; {process['closed']}" if process["closed"] else ""))
         for i, answer in enumerate(answers):
             verdict, last = b"".join(answer["lines"][:-1]), answer["lines"][-1]
@@ -193,7 +207,8 @@ def main() -> int:
                                 f"verify's alone ({hashlib.sha256(singles[i]['verdict']).hexdigest()[:16]})")
             if last != want:
                 failures.append(f"round {r}: member {i}'s line is {last!r}, not {want!r}")
-            rows.append({"round": r, "way": "kept", "member": i, "load": load, **(got[i] if i < len(got) else {}),
+            rows.append({"round": r, "way": "kept", "member": i, "call": order[i], "load": load,
+                         **(got[i] if i < len(got) else {}),
                          "wall_s": answer["wall_s"], "rss_kb": answer["rss_kb"],
                          "exit": json.loads(last[len(b"MEMBER "):]).get("exit")})
             print(f"FM {json.dumps(rows[-1])}", flush=True)
@@ -201,14 +216,15 @@ def main() -> int:
     def of(way: str, key: str, members) -> float | None:
         return median([row[key] for row in rows if row["way"] == way and row["member"] in members and key in row])
 
-    later = range(1, a.members)
+    later = [i for i in range(1, n) if order[i] == order[i - 1]]
+    changed = [i for i in range(1, n) if order[i] != order[i - 1]]
     summary = {f"{name}_{key}": of(way, key, members)
-               for name, way, members in (("alone", "alone", range(a.members)), ("kept_first", "kept", (0,)),
-                                          ("kept_later", "kept", later))
+               for name, way, members in (("alone", "alone", range(n)), ("kept_first", "kept", (0,)),
+                                          ("kept_later", "kept", later), ("kept_changed", "kept", changed))
                for key in ("before_check_ms", "inputs_ms", "setup_ms", "session_ms", "wall_s", "rss_kb")}
-    doc = {"schema": SCHEMA, "lean_sha256": hashlib.sha256(Path(a.lean).read_bytes()).hexdigest(), "members": a.members,
-           "rounds": a.rounds, "core": core, "env": {name: env[name] for name in VERIFIER_ENV}, "once": once, "rows": rows,
-           "kept": processes,
+    doc = {"schema": SCHEMA, "lean_sha256": hashlib.sha256(Path(a.lean).read_bytes()).hexdigest(), "members": n,
+           "order": order, "rounds": a.rounds, "core": core, "env": {name: env[name] for name in VERIFIER_ENV},
+           "once": once, "rows": rows, "kept": processes,
            "guard": {"ok": not failures, "failures": failures}, "summary": summary}
     (out / "members.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"FM {json.dumps({'guard': doc['guard'], 'summary': summary})}", flush=True)
