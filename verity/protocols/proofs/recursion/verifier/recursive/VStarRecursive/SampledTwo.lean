@@ -363,7 +363,7 @@ def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray
 
 /-- **On two windows, the first session releases none of the second stage's coins** (check, 4): where the interior
 audit's window is not the boundary registration's, the first session's log (the session `e.coins` names on the
-boundary's window under the interior audit's challenger key, `Challenger.trustedSessionOf`) shows no coin of the
+boundary's window under the interior audit's challenger key, `Challenger.trustedChallengePhaseOf`) shows no coin of the
 second stage's family, the one the interior audit's parameters name, released after the interior registration's
 digest (`INTERIOR_SHOWN`), so the coins of that family after that digest are the second session's alone. The
 interior audit's parameters always name a challenger (`OneStageZk.NO_CHALLENGER`); where the boundary names no window
@@ -373,8 +373,8 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   | some (k, label), some w =>
     if some w == p.audit.base.verifier.windowRoot then .ok () else do
       let after ← Registration.digest e.record
-      let (_, roots) ← Challenger.trustedSessionOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
-        (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
+      let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
+        k (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
