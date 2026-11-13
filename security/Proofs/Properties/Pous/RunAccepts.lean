@@ -12,6 +12,9 @@ rounds each open block 0 with the table's row, on time. Each round's coin opens 
 frame-v3 nodes over their children (`nodeAt`), so a coin's siblings climb to its root whatever the hashes are
 (`climbL_nodeAt`). The session's message is signed at leaf 0 of a key `Lms.key` derives, the verifier's one trusted
 key. Each digest a check compares is the expression it is compared with, so no SHA-512 is evaluated.
+
+`runCheck_acceptsAt` is the same run on any published setup and table that pass `Run.checkAt`'s setup-side checks:
+the rounds open the table's row 0 and the commitment binds the setup's root.
 -/
 
 @[expose] public section
@@ -208,21 +211,23 @@ theorem root_honest : (PousCheck.Merkle.root honestLeaves == some honestPub.root
   simp only [hne, Bool.false_eq_true, ↓reduceIte]
   exact beq_self_eq_true _
 
-/-- Round `j`: coin `j` opened block 0, sent and received at 0 ns, with the table's row 0. -/
-def honestRound (j : Nat) : Round := ⟨j, 0, 0, 0, PousCheck.Run.row honestDigests 0⟩
+/-- Round `j`: coin `j` opened block 0, sent and received at 0 ns, with row 0 of the table `digests`. -/
+def honestRound (digests : ByteArray) (j : Nat) : Round := ⟨j, 0, 0, 0, PousCheck.Run.row digests 0⟩
 
-def honestRounds : Array Round := (Array.range 105).map honestRound
+def honestRounds (digests : ByteArray) : Array Round := (Array.range 105).map (honestRound digests)
 
-def honestCommitment : SessionCommitment :=
+/-- The session's commitment, bound to the setup's root `root`. -/
+def honestCommitment (root : ByteArray) : SessionCommitment :=
   ⟨honestSid, honestCoinRoot, honestCoinKey, PousCheck.P2.Params.deployed.blocks, 105,
-    PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, honestPub.root⟩
+    PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root⟩
 
 theorem commitment_beq_self (c : SessionCommitment) : (c == c) = true := by
   cases c
   simp only [BEq.beq]
   simp [instBEqSessionCommitment.beq]
 
-theorem verifyCoin_honest {j : Nat} (hj : j < 105) : verifyCoin honestCommitment (honestOpening j) = true := by
+theorem verifyCoin_honest (root : ByteArray) {j : Nat} (hj : j < 105) :
+    verifyCoin (honestCommitment root) (honestOpening j) = true := by
   unfold verifyCoin
   have hc := coinLeaf_honest (j := j) (by omega)
   simp only [honestCommitment] at hc ⊢
@@ -230,18 +235,18 @@ theorem verifyCoin_honest {j : Nat} (hj : j < 105) : verifyCoin honestCommitment
     show (honestOpening j).salt = honestSalt from rfl, hc, hj, blocks_pos, decide_true, Bool.true_and]
   exact verifyOpening_coin hj
 
-theorem rounds_honest : ∀ j (hj : j < honestRounds.size),
-    (∃ o, honestOpenings.findRev? (·.j == j) = some o ∧ honestRounds[j].j = j ∧
-      o.index = honestRounds[j].index ∧ verifyCoin honestCommitment o = true) ∧
-    honestRounds[j].index < honestCommitment.blocks ∧
-    PousCheck.Run.expected PousCheck.P2.Params.deployed honestDigests honestRounds[j].index =
-      some honestRounds[j].digest ∧
-    0 ≤ honestRounds[j].elapsedNs ∧ honestRounds[j].elapsedNs ≤ honestCommitment.limitNs := by
+theorem rounds_honest (root digests : ByteArray) : ∀ j (hj : j < (honestRounds digests).size),
+    (∃ o, honestOpenings.findRev? (·.j == j) = some o ∧ (honestRounds digests)[j].j = j ∧
+      o.index = (honestRounds digests)[j].index ∧ verifyCoin (honestCommitment root) o = true) ∧
+    (honestRounds digests)[j].index < (honestCommitment root).blocks ∧
+    PousCheck.Run.expected PousCheck.P2.Params.deployed digests (honestRounds digests)[j].index =
+      some (honestRounds digests)[j].digest ∧
+    0 ≤ (honestRounds digests)[j].elapsedNs ∧ (honestRounds digests)[j].elapsedNs ≤ (honestCommitment root).limitNs := by
   intro j hj
   have hj' : j < 105 := by simpa [honestRounds] using hj
-  have hr : honestRounds[j] = honestRound j := by simp [honestRounds]
+  have hr : (honestRounds digests)[j] = honestRound digests j := by simp [honestRounds]
   simp only [hr]
-  exact ⟨⟨honestOpening j, findRev_honest hj', rfl, rfl, verifyCoin_honest hj'⟩,
+  exact ⟨⟨honestOpening j, findRev_honest hj', rfl, rfl, verifyCoin_honest root hj'⟩,
     by simp [honestRound, honestCommitment, blocks_pos],
     by simp [PousCheck.Run.expected, honestRound, blocks_pos],
     by simp [Round.elapsedNs, honestRound],
@@ -255,10 +260,11 @@ theorem mapM_ok {α β ε : Type} (f : α → Except ε β) :
     obtain ⟨bs, hbs⟩ := mapM_ok f l fun x hx => h x (List.mem_cons_of_mem _ hx)
     exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs, bind, Except.bind, pure, Except.pure]⟩
 
-theorem message_honest : ∃ m, message honestCommitment COMPLETE honestRounds = .ok m := by
-  obtain ⟨vs, hvs⟩ : ∃ vs, honestRounds.mapM Round.value = .ok vs := by
+theorem message_honest (root digests : ByteArray) :
+    ∃ m, message (honestCommitment root) COMPLETE (honestRounds digests) = .ok m := by
+  obtain ⟨vs, hvs⟩ : ∃ vs, (honestRounds digests).mapM Round.value = .ok vs := by
     rw [Array.mapM_eq_mapM_toList]
-    obtain ⟨bs, hbs⟩ := mapM_ok Round.value honestRounds.toList fun a ha => by
+    obtain ⟨bs, hbs⟩ := mapM_ok Round.value (honestRounds digests).toList fun a ha => by
       simp only [honestRounds, Array.toList_map, List.mem_map, Array.toList_range, List.mem_range] at ha
       obtain ⟨j, hj, rfl⟩ := ha
       have h32 : j < 4294967296 := by omega
@@ -289,15 +295,21 @@ theorem checkAt_of {schemes : Schemes} {pt : PousCheck.Run.Point} {trusted : Lis
   simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, PousCheck.Run.need, ↓reduceIte, bind, Except.bind, pure,
     Except.pure]
 
-/-- **The composed check accepts a run**, at P2's deployed point under S1's LMS: the table of zero digests, the setup
-whose root is its leaves', and a complete session of 105 rounds at block 0, each coin opened in its tree and the
-session signed at leaf 0 of a key `Lms.key` derives at `Lms.deployed`, which is the verifier's one trusted key. -/
-theorem runCheck_accepts : ∃ (trusted : List ByteArray) (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
-    (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray), PousCheck.Run.check trusted pub digests r sid = .ok () := by
+/-- **The composed check accepts a run on any published setup** `pub` whose salt, size and root agree with the table
+`digests` (the setup-side checks of `Run.checkAt`), at P2's deployed point under S1's LMS: a complete session of 105
+rounds at block 0 with `digests`' row 0, each coin opened in its tree, bound to `pub.root` and signed at leaf 0 of a
+key `Lms.key` derives at `Lms.deployed`, which is the verifier's one trusted key. -/
+theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
+    (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
+    (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
+    (hr : (PousCheck.Merkle.root (PousCheck.Run.rowLeaves PousCheck.P2.Params.deployed pub.salt digests) ==
+      some pub.root) = true) :
+    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
+      PousCheck.Run.check trusted pub digests r sid = .ok () := by
   obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed (I := PousCheck.Prim.zeros 16) rfl
     (PousCheck.Prim.zeros 64)
   obtain ⟨hIs, hps, hpI⟩ := pub_spec hk
-  obtain ⟨m, hm⟩ := message_honest
+  obtain ⟨m, hm⟩ := message_honest pub.root digests
   obtain ⟨σ, hσs, hσv⟩ := signs hk
     (Flock.Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++ field (field honestSid) ++
       field m))
@@ -306,14 +318,22 @@ theorem runCheck_accepts : ∃ (trusted : List ByteArray) (pub : PousCheck.Setup
     unfold lmsVerify memoryChallengerMessage
     simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
     exact hσv
-  refine ⟨[k.publicKey], honestPub, honestDigests,
-    ⟨⟨honestCommitment, COMPLETE, honestRounds, LMS, k.publicKey, σ.encode⟩, honestCommitment, honestOpenings⟩,
+  refine ⟨[k.publicKey],
+    ⟨⟨honestCommitment pub.root, COMPLETE, honestRounds digests, LMS, k.publicKey, σ.encode⟩,
+      honestCommitment pub.root, honestOpenings⟩,
     honestSid, ?_⟩
   unfold PousCheck.Run.check
-  refine checkAt_of (beq_self_eq_true _) (by simp [honestPub, zeros_size, PousCheck.Run.SALT])
-    (by simp [honestDigests, zeros_size, PousCheck.Run.DEPLOYED]) root_honest (beq_self_eq_true _) (beq_self_eq_true _)
+  refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
+    (by simp [hd, PousCheck.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
     (by simp [honestCommitment]) (beq_self_eq_true _) (beq_self_eq_true _) (beq_self_eq_true _) ?_
   exact verdict_accepted_of (p := Lms.deployed) (m := m) (by simp [SCHEMES]) (by simp) hm hv
-    (commitment_beq_self _) rfl (by simp [honestRounds, honestCommitment]) rounds_honest
+    (commitment_beq_self _) rfl (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
+
+/-- **The composed check accepts a run**, on the table of zero digests and the setup whose root is its leaves'
+(`runCheck_acceptsAt`). -/
+theorem runCheck_accepts : ∃ (trusted : List ByteArray) (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
+    (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray), PousCheck.Run.check trusted pub digests r sid = .ok () := by
+  obtain ⟨tr, r, sid, h⟩ := runCheck_acceptsAt honestPub honestDigests rfl (zeros_size _) (zeros_size _) root_honest
+  exact ⟨tr, honestPub, honestDigests, r, sid, h⟩
 
 end Pous.EndToEnd.SecurityProofs.Honest
