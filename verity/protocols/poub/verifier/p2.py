@@ -27,7 +27,7 @@ y_(i,p)       SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ 
 Everything else is the audit's (`audit.py`): seeds, plans (over units), leaves of sixteen receipts, their trees,
 windows, deadlines, coins and draws.  A unit is the receipt's vector so that it is whole sectors: block j starts at
 byte 8j mod 32 of the store, so a receipt of one block would leave a sector half read, and the sketch's bound on a
-guessed receipt (`SketchBoundSession`, over sectors) would lose a factor 2^32 a receipt.
+guessed receipt (`SketchBoundRun`, over sectors) would lose a factor 2^32 a receipt.
 
 An opening (`Opening`) is the unit's four blocks, each with its path to the registration's root, and the receipt
 leaf with its salt and path to the pass's root.  The verifier, the audit's session over a P2 codec

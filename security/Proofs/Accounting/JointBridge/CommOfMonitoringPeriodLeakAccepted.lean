@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.Accounting.NetWitness
 public import Proofs.NetworkCertifier.Period
@@ -42,16 +42,16 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The network certifier's per-period guarantee from its period of sampled audits (proof)
 
-`Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted`: `comm_of_periodLeak` at network accounting's proof of
+`Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted`: `comm_of_monitoringPeriodLeak` at network accounting's proof of
 `PeriodLeakAccepted` (`NetTiming.periodLeak`). On a run that realizes the network certifier's period of `n` sampled
-audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
+audits (`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
 `n · (δ + ε_ks + ε_bind + ε_tap)`. The network certifier accepting with the claim failing means some window fails
 `WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
 verifier's `PrBad` at `RLeakCertifier` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
 `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
-so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at
+so it is read off at the period of no windows (`ksLin_of_monitoringPeriodLeak`). Its count of the secrets is what the claim at
 `K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-host`) is the realization's
 `trusted`, which this proof doesn't read: `window_le` is the per-window bound its records give, and deriving it from
 `PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
@@ -78,7 +78,7 @@ theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Pr
   exact Finset.filter_congr_decidable _ _ _
 
 /-- `PeriodLeakAccepted`'s per-window conjunct, read off at the period of no windows. -/
-theorem ksLin_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin : Type} [Fintype Coin]
+theorem ksLin_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin : Type} [Fintype Coin]
     [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
     (D : Claims.SamplingGeneric.Compiled Coin A) (hks : D.KS H) (L Kₒ S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
@@ -97,14 +97,14 @@ theorem ksLin_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin : Type}
     (fun _ h => h.elim) (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ())
     (fun _ h => h.elim) (fun _ => ()) (fun _ h => h.elim) (fun _ => Fin.elim0) (fun _ => Fin.elim0) tops hb).1
 
-/-- `Guarantees.Bridge.CommOfPeriodLeakAccepted` from `PeriodLeakAccepted`. -/
-theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
+/-- `Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` from `PeriodLeakAccepted`. -/
+theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
     [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {H : Msg → Msg}
     {D : Claims.SamplingGeneric.Compiled Coin A} {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
     {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
-    {Dj n : ℕ} (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ reg Dj n) (hks : D.KS H)
+    {Dj n : ℕ} (R : RealizesCommOfMonitoringPeriodLeakAccepted r c.K H D L Kₒ S lay k δ reg Dj n) (hks : D.KS H)
     (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (εks εbind εtap : ℝ)
     (herr : ∀ ξ i, D.κ δ (R.stmt ξ i) - δ +
       Real.sqrt (D.γ (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)
@@ -113,7 +113,7 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
       εtap) :
     r.Sound c p .network (n * (δ + εks + εbind + εtap)) := by
   intro ξ
-  have hlin := ksLin_of_periodLeak hsrc H D hks L Kₒ S lay k δ hδ reg Dj R.tops hb
+  have hlin := ksLin_of_monitoringPeriodLeak hsrc H D hks L Kₒ S lay k δ hδ reg Dj R.tops hb
   calc Pouw.pr (fun x : Ω (r.own .network) =>
         r.accepts .network (Function.update ξ (r.own .network) x) ∧
           ¬ r.Holds c p .network (Function.update ξ (r.own .network) x))
@@ -143,15 +143,15 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 /-- **The network certifier's per-period guarantee**, at network accounting's proof of `PeriodLeakAccepted`. -/
-theorem CommOfPeriodLeakAccepted : Guarantees.Bridge.CommOfPeriodLeakAccepted := by
+theorem CommOfMonitoringPeriodLeakAccepted : Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted := by
   intro ι d α _ C I Ω _ _ Coin _ _ _ A r c p H D L Kₒ S lay k δ reg Dj n R
-  exact comm_of_periodLeak NetTiming.periodLeak c p R
+  exact comm_of_monitoringPeriodLeak NetTiming.periodLeak c p R
 
 open NetWitness in
-/-- **`CommOfPeriodLeakAccepted`'s conclusion fails at the verifier that accepts everything** (`acceptAllNet`): the
+/-- **`CommOfMonitoringPeriodLeakAccepted`'s conclusion fails at the verifier that accepts everything** (`acceptAllNet`): the
 network audit accepts on every coin while the network certifier's claim fails on it, so the audit's guarantee fails at
 error `½`. -/
-theorem CommOfPeriodLeakAccepted_nontrivial :
+theorem CommOfMonitoringPeriodLeakAccepted_nontrivial :
     ¬ acceptAllNet.Sound ⟨0, 1, 0, 0, 0⟩ (fun _ => 1) .network (1 / 2) := by
   intro h
   have h1 := h fun _ => ()

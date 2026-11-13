@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Accounting.Remote.Session
+public import Proofs.Properties.Accounting.Remote.Run
 public import Proofs.Properties.Accounting.Remote.Bisect
 import Batteries.Tactic.OpenPrivate
 import Proofs.Properties.Accounting.Remote.Plan

@@ -43,7 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 `(R/4)(C/8)`), is accepted with a leaf that fails its relation, and no collision in hand, with probability at most
 `G δ`: `δ` a session from `CheckedSessionSound`'s argument, joined by a union bound over the group. Its premises are named
 (`Accounting.Premises.TS`): Flock's collision resistance at every session (`SessionsCR`), the window's sampling design at every
-statement (`WindowDesigns`), and the group's circuits realizing the leaf's relation at the rows the sessions open
+statement (`ExecutionPhaseDesigns`), and the group's circuits realizing the leaf's relation at the rows the sessions open
 (`GroupRealizes`). Everything else of the session argument is the verifier's: port uniqueness and the `ok` port (the
 known-read check's names, at known content ending in the `o0` row 1), full checking and a unit (the sample check),
 registered served roots (the reads built from `own` and the one-read check). At the 32 × 32 leaf with one chunk a lane
@@ -72,7 +72,7 @@ flock-verify `--zk --registered` accepts with its known-content, complete and kn
 and of its reads, one at each port, pass; opening `opened x w i`, its relation `rel x w i`, or a clash of two of the
 sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie, `LeafKnownColl`): given
 the named premises `Accounting.Premises.TS.SessionsCR` (`RowsSession.CR` at every session),
-`Accounting.Premises.TS.WindowDesigns` (the window's sampling design at every statement) and `Accounting.Premises.TS.GroupRealizes`
+`Accounting.Premises.TS.ExecutionPhaseDesigns` (the window's sampling design at every statement) and `Accounting.Premises.TS.GroupRealizes`
 (the group's circuits realize `rel` of `opened` at the rows the sessions open, past the leaf verifier's check of the
 tile and its chunks), and
 $$n_s \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
@@ -91,7 +91,7 @@ def LeafGroupSound : Prop :=
     (opened : Paths Ω S → Fin S → Fin nπ → V) (rel : Paths Ω S → Fin S → Fin nπ → V → Prop)
     (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) (δ : ℝ),
     Accounting.Premises.TS.SessionsCR sess →
-    Accounting.Premises.TS.WindowDesigns sess out →
+    Accounting.Premises.TS.ExecutionPhaseDesigns sess out →
     Accounting.Premises.TS.GroupRealizes sess (fun x w i k => okKnown (known x w i k) (okSalt x w i k)) full want
       (fun _ _ _ => PouwWindow.Lanes.checkChunks T n = .ok ()) opened rel →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
