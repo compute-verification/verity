@@ -44,6 +44,9 @@ the remote lacks as the checkout knows it, the commits reachable from what it pu
 that remote, so a merge of the remote's `main` adds the merge alone and `git fetch` comes first where a ref is stale; a
 push that adds commits from a checkout with no configured identity, or whose commits git can't list, is refused too.
 Where a node made the commits, the run that made them names this checkout's identity, as `tools/move/README.md` shows.
+One other identity passes (`OTHERS`), the queue's own: `research queue cross` makes a crossing's commits under it and
+pushes them with the caller's git, so an agent's crossing meets this rule, and a test of research's holds the entry to
+the queue's definition. A head crossed by hand under any other name is refused.
 The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
 own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
 and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd` or `popd` anywhere in the command, run
