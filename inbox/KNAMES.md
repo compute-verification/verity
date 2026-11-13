@@ -357,3 +357,63 @@ yes. So the base's drift is in `main`'s locks now, written by the landing as lea
    proofs and lean, and the mark waits for proofs' read.**
 
 Return by Fri 13 Nov 06:30Z.
+
+## Fri 13 Nov 04:24Z: #9620 was MARKED (04:15Z, on proofs' word) and is HELD by ci's reader at `cf3cc78666ce`: `tools/move`'s map test fails at the head. The fix is one row of our map; the move's output must not change by a byte
+
+**What happened since your return.** ci ruled (HASH-125, 03:54Z) that #9620 lands as an
+ordinary pull request, its head as it is, on a tier-1 land verdict; lean has no objection and
+takes `rename.py --moves`' gap as its own fix; proofs said the mark is kernels' and reads the
+names by Fri 15:00Z. I took the `Move:` line out of the body (`research queue edit`; "How it
+lands" now says ci's ruling) and marked it. **ci's reader (review-46, 04:22Z) then held it:**
+
+> tools/move's test_maps.py two-word test fails at this head: kernels_names_map.toml's
+> [[words_in]] 'window' = 'executionPhase' clashes with terms_map.toml's 'window' =
+> 'execution phase'. Replace the bare-word row with the phrases the move rewrote, rerun
+> tools/move/tests. Also record proofs' yes on the renamed guarantee in the body. The move,
+> locks and Spot values otherwise read clean.
+
+**Run by me at `cf3cc78666ce`:** `pytest tools/move/tests/test_maps.py`: 1 failed,
+`test_two_word_maps_that_rename_one_word_reach_one_name_in_either_order`: "'window':
+kernels_names_map.toml renames it to 'executionPhase' … terms_map.toml renames it to 'execution
+phase' … each concept has one name: settle the word in one map and drop its row from the other,
+or give the other map the first one's names". The test and `terms_map.toml`'s row have been on
+`main` since 4 Nov, so every head of ours with the bare row (line 26 of the map,
+`words = { "window" = "executionPhase" }`) failed it. **The suites the change touches were
+never run at the merged head: my 03:1xZ brief asked for the records only. That is my miss as
+much as yours; this time every suite runs.**
+
+**Do:**
+1. **The map's row.** Replace the bare word with the whole names or phrases the move in fact
+   rewrote in those files (the reader's words), so that no map gives `window` a second name.
+   Read `test_maps.py`'s `two_names` first, so that the form you choose is one it passes and
+   not one that only hides the word from it.
+2. **The move's output does not change by a byte.** Run the fixed map where the move's commit
+   `b5ca4e47d9` was made (its parent, with that parent's scripts, as `stage.py` did) in a
+   scratch tree: the tree it gives must equal `b5ca4e47d9`'s tree outside
+   `tools/move/kernels_names_map.toml`. Show the `git diff --stat` of the two (empty, or the
+   map alone). If any other file differs, stop and tell me which and why.
+3. **How it sits in the branch:** one more commit on top that changes the map's row and
+   nothing else; no restage, no rebase, no force-push. Say in the body that the move's commit
+   was made by the earlier form of the row and that the present form gives the same tree
+   (the diff of step 2). If `move_check`, run as the reader runs it on the move's commit,
+   needs the map in a particular state, say what you ran and what it said.
+4. **`main`:** fetch. If #9598 (compute-research: the PoUW verifier's tests import at the top;
+   it conflicts with us in `verity/protocols/pouw/verifier/tests/test_circuit_plan.py`) has
+   landed, merge `origin/main` too, keeping its imports and our three renamed words (lines
+   near 207, 294 and 330). If it has not landed, do not merge its head and do not wait for it.
+5. **No Lean file and no lock may differ** between `cf3cc78666ce` and the new head beyond what
+   a merge of `main` brings (`git diff --stat cf3cc78666ce NEW -- '*.lean'
+   '**/lean-audit.json'`, and against `main`'s side). Then the records stand and no records
+   run is needed; say the two Lean-input keys if the mark's records gate prints them.
+6. **Every suite the change touches, fresh, at the new head** (`suites.py --fresh --changed
+   <the main you are on>`), on a CPU node outside an infra window: `tools/move`,
+   `repository`, PoUW's verifier, Flock's prover (the randomness pins) and whatever else it
+   picks. A red is a finding: say which test and stop.
+7. **The body:** the new head; the row's change and step 2's diff; the suites' run; **proofs'
+   yes on the renamed guarantee, in proofs' own words from its comment on HASH-125 (Thu 12 Nov,
+   21:15Z: all six names a listed guarantee reads are renamed in kernels' move), with its
+   hour**; keep `Lane proofs`, keep "How it lands", add no `Move:` line.
+8. One comment on HASH-125 (at most 80 words). **Tell me the head: I mark it again and tell
+   ci's reader.**
+
+Return by Fri 13 Nov 06:00Z.
