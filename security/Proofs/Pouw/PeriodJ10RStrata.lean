@@ -150,7 +150,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (hlk : ∀ t : Fin (tileCount σ s), 0 < shareCone Sc Cd (tileCount σ s) t →
       tileLuck Sc Cd (tileCount σ s) t ≤ 7 / 8 ∧ tileLuck0 Sc Cd (tileCount σ s) t ≤ 1 / 2)
     (hG : Pl.game = monitoringPeriodGame (tileStage Cd (tileCount σ s)) (liveCone Sc Cd (tileCount σ s)) 1 1 (k s) Wp)
-    (hDD : Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd (tileCount σ s) live))
+    (hDD : Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd (tileCount σ s) live))
     (hPre : PrefixOf (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile) Pl.game)
     (hMoved : ∀ w, prob (fun y => (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile).MovedIn y w) ≤ δbind)
     (hServ : TileServiceSound σ s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
