@@ -141941,3 +141941,96 @@ None out. Ended and read: `r20261113-124720-fcfb` (rc 0).
 As in my 12:50Z entry, less its second line: `SessionMsgsAsk` is not proved, so `ShowsPlaced` at the form and `FixedBefore` are not.
 
 Branch `cursor/proofs-messages-rise-745c` at `086bbcde754`, pushed; nothing unpushed.
+
+## STAGECOINS, Fri 12:58Z: it is (a). The builder's honest play of one member is accepted at the join's tip (`b781`); `241e`'s kept plays are the kind `second-inputs` is written to refuse; the script's default arguments still make that kind
+
+In soundness's terms: the one play I made with the builder's honest arguments (`--inline --units 1 --logits`) is not refused at the join's tip `e9346a9e70`, without my commit [run `r20261113-122758-b781`]. `241e`'s two kept plays are refused there because their interior registers `logits`, a value the prover gives after the first stage's sample, and refusing that is what `second-inputs` is for. They were accepted earlier only because their tree had no such check. One thing is the opposite of what one would want: `sampled_two_small.sh` with no extra arguments still makes a play of the refused kind. I ran honest arguments for an interior of one member only.
+
+**1. Which commit** [run `b781`, vy-nebius-cpu-11, rc 0; read]
+- It is not `4f52809539`. In the executable check that commit changes one docstring of `Spot/SecondStage.lean` and one comment of `second_stage.py`.
+- [run] Both kept cases through the form built at each commit, switch on:
+  - at `1e20910586`: both accepted (`ON rc=0`, `OFF rc=1`);
+  - at `0c7a84c235`, the join's merge of that form: both refused, the run of record's interior `statements` check failing on `second-inputs`, value `logits`.
+- [read] `1e20910586` has no `second-inputs`: no line of its `SecondStage.lean` names `inputsFailure`. `122832e6a1` introduced it on 12 Nov, and `2ee963042e`, `2e3d3ad762` and `23097989035` tightened it. None is on `main`.
+- [read] All of it reached the join's first-parent line at `26e01cd9f8` (05:07Z), ACCEPTS's merge of RUNCOINS's line on the new base. The form at `1e20910586` reached the join later, at `0c7a84c235` (08:35Z). `241e` ran at `9425ffd35b`, which is `1e20910586` plus one commit and is not on the join.
+
+**2. What the check asks** [read: `SecondStage.lean` 1262–1282 and `second_stage.py` 1346–1368 at `e9346a9e70`; the two agree]
+`inputsFailure` returns the first value the interior registers that passes none of these:
+- the verifier holds it without the prover: it is in `own.fixed` (pinned, or held to an earlier record);
+- the verifier fills it from its own bytes (`ownValues`, line 1186: every source is `bytes`);
+- it is the opened row of a read: at least one link names it, every link that names it passes `openedRow` (lines 1231–1251), and no reference statement reads it at a port no link names (`readUnlinked`). `openedRow` asks five things:
+  - the link's template is a read the auditor's parameters record (`readSize`);
+  - its port is `row`, `salt` or `path` (`OPENING_ROW`, line 232);
+  - the read's root and domain are the verifier's values and one table of the first stage's record (`oneTable`);
+  - its key is no wire and is a value the interior does not register or the verifier holds;
+  - its verdict is held to 1.
+
+**3. What fails in `241e`'s cases, and what `--logits` changes** [read: both cases' `params.json` and `evidence.json`; `b781`'s tip case]
+- `241e`'s cases:
+  - the parameters' `interior.values` holds `{"name": "logits", "registered": true}`;
+  - the interior record's `registered` is `["logits"]`;
+  - the first stage's `values` are `b.ingress`, `b.egress`, `o0`;
+  - the member is `TokenSelect_v4{V=128}`.
+- Why that fails: the verifier neither pins nor fills `logits`, and the select reads it at its port `logits`, which is none of `row`, `salt`, `path`, so no link naming it is an opened row. [derived] I did not single out which clause fails first.
+- With `--logits` (`7c7e`'s case, and `b781`'s at the tip):
+  - the first stage's `values` gain `{"name": "logits", "registered": false}`, so the first stage's record commits the select's inputs beside the ids;
+  - `interior.values` holds no `logits` of its own;
+  - the interior record has no `registered` key;
+  - the member is `GreedyCombine_v2{V=128,N=128}`.
+- The builder says the same [read: `two_stage.py` docstring, the block's inputs]: where the first stage's record commits the parameter as a port, "the interior registers no value for it"; where it commits none, "the parameter is a link whose value the interior registers, and round 2 refuses the run by `second-inputs`". `two_stage_small.py`'s docstring names the refused play as its own negative case (`expect --inputs`).
+- So it is (a), stated exactly: the kept cases were made by a tree with no `second-inputs`, with the script's default arguments. A play made today with those same default arguments is still refused [run `r20261113-112829-e535`, at `701559cfdc`]. A play made today with `--inline --units 1 --logits` is accepted.
+
+**4. The run you named as not done** [run `b781`, at `e9346a9e70`, no commit of mine]
+`SMALL_ARGS='--inline --units 1 --logits' bash benchmarks/one_stage/sampled_two_small.sh`:
+- `ROUND_TWO ok`, no code;
+- `FORM_ON rc=0`, accepted with the switch on, public `{"bound": 2, "drawn": [0, 6], "proved": [0, 6]}`;
+- `FORM_OFF rc=1`, refused by the shipped switch;
+- `FORM_TREE rc=1`, refused by the first session's coin tree's line.
+
+**5. The script's default** [read]
+- The last change to the file is `654e34d42b` (09:02Z), one comment line (the variable's name). It came to the join in `e8e0cb6261`, whose message calls it TWOLEG's scratch.
+- The last change to what it runs is `0e0d120c45` (08:15Z): where the serve kept the select's inputs, both `second` runs take them as `--kept`. [guess] TWOLEG's as well: every author is "Cursor Agent", and it sits on TWOLEG's scratch and GATHER's branches.
+- The one-line change, line 63: `${SMALL_ARGS:-}` becomes `${SMALL_ARGS:---inline --units 1 --logits}`. `--logits` alone is refused by the builder: it needs `--inline --units K` (`two_stage_small.py:209`). The header's lines 14–19 would say the default in words.
+- The negative case stays named where it is: `two_stage_small.sh` with no arguments passes `expect --inputs` (line 94), and `benchmarks/one_stage/tests/test_two_stage_second.py` holds it (lines 203, 266–282). `sampled_two_small.sh` has no such play; putting one through the form beside `FORM_TREE` is more than one line.
+- I made no change.
+
+**6. Friday's demo at `984cb027efa3`** [read; nothing run there]
+- The demo's serve commits the logits. `benchmarks/serve_tax/serve_tax.py:229–246` says "a job that serves the two-stage audit serves that arm", and the arm's rows are `TWO_STAGE_ROWS = {**ROWS, "ids": True, "logits": LOGITS, "tables": TABLES}` with `inline` true. So its interior registers no `logits`, and `second-inputs` has nothing to refuse on that value.
+- `second_stage.py` at that head already holds `inputs_failure`. So the demo's Python second stage refuses the kind today, and the join's form adds no refusal on this point.
+- What breaks on the day the join's form runs: nothing by `second-inputs` on `logits`. What would break is a case taken from the rehearsal's default: `two_stage_small.sh` with no arguments makes the refused kind on purpose and exits 0 on the refusal (its lines 6–10 and 94).
+- [relayed, TWOLEG's 11:57Z entry] GATHER's layout trial alone, with interiors of two and of twenty members, was refused by the form for another reason (`registered`, at the last step), which TWOLEG's rule B is for. That is not `second-inputs`, and I did not look into it.
+
+**7. Every other case of the refused kind** [read, except where marked]
+- Nothing in the tree sets `VERITY_SAMPLED_TWO_CASE`. Three files name it:
+  - its declaration, `verity/difftest/python/verity_difftest/settings.py:12`;
+  - the test, `test_sampled_two_difftest.py:165–171`, which skips where it is unset;
+  - a comment, `sampled_two_small.sh:8`.
+- The composition suite's `pyproject.toml:18` lists the test file under `untraced` and sets no environment. So `check` skips the accept test, and no join test reads a kept case today.
+- Node jobs I know of: [relayed] TWOLEG's `e8f4` set the variable to its own play's case (66 passed). `241e` and my runs never set it; they pass kept cases to the script as `KEPT_CASES`.
+- No file on the join names `241e`'s cases: not the art ids, the commitments or the run ids.
+- Store records of the refused kind, each refused at the join's tip [run `e535`, `b781`]:
+  - `art:d63a5946…` (`out/form`, commitment `2a24eca4…`);
+  - `241e`'s run record `art:9b3d8368…` (`out/form`, commitment `c4358eca…`).
+  A job that passes either as `KEPT_CASES` exits 8.
+- Tests that build the refused kind in memory and assert the refusal, so they pass because of it:
+  - `benchmarks/one_stage/tests/test_two_stage_second.py:127, 203, 266–282, 355–380`;
+  - `verity/protocols/spot/verifier/tests/test_two_stage.py:728–735, 847–853`.
+- `fixtures/artifacts.json` has one two-stage entry, `art:f164ac2c…` for `benchmarks/two_stage/tests/fixtures/guard.tar.xz`, the toy's. The file is not in a checkout and I did not open it.
+
+**8. The kept case to use** [derived]
+- `b781`'s play: run record `art:9c575558d6a32b354a788dc00f8bc35d872ff72d61c972951f9d19b4b04feec6`, `out/tip/form`, commitment `313a1662…`. It was made and accepted at the join's tip `e9346a9e70` itself, with nothing of mine. `7c7e`'s (`art:f7b288c0…`, `out/form`) is the same kind, made at my `a013df7279`.
+- Not `e8f4`'s for now: [relayed] it was made at a local tree with GATHER's layout trial and rule B, neither on the join, and TWOLEG's what-if of the form with today's reads refuses it.
+- No test or docstring on the join names `241e`'s case, so there is nothing to edit; the case is named only where a job sets `KEPT_CASES` or `VERITY_SAMPLED_TWO_CASE`.
+
+STOP RULE: not met. It is (a); I wrote no mend and changed nothing on the join.
+
+NEEDS: a word on whether the script's default changes (section 5), and whose pen writes it. Jobs that replay kept cases should name `b781`'s case, not `241e`'s.
+
+To post: nothing. Nothing new pushed to any branch but this entry; my head stays `a013df7279`. No run of mine is going on. The join's tip moved to `4e986e339a` while `b781` ran; I ran at `e9346a9e70`, the tip your order named.
+
+Not established:
+- An honest play of an interior of more than one member at the join's tip (I ran `--units 1` only).
+- Which clause of `inputsFailure` fails first on `241e`'s cases.
+- Which script Friday's demo runs on the day: I took the serve's `two-stage` arm and `two_stage.py second`. Whether the demo's table reads pass `openedRow` I did not read.
+- What the toy's guard fixture `art:f164ac2c…` holds.
+- That `0e0d120c45` is TWOLEG's.
