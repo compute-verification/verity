@@ -422,14 +422,14 @@ def levers(f: Family, **kw) -> list[dict]:
     ys = [p[0] for p in f.fill[c.mix]]
     step(point(f, Config(c.mix, ys[1], c.served), t.B_sample, **kw), f"verified filler, y = 0 → {ys[1]:g} a word",
          "the machine model's sweep (honest time modeled past the measured kernel); FILL-OPT (decision 94)")
-    step(point(f, c, f.prover * spend_for(2 * TODAY_SAMPLES), **kw), "draws 2 → 4 a round",
+    step(point(f, c, f.prover * spend_for(2 * TODAY_SAMPLES), **kw), "samples 2 → 4 a round",
          "cost-model/v1's sessions (A6's two, fitted: the session's fixed cost is the uncertain part, σ 0.5)")
     for regime, rests in (("sessions/256", "multi-round sessions amortizing a session 256-fold (OPT2's estimate); S "
                                            "holds when a session covers its rounds"),
                           ("prefix, sessions/256", "also the running sums committed anyway (COMMIT's prefix mode), so "
                                                    "chunks of 32 pay")):
         step(point(f, Config(c.mix, c.y, c.served, regime), f.prover * spend_for(TODAY_SAMPLES, regime), **kw),
-             f"today's draws in regime {regime}", rests)
+             f"today's samples in regime {regime}", rests)
     step(point(f, c, t.B_sample, leaf=256, **{k: v for k, v in kw.items() if k != "leaf"}),
          "SHA-512 leaves R = 128 → 256", "COMMIT-GPU's two points extrapolated (modeled)")
     row("operand floor (--operands floor)", -f.route, 0.0, "a new named assumption on φ_del (decision 89: Daniel's)")
