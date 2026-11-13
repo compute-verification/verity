@@ -145,7 +145,9 @@ theorem coinOf_starts {h : SpotFlock.Held} (hcov : CoinsCover h) {b : ByteArray}
       show b.size + (Array.replicate (SpotFlock.L - b.size) (0 : UInt8)).size = SpotFlock.L
       rw [Array.size_replicate]
       omega)
-    exact ⟨_, Classical.epsilon_spec ⟨c', hc'⟩⟩
+    have hsp := Classical.epsilon_spec (p := fun c : FlockDeploy.Coin =>
+      SpotFlock.src c = b ++ ByteArray.mk (Array.replicate (SpotFlock.L - b.size) 0)) ⟨c', hc'⟩
+    exact ⟨_, hsp⟩
   · cases hc
 
 /-- **The coins `stageCoinsOf` chose start with the run's bytes.** -/
@@ -160,7 +162,9 @@ theorem stageCoinsOf_starts {h : SpotFlock.Held} (hcov : CoinsCover h) {b : Byte
       show b.size + (Array.replicate (h.stage * SpotFlock.L - b.size) (0 : UInt8)).size = h.stage * SpotFlock.L
       rw [Array.size_replicate]
       omega)
-    exact ⟨_, Classical.epsilon_spec ⟨c', hc'⟩⟩
+    have hsp := Classical.epsilon_spec (p := fun cs : SpotFlock.Stage h =>
+      SpotFlock.stageSrc cs = b ++ ByteArray.mk (Array.replicate (h.stage * SpotFlock.L - b.size) 0)) ⟨c', hc'⟩
+    exact ⟨_, hsp⟩
   · cases hc
 
 /-! ## Runs -/
@@ -204,12 +208,11 @@ theorem msgAt_run {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prove
     (by rw [List.length_nil, Nat.zero_add]; exact hn)
   simp only [List.length_nil, Nat.zero_add, List.nil_append] at hget
   have hget' : (Claims.run H P V x ω r).msgs[n]? = _ := hget
-  refine ⟨_, ?_, ?_⟩
+  refine ⟨new.map RecDeploy.histOf, ?_, ?_⟩
   · unfold msgAt
     rw [hget']
     rfl
-  · rw [← hnew]
-    exact List.length_map _
+  · rw [List.length_map, hnew]
 
 /-- **The sessions leave no round between them**: every round from `stage + 2` before template `m`'s session is in
 some earlier template's. -/
@@ -248,7 +251,8 @@ theorem form_coin_stage {j : ℕ} (hj : j < A.h.stage) :
     (formReading A C S dev).coin o (j + 1) =
       (inputOn C o).bind fun i => i.interior.bind fun it =>
         (stageCoinsOf A.h it.source).map fun cs => cs ⟨j, hj⟩ := by
-  simp [formReading, hj]
+  have hj' : j ≤ A.h.more := Nat.le_of_lt_succ hj
+  simp [formReading, hj']
 
 theorem form_coin_slot {n t : ℕ} (h0 : n ≠ 0) (h1 : ¬n - 1 < A.h.stage) (h2 : n ≠ A.h.stage + 1)
     (hs : SpotFlock.slotOf A.h (n + 1) = some t) :
@@ -263,7 +267,7 @@ theorem form_agree_zero (c c' : FlockDeploy.Coin) :
 theorem form_agree_stage {j : ℕ} (hj : j < A.h.stage) (c c' : FlockDeploy.Coin) :
     (formReading A C S dev).agree o (j + 1) c c' ↔
       ∃ i it, inputOn C o = some i ∧ i.interior = some it ∧ prefixAgree (stageWidth it.source j) c c' := by
-  simp [formReading, hj, Nat.succ_le_of_lt hj]
+  simp [formReading, Nat.succ_le_of_lt hj]
 
 theorem form_agree_slot {n t : ℕ} (h0 : n ≠ 0) (h1 : ¬n ≤ A.h.stage) (hs : SpotFlock.slotOf A.h (n + 1) = some t)
     (c c' : FlockDeploy.Coin) :
