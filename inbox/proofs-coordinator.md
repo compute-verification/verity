@@ -138032,3 +138032,68 @@ Mailbox read to line 505, nothing after your 10:54Z [read]. The pen is mine [run
 **Heads, all pushed, nothing unpushed** [run]: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717); `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3` (#9728); `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
 
 **I wait on:** `r20261113-105619-032e` (vy-nebius-cpu-1, seven suites to go; about 11:50Z [guess]) for #9728's ready line, and `r20261113-112700-682b` (vy-nebius-2; about 12:20Z [guess]) for the one-call records. One timer of mine is set for about 11:47Z.
+
+## RATING, Fri 13 Nov 11:37Z: STOP, for compute-accounting and for you: the mend restates `TileKeepsTheCap`, a property the Properties lock records under owner `@proofs`, so one recorded statement and its witness's signature change. I hold the pull request's opening until you say. Everything else is in and green.
+
+In plain words. The records run built every module of the three packages and found what the single-file tries could not show: the mend does change a statement that a lock records. It is not one of the five files and not my change. It is the property that says what the Pearl+ check's cap test keeps, which compute-accounting restated in their own commit when they changed the check. Your stop rule names this case, so I report it here and do not open the pull request on my own reading. Nothing else is in the way.
+
+### The stop [run: the records run's printout; read: the diff and the lock]
+
+Run `r20261113-102754-9a9a` (vy-nebius-cpu-9) at `930ae67318100c10d1a0547679fbb9a0f1b983f8`, `lean_changed.py --records security --update`. On `security/Properties` (536 guarantees) it prints four differences, two of them statements:
+
+1. **`Properties.Pouw.PearlPlus.tileKeepsTheCap`'s statement changed**: "its definition `Properties.Pouw.PearlPlus.TileKeepsTheCap` unfolded once, changed (`77ba71b4…` to `875994f1…`): the definition was restated".
+2. **`Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial`'s signature changed** (the witness quotes the property's body, so it follows 1).
+3. Definitions in `PouwPearlPlus.Rule` that 35 guarantees read changed: `capCheck` and `saltDead` changed, seven are new (`cutFold`, `cutStep`, `cuts`, `endCodes`, `rowEnds`, `wordCuts`, `wordMend`).
+4. The definition `TileKeepsTheCap` that 11 guarantees read changed.
+
+What the restatement is, read in `security/Properties/Pouw/PearlPlus.lean`: the property gains two existentials, the ends of the credited rows and columns (`Rule.rowEnds` succeeds on each), and its row debit gains the term `n · Σ Rule.wordMend`. So it says more than before: a passed tile keeps the cap with the mends counted. Its text gives the test as `400·(n·(D + M) + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|`.
+
+Whose change it is: `git log 9182900fb94e..HEAD -- security/Properties` lists one commit, `a4b1b493dac` ("proofs adjusted (wip)"), which is compute-accounting's and is below `e65fed25da0`. None of my eight commits touches `security/Properties/`. [run]
+
+Why it still needs a word from you and them:
+
+- The lock lists `tileKeepsTheCap`, `tileKeepsTheCap_honest` and `tileKeepsTheCap_nontrivial` with **owner `@proofs`**. A guarantee our lane owns is restated by another lane's mend. [read: `security/Properties/lean-audit.json`]
+- It is not deployed and has no `trust_gap` entry. Its premises are empty before and, in the run's printout, after. [read; the regenerated Properties record is not written yet, so "after" is from the printout]
+- I do not see how the mend could leave this statement as it was: the property quotes the check's own test, and the mend changes the test. [inference]
+- One thing a reader of the witness should know: `tileKeepsTheCap_nontrivial` still refutes the conclusion by the same step as before (the words' flags fail on its short record). It does not exercise the new term. The witnesses rule is met in form; whether a witness should reach the mends is not mine to say. [read: `Proofs/Properties/Pouw/PearlPlus/Witnesses.lean`]
+
+**The question, yes or no, for compute-accounting and for you as the owner: is `TileKeepsTheCap` as `a4b1b493dac` restates it the statement to record?** If yes, I commit the regenerated Properties record and open the pull request with this change named in its first paragraph. If no, nothing of mine changes it: the statement is theirs to rewrite.
+
+### What the same run shows for `security` (no statement moved) [run]
+
+`AUDIT security: PASS`, 27,791 declarations in 731 modules, 1,137 guarantees, axioms `propext`, `Classical.choice`, `Quot.sound`. `AUDIT security/Proofs: PASS`, 204,343 declarations in 4,052 modules; its build log ends "Build completed successfully (14581 jobs)". So every module of both packages builds against the new definitions, not only the five files.
+
+The regenerated `security/lean-audit.json` differs from the committed one in 41 lines, all under the modules' definitions: 23 definitions that guarantees read are changed or new (14 in `Definitions.Pouw.PearlC.{Device,DeviceRev1,Mend}`, 9 in `PouwPearlPlus.Rule`). No guarantee entry of that lock changed. [run: `git diff` of the record over the file]
+
+This is the fast path: the run says of itself "without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse". The kernel replay is the queue's.
+
+### Everything else [run]
+
+| What | Run | Commit | Result |
+|---|---|---|---|
+| The suites the change touches, quick tier | `r20261113-103148-12f7`, cpu-2 | `930ae673181` | 60 of 60 suites passed, 0 failed. Among them `verity/protocols/pouw/verifier` 2,008 passed; `verity-pouw-benchmarks` 1,489 passed, 15 skipped; `verity-pouw-window-difftest` 122 passed |
+| The Pearl+ Lean difftest, slow tier | `r20261113-105540-5a2b`, cpu-9 | `98fb5ddbd05` | 23 passed, 2 skipped, in 1,753 s. The two skipped are `test_a_recorded_h200_run[run]` and `[control]`, which need a recorded run named by `POUW_PEARLPLUS_RECORDED` [read: the file's one skip mark; the run prints no reasons] |
+| The tile test file whole, its five tests at k = 65,536 included | `r20261113-102603-6b5c`, cpu-5 | `930ae673181` | 13 passed in 823.56 s |
+| Siblings of the files that add declarations | `r20261113-102939-3ff6`, cpu-5 | `930ae673181` | exit 0, no clash among built modules |
+
+My branch is at `b9888ce74a0`: two commits past `930ae673181`, both prose in `Cap.lean`'s header (it names the mends; two paragraphs wrapped at 120 columns). No run has compiled those two yet.
+
+### What I do while I wait, all on my own branch
+
+- Commit `security`'s regenerated record (no statement in it changed).
+- When the run's `--update` on Properties ends (it is running now), commit that record too. It is on an unopened branch and one revert undoes it. Say if you want it left out.
+- Then one records run without `--update` at the head, to show the committed locks match the build and that the header's two commits compile.
+- **Not** the pull request, and so not the rating at its head, until your word.
+
+### Does 7 AM PST (15:00Z) still hold: yes, if the answer is here by about 13:30Z [guess]
+
+After the answer: the pull request is one command, and the rating's three salts took 761 s for one salt in my preview (`r20261113-103443-fc18`), so about 40 minutes for three.
+
+### Not established
+
+- That the queue's full check passes: no kernel replay ran, and `circuit-check` and the slow tier of the suites other than the two above did not run.
+- The difftest on a recorded served run under the mended rule: the two skipped cases.
+- Anything at sm_120's step.
+- Nothing here rates the mend.
+
+Branch `cursor/proofs-rating-debit-4ba7` at `b9888ce74a0`, pushed. Mailbox read at 11:30Z (116 lines, last change 10:37Z).
