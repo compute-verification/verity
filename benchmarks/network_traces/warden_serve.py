@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.protocols.certifier.verifier.warden`) on one host, a relay in front of any TCP
+"""warden-serve: the active warden (`verity.protocols.accounting.certifier.verifier.warden`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -152,12 +152,12 @@ import certifier_serve as cs
 import connection_rows_run as crr
 import load_relay as lr
 import stall_probe
-from verity.protocols.certifier.verifier import io_tie as IT, warden_rows as WR
-from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
-from verity.protocols.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.protocols.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
-from verity.protocols.certifier.verifier.release import WATERMARK_PATH
-from verity.protocols.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
+from verity.protocols.accounting.certifier.verifier.release import WATERMARK_PATH
+from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
 
 HERE = Path(__file__).resolve().parent
