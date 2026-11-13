@@ -111884,3 +111884,31 @@ When try10 ends I will send `CoinStages.lean` to cpu-11, and the head to whichev
 - Not yet written: `FreshWide` for every play of the game, and the `fitOf` bound for `FirstElems`/`SecondElems`.
 - `StageDraws` is a hypothesis, owner TWOLEG.
 - The earlier-period signature hole is noted, not worked around.
+
+## TWOLEG, Fri 13 Nov 01:16Z: `Steps.lean` compiles at `7fed11bb74` (no `sorry`, three axioms): CUT, HISTORY, STAGECOINS and ASSEMBLY can merge it; the form `SampledTwo.lean` built in the same run
+
+`Steps.lean`, the file that says what an accepted two-stage check ran, now compiles whole, and so does the form it reads. Four things were wrong. The file did not `open Spot`. `sourceRead_le` used a `split` that Lean couldn't do. In `inputAt_ok`, the branches after each `| ok … =>` were indented at the `|`'s column, so Lean read them as empty. And `cases h : e` in both `inputAt_ok` and `accepted_steps` also rewrote the goal's own `inputAt …` (and `Flock.canon e.record`, `interiorUnshown p e`), so the hypotheses no longer matched the goal. Both proofs now peel the check one bind at a time with a private `bind_ok` (the repository's lemma of that shape, by `cases x`). The statements are unchanged, so nothing that reads them changes. Branch `cursor/proofs-twoleg-c5e5`, head `7fed11bb74`, pushed; nothing is left unpushed.
+
+- [run] `r20261113-011300-9f0c` on vy-nebius-cpu-12, a one-file try of `Steps.lean` at `7fed11bb74`. It took a place within seconds and finished at 01:15Z, rc 0: "lean exit 0 in 131 s"; "axiom probe: none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The six are `bind_ok` (no axioms), `finishWith_accept`, `inputAt_ok`, `accepted_steps`, `sourceRead_le` and `interiorUnshown_roots`. The build log shows `Built VStarRecursive.SampledTwo`, so the form with its `#guard`s (`sourceRead`, `interiorShown`) elaborates. Neither file has a warning.
+- [run, before the node run] I checked each new proof's shape first in a scratch file on the VM that imports only Lean core: `inputAt_ok`, `accepted_steps`, `sourceRead_le` and `interiorUnshown_roots` over the same do-block shapes.
+- [read] For the readers:
+  - CUT's `CutHeld.interiorHeld_of_accepts` and HISTORY's `binds_dev₂` and `cut_dev₂` read `inputAt_ok` and `accepted_steps` as stated.
+  - `accepted_steps`'s conjuncts, in order: `form = true`; `∃ c₂ ξ₂ r i run`; `inputAt … = .ok (c₂, ξ₂, r, i)`; `Spot.Run.run i true = .ok run`; `sourceRead ξ run = .ok ()`; `interiorUnshown p e = .ok ()`; the run's symbol is `accept`; and `OneStage.checkAt … = .accept pub prof`.
+  - HISTORY: your stubs of these two can go.
+- [read] `CaseIsSent C` (STAGECOINS 00:54Z). `C` is a parameter of my `Reading`. The one who joins the leg to the cut instantiates it, which is ASSEMBLY. [derived] The instance that makes it hold is `C o := ` the case built from the same two finds CUT's `paramsAt` and `caseIn` make: the composite parameters' entry under `Sampled.PROTOCOL`, its `params.toUTF8`, and the composite evidence's entry's `commitment` and `evidence`, with `Blobs.ofArray o.sent.blobs`. `Decoded` then reads exactly `paramsAt`'s and `caseIn`'s decoders, so `CaseIsSent` holds by unfolding. I write that instance and its proof, a new file over CUT's `Cut.lean` (owner TWOLEG), once `Cut.lean` compiles and the form's pull request is open. Until then it stays named.
+- [read] RUNCOINS's restated `HeldMatches.parts`: neither `Leg.lean` nor `Claim.lean` reads `hm.parts`, at any sample.
+
+STOP RULE: nothing. The statements are as before; only the proofs and an `open` changed.
+
+NEEDS:
+1. CUT, HISTORY, STAGECOINS and ASSEMBLY: merge `7fed11bb74`.
+2. CUT: `Cut.lean` to compile. The `CaseIsSent` instance sits over it.
+
+Runs:
+- `r20261113-011300-9f0c` (cpu-12): done, rc 0, as above.
+- `r20261113-005817-5d2d` (vy-nebius-2): the difftest at `45e4dffec3`, with the new test by name, running since about 01:10Z. ETA [guess]: 01:30Z.
+- `r20261113-005749-08c4` (cpu-11): cancelled unstarted at 01:09Z, as you asked. The build of the other proof files goes to cpu-12 next, at the pull request's head.
+
+To post: nothing.
+
+Not established: that `Projection`, `Reading`, `Claim`, `Refused`, `DevAgrees` and `Leg` compile (next run); that the `sampled-two` executable builds and the new test passes (`5d2d`).
