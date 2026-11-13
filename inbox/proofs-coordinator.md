@@ -154990,3 +154990,194 @@ Each run's clone is of `4d4950f1bb99`, the old head: I launched them at 16:54Z, 
 - The ready line follows when both end. If the records run regenerates a record I commit it on top and say so.
 
 Mailbox read at 18:06Z; nothing newer than your 17:07Z.
+
+## REDRAW, Fri 13 Nov 18:08Z: the read-only job is back: the VCVio instance is the `default` of five definitions, four of them read, all `neither` already, so none of the 80 moves; no nested proof of the 175 names anything of ArkLib or VCVio; the split stands at 1,914 / 2,281 / 2,251; the `commitOf?` runs are still out
+
+### 0. Your 17:22Z, 17:26Z and 17:46Z are read
+
+- 17:22Z: the one job is run, below. No branch for Y2, nothing of it written.
+- 17:26Z: the fast-forward and the ready line wait for `4267` and `cb9f`, both still running (section 6). `71b3` is
+  not back, so the line on #9717 is not written yet (section 7).
+- 17:46Z: the table of the 47 groups and the field's block, by Sat 14 Nov 18:00Z, from the stored tables, read-only.
+  It is next after the ready line.
+
+### 1. The job as it ran
+
+- **What it is** [local]. One scratch Lean file, in no commit of any branch. It imports the 182 roots of the proofs
+  library's lakefile and reads the environment that gives it. For each constant of the workspace it prints the
+  constants it mentions that an outside package declares. A module's package is read from where its `.olean` sits.
+  Outside means not the toolchain, and not Mathlib or what Mathlib requires. A top-level theorem's statement is
+  listed. Its proof is only tallied by package.
+- **The run** [run]: `r20261113-174640-2051`, `verity lean try FILE --on auto --as proofs`, from a checkout of
+  `main` at `2359dfc54cd6`. The queue placed it on vy-nebius-cpu-14. It waited 3 minutes for a slot, ran 180 s in
+  it, exit 0. The probe itself took 53 s over 16,878 modules. Peak resident memory 19 GB by the sampler's sum.
+- **The launch line** [run]: "7 files changed there", on that node's slot tree `build-1`. Lake then compiled 15
+  modules of the proofs package, `Proofs.Pouw.Period.Accept` and 14 after it under `Proofs.Pouw` and
+  `Proofs.Accounting`, 1.6 to 5.8 s each. The rest of its 14,578 jobs were up to date. I took that as the cache
+  holding main's modules and let it run. It was not a build of the proofs package.
+- **Nothing of it entered the artifact cache** [run]. The tool's line: the file "runs code while it compiles
+  (#eval)… so none of its modules go into the artifact cache", and "0 module version(s) new in the artifact cache".
+  The probe writes no file.
+- **A second run, cancelled by me, and the cancel was badly timed** [run]. The first read left out two modules of
+  the proofs tree (this section's last bullets). I launched the same probe with the lock's seven further roots:
+  `r20261113-175553-1892`, placed on vy-nebius-cpu-5. I then settled the two modules from the kept facts and
+  cancelled it at 18:01Z to free its place in line. I had read it as waiting 50 s earlier and did not read again.
+  The cancel's own line: "waited 5 min for a check slot, then checked 1 min in slot r2". By then it had synced (5
+  files changed), Lake had compiled nothing, and it was in its `lean` step. It printed nothing. Exit 143.
+- **Evidence** [run]: `art:43131e3112fb53ee6ecf24b7dcf364e956f625d1a4e21a8b2b348be42509340c` (preserved): the
+  probe, its output, the join with step 0's tables, each script.
+
+**What the probe read** [run].
+
+| | modules | |
+|---|---|---|
+| the workspace | 5,276 | 4,049 under `Proofs.`, 709 `Definitions.`, 103 `Properties.`, 415 of 32 code roots |
+| ArkLib | 235 | read as outside |
+| VCVio | 54 | 27 of its own, 27 of its `ToMathlib` |
+| CompPoly, PolyFun, cslib | 24, 18, 6 | what the two bring |
+| Mathlib and what it requires | 8,908 | not looked at |
+| the toolchain | 2,357 | not looked at |
+
+- 272,964 constants of the workspace, 88,646 of them top-level theorems.
+- **Three modules of step 0's facts were not read**: `Proofs.Pouw.PeriodJ10R.Binding` and
+  `Proofs.Properties.Verity.Recursive.Audit`, which the lock lists as roots and no lakefile root imports, and
+  `Definitions.Accounting.Guarantees.PeriodBinding`, which only the first imports. They hold 64 constants.
+- They change neither answer [run: `gap.py`; read]. Six of the 6,446 read definitions sit in them, all in
+  `Recursive.Audit`. None has a nested proof. None is among the 175 or the 329. The other two modules load
+  neither ArkLib nor VCVio. The six are read by one guarantee, `Flock.SecurityProofs.RecursiveAuditC3`, whose walk
+  reaches the two ArkLib constants of step 0 and nothing else of an outside package. Four of the six were
+  `neither` already. The text of the other two (`nI₀`, `vS₀`) is one line of arithmetic each.
+- Every name the probe printed is in step 0's unread facts, and all 5,276 modules are [run].
+
+### 2. Where the VCVio instance sits
+
+**In the `default` of five definitions** [run; read].
+
+| definition | file under `Proofs/Flock/Soundness/Discharge/` | lines | read by |
+|---|---|---|---|
+| `DecodeZL.opnAt` | `DecodeZL/Statements.lean` | 139 to 147 | both guarantees |
+| `HiddenDec.opnAtH` | `HiddenDec/Statements.lean` | 71 to 79 | both |
+| `PlainHJ.opnPHJ` | `PlainHJ/Defs.lean` | 112 to 123 | `flock_verify_sound` |
+| `PlainJ.opnPJ` | `PlainJ/Defs.lean` | 190 to 201 | `flock_verify_sound` |
+| `DecodeZLJ.opnJ` | `DecodeZLJ/Statements.lean` | 132 to 142 | no listed statement |
+
+- Each returns `Opens 𝔽 Dig × Salts (List UInt8)` and falls back to `default` twice: where the setup refuses, and
+  where `fast100` gives no schedule [read].
+- `Opens` and `Salts` are function types (`Definitions/Flock/Compiled.lean` 37 and 231) [read]. Where VCVio is
+  loaded, the elaborator fills `default` at such a type with `QueryImpl.instInhabitedOfRangeOfPure` [run: the
+  instance is in each value; guess: why it wins over core's instance for functions].
+- **No other constant of the workspace names it**, outside a top-level theorem's proof [run].
+- **22 read definitions hold it in what they read**: the four, and the 18 `SoundExec…` definitions of
+  `FailClosed/One.lean` and `FailClosed/Numeric.lean`. All 22 are among the 329. **All 22 were `neither` already**,
+  for a lemma of the proofs tree [run].
+- **So none of the 80 moves.** The split of section 2 of my 16:19Z entry stands.
+- The mend is ten `default`s in five definitions: write the value out, or name core's instance. It changes the
+  four read definitions' terms, so the two guarantees' records [derived]. Not done; no branch.
+- **It matters once the field's block moves** [run]. The four hold lemmas of `Proofs.Flock.Level3` and of no other
+  group, and no ArkLib. With the field in the properties tree, the instance alone keeps them out. They are 4 of
+  the 477 I counted for the properties tree at 16:19Z. The 18 `SoundExec…` hold lemmas of seven to ten further
+  groups of files each.
+
+### 3. Nested proofs
+
+- **Of the 175: none.** No nested proof of any of them names a constant of ArkLib, VCVio, CompPoly, PolyFun or
+  cslib, in its statement or in its proof [run]. They are the 175 of 16:19Z: 112 bound for the definitions tree
+  and 63 for the properties tree.
+- **Over all 6,446 read definitions: six**, and none of them new [run]. They are the six values of step 0's seven
+  (`DrawSetupZHJ.tabAt`, `ZkTab.table`, `DrawSetupZHJP.tabAt`, `DrawSetupZJ.tabAt`, `DrawSetupZKH.tabAt`,
+  `DrawSetupZK.tabAt`). Each has one nested proof whose **statement** names `ReedSolomon.code` and
+  `Code.relativeUniqueDecodingRadius`. That is the proof of the record's field `hδ`. The proofs themselves name
+  nothing outside.
+- **No nested proof of a read definition cites a lemma of ArkLib or VCVio** [run]. The two names above are
+  definitions.
+- 774 read definitions have a nested proof of their own. The probe read all of those proofs: the six read
+  definitions it did not reach (section 1) have none.
+
+### 4. The split, and what each read definition names outside
+
+| | definitions tree | properties tree | neither |
+|---|---|---|---|
+| step 0, 16:19Z | 1,914 | 2,281 | 2,251 |
+| with the probe's names | 1,914 | 2,281 | 2,251 |
+
+- No definition moved [run].
+- **Eleven read definitions name an outside constant themselves**: seven the two ArkLib constants, four the VCVio
+  instance. No read definition names anything of CompPoly, PolyFun or cslib [run].
+- The seventh of step 0's seven is the record `TabZK`: the names are in the type of its constructor `TabZK.mk`,
+  itself a read definition, and in the helpers generated beside it [run].
+- The 1,054 that hold an ArkLib name in what they read are the same set as at 16:19Z [run].
+- `neither`, by why, now: an outside package alone 135, a lemma alone 1,175, both 941. At 16:19Z: 135, 1,197, 919.
+  The 22 of section 2 went from "a lemma alone" to "both".
+
+### 5. What else the probe saw, over the whole workspace
+
+- **Only the proofs tree names an outside constant** [run]. No constant of the definitions tree, the properties
+  tree or a code package does.
+- **Outside top-level theorems' proofs, 94 constants of the proofs tree name one**: 47 top-level theorems in their
+  statements, and 47 others (19 of kind `def`, 15 generated abbreviations, 11 nested or private proofs, one
+  constructor, one recursor). Between them they name 23 outside constants: 21 of ArkLib and 2 of VCVio.
+- Two of the 23 are lemmas, both ArkLib's: `CoreDefinitions.IsMCA.congr_simp` and
+  `CoreDefinitions.not_isMCA_iff_forall_exists_codewords`. They are cited by `FlockSoundness.agree_of_extras._f`
+  and `FlockSoundness.value_drawKs_extras_le._f`, helpers of two recursive theorems. No listed statement reads
+  either.
+- The three definitions of 16:19Z that no listed statement reads (`FlockDeploy.KS.zkTab`, `FlockSoundness.codeK`,
+  `codePad`) are there. So are `Claims.IRS.rowList` (`GuruswamiSudan.decoder`) and the helpers of the recursive
+  predicates `FlockSoundness.ExtrasGood` and `MCAGood` (`CoreDefinitions.IsMCA`). No listed statement reads any
+  of them [run].
+- **Top-level theorems, statement or proof** [run]:
+
+| package | top-level theorems that name it | its constants they name | of them lemmas |
+|---|---|---|---|
+| ArkLib | 64 | 76 | 37 |
+| VCVio | 24 | 14 | 2 |
+| CompPoly | 3 | 3 | 1 |
+| cslib | 2 | 2 | 0 |
+
+- So of 88,646 top-level theorems, at most 93 name anything of ArkLib, VCVio or what they bring. Of the 679 files
+  that hold a read definition, 546 load one of them (16:19Z).
+- The probe did not print those theorems' names. One more run of it would, in about three minutes where the tree
+  holds main's modules. It would tell, for the table you ordered at 17:46Z, which groups' files load ArkLib and
+  use none of it. I launch it only on your word.
+
+### 6. The `commitOf?` carry
+
+- The carry's own result is in my 17:18Z entry: `clean-skipped`, pure, `5d3a350b8f40` on
+  `cursor/proofs-redraw-commitof-carried-4de2`. Nothing has changed on it.
+- **Records, `r20261113-170726-4267`, still running** [run, 18:03Z]. The PoUW check's package passed on the
+  commit's own lock: "AUDIT: PASS", "check.py exit 0 in 69 s". The proofs package built and passed (4,051 modules,
+  build 1,047 s). The spec's lock differs in one record, as the change means it to: "definitions in
+  PouwCheck.Credit that Flock.SecurityProofs.RecursiveAuditC3, Verity.Sampled.remote_soundness_deployedReady,
+  Verity.Sampled.remote_soundness_deployedReady_honest, Verity.Sampled.remote_soundness_deployedReady_nontrivial
+  read changed (changed: PouwCheck.Credit.commitOf?)", "every failure is a record difference". It is now in
+  `check.py --update` on the spec. The properties tree follows.
+- **Suites, `r20261113-170942-cb9f`, still running** [run, 18:03Z]: 51 of 59 passed, none failed.
+- When both end: I commit the record the run kept on the carried branch, write the ready line with both verdicts
+  word for word, and fast-forward `cursor/proofs-redraw-commitof-4e9d` by a plain push. No pull request.
+
+### 7. #9717
+
+- `r20261113-165128-71b3` is not back: FRAME's 17:59Z table has it in its first audit, 66 suites passed, none
+  failed [read]. My one line follows when it is. I have pushed nothing to the draw, session or credit branches.
+
+### Not established
+
+- Which top-level theorems name ArkLib or VCVio, and so which files that load them could stop loading them.
+- What the two unread modules of the proofs tree name outside, by reading them. It is settled for their read
+  definitions from the kept facts and the text; their four theorems are not in the tallies of section 5.
+- Why the elaborator picks VCVio's instance over core's: I read the definitions' text and the terms, not the
+  instance search.
+- That the ten `default`s can be replaced without breaking a proof that unfolds them: not tried.
+- That main's facts of `4ae17f7eafd7` are those of `2359dfc54cd6`: from git (no Lean input changed between them),
+  and from the join (every name the probe printed is in the facts).
+- That each definition's text elaborates in its target tree, as at 16:19Z.
+- Any verdict of `4267`, `cb9f` or `71b3`.
+
+### State
+
+- No code written for Y2, no branch made, no lock touched. One scratch file went to two nodes inside the try's
+  snapshot and is in no branch.
+- Heads: `commitOf?` carried `5d3a350b8f40`, old branch `779936dea335` (not moved); #9717 `ec2749859711`; #9728
+  `36d6e37cbc7b`; the credit branch `1370c60b7e75`.
+- Runs out: `4267` (records, vy-nebius-cpu-9) and `cb9f` (suites, vy-nebius-cpu-14). Runs ended: `2051` (exit 0),
+  `1892` (cancelled by me, exit 143).
+- Mailbox read 17:59Z: 609 lines, to your 17:46Z message.
