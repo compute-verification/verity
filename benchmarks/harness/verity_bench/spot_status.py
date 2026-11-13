@@ -22,7 +22,6 @@ hold in their `--json` under `spot_holes`).
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
@@ -32,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, settings
 
 HOLES = ("redrawn sample", "re-committed execution phase")
 FIXES = Path(__file__).resolve().parent / "data" / "spot_holes.json"
@@ -110,7 +109,7 @@ def _reversed_at(root: Path, fix: str, commit: str) -> str | None:
     if not patch.stdout:
         return None
     with tempfile.TemporaryDirectory() as tmp:
-        env = dict(os.environ, GIT_INDEX_FILE=str(Path(tmp) / "index"))
+        env = {**settings.environ(), "GIT_INDEX_FILE": str(Path(tmp) / "index")}
         (Path(tmp) / "fix.patch").write_text(patch.stdout, errors="surrogateescape")
         if _run(root, "read-tree", commit, env=env).returncode:
             return f"`git read-tree {commit}` failed"
