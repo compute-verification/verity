@@ -13,6 +13,7 @@ from training_slowdown.codecs import ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
 from training_slowdown.routes import ema, qat, subset
+from training_slowdown.routes._codes import row_codes, row_values
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
 
@@ -100,6 +101,28 @@ def test_muon_takes_the_matrices_and_adamw_the_gains():
     lr = 0.01 * subset.schedule(dials, 0, 1)
     want = before["blocks.0.w_up.weight"] * (1 - lr * 0.05) - lr * 2 ** 0.5 * newton_schulz(1.95 * seen["grad"])
     assert torch.allclose(w, want, rtol=0, atol=1e-7)
+
+
+@pytest.mark.parametrize("bits", [2, 4, 8])
+def test_row_codes_pack_each_rows_rounding_into_bytes_and_row_values_decode_it(bits):
+    """`_codes.row_codes`: each row rounded to the nearest multiple of its scale, the row's largest magnitude over
+    2^(bits-1) - 1 as bf16 holds it, packed 8/bits codes a byte, with the scales beside them; `row_values` decodes
+    that rounding, a zero row as zeros. A matrix already on its rows' grids passes unchanged, and a row that fills
+    no whole bytes is refused."""
+    g = torch.randn(6, 16, generator=torch.Generator().manual_seed(2))
+    g[2] = 0.0
+    packed, scales = row_codes(g, bits)
+    assert (packed.dtype, tuple(packed.shape)) == (torch.uint8, (6, 16 * bits // 8))
+    assert (scales.dtype, tuple(scales.shape)) == (torch.bfloat16, (6, 1))
+    top = 2 ** (bits - 1) - 1
+    step = (g.abs().amax(1, keepdim=True) / top).bfloat16().float()
+    want = torch.where(step > 0, (g / step).round().clamp(-top, top) * step, 0.0)
+    got = row_values(packed, scales, bits)
+    assert torch.equal(got, want) and not got[2].any()
+    assert torch.equal(row_values(*row_codes(got, bits), bits), got)
+    if bits < 8:
+        with pytest.raises(ValueError, match="fill whole bytes of a row only, and a row of 3"):
+            row_codes(torch.randn(2, 3), bits)
 
 
 GAINS = ["norm", "blocks.0.attn_norm", "blocks.0.mlp_norm"]
