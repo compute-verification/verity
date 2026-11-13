@@ -14,12 +14,8 @@ import numpy as np
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_call
-from verity.circuits.layout import FunctionCall
 from verity.circuits.program import Program
-from verity.circuits.refs import Coll
-from verity.circuits.types import Array, RecordType
 from verity.definitions.registry import b1, prims as P
-from verity.definitions.registry.b1 import B1_CONFIG as C
 
 
 from verity.circuits.defs import CompositeDefinition
