@@ -116711,3 +116711,45 @@ In plain words: the file that blocked MAJORITY's records run, COINMAP's import a
 **To post.** Nothing.
 
 **Not established.** That `ClaimInner`, `SecondRead`, the form with `stagesFit`, and `Steps` with `accepted_fits` compile on a node.
+
+## GATHER, Fri 13 Nov 03:06Z: at 8 of 8 the two stages are two sessions on two windows, each under its own local challenger's key and ledger; the second opens after the first's last coin is released by both ledgers' stamps, but no one ledger holds both
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `671dd73cce63074b543d8a77239f250d9e73edf0`, the head I stand behind (`5ad83c84ef5e` plus one test file), rehearsed at that code by `7b90` and `b025`. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`. Both pushed, unchanged since my 03:03Z entry.
+
+**In plain words.** Your 03:00Z ask has two halves and they come out differently. The order is right: in every run the second stage's session starts after the first stage's session has released its last coin and ended. But the two sessions are not lines of one device's ledger. Each of the audit's two commands starts a challenger of its own, with a key of its own, so each stage has its own window, its own session and its own signed ledger of three lines. Nothing signed under one key puts the second session after the first; the order is read by comparing the stamps of two ledgers. So if the form's check asks for the second session's opening after the first's last release in one ledger, Friday's run as it is launched (`--challenger local` in each command) does not have that shape and would be refused. If it compares two ledgers' stamps, Friday's run passes. [run: `second/coins.json` of `b025`, `240a` and `c6bd`, each stage's `key`, `ledger`, `session` and `segment`, read 03:04Z; derived]
+
+### 1. What each run's evidence holds
+
+| | `b025`: 8 of 8, 4 a cell | `240a`: 8 of 8, 32 a cell | `c6bd`: 4 of 8, 1 a cell |
+|---|---|---|---|
+| First stage's session | `s20261113T015403Z-2475` | `s20261113T011722Z-964c` | `s20261113T014103Z-24f1` |
+| its ledger | 3 lines: `reserve`, `open`, `end` | the same | the same |
+| started, ended | 01:54:03Z, 01:57:16Z | 01:17:22Z, 01:17:27Z | 01:41:03Z, 01:44:15Z |
+| coins released | `window` 1, `draw/0` 4, `draw/1` 4 | 1, 4, 4 | 1, 3, 3 |
+| Second stage's session | `s20261113T020013Z-1b10` | `s20261113T011732Z-746e` | `s20261113T014713Z-4764` |
+| its ledger | 3 lines: `reserve`, `open`, `end` | the same | the same |
+| started, ended | 02:00:13Z, 02:02:26Z | 01:17:32Z, 01:17:50Z | 01:47:13Z, 01:49:32Z |
+| coins released | `window` 1, `draw/0` 340 | 1, 1,600 | 1, 103 |
+| The two keys | different | different | different |
+| The two window roots | different | different | different |
+| Second's first request after first's last release, by the sessions' own stamps | yes, 178 s later | yes, 6 s later | yes, 179 s later |
+
+- **One window or two:** two. Each ledger's `open` line names its own window root, and the two roots differ in every run.
+- **The order:** the first session's ledger ends (`end`, "closed by the client") before the second's `reserve` line is stamped, in all three. The last row compares the first session's last `release` with the second session's first request, on the monotonic stamps each session's log carries; both ran on one host. [run; derived]
+- **Not in one ledger:** each ledger is a chain of its own: `seq` 0 to 2, its first line's `prev` all zeros, each line signed under its own key, its host named `local-challenger.<its own session>`. The second ledger does not name the first session, and the first does not name the second. [run: `b025`'s two ledgers, 03:06Z]
+- **The first stage releases under two labels** when there is a stop rule: `draw/0` for the class and `draw/1` for the stop class. The outcome's first-stage evidence is the `draw/0` segment alone; the session's last coin released is `draw/1`'s. A check on "the first stage's last coin" should say which it means. [run: each first ledger's `end` line, `released`]
+
+### 2. What would put both in one ledger
+
+Each command takes `--challenger local`, `loopback:HOST:PORT` or `gate:USER@HOST` (`benchmarks/one_stage/two_stage.py:1193`, `:1222` at the second try's head). With one standing challenger named to both commands, the two sessions would be under one key. I have not run that and do not know whether its ledger then holds both sessions in one chain. By Daniel's ruling both of Friday's tries run `--challenger local`, so they will have the shape of the table above. [read; not run]
+
+### 3. Runs since my 03:03Z entry
+
+- **The rerun over `c6bd`'s kept files** (`r20261113-023437-3243`, vy-nebius-2, at the first try's head; waited 6 minutes for a place, running since 02:40:53Z): its first print gives the same outcome and the same record digest as the try printed, with both registrations and both samples the same, and serving's `second_form_check.py` exits 0 on its summary unchanged. So Friday's first-try shape prints again from its kept files. Its three changed copies are still running; at this vocabulary a print takes minutes, not seconds. [run: its `out/second-again.json`, read 03:05Z; the reader run on my VM, 03:05Z]
+- **The rerun over `b025`'s kept files** with the class's figure (`r20261113-030038-1a73`, vy-nebius-2, at `671dd73cce`): waited 3 minutes, running since 03:04:09Z. Expected end by 03:30Z. [guess]
+
+### 4. Not established
+
+- What a single standing challenger's ledger looks like across the two commands.
+- That the changed copies of `c6bd`'s kept files are each refused (running), and `b025`'s rerun.
+- Anything on the engine or on cards in my runs.
