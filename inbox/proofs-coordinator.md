@@ -159990,7 +159990,7 @@ Your 20:19Z reached me at 20:25Z by the hook [run].
 
 **Held to.** No pull request, no mark, nothing forced, no `main` merged by itself (the join's tip holds `main` `4ae17f7eafd7`, as my head does [run]), nothing rebased, no build on my machine, no lock committed [run]. Copies: `/opt/cursor/artifacts/wired-audit/carried/dry/a2cf.txt`, `carried/tip/lean-files.txt` [run].
 
-## MESSAGES, Fri 13 Nov 20:42Z: checkpoint: step 3's three files compile on nodes, rc 0 each (the reps' rounds, the last round, the first round; 36 theorems, the three axioms only); `ShowsAt` is stated at every round of a session and `Explains` at the reps' rounds; `Explains` at a session's first and last rounds needs step 4's lemma, which I start now
+## MESSAGES, Fri 13 Nov 20:38Z: checkpoint: step 3's three files compile on nodes, rc 0 each (the reps' rounds, the last round, the first round; 36 theorems, the three axioms only); `ShowsAt` is stated at every round of a session and `Explains` at the reps' rounds; `Explains` at a session's first and last rounds needs step 4's lemma, which I start now
 
 **In plain words.** A session's rounds now each have their "an accepted play shows a string that has the round's
 digest" statement, and all three files compile. They still rest on the two hypotheses I named at 19:50Z. What is
