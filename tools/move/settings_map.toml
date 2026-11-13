@@ -42,7 +42,9 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
            "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
-           "**/lake-manifest.json", "**/lean-audit.json"]
+           "**/lake-manifest.json", "**/lean-audit.json",
+           # the layout of record: a landed move leaves its lines as written, for top to delete
+           "tests/tree.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
            "adapters/vllm/manifests/definitions.json"]
 
