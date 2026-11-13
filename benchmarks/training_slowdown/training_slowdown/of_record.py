@@ -89,7 +89,7 @@ E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the 
              "lowrank": "each matrix's rounded factors packed apart under a header of their own, where the record's "
                         "program packed every matrix's factors in one stream under one header"}
 #: how many of a config's steps are counted; the last is the one compared
-STEPS = 2
+STEPS = 165
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
         "traced the step as one fixed graph that reads no value back, so it is the step a job of the config takes on "
