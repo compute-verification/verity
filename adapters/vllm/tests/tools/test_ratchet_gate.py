@@ -525,7 +525,8 @@ def test_runs_over_a_growing_train_judge_each_change_once_and_a_cached_verdict_i
 
 def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted, verdict_cache, monkeypatch, capsys):
     """A train's merges are judged by a pool of processes, each with its own worktree for the base's lints: the report, its
-    order and the exit status are the ones judging them in turn gives, failures included, cached or not."""
+    order and the exit status are the ones judging them in turn gives, failures included, cached or not, and with every
+    rule as without."""
     linted.git("checkout", "-q", "-b", "next", "main")
     for pr, files in enumerate([
             {"adapters/vllm/verity_vllm/a.py": "A = 'ok'\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -544,14 +545,17 @@ def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted
     def report(jobs: str, cache: str = "") -> list[tuple[int, str]]:
         monkeypatch.setenv("RATCHET_GATE_JOBS", jobs)
         monkeypatch.setenv("RATCHET_GATE_CACHE", cache)
-        return [(G.main(["main", "next", *flag]), capsys.readouterr().out) for flag in ([], ["--json"])]
+        return [(G.main(["main", "next", *flag]), capsys.readouterr().out)
+                for flag in ([], ["--json"], ["--json", "--every-rule"])]
 
     serial = report("1")
     assert pools == [] and [v for _, v in _verdicts(json.loads(serial[1][1]))] == [
         "passed", "failed", "untouched", "failed", "failed", "untouched"]
-    assert [code for code, _ in serial] == [1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
-    assert report("4") == serial and pools == [4, 4]
-    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4]
+    assert [code for code, _ in serial] == [1, 1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
+    assert [[c["why"].endswith(G.STOPPED) for c in json.loads(out)["changes"]] for _, out in serial[1:]] == [
+        [False, False, False, True, False, False], [False] * 6]
+    assert report("4") == serial and pools == [4, 4, 4]
+    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4, 4, 3]
     assert len(linted.git("worktree", "list").splitlines()) == 1
     monkeypatch.setenv("RATCHET_GATE_JOBS", "none")
     assert G.main(["main", "next"]) == 2 and "RATCHET_GATE_JOBS is 'none'" in capsys.readouterr().err
