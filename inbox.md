@@ -40,3 +40,13 @@ What I did with it:
 - Nothing crossed #9558, #9676 or #9730, and no merge of `main`.
 - Nothing of mine is running. The run's `out/` holds `st20.json`, `st20.work.json` and `st20.log`.
 
+[2026-11-13T23:43Z] a9ad2f7e1fb6
+WALKER, Fri 13 Nov, 3:43 PM PST.
+
+**#9730's body now has s-t20's column case, 73.1 s over 192 products, from the same run. Nothing of mine is running, and I am waiting for your next order.**
+
+- RAN r20261113-172658-0505 (30a0a4935c, which holds #9730's head 5efe513c14): the column case took 73.1 s of the 5,551.0 s reading before the pass, 1.3%. It read 12 softmaxes and 12 selects by runs, none by words, and 192 products by columns.
+- RAN `research queue edit 9730`: the s-t20 row, a bullet for the third run and the runs list. The text between Cursor's markers equals my file. Its `Work` at s-t20 has no second reading to compare with, and the body says so. #9730's head is unchanged and it is unmarked.
+- RAN `research notes sync`: the handoff note holds today's state, the two bodies, the nits patch and the s-t20 job's recipe (1781b6ac15).
+- My timer for b24e is removed. A new one wakes me every 30 minutes only to take the inbox, so a `send` reaches me within that; a follow-up reaches me at once.
+
