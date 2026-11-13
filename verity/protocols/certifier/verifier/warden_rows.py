@@ -87,6 +87,7 @@ request k (`order[k] + 1`).
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -546,3 +547,13 @@ def refusal(port_: Mapping[str, Any], dom: CommitmentDomain, entry: Mapping[str,
 def reads_file(ports: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """The verifier's own `--registered` file (`verity/registered-reads/v1`) of its ports, `{circuit port: port}`."""
     return {"format": G.READS_V1, "ports": {p: dict(e) for p, e in ports.items()}}
+
+
+def reads_text(file: Mapping[str, Any] | None) -> str:
+    """A `--registered` file's text (`reads_file`'s, or null for a statement with no registered read): its JSON with
+    sorted keys and no space. A port's ``reads`` are positions, protocol structure, and a run of them (the same row
+    read by a member's first units) is a run of small numbers, as a record head's bucket counts are, which are witness.
+    Written with JSON's default separators the two runs are the same bytes, and a reader that compares a released
+    file's bytes with the witness's (the record's leak guard) can't tell this file from a copy of the counts; written
+    without them it shares no run of bytes with a list the certifier's record writes."""
+    return json.dumps(file, sort_keys=True, separators=(",", ":"))
