@@ -1110,7 +1110,8 @@ def test_the_figures_words_call_neither_a_leak_bound_and_put_both_ties_under_the
     """What the record says of its two figures: each bounds a count expression, by the arithmetic the lock lists, and
     neither is a leak bound; the check's K rests on neither tie; the figure with both ties is given only as
     conditional on them, each stated at the network certifier's run and neither checked; and no word of it names a
-    statement that no Lean file of the tree holds."""
+    statement that no Lean file of the tree holds. The calculator's rows carry what they are open on by these
+    premises' names (`leak_bounds.OPEN`, `TIES`), each under the charge its reading is of."""
     assert all(x in OR.COUNT for x in ("each figure bounds a count expression", "RowsKBoundsCount, the arithmetic alone",
                                        "No statement yet ties that count to the secrets", "neither figure is a leak "
                                        "bound"))
@@ -1125,6 +1126,12 @@ def test_the_figures_words_call_neither_a_leak_bound_and_put_both_ties_under_the
                         *(OR.PREMISES[n]["is"] for n in ("count-arithmetic", "answers-verified", *OR.VIEW, *OR.ENTRIES))])
     assert not re.search(r"ScanViewCut|PeriodLeakChecked|ScanCountBounded|StateTieHeld|ViewTieHeld|leak bound of", words)
     assert "is a leak bound" not in words.replace("neither figure is a leak bound", "")
+    assert tuple(LB.TIES) == OR.TIES and set().union(*LB.OPEN.values()) <= set(OR.PREMISES)
+    for reading, charge in ((LB.CHECKED, "view"), (LB.WITH_TIES, "entries"), ("anchors", "entries")):
+        assert all(charge in OR.PREMISES[n].get("charge", (charge,)) for n in LB.OPEN[reading]), reading
+        assert {n for n, p in OR.PREMISES.items() if p.get("charge") == (charge,)} <= set(LB.OPEN[reading])
+        assert {"period-checked", "answers-verified"} <= set(LB.OPEN[reading])
+    assert not set(OR.TIES) & set(LB.OPEN[LB.CHECKED]) and set(OR.TIES) <= set(LB.OPEN[LB.WITH_TIES])
 
 
 def test_on_answers_read_as_given_the_checks_K_is_open_on_them_and_the_figure_with_both_ties_is_labelled_too(
