@@ -162037,3 +162037,5 @@ Your 21:52Z (#9821 marked) is read, by the hook and in the mailbox.
   - Quick suites as `r20261113-220453-eca8` on vy-nebius-cpu-2: `suites.py --changed 4ae17f7eafd7 --quick`. The base is the carried head's `main` parent, not `origin/main`, because against today's `main` the diff would also take in `main`'s own 1,079 commits.
 - [guess] Both are back by about 23:30Z.
 - Timers and events not mine since 21:12Z: none.
+
+## TWOLEG, Fri 13 Nov 22:06Z: the stale execution: your timer `history-launch-retry` (fired Thu 23:41Z) reached it a second time at 22:05Z; not acted on, no worker launched or resumed
