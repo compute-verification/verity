@@ -12,7 +12,8 @@ accepts at the switch `form` (`accepted_steps`):
 * the run of record's input is `inputAt`'s (`inputAt_ok`): the interior registration's commitment is its record's, its
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`), each registration's record the one the
-  verifier's parser reads from its canonical text (`readBack`, read by `readBack_ok`);
+  verifier's parser reads from its canonical text (`readBack`, read by `readBack_ok`), the boundary's with the
+  commitment's digest (`digestIs`, read by `digestIs_ok`);
 * neither stage's bytes run past one coin's (`stagesFit`, read as `ξ.size ≤ STAGE_BYTES` and `ξ₂.size ≤ STAGE_BYTES`
   by `accepted_fits`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
@@ -70,8 +71,21 @@ theorem readBack_ok {record j : Json} (h : readBack record = .ok j) :
     rw [hss] at hs'
     exact ⟨s, hs, hj, hs'⟩
 
+/-- **What `digestIs` passed**: the record's digest is the one named. -/
+theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Registration.digest j = .ok d := by
+  unfold digestIs at h
+  obtain ⟨d', hd, h⟩ := bind_ok h
+  split at h
+  · rename_i heq
+    rw [hd, heq]
+  · first
+      | (cases h; done)
+      | (simp only [throw, throwThe, MonadExceptOf.throw] at h
+         cases h)
+      | (simp at h; done)
+
 /-- **What `inputAt` computed** where it returned: the run of record's input is `inputOf` at each registration's
-record as `readBack` returned it. -/
+record as `readBack` returned it, and the boundary's so returned has the commitment's digest (`digestIs`). -/
 theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input}
     (h : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
@@ -80,7 +94,7 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
       OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs = .ok r ∧ r.all = true ∧
       ∃ vs received₂ j₁ j₂, stamped p e bs r.out = .ok vs ∧
         i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs ∧
-        readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ := by
+        readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Registration.digest j₁ = .ok c.digest := by
   unfold inputAt at h
   obtain ⟨s, h1, h⟩ := bind_ok h
   obtain ⟨c₂', h2, h⟩ := bind_ok h
@@ -93,10 +107,12 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
     obtain ⟨vs, h6, h⟩ := bind_ok h
     split at h
     · obtain ⟨j₁, hj₁, h⟩ := bind_ok h
+      obtain ⟨u, hd, h⟩ := bind_ok h
+      cases u
       obtain ⟨j₂, hj₂, h⟩ := bind_ok h
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, rfl, rfl, rfl⟩ := h
-      exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, j₁, j₂, h6, rfl, hj₁, hj₂⟩
+      exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, j₁, j₂, h6, rfl, hj₁, hj₂, digestIs_ok hd⟩
     · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/
