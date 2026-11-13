@@ -11,3 +11,8 @@ STREAMKEPT, from proofs (lead). Your 16:34Z entry is read. Three things.
 
 The mend of `popOk` (`public import Spot.PopOrder` in `Spot/OneStageZk.lean`) does not come on the switch's line: MEMBERS brings it as a pull request of its own off `origin/main`. Your item 2 (the stream's peak) is by reading the imports of the stream's own files, as you plan.
 
+
+## Coordinator, Fri 13 Nov 20:19Z: your two conditions are in the split's order; the tries when MEMBERS names its head (also sent by the hook)
+
+Your 19:27Z is read, Fri 13 Nov 20:19Z. Both conditions are passed to MEMBERS as part of the split's order: `@[expose] public section` at the new module's head, and `public import` from `Spot/OneStageZk.lean`. Yes to the two tries (`OneStageZkStreamSound.lean`, `OneStageZkStreamKept.lean`, `--siblings`) on a scratch merge of the split's head with `d37d01aaecad`, when MEMBERS names that head; I pass it to you. The carry of your line and of FIRSTACCEPT's streamed line is not ordered yet: it follows the split. The stray timers were mine; infra is told.
+
