@@ -114720,3 +114720,64 @@ Two things my reading of 02:22Z left as not established are now read, and both s
 Not established: everything else the 02:22Z entry lists under that heading, unchanged. Nothing built or run; no file changed.
 
 Pushed head of my own work: `cursor/proofs-stops-drawn-7b3e` at `7c776d1125f7`, unchanged; nothing unpushed. No run is out. To post: nothing.
+
+## COINMAP, Fri 13 Nov 02:27Z: still only `CoinMap.lean` compiles (`r20261113-013349-6da9`, rebuilt ✔ in `r20261113-021137-ab6a`); `CoinMapLaw.lean` is down from 20 errors to 10, all fixed in try15 `r20261113-022445-682a` (vy-nebius-2, running); no Lean slot made me wait more than 10 minutes
+
+In plain words: the definitions of the coin map compile. The proof that reading the period's play as a two-stage
+verifier run costs only the coin trees' hiding term (the first clause, `lawAt`) does not compile yet. The last try
+showed 10 errors, none of them in the argument itself: a type class the elaborator couldn't find, a rewrite under a
+proof, an implicit term left open, and an application it couldn't infer. All 10 are fixed, along with the same
+patterns in the agreement file, and the next try is running. The 03:00Z deadline for the definitions and the first clause
+rests on this try. If it shows new errors, I fix them and send one more.
+
+Machine and wait [run]: try14 `r20261113-021137-ab6a`, vy-nebius-cpu-11, at `cc95821a94`; launched 02:11Z, started at
+once, exit 1 after 331 s. try15 `r20261113-022445-682a`, vy-nebius-2 (cpu-11 is no longer to be used, per your 02:14Z
+message), at `28d9babc1b`; launched 02:24Z and running within a minute.
+
+### What compiled and what didn't [run]
+
+- `r20261113-021137-ab6a`: `✔ Built Proofs.Properties.Verity.SampledTwo.CoinMap`. `✖ CoinMapLaw`: 10 errors.
+  - 211, 221, 331: `Fintype (C × ((c : C) → Tape (k c) (s c)))` not synthesized, even under `open Classical`.
+  - 429: `rw [Fin.coe_divNat]`, motive not type correct (the rewritten value sits under a `Fin.mk` proof).
+  - 689, 693: `law_write`'s term `G` was not determined.
+  - 724, 760: `law_send … s'` could not infer its continuation from `s'`.
+  - `CoinMapAgree.lean` and `CoinStages.lean` were not reached.
+
+### What I changed [read]
+
+- `CoinMapLaw.lean`:
+  - The coin node's tape lemmas are now stated over `Tape (coin k) s`, with accessors `tapeVal`/`tapeAt`, so their
+    instance is `Tape.instFintype` itself (as `Proofs.Core.Game.Tape.prob_eq_prCoin` passes it explicitly).
+  - One lemma, `avg_tape_map` (the value written through `w`), gives `avg_tape_coin` (`w = id`), `avg_tape_at`
+    (`w` constant) and `law_write`'s `e₁`.
+  - `freshVal_eq` uses `simp only` in place of `rw`.
+  - `law_round` passes `G` explicitly (the `next` of `gapRound`).
+  - Each `law_send` takes its continuation, message and strategy from the goal (`law_send _ _ _ ?_`).
+- `CoinMapAgree.lean`: the same changes at `law_writeA`, `law_roundA` and `law_sendA`.
+- I merged the base at `e0a4052b5f` (TWOLEG's DevAgrees fix `c0216f674d` and `ClaimInner.lean`). There was no conflict.
+  My files still don't import `DevAgrees.lean`. `ElemAgrees` states `ElemsBelow`'s body, as in entry 6.
+
+### NEEDS
+
+1. TWOLEG: `elems_first` takes `b.size ≤ SpotFlock.L` for the first stage's bytes. What gives it on an accepted play
+   is yours or STAGECOINS's [read]. This is still open from entry 6.
+2. STAGECOINS: `DevSecond` over every `FormAccepts` exchange needs `FreshWide o.log`. `freshWide_play` gives it for
+   every play, so `Good o` or a play premise in `DevSecond` closes it [derived]. This is still open from 01:13Z.
+
+### STOP RULE
+
+Kept. I changed no listed guarantee or lock, didn't turn on the accept, and didn't touch Sampled.lean or any file that
+isn't mine.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- `CoinMapLaw.lean`, `CoinMapAgree.lean` and `CoinStages.lean` have not compiled [run]. Their statements are
+  unproved until a run compiles them.
+- Whether try15 fixes the instance errors is a [guess]: it follows the reference proof's explicit instance and has not
+  been compiled.
+
+Branch `cursor/proofs-coinmap-8b0c` at `28d9babc1b`, pushed; nothing unpushed.
