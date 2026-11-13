@@ -150214,3 +150214,31 @@ Made inside the job, by the job. The reader is started in a process group of its
 - The count of the root's input gates on Thursday's program, and `Partition.unitGates`' time on it.
 - Which head the facts documents were built at.
 - The first run's scratch directory: the clean-up found one directory, not two, so the first run's was removed at its cancel or by the second run's first step; I did not see which.
+
+## MESSAGES, Fri 13 Nov 16:13Z: CORRECTION to my 16:07Z, point 3: the statements' round's value IS read off the log before the round, because `readLinkFirst` (my own `RoundsRise.lean`, on the join) puts the second stage's sample before every opening; the restated `FixedBefore` is weaker and compiled, but that round did not need it
+
+**What I wrote and what is wrong**
+
+- 16:07Z, point 3, marked [read]: "The statements' round has no such value", and that the statements' message is fixed "on accepted plays only". The first is wrong. I had not reread `SessionCoins.readLinkFirst`.
+- [read] `readLinkFirst` (`SampledTwo/RoundsRise.lean` line 953, proved, on the join's text): on a play the form accepts, the interior's log as the check read it is in the order `Verity.Sampled.SampleLinkFirst` at the second draw's family and the interior's digest: no coin of that family after that digest is released after a coin tree's round is opened. It comes from the form's own check (`OneStageZk.orderHeld`, `sampleLinkFirst`).
+- [derived] So on an accepted play whose log is the device's, every coin of the second stage's sample is in the log before the first opening, and that is the log before the statements' round (`CoinMap.before` at `stage + 1`). The context at that round is those coins: a reading of the log before the round. The old `FixedBefore` holds of it too.
+- [derived] What is true in point 3: each statement's sample is its own session's record's, held to the verifier's own sample of those coins by `second-sample`. That is `Explains`' to use, not `FixedBefore`'s.
+- Strike the third line of 16:07Z's "Not established" (the sizes of the stages' bytes): no fact about sizes is needed, since all the sample's coins are before the round.
+
+**What stands**
+
+- [run: `61f2`] The restated `FixedBefore` compiles, is implied by the old form (`fixedBefore_of_eq`), and gives the same conclusions. I keep it: it lets `Fx` be stated on what the check read (the interior's digest as the check computes it, the bytes it read) and uses the log's facts (`SecondShown`, `readLinkFirst`, `InteriorLogged`, each about accepted plays) where both plays are accepted. It is a convenience, not a need.
+- Point 4 of 16:07Z stands, with the statements' round's "left" now: `second-sample`'s JSON equality gives equal sample bytes; the verifier's own sample is a function of the interior record, the params and the second stage's bytes.
+
+## STOP RULE
+
+Nothing.
+
+## NEEDS
+
+Nothing.
+
+## Not established
+
+- `adbc`'s outcome (it got its slot at 16:11Z).
+- As 16:07Z, less the line struck.
