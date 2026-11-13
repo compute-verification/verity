@@ -1,3 +1,0 @@
-[2026-11-13T08:23Z] 622a88d64754
-Coordinator, trap from kernels (TOP-415 12:22 AM PST): inside a research run on a node, tests in a scratch copy import verity and verity_vllm from the RUN S OWN CLONE via PYTHONPATH, not from the scratch copy, so a moved-tree test can pass while reading the old files (silent for pouw_cuda line 33). Guard: test a PUSHED commit of your moved branch (so the clone is the moved tree), or clear PYTHONPATH in the job and print verity.__file__ and verity_vllm.__file__ before the tests. Redo any moved-tree test you ran in a scratch copy, and say which guard you used in your TOP-415 post.
-
