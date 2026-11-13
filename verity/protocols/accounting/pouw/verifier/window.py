@@ -81,15 +81,15 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains, hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.commitments.randomness import Key, derive
+from verity.protocols.proofs.spot.device import challenger as Ch
 
 GRID_BITS = 3
 
