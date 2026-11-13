@@ -401,7 +401,9 @@ theorem miss_le_sqrt [Nonempty β] [Nonempty γ] (cls : β → κ) (res : β →
       have hc : cls x'' = cls x := (mem_classOf cls).1 hcx
       unfold badCount forkCount
       rw [classOf_eq cls hc]
-      refine Nat.cast_le.2 (le_of_le_of_eq (card_ne_le (classOf cls x) (F (cls x)) u (v (cls x)) (hmode x u)) ?_)
+      refine Nat.cast_le.2 (le_trans (le_of_eq ?_)
+        (le_of_le_of_eq (card_ne_le (classOf cls x) (F (cls x)) u (v (cls x)) (hmode x u)) ?_))
+      · exact congrArg Finset.card (Finset.filter_congr fun x' _ => Iff.rfl)
       congr 1
       refine Finset.filter_congr fun x' _ => ?_
       unfold fork
@@ -548,11 +550,11 @@ theorem sum_merge {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (φ : Coins
     (∑ y, φ (merge hist y)) * ((Finset.univ.filter fun r : Coins A x => Shows hist r).card : ℝ) =
       (Fintype.card (Coins A x) : ℝ) * ∑ r ∈ Finset.univ.filter (fun r => Shows hist r), φ r := by
   have hS : ∀ y ∈ (Finset.univ : Finset (Coins A x)),
-      merge hist y ∈ Finset.univ.filter fun r => Shows hist r :=
+      merge hist y ∈ Finset.univ.filter fun r : Coins A x => Shows hist r :=
     fun y _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, shows_merge hist y⟩
   have hfib : ∀ ψ : Coins A x → ℝ, ∑ y, ψ (merge hist y) =
-      ((Finset.univ.filter fun y => merge hist y = complete hist).card : ℝ) *
-        ∑ r ∈ Finset.univ.filter (fun r => Shows hist r), ψ r := by
+      ((Finset.univ.filter fun y : Coins A x => merge hist y = complete hist).card : ℝ) *
+        ∑ r ∈ Finset.univ.filter (fun r : Coins A x => Shows hist r), ψ r := by
     intro ψ
     rw [← Finset.sum_fiberwise_of_maps_to hS (fun y => ψ (merge hist y)), Finset.mul_sum]
     refine Finset.sum_congr rfl fun r hr => ?_
@@ -748,7 +750,7 @@ theorem classOf_clsOf (hS : RunShown A x) (s : TapeOf V θ F c σ × Coins A x) 
   ext ⟨ω', r'⟩
   rw [Finset.mem_map]
   unfold classOf
-  rw [Finset.mem_filter]
+  simp only [Finset.mem_filter]
   constructor
   · rintro ⟨-, h⟩
     have h1 : ω' = s.1 := congrArg Prod.fst h
@@ -757,8 +759,8 @@ theorem classOf_clsOf (hS : RunShown A x) (s : TapeOf V θ F c σ × Coins A x) 
     exact ⟨r', Finset.mem_filter.2 ⟨Finset.mem_univ _,
       (hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 r' i).1 h2⟩, rfl⟩
   · rintro ⟨a, ha, he⟩
-    simp only [Function.Embedding.coeFn_mk, Prod.mk.injEq] at he
-    obtain ⟨rfl, rfl⟩ := he
+    have he' : (s.1, a) = (ω', r') := he
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj he'
     exact ⟨Finset.mem_univ _, Prod.ext rfl
       ((hist_eq_iff hS (prover V θ F c σ place Rd Dg) s.1 s.2 _ i).2 (Finset.mem_filter.1 ha).2)⟩
 

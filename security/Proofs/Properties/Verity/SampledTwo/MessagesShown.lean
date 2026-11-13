@@ -375,16 +375,21 @@ alone is never decided, and a step that is no coin request reads no coin but tho
 
 theorem linkOf_of_finalOf {a : Msg} {f : FlockDeploy.Final} (hf : FlockDeploy.finalOf a = some f) :
     FlockDeploy.linkOf a = none := by
-  unfold FlockDeploy.linkOf
-  split
-  · rename_i body
-    have h0 : FlockDeploy.finalOf (0 :: body) = none := by
-      first
-        | rfl
-        | simp [FlockDeploy.finalOf]
-    rw [h0] at hf
-    cases hf
-  · rfl
+  rcases a with _ | ⟨b, body⟩
+  · first
+      | cases hf
+      | simp [FlockDeploy.finalOf] at hf
+  · by_cases hb : b = 0
+    · subst hb
+      have h0 : FlockDeploy.finalOf (0 :: body) = none := by
+        first
+          | rfl
+          | simp [FlockDeploy.finalOf]
+      rw [h0] at hf
+      cases hf
+    · first
+        | simp [FlockDeploy.linkOf, hb]
+        | (unfold FlockDeploy.linkOf; split <;> simp_all)
 
 /-- **A lone message that is no coin request is refused.** -/
 theorem act_single (zk : Bool) (x : Msg) {a : Msg} (ha : ∀ t, a ≠ 0 :: t) (e : FlockDeploy.Coin) :
@@ -393,7 +398,7 @@ theorem act_single (zk : Bool) (x : Msg) {a : Msg} (ha : ∀ t, a ≠ 0 :: t) (e
   rcases FlockDeploy.setupOf zk x with _ | ⟨s, spec, sts⟩
   · rfl
   · dsimp only
-    rw [List.getLast?_singleton, List.getLast?_singleton]
+    try simp only [List.getLast?_singleton]
     split
     · rename_i heq _
       exact absurd (Option.some.inj heq) (ha _)
