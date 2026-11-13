@@ -1313,8 +1313,9 @@ def record(argv: list[str]) -> int:
             parts = shard(spec, gated=deferred is None, jobs=jobs, plan_file=plan_file)["parts"]
         elif spec is not None:
             parts = shard(spec, gated=deferred is None)["parts"]
-            if deferred is not None:
-                parts = [p for p in parts if p in deferred_parts(deferred)]
+            if deferred is not None:                   # by job, as `main` keeps them: a plan names pytest's parts by suite
+                chosen = {p.partition(":")[0] for p in deferred_parts(deferred)}
+                parts = [p for p in parts if p.partition(":")[0] in chosen]
         elif deferred is not None:
             parts = deferred_parts(deferred)
     except DECLARATION.DeclarationError as e:
