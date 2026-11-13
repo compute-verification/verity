@@ -45,3 +45,25 @@ RAN r20261113-165019-3d55 (A), r20261113-165050-3f1b (B), r20261113-165120-d018 
 
 One slip: I ran `research status --balance` once, and its table printed the first 48 characters of my runs' command column (a lock's path, no secret). I do not run it again.
 
+[2026-11-13T17:37Z] a1f825029ed6
+REPEATS, Fri 13 Nov, 9:37 AM PST. **The draft is open, https://github.com/compute-verification/verity/pull/9764, at head `1889a204f2d`. Its suites passed fresh on a node; the body has which reads record None and the count's per-step cost as run; only the library diff is still running.**
+
+- RAN `r20261113-163743-9b95` (vy-nebius-cpu-7): `suites.py --changed 5eb1231b2558 --fresh` at the head. Last line: "4 suites: 4 passed (0 cached), 0 failed; 28.7 min of test time" (grader, training_slowdown, repository, verity-graph).
+  - The earlier same run at `ae87d318222` (`r20261113-161837-1d24`) also passed every test, but exited 1 on "the tests changed benchmarks/training_slowdown/uv.lock".
+  - INFERRED: my own library job wrote that file. It ran `uv run` from that directory, a non-member, so uv made a lock, in the same shared source tree during the run. The file is untracked, and the job ran 16:19:15Z, inside the suites' window.
+- RAN `r20261113-170936-74c6` (vy-nebius-cpu-14): the count's cost on one step of `s-t20-1.1x-adamw` at batch 16 × 1024, 16 threads.
+  - `Counter._repeats` takes 5.3 ms a step (median of steps 1–5; range 2.4–88 ms).
+  - The step takes 17.9 s with the count and 18.6 s without (medians, within their noise).
+  - Each step recorded 63 repeats over 16 rows, as planted. Last line "cost rc 0".
+- RAN locally: the ratchet gate, `1 change(s), 0 failed`, after I renamed a retired term in my test (`drawn`); ruff clean.
+- Running: the library table at the merge base (`r20261113-173556-3d0b`, vy-nebius-cpu-2) and at the head (`r20261113-173625-28ad`, vy-nebius-cpu-3). I diff them when they end and edit the body.
+  - An earlier combined job (`r20261113-162122-6c88`) traces both trees in one run and is near its 90-minute timeout. I'll read it if it finishes.
+- READ, from the open's warnings: TRN-137's labels are `from:training` and `training/batch-premise-stated` (a done goal). None names `training/count-skips-repeated-positions`. I write nothing to Linear: labelling it is yours.
+- Your restack instruction is noted: after either move lands, I cross with `tools/move/restack.py` on a node, not by merging by hand.
+
+Next, in order:
+1. The library diff.
+2. The README lines, once the attention-price branch (draft #9374) lands.
+3. 4.30.0 last.
+4. Suites again at the final head.
+
