@@ -13,7 +13,14 @@ file.  With no remote configured the commit is local and the report says so.
 One sync of a clone runs at a time, so several agents can share a clone: a sync holds the clone's lock (`_lock`, a flock on
 `<git dir>/notes-sync.lock`) from before its commit to after its push, and another sync of the clone waits for it, at most
 LOCK_WAIT_S, saying on stderr whom it waits for (the holder's pid, machine and agent); past that it commits nothing and exits
-1.  Other git commands in a clone (the watcher's `snapshot`, the standby's `pull`, the archive) do not take the lock.
+1.  Before it commits, a sync puts right what an earlier git left in the clone (`settle`), each with one `SYNC-WARN` line: a
+rebase or merge in progress that no git process is running is ended, and a HEAD left detached with nothing in progress and the
+branch at or behind it gets the branch checked out where it is.  A HEAD detached anywhere else is refused (exit 2).  Ending a
+rebase it found never loses what was written under it: `git rebase --abort` resets every tracked file, so the files changed
+in the working tree are saved first and put back after (`end_operation`).  What cannot be put back (the file changed on both
+sides since, a conflicted file someone wrote into, a file written where the rebase had taken one out of the tree, a commit
+made on its detached HEAD) stays on a local branch `rescue-<UTC time>`, and the sync fails naming it.  Other git commands in
+a clone (the watcher's `snapshot`, the standby's `pull`, the archive) do not take the lock.
 
 A commit made here is the clone's own (`identity_env`: `sync`'s and its rebase's, the archive's, `snapshot`'s): where the
 configuration git reads in the clone names an author and a committer, git is not handed the calling shell's GIT_AUTHOR_NAME,
@@ -112,6 +119,12 @@ EVIDENCE_PATH = re.compile(r"^(?:renders/|campaigns/[^/]+/assets/|lanes/[^/]+/ev
 STALE_LOCK_S = 600
 #: the clone's sync lock, in its git directory; how long a sync waits for another sync of the clone, and how often it looks again
 LOCK_FILE, LOCK_WAIT_S, LOCK_POLL_S = "notes-sync.lock", 120.0, 0.25
+#: how long a sync that finds a rebase or merge in progress, or HEAD detached, waits for a git process at work in the clone to end
+GIT_WAIT_S = 10.0
+#: a local branch that keeps what a sync could not put back; never pushed, and never taken for the notes branch
+RESCUE = "rescue-"
+#: `git status --porcelain` codes of a path with an unresolved conflict
+UNMERGED = ("DD", "AU", "UD", "UA", "DU", "AA", "UU")
 
 
 def is_evidence(path: str) -> bool:
@@ -150,13 +163,17 @@ def identity_env(root: Path) -> dict[str, str] | None:
     return env if whole else None
 
 
-def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
+def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None, index: Path | None = None) -> subprocess.CompletedProcess:
     """git in `root`, as the clone's own author and committer (`identity_env`); output that is not UTF-8 (a diff of a binary
-    or Latin-1 file) is decoded with replacement characters.
+    or Latin-1 file) is decoded with replacement characters.  With `index`, git reads and writes that index file instead of
+    the clone's.
     Commits are unsigned: the notes repo needs no signatures, and an agent VM's signing key is often missing from its agent,
     which would make every commit and rebase here fail."""
+    env = identity_env(root)
+    if index is not None:
+        env = {**(os.environ if env is None else env), "GIT_INDEX_FILE": str(index)}
     return subprocess.run(["git", "-C", str(root), "-c", "commit.gpgsign=false", *args], capture_output=True, text=True,
-                          errors="replace", timeout=timeout, input=input, env=identity_env(root))
+                          errors="replace", timeout=timeout, input=input, env=env)
 
 
 def _out(root: Path, *args: str) -> str | None:
@@ -628,18 +645,9 @@ def citation_warnings(cites: dict[str, list[str]], remote=None) -> list[str]:
     return out
 
 
-def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
-    """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
-    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase until someone clears it by hand."""
-    gitdir = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
-    if not gitdir:
-        return False
-    lock = Path(gitdir) / "index.lock"
-    try:
-        if (now if now is not None else time.time()) - lock.stat().st_mtime < STALE_LOCK_S:
-            return False
-    except FileNotFoundError:
-        return False
+def git_running(root: Path, procs: Path = Path("/proc")) -> int | None:
+    """The pid of a git process at work in the repository (its working directory is `root` or under it); None when there is
+    none, and where there is no /proc to look in."""
     real = Path(root).resolve()
     for proc in procs.glob("[0-9]*"):
         try:
@@ -649,7 +657,24 @@ def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/
         except OSError:
             continue
         if cwd == real or real in cwd.parents:
+            return int(proc.name)
+    return None
+
+
+def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
+    """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
+    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase until someone clears it by hand."""
+    gitdir = _gitdir(root)
+    if gitdir is None:
+        return False
+    lock = gitdir / "index.lock"
+    try:
+        if (now if now is not None else time.time()) - lock.stat().st_mtime < STALE_LOCK_S:
             return False
+    except FileNotFoundError:
+        return False
+    if git_running(root, procs) is not None:
+        return False
     lock.unlink(missing_ok=True)
     return True
 
@@ -657,6 +682,11 @@ def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/
 def _gitdir(root: Path) -> Path | None:
     out = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
     return Path(out) if out else None
+
+
+def _branch(root: Path) -> str:
+    """The branch HEAD is on; '' when HEAD is detached."""
+    return (_out(root, "symbolic-ref", "-q", "--short", "HEAD") or "").strip()
 
 
 class Busy(Exception):
@@ -697,12 +727,225 @@ def _lock(gitdir: Path, wait_s: float) -> int:
     return fd
 
 
+def in_progress(gitdir: Path) -> str | None:
+    """"rebase" or "merge" when the repository is in the middle of one (its state is in the git directory), else None."""
+    if (gitdir / "rebase-merge").is_dir() or (gitdir / "rebase-apply" / "rebasing").exists():
+        return "rebase"
+    return "merge" if (gitdir / "MERGE_HEAD").exists() else None
+
+
+def notes_branch(root: Path, remote: str = "origin") -> str | None:
+    """The branch a clone whose HEAD is detached belongs on: the one the remote's HEAD names (`refs/remotes/<remote>/HEAD`, which
+    a clone sets), else the only local branch that is not a `rescue-` one; None when neither says."""
+    local = [b for b in (_out(root, "for-each-ref", "--format=%(refname:short)", "refs/heads") or "").split() if not b.startswith(RESCUE)]
+    named = (_out(root, "symbolic-ref", "-q", "--short", f"refs/remotes/{remote}/HEAD") or "").strip().removeprefix(f"{remote}/")
+    return named if named in local else local[0] if len(local) == 1 else None
+
+
+def _merged(path: Path) -> bytes | None:
+    """A file's bytes with the labels off its conflict markers, which differ with the command that wrote them; None when it is
+    not a file."""
+    try:
+        return re.sub(rb"(?m)^(<{7}|\|{7}|>{7}) .*$", rb"\1", path.read_bytes())
+    except OSError:
+        return None
+
+
+def _keep(root: Path, gitdir: Path, found: bool, orig: str = "") -> dict | None:
+    """What ending a rebase or merge would discard from the working tree, as a commit on HEAD (`commit`) made through an index of
+    its own, so the clone's index and files are not touched: every tracked file as the working tree has it.  `paths` are the
+    files changed since they were last staged, which is what someone wrote under the operation: each is put back after (`base`
+    is the tree they are a change to).  A file left in conflict is the stopped step's own, and git writes it again at the next
+    conflict; with `found` (an operation that may have sat stopped for long), `aside` are the conflicted files that are no
+    longer what git wrote there (`git checkout --merge` writes that again, into a directory of its own), which someone wrote
+    into since: the commit holds those as they are, and they are not put back.  So it is with `in_way`, the untracked files at
+    paths the commit a found rebase began from (`orig`) has: a rebase takes a file its branch added out of the tree until it
+    picks that commit again, a line appended meanwhile makes a new file there, and git will not abort over it.  None when there
+    is nothing to keep."""
+    entries = (_out(root, "status", "--porcelain=v1", "-z", f"--untracked-files={'all' if found and orig else 'no'}") or "").split("\0")
+    unmerged, paths, untracked, i = [], [], [], 0
+    while i < len(entries):
+        code, path = entries[i][:2], entries[i][3:]
+        i += 2 if code[:1] in ("R", "C") else 1
+        if path and (code in UNMERGED or code[1] != " "):
+            (unmerged if code in UNMERGED else untracked if code == "??" else paths).append(path)
+    in_way = sorted(set(untracked) & set((_out(root, "ls-tree", "-r", "-z", "--name-only", orig) or "").split("\0"))) if untracked else []
+    index, aside = gitdir / f"notes-sync.index.{os.getpid()}", []
+    try:
+        shutil.copyfile(gitdir / "index", index)
+        if found and unmerged:
+            with tempfile.TemporaryDirectory(prefix="notes-sync-") as tmp:
+                _run(root, "-c", "core.hooksPath=/dev/null", f"--work-tree={tmp}", "--literal-pathspecs", "checkout", "-q", "--merge",
+                     "--", *unmerged, index=index)
+                aside = [p for p in unmerged if (was := _merged(Path(tmp) / p)) is None or was != _merged(root / p)]
+        if not (paths or aside or in_way):
+            return None
+        if unmerged:
+            _run(root, "update-index", "--force-remove", "-z", "--stdin", input="\0".join(unmerged), index=index)
+        base = _run(root, "write-tree", index=index).stdout.strip()
+        _run(root, "add", "-u", index=index)
+        if there := [p for p in aside + in_way if (root / p).is_file()]:
+            _run(root, "--literal-pathspecs", "add", "-f", "--", *there, index=index)
+        tree = _run(root, "write-tree", index=index).stdout.strip()
+    finally:
+        for p in (index, index.with_name(f"{index.name}.lock")):
+            p.unlink(missing_ok=True)
+    made = _run(root, "commit-tree", tree, "-p", "HEAD", "-m", "notes sync: what the working tree held when a rebase or merge was ended")
+    if not (base and tree and made.returncode == 0):
+        raise RuntimeError(f"could not save the working tree before ending a rebase or merge; nothing was changed: {made.stderr.strip()[-200:]}")
+    return {"commit": made.stdout.strip(), "base": base, "paths": paths, "aside": aside, "in_way": in_way}
+
+
+def _rescue(root: Path, commit: str) -> str:
+    """A new local branch `rescue-<UTC time>` at `commit`; its name."""
+    stamp = f"{RESCUE}{_utcnow():%Y%m%dT%H%M%SZ}"
+    for name in (stamp, *(f"{stamp}-{n}" for n in range(2, 100))):
+        if _run(root, "branch", "-q", "--no-track", name, commit).returncode == 0:
+            return name
+    raise RuntimeError(f"could not make a branch {stamp} at {commit[:12]} to keep the working tree on; nothing was changed")
+
+
+def _patch(root: Path, old: str, new: str, *paths: str) -> bytes:
+    """The change from tree `old` to tree `new` (in `paths`, else everywhere) as a patch `git apply` takes."""
+    return subprocess.run(["git", "-C", str(root), "-c", "diff.noprefix=false", "--literal-pathspecs", "diff", "--binary", "--no-color",
+                           "--no-ext-diff", "--no-textconv", old, new, "--", *paths], capture_output=True, timeout=120).stdout
+
+
+def _apply(root: Path, patch: bytes) -> bool:
+    """Apply `patch` to the working tree, whole or not at all (git refuses a patch any hunk of which does not fit, and changes
+    nothing); True when the tree already holds what it adds, and when it is applied."""
+    if not patch.strip():
+        return True
+    git = ["git", "-C", str(root), "apply", "--whitespace=nowarn"]
+    if subprocess.run([*git, "--reverse", "--check"], input=patch, capture_output=True, timeout=120).returncode == 0:
+        return True
+    return subprocess.run(git, input=patch, capture_output=True, timeout=120).returncode == 0
+
+
+def _unstash(root: Path, stash: str) -> bool:
+    """Put back the uncommitted changes a rebase stashed before it began (its autostash); whether they are back.  The stash goes
+    into `git stash list` first, and stays there when it does not apply."""
+    if _run(root, "stash", "store", "-m", "notes sync: the autostash of a rebase that never ended", stash).returncode:
+        return False
+    if not _apply(root, _patch(root, f"{stash}^1", stash)):
+        return False
+    if (_out(root, "rev-parse", "-q", "--verify", "refs/stash") or "").strip() == stash:
+        _run(root, "stash", "drop", "-q")
+    return True
+
+
+def end_operation(root: Path, gitdir: Path, op: str, found: bool = False) -> dict:
+    """End the rebase or merge in progress in the clone (`git rebase --abort`, `git merge --abort`) and keep what that discards.
+    git's abort resets the tracked files, so lines someone wrote into one under the operation would be gone, held by no commit:
+    they are saved first (`_keep`, on a new `rescue-` branch) and put back after as a patch, and the branch is deleted once all
+    of it is back.  `found`: the operation was found in progress with no process running it, however long ago it stopped; then
+    a conflicted file someone wrote into since, a file written where a rebase had taken one out of the tree (removed from the
+    tree once the branch holds it, so the abort can run), and a commit made on a rebase's detached HEAD that the branch has no
+    equal of, stay on the rescue branch.  A rebase that died before it wrote where it came from (only its autostash is there, and HEAD
+    never moved) is cleared by removing its directory, its autostash put back (`_unstash`).
+    The report: `over` (nothing is in progress now), `put_back` (files), and `lost`: None when everything local is back in the
+    tree, else what is not and where it is kept, for the caller to fail with."""
+    state = next((gitdir / d for d in ("rebase-merge", "rebase-apply") if (gitdir / d).is_dir()), None) if op == "rebase" else None
+
+    def read(name: str) -> str:
+        try:
+            return (state / name).read_text().strip() if state else ""
+        except OSError:
+            return ""
+
+    head, onto, orig, autostash = (_out(root, "rev-parse", "HEAD") or "").strip(), read("onto"), read("orig-head"), read("autostash")
+    picked = {f[1] for f in (line.split() for line in read("rewritten-list").splitlines()) if len(f) == 2}
+    out = {"over": True, "put_back": 0, "lost": None}
+    try:
+        kept = _keep(root, gitdir, found, orig)
+        rescue = _rescue(root, kept["commit"]) if kept else None
+    except (OSError, RuntimeError) as e:
+        return {**out, "over": False, "lost": f"the {op} in progress was not ended ({e})"}
+    in_way = kept["in_way"] if kept else []
+    for p in in_way:
+        (root / p).unlink()                                     # the rescue branch holds it, and git's abort refuses to write over it
+    aborted = _run(root, op, "--abort")
+    if aborted.returncode and in_progress(gitdir):
+        for p in in_way:
+            (root / p).write_bytes(subprocess.run(["git", "-C", str(root), "cat-file", "blob", f"{kept['commit']}:{p}"],
+                                                  capture_output=True, check=True, timeout=120).stdout)
+        if rescue:
+            _run(root, "branch", "-q", "-D", rescue)            # the abort changed no file, so the tree still holds all of it
+        if state is None or read("head-name"):
+            why = " ".join(aborted.stderr.split())[-300:] or "git gave no reason"
+            return {**out, "over": False, "lost": f"the {op} in progress could not be ended ({why}); no file was changed"}
+        shutil.rmtree(state)
+        if autostash and not _unstash(root, autostash):
+            out["lost"] = ("the uncommitted changes a rebase stashed before it died no longer apply to the files: they are the "
+                           "first entry of `git stash list` (git stash pop, then resolve)")
+        return out
+    missing = [p for p in (kept["paths"] if kept else []) if not _apply(root, _patch(root, kept["base"], kept["commit"], p))]
+    out["put_back"] = len(kept["paths"]) - len(missing) if kept else 0
+    aside = kept["aside"] if kept else []
+    extra = [line[2:] for line in (_out(root, "cherry", orig, head, onto) or "").splitlines()
+             if line.startswith("+ ") and line[2:] not in picked] if found and head and onto and orig else []
+    if not (missing or aside or in_way or extra):
+        if rescue:
+            _run(root, "branch", "-q", "-D", rescue)
+        return out
+    rescue = rescue or _rescue(root, head)
+    what = [f"{len(x)} {name} ({', '.join(x[:3])})" for x, name in (
+        (missing, f"file(s) written while the {op} was in progress could not be put back"),
+        (aside, f"file(s) the {op} left in conflict were written into since"),
+        (in_way, f"file(s) were written where the {op} had taken a file of the branch's out of the tree"),
+        ([c[:7] for c in extra], "commit(s) made on its detached HEAD are not on the branch")) if x]
+    return {**out, "lost": f"{'; '.join(what)}: the branch {rescue} keeps them as they were (git diff HEAD {rescue}); "
+                           f"delete it once they are back"}
+
+
+def settle(root: Path, gitdir: Path, remote: str = "origin") -> tuple[str, list[str], str | None]:
+    """The clone back on its branch with nothing in progress, whatever an earlier git left behind, before a sync commits:
+    (the branch, one line for each thing put right, why it could not be: then the sync commits nothing).  The caller holds the
+    clone's lock, so no other sync is at work in it.
+    A rebase or merge in progress that no git process is running is ended (`end_operation`).  A HEAD left detached with nothing
+    in progress and the notes branch (`notes_branch`) at or behind it, as a rebase leaves it that died after its first step or
+    lost its state directory, gets the branch checked out where HEAD is (`git checkout -B`), which moves no file and drops no
+    commit.  Any other detached HEAD is someone's to resolve, and is refused as before."""
+    said: list[str] = []
+    op, head = in_progress(gitdir), (_out(root, "rev-parse", "--short", "HEAD") or "").strip()
+    if not op and (branch := _branch(root)):
+        return branch, said, None
+    start = time.monotonic()
+    while (pid := git_running(root)) is not None and time.monotonic() - start < GIT_WAIT_S:
+        time.sleep(LOCK_POLL_S)                                 # a git that only reads is gone at the next look
+    if pid is not None:
+        return "", said, (f"a {op} is in progress" if op else "HEAD is detached") + \
+            f" and git (pid {pid}) is at work in this clone; nothing committed: sync again when it has ended"
+    if op:
+        ended = end_operation(root, gitdir, op, found=True)
+        if not ended["over"]:
+            return "", said, f"{ended['lost']}; nothing committed"
+        said.append(f"ended a {op} left in progress that no process was running (HEAD was at {head}): the local commits are kept"
+                    + (f", and {ended['put_back']} file(s) written under it are back in the tree" if ended["put_back"] else ""))
+        if ended["lost"]:
+            return "", said, f"{ended['lost']}; nothing committed"
+    branch = _branch(root)
+    if not branch:
+        want = notes_branch(root, remote)
+        if not want or _run(root, "merge-base", "--is-ancestor", f"refs/heads/{want}", "HEAD").returncode:
+            return "", said, f"HEAD is detached at {head}" + (f", which {want} is not behind" if want else "") + \
+                "; nothing committed: check out the notes branch"
+        back = _run(root, "checkout", "-q", "-B", want, "HEAD")
+        if back.returncode:
+            why = (back.stderr.strip().splitlines() or ["git gave no reason"])[-1][:200]
+            return "", said, f"HEAD is detached at {head} and {want} could not be checked out there ({why}); nothing committed"
+        said.append(f"HEAD was detached at {head} with nothing in progress and {want} at or behind it: checked {want} out there "
+                    f"(git checkout -B {want} HEAD), which moved no file and dropped no commit")
+        branch = want
+    return branch, said, None
+
+
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
-    """Commit, then fetch / rebase / push with bounded retries (module docstring), one sync of a clone at a time (`_lock`).
-    The report: `commit`, `paths`, `skipped`,
+    """Commit, then fetch / rebase / push with bounded retries (module docstring), one sync of a clone at a time (`_lock`)
+    and from a clone put right first (`settle`).  The report: `commit`, `paths`, `skipped`,
     `evidence` (evidence and renders left out), `future` (notes left out, stamped ahead of `now`), `header` (notes left out, broken
-    front matter), `warn` (SYNC-WARN lines: front matter, and once pushed, citations the store lacks),
+    front matter), `warn` (SYNC-WARN lines: front matter, what `settle` put right, and once pushed, citations the store lacks),
     `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
     or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
@@ -723,14 +966,14 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
 def _sync(root: Path, gitdir: Path, paths: list[str] | None, message: str | None, retries: int, remote: str, max_bytes: int,
           secrets: list[str] | None, now: dt.datetime | None) -> dict:
     """`sync`, holding the clone's lock."""
-    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
-    if not branch:
-        return {"rc": 2, "pushed": False, "attempts": 0, "commit": None,
-                "error": "HEAD is detached; nothing committed: check out the notes branch"}
     stale = clear_stale_lock(root)
-    rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
+    branch, said, error = settle(root, gitdir, remote)
     if stale:
-        rep["warn"] = [*rep.get("warn", []), f"removed a stale .git/index.lock (over {STALE_LOCK_S} s old, no git running here)"]
+        said.insert(0, f"removed a stale .git/index.lock (over {STALE_LOCK_S} s old, no git running here)")
+    if error:
+        return {"rc": 2, "pushed": False, "attempts": 0, "commit": None, "warn": said, "error": error}
+    rep = {"rc": 0, "pushed": False, "attempts": 0, **commit(root, paths, message, max_bytes, now)}
+    rep["warn"] = [*rep.get("warn", []), *said]
     if rep["future"] or rep["header"]:
         rep["rc"] = FUTURE_RC
     if _out(root, "remote", "get-url", remote) is None:

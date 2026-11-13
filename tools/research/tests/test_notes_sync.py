@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import select
+import shutil
 import subprocess
 import sys
 import threading
@@ -126,16 +127,19 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
     assert not (b / ".git" / "rebase-merge").exists()
 
 
-def test_a_detached_head_commits_nothing(machines):
+def test_a_detached_head_the_branch_is_not_behind_commits_nothing(machines):
     """Once HEAD is detached, a pass that commits onto it can't push, nor can any pass after it; a sync on a detached HEAD
-    leaves the work uncommitted for the branch to take."""
+    that the branch has commits beside leaves the work uncommitted for the branch to take."""
     _, a, _ = machines
-    _git(a, "checkout", "-q", "--detach")
+    _insert_after(a / DOC, "<!-- b -->", "a on the branch")
+    _git(a, "commit", "-qam", "on the branch")
+    _git(a, "checkout", "-q", "--detach", "HEAD~1")
     _insert_after(a / DOC, "<!-- a -->", "a while detached")
     before = _git(a, "rev-parse", "HEAD")
     rep = NS.sync(a, secrets=[])
     assert (rep["rc"], rep["commit"], rep["pushed"]) == (2, None, False) and "detached" in NS.render_sync(rep)
     assert _git(a, "rev-parse", "HEAD") == before and "a while detached" in (a / DOC).read_text()
+    assert "a on the branch" in _git(a, "show", f"main:{DOC}")
 
 
 def _start(clone: Path, *argv: str, **env: str) -> subprocess.Popen:
@@ -243,6 +247,176 @@ def test_a_sync_waits_a_bounded_time_for_another_sync_of_its_clone_and_then_comm
     assert f"still running after {NS.LOCK_WAIT_S:g} s" in rep["error"] and f"pid {os.getpid()} on " in rep["error"]
     assert _git(a, "status", "--porcelain").strip() == f"M {DOC}", "the line waits, uncommitted, for the next sync"
     assert NS.sync(a, secrets=[])["pushed"] and "a gave up" in _git(origin, "show", f"main:{DOC}")
+
+
+def _killed_rebase(clone: Path, *args: str) -> None:
+    """`git rebase ARGS origin/main` in the clone, killed once it has checked out the remote's commit: HEAD is detached there,
+    `.git/rebase-merge` is whole, and nothing is picked."""
+    _git(clone, "fetch", "-q", "origin")
+    hook = _hook(clone, "kill -9 $PPID")
+    died = subprocess.run(["git", "-C", str(clone), "rebase", *args, "refs/remotes/origin/main"], capture_output=True)
+    hook.unlink()
+    assert died.returncode == -9 and (clone / ".git" / "rebase-merge" / "head-name").is_file()
+
+
+def test_a_rebase_left_in_progress_by_a_process_that_died_is_ended_and_everything_local_is_published(machines):
+    """A sync killed inside its rebase leaves the clone detached with the rebase in progress, and every later sync refused.
+    The next sync ends the rebase and says so in one line; the commit it was rebasing, the line it had stashed, a line
+    appended to a tracked file since, and a new note are all published."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _insert_after(a / DOC, "<!-- a -->", "a committed")
+    (a / "kb" / "log.md").write_text("line 0\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "local")
+    with (a / "kb" / "log.md").open("a") as f:
+        f.write("a had this uncommitted\n")
+    _killed_rebase(a, "--autostash")
+    assert _state(a)[:2] == ("", True) and not (a / "kb" / "log.md").exists()
+    with (a / DOC).open("a") as f:
+        f.write("appended while it sat\n")
+    new = _report(a, "x", "a new note\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith("SYNC-WARN ended a rebase left in progress that no process was running") and "1 file(s)" in line
+    assert _state(a) == ("main", False, []) and _git(a, "status", "--porcelain") == "" and _git(a, "stash", "list") == ""
+    doc = _git(origin, "show", f"main:{DOC}")
+    assert all(x in doc for x in ("b first", "a committed", "appended while it sat"))
+    assert _git(origin, "show", "main:kb/log.md") == "line 0\na had this uncommitted\n" and _git(origin, "show", f"main:{new}") == "a new note\n"
+
+
+def test_a_rebase_that_died_before_it_began_is_cleared_and_what_it_stashed_is_published(machines):
+    """A rebase that dies between stashing the uncommitted changes and recording where it came from leaves a `rebase-merge`
+    holding only `autostash`: `git rebase --abort` can't read it, and every later rebase refuses to start beside it."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _insert_after(a / DOC, "<!-- a -->", "a had this uncommitted")
+    stash = _git(a, "stash", "create").strip()
+    _git(a, "reset", "-q", "--hard")
+    (a / ".git" / "rebase-merge").mkdir()
+    (a / ".git" / "rebase-merge" / "autostash").write_text(f"{stash}\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith("SYNC-WARN ended a rebase left in progress that no process was running")
+    assert _state(a) == ("main", False, []) and _git(a, "stash", "list") == ""
+    assert all(x in _git(origin, "show", f"main:{DOC}") for x in ("b first", "a had this uncommitted"))
+
+
+def _left_at_a_conflict(machines, op: str) -> tuple[Path, Path]:
+    """Machine a with a `git rebase` or `git merge` stopped at a conflict in DOC and left so, as a sync that died before its
+    abort leaves it; `kb/other.md` is tracked on both sides and not in conflict."""
+    origin, a, b = machines
+    (a / "kb" / "other.md").write_text("other\n")
+    assert NS.sync(a, secrets=[])["pushed"] and NS.sync(b, secrets=[])["rc"] == 0
+    _insert_after(b / DOC, "<!-- a -->", "b says no")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _insert_after(a / DOC, "<!-- a -->", "a says yes")
+    _git(a, "commit", "-qam", "local")
+    _git(a, "fetch", "-q", "origin")
+    stopped = subprocess.run(["git", "-C", str(a), op, "refs/remotes/origin/main"], capture_output=True)
+    assert stopped.returncode == 1 and _git(a, "diff", "--name-only", "--diff-filter=U").split() == [DOC]
+    return origin, a
+
+
+@pytest.mark.parametrize("op", ["rebase", "merge"])
+def test_a_rebase_or_merge_left_at_a_conflict_is_ended_and_the_conflict_is_reported_as_a_sync_s_own(machines, op):
+    """The clone is put back on its branch with the local commit kept and a line appended since still in its file; the
+    conflict is still there to resolve, and the sync says so as it does for a conflict of its own."""
+    origin, a = _left_at_a_conflict(machines, op)
+    with (a / "kb" / "other.md").open("a") as f:
+        f.write("appended while it sat\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["conflict"]) == (3, [DOC]), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith(f"SYNC-WARN ended a {op} left in progress that no process was running") and "1 file(s)" in line
+    assert _state(a) == ("main", False, []) and _git(a, "status", "--porcelain") == ""
+    assert "a says yes" in _git(a, "show", f"main:{DOC}") and "<<<<<<<" not in (a / DOC).read_text()
+    assert _git(a, "show", "main:kb/other.md") == "other\nappended while it sat\n"
+    assert "a says yes" not in _git(origin, "show", f"main:{DOC}")
+
+
+def test_a_line_written_into_a_file_left_in_conflict_is_kept_on_a_rescue_branch_and_the_sync_fails_once(machines):
+    """A line appended to the conflicted file itself can't be put back into the file the abort restores; the sync ends the
+    rebase, keeps the file as it was on a `rescue-` branch, and fails saying where."""
+    _, a = _left_at_a_conflict(machines, "rebase")
+    with (a / DOC).open("a") as f:
+        f.write("appended to the conflicted file\n")
+    rep = NS.sync(a, secrets=[])
+    branch, busy, (rescue,) = _state(a)
+    assert (rep["rc"], rep["commit"], branch, busy) == (2, None, "main", False), rep
+    assert f"the branch {rescue} keeps them as they were" in rep["error"] and DOC in rep["error"]
+    assert "appended to the conflicted file" in _git(a, "show", f"{rescue}:{DOC}")
+    assert "a says yes" in _git(a, "show", f"main:{DOC}")
+    again = NS.sync(a, secrets=[])
+    assert (again["rc"], again["conflict"], again.get("warn")) == (3, [DOC], []) and _state(a) == ("main", False, [rescue])
+
+
+def test_a_file_written_where_a_dead_rebase_had_taken_one_away_is_kept_on_a_rescue_branch_and_the_sync_fails_once(machines):
+    """A rebase takes a file its branch's own commit added out of the tree until it picks that commit again.  A line appended
+    there while a dead rebase sits makes a new file, which `git rebase --abort` refuses to write over: the sync keeps it on
+    a `rescue-` branch, ends the rebase, and fails saying where; the next sync publishes the branch."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    (a / "kb" / "log.md").write_text("line 0\n")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "local")
+    _killed_rebase(a)
+    assert not (a / "kb" / "log.md").exists()
+    with (a / "kb" / "log.md").open("a") as f:
+        f.write("appended while it sat\n")
+    rep = NS.sync(a, secrets=[])
+    branch, busy, (rescue,) = _state(a)
+    assert (rep["rc"], rep["commit"], branch, busy) == (2, None, "main", False), rep
+    assert f"the branch {rescue} keeps them as they were" in rep["error"] and "(kb/log.md)" in rep["error"]
+    assert _git(a, "show", f"{rescue}:kb/log.md") == "appended while it sat\n" and (a / "kb" / "log.md").read_text() == "line 0\n"
+    assert NS.sync(a, secrets=[])["pushed"] and _git(origin, "show", "main:kb/log.md") == "line 0\n"
+
+
+def test_a_rebase_in_progress_that_a_live_git_runs_is_left_alone(machines, monkeypatch):
+    _, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _killed_rebase(a)
+    with (a / DOC).open("a") as f:
+        f.write("appended while it runs\n")
+    monkeypatch.setattr(NS, "time", FakeClock().module)
+    monkeypatch.setattr(NS, "git_running", lambda root: 4242)
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["commit"]) == (2, None) and "git (pid 4242) is at work in this clone" in rep["error"]
+    assert _state(a) == ("", True, []) and "appended while it runs" in (a / DOC).read_text()
+
+
+@pytest.mark.parametrize("committed", [False, True])
+def test_a_head_left_detached_on_the_remote_s_commit_with_nothing_in_progress_is_put_back_on_its_branch(machines, committed):
+    """A rebase that lost its state after its first step leaves HEAD detached on the remote's commit, the branch behind it, no
+    `rebase-merge`, and the reflog's last line `rebase (start): checkout refs/remotes/origin/main`; every sync then refused.
+    The sync checks the branch out where HEAD is and says so in one line, and what was appended there, or committed there,
+    is published."""
+    origin, a, b = machines
+    _insert_after(b / DOC, "<!-- b -->", "b first")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _killed_rebase(a)
+    shutil.rmtree(a / ".git" / "rebase-merge")
+    assert _state(a)[:2] == ("", False) and _git(a, "rev-parse", "HEAD") == _git(a, "rev-parse", "refs/remotes/origin/main")
+    assert _git(a, "reflog", "-1", "--format=%gs").strip() == "rebase (start): checkout refs/remotes/origin/main"
+    subprocess.run(["git", "-C", str(a), "merge-base", "--is-ancestor", "main", "HEAD"], check=True)
+    with (a / DOC).open("a") as f:
+        f.write("appended line 1\nappended line 2\n")
+    if committed:
+        _git(a, "commit", "-qam", "committed while detached")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"]) == (0, True), rep
+    (line,) = NS.refused_lines(rep)
+    assert line.startswith("SYNC-WARN HEAD was detached at ") and "git checkout -B main HEAD" in line
+    assert _state(a) == ("main", False, []) and _git(a, "status", "--porcelain") == ""
+    doc = _git(origin, "show", f"main:{DOC}")
+    assert doc.endswith("appended line 1\nappended line 2\n") and "b first" in doc
+    assert committed == ("committed while detached" in _git(origin, "log", "--format=%s", "main"))
 
 
 def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
