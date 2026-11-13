@@ -156110,3 +156110,98 @@ At B's new head `ca7a92c69852`, launched 18:35Z, each waiting for a slot at 18:3
 - Whether the composition test passes on the kept play once the form builds. My 17:49Z guess was that it fails
   there, for want of a play made after B.
 - No run is at `bf701e54dc6e` itself. It differs from `b678f3affc5a` by the three input lists only.
+
+## SESSIONCOINS, Fri 13 Nov 18:40Z: route (a), the alignment across tables: yes, at every table node of `lockSessZ`
+
+All files at `main` `3f4af5f89966`, under `security/Proofs/`. Abbreviations: `ZkLink/` is
+`Flock/Soundness/Discharge/ZkLink/`; `Core/` is `Core/Game/`.
+
+**Answer.** Yes. Every table node of `lockSessZ` has two continuations that are `Lock.Aligned` when the tables differ
+(`Aligned (L t₁ d) (L t₂ d)` for all `t₁ t₂ d`). No node fails. This holds at the pads nodes, the masked level nodes
+(level 1 and levels 2 and up) and the τ nodes, in both repetitions r = 0 and r = 1. The compiled side of every table
+node is independent of `t`. [read] `Lock.table`'s `k'` takes `d` only (`Definitions/Core/Game/Lock.lean:45`).
+
+Today's lemmas don't state this; they need restating. Two statements must be generalized. Everything else follows by
+re-running the existing proofs with two tables in place of one, because none of them uses that the two sides
+share a table. The steps, node by node:
+
+1. **τ node** (`lockInnerZ`, `ZkLink/LockRep.lean:204`). [read] The table continuation is
+   `.coin _ fun _ => .send _ fun _ => .coin _ fun _ => .ret _`. That is the proof term of `aligned_lockInnerZ` (`:367`),
+   which never names the table. [derived] So it is aligned across tables with the same term.
+2. **Masked level 1** (`lockLigTailZ`, `ZkLink/LockLevel.lean:421–484`). [read] The node `.table (slotOf r 1) … fun C₁ cap₁ => …`
+   continues as `Lock.bind` over:
+   - `lockTwoOod` with index `update ∅ 1 (C₁, cap₁)`, then
+   - `lockQuery0Z` at the fixed level-0 oracle `C₀`, then
+   - `lockRecZ … _ {st3 with prev := C₁} {stC3 with level := 1, caps := [cap₁]}`.
+
+   The table `C₁` enters only the index `i` and the oracle state `st`. The compiled state holds only `cap₁`. [read] The
+   lemmas the existing proof calls are each stated with two independent indices and two oracle states:
+   - `aligned_lockTwoOod` (`Flock/Soundness/CompiledAlign.lean:48`: `i₁ i₂`, `P₁ P₂`, `s₁ s₂`, `q₁ q₂`);
+   - `aligned_lockQuery0Z` (`ZkLink/AlignLevel.lean:97`: `i₁ i₂`, `st₁ st₂`);
+   - `aligned_lockRecZ` (`AlignLevel.lean:36`: `i₁ i₂`, `st₁ st₂`, the same `stC`).
+
+   [derived] So the body after `.table _ fun C' cap =>` in `aligned_lockLigTailZ` (`AlignLevel.lean:115–133`) proves
+   the cross-table case unchanged with `C'₁` on one side and `C'₂` on the other.
+3. **Masked levels 2 and up** (`lockRecZ`, `LockLevel.lean:230–320`). [read] This has the same shape:
+   `.table (slotOf r (stC.level+1)) … fun C' cap =>` continues through `lockTwoOod`, `lockQueryZ` and `lockRecZ` with
+   `{st3 with prev := C'}`. The compiled state again takes only `cap`. [derived] The body of `aligned_lockRecZ` after its
+   `.table _ fun C' cap =>` (`AlignLevel.lean:76–95`) carries over the same way. It uses `aligned_lockTwoOod`,
+   `aligned_lockQueryZ` (`:24`, two `i`, two `st`) and itself.
+4. **Pads node** (`lockRepZ`, `LockRep.lean:237`). [read] The continuation at `(O, c)` is
+   `Lock.bind (R := … j.pads = some (O, c) …) (fun … => … lockInnerZ … lev O c) (Lock.mono … (lockReindex (fun lev => ⟨lev, some (O, c), none⟩) (· + 4) … (lockMaskedZ … C₀ extra)))`.
+   This is the one node where a statement must be generalized. Its two sides differ in two places:
+   - **The reindex embedding.** `e_O = fun lev => ⟨lev, some (O, c), none⟩` depends on `O`. `Aligned.reindex`
+     (`LockRep.lean:62`) is stated with one `e` on both sides. It needs a form with `e₁ e₂` (and their two
+     `hget`/`hupd` hypotheses) and the same `sl`. [derived] Its induction is unchanged, because its table case
+     (`.table (sl s) ih`) reads only `sl`. The masked lock inside is the same on both sides (`C₀`, `extra` fixed),
+     so `Aligned.refl` (`Core/Lock.lean:239`) supplies the hypothesis.
+   - **The inner continuation.** `lockInnerZ … lev O c` has `O₁` on one side and `O₂` on the other. `aligned_lockInnerZ`
+     takes `lev₁ lev₂` but one `O`. It needs `O₁ O₂`. [derived] The proof term is the same, as in item 1.
+   - Then `Aligned.mono` (`Core/Batch.lean:88`) and `Aligned.bind` (`Core/Lock.lean:266`). Each is stated with
+     `R₁ ≠ R₂` and `i₁ ≠ i₂` already.
+5. **The combinators above the nodes.** [read] `lockAfterZ` (`LockRep.lean:295`) is `Lock.bind` over
+   `interleaveLock disjoint_getZ (lockRepZ … 0) (lockRepZ … 1)`. `lockSessZ` (`:319`) is a coin, then `Lock.mono` over
+   `batchLock dfltOutZC (mapL … lockAfterZ) post pre`. Inside these, a table node of one component continues as the same
+   combinator applied to that component's continuation. Its other arguments are fixed. The other sides of the batch
+   (`post`, `pre`) are `Lock.same` and hold no table node. [read] The existing combinator lemmas already take two
+   different locks on their two sides:
+   - `Aligned.interleaveLock` (`Core/Lock.lean:346`: `Aligned L L' → Aligned M M' → …`);
+   - `Aligned.lockWith` (`:307`), `embedLeft` and `embedRight`;
+   - `Aligned.map`, `mono` and `mapL` (`Core/Batch.lean:80, 88, 98`);
+   - `Aligned.batchLock` and `lockWithL` (`Core/Batch.lean`).
+
+   [derived] Fed the cross-aligned component and `Aligned.refl` of the other, each gives the cross case at that node.
+
+**Where this has to live: a second relation.** `Lock.Aligned`'s table case requires `∀ t d, Aligned (L₁ t d) (L₂ t d)`
+at the same `t` (`Definitions/Core/Game/Lock.lean`, `Aligned`). To use the facts above in one induction for the fork,
+they are best stated as a relation whose table case is `∀ t₁ t₂ d, AlignedX (L₁ t₁ d) (L₂ t₂ d)` and whose other cases
+are `Aligned`'s. Call it `AlignedX`; it is defined in `Proofs/Core/Game/` and does not touch the definitions tree.
+- [derived] `AlignedX L₁ L₂ → Aligned L₁ L₂`, which takes `t₁ = t₂`.
+- The cross-table facts above are then `AlignedX (lockSessZ … C₀ …) (lockSessZ … C₀ …)`. It is proved by copies of the
+  alignment lemmas with `AlignedX` in place of `Aligned`, and `fun t₁ t₂ d` in place of `fun t d` at each `.table`.
+  These are the lemmas the existing `aligned_lockSessZ` chain calls.
+
+I recounted the existing lemmas by declaration. [run] This was a local count of each `theorem Aligned.*` and
+`theorem aligned_*` to the next declaration, bodies only, without docstrings. The ZK chain calls:
+- `Core/Lock.lean`: 6 lemmas, 125 lines;
+- `Core/Batch.lean`: 9 lemmas, 158 lines;
+- `ZkLink/AlignLevel.lean`: 5 lemmas, 137 lines;
+- `ZkLink/LockRep.lean`: 7 lemmas, 90 lines;
+- `aligned_lockFold` and `aligned_lockTwoOod` in `CompiledAlign.lean`.
+
+The `refl` copy is different. `AlignedX L L` is not free: it is what the builders prove. So `Aligned.refl` is used only
+at table-free locks (`Lock.same`, `lockFoldZK … (fun _ => none)`, `drawKs`), where `AlignedX` and `Aligned` coincide.
+[read] Neither holds a table node:
+- `lockFoldZK` (`LockLevel.lean:332–352`) is only `.coin`, `.send`, `.ret` and `Lock.bind`.
+- `Lock.same` (`Definitions/Core/Game/Lock.lean:105`) is only `.ret`, `.coin` and `.send`.
+
+**What remains not established.** These go in the sizing entry next:
+- **The fork lemma over `AlignedX`.** It states that `AlignedX L₁ L₂` gives
+  `forkE plur₁ slot Φ L₁ σ = forkE plur₂ slot Φ L₂ σ` for every two choosers. [derived] Its proof is one induction:
+  - at the slot node, both sides are `expect₂ (Φ σ'.1) (k' σ'.1) σ'.2`, independent of `L`;
+  - at another table node, the induction hypothesis on `AlignedX (L₁ (plur₁ …) d) (L₂ (plur₂ …) d)`;
+  - the other nodes as in `forkE_congr` (`Proofs/Core/Game/Lock.lean:247`).
+
+  It is not compiled.
+- The plain session's chain (`plurSL`/`plurCL`'s locks, `aligned_lockRec`/`Lig`/`Rep`/`Table` in `CompiledAlign.lean`).
+  I have not read it with two tables.
