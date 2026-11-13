@@ -10,7 +10,7 @@ one from it to the outside. Hosts carry no compute: a device names its sheet by 
 the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the tensor clock and the peak
 rate of each operand class) and its memory figures (bits from device memory to the chip a tick, bits of on-chip state and
 bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
-estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
+estimate of the SKU's (`Auditor.estimate`); they come from the card files (`hardware/cards/<sku>.toml`):
 `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. A node's entry comes from its files too:
 `Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`), its GPU card's and the
 file's ways out (`verity.hardware.nodes.ways_out`), and registers each way out that has a rate, an interface or the

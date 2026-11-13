@@ -518,9 +518,6 @@
     {"file": "verity_vllm/pipeline/advice_code/derived.py", "kind": "var-annotated", "symbol": "walk_steps", "detail": ""},
     {"file": "verity_vllm/pipeline/advice_code/pool.py", "kind": "var-annotated", "symbol": "BlockPool._free_blocks", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/advice_code/pool.py", "kind": "var-annotated", "symbol": "_FreeFork.__init__", "detail": ""},
-    {"file": "verity_vllm/pipeline/advice_code/window_code.py", "kind": "arg-type", "symbol": "code_window", "detail": ""},
-    {"file": "verity_vllm/pipeline/advice_code/window_code.py", "kind": "index", "symbol": "code_window", "detail": "", "count": 3},
-    {"file": "verity_vllm/pipeline/advice_code/window_code.py", "kind": "operator", "symbol": "code_window", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_rows.py", "kind": "arg-type", "symbol": "Layout.verdict_rows", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_rows.py", "kind": "index", "symbol": "Layout.leaves", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_rows.py", "kind": "index", "symbol": "Layout.words", "detail": ""},
@@ -918,6 +915,9 @@
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "var-annotated", "symbol": "BoundaryWindows.__init__", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "attr-defined", "symbol": "_StepPart.after_sample", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "attr-defined", "symbol": "_StepPart.before_forward", "detail": "", "count": 5},
-    {"file": "tests/check/capture_map_check.py", "kind": "misc", "symbol": "check", "detail": ""}
+    {"file": "tests/check/capture_map_check.py", "kind": "misc", "symbol": "check", "detail": ""},
+    {"file": "verity_vllm/pipeline/advice_code/window_code.py", "kind": "arg-type", "symbol": "code_executionPhase", "detail": ""},
+    {"file": "verity_vllm/pipeline/advice_code/window_code.py", "kind": "index", "symbol": "code_executionPhase", "detail": "", "count": 3},
+    {"file": "verity_vllm/pipeline/advice_code/window_code.py", "kind": "operator", "symbol": "code_executionPhase", "detail": ""}
   ]
 }

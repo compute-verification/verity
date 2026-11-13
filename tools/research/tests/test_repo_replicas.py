@@ -1,4 +1,4 @@
-"""`fixtures/artifacts.json` (store README §7): every repo replica this repository advertises hashes to the art id it is registered
+"""`artifacts.json` (store README §7): every repo replica this repository advertises hashes to the art id it is registered
 under.  A repo-registered `fixture/v1` carries no meta and no refs (identity is the bytes and the bare file name -- rule 6: content,
 not pathname), so the manifest, and with it the id, is rebuilt here from the file alone; no store state is needed.  When a fixture's
 bytes change on purpose, `research data refresh-fixtures` re-registers it and keeps the superseded id under the map's `previous`
@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
-MAP = REPO / "fixtures" / "artifacts.json"
+MAP = REPO / "artifacts.json"
 MAX_BYTES = 20 << 20
 PREVIOUS = "previous"
 
