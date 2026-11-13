@@ -396,19 +396,19 @@ def write_realized(plan: Plan) -> dict | None:
     generated length, the arrival / first / finish engine steps and finish reason (from capture/tokens.json), the engine-step
     count of the observed and the control run, and the snapshot steps that actually happened.  "Record the exact realized
     input/output lengths in every run artifact": run.json is the artifact every gate and the card read first."""
-    cap_p = plan.snapshots / "tokens.json" if plan.a.log else plan.capture_dir / "tokens.json"
+    obs_p = plan.snapshots / "tokens.json" if plan.a.log else plan.capture_dir / "tokens.json"
     ctl_p = plan.control_tokens_path()
     try:
-        cap = json.loads(cap_p.read_text()) if cap_p.exists() else None
+        obs = json.loads(obs_p.read_text()) if obs_p.exists() else None
     except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads: no record
-        cap = None
+        obs = None
     try:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
     except (OSError, ValueError, RecursionError):
         ctl = None
-    if cap is None and ctl is None:
+    if obs is None and ctl is None:
         return None
-    src: Any = cap or ctl   # an empty capture document beside no control's is no record's source: its read below raises
+    src: Any = obs or ctl   # an empty capture document beside no control's is no record's source: its read below raises
     reqs = []
     for r in src.get("requests", []):
         prompt, generated = r.get("prompt_token_ids"), r.get("generated_token_ids")   # counted where the record states no count
@@ -426,7 +426,7 @@ def write_realized(plan: Plan) -> dict | None:
         except (OSError, ValueError, RecursionError, OverflowError, AttributeError, TypeError):   # unreadable, or no list of whole steps (an infinite one is none)
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
-            "engine_steps_capture": _engine_steps(cap), "engine_steps_control": _engine_steps(ctl),
+            "engine_steps_capture": _engine_steps(obs), "engine_steps_control": _engine_steps(ctl),
             "expected_engine_steps_declared": src.get("expected_engine_steps"), "serving_profile": src.get("serving_profile"),
             "context_class": src.get("context_class"), "snapshot_steps_realized": snaps,
             "max_concurrent_requests": _max_concurrent(reqs)}
