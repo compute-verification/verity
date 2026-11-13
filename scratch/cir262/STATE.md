@@ -76,10 +76,22 @@ cp ~/.research/runs/r20261112-181549-6fce/out/glm53_flashmla_fp8_capture.json /t
 
 ## The PR
 
-Not open yet. `research queue open --head cursor/circuits-cir262-flashmla-fp8-read-6f04 --sha SHA --title T --body-file F
---issue CIR-262 --by circuits`, unmarked. The body is `pr_body_static.md` + `pr_body_runs.md` + `pr_body_capture.md` (fill
-its `@@...@@` marks) + a suites section + `pr_body_notrun.md`. `comment1.md` and `comment2.md` are the two comments as
-posted on CIR-262.
+Open, unmarked: https://github.com/compute-verification/verity/pull/9567 at head
+`70a27d97ec6086b5fcd45b3bf936efa1bd6702e1` (my commits to `ce254bd223`, then `main` `417526501974` merged in). Its body is
+`pr_body.md`, assembled from `pr_body_static.md`, `pr_body_runs.md`, `pr_body_capture.md`, `pr_body_suites.md` and
+`pr_body_notrun.md`; edit it with `research queue edit 9567 --body-file F`. `comment1.md`, `comment2.md` and `comment3.md`
+are the three comments as posted on CIR-262. The coordinator marks it; I do not.
+
+Final job `r20261112-231418-ada0` at that head, rc 0: the first card run's saved capture compared again gives the card
+run's record byte for byte; the pins update pass changed no file; circuit-check sidecar 12 targets and served-size heads
+5 targets, 0 failures, 0 unchecked, the whole token 0 failures, 1 unchecked (edge vectors only); `--changed 417526501974
+--quick` 57 suites passed (8 cached), `repository` whole 356 passed. Waited 0 s, held slot r0 from 23:14:51Z to 00:36:46Z.
+
+Open: the launch stage at the PR's head has not run on a card (only the comparison was run again). I ran nothing on a card
+in the row of Fri 03:15Z. The calendar's provisional row of Fri 15:45Z to 19:45Z names card 1, cores 10-19 for CIR-262's
+capture of record; one capture at the landed head there would close it:
+`NOT_BEFORE=2026-11-13T15:45:00Z bash /tmp/cir262/launch_card.sh 2026-11-13T19:45:00Z 10-19 "" 2`, after reading the row
+again, and only if the coordinator says so.
 
 ## Waits and holds (read in each run's `slot.json` and logs)
 
@@ -98,3 +110,4 @@ posted on CIR-262.
 - 2026-11-12T23:12:46Z: the evaluator job is read. Next: merge main into the PR branch, launch final.sh on that head, open the PR, and (if my row of Fri 03:00Z to 04:25Z stands) one more capture at the PR's head.
 - 2026-11-12T23:15:00Z: the PR branch is at 70a27d97ec6086b5fcd45b3bf936efa1bd6702e1 (main 417526501974 merged in; the diff against main is the nine files). The final job r20261112-231418-ada0 (final.sh, BASE=417526501974912c8776a6ea920fb51024038eeb) is running on vy-nebius-cpu-4. When it ends: read out/rc.txt, out/recompare-verdict.txt, out/pins, out/cc, out/suites.json and out/suites-repository.json; fill the PR body; open the PR.
 - 2026-11-13T00:07:51Z: final job r20261112-231418-ada0 so far, read: the saved capture compared again at 70a27d97ec gives the card run's record byte for byte (digest 1002e7be...); pins pass changed no file; circuit-check sidecar 12 targets 0 failures, heads 5 targets 0 failures, whole token 0 failures 1 unchecked (edge vectors only); suites running (verity-vllm passed: 14,366 passed, 401 skipped).
+- 2026-11-13T00:50:42Z: PR #9567 is open at 70a27d97ec, unmarked; third comment posted on CIR-262; returning to the coordinator.

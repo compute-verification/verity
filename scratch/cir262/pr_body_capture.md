@@ -24,15 +24,20 @@ runs again off the card. What I read in both:
 - **`FlashMlaV32Decode_v1`'s own evaluator, in the card job:** 73 tokens, 299,008 words, 0 differ.
 - The two runs saved the same bytes: 246 of 247 files are identical, and `launch.json` differs only in the output path.
 
-**Every token against the Definition's evaluator, off the card.** Run `@@EVALRUN@@` (a check slot, head `1f6f0969a9`) took
+**Every token against the Definition's evaluator, off the card.** Run `r20261112-185922-3b8c` (a check slot, head `1f6f0969a9`) took
 the first card run's saved capture and held every token's 8 real heads to `FlashMlaV32Decode_v1` bound at GLM-5.3's
-statics and the step's SPLITS: @@EVAL@@.
+statics and the step's SPLITS: 1,472 tokens, 6,029,312 words, 0 differ, over the 12 cuts the planner made.
 
-**The capture of record ran at `1f6f0969a9`; this head is `@@HEAD@@`.** One commit lies between them (`ce254bd223`). It
-removes seven catch-all handlers from the script, which the adapter's lint ratchet refuses: a step that fails is now the
-script's own traceback and non-zero exit, and it leaves no launch file and no record, where before it left an entry under
-`errors` and a record that was not ok. A missing SASS listing is still recorded, as `sass.ok` false. It changes nothing
-the capture computes: @@RECOMPARE@@
+**The captures of record ran at `1f6f0969a9`; this head is `@@HEAD@@`.** Between them lie one commit of mine
+(`ce254bd223`) and the merge of `main`, which touches none of the nine files. The commit removes seven catch-all handlers
+from the script, which the adapter's lint ratchet refuses: a step that fails is now the script's own traceback and
+non-zero exit, and it leaves no launch file and no record, where before it left an entry under `errors` and a record that
+was not ok. A missing SASS listing is still recorded, as `sass.ok` false. Nothing the capture computes changed:
+
+- **The comparison, run again at this head.** Run `r20261112-231418-ada0` took the first card run's saved capture and
+  compared it with this head's script: 48,234,496 words, 0 differ; the evaluator's 73 tokens, 299,008 words, 0 differ; and
+  the record it wrote is byte for byte the card run's record (digest `1002e7be…bb9a96e`).
+- **The launch stage at this head.** @@LAUNCH@@
 
 ## The two reads of one cache row
 
