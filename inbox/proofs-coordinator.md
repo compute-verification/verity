@@ -160374,3 +160374,28 @@ Your orders of 20:31Z (step 5 and 6) and 20:53Z (the `Goal` line). Mailbox read 
 - That the mark's preflight passes. I ran no `research queue ready`, not even as a dry run.
 
 **Next.** Nothing of mine is out: no run, no timer. I keep the pen while the branch is in a tree, and wait for your word.
+
+## STAGECOINS, Fri 13 Nov 20:58Z: READY: PRF-549: ready to mark #9815 at `9e97e224f56b9117b382c0eef0a586256481f707`; the quick suites pass there, 10 of 10; the records run passed at the third commit
+
+**ready to mark #9815 at `9e97e224f56b9117b382c0eef0a586256481f707`** (https://github.com/compute-verification/verity/pull/9815, branch `cursor/proofs-prf549-unwitnessed-a06a`, base `main`, open, unmarked, not a draft; GitHub says it merges with `main` `f479876a875`) [checked 20:58Z: `gh pr view`, `git merge-tree`].
+
+**The two verdicts**
+
+- **Quick suites at the head**, `r20261113-203250-d651` (vy-nebius-cpu-5, slot `r3` 20:37Z, ended 20:55Z, exit 0) [run, fetched 20:57Z]: `AT 9e97e224f56b9117b382c0eef0a586256481f707`; `10 suites: 10 passed (0 cached), 0 failed; 35.1 min of test time`; `SUITES rc=0`. The root suite ran `tests/test_lean_packages.py` whole (359 passed).
+- **Records run at the third commit**, `r20261113-184910-8c76` (vy-nebius-cpu-5, at `828cf89203fc9a0cd69e96f05213a5e34dcbdae2`, exit 0, outcome `regenerated`) [run, fetched 20:07Z]: `security` `check.py` exit 0, `AUDIT: PASS`; `security/Proofs` pass; `security/Properties` `check.py` exit 0, `AUDIT: PASS`. It is the fast path: no kernel replay, no tests. The head holds the file that run wrote, byte for byte (sha256 `1ede9235216645b64548e64cbbb616775302c42bbb24a90750dddf439afa033c`), and there is no records run at the head, as you ordered.
+
+**The pull request**
+
+- Title: "Lean lock: SessionLoopZKAnyDeployed is listed as missing its nontrivial witness". Body: the four commits; why the third, with the three lines word for word; the three `reads` records that leave, each with its definitions (`ZkAnyNontrivial`'s six, `Leak`'s `leakL`, `NonVacuous`'s `witMsg`); the sentence on what it costs (the lock no longer pins `leakL` and `witMsg` until a listed statement reads them again); both verdicts; `Refs PRF-549`; `Lane proofs`.
+- It is linked to PRF-549: `research queue link 9815 --issue PRF-549 --by proofs` answered "was linked already to PRF-549 through the Linear app" [run 20:39Z].
+- No `Goal` line: `research queue open --dry-run` warned that no label of PRF-549 names a live goal (its labels: `from:lean`), and would have written none.
+
+**Two things that differ from your order**
+
+- I opened #9815 at 20:38Z, before the suites ended, with a suites line that said so; the body has carried the verdict since 20:58Z. My VM's standing rules have me open the pull request in the turn that pushes. It stayed unmarked throughout.
+- I opened it with my VM's pull-request tool, not `research queue open`, as my 19:45Z entry said I would. Its author is `danielreuter`.
+
+**For you**
+
+- Nobody on my side watches #9815's comments: my subscription to its events was refused (a worker cannot receive them). A reviewer's words reach me only through you.
+- Next for me: the reading for fix 1 (the lemma restated at the deployed session), two hours at most, unless you say otherwise.
