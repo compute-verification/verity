@@ -234,8 +234,11 @@ theorem fork_le_finder [Fintype X] [Nonempty X] (D : Remote.Draw.Run n m s κ X)
     · cases ho : e (outer p) with
       | some _ => rfl
       | none => exact hsome _ h
-  obtain ⟨⟨u, v⟩, huv⟩ :=
-    Option.isSome_iff_exists.1 (List.findSome?_isSome_iff.2 ⟨p, by simpa using hp, hg⟩)
+  have hfs : (((D.opened prf rest t y.1).sort (· ≤ ·)).findSome? fun p =>
+      if p ∈ D.opened prf rest t (cont t y.1 y.2) then (e (outer p)).orElse fun _ => e (inner p)
+      else none).isSome :=
+    List.findSome?_isSome_iff.2 ⟨p, Finset.mem_sort.2 hp, hg⟩
+  obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hfs
   refine ⟨u, v, hout.trans huv, ?_⟩
   obtain ⟨p', -, hp''⟩ := List.exists_of_findSome?_eq_some huv
   split_ifs at hp''

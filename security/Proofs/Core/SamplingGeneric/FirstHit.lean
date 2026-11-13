@@ -742,10 +742,14 @@ theorem outOf_collision [Fintype P] (H : Msg → Msg) (op : Ω → P → Option 
   have hsome : (if ∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j then coll ω (ρ j) else none).isSome := by
     rw [if_pos hp]
     exact hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩
-  obtain ⟨⟨u, v'⟩, huv⟩ :=
-    Option.isSome_iff_exists.1 (List.findSome?_isSome_iff.2 ⟨j, List.mem_finRange j, hsome⟩)
+  have hfs : (outOf op coll K ω ρ).isSome := by
+    unfold outOf
+    exact List.findSome?_isSome_iff.2 ⟨j, List.mem_finRange j, hsome⟩
+  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hfs
   refine ⟨u, v', huv, ?_⟩
-  obtain ⟨j', -, hj'⟩ := List.exists_of_findSome?_eq_some huv
+  have huv' := huv
+  unfold outOf at huv'
+  obtain ⟨j', -, hj'⟩ := List.exists_of_findSome?_eq_some huv'
   split_ifs at hj'
   exact hs _ _ u v' hj'
 
@@ -1488,9 +1492,14 @@ theorem outOfAt_collision [Fintype P] (H : Msg → Msg) (op : Ω → P → Optio
       coll ω (ρ (j, p).1) (j, p).2 else none).isSome := by
     rw [if_pos ⟨by simp [hv], hj⟩]
     exact hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩
-  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 (List.findSome?_isSome_iff.2 ⟨(j, p), hmem, hsome⟩)
+  have hfs : (outOfAt op coll K ω ρ).isSome := by
+    unfold outOfAt
+    exact List.findSome?_isSome_iff.2 ⟨(j, p), hmem, hsome⟩
+  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hfs
   refine ⟨u, v', huv, ?_⟩
-  obtain ⟨jp, -, hjp⟩ := List.exists_of_findSome?_eq_some huv
+  have huv' := huv
+  unfold outOfAt at huv'
+  obtain ⟨jp, -, hjp⟩ := List.exists_of_findSome?_eq_some huv'
   split_ifs at hjp
   exact hs _ _ _ u v' hjp
 
