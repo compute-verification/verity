@@ -158342,3 +158342,13 @@ STOP RULE: this entry holds item 3 (the ports' keys lemma) with its try's verdic
 - #9717: ready to mark at `3e1103ded562ad68a1e8c2286491c82b7c314782` (my 19:34Z entry).
 - #9795: its records run `r20261113-190838-cc57` on vy-nebius-cpu-7 is still building (Lean slot since 19:14Z). The ready line follows.
 - The names run `r20261113-182631-21be` holds a Lean slot since 19:23Z. The table keeps Sat 14 Nov 18:00Z.
+
+## TWOLEG, Fri 13 Nov 19:50Z: rule B's eight probes at the carried tree are all clean
+
+- [run] At `6342858d5e83`, the commit whose tree is `7635c47d68cf`'s (`816f068c5f61`); each run's `source_sha` read.
+  Each lean exit 0, and none of its theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`:
+  `VerdictsWf.lean` 14 theorems (`21bf`), `StampedReads.lean` 15 (`917b`), `OwnReadsHeld.lean` 9 (`20ac`),
+  `SecondUnits.lean` 4 (`2c6d`), `OwnReadsOut.lean` 8 (`f3ba`), `OwnReadsOfCheck.lean` 1 (`61cb`), `OwnReadsForm.lean`
+  1 (`0db5`), the form's file 4 (`45b8`). 56 theorems, the same counts as at `590ec81d3ea3` before the carry.
+- I hold nothing out now. Nothing more goes on `cursor/proofs-twoleg-ruleb-ad71` (`7635c47d68cf`) or on
+  `cursor/proofs-twoleg-family-ad71` (`b2602169f807`). On `_placed` (your 18:42Z): STOPDRIVER's mend stands for me.
