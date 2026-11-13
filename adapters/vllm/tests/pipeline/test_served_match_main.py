@@ -269,6 +269,15 @@ def test_the_process_has_its_own_compile_dirs_under_the_out_dir_before_the_hooks
                                    engine_env.INDUCTOR_DIR_MARK: "1", **engine_env.COMPILE_FRESH, "winners": {}}
 
 
+def test_an_out_dir_that_holds_an_earlier_match_is_written_over(monkeypatch, tmp_path):
+    run = _Run(monkeypatch, tmp_path)
+    run.out.mkdir(parents=True)
+    (run.out / "match.json").write_text('{"ok": false}')
+    assert run.main() == 0
+    assert run.files() == ["build.json", "facts.json", "match.json"]
+    assert run.read("match.json")["ok"] is True
+
+
 @pytest.mark.parametrize(("options", "engine", "batch", "rows"), [
     ({"case": "B-CASE"}, {"case": "B-CASE"}, 8, 16),
     ({"max_num_seqs": 2}, {"max_num_seqs": 2}, 2, 16),
