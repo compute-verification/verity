@@ -1,6 +1,7 @@
 module
 
 public import Spot.OneStage
+import Mathlib.Tactic.DefEqTransformations
 
 /-!
 # The verifier program v2's parameters name parses from some bytes (`paramsParsed_program`)
@@ -35,16 +36,15 @@ theorem paramsParsed_program {j : Lean.Json} {p : _root_.Spot.OneStage.Params}
     (h : _root_.Spot.OneStage.paramsParsed j = .ok p) :
     ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
   unfold _root_.Spot.OneStage.paramsParsed at h
-  dsimp only at h
   repeat' (first
     | (with_reducible exact absurd h throw_ne_ok)
     | (with_reducible exact absurd h throw_bind_ne_ok)
-    | (obtain ⟨_, _, h⟩ := ok_of_bind h; try dsimp only at h)
-    | (split at h; try dsimp only at h))
+    | (with_reducible obtain ⟨_, _, h⟩ := ok_of_bind h; try beta_reduce at h)
+    | (split at h; try beta_reduce at h))
   all_goals first
     | (with_reducible exact absurd h throw_ne_ok)
     | (simp only [pure, Except.pure, Except.ok.injEq] at h
        subst h
-       exact ⟨_, by assumption⟩)
+       exact ⟨_, by with_reducible assumption⟩)
 
 end Verity.Sampled

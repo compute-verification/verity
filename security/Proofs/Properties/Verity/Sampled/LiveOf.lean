@@ -363,7 +363,6 @@ theorem printed_units {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     simp only [Finset.mem_image, Finset.mem_filter, Finset.mem_univ, true_and, List.mem_toFinset]
     exact ⟨fun ⟨i, hi, he⟩ => he ▸ hi, fun hx => ⟨⟨x, hlt x hx⟩, hx, rfl⟩⟩
   rw [himg, (List.toFinset_sort (· ≤ ·) (hp.imp ne_of_lt)).2 (hp.imp le_of_lt)]
-  simp
 
 /-- **The record's subset print decodes to a sample proving its units**: the print is `printedDraw`'s of the sample
 of its units (`printed_units`), which decodes to that sample (`drawFileZK_printedDraw`), with no closure. -/
@@ -378,7 +377,7 @@ theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
   rw [e] at hD
   rw [drawFileZK_printedDraw m S D hD]
   show (if (#[] : Array ℕ).isEmpty then _ else _) = units
-  simp only [Array.isEmpty_empty, if_true]
+  simp only [Array.isEmpty_empty, ite_true]
   exact hS
 
 /-- **The design `designAt` reads draws `lawK` of it** wherever the registration's population is the descriptor's
@@ -555,7 +554,7 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
   rw [hLd] at hdu
   have hsize := Flock.Bridge.drawUnits_size (lawOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
   subst hcf
-  exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc, hlawD, ⟨reg, hsc⟩,
+  exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc, hlawD, reg, hsc,
     recS, drawnUnits ev.base.draw, rd, x, hrd, hsize, hsetup⟩
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
@@ -595,7 +594,7 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
           (FlockSoundness.Discharge.Composed.inputsJ I 0).partition
           (FlockSoundness.Discharge.Composed.inputsJ I 0).program none = .ok st ∧
         Flock.Zk.shapeOk st = .ok () := by
-  obtain ⟨p, tags0, pubB, record, proofs, n, desc, hp, ht0, hpf, hAc, htab, hdesc, hlaw, ⟨reg, hsc⟩,
+  obtain ⟨p, tags0, pubB, record, proofs, n, desc, hp, ht0, hpf, hAc, htab, hdesc, hlaw, reg, hsc,
     recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hP hreach hv ht
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
