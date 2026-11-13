@@ -67,7 +67,7 @@ Before the carry: r20261113-050213-ed4b at 3d00e506 and r20261113-033011-70e8 at
 ## Lint
 
 - `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD --json` with `origin/main` at fa3e619e: `failures: []`.
-- MYPY_LINE
+- mypy as the lint runs it (`suites.py verity-vllm --fresh -- tests/lint/test_mypy.py`, its slow list checks included), r20261113-182209-33c4: 5 passed, 0 failed.
 - No new entry in any of the adapter's lint lists.
 - `ruff check --config ruff.toml` is clean on the five files.
 
