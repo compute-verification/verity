@@ -119,7 +119,7 @@ files = [
 loader = "verity/protocols/pous"
 loaded = "security"
 files = [
-    "verity/protocols/pous/lean/submissions/reference.lean",
+    "tools/pous_grader/submissions/reference.lean",
 ]
 
 [[against]]
