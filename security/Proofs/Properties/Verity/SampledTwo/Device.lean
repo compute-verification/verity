@@ -20,7 +20,8 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
 * **The device printed the log** (`printsTwo_dev₂`, `binds_dev₂`): each run prints its part
   (`Sampled.Device.prints_dev`, `holds_dev`), and where the setups' ledger lines open neither session's run on the
   other's window (`Apart`), no run prints the other part's window. `binds_dev₂` is `Binds` at the history, from
-  `CutHeld.binds_of_accepts`.
+  `CutHeld.binds_of_accepts`. `Apart` is taken as a hypothesis, not proved; `DeviceOrder` replaces it on the cut's
+  path.
 * **The history holds both runs** (`holdsTwo_dev₂`): `PrintsTwo` speaks of the runs the history holds, and holds of a
   history holding none. On two windows, where the first session's releases hold no tree's hello (`NoHello`), each part
   fits its setup's layout (`Sampled.Device.Fits`) and each printed run reads as coin trees (`TreesRead`), the history
@@ -163,7 +164,9 @@ theorem opensIn_of_opensOn {h : History} {pk : ByteArray} {w id : String} (ho : 
   exact ⟨line, hL line hl, rest⟩
 
 /-- **No session's run is opened on the other's window**: the two setups' ledger lines don't open the second setup's
-run on `w₁`, nor the first's on `w₂`. -/
+run on `w₁`, nor the first's on `w₂`. It is taken as a hypothesis, not proved, and it is no lemma of a device that
+opens each window as a prover's request names it: it fails where the request names the two windows the other way
+round. `DeviceOrder`'s `LedgerInOrder`, which names no window, replaces it on the cut's path. -/
 def Apart (S₁ S₂ : RunSetup) (w₁ w₂ : String) : Prop :=
   ¬ OpensIn (S₁.ledger ++ S₂.ledger) w₁ S₂.id ∧ ¬ OpensIn (S₁.ledger ++ S₂.ledger) w₂ S₁.id
 
@@ -210,7 +213,7 @@ theorem ledger_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → �
 
 /-- **The device printed the play's log in its two sessions** (`PrintsTwo`), at every play: on one window, the one run
 prints the whole log; on two, the first `cut o.log` releases and the rest, each printed by its setup's run, where the
-ledger opens neither session's run on the other's window (`Apart`). -/
+ledger opens neither session's run on the other's window (`Apart`). `Apart` is taken, not proved. -/
 theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (o : Exchange) {w₁ w₂ : String}
     (hw : windowsOf o.params = some (w₁, w₂)) (hA : w₁ ≠ w₂ → Apart (S₁ o) (S₂ o) w₁ w₂) :
     PrintsTwo (dev₂ S₁ S₂ cut o) w₁ w₂ o.log := by
@@ -240,7 +243,7 @@ theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release
 
 /-- **`Binds` at the two-session history** (`CutHeld.binds_of_accepts`): at every play after `θ` the history printed
 its log on the parameters' two windows (`printsTwo_dev₂`), where the setups' ledger lines open neither session's run
-on the other's window (`Apart`). -/
+on the other's window (`Apart`). `Apart` is taken, not proved. -/
 theorem binds_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (θ : ByteArray)
     (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       Apart (S₁ o) (S₂ o) w₁ w₂) :
@@ -668,7 +671,7 @@ theorem signsPlay_dev₂ (V : Vocab d α) (P : Deployment) (fs₁ fs₂ : ByteAr
 /-- **The cut at the deployed two-session history** (`Cut.cutBound`): where the sampled verdict accepts only where the
 form does (`Wired`), the ledger opens neither session's run on the other's window (`Apart`), and the vocabulary's
 signer is the deployment's, an accepted play whose log the check read isn't the device's is at most as likely as the
-read finder's collision plus the forger's forgery over both sessions. -/
+read finder's collision plus the forger's forgery over both sessions. `Apart` is taken, not proved. -/
 theorem cut_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
     (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ)
