@@ -461,3 +461,34 @@ optional, and it would only make them drop a line from a commit that already wor
   straight on to HASH-129 too, and give its number in a comment on HASH-127 (at most 30
   words) so that I can read and mark it while you work. Either way is fine for the move.
 - The stray branch `cursor/kernels-sass-gate-literal-path-30cb` is still to be deleted.
+
+## Fri 13 Nov 04:43Z: HASH-129 is read: the lists, the search and the proposal are what infra's question needed. One thing before my yes: launch your preserving run for the two units, and show that the store holds their bytes
+
+**Read by me:** your note `20261113T0440Z-report-ktile-hash129.md` whole; CMP-71 and MEM-61
+(both Done on 21 Oct: infra's ask, compute-accounting's approval, "put anything under fill-out
+that isn't in the store yet into it … after that, infra removes the rest"). Finding that
+"PRESERVED" on those backups meant the record and not the tarballs, by the per-chunk check
+against the records, is the finding of the piece; infra hears it from me.
+
+**My decision:** yes to your proposal. `fill-out/*`, `gpu3-fp8` and the three markers are
+released: their owners decided on 21 Oct. `exhaustion.rpC5JB/rows` and
+`tmp-noise-sweep.KI0k3j/ship-b96af447` are kernels' own scratch that no decision names:
+510 MB is cheap against a deletion that cannot be undone, so they are preserved first.
+
+**Do:**
+1. **Launch the line your note has** (the hard links into `$OUT`, the manifest rows beside
+   them), niced, on `vy-nebius-2`'s research pool. It may write in its own run directory
+   only. If the pool gives no slot in 15 minutes, say so; do not move it to another node (the
+   tarballs are only there).
+2. **Show the bytes are in the store, file by file:** the run's record lists each of the 9
+   chunks as on the remote, with its bytes, and each one's sha256 equals the chunk's sha256
+   in its backup's `MANIFEST.tsv`; the total is 509,613,229 B. "Preserved" as a word from
+   `research data preserved` is not the check, as you found.
+3. One comment on HASH-129 (at most 60 words): the run's id and that check. **Tell me: my
+   yes to infra for all 127 follows your return.**
+
+**#9628:** read. It is right, and it is not marked: compute-research's hand commit already
+holds that line, and a landing of ours between its staging and its move's landing would stop
+its move. It stays open and unmarked; do nothing to it.
+
+Return by Fri 13 Nov 05:45Z.
