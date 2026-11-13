@@ -7,31 +7,16 @@ slice of the grid with nvcc and gates it; it skips without nvcc and nvdisasm.
 """
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
+import generate as gen
+import loads
+import probe
 import pytest
 
-POUW = Path(__file__).resolve().parents[1]
-FB = POUW / "facet_break"
 EPOCH = "VF3n-16"
-
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-loads = _load("facet_break_loads", FB / "loads.py")
-gen = _load("facet_break_generate", FB / "generate.py")
 
 #: TENSOR's tensor_kinds records: IMMA.16832 alone, beside IADD3+FFMA interleaved at 4 lane ops a
 #: MMA (mixu R32), and FFMA alone
@@ -310,7 +295,6 @@ def test_targets_sit_at_the_section_vertices():
 
 
 def _cuda_tools() -> bool:
-    probe = _load("opcode_probe_probe", POUW / "opcode_probe" / "probe.py")
     try:
         probe.nvcc()
         probe.G.H.find_tools()
@@ -323,7 +307,6 @@ def _cuda_tools() -> bool:
 @pytest.mark.skipif(not _cuda_tools(), reason="needs nvcc, cuobjdump and nvdisasm (CUDA 13)")
 def test_grid_slice_builds_and_gates(tmp_path):
     """What the tests above can't: today's nvcc compiles each kind of program to SASS the gate passes, exact counts."""
-    probe = _load("opcode_probe_probe", POUW / "opcode_probe" / "probe.py")
     picks = {"mx_i16832_ffma_q32_p0_w16", "mx_i16832_sel_q64_p0_w16", "mx_i16832_imadw_q16_p0_w16",
              "mx_i16832_iadd3_ffma_q64_p0_w16", "sp_i16832_ffma_m8_w16", "al_iadd64_w16", "mm_h1684t_w8",
              "mx_h16816f16_lop3_q64_p0_w16"}

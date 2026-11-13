@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import glob
 import gzip
-import hashlib
 import json
 import os
 import time
@@ -17,6 +16,7 @@ from typing import Any
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.query.manifest.format import components_fold_digest
 
 
 def load_json(path: str) -> Any:
@@ -555,7 +555,7 @@ def program_digest_of_record(d: str, batch: int) -> str:
     if os.path.exists(wp):
         w = json.load(open(wp)); wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
     comps = sorted(v["program_digest"] for k, v in b.items() if k.startswith("build_request_LP") and isinstance(v, dict) and v.get("program_digest"))
-    return wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode()).hexdigest() if comps else "")
+    return wd or (components_fold_digest(comps) if comps else "")
 
 
 def snapshot_steps_of_record(d: str) -> str:
