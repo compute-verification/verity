@@ -174,6 +174,33 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
     assert got["differences"] == ["log, the config's step only: fwd/act mul [[1,1024,16] x2] x1, 16,384 MACs"]
 
 
+def added(*logs: dict) -> dict:
+    """The logs of one step's parts: each entry's count and MACs summed."""
+    return {k: [sum(lg.get(k, [0, 0])[i] for lg in logs) for i in (0, 1)] for k in set().union(*logs)}
+
+
+def test_the_cpus_norm_is_expected_beside_plain_normalisations_the_record_has_too():
+    """A step with plain normalisations of its own, outside any norm (the stream by a scalar a token, no gain): the
+    record has them and their backward's products, the config those and the norm's. The rule covers the config's
+    excess alone, with one normalisation a gain, and the record's share is the same on both sides. Not where the
+    config has one plain normalisation more than the record, nor where the record has more of a product than the
+    config."""
+    n = CTX * D
+    plain = log(*norms(0, 0, 2)[2:])
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), plain)
+    cpu = added(log(*BOTH, *norms(3, 2, 5)), plain)
+    got = of_record.compare(step(cpu), step(cuda), SHAPE)
+    assert got["differences"] == []
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
+        ("norm", 3 * n, 3 * n + 2 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+    what = got["expected"][0]["what"]
+    assert "5 normalisations" in what and what.endswith("beside 2 plain normalisations on both sides")
+    for config, record in ((added(cpu, log(*norms(0, 0, 1)[2:])), cuda),
+                           (cpu, added(cuda, log(("bwd", "grad", "mul", [X, X], 11, 11 * n))))):
+        got = of_record.compare(step(config), step(record), SHAPE)
+        assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
+
+
 def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_has_nothing_of_it():
     """A step that trains no gain: CUDA's counter is shown nothing of the fused kernel, so the record has no entry of
     the norm, and the CPU's side has every gain's multiply as θ's. Expected, with one normalisation a gain; not where

@@ -218,35 +218,44 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """The norm: CUDA runs it as one fused kernel, which the counter has no price for and counts only where its gain
     is an updated weight, one MAC an element; a CPU runs it as elementwise ops, each counted. Fires on the record's
     `fwd/updated _fused_rms_norm` over a row's residual stream and a gain beside the config's `fwd/updated mul` over
-    the same shapes with its count and MACs. It then covers the norm's other products on a CPU, none of which the
-    record may have: the gain's multiply where the gain is θ's (`fwd/theta`), the normalisation (`fwd/act`, the
-    stream by a scalar a token), which must be one for each gain's multiply, and the backward's multiplies and
-    quotients over those three shapes alone. A step that trains no gain has neither of the first two, a record with
-    nothing of the kernel beside a config with no updated gain's multiply: the rule then fires on the config's
-    multiplies by θ's gains, and covers the same products."""
+    the same shapes with its count and MACs. It then covers the norm's other products on a CPU: the gain's multiply
+    where the gain is θ's (`fwd/theta`), the normalisation (`fwd/act`, the stream by a scalar a token), which must be
+    one for each gain's multiply, and the backward's multiplies and quotients over those three shapes alone. A step
+    that trains no gain has neither of the first two, a record with nothing of the kernel beside a config with no
+    updated gain's multiply: the rule then fires on the config's multiplies by θ's gains, and covers the same
+    products. The record may hold the normalisation and the backward's products only beside plain normalisations of
+    its own, a step's ops outside any norm (`fwd/act` with no gain): of each such product the config then holds at
+    least the record's count at the same MACs an op, the record's share is the same on both sides, and the rule
+    covers only the config's excess."""
     x, s, g = [1, shape["ctx"], shape["d_model"]], [1, shape["ctx"], 1], [shape["d_model"]]
     gain = json.dumps([x, g])
     fused, mul = ("fwd", "updated", "_fused_rms_norm", gain), ("fwd", "updated", "mul", gain)
     frozen, scale = ("fwd", "theta", "mul", gain), ("fwd", "act", "mul", json.dumps([x, s]))
     trained = fused in rec
-    if cfg.get(mul) != rec.get(fused) or not trained and frozen not in cfg:
+    if cfg.get(mul) != rec.get(fused) or not trained and frozen not in cfg or frozen in rec:
         return None
     updated = rec[fused] if trained else [0, 0]
     inside = [k for k in cfg if k in (frozen, scale) or k[:2] == ("bwd", "grad") and k[2] in ("mul", "div")
               and k[3] != "[]" and all(o in (x, s, g) for o in json.loads(k[3]))]
-    if cfg.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0] or any(k in rec for k in inside):
+    held = {k: rec[k] for k in inside if k in rec}
+    if held and scale not in held or any(cfg[k][0] < n or cfg[k][1] * n != macs * cfg[k][0]
+                                         for k, (n, macs) in held.items()):
+        return None
+    excess = {k: [cfg[k][0] - held.get(k, [0, 0])[0], cfg[k][1] - held.get(k, [0, 0])[1]] for k in inside}
+    if excess.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0]:
         return None
     gains = (f"{updated[0]} multiplies by an updated gain, the same on both sides" if trained else
              "no gain is updated, so the record has nothing of the kernel")
-    found = {"rule": "norm", "record_macs": updated[1], "config_macs": updated[1] + sum(cfg[k][1] for k in inside),
+    plain = f", beside {held[scale][0]} plain normalisations on both sides" if held else ""
+    found = {"rule": "norm", "record_macs": updated[1], "config_macs": updated[1] + sum(e[1] for e in excess.values()),
              "what": f"the norm as the CPU's elementwise ops for CUDA's fused kernel: {gains}, and on the config's "
-                     f"alone {cfg.get(frozen, [0])[0]} by θ's gains, {cfg[scale][0]} normalisations and "
-                     f"{sum(cfg[k][0] for k in inside if k[0] == 'bwd')} products of the backward's, none of which "
-                     "CUDA's kernel shows the counter"}
+                     f"alone {cfg.get(frozen, [0])[0]} by θ's gains, {excess[scale][0]} normalisations and "
+                     f"{sum(e[0] for k, e in excess.items() if k[0] == 'bwd')} products of the backward's, none of "
+                     f"which CUDA's kernel shows the counter{plain}"}
     for k in (*((mul,) if trained else ()), *inside):
         del cfg[k]
-    if trained:
-        del rec[fused]
+    for k in (*((fused,) if trained else ()), *held):
+        del rec[k]
     return found
 
 
