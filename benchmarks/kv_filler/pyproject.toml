@@ -9,4 +9,4 @@ testpaths = ["tests"]
 inputs = ["verity/protocols/accounting/poub/prover/word_codec/kv.py", "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py", "verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/commitments", "verity/commitments/crypto",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py"]

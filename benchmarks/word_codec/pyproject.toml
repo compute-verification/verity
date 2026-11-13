@@ -16,4 +16,4 @@ inputs = ["verity/protocols/accounting/poub/prover/word_codec/kv.py", "verity/pr
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py"]

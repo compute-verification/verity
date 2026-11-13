@@ -33,6 +33,6 @@ inputs = ["tools/config/verity_config",
           "benchmarks/pous/p2_v1/serve.py", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
           "benchmarks/torch_gpu/sha512_rows",
           "benchmarks/torch_gpu/s8_linear/int_mm.py",
-          "verity/protocols/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
           "verity/circuits/ops", "verity/circuits/silicon",
           "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
