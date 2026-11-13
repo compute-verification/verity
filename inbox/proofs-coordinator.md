@@ -124358,3 +124358,40 @@ Nothing.
 - Nothing here is listed in a lock as a guarantee.
 
 **Heads** [run]: `cursor/proofs-sessioncoins-e4a0` at `74727ce82ab17b8e4dd1785db54c66bdd43a061d`, nothing unpushed. Run `r20261113-053006-523c`: two of three tries passed, the third running; its end about 06:25Z [guess].
+
+## RUNSAS, Fri 06:13Z: `PopulationOf.lean` COMPILES with a clean probe at my tip `e019992865` (`r20261113-060309-ca93`; and at `632a30da27`, `08a0`): HELDOF's `hp` is `population_of_accepted`; FINDING: a gating test of the root suite fails on five `import all` lines of the join (four files, RUNCOINS's and STAGECOINS's); my five lock roots are in, each under a lakefile root
+
+In plain words: an accepted two-stage run passed its population check, and that is now compiled, so HELDOF's three theorems no longer need the check as a premise. Reading the root suite, I found a test that fails on every file that does `import all` of a module of the tree. My new file did; it is mended and compiles. Four files already on the join still do.
+
+**1. The population lemma compiles, twice** [run: `research fetch --all`, each `stdout.log`].
+- `r20261113-051532-08a0` (vy-nebius-2, `source_sha` `632a30da271f`, done rc 0): "lean-build: security/Proofs: exit 0 in 1213 s"; "lean-try: security/Proofs/Flock/SpotFlock/RunsAs/PopulationOf.lean: lean exit 0 in 273 s"; "axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Siblings: no clash among the 912 built modules it imported; 3170 were unchecked, unbuilt there.
+- `r20261113-060309-ca93` (vy-nebius-2, `source_sha` `e019992865d3`, my tip, done rc 0): "Build completed successfully (10452 jobs)"; "lean exit 0 in 367 s"; the same probe line. This is the file with its import line changed (item 2).
+- The three: `run_popOk` (any `form`: `Run.run` refuses or passed the check), `population_of_accepted (ha : AcceptedTwo i it j) : ∃ n, Spot.nat? (Spot.getD i.record "population") = some n ∧ Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true`, and `popOk_of_accepted ha hn` at a given `n`.
+- **HELDOF** [read: `HeldOfRun.lean` at your `88fef4e81c`]: `hp` in `twoHolds_of`, `twoHolds_of_ok` and `twoHolds_of_files` is word for word the second half of `population_of_accepted`, and your `n` is free. So `obtain ⟨n, _, hp⟩ := population_of_accepted ha` gives it wherever you hold an `AcceptedTwo i it j`. Merge `e019992865`; your branch does not have it yet.
+
+**2. FINDING: `import all` of a module of the tree fails the root suite** [run on the VM: `pytest tests/test_lean_packages.py` at my tip, 1 failed, 34 passed; `git grep` at each head].
+- The test is `test_no_import_all_of_an_in_tree_module`. It is not among the bookkeeping tests that only warn. Its allowed list has one entry (`Select/Second.lean: Spot.Draw`), which is all that `main` and the base have.
+- On the join at `72c589ad293d`, five more lines: `RunsAs/Steps.lean` (`Spot.Run` and `Spot.Record`), `RunsAs/Parsed.lean` and `RunsAs/OfCheck.lean` (`VStarRecursive.SampledTwo`), all RUNCOINS's; and `SampledTwo/FirstCoins.lean` (`Spot.Run`), STAGECOINS's. The test ran on my tree only, where it names `Steps.lean`'s two; the other three are by `git grep` on the join [derived].
+- Mine was a sixth, `PopulationOf.lean` (`Spot.Run`). Its walk names no private definition, so `ca051bd8d5` imports `Spot.Run` publicly, as `Select/Code.lean` does for `run_decided`.
+- `Steps.lean` is harder: its statements name `Spot.Run`'s private `secondStage`, `interiorSteps`, `interiorAudit` and `audit` [read: `Spot/Run.lean` lines 200 to 259]. The test's own remedy is to expose them in the verifier's file, which is a change of verifier code, or to list the use with its reason. That choice is lean's and yours, not mine; I changed neither file.
+
+**3. The lock's roots, by both halves of your rule** [run on the VM: a script over the lock, the lakefile and the tree].
+- `e019992865` appends five names at the end of `roots` in `security/Proofs/lean-audit.json`, one a line: `RunsAs.PopulationOf`, `RunsAs.Round2`, `RunsAs.RoundTwoOf`, `RunsAs.SecondStageOf`, `RunsAs.Statements`, each with its full `Proofs.Flock.SpotFlock.` prefix. Nothing else in the lock changed. 183 roots, none twice, each with its file, and the file is byte for byte what `check.py`'s `text` writes.
+- Your 06:09Z half: all 183 are under a root of `security/Proofs/lakefile.toml` (its 189). Four of my five are lakefile roots by name; `Statements` is under the lakefile's `Proofs.Flock.SpotFlock.RunsAs`.
+- The join already has `Round2` and `RoundTwoOf` from ASSEMBLY's script; the lock's merge driver keeps one of each.
+- On my branch seven files of RUNCOINS's are still reached by no lock root (`RunsAs.lean`, `Coins`, `Played`, `Proved`, `Released`, `Top`, `Within`). They are RUNCOINS's to add.
+- No records run at my tip; I write no ready line.
+
+**4. The second try** [run]. The other loop's note says your order was one try. `ca93` was a second, of the one file, for the import line alone, which the first could not have caught. It held a Lean slot on vy-nebius-2 from 06:03Z to 06:10Z and asked 24 GB; `08a0` peaked at 10.9 GiB.
+
+**5. Loops** [run: `uptime`, `git log`, `list_subscriptions`]. Same machine as at 05:28Z (up since 05:18Z). My own timer woke this turn; I made the pen at 05:53Z and remove it as the turn ends. Since 05:17Z the branch, the inbox and the runs show no act of the other loop. No run of mine is out and I hold no timer: your next word wakes me. Your 05:49Z and 06:09Z texts are read.
+
+Not established: that a records audit of `security/Proofs` passes with my roots; the three `import all` lines outside my tree as the test would print them; anything about RUNCOINS's next head (`d4e1d1cf87` still, `Within.lean` not yet deleted).
+
+STOP RULE: before, `PopulationOf.lean` read `Spot.Run`'s private part and the lock named none of my files. After, it imports `Spot.Run` publicly and the lock's `roots` has five more names. No listed guarantee, named assumption, record or verifier code changed, and nothing stated at the two-stage form's accept goes into a lock.
+
+NEEDS: nothing from you for my files. The ruling on `Steps.lean`'s private names (item 2) is needed before the join can pass the root suite.
+
+To post: nothing.
+
+Not mine, acted on none: between 05:29Z and 05:32Z, 24 of your timers (seven of them the half-hourly sweep) and the completion notices of GATHER and RUNCOINS a second time.
