@@ -51,3 +51,32 @@ From LAYOUTREAD, Thu 12 Nov 6:31 PM PST, on NET-410. **The map's pull request is
 - NET-408's manifests start now. A line on where they stand by Fri 6:00 PM PST; the pull request by Mon 16 Nov noon PST.
 - On call from Fri 7:00 PM PST. No run of mine in the pool `network` Fri 4:30 to 10:30 AM PST.
 
+[2026-11-13T02:30Z] ebb212135360
+**TERMGB to the lead, 6:30 PM PT, Thu 12 Nov: #9454's branch is at `e2feccf258f6`, the merge of `main` with #9467, six marks, and `verity-bench` passed at it: `r20261113-022415-bc7c`, exit 0. #9533 comes next, and its change is more than the row's mark and one test, so I show you the hunk before I push it.**
+
+**1. #9454's head.** `cursor/na-certifier-term-simulated-b4e6` is at `e2feccf258f63aeb2efb589334f669bfd11ab469` [ran: a fast-forward from `f0616c75f9ba`; no force]. Parents: `f0616c75f9ba` and `origin/main` at `49d12bdc366a`, which holds #9467's head `61d4fd79e030`. `main` has since moved to `8c11a1d5abff`; the head still merges with it cleanly [ran: `git merge-tree`].
+
+**2. The run.** `r20261113-022415-bc7c`: done, exit 0, tree `e2feccf258f6`. `verity-bench`: 580 passed, 0 failed [ran: the masked reader].
+
+**3. Your five points, as done.**
+
+1. `MARKS = ("measured", "modeled", "simulated", "assumed", "missing", RUN_NOT_PROVED)`; `main`'s comment and constants as they are.
+2. The counting line keeps `main`'s form, with `simulated` listed after `modeled`, always, as this branch had it: "9 modeled, 1 simulated and 24 assumed."
+3. The README's opening, the module's docstring and the command's help each name all six. `main`'s docstring still named three, so that sentence is mine. A fourth sentence, in the docstring of `benchmarks/exfiltration/run.py`, still names three; neither side touched it and I left it.
+4. The pin I moved before stands. **Two more of benchmarks' pins had to move, both forced by a red test:**
+   - In `test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured`, the counting line takes "1 simulated," as in point 2.
+   - **`NO_VERDICTS`, the two digests of the print with no verdicts of record.** The test's own message says to pin them where a change elsewhere moved the print on purpose. I checked that it is this branch's print and nothing else [ran]: the document's digest equals the one at `f0616c75f9ba`, before #9467, byte for byte; the text differs from that one by the single line `main` added since ("this is the headline figure: ..."); and `main`'s own print gives `main`'s pins. The new digests are text `0b6a7352...` and json `1a3f148c...`.
+5. The suite once, pushed as a fast-forward.
+
+Before the pins: 33 passed and 2 failed on this machine. After: 35 passed, ruff clean.
+
+**4. #9533: what I found at its merge with `e2feccf258f6`, before any change of mine** [ran: `test_exfiltration.py` there, 33 passed and 2 failed]. The merge itself is clean.
+
+- `NO_VERDICTS` moves again, since #9533 changes the print on purpose. Same re-pin, same check.
+- **`test_proved_by_on_every_piece_makes_it_measured` fails on `"not proved" not in text`.** With every piece of the stop class proved, benchmarks' test wants nothing printed as not proved. #9533's legend says the scan's accept is run, not proved, in every print. Both are right; the test has to say "nothing but the scan's own line". That is a line of benchmarks' test I would change.
+- **The row's mark needs the string in the calculator.** The calculator cannot import the harness, which loads it by path. So `leak_bounds.py` would hold `RUN_NOT_PROVED = "run, not proved"` itself, and one test in the harness's file would hold it equal to the harness's. That is a second place for the string, which your 2:51 PM told me not to make. If you want no second string, the harness has to set the mark, in benchmarks' module.
+
+**I build all of it on a scratch branch now and send you the hunks.** Nothing goes to #9533's branch until you have seen them. #9501 follows #9533, and I send its head in one line when it is pushed.
+
+W's first suites run, `r20261113-005354-0e28`, is still running.
+
