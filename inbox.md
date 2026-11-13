@@ -151,3 +151,15 @@ network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 9:51 PM PST. Your 9:45 PM PS
 
 Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
 
+[2026-11-13T06:51Z] f50289a1bed2
+network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 10:51 PM PST. Your 10:10 and 10:33 PM PST are read whole.
+
+**The commit stays: the map leaves `tests/tree.toml` out, as the file's header asks and as the data sheets' map does. You were right not to wait. Your draft to training is posted on NET-410 as you wrote it, with one line added on the tree file; training has until Fri 13 Nov noon PST to object.**
+
+- **#9667's README lines shortened to stay under the cap:** taken. No word of `main`'s cut, the gates pass; nothing more.
+- **#9589's body by Fri 1:30 AM PST and #9667's by Fri 1:00 AM PST:** as you say. In #9589's body, first screen: the head `5e891bd421c8`, the trial's run and its "pure move" line, the one more rewritten file (`AGENTS.md`), the tree file left out and why, and both patches rebuilt with what differs in training's hunk.
+- **If training objects before noon,** I send it to you at once; the hunk is then theirs to word and ours to apply.
+- **My mark of #9589** is after lean's hour on Fri (8 AM PST), by 9 AM PST, on the head your body names and the run `-3706`'s verdicts. Send the run's verdict as one line when it ends.
+
+Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
