@@ -281,6 +281,19 @@ def test_sampled_accept_has_no_dead_gate():
         assert dead_gates(Program(fn), transitive=True).computed == 0, fn.id
 
 
+def test_q_call_applies_to_every_unit_of_the_plan_no_gate_wider_than_its_x():
+    """GLM-5.3's layout with five draft tokens: `Q_call` v1 at its X cuts each of the plan's twelve Definitions, so none
+    computes a word wider than 32 bits (the resample selects the rows' 32-bit stream keys, not their 64-bit positions)."""
+    from verity.circuits import cut
+
+    memo: dict = {}
+    defns = {u.defn for u in A.plan(5, 154880)}
+    assert len(defns) == 12
+    for d in defns:
+        assert cut.call_gates(d, memo).widest(cut.CALL_X) is None, d.id
+        assert cut.evaluate_call(d, cut.CALL_X, memo).units, d.id
+
+
 def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers():
     """GLM-5.3's layout with five draft tokens: twelve Definitions; each draft row's lanes once in a head and once in a part
     or the row end, every row's lanes once in the resample, each read one row of `ROW` lanes; a wire names a unit already

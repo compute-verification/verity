@@ -72,8 +72,9 @@ of `part` lanes (2,048 at the pin: at 4,096 a part's exponentials and its rows' 
 block); the row's last part is in `AcceptRowEnd_v1`.  The K ratio tests are K units of one Definition, each row's tiles
 read once; the bonus row has no test.  The resample is `GumbelSelectF32_v3{V}`'s function on the residual row,
 written over its own steps (`GumbelStreamKey_v1`, `GumbelNoiseLane_v1`, `GumbelSelectStep_v1`) in chunks of `chunk` lanes
-of all K + 1 rows: every chunk selects the row, its position and its refused draft token by the tests, so the select runs
-once, on rows that are operands, and no residual row is committed.
+of all K + 1 rows: every chunk selects the row, its stream key and its refused draft token by the tests, so the select runs
+once, on rows that are operands, and no residual row is committed.  It keys each row's position and selects the 32-bit key,
+never the 64-bit position, so no gate it computes is wider than Q_call's X.
 
 The numpy reference (`tile_stats`, `row_lse`, `accept_uniform`, `sampled_accept`) computes the same words from the kernels'
 layouts written independently of the Definitions' bodies (`topp_split.tree_sum_1d`, `sampling_rows.gumbel_select_row`).
@@ -99,8 +100,6 @@ from verity.definitions.registry.dsa import I32Sub
 from verity.definitions.registry.dsv4_moe import Ex2Approx
 from verity.definitions.registry.ref_prims import F32GtStrict, F32Sub
 from verity.definitions.registry.topp_word_gates import I32ToF32, LOG2E, U32Xor
-from verity.definitions.registry.torch_words import SelectI64
-
 I64, U32 = SA.I64, SA.U32
 #: the stats kernel's `BLOCK_SIZE` at the pin (`VOCAB_BLOCK_SIZE`)
 STATS_TILE = 8192
@@ -470,12 +469,11 @@ def AcceptResample(B, S, *args):
     live = [B.call(I32Eq, tests[0], one)]
     for p in range(1, K):
         live.append(B.call(BitAnd, live[p - 1], B.call(I32Eq, tests[p], one)))
-    row, at, d = rows[K], pos[K], minus_one
+    row, key, d = rows[K], B.call(SA.GumbelStreamKey, seed, pos[K]), minus_one
     for p in reversed(range(K)):
         row = B.batch(SelectF32, live[p], row, rows[p], axes=(None, 0, 0))
-        at = B.call(SelectI64, live[p], at, pos[p])
+        key = B.call(SelectI32, live[p], key, B.call(SA.GumbelStreamKey, seed, pos[p]))
         d = B.call(SelectI32, live[p], d, draft[p])
-    key = B.call(SA.GumbelStreamKey, seed, at)
     noisy = B.call(BitNot, B.call(F32Eq, temp, zero))
     rem = d if S.FIRST else B.call(I32Sub, d, args[-1][2])
     masked = B.batch(I32Eq, rem, array_of([B.call(const(32, j)) for j in range(N)]), axes=(None, 0))
