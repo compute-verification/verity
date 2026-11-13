@@ -685,7 +685,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/harness/chain.py::Link":
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
-    "benchmarks/pouw/harness/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
+    "verity/protocols/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
