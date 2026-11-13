@@ -116,6 +116,46 @@ the layout's move, and its side of a conflicted module imports a package that is
 - #8580 (vllm, not marked): 4 files in conflict; `ModuleNotFoundError: No module named 'verity.ml'`
 - #8731 (proofs, not marked): 5 files in conflict; `ModuleNotFoundError: No module named 'verity.ml'`
 
+## A second read, at 04:17Z
+
+By 04:17Z `main` was `00479a6c442a` (one of the candidates run above), 288 pull requests besides #8463 were open on
+GitHub and 68 were marked. The sweep had already run 192 of them at the very head they still had;
+the other 96 (opened or pushed since, or open with no row in the queue's table) were run the same way, at the same base,
+with every candidate that then held `main`'s tip. This table is of every pull request open at that read, each at the
+head it then had:
+
+| heads | count | of them run in this pass | merged with the base, the test passes | the merge stops; passes with its side | would fail | the merge stops, no verdict |
+|---|---|---|---|---|---|---|
+| marked, admitted | 58 | 14 | 58 | 0 | 0 | 0 |
+| marked, refused | 7 | 0 | 0 | 7 | 0 | 0 |
+| marked, waiting | 3 | 0 | 0 | 3 | 0 | 0 |
+| not marked | 205 | 67 | 109 | 91 | 0 | 5 |
+| open, with no row in the queue's table | 15 | 15 | 2 | 4 | 0 | 9 |
+| candidates holding `main`'s tip, and `main` | 5 | 5 | 5 | 0 | 0 | 0 |
+
+**Still none would fail**: 0 of the 68 marked, 0 of the rest.
+
+The 10 marked ones whose merge stops:
+
+- #8436 (ci, refused): 2 files, 0 read by the test; as in the table above; pass with its side
+- #8465 (ci, refused): 3 files, 0 read by the test; as in the table above; pass with its side
+- #8756 (ci, refused): 12 files, 0 read by the test; as in the table above; pass with its side
+- #8772 (-, waiting): 1 files, 0 read by the test; as in the table above; pass with its side
+- #9080 (proofs, waiting): 4 files, 0 read by the test; as in the table above; pass with its side
+- #9176 (proofs, refused): 4 files, 0 read by the test; as in the table above; pass with its side
+- #9212 (proofs, waiting): 4 files, 0 read by the test; as in the table above; pass with its side
+- #9363 (lean, refused): 15 files, 0 read by the test; as in the table above; pass with its side
+- #9462 (ci, refused): 1 files, 0 read by the test; as in the table above; pass with its side
+- #9556 (ci, refused): 3 files, 0 read by the test; as in the table above; pass with its side
+
+Heads of this pass that register other ids than the base, none leaving a version superseded:
+
+- #9417 (training, not marked): 14 added, 0 removed; above `_v1`: `Fa2TrainBwdDkDv_v2`, `Fa2TrainBwdDq_v2`, `Fa2TrainBwdHead_v2`, `Fa2TrainBwdKeyFirst_v2`, `Fa2TrainBwdKey_v2`, `Fa2TrainBwdPre_v2` and 1 more
+- #9514 (None, open, with no row in the queue's table): 14 added, 0 removed; above `_v1`: `Fa2TrainBwdDkDv_v2`, `Fa2TrainBwdDq_v2`, `Fa2TrainBwdHead_v2`, `Fa2TrainBwdKeyFirst_v2`, `Fa2TrainBwdKey_v2`, `Fa2TrainBwdPre_v2` and 1 more
+- #9605 (compute-accounting, not marked): 0 added, 27 removed
+
+No verdict (the head's side of its conflicts gives no tree whose registries load): #8197, #8415, #8460, #8503, #8580, #8584, #8656, #8705, #8731, #9018, #9030, #9207, #9517, #9610.
+
 ## lean's #9375, circuits' #9340 and top's staged move branch
 
 - **#9375** (`34c5cbb3705c`) is on `main` since 03:01Z, and the base holds it: the test on the base is `3 passed`, with the
@@ -139,16 +179,17 @@ files, so it got no verdict here. When its owner brings it up to `main` after #8
 
 ## What moved while this was run
 
-Between the first read of the queue (02:52Z, 49 marked) and this one (03:24Z, 58 marked), ten marked pull requests
-landed, twenty more were marked and one lost its mark. An earlier sweep at the head `b1409cffb0` (`main` `8c11a1d5ab`)
-over the first read's 261 heads found the same: no head fails, 107 merges stop. A pull request opened, pushed or marked
-after 03:24Z is not in this document.
+Between the first read of the queue (02:52Z, 49 marked) and the one this document is made on (03:24Z, 58 marked), ten
+marked pull requests landed, twenty more were marked and one lost its mark; by the second read above (04:17Z) 68 were
+marked. An earlier sweep at the head `b1409cffb0` (`main` `8c11a1d5ab`) over the first read's 261 heads found the same:
+no head fails, 107 merges stop. A pull request opened, pushed or marked after 04:17Z is not in this document.
 
 ## Run, and inferred
 
-- **Run.** Every count in the tables above: 264 merges, the test file on each tree that merged, the two controls, and
-  `git merge-tree` of `main` with each head whose merge stopped (the two with 913 files in conflict left out).
+- **Run.** Every count in the tables above: 365 merges at this base (264 on the 03:24Z read, 101 more on the 04:17Z
+  read), the test file on each tree that merged, the two controls, and `git merge-tree` of `main` with each head whose
+  merge stopped on the 03:24Z read (the two with 913 files in conflict left out).
 - **Inferred.** That a pull request whose merge stops will pass once its owner merges `main`: the verdict is of the pull
-  request's side of each conflict. For the 16 marked ones no conflicted file is one the test reads, so the inference is
-  short. For 20 of the 111 not marked it is not.
+  request's side of each conflict. For the marked ones no conflicted file is one the test reads, so the inference is
+  short. For 20 of the 111 not marked on the 03:24Z read it is not.
 - **Not run.** The queue's own candidate with #8463 in it; `tools/move/restack.py` on the branch.

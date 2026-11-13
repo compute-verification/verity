@@ -22,16 +22,17 @@ files, so it got no verdict here. When its owner brings it up to `main` after #8
 
 ## What moved while this was run
 
-Between the first read of the queue (02:52Z, 49 marked) and this one (03:24Z, 58 marked), ten marked pull requests
-landed, twenty more were marked and one lost its mark. An earlier sweep at the head `b1409cffb0` (`main` `8c11a1d5ab`)
-over the first read's 261 heads found the same: no head fails, 107 merges stop. A pull request opened, pushed or marked
-after 03:24Z is not in this document.
+Between the first read of the queue (02:52Z, 49 marked) and the one this document is made on (03:24Z, 58 marked), ten
+marked pull requests landed, twenty more were marked and one lost its mark; by the second read above (04:17Z) 68 were
+marked. An earlier sweep at the head `b1409cffb0` (`main` `8c11a1d5ab`) over the first read's 261 heads found the same:
+no head fails, 107 merges stop. A pull request opened, pushed or marked after 04:17Z is not in this document.
 
 ## Run, and inferred
 
-- **Run.** Every count in the tables above: 264 merges, the test file on each tree that merged, the two controls, and
-  `git merge-tree` of `main` with each head whose merge stopped (the two with 913 files in conflict left out).
+- **Run.** Every count in the tables above: 365 merges at this base (264 on the 03:24Z read, 101 more on the 04:17Z
+  read), the test file on each tree that merged, the two controls, and `git merge-tree` of `main` with each head whose
+  merge stopped on the 03:24Z read (the two with 913 files in conflict left out).
 - **Inferred.** That a pull request whose merge stops will pass once its owner merges `main`: the verdict is of the pull
-  request's side of each conflict. For the 16 marked ones no conflicted file is one the test reads, so the inference is
-  short. For 20 of the 111 not marked it is not.
+  request's side of each conflict. For the marked ones no conflicted file is one the test reads, so the inference is
+  short. For 20 of the 111 not marked on the 03:24Z read it is not.
 - **Not run.** The queue's own candidate with #8463 in it; `tools/move/restack.py` on the branch.
