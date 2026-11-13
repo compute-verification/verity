@@ -156377,3 +156377,62 @@ This entry restates nothing. Nothing is committed on top of `5961fa466d1e` and n
 ### Next
 
 The records' entry when `fbb7` ends, then the four suites. The merge of #9520's new head at your word.
+
+## SESSIONCOINS, Fri 13 Nov 18:50Z: route (a): no schedule premise enters; the core's try is running; one point to decide before the sizing
+
+All files at `main` `3f4af5f89966`, under `security/Proofs/`.
+
+**(a) No schedule premise enters route (a).** [read] The chain, step by step, from V3's and V5's fork terms to
+`qF²/2^513`:
+1. **The builders' alignment across tables** (`alignedX_lockSessZ` and the chain under it: `ZkLink/LockRep.lean`,
+   `ZkLink/AlignLevel.lean`, `CompiledAlign.lean`, `Core/Game/Lock.lean` and `Core/Game/Batch.lean`). These are
+   statements about the locks alone, for all indices, oracle states and tables. No strategy appears in them, so no
+   premise on the prover can. The `Aligned` lemmas they restate carry none today (`aligned_lockSessZ`,
+   `LockRep.lean:406`, takes only the builders' arguments).
+2. **`forkE_alignedX`** (the try below). It holds for every compiled strategy `σ'` and every two choosers. Its only
+   hypothesis is `AlignedX L₁ L₂`, which step 1 proves. No guarantee carries it, and no lock lists it.
+3. **`advRSZ_eq_zero`** and its pads and τ siblings. This is step 2 applied to step 1, with `C₀ := default` on one
+   side and `O₀` on the other. It adds nothing.
+4. **`forkE_le_ev`** (`Flock/Soundness/StrictCR.lean:153`). Its hypotheses are `hΦ` (the picker dominates `Φ`) and
+   `hdflt`, nothing on the schedule. `forkE_conflict_le` and `forkE_capAcc_le` take only the opening functions and
+   their collision lemmas, as today's `advRSZ_le_strict` uses them (`ZkLink/StrictZ.lean:105–113`, whose sole
+   premise is the finder's `CR`).
+5. **`Finder.CR…le`.** This step's only premise is the cost bound (below).
+
+`Lock.PreFirst`, `Lock.Leads`, `Lock.Lead` and `SchedZ` enter only route (b): through `Lock.SlotAt`
+(`Claims/KS/ForkAlign.lean:95`) and the `slotRSZ_of_*` lemmas, none of which route (a) calls.
+
+**(b) The try.** It is the scratch branch `cursor/sessioncoins-alignedx-try` at `3115692c3fb5`, on base `3f4af5f89966`,
+with no pull request. Its one file, `security/Proofs/Core/Game/AlignedXTry.lean`, holds:
+- `AlignedX`: `Aligned`'s four constructors, with the table case
+  `(∀ t₁ t₂ d, AlignedX (L₁ t₁ d) (L₂ t₂ d)) → AlignedX (Lock.table slot upd₁ … L₁) (Lock.table slot upd₂ … L₂)`;
+- `AlignedX.toAligned`;
+- `forkE_alignedX (plur₁ plur₂) … : AlignedX L₁ L₂ → ∀ σ', forkE plur₁ slot Φ L₁ σ' = forkE plur₂ slot Φ L₂ σ'`;
+- `forkE_const`, the same at `plur₂ := fun _ _ _ _ => t₀` on `AlignedX L L`.
+
+The run is `r20261113-184926-3df8` on `vy-nebius-cpu-2`, pool `research`:
+`lean_changed.py --try security/Proofs/Core/Game/AlignedXTry.lean`. I expect it within 30 minutes. If the induction
+fails at a node kind, my next entry names it and stops.
+
+**A point for you before the sizing: the cost condition touches V3's and V5's hypotheses, not δ.** [derived] Soundness's
+cost has the rewinding finder at outcome `(d, b, b′)` charged `2·t′ + hOpen(d, b) + hOpen(d, b′)`, with nothing for
+the plurality. So `Finder.CR`'s cost stops being the constant `fun _ => q` (`StrictCR.lean:97`). `SHA512CRStrict`
+gives `q²/2^513` only under `∀ b, cost b ≤ q` (`Definitions/Assumptions/Flock.lean:52`). At today's
+`qF = 2(t′+v)` and `qS = t′+v` (`Bridge/ScopeGate.lean:169`), that is `hOpen ≤ v` (and `hSelf ≤ v`) on every outcome.
+Today nothing ties `v` to the openings (`ZkLink/StrictZ.lean:94–96`). There are two ways:
+- (i) V3 and V5 gain one hypothesis, that `v` bounds one run's opening hashes at every table of
+  `planZHJ dj y₀ S R`. `ksStrictZ` and δ are unchanged as functions of `t′` and `v`.
+- (ii) `v` is replaced by a count computed from the schedule. That moves δ's argument.
+
+I'd take (i). By your 18:35Z rule I write you before either. The full sizing, which this point is part of, follows
+the try.
+
+**Also found, for soundness's walk.** [read] The three fork finders build their lock at
+`lockSessZ A Hs T pre post default cap₀` (`ZkLink/StrictZ.lean:55, 64, 73`). That `default` is the level-0 oracle,
+`Oracle F := ℕ → ℕ → F`: a `default` at a function type, already in the finders' data. Route (a) replaces it with the
+constant as well, at no cost, since the alignment lemmas already vary `C₀`. The constant must not be `(0 : GF128)`
+either. [read] `GF128`'s one instance is `instFieldGF128 := equivAdj.field` (`Level3/GF128Field.lean:195`), whose
+inverse is `Ideal.Quotient`'s `Classical.choose`. The term I'd use is
+`fun _ _ => FlockLevel3.GF128.of Flock.F128.zero`. [read] `GF128.of a := a` (`GF128Field.lean:199`), and `F128.zero`
+is the structure of two UInt64 zeros (`verity/circuits/base/Base/Field.lean:13–26`). Lean's walk on this term is not
+run.
