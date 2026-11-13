@@ -24,20 +24,20 @@ not call the descriptor check (`VStar.Recursive.SampledTwoDesc.descOk`). So the 
 
 The descriptor check gives the copy (`HeldOf.heldOf_of_descOk`), and `CopyAt` says which it is.
 
-## `CopyAt` at the cases at one statement
+## At the cases at one statement
 
-At the cases at the statement `x` (`atStmt C x`), `copyAt_of` gives `CopyAt` from three premises, and `heldOfAt_at`
-is `HeldOfAt A (atStmt C x)` from them and `DescAt`. `heldOf` reads the boundary record, the parameters and the
-reference statements:
+At the cases at the statement `x` (`atStmt C x`), the copy is read play by play: `heldOfAtOr_at` (`RefsOfSent`) gives
+each accepted play the held copies, or a collision of its blobs with files the statement is given (`HeldOfAtOr`),
+from `DescAt` and three premises. `heldOf` reads the boundary record, the parameters and the reference statements:
 
 * the boundary record needs none: every accepted play at `x` carries the record the proved verifier's reader reads
   from `x` (`inputOn_at`, `jsonMsg_of_readBack`);
 * `DecodesAt C P`: every accepted play decodes the parameters `P`, which a case map over the plays at one
   parameters' bytes has;
-* `RefsAt C xs₀`: at every accepted play, the blobs the parameters' digests name give the reference statements `xs₀`.
-  A reference statement is its member's circuit file and public file, each the blob under a digest the parameters
-  name, and the pinned lookup tables the blobs hold, each under a digest the verifier pins (`RefsOfSent` reads each
-  against its digest);
+* `RefsAtOr C xs₀ F₀` (`RefsOfSent`): at each accepted play, the blobs the parameters' digests name give the
+  reference statements `xs₀`, or the play's blobs collide with the files `F₀`. A reference statement is its member's
+  circuit file and public file, each the blob under a digest the parameters name, and the pinned lookup tables the
+  blobs hold, each under a digest the verifier pins (`RefsOfSent` reads each against its digest);
 * `CopyOf A P j u`: `A.h` is the copy `heldOf` builds from the parameters `P`, the boundary record `j` and `u`, at
   every input and interior that carry them in the seven fields `heldOf` reads, which are the ones an accepted play's
   input has (`fields_of_accept`). One such input and interior building `A.h` give it (`copyOf_of_one`, in
@@ -45,9 +45,11 @@ reference statements:
 
 ## What this does not show
 
-* `DecodesAt`, `RefsAt` or `CopyOf` at any case map or session of record. `RefsOfSent` gives `RefsAt` per play at
-  the reference statements of files the statement is given, or the play's blobs and those files differ under one
-  SHA-512 (`RefsAtOr`); the form's check runs the tables' check only at a member a statement names.
+* `CopyAt` at any case map: it asks one copy of every accepted play, and `RefsOfSent` gives each play the reference
+  statements of files the statement is given only up to a collision of its blobs with them (`RefsAtOr`). No theorem
+  gives `CopyAt`; `heldOfAtOr_at` reads the copy per play instead.
+* `DecodesAt` or `CopyOf` at any case map or session of record. The form's check runs the tables' check only at a
+  member a statement names.
 * That the form's check calls `descOk`: it does not.
 -/
 
@@ -82,16 +84,11 @@ theorem heldOfAt_of_desc {A : Live₂} {C : CaseOf} (u₀ : Unread) (hd : DescAt
   obtain rfl := hc o k p c e i it xs h hA hk hdec hi hit hx hh
   exact ⟨_, hh⟩
 
-/-! ## `CopyAt` at the cases at one statement -/
+/-! ## At the cases at one statement -/
 
 /-- **The accepted plays decode the parameters `P`.** -/
 def DecodesAt (C : CaseOf) (P : VStar.Recursive.SampledTwo.Params) : Prop :=
   ∀ o k p c e, FormAccepts C o → C o = some k → Decoded k p c e → p = P
-
-/-- **The accepted plays' blobs give the reference statements `xs₀`**: at every play the form accepts, the blobs the
-parameters' digests name give the reference statements `xs₀` (`refStmtsOf`), wherever they give any. -/
-def RefsAt (C : CaseOf) (xs₀ : List Claims.Msg) : Prop :=
-  ∀ o k p c e xs, FormAccepts C o → C o = some k → Decoded k p c e → refStmtsOf p k.blobs = some xs → xs = xs₀
 
 /-- **`A.h` is the copy `heldOf` builds from the parameters `P`, the boundary record `j` and `u`**: at every input
 and interior that carry them in the seven fields `heldOf` reads (the boundary and interior verifiers, the boundary
@@ -139,32 +136,5 @@ theorem fields_of_accept {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VSta
   have hrep : it.replay = p.replay := (congrArg Spot.Run.Interior.replay (Option.some.inj hit)).symm
   have hcirc : it.circuits = p.circuits := (congrArg Spot.Run.Interior.circuits (Option.some.inj hit)).symm
   exact ⟨j₁, hj₁, hr, hp, hrule, hcl, hip, hrep, hcirc⟩
-
-/-- **`CopyAt` at the cases at the statement `x`**, where the accepted plays there decode the parameters `P`
-(`DecodesAt`), their blobs give the reference statements `xs₀` (`RefsAt`), and `A.h` is the copy `heldOf` builds from
-`P`, the record `j` the proved verifier's reader reads from `x` and `xs₀` (`CopyOf`): an accepted play at `x` carries
-`j` (`inputOn_at`, `jsonMsg_of_readBack`) and `P`'s fields (`fields_of_accept`). -/
-theorem copyAt_of {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
-    {j : Lean.Json} {xs₀ : List Claims.Msg} (u₀ : Unread) (hP : DecodesAt (atStmt C x) P)
-    (hR : RefsAt (atStmt C x) xs₀) (hj : SpotFlock.jsonMsg x = some j)
-    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : CopyAt A (atStmt C x) u₀ := by
-  intro o k p c e i it xs h hacc hk hdec hi hit hx hh
-  obtain rfl := hP o k p c e hacc hk hdec
-  obtain rfl := hR o k p c e xs hacc hk hdec hx
-  obtain ⟨j₁, hj₁, hrec, hpar, hrule, hcl, hip, hrep, hcirc⟩ := fields_of_accept hacc hk hdec hi hit
-  have hmsg : recordMsg i.record = some x := (inputOn_at hi).2
-  rw [hrec] at hmsg
-  have hjj : j₁ = j := Option.some.inj ((jsonMsg_of_readBack hj₁ hmsg).symm.trans hj)
-  exact hA i it h (by rw [hpar]) (hrec.trans hjj) hrule hcl (by rw [hip]) hrep hcirc hh
-
-/-- **Each accepted play at the statement `x` has the held copies `heldOf` builds** (`HeldOfAt` at the cases at
-`x`), where every accepted play there passes the descriptor check (`DescAt`), decodes the parameters `P` (`DecodesAt`)
-and has blobs giving the reference statements `xs₀` (`RefsAt`), and `A.h` is the copy built from `P`, the record read
-from `x` and `xs₀` (`CopyOf`). -/
-theorem heldOfAt_at {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
-    {j : Lean.Json} {xs₀ : List Claims.Msg} (u₀ : Unread) (hd : DescAt (atStmt C x))
-    (hP : DecodesAt (atStmt C x) P) (hR : RefsAt (atStmt C x) xs₀) (hj : SpotFlock.jsonMsg x = some j)
-    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAt A (atStmt C x) :=
-  heldOfAt_of_desc u₀ hd (copyAt_of u₀ hP hR hj hA)
 
 end Verity.SampledTwo

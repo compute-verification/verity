@@ -10,8 +10,9 @@ public import Proofs.Flock.Bytes
 /-!
 # The reference statements of the blobs sent, digest by digest
 
-`RefsAt C xs₀` (`HeldOfAtDesc`) asks that every play the form accepts on the case map `C` has blobs giving the
-reference statements `xs₀`. A reference statement (`SpotFlock.HeldOf.refRawOf`) reads three things of the blobs: its
+The held copies at an accepted play are built at the reference statements its blobs give (`HeldOfAtDesc`), so one
+session of record's copies are every accepted play's only where each play's blobs give the same reference statements
+`xs₀`. A reference statement (`SpotFlock.HeldOf.refRawOf`) reads three things of the blobs: its
 member's circuit file and public file, each the blob under a digest the parameters name (`Core.Blobs.get`), and the
 pinned lookup tables the blobs hold (`Spot.OneStageZk.tablesOf`), each the first blob under a digest the verifier pins
 (`Flock.MUFU_TABLES`). The blobs are the ones the prover sent (`CaseIsSent`), so each read is checked here against
@@ -273,7 +274,7 @@ theorem memberOf_mem {p : VStar.Recursive.SampledTwo.Params} {t : ℕ} {m : _roo
   obtain ⟨_, -, hf⟩ := Option.bind_eq_some_iff.1 h
   exact Array.mem_of_find?_eq_some hf
 
-/-! ## `RefsAt`, or a collision -/
+/-! ## The tables' check at the accepted plays -/
 
 /-- **Every accepted play's blobs passed the tables' check at the registration `q`** (`tablesHeld`, as
 `Properties.Spot.HoldsRegisteredTables` reads it): `q`'s circuit file is on the blobs and looks up exactly the pinned
@@ -312,10 +313,11 @@ theorem names_same {q : _root_.Spot.OneStageZk.Own} {F F' : Array ByteArray}
 theorem caseIsSent_at {C : CaseOf} (x : Claims.Msg) (h : CaseIsSent C) : CaseIsSent (atStmt C x) :=
   fun o k p c e hk hdec => h o k p c e (atStmt_some hk).1 hdec
 
-/-! ## Per play: `RefsAt` or a collision with the blobs given -/
+/-! ## Per play: the reference statements, or a collision with the blobs given -/
 
-/-- **Each accepted play's blobs give the reference statements `xs₀`, or collide with the blobs `F₀`**: `RefsAt`
-per play, the play's way out a collision between its own blobs and `F₀`, which the statement is given. -/
+/-- **Each accepted play's blobs give the reference statements `xs₀`, or collide with the blobs `F₀`**: at each play
+the form accepts, the blobs the parameters' digests name give the reference statements `xs₀` (`refStmtsOf`), wherever
+they give any, or the play's own blobs collide with `F₀`, which the statement is given. -/
 def RefsAtOr (C : CaseOf) (xs₀ : List Claims.Msg) (F₀ : Array ByteArray) : Prop :=
   ∀ o k p c e xs, FormAccepts C o → C o = some k → Decoded k p c e → refStmtsOf p k.blobs = some xs →
     xs = xs₀ ∨ BlobsCollide o.sent.blobs F₀
@@ -344,8 +346,12 @@ theorem refsAtOr_of_tables {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} 
   · exact .inr hne
   exact .inl ((refStmts_same hx hx₀ ((names_same hh hT₀).resolve_right hne)).resolve_right hne)
 
-/-- **`HeldOfAtOr` at the cases at the statement `x`**: `heldOfAt_at` per play, from `RefsAtOr` in place of
-`RefsAt`. -/
+/-- **`HeldOfAtOr` at the cases at the statement `x`**, where every accepted play there passes the descriptor check
+(`DescAt`), decodes the parameters `P` (`DecodesAt`) and has blobs giving the reference statements `xs₀` or colliding
+with `F₀` (`RefsAtOr`), and `A.h` is the copy `heldOf` builds from `P`, the record `j` the proved verifier's reader
+reads from `x` and `xs₀` (`CopyOf`): the descriptor check gives a copy at the play's reference statements
+(`HeldOf.heldOf_of_descOk`), and an accepted play at `x` carries `j` (`inputOn_at`, `jsonMsg_of_readBack`) and `P`'s
+fields (`fields_of_accept`). -/
 theorem heldOfAtOr_at {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
     {j : Lean.Json} {xs₀ : List Claims.Msg} {F₀ : Array ByteArray} (u₀ : Unread) (hd : DescAt (atStmt C x))
     (hP : DecodesAt (atStmt C x) P) (hR : RefsAtOr (atStmt C x) xs₀ F₀) (hj : SpotFlock.jsonMsg x = some j)
