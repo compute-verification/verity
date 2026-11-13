@@ -157160,3 +157160,36 @@ Next, as ordered: the sizing of way (b) on #9713, in one entry, before any line 
 - Its body has `Lane proofs`, then compute-accounting's three conditions by name with how each is met: **stricter only** (the one definition, the two places the parsers differ and why neither lets `commitOf?` take a text it refused; its 4 readers in `security` and 32 in `security/Properties`), **tests** (`test_credit` on the unchanged Python reference; the new `test_a_commit_record_reads_alike_under_both_parsers` over the port `commit-parsers`), **order** (carried with `restack.py`, not marked). It says what is not covered: no stored vectors and no served run's Commit record are in the tree, so the test is over the case writer's records.
 - The tool's one warning, yours to settle or leave: "`--issue PRF-582`: no label of it names a live goal of the Goals page (its labels: from:proofs)". [run]
 - Your 19:01Z is read (mailbox to line 647). Next, in this order: the records run at `a669fecb` through `--on auto`, now; then the entry on the two conflicts in `ChallengerCoins.lean` and which side each takes, before I write any settlement of #9717 on #9555.
+
+
+## SESSIONCOINS, Fri 13 Nov 19:11Z: the cost point, numbers first: the largest opening count is far below the `v` the figures use; changed text, unchanged figures
+
+Read at `main` `3f4af5f89966`. This answers your 19:06Z item 3 (which case it is) and the numbers half of your 19:03Z item 2. The third way, the binders, and way (i)'s statement with the kernel try follow in the next entry.
+
+**The case.** The largest opening count at the deployed plans is at most 19 SHA-512 evaluations for one compared opening, and at most 23,830 for everything one run opens. The only stated figure that evaluates `v` holds for every `v` up to 2^80. So the ask would be a changed text with unchanged figures. The room is a factor of at least 2^80/23,830, about 2^65.5, at the widest count. [derived from the reads below]
+
+**What one opening costs, as a formula** [read, derived]. All counts are SHA-512 calls of `H512`:
+- A row opening at level ℓ (`opRZ`, `BadZ.lean:160`, through `VerifiedZ`/`VerifiesL`) costs one hm96 leaf plus one node per path step. The leaf is `hm96Leaf` (`Definitions/Flock/Merkle.lean:95`), `H(LP ‖ H(col) ⊕ M·y ‖ H(SP ‖ y))`: three calls. The rows use `leaf512 = Leaf.hm96` (`Refine/Salted.lean:71`; `hs512`, `ZkExec/VerdictStatements.lean:81`). The path length is `pathLen = logLen − min(⌊log₂ Q⌋, logLen)` (`Definitions/Flock/Compiled.lean:42–45`). So one opening costs `3 + logLen_ℓ − min(⌊log₂ Q_ℓ⌋, logLen_ℓ)`.
+- A pads opening (`opPadsAtZ`, `BadZ.lean:203`) costs `3 + log₂ N` (an hm96 leaf `Lp`, then a single-root path of depth `Nat.log 2 N`). A τ opening (`opTauZ`, `BadZ.lean:300`) costs 3 (the `Lτ` leaf alone).
+- The plan's parameters come from `Zk.schedule m` (`Flock/Zk.lean:50`). That is `fast100 m` (`Definitions/Flock/Accounting/Schedule.lean:79–94`) with level 0's queries set to `q₀` (277, 242, 229 at m = 25, 26, 27; 219 to m = 31; 218 to m = 35; `Zk.lean:40–46`). Each level has `logLen_ℓ = cols_ℓ + ℓ + 1` and `Q_ℓ = queriesAt (ℓ+1)` for ℓ ≥ 1 (`Schedule.lean:58–75`). The pads use `N = nextPow2(len + 192)·8`, which is 4096 or 8192, and `Q = 168` (`Zk.lean:24–27, 261`).
+
+**The numbers at the deployed plans** (m = 25 to 35, the `--zk` range) [derived; a script over the read tables, not a Lean computation]:
+
+| m | largest row opening (level 0) | pads opening | one run's openings, all verified (hSelf as a scan) |
+|---|---|---|---|
+| 25 | 8 | 15 or 16 | 12,556 or 12,892 |
+| 28–30 | 14 | 15 or 16 | 17,244 or 17,580 |
+| 31 | 15 | 15 or 16 | 18,732 or 19,068 |
+| 35 | 19 | 15 or 16 | 23,494 or 23,830 |
+
+- **The largest `hOpen`** is one compared opening in one run: `max(3 + pathLen₀, 3 + log₂ N)`. That is 19 at m = 35, from level 0 at `logLen = 23` and `q₀ = 218`. At every m, level 0 has the largest row opening.
+- If the cost charges finding the conflicting position as well, the opening function as written verifies every slot opening at that position (`opOfL` filters, then takes the head). The bound is then `Q_ℓ·(3 + pathLen_ℓ)`, which is at most 4,142 (level 0, m = 35) and at most 2,688 for the pads.
+- **The largest `hSelf`** is the self-clash finder's one run (`SelfClashZ`, `BadZ.lean:348`). The two clashing openings alone cost at most 2·19 = 38. A scan of everything the run opens, both reps, costs `2·(q₀·s₀ + Σ_{ℓ≥1} Q_ℓ·s_ℓ + 168·(3 + log₂ N) + 3)`, where `s_ℓ` is one opening's cost at level ℓ. That is at most 23,830, at m = 35.
+
+**The `v` at which a figure of V3 or V5 is evaluated** [read]:
+- No figure evaluates V3 (`SampledKSLiveV3`) or V5 (`SampledKSLiveV5`) at a number. No such figure is in the lock, `DESIGN.md` or `benchmarks/`; `git grep` of `t′ + v`, `qF =` and `v = 2^` over `*.md`, `*.toml`, `*.py` and `*.json` finds only `ASSUMPTIONS.md:64–72, 243`, which states the conditions without numbers.
+- The figure that shares their budgets is `Flock.Guarantees.DeltaPubDeployed` (`Bridge/PublicDeployed.lean:248–257`, in the lock's `deployed`). It says `deltaPub < 1` at `q_F = 2(t′+v)`, `q_S = t′+v`, link cost `t′+v`, "for a prover's per-run time `t' ≤ 2^80` and one opening's verification `v ≤ 2^80`". It quantifies `∀ v, 0 ≤ v → v ≤ 2^80`. `sampledKSLivePub_rows` (`Bridge/PublicRows.lean:220–250`) has the same range.
+- So a hypothesis `hOpenMax ≤ v` (or `hSelfMax ≤ v`) cuts each figure's range from `[0, 2^80]` to `[19, 2^80]` (or `[23,830, 2^80]`). It changes no number: the figure holds at every `v` it still admits.
+- V5 has no `v`. Its knowledge finders' budgets are the free binders `(qF qS : ℝ)` (`V5/Statement.lean:358`), and `t'` (`:354`) charges only the link finders. For V5 the same condition reads `2t′ + 2·hOpenMax ≤ qF` and `t′ + hSelfMax ≤ qS`. That still needs a statement change, to tie `qF` and `qS` to `t′`.
+
+**Not established.** The counts assume each hm96 leaf and each node is one SHA-512 call (the `H : List UInt8 → D` model), whatever the message length. I haven't proved in Lean that `N ≤ 8192` holds at every statement `planZHJ` admits; the table rests on Part B's reading, `len + 192 ≤ 1024`. Whether `decide` reduces `capDepth`, which calls `Nat.log`, a well-founded definition, in the kernel is not known; I will try it on a node next and report it in the next entry.
