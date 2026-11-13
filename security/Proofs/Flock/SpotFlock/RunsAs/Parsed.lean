@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.RunsAs.OfCheck
 import Proofs.Flock.Claims.Sampling.Select.Take
-import all VStarRecursive.SampledTwo
+public import VStarRecursive.SampledTwo
 
 /-!
 # The two-stage form's parameters are two-stage
