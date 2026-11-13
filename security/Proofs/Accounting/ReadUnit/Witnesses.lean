@@ -24,7 +24,8 @@ import all Init.WF
 # `TableReadBinding` says something
 
 * **Honest** (`TableReadBinding_honest`): the check accepts a template at the served expert-row read's shape, 256 rows
-  of 3072 words: the read's own template, which the check accepts at every shape it admits (`Accepts.check_readTmpl`).
+  of 3072 words: the read's own template, which the check accepts at every 2 ≤ V < 2^32 and 1 ≤ H ≤ 2^16
+  (`Accepts.check_readTmpl`).
 * **Nontrivial** (`TableReadBinding_nontrivial`): where the check doesn't fix the read's gates, a read needn't bind: some
   unit's reads don't. The unit net `net₀` has 5 input words (640 columns), its constant on column 640 and no computed
   row, so a read at the template's columns (`portsAt`, at one row of no words) holds its index, root and the domain
