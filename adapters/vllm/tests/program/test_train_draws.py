@@ -1,4 +1,4 @@
-"""A training step's random ops, which no rule lowers until a Definition of torch's CUDA generator computes what it draws: the
+"""A training step's random ops, which no rule lowers until a Definition of torch's CUDA generator computes what it samples: the
 training rules, with and without a compute capability, refuse each form at its own node, and a survey (`rules.training_survey`)
 makes each one a hole, in graph order, and derives the rest."""
 from __future__ import annotations

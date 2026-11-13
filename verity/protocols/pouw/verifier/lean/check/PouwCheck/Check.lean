@@ -5,7 +5,7 @@ public import PouwCheck.WindowSalt
 /-!
 # PoUW's rule (`core_check.py`, "the check")
 
-`registered` holds the window commitment record to PoUW's rule: a served execution phase in the verifier's context registering exactly
+`registered` holds the execution phase commitment record to PoUW's rule: a served execution phase in the verifier's context registering exactly
 `window.REGISTERED` (a record of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
 its `length` item a fixed-length execution phase's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
 slot served its max_tokens), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
@@ -39,7 +39,7 @@ def registeredSorted : List String := (PouwWindow.registered.toArray.qsort (· <
 /-- `sorted(window.LEGACY_REGISTERED)`. -/
 def legacySorted : List String := (PouwWindow.legacyRegistered.toArray.qsort (· < ·)).toList
 
-/-- What a window commitment record that keeps PoUW's rule fixes: the level's work, the sampling item and K′, and `root_W`. -/
+/-- What an execution phase commitment record that keeps PoUW's rule fixes: the level's work, the sampling item and K′, and `root_W`. -/
 structure Fixed where
   work : Work
   sampling : Sampling
@@ -64,7 +64,7 @@ def levelOf (items : Json) : Option Nat := PouwWindow.field? (get items "work") 
 def wrongItems (p : Params) (items : Json) (f : Fixed) : List String :=
   ((expected p f).filter fun (k, v) => cs (get items k) ≠ cs v).map (·.1)
 
-/-- PoUW's rule over the window commitment record. -/
+/-- PoUW's rule over the execution phase commitment record. -/
 def registered (p : Params) (c : WindowCommitmentRecord) : Except String Fixed :=
   let win := c.window
   let ks := (keys win.items).getD []
@@ -137,7 +137,7 @@ instance instDecidableUnitsOk (units : Array Nat) (k n : Nat) : Decidable (Units
 
 def drawnJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
 
-/-- The service's answer to a window commitment record that keeps PoUW's rule. -/
+/-- The service's answer to an execution phase commitment record that keeps PoUW's rule. -/
 def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let d := Flock.hexOf c.digest
   let k := f.sampling.k
