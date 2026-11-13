@@ -12,8 +12,18 @@
   where its writer is lowered, and the peers' rows are free. `_Builder.feed` takes only a port whose rows are all fed,
   so the frame gained `NodeWindow.feed_rows`, which writes `IF.Wire`s with `cut=(i, 1)` and sets the cut itself, and
   `Free.rows` (a frame commit). `check_wires` and `check_inputs` take it [test].
-  - Risk: `feed_rows` bypasses `_Builder.settle`'s port checks (row count, widths), and does its own instead (width =
-    port words / k, one writer row a unit). A port fed by both `feed` and `feed_rows` would not be caught.
+  - Under the frame's checks (frame commit `7ebb59cc81`): `NodeWindow.row_fed` keeps each row-fed port's cut and its
+    rows' unit ranges. Refused by name: a second cut at once (`feed_rows`); a port also fed whole (`_Builder.feed`, or
+    left free whole by `feed`) and a row of a unit fed twice (free twice, wired and free) before `settle`
+    (`_check_rows`); a cut changed after `settle`. One test each, plus two showing what `check_wires` refuses on its
+    own: a wire on a row past the cut (``cut``) and one whose writer row is another width (``width``) [test, local].
+    `settle`'s rows-a-unit check and `check_proof_block` read the cut from `b.cuts`, and the after-settle check holds
+    that it is still the `feed_rows` cut. Taken over a smaller form (folding `feed_rows` into `_Builder.feed` as a
+    per-row feed) because that is a hunk in `window_builder.py`, which is on `main`.
+  - **What no structure check catches:** a wire on a row that exists, has its width and has no other wire, but is the
+    wrong one: rank r's partial on row i ≠ r, or column block a's writer unit on block a′'s reader unit. `check_wires`
+    sees rows, widths, bounds and overlap, never which writer a row should be. `test_wires_refused_on_their_own` moves
+    rank 0's wire to row 3 and the Circuit is built. Only a check on values sees it (item 5's notes).
 - **Gathers past two levels.** The LM head's 19,360 one-word slices are 160 chunks of 121 (161 > 128 rows), so
   `_gather` now recurses on its chunk rows (a frame commit): AllGather{121,1} ×160, then {80,121} ×2, then
   {2,9680}. Where two levels fit, the units are unchanged (the frame's tests pass unchanged).
