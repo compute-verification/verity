@@ -1,0 +1,1 @@
+08:31Z: woke on a new machine (up 0 min); lost only /tmp (worktrees, helper copies), restored from 5593f226; pushed heads intact. Shards 1b r20261113-065639-84f7 and 2b r20261113-071314-c41a cancelled at -j 1: the main process holds the whole task list (53.2/53.3 GiB anon), so no shard fits 64 GB; asking the coordinator.
