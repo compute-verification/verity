@@ -302,3 +302,31 @@ Records runs:
 - B `r20261113-065139-a60b` (#9625 `2f3c3e6022`, from `wt-pr4`, `--records security/Properties --update`): check slot p0 at 06:52:09Z, limit 08:52Z; expect about 07:45Z.
 
 When A passes: add the run to #9581's body (`pr3-body.md`, Checks), then its ready line. When B passes: `pr4-body.md` the same, then #9625's line and #9665's with it.
+
+## State at Fri 07:35Z (three ready lines given; the ratchet gate; the carry)
+
+- **Ready lines given** in the entry of 07:32Z (`1a97e47fc0` on `cursor/verity-proofs-84b5`), in the coordinator's order:
+  #9581 `e230e76f63423740f73b9e69bff0cfe6a32e3376` on `r20261113-055441-2c57`; #9625
+  `2f3c3e6022e189a2f94be90f1d3d067eda6995d6` on `r20261113-065139-a60b`; #9665
+  `5edf7e30ee80bb013e16e4fe8386ef6332aee99e` on `r20261113-055510-d3ba`. All three runs: rc 0, `OUTCOME pass`, `failed`
+  and `regenerated` empty. #9537 and #9595 are marked and admitted. #9637 merged 06:43:17Z.
+- **The ratchet gate fails on all five** (`python adapters/vllm/tools/ratchet_gate.py BELOW HEAD`): 33, 65, 44, 37, 11
+  new retired-term sites, 190 in all. Off the merge gate; holds nothing. Split: 106 my own `Period…` module and
+  namespace names; 18 the difftests' constants `DRAW`, `LAW`; 9 prose ("Sampled proofs' period" 7, "one draw a case" 2);
+  6 the executable's name `sampled-proofs-period`; 37 existing formats' words (`cap` 15, `draw` 12, `drawn` 5, `law` 4,
+  a sibling executable 1); 14 existing Lean (`MonitoringPeriod` 12, `Nci`, `NciCheck`). The five bodies say it.
+- **Also warned**: three structures (`Spot.Period.Session`, `.Window` in #9537; `.Commitment` in #9595) by the vocabulary
+  test; the verifier's README 1,590 bytes over its 48 KB cap at the top (main's own is 188 over at `9182900fb9`).
+- **Asked the coordinator (NEEDS 1)**: the name a new Lean module about a monitoring period takes, from lean.
+- **Said I do, unless told otherwise**: heads stay; ONE pull request AFTER the carry fixes the 33 fixable sites (rename
+  `DRAW`/`LAW`, reword 9 prose sites, executable to `spot-period`), renames or lists the three structures, cuts the
+  README under its cap; a pull request not landed at the carry gets its share folded into its carried head.
+- **The coordinator's 07:22Z word**: paths move tonight (protocols into `verity/protocols/proofs|accounting|policy/`);
+  merge NO `main` until told; a branch that crosses a move is carried once with `tools/move/restack.py` when the
+  coordinator says, never by hand, and then gets a new ready line (so: a new records run at each carried head). Daniel's
+  words in new prose: "challenges" not "coins"; "accounting protocol"; "the auditor's devices", never "host".
+- **Memory**: a records run asked 32 GB and held at most 15.6 GB (peak proportional set size).
+- **GitHub shows the five as CONFLICTING**; `git merge-tree --write-tree origin/main HEAD` exits 0 for each with the
+  repository's merge drivers, and the queue's status has #9537 and #9595 admitted.
+- **How to count sites by kind**: load `tests/lint/test_repo_retired_terms.py` as a module, `sites(text, path)` on
+  `git show REV:PATH` for each file of `git diff --name-only BASE TOP` that `holds(path)` takes, and subtract by term.
