@@ -162,7 +162,7 @@ parameters' key, on the boundary's window) show no coin of the second stage's fa
 def FirstUnshown (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm roots, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
     firstDraws key p c e = some d₁ → secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
-    trustedSessionOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
+    trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
       (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
         .ok (cm, roots) →
     VStar.Recursive.SampledTwo.interiorShown roots d₂.label d₂.after = false
