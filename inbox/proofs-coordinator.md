@@ -129468,3 +129468,119 @@ Nothing.
 - A records run of `security/Proofs` at a head that holds the three newer roots: none has run. The join's records run is the first that reads them.
 - That any play is accepted at a tree with FRAME's `second-inputs` rule: none has run; HELDOF's `593d` shows the second stage refusing my play there.
 - That an evidence file reaches `RECORD_DIGEST` or `RECORD_READ` through the binary: `#guard`s only.
+
+## RELAX, Fri 13 Nov 08:12Z: YOUR 07:54Z POINTS 2, 3 AND 4. No property covers the log's information entries and declarations (the spec for them is on `main`). R2: no to "instead of"; the declarations it reads are parameters today, from two sources. The one data sheet: `Accel.Card`, with `Site.Sheet` what registration registers of it
+
+Read only, at `origin/main` `9182900fb94e` and soundness's draft #9701 at `899cbbfd665f`. Nothing built. Point 1 (who moves the check, in which cut, and each hour) is section 1 of my 08:05Z entry: two pull requests, both proofs', the Python by a map in review Fri 13 Nov 9 AM PST, the Lean package open Fri 13 Nov 10 AM PST with its ready line at noon PST, each slipping with chain 2.
+
+### Point 2. `Core.Registration.check` and its three entry kinds
+
+**The spec for all three kinds is already on `main`. Only the code-to-spec property is missing, and only for two kinds and the log as a whole.**
+
+What exists, kind by kind:
+
+| Kind | Spec on `main` | Code | Property | What else holds the code |
+|---|---|---|---|---|
+| Site entry | `Verity.Site.Entry.Valid`, `refusal` | `Core.Site.Registration.Entry.refusal` | `Properties.Site.Refuses`, `EntryValid`, `Fold`, `Checks`, `RefusedAt`, proved | `site-difftest` against the Python Site |
+| Information entry | `Entry.ItemsOnce`, `Registration.theta`, `builder?` | `Entry.refusal`'s second arm | none | the registration difftest, `#guard`s |
+| Declaration | `Entry.DayOnce`, `Registration.declared`, `RunsDeclared` | `Entry.refusal`'s third arm | none | the registration difftest, `#guard`s |
+| The log of all three | `Verity.Registration.Valid`, `Registration.refusal` | `Core.Registration.check` | none | the registration difftest |
+
+- **The spec** [read: `security/Definitions/Core/Site.lean:195-278`, `509-590`]. `Verity.Registration.Entry` has the three kinds. `Valid` says each entry follows the head, a site entry passes the Site's checks, and no item and no day is registered twice. `refusal` names `duplicateInformation` and `duplicateDeclaration`.
+- **The five properties are about another function** [read: `security/Properties/Core/Site.lean:124-126`, `177-215`]. They are stated of `Core.Site.Registration.check`, the Site's own check of a log of site entries: its entry type has the one constructor `.site`, and the digests are a parameter `D`. `Core.Registration.check` is a second fold, which calls the Site's entry refusal at the deployed digests for a site entry and has its own two arms [read: `Registration.lean:262-282`]. No statement names it.
+- **The difftest is code to code.** It holds the compiled check to the Python mirror on generated logs of all three kinds, on every field of the outcome [read: `test_registration_difftest.py:1-8`]. It says nothing about the spec.
+- **The view.** `View.declared?`'s docstring calls it "the spec's `Verity.Registration.declared`". That is a comment [read: `Registration.lean:304-306`].
+- **Soundness's draft says the same:** "`Properties.Site.Checks` for a log of site entries; none yet for information entries and declarations" [read: #9701, `security/Definitions/Core/Registration.lean:37-38`].
+
+What the missing property would state, in the shape of the Site's five:
+
+1. **What a code log denotes:** a function from `Core.Registration.Log` to `Verity.Registration`. A site entry goes by the existing `regEntry`, and an information entry or a declaration field for field. The same for a refusal and for the view.
+2. **`Checks`:** for every auditor, composite and log, `Core.Registration.check` accepts exactly when the log it denotes is `Verity.Registration.Valid` at the deployed digests. Its view is then the spec's: the Site is `Site.ofLog`, θ is `theta`, the compiler is `builder?`, the declarations are the log's in order, and the head is `Registration.head`.
+3. **`RefusedAt`:** when it refuses at entry `i` with refusal `r`, the first `i` entries are valid and the spec's `Registration.refusal` of entry `i` against them is `r`.
+4. **`Declared`:** for an accepted log, `View.declared? day` is `Verity.Registration.declared` of the log it denotes. This is the one R2 and `RunsDeclared` read.
+
+What it would rest on [guess: read, not tried]:
+- **The site arm:** `Properties.Site.Refuses` and `Fold`, already proved, taken at the deployed digests.
+- **Two new arms:** the code's Boolean `nodup` is `List.Nodup`, and "some declaration has this day" is the negation of `DayOnce`.
+- **The head is the part to settle.** The spec's head takes a digest for an entry of any kind. The code's `Properties.Site.digests` denotes a digest for a site entry only, and the code hashes the other two kinds by `Site.tagged e.format e.toJson` [read: `Registration.lean:143-144`]. The property needs a `Digests` built from that.
+- **Size:** not sized. The Site's five are 256 lines of statements and 547 of proofs.
+
+### Point 3. Should R2 read the registration log's declaration instead of the verifier's parameters?
+
+**No to "instead of". Yes to R2 holding the program to the log's declaration every time. That second part changes a verdict, so it is a ruling and not mine.**
+
+Where SPOT's check takes the program's digest today:
+
+- **R2 computes it from the verifier's own program.** `program := Flock.hexOf v.program.sha512`, the SHA-512 of the canonical JSON of the program the parameters hold. R2 holds the record's `program`, partition, query and population to it [read: `Spot/Registration.lean:558-572`; `Circuits/Program.lean:1000`].
+- **R2 has a clause for the day's declaration, and it is optional.** With `day` and `declarations` in the parameters, it refuses a day with no declaration, a day declared twice, and a record whose program is not the day's (`R2-undeclared`, `R2-declared-twice`, `R2-declared`). With neither, it reads no declaration and refuses nothing for it [read: `Spot/Registration.lean:219-227`, `573-574`; `Spot/OneStage.lean:30-32`, `375-383`; the field's default is `none`, `Registration.lean:200`].
+- **The declarations are parameters too.** The compiled check never reads the registration log. Whoever writes the parameters copies the declarations in. Today that is Python, from one of two sources [read: `benchmarks/prove_path/records_audit.py:588-613`, `642`]:
+  - the registration log, checked by the Python mirror (`--day`, `--day-log`), or
+  - the auditor's challenger's ledger, whose lanes sign `declaration` entries of the same three fields (`Spot.ChallengerSession.declaredDay`) [read: `Spot/ChallengerSession.lean:536-550`, `750-768`].
+- **So a day's declaration is recorded in two places**, the registration log and the challenger's ledger, and nothing I found ties one to the other.
+
+Why not "instead of":
+- **R2 needs the program, not only its digest.** It derives the sampling law and the population from the program itself (`Draw.derive v.program`, `Partition.units v.program`) [read: `Spot/Registration.lean:553`, `570`]. A declaration holds a digest and the block Definitions' keys. So the parameters' program stays, and the declaration can only be held equal to its digest.
+
+What would have to change for R2 to read the log's declaration:
+1. **The clause stops being optional:** `day` is required, and a day with no declaration is refused. Runs that pass no day are accepted today and would be refused. That is the verdict change.
+2. **The declarations come from an accepted log, not from a list a caller wrote.** Either SPOT's check takes the log and runs `Core.Registration.check` on it, or the check above it hands SPOT the accepted log's view. The second fits the agreed page (a protocol reads the registration it accepted). Either way SPOT's package requires the registration package, which the split gives it.
+3. **One source for a day's declaration.** The challenger's ledger's copy is tied to the log's, or one of the two goes.
+4. **The Python stops deciding:** `records_audit.py:607`, the same line as in the sizing.
+5. **The mirrors and difftests follow:** `verity/protocols/spot/verifier/one_stage/registration.py` (`_declared`) and the two difftests that name the declared day.
+
+A finding for soundness, which I think matters more than the yes or no:
+
+- **`DeclaredIsParams` compares two different digests.** [read; not run]
+  - The game's `programDigest` is the circuit file's SHA-512, v2's `proofs.circuit`: `programDigestOf θ = digestOf p.own.circuit`, and the game finds the circuit file among the committed files by it [read: `security/Proofs/Properties/Verity/Sampled.lean:781`; `security/Properties/Verity/Game.lean:781`, `803`; `Spot/OneStageZk.lean:161-168`, `245-258`].
+  - The log's `Declared.program` is "the digest of the circuit's program", and R2 compares it with the record's `program`, which is the program descriptor's SHA-512 [read: `Registration.lean:92-97`; `Spot/Registration.lean:226`, `559`].
+  - The two are digests of two files: the circuit file and the program's descriptor. An honest run does not make them equal.
+  - They are tied elsewhere: the circuit file's META names its program's digest, and Flock's verifier holds its `--program` bytes to it [read: `ProgramOfCircuit`, `security/Proofs/Flock/Soundness/Discharge/FailClosed/Scope.lean:625-630`, whose own words are "the binding is META's"].
+  - So the tie soundness wants has three links: the day's declaration is R2's program digest (R2, when it has the day); that digest is the one the circuit file's META names (Flock); the circuit file is the one the parameters name (the game). Stated with the game's `programDigest` alone it reads as one equation that does not hold.
+
+Who else reads the parameters' digests:
+- **The circuit file's digest, `own.circuit`:** the soundness game and its instance (`Game.lean`, `Sampled.lean`, `Sampled/Instance.lean`, `Sampled/Accepts.lean`, `Event.lean`, `Moves.lean`, `Record/Accepts.lean`, `Idle.lean`), v2's check (`Spot/OneStageZk.lean`, `Spot/MembersParse.lean`), and recursion's verifier, which has an `Own.circuit` of its own (`VStarRecursive/Protocol.lean:79-99`) [ran: `git grep` for `own.circuit` and `programDigest`].
+- **The program's digest as R2 reads it:** the pool's chain (`Registration.Pool.chains`, `Spot/OneStage.lean:213`), Flock's verdict (`program_sha512`, `Flock/ProgramRead.lean`), and the Python mirror.
+
+### Point 4. Which of `Site.Sheet` and `Accel.Card` is the one data sheet
+
+**`Accel.Card`. `Site.Sheet` is what registration registers of a card, and it should be defined from a card.** A recommendation from reading the three structures and the Python that derives one from the other; I did not read their readers' proofs.
+
+What each is [read: `security/Definitions/Core/Site.lean:133-141`; `security/Definitions/Core/DeviceFigures.lean:91-99`; `security/Definitions/Core/Accel/Card.lean:30-42`, `93-108`; `security/Definitions/Accounting/TS/Sheet.lean:62-78`]:
+
+| | `Site.Sheet` | `Accel.Card` | `TS.Sheet` |
+|---|---|---|---|
+| Holds | the SKU's name; the tensor clock in Hz; the peak MACs a second of each operand class; device memory's bits a tick; on-chip state in bits; device memory in bytes | each store's words; each resource's units a second at the clock's ceiling; the tensor units a MAC of each format uses; P1's exact range; the code space | the top clock; per instruction class its MACs, its peak, its pipe and its shared-memory bytes; per pipe its width |
+| Numbers | ℚ≥0 and ℕ, equality decides | ℚ≥0 and ℕ, with a proof field | ℝ |
+| Made from | the card file, in Python (`Sheet.of_file`) | the card file, generated into Lean (`verity/hardware/lean.py`) | written by hand per device |
+| Read by | registration: the spec, the code's copy, its JSON and digest, 13 proved properties | PoUW's definitions and proofs, the device model (`Card.toDevice`) | the TS machine |
+
+What `Site.Sheet` holds that `Accel.Card` lacks:
+- **The SKU's name**, which the registration log names a card by.
+- **The clock as a number of its own.** A card folds the clock into each rate. The generated module has `clock` and `tensorClock` beside the card, outside the structure [read: `verity/hardware/lean.py:3-5`].
+- **A peak rate for each operand class.** A card has one tensor rate and a weight for each format, and no operand classes.
+- **Whole numbers at a tick**, an equality that decides, a JSON form and a digest.
+- **The two readings:** the auditor's estimate, the tolerance, and the larger of the stated and the estimated figure as what the bound reads (`DeviceFigures.Accepted`, `bounding`) [read: `DeviceFigures.lean:123-141`].
+
+What `Accel.Card` holds that `Site.Sheet` lacks:
+- **Each store's size** (registers, shared memory, L2, device memory). A sheet has two sums.
+- **A rate for every resource** (the issue slots, each pipe, shared memory, L2), where a sheet has the tensor's and device memory's.
+- **The format weights, P1's exact range and the code space.**
+- **The opcodes' use of each resource and the map to the device model** (`Card.use`, `Card.toDevice`).
+
+Why `Accel.Card`:
+- **A sheet is a function of a card and a tick, and not the other way.** Python already computes it so: the SKU, the SM clock, the SMs times the card's tensor rate times the clock for every operand class, and the three memory numbers "as `Accel.Card.toDevice` reads the card" [read: `verity/hardware/site/__init__.py:303-318`]. No Lean function ties the two [ran: `git grep` for one].
+- **`TS.Sheet` fits a card field for field and a sheet in two fields.** Its pipes' widths and shared memory are a card's per-resource rates; its per-class MACs, pipe and bytes are the instruction set's, which a card's `use` reads. A sheet has only the clock and the tensor peak of them.
+- **Making `Site.Sheet` the one would change what is registered.** Every resource's rate would enter the site entry's JSON and digest. With the card as the one, the registered form stays, and the 13 properties keep their statements.
+
+What the fold has to settle, whichever way it goes:
+- **A card has no clock field and no name.** `TS.Sheet`'s `fmax` needs the first. Either the card gains them or they stay in `Site.Sheet` and in the generated module.
+- **Units differ:** a sheet's memory is in bytes, the device model's in bits; `TS.Sheet` is in SM clocks and in ℝ, a card in seconds and in ℚ≥0.
+- **The operand classes** exist only on the registration side.
+- **It changes lock records** of `security` (`reads/Definitions.Core.Accel.Card`, 13 definitions; `reads/Definitions.Accounting.TS.Sheet`, 20) [ran: a scan of the lock]. `Accel` is compute-research's by the registry's remit, and `security/` is lean's.
+
+### Not established
+
+- **Nothing was built or run.** Every statement above is from reading.
+- **Point 2:** whether the head's digest is the only hard part of the property; its size.
+- **Point 3:** whether any served run passes `day` today, and how many pass none. Whether the challenger's ledger's declarations are meant to replace the log's or to copy them. Whether soundness meant `DeclaredIsParams` to take the program's digest and not the circuit file's: its definition takes `programDigest` as an argument, and its docstring says "as the soundness game's vocabulary reads it".
+- **Point 4:** compute-research's view. The readers of `Accel.Card` and `TS.Sheet` beyond their file lists.
