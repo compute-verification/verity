@@ -52,10 +52,10 @@ their floor.
   `work:1` sampling design. Its tests are this directory's suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
-  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session drawing
+  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session sampling
   `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
-  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
-  units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
+  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and sampled
+  proof blocks, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
