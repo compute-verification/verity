@@ -25,8 +25,10 @@ from .events import TritonLaunch
 from .observer import Recorder, encode_arg
 
 _STATE: dict[str, Any] = {"orig_run": None, "rec": None, "patch": None}
-_SRC_SHA: dict[int, str] = {}
-_CONSTEXPR_NAMES: dict[int, frozenset[str]] = {}
+#: what was read of a JIT function, by the function's `id` and with the function: an entry holds its function, so no other
+#: is made at that address while the entry answers for it
+_SRC_SHA: dict[int, tuple[Any, str]] = {}
+_CONSTEXPR_NAMES: dict[int, tuple[Any, frozenset[str]]] = {}
 
 
 def install(rec: Recorder | None) -> None:
@@ -56,27 +58,26 @@ def is_installed() -> bool:
 
 def src_sha(jit_fn: Any) -> str:
     k = id(jit_fn)
-    s = _SRC_SHA.get(k)
-    if s is None:
+    kept = _SRC_SHA.get(k)
+    if kept is None:
         try:
             src = jit_fn.src
         except AttributeError:
             src = ""
-        s = hashlib.sha256(src.encode("utf-8")).hexdigest()
-        _SRC_SHA[k] = s
-    return s
+        kept = _SRC_SHA[k] = (jit_fn, hashlib.sha256(src.encode("utf-8")).hexdigest())
+    return kept[1]
 
 
 def constexpr_names(jit_fn: Any) -> frozenset[str]:
     k = id(jit_fn)
-    names = _CONSTEXPR_NAMES.get(k)
-    if names is None:
+    kept = _CONSTEXPR_NAMES.get(k)
+    if kept is None:
         try:
             names = frozenset(p.name for p in jit_fn.params if p.is_constexpr)
         except (AttributeError, TypeError):
             names = frozenset()
-        _CONSTEXPR_NAMES[k] = names
-    return names
+        kept = _CONSTEXPR_NAMES[k] = (jit_fn, names)
+    return kept[1]
 
 
 def fn_name(jit_fn: Any) -> str:
