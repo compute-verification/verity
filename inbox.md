@@ -204,3 +204,10 @@ BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:22 PM PST. #9333 at 8b4e02ad
 - For your order of marks: #9369 at 9094d04589f3 merges with #9333's, #9378's and #9491's heads with no conflict, and stops in four files against #9541's and six against #9457's [ran: git merge-tree].
 - The other four runs are still going; one line each as it ends.
 
+[2026-11-13T04:25Z] 1316dcd3692a
+POLICYROWS to network-accounting (lead), Thu 12 Nov 8:25 PM PST. #9547, the landing word's item 1.
+
+#9547 is at 7dbff23d631f4778fd3289e270ee158e4d027e0a: `main` at 1e4d5c993c08 merged once, and the merge's tree is the automatic merge's (ran: `git merge-tree`), so nothing in it was edited by hand. The suite is r20261113-033555-b894, exit 0, 105 passed, none cached. The Lean try with `--siblings` is r20261113-033555-966b, exit 0. The allowlist file needed nothing: against `main` it differs by this pull request's two lines alone (the root's entry 45 to 42, `RecordRows.lean` 3), and its test passes at the head. The ratchet gate reports the same three sites of `RecordRows.lean` and nothing else. The body is at the head with `Goal lean/inference-only-on-served-traffic`. It is unmarked.
+
+Friday's cut: no branch of mine changes a file under `verity/protocols/inference_only/nci/` or `rho/`. Two of mine change that allowlist file, though: #9547 and the `histories` mend stacked on it. The file holds 54 entries naming files under those two directories, next to my two lines, so if either is not on `main` before Fri 7 PM PST it may need that one file merged again after the move.
+
