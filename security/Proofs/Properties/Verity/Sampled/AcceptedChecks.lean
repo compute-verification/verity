@@ -9,7 +9,6 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
 public import Proofs.Properties.Verity.Sampled.Deployed
 public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Properties.Verity.Sampled.Moves
-public import Proofs.Properties.Verity.Sampled.ParamsProgram
 import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Flock.Soundness.Refine.Setup
 
@@ -18,9 +17,10 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 `sessionOf` builds the session from the parameters and the registered files under `SessionChecks`. Where v2's
 sampled verdict accepts a play whose blobs are the registered files, then the evidence's, `SessionChecks` holds of those
-files (`sessionChecks_of_verdict`), where the registration's law gives a plain subset sampling design wherever
-`lawAt` reads one (`hsub`), the one sampling design `Live` covers. The descriptor of the verifier's program is the
-parameters' own program (`params_desc`).
+files (`sessionChecks_of_verdict`), but for two facts about the parameters, which a play does not check:
+
+* the descriptor of the verifier's program (`hdesc`);
+* the registration's law gives a plain subset sampling design wherever `lawAt` reads one (`hsub`).
 
 The reference table is the play's own first table: the record's sample file is the subset print of the units v2
 drew (`drawHeld`), and `verify --zk` sets every table up there (`drawHypsZHJ`).
@@ -264,15 +264,17 @@ variable {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
 accepts a play on the parameters `θ` whose blobs are the registered files `F`, then the evidence's `B`, at a
 vocabulary whose digests are v2's (`programDigestOf`, `publicDigestOf`) and whose parameters name them (`DigestsAt`),
 each pinned table the blobs hold being its registered file (`TablesSent`), `SessionChecks θ F` holds; given, of v2's
-parameters `p₀` in `θ`, that the registration's law gives a plain subset sampling design wherever `lawAt` reads one.
-The descriptor is the parameters' own program (`params_desc`). The record's sample file is then the subset print of the units v2 drew
+parameters `p₀` in `θ`, a descriptor of the verifier's program and that the registration's law gives a plain subset
+sampling design wherever `lawAt` reads one. The record's sample file is then the subset print of the units v2 drew
 (`drawHeld`, `drawOf_filter`), at which `verify --zk` sets the first table up (`Accepted.checksWitness`). -/
 theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     {θ : ByteArray} {F B : Array ByteArray}
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     (hD : DigestsAt V θ) (hreg : V.Registered θ F) (hv : V.Verdict k .sampled o) (hθ : o.params = θ)
     (hs : o.sent.blobs = F ++ B) (ht : TablesSent o.sent) {p₀ : _root_.Spot.OneStageZk.Params}
-    (hp₀ : ParamsAt θ p₀) (hsub : ∀ n L, lawAt p₀.base.verifier n = .ok L → ∃ kd, L = .subset kd) :
+    (hp₀ : ParamsAt θ p₀) {desc : Claims.Msg}
+    (hdesc : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p₀.base.verifier.program)
+    (hsub : ∀ n L, lawAt p₀.base.verifier n = .ok L → ∃ kd, L = .subset kd) :
     SessionChecks θ F := by
   subst hθ
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp₀ (verdict_case hv)
@@ -319,6 +321,6 @@ theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Comp
     have h := get_named (hD.publicFile p₀ hp₀) hreg.2 hpubB
     rwa [hp] at h
   subst hcf hpf
-  exact hA.checksWitness hp₀ ⟨key, dr.label, hkey⟩ (params_desc hp₀) hlaw hrd'
+  exact hA.checksWitness hp₀ ⟨key, dr.label, hkey⟩ hdesc hlaw hrd'
 
 end Verity.Sampled
