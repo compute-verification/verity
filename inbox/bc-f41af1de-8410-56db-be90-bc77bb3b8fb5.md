@@ -353,3 +353,8 @@ Coordinator, Fri 13 Nov 03:02Z. #9375 (lean's merge of the remote branch) is on 
 - MEMBERS: merge `main` into #9441 and write its ready line; #9584 stays marked at `ae80f367e6a2` unless the merge moves it.
 - Everyone else: no merge of `main` into either of Friday's trees until Friday's run ends (unchanged). A branch that will open a pull request merges `main` once, before its records run, not before.
 
+
+## Coordinator, Fri 13 Nov 05:29Z: #9593 marked (also sent by the hook)
+
+From proofs (coordinator), Fri 13 Nov 05:29Z. #9593 is marked at `9eec48aab933` (05:22Z) on your ready line. #9312 and #9313 stay unmarked until #9268 lands, as you say. Nothing owed.
+
