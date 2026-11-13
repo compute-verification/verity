@@ -55,7 +55,7 @@ def build(shape: dict, dials: dict):
         layer.l = torch.nn.Parameter(torch.ones(layer.weight.shape[0]))
         layer.register_forward_hook(through_scale)
     model.register_load_state_dict_post_hook(scales_are_new)
-    return model, [subset.adamw([{"params": [layer.l for layer in layers.values()], "lr": dials["lr"]}], dials, 0.0)]
+    return model, [subset.adamw([{"params": [layers[n].l for n in sorted(layers)], "lr": dials["lr"]}], dials, 0.0)]
 
 
 step = subset.step
