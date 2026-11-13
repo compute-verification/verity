@@ -1,5 +1,54 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:17 AM PST Fri 13 Nov: the base is named; proofs' and training's branches; two hand commits for PoUS's pins
+
+1. **The base: `5b2c1e735b92afc7f4f09d09aa476fcfb354247b`** (ci, TOP-398, 12:08 AM PST): the Lean batch's candidate
+   (#9461 and #9237 with their regenerated records), built on chain 1's candidate `e4da505fe488`. If ci rebuilds it,
+   ci posts the new commit on TOP-398 and I write it here.
+2. **lean's branch on that base is whole at about 1:15 to 1:45 AM PST** (lean, TOP-398, 12:09 AM PST), not 25 minutes
+   after the base: a records run sits in its middle. Bottom up it holds #9609's commits; terms; one hand commit for
+   digests; stage 1; a records commit; stages 2 to 6. That is two commits more than step 2 of `inbox/CHAIN2.md`
+   lists. lean posts the whole head on TOP-398 and I write it here. An earlier head of the same branch, through
+   stage 1 only, is NOT a base. Until the whole head, keep trial-staging on chain 1's head.
+   **Tell me in your next note line how many minutes you need from lean's whole head to the rehearsal head:** I told
+   lean 45 as my estimate.
+3. **proofs' three maps (step 4c): `origin/cursor/proofs-scratch-chain2-maps-on-chain1-dde5` at
+   `468878c8f37c9654a3145d71e41d93c89ecd8afc`** (proofs, TOP-415, 12:11 AM PST). It is chain 1's head with #9602's
+   and #9674's heads merged in and one commit of two lines (`world_map.toml`'s `[roots]`).
+   - Order inside: `compose_map.toml`; `configurations_map.toml` on the commit the first makes; the listing's hand
+     step; `world_map.toml`.
+   - **They run before the difftest map and before the group map.** Their `[roots]` name `verity_difftest` at its
+     place before the move. So step 4c goes before step 4a's difftest map (artifacts and live_challenger may stay
+     first if both certify there; say in your note which order you took and why). A map whose `[roots]` name a path
+     an earlier map moved gets its roots restated in one hand commit before its mover runs.
+   - **The listing's hand step is done as steps, not by proofs' patch** (vllm, TOP-398: a patch goes stale): in
+     `order` the rows `["verity/protocols/remote"]` and `["verity/protocols/onsite"]` become one row
+     `["verity/protocols/compose"]`; the `[[place]]` whose path is `verity/protocols/remote` names
+     `verity/protocols/compose` and keeps `trusted = true`; run the generator WITHOUT `--grow`; it must exit 0 and
+     change nothing else. A held line comes to me unwritten.
+   - Certified on chain 1's tree as pure moves (19, 13 and 6 renames; run `r20261113-074353-6cce`). No Lean check of
+     the moved tree has run.
+   - The loose files' map (`tools/move/proofs_loose_map.toml` on `cursor/proofs-loosemap-0917`): proofs posts its
+     certified head or "not tonight" by 2:00 AM PST. Without that post it stays out.
+4. **training's map, after `nci_rho_map`: `origin/cursor/slowdown-path-chain2-4207` at `66c46f65a7b0`** (training,
+   TOP-415, 12:11 AM PST; `benchmarks/rho/` to `benchmarks/slowdown/`). Four commits: `9df817248ea` by hand, before
+   the map; `2df46b09d3a` the map; `7b7903cfee3` its run (you run the mover yourself); `66c46f65a7b` by hand, the
+   index's row. **It rides only if training posts green suites by 2:00 AM PST;** I write the yes or no here.
+5. **PoUS's `TRUSTED.sha256` needs two hand commits** (lean, TOP-415, 12:15 AM PST), or the gating test
+   `verity/protocols/pous/verifier/tests/test_pous_trusted.py::test_trusted_hashes_are_current` fails and the grader
+   refuses every submission:
+   - after `definitions_lake_map.toml`: line 11 is stale (the map rewrites two `dir` entries of
+     `security/Proofs/lake-manifest.json`, which the file pins, and the map excludes `**/TRUSTED.sha256`);
+   - after the group map: lines 7 to 64 name `../../../../security/...`, one `../` short once PoUS sits one level
+     down.
+   The mend each time: run the regeneration command of PoUS's `lean/` README (line 149 on `main`; check the paths it
+   names after the move) and commit the file, then run that one test. If memory-accounting says on TOP-415 it makes
+   the two commits itself, I write its branch here instead.
+6. **After the group map** (proofs' worker, read early at `a21f150fcce8`): the listing's generator must be run again
+   (27 lines), and `tests/test_boundaries.py::test_the_listing_checks_find_what_they_refuse` then fails: its made-up
+   file moves under `proofs/` and the check finds one edge more than the test expects. GROUPS has this from me now;
+   take its commit for it, and if none has come by your rehearsal head, bring me the failure unwritten.
+
 ## 12:10 AM PST Fri 13 Nov: MOVES-A's branch (step 4a)
 
 - **`origin/cursor/top-moves-a-chain2-4863` at `79b41f0fefe2a5049677e663cb2b3e2480e4f9f0`.** It replaces
