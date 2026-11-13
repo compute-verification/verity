@@ -24,7 +24,6 @@
     {"file": "tests/engine/test_gen_ov_moe.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "tests/engine/test_hooks.py", "kind": "B009", "symbol": "test_export_shims_restore_torch_and_vllm", "detail": "Do not call `getattr` with a constant attribute value. It is not any safer than normal property access."},
     {"file": "tests/engine/test_hooks.py", "kind": "SIM105", "symbol": "test_export_shims_restore_torch_and_vllm", "detail": "Use `contextlib.suppress(AttributeError, RuntimeError)` instead of `try`-`except`-`pass`"},
-    {"file": "tests/observe/test_m1_log.py", "kind": "SIM222", "symbol": "test_every_view_alloc_has_a_preceding_storage_alloc", "detail": "Use `True` instead of `... or True`"},
     {"file": "tests/pipeline/served_rope.py", "kind": "E741", "symbol": "commit", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_interior_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
