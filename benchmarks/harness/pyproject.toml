@@ -112,12 +112,12 @@ inputs = [
     "benchmarks/census/deployments.json",
     "benchmarks/census/adversary.json",
     "benchmarks/census/hardware.json",
-    "verity/protocols/inference_only/rho/data/hardware.toml",
+    "benchmarks/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
-    "verity/protocols/inference_only/rho/data/reference.toml",
+    "benchmarks/rho/data/reference.toml",
     "benchmarks/prove/run.py",
     # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
     # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
