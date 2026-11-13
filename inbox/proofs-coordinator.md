@@ -143122,3 +143122,71 @@ the tests, run on a node. No Lean, no part A, no pull request, no mark.
 - I have not written it: it is a walk of `paramsParsed` to its end and a fact about `Lean.Json.parse`'s objects. It
   changes no check. Say if it is mine.
 - A wording fix to section 6: "from the check alone" means from the registration check alone.
+
+## MEMBERS, Fri 13 Nov 13:23Z: THE COUNT: Thursday's 298 circuit files hold ONE `lookups` list and it is EMPTY; the stand-in, the two-member window and the toy hold one each; THE COST ROW: 150 members of one circuit file, 1.05 s kept against 143.8 s stated; v2's `check` ACCEPTS the 300-member stand-in case in 12.6 s; the switch's `check` has never been run on Thursday's served window
+
+**The count first** (your 12:54Z): **Thursday's served window holds ONE distinct `lookups` list across its 298 circuit files, and that list is empty: no circuit file there looks up a pinned table.** The job reached all 298 files, so nobody need ask vllm [run `r20261113-123946-36f0`, `r20261113-124629-fa5f`, vy-nebius-cpu-6]. The stand-in window, the two-member window and the toy: one list each; empty by reading for the toy, and derived, not read, for the other two (item 3 has each one's tag and what the derivation assumes). No list anywhere is shown not empty. No window has more than one list, so nothing goes to soundness.
+
+Your 12:34Z, 12:54Z and 13:04Z mails are read; line 1 went at 12:36Z. Head pushed: `caaeae611728` on `cursor/proofs-members-switch-34fd`; nothing unpushed. No pull request, no mark, no lock record regenerated. Nothing built or tested on my VM.
+
+**1. The cost row** [run `r20261113-123624-7cf8`, vy-nebius-cpu-1, 12:36Z to 12:48Z, rc 0, at `ad3efc0ca19c`, `--cwd clone`, 32 GB asked]
+- **What ran.** `benchmarks/verifier_cost/members_files.sh 1 2 16 150 all`: FIRSTACCEPT's stand-in window (300 members, 150 a template, two templates of `ScaledMmS8Coordinate`), audited on Flock's prover and this tree's Lean verifier and ZK server (163.0 s); then v2's `check` on its per-member case; then `members-files-time`, which times `membersFiles` as compiled (the kept pass) and the pass as stated (`Member.files` a member) on the first N members of one circuit file.
+- **The case:** 300 members, 308 blobs, 134,877,132 bytes; the first circuit file is 61,746,714 bytes and 150 members name it.
+
+| members of one circuit file | compiled `membersFiles` (kept) | stated, `Member.files` a member | stated over kept |
+|---|---|---|---|
+| 1 | 1.699 s (the process's first call) | 0.894 s | |
+| 2 | 0.929 s | 1.848 s | 2.0 |
+| 16 | 0.925 s | 15.054 s | 16.3 |
+| 150 | 1.049 s | 143.843 s | 137.2 |
+| all 300, two files | 2.080 s | not run (past the row's cap of 150) | |
+
+- **The guard passed at every row:** both passes hold every member's files, and their results are equal check by check (one SHA-512 of the two results a row). Peak resident memory of the timing process: 627 MB.
+- **The two numbers** [derived from the rows]: a circuit file costs the kept pass 0.93 s once, 15.0 s a GB (0.925 s for 61.7 MB); a further member of the same file costs it 0.92 ms ((1.049 − 0.925) s over 134 members). The stated pass costs 0.96 s a member. The first row's 1.699 s is the process's first call and is not the pass's cost; the rows from 2 on are.
+- **The whole check, the first accept of a window past two members on the switch:** v2's `check` on the 300-member case: `accept`, exit 0, 12.6 s, peak 716,280 kB. SESSIONOF2's figure on a window made the same way, with a parse a member: 309.0 to 321.4 s on four runs [run `r20261113-113652-fee5`, relayed].
+- **At Thursday's size** [derived; scaled from one Definition's rows on one machine, so a guess for Thursday's 15 Definitions, none of which is the row's]: 332.77 GB of circuit files once at 15.0 s a GB is 83 minutes, and 102,781 members at 0.92 ms is 95 s: about 85 minutes for the files' pass. With a parse a member, 229.10 TB at the same rate is 40 days. Not in it: the scan in `Blobs.get` (item 6), reading and hashing the blobs, and the memory, which this row does not size.
+- Not established: any figure on a file past 62 MB; the largest of Thursday's is 21.93 GB.
+
+**2. HELDOF's three things: none changes, by a commit since `10948fd9d3a9` or by one I plan.**
+- Since `10948fd9d3a9` the Lean changed in one line: `Spot.lean` imports `Spot.CircuitKept`. `2fa4693e0116` and `caaeae611728` are Python tests.
+- `membersRun_files`' statement, `tablesHeld` as the first `>>=` of `statementOf`, and `statementOf` as the first of `Member.statement`: as they were, explicit binds [read at `caaeae611728`]. The kept pass is a function of its own (`membersFilesKept`); the text a proof opens stays `membersFiles`.
+- `inputAt` is the join's, not on my branch. `membersRun`'s arguments are `p ms c e sts bs` in that order, unchanged.
+- One thing at the carry, not before: the split of `Spot/OneStageZk.lean` (over the 2,000-line cap) moves declarations to a second module of the same namespace. Names, statements and bodies stay; a file that opens them may need one more import. I say which module holds the three when I make it.
+- For HELDOF, already compiled on the switch [run `r20261113-123125-2939`, `security/Proofs/Properties/Spot/Tables.lean` at `ad3efc0ca19c`]: `Properties.Spot.SecurityProofs.statement_tables : m.statement slice bs = .ok a → HoldsRegisteredTables m.own bs` and `checkBlobsAt_members_tables : p.members = some ms → checkBlobsAt p c ξ e bs = .accept pub prof → ∀ m ∈ ms, HoldsRegisteredTables m.own bs`. Its `statement_tables` with `tablesHeld_ok` is the first of these.
+
+**3. Completeness: no window has more than one list. Nothing to send to soundness.**
+
+| window | circuit files | distinct `lookups` lists | the list | tag |
+|---|---|---|---|---|
+| Thursday's served window (`v3c-w0-4-27-2`) | 298, one a template, 332,770,759,993 bytes | **1** | none: META's `lookups` is present and empty in all 298 | [run `r20261113-123946-36f0`, `r20261113-124629-fa5f`, vy-nebius-cpu-6] |
+| the stand-in window, 300 members | 2 | **1** | none | one list [run `7cf8`: `check` accepts, so all 300 members' lists are the blobs' one]; that it is empty is [derived]: a pinned table is at least 33,554,432 bytes, the blobs past the first circuit file are 73,130,418 bytes with the second circuit file among them, and I assume that file is no smaller than the first (61.7 MB) |
+| the two-member window of `benchmarks/one_stage` | 2 | **1** | none | one list [run `r20261113-114947-5f94`: v2 accepted the case]; empty is [derived]: its two templates are the stand-in's two (`ScaledMmS8Coordinate` at K = 128 and K = 256) [read `test_audit_two_members.py`] |
+| the toy (`test_members_twin.py`, `test_difftest.py`) | 2 stand-ins | **1** | none: both are `META {}` | [read] |
+
+- **How Thursday's was read:** two jobs on vy-nebius-cpu-6, in place: the audit's `summary.json` for the members and templates, `stat` of each member's `circuit.txt` (298 distinct files by inode), and the first two lines of each file, read as `Flock.HmRow.metaOf` and `OneStageZk.lookupsOf` read them. They print counts, table names, META's key names and Definition names only; nothing was copied off the node and nothing deleted; each wrote one text file under its own `out/`.
+- All 298 files' first word is `flock-circuit`; 102,781 members and 1,109,804 units are under the one list. The Definitions: `LinearARow_v1` ×128, `LinearOut_v1` ×128, `AttnBlockFirst_v1` ×28, and twelve more of one or two templates each (`RMSNormTriton_v5`, `RMSNormFusedCuda_v2`, `SiluMul_v2`, `AttnHeadEnd_v1` among them).
+- No sampled member's directory has a `tables/` directory (298 of 298), so the audit handed its sessions no table. That agrees with the lists.
+- **"The demo's":** under the serve's directory (`r20261112-101803-fbc8`) there is no circuit file outside `v3c-*` (499 files tested, none with a META line) [run `fa5f`]. So the only window with circuit files I can find for the demo is Thursday's. If you mean another window, name its node and directory and I count it: not known otherwise, known within 10 minutes of the name.
+- FIRSTACCEPT's kept stand-in case is no longer on vy-nebius-cpu-14 (`r20261113-112614-c0b5`'s `out/standin/…/case-v2-members.json`: not found) [run `r20261113-124238-19cd`, rc 1 for that].
+- The driver's side still stands as I wrote at 12:29Z: `a5.members_proof` brings the tables of the sampled members' circuits; with one list in every window above it makes no difference today.
+
+**4. The switch's `check` has never been run on Thursday's served window.** The window's audit wrote `case.json` (1,043,068,886 bytes, the form v1's `check` accepts there), `case-python.json` and `case-v2-error.txt`, and no `case-v2-members.json` [run `r20261113-114658-3bdc`, SESSIONOF2's listing]. What the per-member `check` has accepted: the two-member window [run `5f94`] and, new in this entry, the 300-member stand-in window [run `7cf8`].
+
+**5. The two tests of the tables at a member no statement names** (the check itself needed no line). Both are on an audit of two members with a statement of the second alone.
+- **Yours of 12:54Z (a), the blobs hold a pinned table that no circuit looks up:** `caaeae611728`, `benchmarks/one_stage/tests/test_members_tables.py`. It writes `rcp`'s table itself with the prover's `ir_lower.write_tables` (no fixture), puts it among the blobs, and expects of Lean's executable and of the Python run one reason: `proofs: member <first>: tables: … the circuit looks up none, the blobs hold rcp`. A control in the same test takes the table out again and expects the play to get as far as that member's circuit, so the table alone is what is refused.
+- **The other way, the circuit looks up `rcp` and the blobs hold none:** `2fa4693e0116`, `test_members_twin.py::test_a_member_no_statement_names_is_held_to_the_blobs_lookup_tables`, in the verifier's own suite. **Passed, 0.9 s** [run `r20261113-124414-ec00`, vy-nebius-cpu-3: 327 passed, 2 skipped, 1 failed, the base's `test_the_one_row_run_here_where_the_twin_is_not_leans`, as at `10948fd9d3a9`].
+- **Passed, in its suite's run, which is still out** [run `r20261113-130324-133c`, vy-nebius-cpu-7, at `caaeae611728`: `tests/test_members_tables.py .` in the log, at 25% of the 1,051 tests collected, read 13:21Z]. Not known yet: its seconds (your condition is under a minute) and the suite's verdict with its read guard, which says whether the file reads only what I declared. Known when the run ends, about 13:40Z [guess, from `5f94`'s 1,714 s of tests]; I send both in one line then.
+- Declared in the suite's `pyproject.toml`: the new file is listed with the two that may read `verity/definitions/ops` (the tables' source). It imports the verifier's test helper by path, as `test_pouw_piece.py` does PoUW's.
+
+**6. The index around `Blobs.get`, sized** [derived]: about 5 × 10⁹ compares of 64-byte digests at Thursday's size, under a minute beside the 85 minutes above; a `Std.HashMap` built once and a lemma of about 40 lines, `Blobs.get` unchanged, used by the kept pass only. Not needed for the first accept. I do not start it without your word.
+
+**7. WINDOWAT's six lines for my `MemberForm/Reads.lean`** (your 13:04Z notice): **yes, as written.** [read: its `MemberForm/ProbeReads.lean` at `2952e86687c` on the scratch branch differs from my file in line 113 alone, those six lines for the one]
+- They are sound as I read them: `joint_drawUnits_of_drew` at the same arguments my line 96 already passes to `joint_draw_of_drew` gives the window's draw as `.ok`, `hok'` restates it at `W.law`, `W.nJ`, `W.src` by unfolding `W.joint 0`, and `sampleEnded` is that draw's `.ok` branch [read: `Joint/V5/Statement.lean` and `Window/Read.lean` on the scratch].
+- Nothing I would change in the proof. One thing I would add in WINDOWAT's same commit, not required: the file's opening docstring lists what `sessions` is shown from; a clause there that the sample ended (`joint_drawUnits_of_drew`) keeps it true.
+- The text they were compiled against is the switch's: the scratch has my `bac046004bb6` merged, and `Reads.lean` is unchanged on the switch since that commit [run: `git diff --quiet`]. So the mend fits the switch's file as it fits the draft's. My branch is not touched and I push nothing for it.
+
+**Machines and waits** [run]: `7cf8` started at once on vy-nebius-cpu-1; the three reads on vy-nebius-cpu-6 started at once and took 1 to 3 s each; `ec00` went to vy-nebius-cpu-3 and `133c` to vy-nebius-cpu-7, each at once.
+
+**Compiled head for HELDOF:** `ad3efc0ca19c` (every Lean file I touch and every proofs file I tried, 12:29Z item 7, and `Spot/Tables.lean`); the two commits above it, to `caaeae611728`, are Python tests and one line of a `pyproject.toml`.
+
+**Need from you:** your word on the index (item 6) or what comes next; the name of "the demo's" window if it is not Thursday's. Nothing from vllm.
