@@ -13,11 +13,11 @@ from fractions import Fraction
 
 import pytest
 
-from verity.hardware.site import (CHECKS, GENESIS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, SCHEMES, SHEET,
+from verity.device import (CHECKS, GENESIS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, SCHEMES, SHEET,
                                   SITE, STORAGE_PATH, TIME_UNIT, Auditor, DeviceFigures, Entry, HostFigures, Link, Loc, Malformed,
                                   MemoryFigures, Refused, Registration, Sheet, Site, check, check_registration, genesis,
                                   incomplete, node_figures, refusal)
-from verity.configuration.wire import canonical
+from verity.channel import canonical
 
 GHZ = 10 ** 9
 SHEET_A = Sheet(DeviceFigures("sim-int8-a", GHZ, 64 * GHZ), 3200 * GHZ, 1 << 25, 64 << 30)

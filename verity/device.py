@@ -52,7 +52,7 @@ end (`incomplete`):
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `read_rate`, `over`, `time_unit`,
 `clock`, `drift`, `mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
 auditor's sheet too. Digests are SHA-512 over canonical JSON
-(`verity.configuration.wire.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
+(`verity.channel.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
 Stdlib and the wire only.
 """
 
@@ -67,7 +67,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
-from verity.configuration.wire import canonical
+from verity.channel import canonical
 
 SITE = "verity/registration/site/v2"
 """A site entry's format: the tag its digest is taken under."""

@@ -25,7 +25,7 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
+from verity.device import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
                                   HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, auditor_host,
                                   check, clock_drift, node_figures, refusal)
 

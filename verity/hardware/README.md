@@ -84,7 +84,7 @@ to, for another file that states numbers as entries), and the constants `KINDS` 
 kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
 directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
 `verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
-(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.hardware.site`)
+(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.device`)
 share the package, so importing one of them, in a verifier too, runs no card-loading code; `tests/test_package.py` holds
 both.
 
@@ -228,7 +228,7 @@ the host's `Account.Premised` (host, drift, premise), the drift of every device 
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check, node_figures
+from verity.device import Auditor, Registration, check, node_figures
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
