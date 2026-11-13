@@ -148224,3 +148224,89 @@ Nothing.
 ### Branches
 - `cursor/proofs-heldof-couples-f083` at `cc1068d1c8b` (new, off the join's `ff6ea109e06f`; carried with the join on your word "carry"; no merge of `main`, no rebase)
 - `cursor/proofs-heldof-join9441-f684` at `b755ba133f9`, `cursor/proofs-heldof-joinswitch-f684` at `1002467c84a`, `cursor/proofs-heldof-4c7b` at `2861eed8d0a`: unchanged
+
+## STAGECOINS, Fri 15:17Z: the compiled form accepts honest two- and twenty-template wired plays once rule B is merged; without rule B it refuses at "registered"; a flipped reader root is refused at the coins before the clause
+
+**For soundness, one sentence.** [run] An honest interior of more than one template is accepted by the compiled two-stage
+form (`sampled-two-on`). This holds for two templates and for twenty (19 `GreedyChunk_v2` and one `GreedyCombine_v2`),
+on scratch head `9f4df9cc04d`: the join's tip `ff6ea109e06` with GATHER's wired layout `fc5c9053db6`, my `761e99eaeb9`
+and TWOLEG's rule B `c8bfe0d0102`. None of those is on `main`. Without rule B (scratch `ce5c28d0ad2`), the same
+two-template play is refused at the record's `registered` check. So the accept needs both GATHER's layout and rule B.
+
+### The scratch heads, and what I met
+
+- [run] **The ordered scratch:** `cursor/proofs-stagecoins-wiredplay-af4a` at `ce5c28d0ad2`.
+  - The join's tip I fetched was `ff6ea109e06` (14:10Z, the merge of HELDOF's `b755ba133f`). It already holds ACCEPTS's
+    `66a637cb91a9`.
+  - I used GATHER's newer head, `fc5c9053db63`, which its 14:13Z entry names. It is `faaa93a0780` plus the pick of
+    `65a6f23f426` and five picks of ACCEPTS's commits.
+  - My `761e99eaeb9` merged cleanly on top.
+- [run] **Three conflicts in GATHER's merge, none changing GATHER's code:**
+  - `benchmarks/one_stage/a5.py`: I took GATHER's file whole, as ADDRROW2 did. I then re-applied the join's
+    docstring-only hunk in `case_members`, a comment only.
+  - `verity/protocols/spot/verifier/one_stage/members.py` (new from #9441), at one call site: I took the join's side.
+    GATHER's side there only refactors the slice dict into `_slice(...)`. GATHER's `_slice` and `slices` both merged in.
+  - The SPOT verifier's `tests/test_difftest.py`: the join's side was empty, so I kept GATHER's block.
+- [run] **The second scratch, beyond the merge you named:** `cursor/proofs-stagecoins-wiredplayb-af4a` at `9f4df9cc04d`.
+  - It is `ce5c28d0ad2` plus TWOLEG's rule B, `c8bfe0d0102` from `cursor/proofs-scratch-twoleg-ownreads-ad71`.
+  - It has one conflict, in `SampledTwo.lean`'s examples: two `#guard` blocks written at one place, the join's
+    `INTERIOR_DIGEST` guards and rule B's guard. I kept both, the join's first.
+  - I made it because GATHER's head holds no rule B, so no play at the ordered scratch can be accepted.
+- Neither scratch has a pull request, a merge of `main` or a rebase. I changed no verifier file, statement or lock.
+
+### Runs (all on vy-nebius-cpu-11)
+
+| run | head | play | compiled form's verdict | wall | peak |
+|---|---|---|---|---|---|
+| `r20261113-141754-1f67` | `ce5c28d0ad2` | two, honest | refused: "two-stage: the interior's audit: the audit's checks failed: registered" | 7:55 | 3.53 GB |
+| `r20261113-142936-baad` | `ce5c28d0ad2` | two, honest and changed | honest: refused, same word; changed: refused at the coins | | |
+| `r20261113-143126-e3d5` | `9f4df9cc04d` | two, honest | **accepted** (`sampled-two-on` exit 0, commitment `58c057a7…`) | 9:47 | 3.51 GB |
+| `r20261113-143126-e3d5` | `9f4df9cc04d` | twenty, honest | **accepted** (exit 0, commitment `4c9b6b05…`, 20 members, 160 units, 40 drawn) | 18:27 | 13.03 GB |
+| `r20261113-150644-df1f` | `9f4df9cc04d` | two and twenty, honest copy and changed | honest: accepted again; changed: refused at the coins | | |
+
+- [run] **The ordered scratch, two templates.**
+  - Rule A is cleared: both sessions are accepted (`182bc419…` registering `logits` and `o0`; `1db7822e…` registering
+    `logits`, `o0` and `r0`).
+  - `REP_STREAM_ORDER` and `INTERIOR_DIGEST` hold.
+  - The refusal is rule B, the interior's own audit, with the word "registered".
+  - [derived] It reaches the run of record: `prepare` runs `Spot.Run.run` before `secondCheck`, which is where
+    "registered" comes from.
+  - Twenty was not run there: the order ran twenty only if two was accepted.
+- [run] **The rule B scratch.**
+  - `sampled-two` (switch off) refuses both plays at "two-stage: the run of record: …".
+  - The coin-tree case refuses both with its own words ("the first session's log holds a coin tree's line").
+  - Both refusals are what `sampled_two_small.sh` expects; the script's exit is 0 for both legs.
+- [read] For comparison: GATHER's `9a9e`, at its trial head through the same form, was refused at "registered" on two and
+  on twenty, with a peak of 14.5 GiB. TWOLEG's 11:57Z entry reports a compiled accept of twenty on a local tree that was
+  never pushed. These plays are the first compiled accepts of more than one template on a pushed tree.
+
+### The changed play (item 4): refused before the clause, and why it can't reach the clause without changing GATHER's code
+
+- [run] **The change:** one hex digit of the wired reader's root in `evidence.json`'s record.
+  - Two templates: `GreedyCombine_v2{V=256,N=128}/r0`, whose writer is `GreedyChunk_v2{N=128,OFF=0}/o0`.
+  - Twenty templates: `GreedyCombine_v2{V=2560,N=128}/r0`, one of 19 wires.
+- [run] **The word:** the compiled form refuses both at "two-stage: coins: the draw's coins were not opened after the
+  prover's commitment the verifier holds". The run of record is not reached.
+  - Re-running the sessions on the changed record also refuses the reader: "member GreedyCombine_v2{…}: public file: not
+    the registration's: roots".
+  - `Registration.check` run alone on the changed record gives exactly the codes `[R3-wired]`. That is the clause's
+    word; `REP_STREAM_ORDER` and `INTERIOR_DIGEST` still hold.
+- [derived] **Why the full form can't reach `R3-wired`:**
+  - A flip made after the coins is refused at the coins, because the coins are bound to the committed record.
+  - A flip made before the commitment would have to come from `a5.py`, which is both the prover and the stand-in
+    verifier. It refuses such a case itself before writing one: `WI.check` before the draw, `WI.check_drawn` after it.
+  - So a changed play that reaches the clause in the full compiled form needs a change in GATHER's `a5.py`: an option
+    that skips those two Python refusals and commits the flipped reader values. By the order, I stopped there.
+
+### Not established
+
+- [run] No play at the ordered scratch `ce5c28d0ad2` is accepted. Every accept above needs TWOLEG's rule B, which is on
+  a scratch branch, not on the join and not on `main`.
+- [run] The full compiled form has not refused a changed play at `R3-wired`. It is shown only by `Registration.check`
+  run alone, as above.
+- [read] The peaks are GNU time's "Maximum resident set size": the largest single process in the script's tree, not the
+  sum of its processes.
+- [read] I have no figure for GATHER's twenty-template time through the Python twin, so no time comparison is given.
+- [run] Custody of `r20261113-143126-e3d5` is not yet taken: its custody reads "2 changed since it was taken"
+  (`out/twenty/time.txt`, `resources.jsonl`). The run's files are on vy-nebius-cpu-11 under
+  `/workspace/research/runs/`.
