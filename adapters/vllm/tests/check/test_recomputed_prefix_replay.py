@@ -3,14 +3,17 @@ the sampled replay's CPU-served world (`tests.check.test_sampled_replay`): r1 se
 (C = 1), so serving committed its first step's per-position members from position 1 on and embedded prompt[1:]. Its prefix
 rows leave its population, every sampled VU replays bit for bit, a read below C is its replay's and never a committed word
 (with attention, a later position's and every decode's key and value reads of position 0), and without the recompute the
-same record doesn't pass."""
+same record doesn't pass. A hit its Program takes (a prefix layout beside the Program) is recomputed by nothing: the
+population binds the request to its producers."""
 from __future__ import annotations
 
 import copy
+import json
 
 import numpy as np
 import pytest
 
+from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import recomputed_prefix as RP
@@ -130,3 +133,27 @@ def test_the_warm_request_replays_bit_for_bit_with_its_prefix_out_of_its_populat
     with pytest.raises(ValueError, match="needs its certified prompt"):
         SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0,
                           cached_prefixes={"r1": {"cached": C, "producers": ["r0"]}})
+
+
+def test_a_hit_its_program_takes_is_bound_to_its_producers_and_recomputed_by_nothing(tmp_path):
+    """r1's Program has a prefix layout beside it (`prefix_cache.json`, a build with `--cached 4`), r0's has none."""
+    import tests.check.test_sampled_replay as T
+
+    cold, warm = T._program()[0], T._program()[0]
+    layout = {"input": 1, "C": 4, "row_leaves": 4, "layers": ["model.layers.0.self_attn.attn"]}
+    (tmp_path / CP.PREFIX_FILE).write_text(json.dumps(layout))
+    arrivals = {"r0": 0, "r1": 2}
+
+    def indices(cached: int, producers: list[str]) -> dict:
+        return SR.populate({"r0": cold, "r1": warm}, [0], arrivals, None, None, attention_paths=None, tp=None,
+                           program_dirs={"r1": str(tmp_path)}, manifest=None,
+                           cached_prefixes={"r1": {"cached": cached, "producers": producers, "prompt": [5, 3]}})[3]
+
+    got = indices(4, ["r0", "r0"])
+    taken = got["r1"].cached_prefix["r1"]
+    assert got["r1"].kv_prefix == layout and got["r1"].recomputed == {} and got["r0"].cached_prefix == {}
+    assert (taken.C, taken.rl, taken.layers, taken.producers, taken.block) == (4, 4, [0], ["r0", "r0"], 2)
+    assert taken.indices is got and taken.arrivals is arrivals
+    assert indices(0, ["r0"])["r1"].cached_prefix == {}                           # served no cached row: no hit to bind
+    with pytest.raises(ValueError, match="^r1 is served 5 cached prompt rows but its Program of record takes a cached prefix of 4$"):
+        indices(5, ["r0"])
