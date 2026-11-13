@@ -403,6 +403,7 @@ def test_a_report_that_is_not_ok_an_error_in_it_or_an_error_of_the_source_fails_
     assert (replay["result"], check["ok"], out["ok"], out["components"]["boundary_linkage"]["result"]) == (False, False, False, True)
     assert (replay["why"], replay["errors"], replay["mismatch"], check["error"]) == (why, errors, report["failures"], report.get("error"))
     assert (replay["n"], replay["exact"]) == (n, exact) == (check["checked"], check["equal"]) == (check["launches_checked"], check["launches_exact"])
+    assert out["value_correspondence"]["n"] == n
     assert out["line"].startswith(f"FAIL {exact}/{n} ") and out["line"].endswith(f" {report.get('error') or ''}")
     assert line is None or out["line"] == line.replace("@", str(replay["seed"]))
 
