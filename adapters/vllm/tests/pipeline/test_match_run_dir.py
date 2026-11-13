@@ -1,5 +1,6 @@
-"""A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records: the tier-b steps of a `--full-replay`
-run among them, which no flag sets.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
+"""A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records, the tier-b steps of a `--full-replay`
+run among them unless `--tier-b-steps` names others.  `--no-verify-weights`, `--keep-traces` and `--chains` reach the capture's
+command, the census's and the manifest.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
 realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
 could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
 written, which a pod's script shows."""
@@ -67,10 +68,40 @@ def test_a_run_json_s_tier_b_step_that_is_no_integer_s_text_is_refused_with_or_w
         _rerun_plan(tmp_path, recorded, full_replay)
 
 
-def test_no_flag_sets_the_tier_b_steps():
-    with pytest.raises(SystemExit):
-        cli.parse("match", ["--tier-b-steps", "0,1"], {})
-    assert cli.parse("match", [], {}).tier_b_steps == RC.TIER_B_STEPS
+@pytest.mark.parametrize("given, steps", [
+    ([], [0, 2]),                                   # no flag: the steps the run.json records
+    (["--tier-b-steps", "1,3"], [0, 1, 3]),         # a flag wins over the record, and step 0 is always replayed
+    (["--tier-b-steps", "2,7"], [0, 2]),            # a step that is no snapshot step is dropped
+    (["--tier-b-steps", ""], [0, 1, 2, 3]),         # an empty list: every snapshot step
+    (["--tier-b-steps", RC.DEFAULT_TIER_B_STEPS], [0, 2]),   # the default's own text reads as no flag
+])
+def test_tier_b_steps_on_the_command_line_win_over_the_ones_a_run_json_records(tmp_path, given, steps):
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1, 2, 3], tier_b_steps=[0, 2])
+    a = cli.parse("match", ["--run-dir", str(run), "--phase", "cpu", "--full-replay", *given], {})
+    RC._defaults_from_run_dir(a)
+    assert RC.Plan(a).tier_b_steps == steps
+
+
+def test_a_first_run_s_tier_b_steps_are_the_flag_s_else_step_0_and_three_decode_steps(tmp_path):
+    def steps(*given):
+        return RC.Plan(cli.parse("match", ["--out", str(tmp_path), "--snapshot-steps", "0,1,2,3,4", "--full-replay", *given], {})).tier_b_steps
+
+    assert (steps(), steps("--tier-b-steps", "4"), steps("--tier-b-steps", "")) == ([0, 1, 2, 3], [0, 4], [0, 1, 2, 3, 4])
+
+
+def test_the_capture_verifies_the_weights_and_the_census_keeps_no_trace_unless_a_flag_says_otherwise(tmp_path):
+    (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0", "prompt_len": 5, "max_tokens": 4}]}))
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1])
+
+    def cmd(stage, *given):
+        a = cli.parse("match", ["--run-dir", str(run), *given], {})
+        RC._defaults_from_run_dir(a)
+        return RC.Plan(a).cmd(stage)
+
+    unverified, kept = cmd("capture", "--no-verify-weights"), cmd("census", "--keep-traces")
+    assert "--verify-weights" not in unverified and cmd("capture") == [*unverified, "--verify-weights"]
+    assert "--no-traces" not in kept and cmd("census") == [*kept, "--no-traces"]
+    assert cmd("capture", "--keep-traces") == cmd("capture") and cmd("census", "--no-verify-weights") == cmd("census")
 
 
 CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring",
@@ -112,6 +143,11 @@ def test_a_cpu_phase_with_every_stage_skipped_writes_the_manifest_the_spec_and_t
     assert spec["reconstructed_after_execution"] is True
     stages = json.loads((run / RC.G.ARTIFACTS["stages"]).read_text())["stages"]
     assert [(s["stage"], s["status"], s["reason"]) for s in stages] == [(st, "skipped", "--skip") for st in CPU_STAGES]
+    # the weights were verified and three chains recorded, unless a flag says otherwise
+    assert (man["verify_weights"], man["sampling"]["chains"]) == (True, RC.DEFAULT_CHAINS) == (True, 3)
+    assert _cpu_phase(run, "--no-verify-weights", "--chains", "5") == 0
+    man = json.loads((run / "run.json").read_text())
+    assert (man["verify_weights"], man["sampling"]["chains"]) == (False, 5)
 
 
 def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realized_shape(tmp_path, monkeypatch):
