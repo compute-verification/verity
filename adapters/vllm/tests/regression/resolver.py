@@ -18,7 +18,7 @@ A resolved file whose recorded sha256 is known and whose size is <= VERIFY_LIMIT
 from the frozen index is `InputMismatch`, a failure, not a skip -- the oracle changed under the test.  Files above the limit (the
 multi-GB fold records, 100+ MB manifests) are checked by size only unless VERITY_REGRESSION_VERIFY_ALL=1.
 
-`Row` is the handle the checks receive: `row.path(rel)`, `row.json(rel)`, `row.workload()` (the in-repo `workloads/<row>.json`),
+`Row` is the handle the checks receive: `row.path(rel)`, `row.json(rel)`, `row.workload()` (the row's `workloads/<row>.json`),
 `row.programs_root()` (a dir holding `build_request*/instances.json.gz`, or None), `row.candidate(rel)` (the v2 output under
 $VERITY_REGRESSION_CANDIDATE/<row>/<rel>, or None: self-check mode), `row.decisions(check)` (the labelled decisions of
 `[[rows.<row>.decisions]]` naming that check; `sanction()` consults them when a result differs from v1).
@@ -286,7 +286,7 @@ class Row:
 
     def workload(self) -> Path:
         """The declared workload manifest (`adapters/vllm/workloads/<row>.json`, fetched by its art id and checked against its
-        digest, `config.workload_file`) -- the same file row_pod.sh's `$WL` was."""
+        digest, `config.workload_file`)."""
         p = workload_file(VLLM_ROOT / "workloads" / f"{self.key}.json")
         if not p.is_file():
             raise NotResolvable(f"{self.key}: workload manifest {p} not in this tree")
