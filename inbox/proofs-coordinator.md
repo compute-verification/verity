@@ -110316,3 +110316,34 @@ Clock: `date -u` read 00:06Z. Mailbox `inbox/bc-914a7a8a-3965-5116-b914-8cb62f2d
 **To post.** Nothing.
 
 **Not established.** Nothing is written or compiled. That `heldOf` builds `refReads` from parsed JSON (I read `Spot/Run.lean:270`, not `heldOf`).
+
+## MESSAGES, Fri 00:09Z: a Lean slot on vy-nebius-2 has kept my try waiting 14 minutes, the one before it 20; the message bound is written whole, not yet compiled
+
+LEAN SLOT WAIT: my try `r20261112-235532-e8e9` (tree `84f4658043`) has waited for a check slot on vy-nebius-2 since 23:55Z, 14 minutes at this entry, and its check has not started [run]. The try before it, `r20261112-234559-4b1d`, waited 20 minutes without a slot; I cancelled it at 00:06Z because the newer try supersedes it [run]. Nothing of `Messages.lean` past the first try (`r20261112-231552-e227`, which failed on a `noncomputable` word, since fixed) has compiled yet.
+
+What is written. `SampledTwo/Messages.lean` (one file, 871 lines, 30 theorems, a lakefile root on its own line) now holds the whole of my piece's argument [read]:
+- The frame's prover is the mode prover. At each round, it sends the opening that occurs most often among the coin draws consistent with what the run has shown so far, meaning the run's history before that round. The frame is `frame`, and its prover is `prover`.
+- `callsLe` gives `CallsLe` from `VerifierCallsLe`, which says the run's verifier makes at most the cost's calls. The instance owes that premise, because a cost of 0 makes `CallsLe` false.
+- `miss_le_sqrt` is the forking lemma, written for any partition into classes with a uniform resampling on each class. It says the chance that the message misses the mode is at most the square root of the chance that two draws in one class open differently. The proof uses Cauchy–Schwarz through the class-average identity. Written, not compiled [read].
+- `missBound` instantiates that lemma, taking the classes to be the run's histories before the round. Its finder `msgFinder` (cost q) returns the two openings, which form a SHA-512 collision whenever the two draws open differently [read].
+- `messagesBound` gives `MessagesBound`, which is `MessagesFixed` on the rounds the run reaches. The miss at each round is summed through `reachedOfRounds`, using `Nat.find` on the first missed round [read].
+
+The premises the bound takes, each a named Prop:
+- `MsgOpens` and `DigestBefore`: the form's parse owes these (the message read at a round opens a digest the log recorded before the round's coin).
+- `RunsThrough`: ACCEPTS owes this (an accepted play's run reaches every round the reading reads).
+- `RunShown`: mine to discharge for SpotFlock's verifier. It says the run's history before a round shows exactly the coins drawn before it.
+
+STOP RULE: kept. No listed guarantee, lock or named assumption was touched. Nothing is wired into `Sampled.lean`. Nothing rests on the switch being off [read].
+
+NEEDS:
+1. For TWOLEG or SpotFlock's owner: `RunShown` fails in one corner of `SpotFlock.V`, and I need a ruling on it [derived]. The corner is a session whose first message is final. There, Flock's `act` decides with `c₁` equal to the current round's coin, which the run has not shown, so the round's answer depends on a coin the history does not show. One fix would be for `sessStep` to refuse a decision at a session's first round. Another would be for the decision to ignore `c₁` when the rest of the coins is empty. Without either fix, I carry `RunShown` as a premise and state the corner.
+2. For COINMAP: `DigestBefore` needs the coin map not to write the run's coin at rounds whose coin the run never shows [derived]. Those rounds are the statements' round `stage + 1` and the sessions' decision rounds. `readsAt` includes the decision rounds, so the two conflict. COINMAP and I need to agree on which rounds the play's releases read.
+3. Still standing from my earlier entries: restrict `MessagesFixed` and `AcceptsRun` to the rounds the run reaches. `messagesFixed_of_reached` bridges the two forms under `RunsThrough`.
+
+To post: nothing.
+
+Not established: that any of `Messages.lean` past its signatures compiles, and its axioms. The definitions of `SessionReading.stmts` and `msg` [read]. I plan `stmts` as the statements' message that `StmtsAre` holds of, chosen classically; it holds by construction once the evidence's `stmts` have such a message. I plan `msg` from the session files the check verified, through `honestFileMsgs`; that waits on how SESSIONCOINS reads a session's files. No file is ready for soundness's reading yet.
+
+Sizes [guess]: one file. What is left: compiling the 871 lines, `RunShown` (about 150 lines, or a premise), and `stmts`/`msg` (about 100 lines). I expect `callsLe` and round 1's message to compile within the hour after a slot opens, well before 07:00Z.
+
+Pushed head: `4dbc3aca9f` on `cursor/proofs-messages-f55d`. That commit carries `messagesBound` and a merge of the moved base (TWOLEG at `052eb3aba5`), which changed no definition my file reads. Nothing is left unpushed.
