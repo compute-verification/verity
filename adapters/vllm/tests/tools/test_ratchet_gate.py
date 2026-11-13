@@ -26,7 +26,9 @@ public command P16's list gains (passing when the file it names runs it, failing
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
-(a revert, a pure move the base's move_check certifies), and its command line."""
+(a revert, a pure move the base's move_check certifies), each rule a change breaks named (those that read no lint
+together; the base's lints and the source checks on a change another rule fails only under `--every-rule`, at the same
+verdict and exit, and named when they can't run), and its command line."""
 from __future__ import annotations
 
 import fcntl
@@ -334,7 +336,8 @@ def test_a_counted_kind_keyed_anew_at_its_total_is_compared_in_the_bases_form(re
     assert (c["verdict"], c["fix"]) == ("failed", ["typed_records: verity_vllm/check: [or-empty] (3 found, 0 allowed)",
                                                    "typed_records: verity_vllm/commit: [or-empty] (1 found, 0 allowed)"]), c["why"]
     assert c["why"].endswith(f"; {TYPED} or-empty is keyed anew and its total goes 4 -> 3: a kind keyed anew is compared in the "
-                             "base's form only at the base's total, so change its keys in one change and its counts in another")
+                             "base's form only at the base's total, so change its keys in one change and its counts in another"
+                             + G.STOPPED)
 
 
 IMPORTS = "adapters/vllm/tests/lint/_imports.py"
@@ -398,7 +401,7 @@ def test_a_placing_tables_edit_judges_the_edges_of_the_modules_a_change_adds_and
     assert (c["verdict"], c["fix"]) == ("failed", ["p09_layering: program.old -> engine.seed"]), c["why"]
     assert c["why"].endswith(f"; the change edits {IMPORTS}'s LAYER, which judge(s) the edges of the modules it adds: between "
                              "modules its base holds the base's tables judge, so the row lands in one change and that import in "
-                             "the next")
+                             "the next" + G.STOPPED)
     repo.git("checkout", "-q", "-b", "refused", "main")
     repo.commit("another row, and a new module's import neither table admits", {**core("program.old"), rule: uses})
     [c] = G.gate("main", "refused")["changes"]
@@ -508,7 +511,7 @@ def test_runs_over_a_growing_train_judge_each_change_once_and_a_cached_verdict_i
     fresh = [G.gate("main", t) for t in tops]
     monkeypatch.setenv("RATCHET_GATE_CACHE", str(verdict_cache))
     judged: list[str] = []
-    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, b: c.hi, G.judge))
+    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, *_: c.hi, G.judge))
     assert [G.gate("main", t) for t in tops] == fresh
     assert judged == tops
     assert [G.gate("main", t) for t in tops] == fresh and judged == tops
@@ -621,7 +624,7 @@ def test_once_the_base_moves_a_passed_change_is_not_judged_again_and_a_failed_on
                                     P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
                                                     _entry("verity_vllm/c.py", "C"))})
     judged: list[str] = []
-    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, b: c.hi, G.judge))
+    monkeypatch.setattr(G, "judge", _noting(judged, lambda c, *_: c.hi, G.judge))
     first = [G.gate("main", t) for t in ("ok", "bad")]
     repo.git("checkout", "-q", "main")
     repo.commit("main moves on", {"adapters/vllm/verity_vllm/d.py": "D = 1\n"})
@@ -1554,6 +1557,115 @@ def test_a_noqa_outside_the_integration_or_in_a_revert_is_not_held(repo):
     assert _verdicts(G.gate("main", "revert"))[0][1] == "exempt"
 
 
+P01_WITH_C = _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"), _entry("verity_vllm/c.py", "C"))
+NEW_C = f'{P01}: new {G.key(_entry("verity_vllm/c.py", "C"))}'
+
+
+def test_a_change_fails_by_each_rule_it_breaks_that_reads_no_lint(repo):
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("a new entry and a new noqa", {"adapters/vllm/verity_vllm/c.py": "import sys  # noqa: F401\n", P01: P01_WITH_C})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {P01} 2 -> 3 entries: no change adds"), c["why"]
+    assert "; and adds 1 `# noqa` line(s) under adapters/vllm/ and removes 0: a noqa is an exception" in c["why"], c["why"]
+    assert c["fix"] == [NEW_C, "verity_vllm/c.py:1: import sys  # noqa: F401"]
+    repo.git("checkout", "-q", "-b", "broken", "main")
+    repo.commit("an unreadable list and a new noqa", {P01: "{", A_PY: "A = 1  # noqa: E1\n"})
+    [c] = G.gate("main", "broken")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"leaves {P01} unreadable as an allowlist"), c["why"]
+    assert "; and adds 1 `# noqa` line(s) under adapters/vllm/" in c["why"] and c["fix"] == ["verity_vllm/a.py:1: A = 1  # noqa: E1"]
+
+
+def test_a_change_one_rule_fails_is_judged_no_further_and_every_rule_names_what_the_bases_lints_find(linted):
+    """A list that grows, and behind it a violation no entry covers.  The gate stops at the list and says it stopped; with
+    every rule it names the violation too, the verdict is the same, and neither run reads the other's kept verdict."""
+    linted.commit("a new entry, and a violation with none", {
+        "adapters/vllm/verity_vllm/c.py": "C = 'BAD'\n", "adapters/vllm/verity_vllm/d.py": "D = 'BAD'\n", P01: P01_WITH_C})
+    grows = f"grows {P01} 2 -> 3 entries: no change adds a ratchet exception"
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("failed", [], [NEW_C]), c["why"]
+    assert c["why"].startswith(grows) and c["why"].endswith(G.STOPPED) and c["why"].count(G.STOPPED) == 1, c["why"]
+    doc = G.gate("main", "pr", every=True)
+    [e] = doc["changes"]
+    assert (e["verdict"], e["lints"], e["fix"]) == ("failed", ["p01_core"], [NEW_C, "p01_core: verity_vllm/d.py [k]"]), e["why"]
+    assert e["why"].startswith(grows) and G.STOPPED not in e["why"], e["why"]
+    assert e["why"].endswith(f"; and the base's lint code ({e['base'][:12]}) finds 1 violation(s) on its tree that its allowlists "
+                             "don't cover: a change to a lint is judged like source, so fix the code or keep the lint and its "
+                             "entries"), e["why"]
+    assert doc["failures"] == [{"commit": e["commit"], "pr": None, "why": e["why"], "fix": e["fix"]}]
+    told = ("why", "fix", "lints")
+    assert {k: v for k, v in e.items() if k not in told} == {k: v for k, v in c.items() if k not in told}
+    assert G.gate("main", "pr")["changes"] == [c] and G.gate("main", "pr", every=True)["changes"] == [e]
+    linted.git("checkout", "-q", "-b", "revert", "main")
+    linted.commit('Revert "Queue: #9 retires an entry"', {"adapters/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: P01_WITH_C})
+    assert [v for _, v in _verdicts(G.gate("main", "revert", every=True))] == ["exempt"]
+
+
+def test_every_rule_runs_the_source_checks_on_a_top_change_another_rule_fails_and_on_no_member_below_it(both_ruffed):
+    b401 = {**TOOLS_F401, "file": "tools/b.py"}
+    head = both_ruffed.commit("a new finding, allowed, and one with no entry", {
+        "tools/b.py": "import sys\n", "tools/c.py": "import re\n", REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    listed = f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 1"
+    uncovered = ["repo_ruff: tools/c.py [F401]: 1 found, 0 allowed", "repo_ruff: tools/c.py:1 `re` imported but unused"]
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["linted"], c["fix"]) == ("failed", [], None, [listed]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_RUFF_JSON} F401 1 -> 2 in total") and c["why"].endswith(G.STOPPED), c["why"]
+    [e] = G.gate("main", "pr", every=True)["changes"]
+    assert (e["verdict"], e["lints"], e["linted"]) == ("failed", ["repo_ruff"], ["tools/b.py", "tools/c.py"]), e["why"]
+    assert e["fix"] == [listed, *uncovered, "tools/b.py:1 F401 `sys` imported but unused",
+                        "tools/c.py:1 F401 `re` imported but unused"], e["why"]
+    assert e["why"].startswith(f"grows {REPO_RUFF_JSON} F401 1 -> 2 in total") and G.STOPPED not in e["why"], e["why"]
+    assert "; and the base's lint code (" in e["why"] and "; and adds 2 ruff finding(s) to the Python it changes" in e["why"]
+    both_ruffed.git("checkout", "-q", "-b", "after", "main")
+    after = both_ruffed.commit("a constant", {"tools/d.py": "D = 1\n"})
+    both_ruffed.git("checkout", "-q", "-b", "next", "main")
+    both_ruffed.queue(1, "a new finding", head)
+    both_ruffed.queue(2, "a constant", after)
+    below, top = G.gate("main", "next")["changes"]
+    assert (below["verdict"], below["fix"], top["verdict"]) == ("failed", [listed], "passed"), below["why"]
+    assert below["why"].endswith(G.STOPPED) and below["why"].count(G.STOPPED) == 1, below["why"]
+    below, top = G.gate("main", "next", every=True)["changes"]
+    assert (below["verdict"], below["linted"], below["fix"]) == ("failed", None, [listed, *uncovered]), below["why"]
+    assert (top["name"], top["verdict"], top["linted"]) == ("#2", "passed", ["tools/d.py"]), top["why"]
+
+
+def test_every_rule_keeps_a_failed_changes_verdict_when_the_other_rules_find_nothing(both_ruffed):
+    b401 = {**TOOLS_F401, "file": "tools/b.py"}
+    both_ruffed.commit("an entry for no finding, and a constant", {"tools/d.py": "D = 1\n",
+                                                                   REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    docs = [G.gate("main", "pr", every=every) for every in (False, True)]
+    [c], [e] = (doc["changes"] for doc in docs)
+    assert (c["verdict"], e["verdict"]) == ("failed", "failed") and [len(doc["failures"]) for doc in docs] == [1, 1]
+    assert e["fix"] == c["fix"] == [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 1"]
+    assert (c["lints"], c["linted"], e["lints"], e["linted"]) == ([], None, ["repo_ruff"], ["tools/d.py"])
+    assert e["why"] == c["why"].removesuffix(G.STOPPED) + "; ruff finds nothing new in the 1 Python file(s) it changes", e["why"]
+
+
+def test_every_rule_exits_as_the_gate_does_without_it_when_a_later_rule_cant_run(linted, monkeypatch, capsys):
+    """Lints or checks that can't run are an error on a change nothing else fails, and the gate exits 2.  On a change
+    another rule has failed they are named in its why, and the gate exits 1, as it does without the flag."""
+    def cant(what: str):
+        def raises(*args, **kwargs):
+            raise G.GitError(f"no {what} on this host")
+        return raises
+
+    linted.commit("a new entry", {"adapters/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: P01_WITH_C})
+    monkeypatch.setattr(G, "base_lints", cant("lints"))
+    monkeypatch.setattr(G, "find", cant("checks"))
+    assert G.main(["main", "pr"]) == 1 and G.STOPPED in capsys.readouterr().out
+    assert G.main(["main", "pr", "--every-rule"]) == 1
+    out = capsys.readouterr().out
+    assert ("; the base's lints didn't run on it (no lints on this host); the source checks didn't run on it (no checks on "
+            "this host)\n") in out and G.STOPPED not in out, out
+    for branch, files, what in (
+            ("retires", {A_PY: "A = 1\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))}, "lints"),
+            ("constant", {A_PY: "A = 'BAD' or 1\n"}, "checks")):
+        linted.git("checkout", "-q", "-B", branch, "main")
+        linted.commit(branch, files)
+        for flags in ([], ["--every-rule"]):
+            assert G.main(["main", branch, *flags]) == 2, (branch, flags)
+            assert f"ratchet gate: no {what} on this host" in capsys.readouterr().err, (branch, flags)
+
+
 def test_the_command_line(repo):
     repo.git("checkout", "-q", "-b", "pr")
     repo.commit("feature", {"adapters/vllm/verity_vllm/c.py": "C = 1\n",
@@ -1564,6 +1676,9 @@ def test_the_command_line(repo):
 
     r = run("main", "pr")
     assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and "verity_vllm/c.py" in r.stdout, r.stdout
+    assert G.STOPPED in r.stdout, r.stdout
+    r = run("main", "pr", "--every-rule")
+    assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and G.STOPPED not in r.stdout, r.stdout
     r = run("main", "pr", "--json")
     assert r.returncode == 1 and json.loads(r.stdout)["kind"] == G.KIND
     assert run("main", "main").returncode == 0
