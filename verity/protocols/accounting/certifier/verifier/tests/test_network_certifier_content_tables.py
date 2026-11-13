@@ -22,10 +22,12 @@ import signers
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.protocols.accounting.certifier.prover import lengths_row as LR
 from verity.protocols.accounting.certifier.prover import response_tie as RT
+from verity.protocols.accounting.certifier.verifier import class_charge as CC
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_class_charge import four
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import (B, LEN, PLAIN, PLAIN_DIGEST, P,
                                                                                       T, answer, id_req, response,
                                                                                       traffic)
@@ -446,6 +448,60 @@ def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_tables_lay_
             CT.tables(CON, releases, filing)
     with pytest.raises(ValueError, match="not the content of its lengths slot"):
         CR.tables(CON, tuple(tuple(Released(*tuple(r)[:4]) for r in stride) for stride in handed[0]))
+
+
+def test_a_request_longer_than_the_largest_class_holds_is_refused_at_ingress_and_never_released():
+    """A schedule with content rows admits a request of at most the bytes its largest class holds (the schedule's
+    `request_bound`). The longest request a class holds is released and filed; one a prompt id longer,
+    which the `ingress_cells` cells would carry, is ingress past its bounds: its connection fails closed (ingress)
+    with no place in the release order and nothing for the server. So no execution phase holds a release that no
+    class holds for its request's length, under either form of the lengths rows, and every release handed is filed.
+    A schedule without content rows has no class to hold a request to, and releases the longer one as it did."""
+    room = CT.request_room(B, 128)
+    fits, longer = id_req(1, 128), id_req(2, 129)
+    assert len(fits) == room < len(longer) <= LEN.ingress_cells * P
+    assert (CON.request_bound, HELD.request_bound, LEN.request_bound) == (room, room, LEN.ingress_cells * P)
+    arrivals = {0: [cells(longer, B)], 1: [cells(fits, B)]}
+    for params in (CON, HELD):
+        device, _, server = run([[], answer((7, 8))], arrivals, params=params, windows=3)
+        log = {e["ordinal"]: e for e in device.log}
+        assert (log[1]["failed"], log[1]["release"], log[2]["failed"], log[2]["release"]) == ("ingress", None, None, 0)
+        assert not server.conns[0].received and device.requests_released == 1
+        assert [(o, why) for _, o, why in reasons(device)] == [(1, "ingress")]
+        handed = [r for _, strides in device.lengths for stride in strides or () for r in stride]
+        assert [(r.request, CT.file(params, r)) for r in handed] == [(fits, 2)]
+    device, _, server = run([answer((5,)), answer((7, 8))], arrivals, params=LEN, windows=3)
+    assert device.requests_released == 2 and not reasons(device)
+    assert [e["release"] for e in device.log] == [0, 1] and server.conns[0].received
+
+
+def test_an_execution_phase_a_longer_request_reached_releases_only_what_its_classes_count(monkeypatch):
+    """What the ingress bound is for, at the rule that charges a class (`class_charge.charge`). Under form 2 a head
+    counts each class's held rows, and the rule charges a class below its schedule on that class's four verdicts. A
+    release filed in no class is in no count and no verdict is of it, so an execution phase holding one would be
+    charged nothing for it. With the bound, the execution phase a longer request reached releases only what its
+    classes count: its head's counts add up to its releases, so the verdicts that charge it no schedule are of
+    every release it holds. With ingress at its cells' bound alone, as it was, the same traffic's execution phase
+    holds a release more than its head counts, and the rule charges it no schedule on the same verdicts."""
+    arrivals = {0: [cells(id_req(2, 129), B)], 1: [cells(id_req(1, 128), B)]}
+
+    def phases() -> list[tuple[int, list[int], int]]:
+        """Each execution phase that released: its releases, its head's count of each class, and how many of its
+        connections the rule charges their whole schedule with every class's four verdicts accepted and complete."""
+        device, _, _ = run([answer((5,)), answer((7, 8))], arrivals, params=HELD, windows=3)
+        out = []
+        for phase, strides in device.lengths:
+            if not strides or not any(strides):
+                continue
+            head = CR.Rows.commit(LINK, phase, CR.tables(HELD, strides), HELD, signers.SESSION).head
+            charges = [CC.charge(head, i, four(i, head)) for i in range(len(HELD.content))]
+            assert [c.below for c in charges] == [bool(c.count) for c in charges]
+            out.append((sum(map(len, strides)), [c.count for c in charges], sum(c.schedules for c in charges)))
+        return out
+
+    assert phases() == [(1, [0, 0, 1, 0], 0)]
+    monkeypatch.setattr(type(HELD), "request_bound", property(lambda self: self.ingress_cells * self.payload))
+    assert phases() == [(2, [0, 0, 1, 0], 0)]
 
 
 def test_a_row_of_zero_bytes_reads_as_each_tables_decoder_says(ran):

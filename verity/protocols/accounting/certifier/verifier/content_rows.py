@@ -64,7 +64,9 @@ more than O, is refused, never cut short.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
-`tables` lays whatever class that caller gives.
+`tables` lays whatever class that caller gives. The network certifier releases no request longer than the
+schedule's largest class holds (the schedule's `request_bound`: ingress refuses it), so none it releases is unfiled
+for its request's length.
 
 **A row of zero bytes** is what every table of form 1 holds where no release is filed (`empty_rows`, the one
 statement of it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a

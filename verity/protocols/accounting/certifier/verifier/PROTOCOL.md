@@ -2169,10 +2169,13 @@ prompt ids and a size of ids released, each a power of two.
   first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
   nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
   argument. A release that fits no class, or under form 1 one whose class's rows are all held, has no content row,
-  and no later class takes it; its lengths slot holds its lengths all the same. Under form 2 a class's rows are all
-  held at R of them ("The bound", below), and a release filed in it past them is refused, naming the release, the
-  class and R (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none
-  of their tables is laid and no head is signed over them.
+  and no later class takes it; its lengths slot holds its lengths all the same. None is unfiled for its request's
+  length: the network certifier admits a request of at most the bytes the schedule's largest class holds (the
+  schedule's `request_bound`), and a longer one is ingress past its bounds, whose connection fails closed
+  (`ingress`) with nothing released. Under form 2 a class's rows are all held at R of them ("The bound", below),
+  and a release filed in it past them is refused, naming the release, the class and R (`content_rows.tables`):
+  releases with one past R are no execution phase's of the schedule, so none of their tables is laid and no head
+  is signed over them.
 - **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
   request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
