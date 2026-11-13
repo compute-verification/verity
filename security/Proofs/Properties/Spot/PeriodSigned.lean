@@ -105,7 +105,6 @@ theorem recordOfJson_prev {j : Json} {r : Core.Record} (h : Core.Record.ofJson j
   refine of_triple (Q := fun r => getD j "prev" = .str r.prev) ?_ h
   clear h
   mvcgen [Core.Record.ofJson, -Spec.throw_Except, throw_spec]
-  all_goals assumption
 
 -- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
@@ -126,10 +125,6 @@ theorem ledgerEntry_text {line : Json} {e : LedgerEntry} (h : ledgerEntry? line 
   clear h
   mvcgen [ledgerEntry?, guard, -Spec.throw_Option, none_spec, failure_spec, toOption_spec, ledgerTag_spec, nat_spec,
     some_pure_spec]
-  all_goals first
-    | rfl
-    | assumption
-    | (subst_vars; rfl)
 
 /-- **Two entries whose texts without their `sig` agree name one `prev`.** -/
 theorem prev_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry? line = some e)
@@ -213,9 +208,10 @@ theorem ledgerOfDeviceSigned : LedgerOfDeviceSigned := by
         have hl : lines[i] ∈ lines.toList := List.mem_of_getElem? (by rw [Array.getElem?_toList]; exact hli)
         exact lineBreak_of_collision (List.mem_append_left _ (mem_lineTexts hl hle))
           (List.mem_append_right _ (mem_lineTexts (List.mem_of_getElem? hown) he')) hne hh
+      have hstr : e.text = e'.text := String.toByteArray_inj.1
+        (String.toUTF8_eq_toByteArray.symm.trans (htext.trans String.toUTF8_eq_toByteArray))
       rw [List.getElem?_take_of_lt (by omega), List.getElem?_take_of_lt (by omega), Array.getElem?_toList, hli, hown]
-      exact congrArg some ((ledgerEntry_text hle).trans
-        ((congrArg Json.str (String.toByteArray_inj.1 htext)).trans (ledgerEntry_text he').symm))
+      exact congrArg some ((ledgerEntry_text hle).trans ((congrArg Json.str hstr).trans (ledgerEntry_text he').symm))
     · rw [List.getElem?_take_eq_none (by omega), List.getElem?_take_eq_none (by omega)]
 
 end Properties.Spot.Period
