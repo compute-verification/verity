@@ -61,7 +61,7 @@ theorem outPortOf_at {o d : ℕ} (ho : o < c.outPorts.size) (hd : d < (c.outPort
 theorem covered_of_parse {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
     (hty : tags.typed = false) (hcS : HmOut.parseStmt tags cf tables = .ok c) (hU : Built c.unit)
     (hs : ProvedScope.scopeOkH c = true) :
-    ∀ w < c.outWords, ∃ k < c.upv, ∃ j, (c.leavesOut.getD k #[])[j]? = some w := by
+    ∀ w < c.outWords, ∃ k < c.upv, ∃ j : ℕ, (c.leavesOut.getD k #[])[j]? = some w := by
   rw [FlockSoundness.Discharge.FailClosed.scopeOkH_eq] at hs
   obtain ⟨-, ho, -⟩ := FlockSoundness.Discharge.Layout.scopeOkH_spec hU hs
   obtain ⟨cs, hcs, hce⟩ := FlockSoundness.commit_of_parseStmt hty hcS
@@ -79,7 +79,7 @@ theorem covered_of_parse {tags : Flock.Tags} {cf : ByteArray} {tables : List (St
 
 /-- **Bit `bit < 16 · w` of output row `nIn + o` at leaf `u` is a copy row's bit**: some instance `k`'s leaf `j`, bit
 `bit % 16`, has a gate (`outGate`) and its commitment position is that bit. -/
-theorem written_of_word (hcov : ∀ w < c.outWords, ∃ k < c.upv, ∃ j, (c.leavesOut.getD k #[])[j]? = some w)
+theorem written_of_word (hcov : ∀ w < c.outWords, ∃ k < c.upv, ∃ j : ℕ, (c.leavesOut.getD k #[])[j]? = some w)
     (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) (hC : OutsComputed c) {u o bit : ℕ} (hu : u < n)
     (ho : o < c.outPorts.size) (hb : bit < 16 * (c.outPorts.getD o default).2) :
     ∃ k j t x, Spot.Bits.outGate c n u k j t = some x ∧
@@ -89,12 +89,18 @@ theorem written_of_word (hcov : ∀ w < c.outWords, ∃ k < c.upv, ∃ j, (c.lea
   obtain ⟨hjs, -⟩ := Array.getElem?_eq_some_iff.1 hj
   obtain ⟨h1, h2⟩ := hC k hk j hjs (bit % 16) (Nat.mod_lt _ (by omega))
   have hg : ∃ x, Spot.Bits.outGate c n u k j (bit % 16) = some x := by
-    unfold Spot.Bits.outGate
-    dsimp only
-    rw [if_pos (by
-      simp only [Bool.and_eq_true, decide_eq_true_eq]
-      exact ⟨⟨⟨⟨⟨hu, hk⟩, hjs⟩, Nat.mod_lt _ (by omega)⟩, h1⟩, h2⟩)]
-    exact ⟨_, rfl⟩
+    cases hx : Spot.Bits.outGate c n u k j (bit % 16) with
+    | some x => exact ⟨x, rfl⟩
+    | none =>
+      exfalso
+      unfold Spot.Bits.outGate at hx
+      dsimp only at hx
+      split at hx
+      · cases hx
+      · rename_i hne
+        apply hne
+        simp only [Bool.and_eq_true, decide_eq_true_eq]
+        exact ⟨⟨⟨⟨⟨hu, hk⟩, hjs⟩, Nat.mod_lt _ (by omega)⟩, h1⟩, h2⟩
   obtain ⟨x, hx⟩ := hg
   refine ⟨k, j, bit % 16, x, hx, ?_⟩
   · unfold Spot.Bits.outRowBit
@@ -110,7 +116,7 @@ end Flock.Bridge.NeededBitsOf
 
 namespace SpotFlock
 
-open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge Exec Readable
+open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
 
 /-- **At an accepted design, every returned output bit of each member's unit sits on a computed row**: the design
 decides it of every member (`outsOk`, `outs_of_two`). -/
