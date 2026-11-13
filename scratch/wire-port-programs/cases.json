@@ -1,0 +1,122 @@
+{
+ "o0-chain": {
+  "clash": [
+   {
+    "port": "o0",
+    "template": "CoreSpotNamed_v0",
+    "wport": "o0",
+    "writer": "CoreSpotPair_v0"
+   }
+  ],
+  "links": [
+   {
+    "port": "x",
+    "template": "CoreSpotPair_v0",
+    "value": "x"
+   },
+   {
+    "port": "o0",
+    "template": "CoreSpotNamed_v0",
+    "value": "o0"
+   }
+  ],
+  "replay": "CoreSpotReplayNamed_v0",
+  "wires": [
+   {
+    "port": "o0",
+    "template": "CoreSpotNamed_v0",
+    "wport": "o0",
+    "writer": "CoreSpotPair_v0"
+   }
+  ]
+ },
+ "plain-both": {
+  "clash": [],
+  "links": [
+   {
+    "port": "x",
+    "template": "CoreSpotPair_v0",
+    "value": "x"
+   },
+   {
+    "port": "a",
+    "template": "CoreSpotBoth_v0",
+    "value": "w"
+   },
+   {
+    "port": "o0",
+    "template": "CoreSpotBoth_v0",
+    "value": "o0"
+   }
+  ],
+  "replay": "CoreSpotReplayBoth_v0",
+  "wires": [
+   {
+    "port": "b",
+    "template": "CoreSpotBoth_v0",
+    "wport": "o0",
+    "writer": "CoreSpotPair_v0"
+   }
+  ]
+ },
+ "plain-chain": {
+  "clash": [],
+  "links": [
+   {
+    "port": "x",
+    "template": "CoreSpotPair_v0",
+    "value": "x"
+   },
+   {
+    "port": "o0",
+    "template": "CoreSpotNamed_v0",
+    "value": "o0"
+   }
+  ],
+  "replay": "CoreSpotReplayNamed_v0",
+  "wires": [
+   {
+    "port": "y",
+    "template": "CoreSpotNamed_v0",
+    "wport": "o0",
+    "writer": "CoreSpotPair_v0"
+   }
+  ]
+ },
+ "same-both": {
+  "clash": [
+   {
+    "port": "a",
+    "template": "CoreSpotBoth_v0",
+    "wport": "o0",
+    "writer": "CoreSpotPair_v0"
+   }
+  ],
+  "links": [
+   {
+    "port": "x",
+    "template": "CoreSpotPair_v0",
+    "value": "x"
+   },
+   {
+    "port": "a",
+    "template": "CoreSpotBoth_v0",
+    "value": "w"
+   },
+   {
+    "port": "o0",
+    "template": "CoreSpotBoth_v0",
+    "value": "o0"
+   }
+  ],
+  "replay": "CoreSpotReplayBoth_v0",
+  "wires": [
+   {
+    "port": "a",
+    "template": "CoreSpotBoth_v0",
+    "wport": "o0",
+    "writer": "CoreSpotPair_v0"
+   }
+  ]
+ }
+}
