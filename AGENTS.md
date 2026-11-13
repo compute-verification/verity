@@ -315,10 +315,9 @@ Landing.
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
-- **A survey for Daniel is answered at once.** When Daniel wants the leads asked something (a survey, a what-if, a
-  price), whoever relays it asks each lead to answer on reading it, with what it knows now, and sets no later deadline.
-  A lead answers then; for a figure it doesn't have, it says "not known" and the hour it will. Daniel gets each answer
-  as it arrives.
+- **A survey is answered at once.** A question sent to several people for their answers (a survey, a what-if, a price)
+  asks each to answer on reading it, with what they know now, and sets no later deadline. An answer that lacks a figure
+  says "not known" and the hour it will be known. Each answer is passed on as it arrives, not held for the rest.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
   `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
