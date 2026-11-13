@@ -184,7 +184,7 @@ VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 
-# The network certifier's mark certificate (`verity.protocols.certifier.verifier.certificate`)
+# The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
 CERTIFIER_MARK = "verity-network-certifier/mark/v1"
 
 # Not yet read from here: the commitments' own (`verity.commitments`)

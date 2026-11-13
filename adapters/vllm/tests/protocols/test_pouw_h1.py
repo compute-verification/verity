@@ -25,17 +25,17 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.circuits.refs import runs
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import HM96, commit_rows, salt_of
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import CoinError, LiveRecord
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows, salt_of
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
 from tests.protocols import challenger_host as CH
 from verity_vllm import llm as L
