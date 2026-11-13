@@ -2,7 +2,7 @@
 # CIR-261: vLLM d9105ea80's fp8_ds_mla read-back held to Fp8DsMlaUpconvertRow_v1, on ONE card of node A under research run,
 # from the shipped tree's root (a tree holding adapters/vllm/tests/properties/fp8_read_back_capture_gpu.py):
 #   research run --on vy-spot-glm53 --project verity --cwd source --timeout 50m --mem-gb 32 --send fp8_read_back.sh \
-#     --env CARD=3 --env CORES=30-39 --env NOT_BEFORE=2026-11-13T03:00:00Z --env END_UTC=2026-11-13T04:25:00Z \
+#     --env CARD=3 --env CORES=30-39 --env NOT_BEFORE=2026-11-13T03:15:00Z --env END_UTC=2026-11-13T04:25:00Z \
 #     -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/fp8_read_back.sh'
 # Before anything touches CARD it exits 76 when nvidia-smi can't be read, a compute process is on CARD, CARD holds 1024 MiB
 # or more, or CARD's lease is held; 75 before NOT_BEFORE or with fewer than MAX_MIN minutes left before END_UTC. The capture
