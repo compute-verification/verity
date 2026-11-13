@@ -47,6 +47,7 @@ from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
 TREE = Path(__file__).resolve().parents[2]
+CLI = cli.__name__   # the module a stage's command line runs with -m
 
 
 # ---------------------------------------------------------------------------------------------------------------- the stages' environment
@@ -381,7 +382,7 @@ def _launcher(tmp_path: Path, script: str) -> str:
 def test_a_batchs_request_program_is_built_under_its_launch_context_and_a_context_that_does_not_read_fails_the_shape(tmp_path):
     """B=1 asks for none.  B>=2 runs ``launch-context WORKLOAD LP T [C]``: its lines are the Build's ``--launch-context`` arguments
     (none for a context of no lines), and a failure is None with the end of its stderr in row.log, the whole of it kept beside the row."""
-    args = 'shift 2; echo "$@" >&2; '                                        # -m verity_vllm.pipeline.cli, then the command line
+    args = 'shift 2; echo "$@" >&2; '                                        # -m and the cli module, then the command line
     r = _row(tmp_path, "--py", _launcher(tmp_path, args + "printf 'k=1\\nk=2\\n'"))
     r.B = 1
     assert r.launch_args(8, 3) == []
@@ -867,7 +868,7 @@ def test_a_record_is_published_only_from_a_commit_attempt_that_ran_a_clean_commi
         assert asked == [["research", "data", "show", "r-commit", "--json"]] and not (tmp_path / "row.json").exists()
     research, asked = _shows(monkeypatch, {"source": {"commit": "c0ffee", "dirty": False}}, publish=f"published {record}\n")
     assert RS.publish(o, str(tmp_path), runs, research, how) == 0
-    words = [sys.executable, "-m", "verity_vllm.pipeline.cli", "records", "publish", str(tmp_path), ROW, "--build", "art:build", "--match",
+    words = [sys.executable, "-m", CLI, "records", "publish", str(tmp_path), ROW, "--build", "art:build", "--match",
              "art:match", "--match-run", "r-match", "--commit", "art:commit", "--commit-run", "r-commit", "--tree", "main@c0ffee", "--by", "vllm"]
     rest = ["--summary", f"{tmp_path}/commit/summary.json", "--newest-captures"]
     assert asked[-1] == [*words, *rest]
@@ -882,7 +883,7 @@ def test_a_stage_that_cites_a_build_is_held_to_the_program_digest_of_the_build_i
     row dir, and the store for the cited artifact's.  A row dir with no Build, an artifact whose digest does not read and two
     digests that differ each stop the stage by name; the store is asked only once there is a Build here."""
     d, art, here, other = str(tmp_path), "art:" + "b" * 64, "ab" * 32, "cd" * 32
-    digest = ["py", "-m", "verity_vllm.pipeline.cli", "research-outputs", "digest", d, ROW]
+    digest = ["py", "-m", CLI, "research-outputs", "digest", d, ROW]
     show = ["research", "data", "show", art, "--json"]
 
     def held(shown: dict[str, Any], said: str, rc: int = 0) -> tuple[tuple[str | None, str], list[list[str]]]:
@@ -919,7 +920,7 @@ def test_a_stage_under_a_research_run_declares_its_outputs_and_keeps_its_run_wha
     monkeypatch.setattr(RS, "utc", lambda: "T")
     here, other, build, match = "ab" * 32, "cd" * 32, "art:" + "b" * 64, "art:" + "c" * 64
     d, ran = f"{tmp_path}/sweep/{ROW}", []
-    outputs = ["py", "-m", "verity_vllm.pipeline.cli", "research-outputs"]
+    outputs = ["py", "-m", CLI, "research-outputs"]
 
     def run(o: SimpleNamespace, stage: str) -> int:
         ran.append(stage)
@@ -968,7 +969,7 @@ def test_a_chains_stage_is_the_rows_stage_under_a_research_run_that_cites_the_st
 
     def stage_run(st: str, run_id: str, *cited: str) -> list[str]:
         return ["research", "run", "--id", run_id, "--tool", f"vllm.{st}", "--project", "verity", "--cwd", RS.REPO_ROOT, *cited, "--",
-                sys.executable, "-m", "verity_vllm.pipeline.cli", "row", "stage", st, ROW, "single", "org/model", "abc", "--sweep-dir", str(tmp_path)]
+                sys.executable, "-m", CLI, "row", "stage", st, ROW, "single", "org/model", "abc", "--sweep-dir", str(tmp_path)]
 
     rc, asked, ids = chained("build,match,commit", {"outputs": arts})
     assert rc == 0 and len(ids) == 3 and all(re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", i) for i in ids)
