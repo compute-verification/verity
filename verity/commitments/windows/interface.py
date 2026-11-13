@@ -184,8 +184,8 @@ def _static(v: Any) -> Any:
     return v
 
 
-# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
-# (`ALLOWED` in tests/test_boundaries.py).
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/definitions/ops`)
+# and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:

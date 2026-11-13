@@ -132,9 +132,11 @@ blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read
 R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
 let through (`Registration.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
-port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit. That the rows under that root are
-the outputs of the proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed
-with those into a theorem: unproved. -/
+port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
+has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
+link-window whose scan's `prog` is its output counted as faulty. That the rows under that root are the outputs of the
+proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed with those into a
+theorem: unproved. -/
 def R8 (v : Registration.Verifier) : Prop :=
   (Registration.tiedBad v).isEmpty = true ∧
     Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true
