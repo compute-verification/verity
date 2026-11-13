@@ -126,7 +126,7 @@ counts the host's RAM and disks in `R`, so it holds only of a server whose memor
 3.9 GB. `r = 1050` is the least ratio at 5 GB, `k = 93,843` the least `k` with `1049^k · 2^129 ≤ 1050^k`. Same footing
 as `StreamedWipe`. Proof: `PousStreamedWipe.streamed_wipe_meets_server_8H200_HBM`.
 
-Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and the minimal-context probe in Tuesday's window
+Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and a minimal-context probe
 on vy-dc-h200-2 is to measure it.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
@@ -146,7 +146,7 @@ fill's share `8,798,169,129` (1.0998 GB). Its disks count in `R`. `r = 2922` is 
 the least `k` with `2921^k · 2^129 ≤ 2922^k`. Same footing as `StreamedWipe`. Proof:
 `PousStreamedWipe.streamed_wipe_meets_server_8H200_HBMRAM`.
 
-Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and the minimal-context probe in Tuesday's window
+Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and a minimal-context probe
 on vy-dc-h200-2 is to measure it.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
@@ -166,7 +166,7 @@ uniform prior content through the reads is accepted with probability at most `2^
 5 GB, `k = 1,268,143` the least `k` with `14182^k · 2^129 ≤ 14183^k`. Same footing as `StreamedWipe`. Proof:
 `PousStreamedWipe.streamed_wipe_meets_server_8H200`.
 
-Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and the minimal-context probe in Tuesday's window
+Its honest lemma is pending: `R = 8 × 0.3 + 1.5 GB` is unmeasured, and a minimal-context probe
 on vy-dc-h200-2 is to measure it.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
