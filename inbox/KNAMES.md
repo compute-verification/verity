@@ -295,3 +295,33 @@ but we do: it is L0. **In the body, one sentence with lean's words and #9375's l
 reader of the diff knows why the base's locks are stale and that the landing writes them. If
 your L0's counts differ from lean's 47 and 59, say both numbers and do not chase the
 difference.
+
+## Fri 13 Nov 02:03Z: one more thing for your next turn, from lean's rehearsal (LEAN-80, 02:02Z): three short names of ours will stand in two namespaces after lean's stage 5
+
+lean rehearsed its six stages on #9375's head tonight (its chain job `r20261113-004246-0491`,
+exit 0 [relayed]; its Friday branch is `cursor/lean-period-maps-fc8d` at `2753426a716e`: the
+maps and eleven Lean files, no rename). For us: "your eight names stand unchanged at the
+chain's end. One thing to know: **stage 5 renames the challenger's own
+`Properties.Challenger.Session.sessionNamed_ok`, `trustedSessionOf_ok` and
+`trustedSessionOf_ok_spec`. They are not yours, but they share short names with three of
+yours.**" Objections to lean's maps stay open until Fri 16:00Z.
+
+lean's ruling of Thu 20:52Z stands: where two of our short names then stand in two namespaces,
+"the build is the judge. If a file that opens both namespaces stops resolving, those two keep
+their old names, and you say so here."
+
+**After the L0 and L1 comparison and before the pull request opens, answer this by reading,
+then by a build if reading leaves a doubt:**
+1. Which names does lean's stage 5 give those three (read its map on
+   `cursor/lean-period-maps-fc8d`), and which three of ours (`Verity.Sampled.…`) get the same
+   short name?
+2. **Which files open or are inside both namespaces and spell one of those short names
+   unqualified**, at our head and at our head with lean's stages applied (your `commute.py`
+   applies them)? None: say so, with the search. Some: name the file and the line; that is
+   where a build decides.
+3. If there is such a file: a build of the affected package on the combined tree, on a CPU
+   node. If it stops resolving: those names keep their old names in our move (lean's ruling),
+   the map and the table change, and you say so on HASH-125.
+4. One line of the result in the pull request's body and in your comment on HASH-125. **If it
+   is an objection to lean's stage 5 itself (not to ours), tell me before 15:00Z: I say it on
+   LEAN-80 before lean's 16:00Z.**
