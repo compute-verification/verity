@@ -726,7 +726,9 @@ class CommitSession:
             error = f"{type(e).__name__}: {e}"
         try:
             trace = backend.trace
-            steps = result.get("pass_steps") or []
+            steps = result.get("pass_steps")
+            if steps is None:
+                steps = []
             self.record = {
                 "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
