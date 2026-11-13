@@ -8,12 +8,13 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity_vllm.pipeline import ingress_rows as IR, serving_rows as SRW
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1 as B1
 from verity.commitments.windows import interface as IF
+from verity.definitions.registry import b1 as B1
+
+from verity_vllm.pipeline import ingress_rows as IR
+from verity_vllm.pipeline import serving_rows as SRW
 
 FN = bind(B1.BiasAdd, N=8)
 T = descriptor_id(FN)

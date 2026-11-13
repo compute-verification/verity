@@ -22,8 +22,9 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import gpu_lease as GL
@@ -64,7 +65,7 @@ def _replaced(st: dict[str, Any]) -> set[int]:
     return {id(t) for n, t in [*model.named_parameters(), *model.named_buffers()] if n in plain}
 
 
-def _to_host(model: Any, drop: set[int] = frozenset()) -> tuple[int, int]:
+def _to_host(model: Any, drop: set[int] | frozenset[int] = frozenset()) -> tuple[int, int]:
     """Every parameter and buffer of ``model`` on the device moved to host memory in place (the same tensor objects, so any reader
     holding them reads the host copy), except those in ``drop``, which nothing reads after the release and which are emptied (a
     TP rank's MXFP4 Marlin experts, the size of its model, already on the host as loaded); returns the bytes moved and dropped."""
