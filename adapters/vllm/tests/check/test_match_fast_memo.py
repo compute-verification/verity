@@ -154,9 +154,14 @@ def test_an_instances_operands_relative_to_a_sequence_are_the_records(compact, s
 
 
 @FORMS
-def test_a_sequence_equal_to_the_views_steps_in_another_list_is_the_views_own_too(compact, stats):
+def test_a_sequence_equal_to_the_views_steps_in_another_list_is_the_views_own_too(compact, stats, monkeypatch):
+    """The record's function is not asked: it would give the same operands, at the cost the view's own saves."""
     P = reads._mux_reader([("n", reads.M, 0, 2)], compact=compact)
     copy = [list(step) for step in P.steps]
+
+    def the_records(*args):
+        raise AssertionError(f"the record's function is asked about instance {args[1]}")
+    monkeypatch.setattr(C, "_canon_step_relative", the_records)
     assert gmf._canon_step_relative_identity(P, READ, copy, False) == gmf._canon_step_relative_identity(P, READ, P.steps, False) == \
         [tuple(arg) for arg in P.canon(READ, False)]
     assert stats["seqs_identity_checks"] == 2                    # asked again when another list is handed
