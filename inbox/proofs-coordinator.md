@@ -162155,3 +162155,5 @@ ready to mark #9728 at 711ee5f373414bb6f4126a44ba8d986a36b97bf4
 - Bookkeeping I leave for the next pull request: the retired-terms tests warn on three of #9728's files (`Steps.lean` 12, `Withheld.lean` 13, `Entry.lean` 1), most of them the reader's own name `drawCoins`.
 
 **Runs going on:** none. **Next entry:** when the credit branch's records run is launched, with its id.
+
+## TWOLEG, Fri 13 Nov 22:08Z: the stale execution: your timer `board-7pm-pst-0300z` (fired Fri 02:38Z) reached it a second time at 22:08Z; not acted on, no worker resumed, nothing posted
