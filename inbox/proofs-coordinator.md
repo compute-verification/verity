@@ -132675,3 +132675,43 @@ Nothing.
 - That no lock record changes: read, not run.
 - The docstrings' last clause, "no round's challenges are opened before the message of an earlier round is fixed", is my reading of what the order gives with the device's rule that a round's line names what it is opened after. No lemma states it.
 - `sessionsRun_replay`: not written.
+
+## ASSEMBLY, Fri 13 Nov 09:24Z: STAGECOINS's `5f7eec4add` is MERGED, the join is `b0048e4e24`; the one whole compile is OUT, `r20261113-092122-4d80` on vy-nebius-cpu-11, expected end about 09:45Z; `firstDrawn` stays a field until you say
+
+**In plain words.** The last head holding the whole compile is in, and the compile is running. Nothing at the join's tip is known to compile until it ends. STAGECOINS's lemma makes one more field of `JoinsAt` removable; I have not removed it, because STAGECOINS's entry leaves that to you.
+
+**1. The merge** [run].
+- `git merge-tree` of `2fc4e01e46` and `5f7eec4add`: no conflict, tree `7c0f46912d`; the merge commit `b0048e4e24` has that tree. It brings STAGECOINS's five commits above `244bca0793` and nothing of `main` (`git rev-list --count 2fc4e01e46..5f7eec4add --not origin/main`: 5 of 5).
+- It changes three files on the join: `FirstCoins.lean` and `StageCut.lean` (the two pattern lines) and `StageAlone.lean` (`inputOf_coinsRead`, `firstDrawn_of`, two imports).
+- After it: `lock_roots.py --check` adds nothing and finds nothing wrong; `dup_names.py` reports the same 17 names; `pins.py --stale` prints nothing, since no root changed; `pytest tests/test_lean_packages.py`, "35 passed, 3 warnings". Pushed.
+
+**2. The compile** [run: the launch's lines].
+- `r20261113-092122-4d80`: `--on auto --as proofs --mem-gb 72 --timeout 3600`, spilled to vy-nebius-cpu-11's research pool, "starts now", launched 09:21Z at `b0048e4e24`, worktree clean and pushed, no `ulimit`.
+- Five tries, one at a time: `DrawRoots`, `JoinsAt`, `JoinedCoupling`, `JoinedForm`, `StageCoins`. Each runs whether or not an earlier one failed, a failed one prints `TRY FAILED: NAME`, and the run exits 1 if any failed.
+- The first four reach 61 of `SampledTwo/`'s 80 files by their imports, `StageAlone` and STAGECOINS's five others among them [run: the imports read at the tip]. `StageCoins` is the fifth try because none of the four imports it. The other 18 files are the records run's, which I launch after this one, at 72 GB.
+- Expected end about 09:45Z [guess: `22d3` took about 14 minutes on cpu-7; cpu-11's build tree may be colder]. My timer reads it at about 09:32Z, and I set another if it is still going.
+
+**3. `firstDrawn`** [read: STAGECOINS's 09:18Z; `JoinsAt.lean` at the tip].
+- `firstDrawn_of (C) (hC : CaseIsSent C) : FirstDrawn C` is on the join now, compiled at STAGECOINS's head in `308d`, and `JoinsAt.lean` already imports `StageAlone`.
+- The mend is not applied. It is: the field and its docstring go (22 fields), `joinedOfLaw`'s `hD'` becomes `firstDrawn_of _ hC'`, and the module docstring's bullet moves `firstDrawn` to the theorems of the form's accept. One try of `JoinsAt`, `JoinedCoupling` and `JoinedForm` above `4d80`'s head.
+- STAGECOINS wrote "when the coordinator says so", so I wait for your word. Row 6 of my 09:10Z table reads "compiled in `308d`" in place of "not compiled" either way, and leaves the table when the field goes.
+
+**4. Row 7 of the table, `sessionMatches`** [relayed: STAGECOINS's 4b]. It stays a field, per play. My 09:10Z guess that `commitmentOf`'s own canonical check gives its first half is withdrawn: STAGECOINS read that the form parses the second stage's record twice, with two parsers, and compares neither digest with `c₂.digest`, and that `interiorUnshown` reads the digest of `e.record`. So the first half needs a comparison the form lacks, which is STAGECOINS's ask to soundness, not a lemma anyone can write today.
+
+**5. Routing** [read: the events as they reached this run]. At 09:17Z and 09:18Z this run received 21 Slack thread events of 07:13Z to 07:34Z and one timer of yours, `proofs-1552Z-prf589-opened` (set Thu 11:12Z, about FIXEDCOST and `r20261112-110333-4c33`). I acted on none: no resume, no status read of that run, no post. FIRSTACCEPT's 09:17Z reports the same leak.
+
+## Runs
+
+- `r20261113-092122-4d80`, vy-nebius-cpu-11, the whole compile at `b0048e4e24`, expected end about 09:45Z.
+- Timer: `assembly-stagecoins-head`, once, due about 09:32Z.
+
+## NEEDS
+
+- **You:** whether `firstDrawn` leaves `JoinsAt` now (item 3).
+- **TWOLEG:** the entry naming the run at `de592c42ef`, as in my 09:00Z item 5. The join's tip is now `b0048e4e24`, tree `7c0f46912d`.
+
+## Not established
+
+- That anything at `b0048e4e24` compiles: `4d80` decides. The last compiled head of the join is `401d7ef808` (`22d3`); the three mends of `JoinsAt.lean` since then are not compiled.
+- The 18 files of `SampledTwo/` outside the five tries, at the tip.
+- The two red root tests of my 09:15Z entry are as they were; this merge touches none of the files they name.
