@@ -62,7 +62,7 @@ theorem MonitoringPeriodBudget : Accounting.Guarantees.ComposeMonitoringPeriod.M
   induction Wp with
   | done => simp only [monitoringPeriodGame, RoundGame.BudgetAt]
   | window live W next ih =>
-    simp only [ExecutionPhasePlay.EveryWindow] at h
+    simp only [ExecutionPhasePlay.EveryExecutionPhase] at h
     simp only [monitoringPeriodGame]
     exact budgetAt_consGame _ _ h.1 fun ω => ih ω (h.2 ω)
 
@@ -320,14 +320,14 @@ theorem budget_monitoringPeriod {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc 
     (hlk : ∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0)
     (ha : 0 ≤ a) (hb : 0 ≤ b) (hSR : SplitRate Kd ρ p p0 a b wmax Λ)
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
-    (hMu : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)))
-    (hRB : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)))
-    (hGs : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) :
+    (hMu : Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)))
+    (hRB : Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)))
+    (hGs : Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) :
     RoundGame.BudgetAt Λ (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) := by
   induction Wp with
   | done => simp only [monitoringPeriodGame, RoundGame.BudgetAt]
   | window live W next ih =>
-    simp only [ExecutionPhasePlay.EveryWindow] at hMu hRB hGs
+    simp only [ExecutionPhasePlay.EveryExecutionPhase] at hMu hRB hGs
     simp only [monitoringPeriodGame]
     exact budgetAt_consGame _ _
       (budget_executionPhase Sc Cd hLP live W hρ hρN hwmax hlk ha hb hSR hMu.1 hRB.1 hGs.1)
@@ -337,7 +337,7 @@ theorem budget_monitoringPeriod {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc 
 
 /-- `P` of every window gives `P` of the window played at each window along every path. -/
 theorem everyExecutionPhase_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → SplitStages C V M → Prop} :
-    ∀ {n : ℕ} (Wp : ExecutionPhasePlay C Ω V M n), Wp.EveryWindow P → ∀ x w, P (Wp.liveAt x w) (Wp.windowAt x w)
+    ∀ {n : ℕ} (Wp : ExecutionPhasePlay C Ω V M n), Wp.EveryExecutionPhase P → ∀ x w, P (Wp.liveAt x w) (Wp.executionPhaseAt x w)
   | _, .done, _, _, w => w.elim0
   | _, .window _ _ next, hP, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
@@ -347,7 +347,7 @@ theorem everyExecutionPhase_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → S
 /-- **Window `w`'s modes** along the period's coins: the run of the window played there, at its rounds' coins. -/
 def executionPhaseMode {C B : Type} {Np M n : ℕ} (stg : Fin Np → ℕ) (Wp : ExecutionPhasePlay C (Paths C M × B) (Fin Np) M n)
     (x : Paths (Paths C M × B) n) (w : Fin n) (u : Fin Np) : Mode :=
-  (Wp.windowAt x w).modeAt stg (coinAt x w).1 u
+  (Wp.executionPhaseAt x w).modeAt stg (coinAt x w).1 u
 
 /-- **The period game's checks don't read its weights or costs**: its first `j` rounds pass at one set of weights
 and costs when they pass at another. -/
@@ -595,7 +595,7 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
       if Wp.liveAt x w t then executionPhaseMode (tileStage Cd Np) Wp x w t else .whole := by
     intro w hc t
     show (if pr.Credited x w ∧ Wp.liveAt x w t = true then
-      ((Wp.windowAt x w).joint (tileStage Cd Np)).mode (coinAt x w).1 t else .whole) = _
+      ((Wp.executionPhaseAt x w).joint (tileStage Cd Np)).mode (coinAt x w).1 t else .whole) = _
     by_cases hl : Wp.liveAt x w t = true
     · rw [ite_eq_left (And.intro hc hl), ite_eq_left hl]
       rfl
@@ -603,7 +603,7 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
   have hdead : ∀ w, ¬pr.Credited x w → ∀ t, monitoringPeriodMode Cd Wp pr x (w, t) = .whole := by
     intro w hc t
     show (if pr.Credited x w ∧ Wp.liveAt x w t = true then
-      ((Wp.windowAt x w).joint (tileStage Cd Np)).mode (coinAt x w).1 t else .whole) = _
+      ((Wp.executionPhaseAt x w).joint (tileStage Cd Np)).mode (coinAt x w).1 t else .whole) = _
     rw [ite_eq_right (fun h : pr.Credited x w ∧ Wp.liveAt x w t = true => hc h.1)]
   have hGnn : ∀ w, 0 ≤ ∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t
       then (tileWords Sc Cd Np t : ℝ) else 0 := fun w =>
