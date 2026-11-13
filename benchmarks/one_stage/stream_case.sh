@@ -26,12 +26,12 @@ public import Spot.OneStageZkStream
 def main (args : List String) : IO UInt32 := Spot.OneStageZk.Streamed.protocol.main args
 EOT
 printf '\n[[lean_exe]]\nname = "stream-probe"\nroot = "Spot.StreamProbeMain"\n' >> "$L/lakefile.toml"
-log "lake build stream-probe sampled-proofs-one-stage-zk"
+log "lake build: the probe and v2's executable"
 (cd "$L" && lake build stream-probe sampled-proofs-one-stage-zk) > "$O/spot-build.log" 2>&1 \
   || { log "spot build failed"; tail -60 "$O/spot-build.log"; exit 6; }
 from=(--case "${MF_CASE:-}")
 if [ -z "${MF_CASE:-}" ]; then
-  log "lake build flock-verify flock-firewall"
+  log "lake build: the Lean verifier and the ZK server"
   (cd "$F" && lake build flock-verify flock-firewall) > "$O/verifier-build.log" 2>&1 \
     || { log "verifier build failed"; tail -60 "$O/verifier-build.log"; exit 7; }
   log "check_build.sh bin"
