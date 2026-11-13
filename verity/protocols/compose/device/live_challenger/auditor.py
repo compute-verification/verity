@@ -79,7 +79,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
-  `verity.protocols.certifier.verifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  `verity.protocols.accounting.certifier.verifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
   (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
   killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
@@ -88,7 +88,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
   premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
   this auditor host) and `OneClock` (one clock for both, this host's), named in
-  `verity/protocols/spot/verifier/README.md`.
+  `verity/protocols/proofs/spot/verifier/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
   (`run.sh`), and it refuses a window's session (`--root`).
@@ -154,7 +154,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
 - **The model registry** (`/var/lib/vy-challenger/models.jsonl`, auditor's, `chattr +a`; `models.py`) is one line a
   registration, vy-admin's `model-register` run as `auditor`. It refuses a checkpoint whose
   files aren't the pinned `checkpoints-int8.json` role's, or that root or auditor alone can't write, or whose digest
-  isn't core's pin (`verity/protocols/pouw/verifier/lean/check/models.json`), and a descriptor whose linears aren't the model's decoder
+  isn't core's pin (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`), and a descriptor whose linears aren't the model's decoder
   layers in order; it commits each K's b/<K> from the pinned shards alone under a fresh salt key it keeps
   (`weights.weights_roots`), and appends the roots and their fold. `model-key` gives a lane the key (the openings of
   public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.
@@ -202,7 +202,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
-  (`verity.protocols.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
+  (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
   rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
   client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
   `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
@@ -233,7 +233,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the warden also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
-  (`verity.protocols.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
+  (`verity.protocols.accounting.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the warden reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
@@ -285,7 +285,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
 which refuses a second signer, never sees two, and sessions run side by side. The ledger's reference check,
-`verify_ledger` and `verify_periods`, is `verity.protocols.spot.device.challenger`'s, the verifier's own.
+`verify_ledger` and `verify_periods`, is `verity.protocols.proofs.spot.device.challenger`'s, the verifier's own.
 """
 from __future__ import annotations
 
@@ -316,7 +316,7 @@ HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(TREE))
 
-from verity.protocols.spot.device.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
+from verity.protocols.proofs.spot.device.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
                                                              LEDGER_SCHEMA as SCHEMA, LEDGER_SCHEMA_V1 as SCHEMA_V1,
                                                              LEDGER_TAGS as TAGS, MAX_LEDGER_LINE, MAX_LEDGER_LINES,
                                                              MAX_PINS, PERIOD_KINDS, RESERVED, SESSION_KINDS,
@@ -2249,8 +2249,8 @@ def watch_link(link: subprocess.Popen, serve: subprocess.Popen, served: threadin
 
 def record_of(out: Path):
     """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
-    from verity.protocols.spot.device import challenger as C
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import challenger as C
+    from verity.protocols.proofs.spot.device import remote
     try:
         doc = json.loads((out / remote.RECORD).read_text())
         return C.ChallengerRecord.from_json(doc), doc
@@ -2277,8 +2277,8 @@ def await_commitment(host: Host, session: str, active: Callable[[str], bool],
 def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
     """(coins released by family, counted from the release log under the commitment the record signs; the record's leaf),
     each None when the session left no such file."""
-    from verity.protocols.spot.device import challenger as C
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import challenger as C
+    from verity.protocols.proofs.spot.device import remote
     record, doc = record_of(out)
     if record is None:
         return None, None

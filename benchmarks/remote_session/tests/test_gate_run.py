@@ -32,7 +32,7 @@ def dry_run(tmp_path: Path, **given: str) -> tuple[subprocess.CompletedProcess, 
     """gate_run.sh --dry-run with GIVEN and nothing else of SET, step 1 skipped: its result, the words of the prover's
     run it printed and the words of each `research run` it started, in order (the probe, then the fire)."""
     r, origin, bin_, home = tmp_path / "repo", tmp_path / "origin.git", tmp_path / "bin", tmp_path / "home"
-    pin = r / "verity/protocols/pouw/verifier/lean/check/models.json"
+    pin = r / "verity/protocols/accounting/pouw/verifier/lean/check/models.json"
     for d in (pin.parent, r / "benchmarks/remote_session", bin_, home):
         d.mkdir(parents=True)
     pin.write_text(json.dumps({"TINY": {"repo": "org/tiny", "revision": "abc123"}}))

@@ -26,8 +26,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import NamedTuple
 
-from verity.protocols.certifier.verifier import advice as I1
-from verity.protocols.certifier.verifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
+from verity.protocols.accounting.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
 from verity_vllm.pipeline.advice_code.derived import (
     CertifiedRequest, Config, Holdings, pool_bound, PREFIX_ROOT as PREFIX_ROOT, Prefixes, Residual,
     stop_rule as stop_rule, tie_fields, TOKEN_BYTES as TOKEN_BYTES, unit_key as unit_key, Walk,
