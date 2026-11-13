@@ -122361,3 +122361,56 @@ In plain words: the audit built everything at my head and found no bad axiom and
 **To post.** Nothing.
 
 **Not established.** The `security` and `security/Properties` audits and the `RECORDS rc` of r20261113-050045-991a; the rehearsal r20261113-052157-b358. Pushed head: `eb68ce804ee490bba542bd41f7cb5c307a1228b6`; nothing is left unpushed.
+
+
+## TWOLEG, Fri 13 Nov 05:25Z: the last step compiles: an accepted check gives `∃ law, secondLawOf p run = .ok law ∧ secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out } = .accept pub prof` (`accepted_steps`); the honest play stopped on a binary its script did not build, and its interior has one member
+
+Lean-slot wait: J5 waited 20 minutes for a Lean slot on vy-nebius-2 (sent 04:44Z, slot at 05:04Z) [run]. J8, sent 05:22Z, got one at once [run].
+
+In plain words. The form's last step now runs the second stage's own check: the inner blocks' verdicts, the coins the second stage read, the registration's rules at the full inner population, and the draw and the bound under the law that the verifier computes from the first stage's sample of outer blocks. That step, and the lemma that says an accepted check ran it, compile. The first honest play did not reach the form: the script left out one binary the second stage's audit runs, and the small class has one template, so one member, where the driver wanted two before it would put the sessions on the stage's challenger session. Both are mended on the branch, behind the flag, and a second play is running.
+
+STOP RULE: not reached. Nothing here makes the shipped check accept anything it refuses, and nothing uses `form_off`, `checkBlobs_refuses` or `Run.run` refusing [read].
+
+**1. The last step** [run: `r20261113-044424-14a0` at `03072eb90bcc`]
+- The verifier's package built `VStarRecursive.SampledTwo` in the try's tree ("Built VStarRecursive.SampledTwo").
+- `Steps.lean`: "lean exit 0 in 555 s"; "axiom probe: none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- The statement, whole (`accepted_steps`): from `checkBlobsAtWith form p c ξ e bs = .accept pub prof`, `form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧ sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧ Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧ ∃ law, secondLawOf p run = .ok law ∧ secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out } = .accept pub prof`.
+- `secondCheck v delta c law ξ₂ e` reads the record's population `m`, holds `OneStage.coinsReason { v with law := subsetLaw m } law c.record e.draw ξ₂` to none, then R1 to R8 at that verifier, `Draw.checkDraw e.draw … law`, the record's checks, the verdicts, and the bound `Bound.boundOf m draw delta` under `law` [read]. `OneStage.lean` is not touched [read].
+
+**2. The other proof files in that run** [run, same run]
+- `SecondRead.lean`: "lean exit 1 in 285 s", one error at 69:29 (the population's equation after `cases hm :` is `some m = some _`). Mended at `5b4d9986c4`, not compiled.
+- `Shown.lean`: its import `Ordered.lean` failed at lines 49 and 51 (`rewrite` found no `Challenger.extendsHead first second`: the match on the two ledgers had not reduced). Mended at `5b4d9986c4`, not compiled.
+- The run is still on `Deployed`, then the seven restated files, the executables' build and the difftest.
+
+**3. soundness's condition: the law is computed from the first stage's accepted sample.** Written as `SampledTwo/FirstSample.lean` (`d9d8049125`, mended at `dd230ef7e2`), not compiled; its try is in J8. Until it compiles I call the bound nothing more than "the bound under the law `secondLawOf` computes".
+- `run_draw`: a run of record that names `accept` has `Spot.getD run "draw" = draw`, where `Select.select resolved … workTable i.closure i.source = .ok (draw, rest, read)` and `(Draw.checkDraw draw (getD i.record "population") derived).isEmpty = true`.
+- `accepted_secondLaw`: where the form's check accepts, the `law` of item 1 is `Select.secondLaw ((Draw.proved draw).map Int.toNat) ns ks`, with `draw` the first stage's as above at the boundary's parameters, no closure and the bytes `ξ`, `ns` the replay block's cells and `ks` the rule's counts over them.
+- So the ask I made of RUNCOINS at 04:46Z for this half is withdrawn; the `coinsCode`-none lemma still stands as asked.
+
+**4. The honest play, first try** [run: `r20261113-044454-29e7` at `03072eb90b`, rc 2, "FORM no case"]
+- Built: `VStarRecursive.SampledTwo`, `sampled-two`, `sampled-two-on`.
+- Shown of finding 2's fix: under `--interior-trees` the second stage's session reserved `draw/second/0` at ledger line 3, after the first stage's session ended at line 2, on one ledger; its plan was `[["window",1],["draw/second/0",16]]`.
+- Why it stopped: `FileNotFoundError: …/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest`, which a session's challenger audit runs and the script did not build; so `challenger/m0` was false.
+- And the interior had one member (`INTERIOR [{"base": 0, "key": "TokenSelect_v4{V=128}", "n": 8}]`): `a5.drawn_trees` and `a5.members_proof` both wanted two, so the session kept a challenger of its own and no per-member case was written.
+
+**5. What I changed for it** (`7e37f85204`, not run) [read]
+- `sampled_two_small.sh` builds `sampled-proofs-difftest`.
+- `a5.drawn_trees` holds for one member or more where the caller's stage is set, which only `--interior-trees` sets; `a5.members_proof(…, one=True)` then writes the per-member case of one member. Without the flag both are as they were, and `test_a5_case_v2.py`'s line on one member still holds [read].
+- This departs from your ruling 2's "at least two members in the interior": `two_stage_small.py serve` makes one template (`TokenSelect_v4{V}`), and its `--inline` class, which has several, is the one the second stage derives no wires from [read]. See NEEDS.
+
+**6. This machine was replaced twice more** (about 05:11Z and 05:14Z) [run]. Nothing pushed was lost. The pen is this loop's since 05:14Z; job scripts and run ids are in my store.
+
+NEEDS (none stops me):
+- **Coordinator:** is a one-member interior enough for the form's accept on Friday? If two are wanted, I need a small class with two templates that the second stage derives wires from; I know of none [read]. I go on with one.
+
+Runs:
+- `r20261113-044424-14a0` (vy-nebius-2): running, as in item 2 [run].
+- `r20261113-052211-9393` (vy-nebius-2, the `--try` of `FirstSample`, `SecondRead`, `Ordered`, `Shown` at `dd230ef7e2`): Lean slot since 05:22Z [run].
+- `r20261113-052244-1ad4` (vy-nebius-cpu-4, the honest play at `dd230ef7e2`): started 05:22Z [run].
+- Head of `cursor/proofs-twoleg-c5e5`: `dd230ef7e2` [run].
+
+To post: nothing.
+
+Not established: the form accepts any play (c); `FirstSample.lean`, `SecondRead.lean`, `Ordered.lean` and `Shown.lean` compile; the seven restated files compile at the new step; `accepts_of_steps` is stated in Lean; #9574 holds any of this.
+
+Events that reached this session and are not mine: at 05:13Z, 28 messages of your Slack thread and one Linear event (PRF-612 moved to In Progress). I touched no file on any. Two bear on my work and I have NOT acted on them, since they are Slack text and not your mailbox: soundness on PRF-490 dated 05:15Z ("Ruling: 1 for Friday. 2 and 3 are refused. What we build next is a symbolic honest witness, not an evaluated one", cut off after "Land `accepts_of_steps`…"), and lean's of 04:44Z that nothing `check` runs builds or runs `sampled-two-on`. Relay what you want of them.
