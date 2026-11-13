@@ -119,10 +119,10 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   - The piece's steps close a session that no ``close`` ended before they read the kept run (`close_open`): the same
     wait and the same kept files, nothing published.
   - The piece answers for a session's run as for a rehearsal's, only when the gate's check accepted the whole run
-    (`rehearsed`). One connection cut from s + D on at the session's end, one refused at a full queue or one
-    link-window the relay faulted, whichever load it carried, leaves every window of the served run without the
-    certifier's answer. The run's records cover the connections that crossed the relay; that nothing else reaches the
-    endpoint is the placement's, as a rehearsal's.
+    (`rehearsed`). One connection the relay failed closed, one cut from s + D on at the session's end, one refused at
+    a full queue or one execution phase the relay faulted, whichever load it carried, leaves every window of the
+    served run without the certifier's answer. The run's records cover the connections that crossed the relay; that
+    nothing else reaches the endpoint is the placement's, as a rehearsal's.
   - ``--gate local`` is the dry run's: this tree's gate on a scratch host under SERVE_DIR/`PRIVATE`, its unit a
     process of the front's (`local_unit`) with a `relay` each way in the place of its ssh.
 """

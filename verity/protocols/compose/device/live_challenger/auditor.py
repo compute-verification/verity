@@ -310,6 +310,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     s + D, with no `END` or `FAIL`, makes the check refuse the link-window of its admission, so the run isn't
     accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`WardenParams.span`:
     D + ⌊(egress cells − 1) / r⌋ buckets).
+  - *One verdict.* The check's verdict is the whole session's, whichever client a connection was: one connection
+    the relay failed closed, for its client's bytes (ingress past the schedule's bounds, or a malformed cell) or for
+    the endpoint's (an answer late, past its cells, not in the id form, or its connection failing), one refused at a
+    full queue, one cut at or after s + D, or one execution phase the relay faulted, and the run isn't accepted.
   - *What it establishes.* The session's records cover the connections that crossed the relay, each cell in its
     bucket. That nothing else reaches the endpoint is not the relay's to say: it is the placement's, and the
     developer's forward's.
