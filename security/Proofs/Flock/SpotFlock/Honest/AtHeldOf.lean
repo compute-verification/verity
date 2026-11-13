@@ -17,13 +17,14 @@ input rather than the copies:
 * `premises_of_heldOf`: the premises, from the population check at the run's own program and query
   (`Slots.popOk`, which `Run.run` refuses without), a first stage of a count `K` (`firstK`), the registered wiring's
   check (`AddressRow.wiresChecked`) and the reference reads being well formed (`RefReadsWf`);
-* `inScope_of_heldOf`: the two-stage scope holds every statement that decodes, from the population check alone.
+* `inScope_of_heldOf`: the two-stage scope holds every statement that decodes, from the population check alone;
+* `honest_of_heldOf`: `HonestExists`, from those facts and one play the copy's verifier accepts.
 
 ## What this does not show
 
 That `heldOf` builds a copy at an accepted run (`heldOf i it u = some h`), that its first stage is of a count `K`, or
-that the registered wiring's check passes: each is a hypothesis here. An accepted run: `Any.lean`'s `accepts_of` takes
-a witness in Flock's relation, which is the prover's.
+that the registered wiring's check passes: each is a hypothesis here. So is a play the copy's verifier accepts
+(`AcceptsPlay`), which is an honest session's.
 -/
 
 @[expose] public section
@@ -81,5 +82,14 @@ theorem inScope_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Inte
     exact ⟨_, rfl⟩
   obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 (twoHolds_of hh hp s)
   exact inScope_of_two hx hd
+
+/-- **`HonestExists` at a copy `heldOf` builds**, from the facts `premises_of_heldOf` takes and one play the copy's
+verifier accepts, whose statement is in scope (`inScope_of_play`). -/
+theorem honest_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Interior} {u : Unread} {h : Held}
+    (hh : heldOf i it u = some h) (hWf : RefReadsWf h) {n K : ℕ}
+    (hp : _root_.Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true)
+    (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) (hA : AcceptsPlay h) :
+    HonestExists :=
+  ⟨h, premises_of_heldOf hh hWf hp hK hwc, inScope_of_play hA, hA⟩
 
 end SpotFlock.Honest
