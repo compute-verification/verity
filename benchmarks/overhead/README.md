@@ -77,9 +77,8 @@ that nothing supersedes, ran the arm's cubin from the `art:` id it was sent (the
 gate passed; a cubin built in the run is development only), and its point passed every rule: each linear timed, at least
 20 paired reps, a 95% interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every
 row (`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
-and says why. A reader of γ outside `benchmarks/` takes it from `table --json`, whose rows carry `of_record` and `why`;
-inside, `overhead_records.gamma_of_record` raises on a γ without one. Either way the row carries its `note` (A scheme's
-arm, below), and a γ quoted from it keeps the note.
+and says why. A reader of γ takes it from `table --json`, whose rows carry `of_record` and `why`. The row carries its
+`note` (A scheme's arm, below), and a γ quoted from it keeps the note.
 
 `table` presents each γ of record per window and per monitoring period of a week, a month and a year, over all compute:
 the census's datacenter (`dc-12500-machines-600s`: the GPU-hours spent proving at the share γ/(1+γ), and their FLOP at the
