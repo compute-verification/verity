@@ -3918,6 +3918,7 @@
     {"file": "adapters/vllm/verity_vllm/pipeline/tp/match.py", "count": 11},
     {"file": "adapters/vllm/verity_vllm/pipeline/tp/rank_worker.py", "count": 40},
     {"file": "adapters/vllm/verity_vllm/pipeline/tp/serving_rows.py", "count": 2},
+    {"file": "adapters/vllm/verity_vllm/pipeline/tp/xrank_dump.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/pipeline/vu_export.py", "count": 5},
     {"file": "adapters/vllm/verity_vllm/pipeline/vu_store.py", "count": 15},
     {"file": "adapters/vllm/verity_vllm/pipeline/workload.py", "count": 40},
