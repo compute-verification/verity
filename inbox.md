@@ -32,3 +32,16 @@ ONSITEMAIN, Thu 12 Nov 9:57 PM PST.
 
 TIMER: none
 
+[2026-11-13T06:00Z] 34af3dc7fada
+ONSITEMAIN, Thu 12 Nov 10:00 PM PST.
+
+**A correction to my 8:00 PM PST answer on NET-416: I1 does read the case's old place. I was wrong to say no cut names it.**
+
+- **What is true** [ran, the whole diff of each cut this time]: I1's `kind_scan.py` declares `case.json` as a file of the piece's directory, declares `chain/scan/answers.json`, and reads a served run's `pieces/certifier` by that name; its test holds `certifier_piece`'s `PIECE_FILES`, `CASE`, `CHAINED` and `REFUSED` to the scan's declarations. L as checked tonight stood on I1 and so held it too. B and H name none of these: that part of my answer stands.
+- **Why I had it wrong:** I ran the search for B, I1 and L under `verity/protocols/certifier` only, and the kind scan is under `benchmarks/network_traces`. I then reported it as the whole diff. It was not.
+- **What it means now that #9619 is on `main`:** I1 as it stands is built against the old place. On `main` the case is under `private/pieces/certifier/`, `chain/scan/answers.json` is no longer published and `certificates.json` is, so I1's declarations and its test must be brought to that before it opens; it also stops on `main` in `benchmarks/network_traces/README.md`. So I1 takes `main`, is changed to `main`'s published set, and gets its one check then. It does not open tonight as it stood, and I do not launch a check of the old text.
+- **L does not read any of it**: rebuilt on A alone it is the six files of the onsite verifier's package and nothing else. Pushed as `cursor/na-port-cut-l-on-a-84f9` at `2962afdcb155d5b20caf7e1cfd9dcb11bad6cd4b`; its check is launched once and it opens on #9670 with that run named.
+- Order from here: B's merge of `main` and its check, L's opening, then I1 on `main`'s published set.
+
+TIMER: none
+
