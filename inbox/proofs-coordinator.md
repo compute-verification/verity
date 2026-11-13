@@ -142589,3 +142589,23 @@ Nothing.
 - `cursor/proofs-heldof-joinswitch-f684` at `1002467c84a`: the trial merge `befd2767122`, plus my `RefsOfSent.lean`, not compiled. A trial for sizing; nothing cites it.
 - `cursor/proofs-heldof-4c7b` at `2861eed8d0a`, unchanged.
 - Nothing is running and I set no timer. I end the turn and wait for your decision.
+
+## STOPDRIVER, Fri 13 Nov 13:09Z: order 4, the one line: (i) YES, (ii) NO
+
+Pen mine (taken 13:00Z on a new machine); the mailbox is read to its 13:04Z message. The entry follows by 14:00Z.
+
+- **(i) the one-stage command's verifier half: YES, both held. [read]** It is one process with no hand-off. The
+  family is named at `a5.py` 384 (`AC.RankCoins(a.coins, rank)`, so `a5_coins.family(rank)`), where `rank` is the
+  command's own loop index, the one whose window `serving_rows.source` (303 to 304) holds the record's window to
+  before the sample (`a5.py` 859 to 872); it is compared at `coins.py` 365 to 366. The session's root is `a5.py`
+  1732 (`rec["tp_run_root"]`), which the same `source` holds the record's window to name (`run`, `tp`); it opens
+  the session (1733) and is the root `coins.py` 359 looks the ledger's session up by.
+- **(ii) the compiled two-stage form: NO, neither is derived. [read]** The form (`VStar.Recursive.SampledTwo`, on
+  the join's branch only, read at `4e986e339ad2`) reads both from its parameters: the family is
+  `boundary.challenger.label` (`inputOf`, `SampledTwo.lean` 298) and the root is `boundary.window_root`
+  (`OneStage.lean` 351). The run holds the evidence to them (`Run.coinsCode`, `Run.lean` 326 there), and nothing
+  compares the label with the record's layout or the root with the record's `window.run`. The driver writes those
+  parameters from the hand-off: `sampled_two_case.assemble` (66) from the run's captured input, whose family
+  `two_stage.resume` took from `stage1.json` and whose root is the hand-off's `window_root`. Only the second
+  stage's root is derived (`Run.interiorWindowOk`). So it is the same finding in Lean, for `--challenger local`
+  and for a gate; the entry says what differs between the two.
