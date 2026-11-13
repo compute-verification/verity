@@ -47,3 +47,47 @@ POLICYROWS to network-accounting (lead), Thu 12 Nov 5:19 PM PST. Both pool runs 
 - **NET-298:** the command is launched once on `main` at `e86d9204135c` as `r20261113-010724-3b6e`: `verity bench certifier_term` as text, as `--json`, with `--requests census`, with `--world-requests 1.778e16`, and `main`'s own calculator tests, each written under the run's `out/`. It is waiting in the queue. The comment on NET-298, with one line for each item of its done-when list, follows from that run's files.
 - Your correction on the 4:40 PM stamp is read.
 
+[2026-11-13T01:22Z] 2964b0a73abe
+ONSITEMAIN, Thu 12 Nov 5:21 PM PST.
+On your 4:25 and 4:41 PM PST messages, read whole. **The 5:30 PM line. B and I1 ended exit 1, and A and L will: three tests fail in every cut. One is cut A's (a public-boundary edge; a one-line cure is tried and waits on your word). Two are the base's, cured by #9375's last commit. No Lean check failed. Two asks, under "Asks".**
+
+**1. The runs, one line each**
+- **A** `r20261113-001410-d405`, at `16ec16123213` (`cursor/na-scratch-port-cut-a-84f9`): Lean check of the three packages exit 0 [ran]; suites still running at 5:21 PM PST: 53 of 59 ended, 2 failed, the same two suites and three tests as B's. So it ends exit 1. Its limit ends 8:14 PM PST.
+- **L** `r20261113-001437-3142`, at `6c30698f011b` (`cursor/na-scratch-port-cut-l-84f9`): Lean check of the onsite verifier's package exit 0 [ran]; suites still running at 5:21 PM PST: 46 of 59 ended, 2 failed, the same two and three. So it ends exit 1. Its limit ends 8:14 PM PST.
+- **B** `r20261112-231928-0ec8`, at `1801131e3bb3` (`cursor/na-scratch-port-cut-b-84f9`): **exit 1** [ran]. 59 suites, 57 passed, 2 failed.
+- **I1** `r20261112-231955-cb97`, at `5fa0d3fcfbc1` (`cursor/na-scratch-port-cut-i1-84f9`): **exit 1** [ran]. 59 suites, 57 passed, 2 failed.
+- **C's try** (D2d `r20261112-233651-a40c`, at `09df6a06c8f4`, `cursor/na-scratch-port-rows-84f9`): exit 0, as sent at 4:19 PM [ran].
+- **The records run** (H1 `r20261112-234100-b345`): `failed`, on the base's `security/Proofs`, as sent at 4:19 PM [ran]. H stands at `83df88c318b1` (`cursor/na-scratch-port-h-84f9`), waiting on your word.
+
+**2. The three failed tests, the same in B and I1, and in A and L so far** [ran]
+- **Cut A's: `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`** (suite `repository`). One edge: `NetworkCheck/RowsAudit.lean` imports `NetworkCheck.Period`, and `public_boundary.toml` lists the period check private (it reads `NciCheck.Desc`). The rows audit is under the certifier's public group, so a public file needs a private one. It is in every cut from A on; H's head passes the test [ran on the VM].
+  - **The cure I tried, not committed:** one line in `[private] protocols`, beside the period check's: `NetworkCheck/{RowsAudit,RowsMain}.lean`, the audit and its executable. With it the boundary file's 56 tests pass at A's head, and the one test passes at L's head and at the series' head [ran on the VM]. Nothing public imports either file [ran: that test]. The package's lakefile names the executable `network-rows`, as it names the period check's.
+  - **The other way** is to cut the edge: the audit reads the period check's schedule and records, so those definitions would move to a public file. That changes the base's text, which the port's rule forbids. I do not propose it.
+  - The file's header says moving a path across the boundary is a boundary decision. So it is yours.
+- **The base's: two tests of `test_nci_record_difftest.py`** (`test_a_pinned_readers_layout`, `test_the_reference_reads_a_record_as_the_interface_does`; the certifier verifier's network suite). Both fail on H's tree, which holds none of A, B, I1 or L [ran on the VM]. The series changes none of the test's inputs [read]. #9375's last commit `34c5cbb3705` changes the one helper line that fails [read]; I did not run the tests with it.
+- Everything else the repository suite prints (retired terms, an older name, a count) is a bookkeeping warning [read].
+
+**3. Asks**
+- **(a) The boundary line: yes or no.** On yes it is one commit of cut A's, after A's four, and every later cut is rebuilt over it under a new branch name. No force-push.
+- **(b) The reruns.** A rerun is a new decision. I propose none before #9375 is on `main`: until then every cut fails on the base's two tests whatever I do. After your word: the cuts rebuilt on `main` with the boundary line, then each cut's check once, each launch line naming `check.py --build` itself. If you want one run fewer, L's head holds A, B and I1 as prefixes; but each body should cite a run at its own head, so I plan four.
+
+**4. The two reads, for vllm** (the base `bafae2eaec2e`; I build none of parts 1 and 2)
+- **`served_verdicts.py witness` takes the case** [ran: the base's three tables applied to the path]. `private/compose/pieces/certifier/case.json` matches no rule of `WITNESS_DIRS`, `WITNESS_TOPS` or `WITNESS_NAMES`, nor the prover-state rule. The verb judges a path, never the content. Whether the certifier's case holds only verifier-side values I did not read.
+- **The compose follow-on lays nothing into its own `OUT/pieces`** [read]. On the served node `handoff()` copies each piece's `COMPOSE_PIECE_FILES` to `private/compose/pieces/<piece>/` and lists them with their sums. On the composing host `compose` holds the copy to the sums, the record reads `--pieces private/compose/pieces`, and the composite runs under `COMPOSE_HANDOFF=1` with an `OUT` that has no `pieces/certifier`. Its case scan walks `private/` and skips all of `private/compose`. So part 1's scan finds the case only if it also takes `private/compose/pieces/certifier` under a hand-off, or `compose` lays the piece into `OUT/pieces` first.
+- `COMPOSE_PIECE_FILES` is one list for every piece: `case.json` added there is carried for any piece that has a file of that name. I did not list which pieces do.
+
+**5. Your item 4, early: the network certifier's signing key** [read; cut B's head, where these three files are the base's]
+- **Where:** the gate's rehearsal verb (`auditor.py`, `warden_command`) starts a unit that runs `benchmarks/network_traces/warden_serve.py rehearse`. `rehearse` makes the key itself: `certifier_serve.load_key` in a fresh temporary directory, and removes the directory when the run ends.
+- **Which host:** the gate's, where the unit runs.
+- **What leaves:** the public half only. `deployment.json` in the run's `out/` carries it (`params`, `public`, `key_id`), and `fetch RUN` hands that out. The secret seed is a 0600 file of the temporary directory; one process signs.
+- **No verb hands it out ahead of a run, and there is nothing to hand out:** the key is new each run. The gate's `pubkey` verb prints the challenger's key, not this one. `warden_serve.py keys --dir` makes a standing key and `serve --key` reads one, but `rehearse`, the gate's only path, takes no key.
+- **So a pin has nothing to name today.** Until the gate holds a standing key for the network certifier, every run reads `rehearsal` under any table.
+
+**6. `LAUNCH.md`** [ran, 5:09 PM PST]: unchanged since 2:21 PM PST. The five held files match its digests (`sha256sum -c`); the launching checkout is at `0582899c4392`, clean; the pinned launcher's at `5f0c008aa040`. Its 6 AM example reads 16200 s (my 2:33 PM line; your 2:44 PM message took it). **If your "`LAUNCH.md` by 9:00 PM PST" asks for more than that, say what:** I find no open order on it.
+
+**7. The driver cut** as your 4:41 PM message has it: parts 3 and 4 only, the two phrases word for word, our own table empty in the tree, a fixture key for `holds`, a key pinned for another host or role reads `rehearsal`. Built on your word after the rehearsal's report. Nothing is built.
+
+**Least sure of.** That the private-list line is the ruling you want: it keeps `network-rows` out of the public export, like the period check. The base's two tests: shown failing without the series, not shown passing with #9375's line. Item 5: I read the gate's code, not a deployed gate's pinned tree.
+
+**Still failing:** the notes sync's fetch (authentication). My notes are in my store.
+
