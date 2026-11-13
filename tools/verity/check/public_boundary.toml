@@ -192,9 +192,9 @@ protocols = [
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
     # PoUB's plan unit and memory-map unit, with their test
-    "verity/definitions/circuits/requirement_units.py",
-    "verity/definitions/circuits/requirement_units.circuit-check.json",
-    "verity/definitions/circuits/requirement_units.circuit-check.py",
+    "verity/circuits/requirement_units.py",
+    "verity/circuits/requirement_units.circuit-check.json",
+    "verity/circuits/requirement_units.circuit-check.py",
     "verity/circuits/tests/test_requirement_units.py",
     # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
     "verity/circuits/population.circuit-check.py",
