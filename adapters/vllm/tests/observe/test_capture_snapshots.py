@@ -22,7 +22,6 @@ from verity_vllm.observe.capture import Capture, ObserverConfig
 from verity_vllm.observe.log import read_log
 from verity_vllm.observe.pinned import IDENTITY_ALIAS_OPS
 
-
 #: the stand-ins for pinned memory and the CUDA event, and for the capture's clock
 device, clock = S.device, S.clock
 
