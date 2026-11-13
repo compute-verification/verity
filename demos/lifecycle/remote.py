@@ -1,5 +1,5 @@
-"""The remote composite (`verity/remote/v0`: the inference-only policy, PoUW and sampled proofs) on the lifecycle, as a
-deployment of two parties.
+"""H1's remote composite (`verity/remote/v0`, the development executable `remote`, which no configuration names: the
+inference-only policy, PoUW's period and sampled proofs) on the lifecycle, as a deployment of two parties.
 
 The developer serves its own load, so nothing the auditor runs sees the system's I/O: the developer reports what it served
 through its advice, and the audit holds each execution block to its committed values. Work it leaves out of
@@ -13,8 +13,8 @@ from typing import Any
 
 from lifecycle import (DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, VERIFIER, Developer, Link, Verifier, load_of,
                        products, theta_of)
-from verity.configuration.deploy import runtime
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
+from verity.runtime import runner as runtime
+from verity.protocol import Channel, Manifest, Role
 
 ID = "lifecycle-remote"
 LAYOUT = replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),))
