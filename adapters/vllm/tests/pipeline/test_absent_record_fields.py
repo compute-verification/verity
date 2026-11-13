@@ -57,13 +57,16 @@ SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sam
 @pytest.fixture(autouse=True)
 def _the_collector_as_pytest_has_it(monkeypatch):
     """`build`, `manifest` and `global-program` tune the collector of the process their `main` runs in, which here is pytest's:
-    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it."""
+    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it.  Each test runs one over
+    the process's first threshold, so a command that tunes fails it in a process that is tuned already too."""
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
     before = gc.get_threshold()
+    held = (before[0] + 1, before[1], before[2])
+    gc.set_threshold(*held)
     yield
     after = gc.get_threshold()
     gc.set_threshold(*before)
-    assert after == before, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
+    assert after == held, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
 @pytest.mark.parametrize("doc, want", [
