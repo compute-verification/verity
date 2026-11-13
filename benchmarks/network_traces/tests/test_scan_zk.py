@@ -618,10 +618,10 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
-    stratified over the three templates, its bound 0, for the group's registration (a v2 record: it lists a link-window's
-    certified rows as a registered value), and the tied values R8 let through in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
-    refused audit a reject of the same registration naming why; an accepted record of another registration the driver's
-    error."""
+    stratified over the three templates, its bound 0, for the group's registration (a v2 record: it lists a
+    link-window's certified rows as a registered value), and the tied values R8 let through in its public when there
+    are any (``rests_on_period_check``, an extra key the period check's parser takes); a refused audit a reject of the
+    same registration naming why; an accepted record of another registration the driver's error."""
     from verity.protocols.pouw.verifier import core_check as CC
 
     G, T = 2, 4
