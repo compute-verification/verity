@@ -1,0 +1,60 @@
+fdc13292dca Merge remote-tracking branch 'origin/main' into cursor/circuits-cir269-call-scope-6f04 Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+b93a5b1328e Merge 4ae17f7eafd7 (the layout move) into cff86ae1749793f4ed682154d2e35b3019e663d2, restacked
+7534fa84f73 restack: rerun tools/move/layout.py --map tools/move/protocol_groups_map.toml from 0932f6acd0a8 on cff86ae1749793f4ed682154d2e35b3019e663d2
+a7f1d04e317 Merge fced09c40273, the layout move's base, into cff86ae1749793f4ed682154d2e35b3019e663d2
+cff86ae1749 Merge c6e3167fa310 (the layout move) into 77c86308b089ff2cbafbdd4a7483e9e14f61ac1d, restacked
+c219a984fff restack: rerun tools/move/layout.py --map tools/move/pouw_kernels_map.toml from c6e3167fa310 on 77c86308b089ff2cbafbdd4a7483e9e14f61ac1d
+8077651c97d Merge 2b0d06065c5f, the layout move's base, into 77c86308b089ff2cbafbdd4a7483e9e14f61ac1d
+77c86308b08 Merge 396437741ba7 (the layout move) into b85df71b4fd4a9991747ab811d6c78f573db69a8, restacked
+26a21ab68a8 restack: rerun tools/move/layout.py --map tools/move/pouw_rows_map.toml from 396437741ba7 on b85df71b4fd4a9991747ab811d6c78f573db69a8
+ff33621032d Merge 50f76ac59743, the layout move's base, into b85df71b4fd4a9991747ab811d6c78f573db69a8
+b85df71b4fd Merge 33cf1e51e2b0 (the layout move) into 67512e3bda13737ca8837efb2f17734714c9f52d, restacked
+4b299d9e621 restack: rerun tools/move/layout.py --map tools/move/sass_gate_map.toml from 33cf1e51e2b0 on 67512e3bda13737ca8837efb2f17734714c9f52d
+8ace62e935c Merge ffdc9480c03d, the layout move's base, into 67512e3bda13737ca8837efb2f17734714c9f52d
+67512e3bda1 Merge 5323c3704a51 (the layout move) into 5aa0806cf6fe5e82d5e7f35973f9523c2f8012af, restacked
+5376bd0b30c restack: rerun tools/move/layout.py --map tools/move/hardware_map.toml from 5323c3704a51 on 5aa0806cf6fe5e82d5e7f35973f9523c2f8012af
+5aa0806cf6f Merge 525dbb4581d4 (the layout move) into 20ece08f515bf453ecaad64de02d16f4a299951c, restacked
+a193fda8ab4 restack: rerun tools/move/layout.py --map tools/move/definitions_lake_map.toml from 525dbb4581d4 on 20ece08f515bf453ecaad64de02d16f4a299951c
+cdd8347dedc Merge d82cc1171331, the layout move's base, into 20ece08f515bf453ecaad64de02d16f4a299951c
+20ece08f515 Merge b4b47b205244 (the layout move) into da3bd32b26c59aaf77e785db1f5dbcdf4b7aa0e1, restacked
+df7c73f1569 restack: rerun tools/move/layout.py --map tools/move/definitions_merge_map.toml from b4b47b205244 on da3bd32b26c59aaf77e785db1f5dbcdf4b7aa0e1
+da3bd32b26c Merge 74c69cd71521 (the layout move) into f83c83201bd91bdcf2ce7450adeff08c4f93e373, restacked
+8cedd17a4ec restack: rerun tools/move/layout.py --map tools/move/definitions_kept_map.toml from 74c69cd71521 on f83c83201bd91bdcf2ce7450adeff08c4f93e373
+f83c83201bd Merge e3ee3e740aeb (the layout move) into de065b0d9562ab252046b6ad98dfcc460a7b053c, restacked
+139464afeb3 restack: rerun tools/move/layout.py --map tools/move/difftest_map.toml from e3ee3e740aeb on de065b0d9562ab252046b6ad98dfcc460a7b053c
+131972cd5f8 Merge 3c00c8371bb7, the layout move's base, into de065b0d9562ab252046b6ad98dfcc460a7b053c
+de065b0d956 Merge 578efd95fb31 (the layout move) into c4e0e6716d993635932a952da7abdb3f9c793ea3, restacked
+0e81b2154a7 restack: rerun tools/move/layout.py --map tools/move/proofs_loose_map.toml from 578efd95fb31 on c4e0e6716d993635932a952da7abdb3f9c793ea3
+c4e0e6716d9 Merge dddb1864a440 (the layout move) into 6784576d1c87524846b698807dbbd5bf2de0cf7b, restacked
+98ec24f534e restack: rerun tools/move/layout.py --map tools/move/world_map.toml from dddb1864a440 on 6784576d1c87524846b698807dbbd5bf2de0cf7b
+6784576d1c8 Merge 354b5b6fac74 (the layout move) into f042746cdd151060bd7bddf27aa6ded936adc22b, restacked
+04bd1dd7740 restack: rerun tools/move/layout.py --map tools/move/configurations_map.toml from 354b5b6fac74 on f042746cdd151060bd7bddf27aa6ded936adc22b
+f042746cdd1 Merge 2ad8dd208591 (the layout move) into 13f59b8a517b828a6b45ca3d27887028dfada7cf, restacked
+a375d9701e7 restack: rerun tools/move/layout.py --map tools/move/compose_map.toml from 2ad8dd208591 on 13f59b8a517b828a6b45ca3d27887028dfada7cf
+13f59b8a517 Merge 2f555ac88c12 (the layout move) into 9c3d3da6821097a612076636e2a37edacb27e115, restacked
+d9a66c232b6 restack: rerun tools/move/layout.py --map tools/move/live_challenger_map.toml from 2f555ac88c12 on 9c3d3da6821097a612076636e2a37edacb27e115
+9c3d3da6821 Merge c3839d870386 (the layout move) into f1b2de5a1c6c198e9624bb16aedd7c63205fe0e8, restacked
+32171979790 restack: rerun tools/move/layout.py --map tools/move/artifacts_map.toml from c3839d870386 on f1b2de5a1c6c198e9624bb16aedd7c63205fe0e8
+c5bba7b91ad Merge 9d39102b22cd, the layout move's base, into f1b2de5a1c6c198e9624bb16aedd7c63205fe0e8
+f1b2de5a1c6 Merge 4179dced6d53 (the layout move) into 4c8c8b9ec66e9902218f3d066642cd3800911a92, restacked
+09ca7daf5c3 restack: rerun tools/move/layout.py --map tools/move/nci_rho_map.toml from 4179dced6d53 on 4c8c8b9ec66e9902218f3d066642cd3800911a92
+4c8c8b9ec66 Merge 8cd042ce57aa (the layout move) into 8842ad39a3d5f91e630f8b2e627226c7722227b8, restacked
+6886f1013de restack: rerun tools/move/layout.py --map tools/move/pous_grader_map.toml from 8cd042ce57aa on 8842ad39a3d5f91e630f8b2e627226c7722227b8
+89e24185ccb Merge 880f4d9b9d5f, the layout move's base, into 8842ad39a3d5f91e630f8b2e627226c7722227b8
+8842ad39a3d Merge 3c74491f13bf (the layout move) into 3ee00f6ada18d6dd98d5739de3812bee377808ec, restacked
+ce4123f3886 restack: rerun tools/move/rename.py --map tools/move/period_soundness_map.toml from 3c74491f13bf on 3ee00f6ada18d6dd98d5739de3812bee377808ec
+3ee00f6ada1 Merge 33d9c687bf62 (the layout move) into a0c475bf12e41481ffa527abe8bba738cb065cfd, restacked
+86632852593 restack: rerun tools/move/rename.py --map tools/move/period_proofs_map_2.toml from 33d9c687bf62 on a0c475bf12e41481ffa527abe8bba738cb065cfd
+a0c475bf12e Merge 9e10c4c9e33a (the layout move) into 8f309dff03abc736261329a9b426f7c1a8ed7015, restacked
+4db306f5069 restack: rerun tools/move/rename.py --map tools/move/period_proofs_map.toml from 9e10c4c9e33a on 8f309dff03abc736261329a9b426f7c1a8ed7015
+8f309dff03a Merge ea6f83438142 (the layout move) into fc3e10f67ea27a4a36ebcbdded1f0733e1e27196, restacked
+a9ef18c5a2d restack: rerun tools/move/rename.py --map tools/move/period_net_map.toml from ea6f83438142 on fc3e10f67ea27a4a36ebcbdded1f0733e1e27196
+fc3e10f67ea Merge 083f7bd0e6dc (the layout move) into 563adaa972c37fe31988417787bfae3b976f4e5c, restacked
+1cdc7de1e0a restack: rerun tools/move/rename.py --map tools/move/period_map_2.toml from 083f7bd0e6dc on 563adaa972c37fe31988417787bfae3b976f4e5c
+454049948d7 Merge 90419c0c80f3, the layout move's base, into 563adaa972c37fe31988417787bfae3b976f4e5c
+563adaa972c Merge 9fa40840bc5c (the layout move) into 0dbc2e158dbd579a99f1c4b2c3c17b380dcf0512, restacked
+3f2359e446c restack: rerun tools/move/rename.py --map tools/move/period_map.toml from 9fa40840bc5c on 0dbc2e158dbd579a99f1c4b2c3c17b380dcf0512
+d83be471fca Merge 78b5d7737b92, the layout move's base, into 0dbc2e158dbd579a99f1c4b2c3c17b380dcf0512
+0dbc2e158db Merge 833703ef0e1d (the layout move) into 3d484ece0953d11e8e19deb42d92acc843fa1994, restacked
+a4b34f64884 restack: rerun tools/move/rename.py --map tools/move/terms_map.toml from 833703ef0e1d on 3d484ece0953d11e8e19deb42d92acc843fa1994
+66cae13174a Merge 92b5727aca40, the layout move's base, into 3d484ece0953d11e8e19deb42d92acc843fa1994
