@@ -26,4 +26,9 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # locations' GPUs), and served_window.py's output cap (rho's reference)
           "benchmarks/census/deployments.json", "verity/protocols/inference_only/rho/data/reference.toml",
           "verity/protocols/inference_only/rho/data/hardware.toml",
+          # glm53.py's stop class reads its two blocks' Definitions and their pins: the stop rule's Boolean lowering
+          # (verity.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
+          # (verity.protocols.certifier.prover, which loads the certifier's verifier)
+          "verity/definitions/registry", "verity/definitions/numerics", "verity/definitions/evidence.py",
+          "verity/definitions/evidence.json", "verity/protocols/certifier",
           "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py"]

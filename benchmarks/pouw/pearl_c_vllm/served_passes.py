@@ -125,7 +125,12 @@ found by the SHA-256s ``--verify``'s document names, so a renamed DIR still serv
 nothing. It writes ``{schema, verify, commitment, records, uncredited}`` to ``--out`` and exits 0 only where the
 document accepted, the passes are its run's (their commitment is its ``commitment``, `verify_run.run_commitment`) and
 the totals are its credit's exactly (``checked_macs`` its ``macs``, ``credited`` its ``credited``); else it prints why
-and exits 1, writing nothing.
+and exits 1, writing nothing.  A run held to its class's fixed load publishes its work in the grid form instead
+(``give_up`` among it, `verify_run.grid_work`): its ``macs`` are the passes' whole MACs, each call's real MACs less its
+side channels, and its ``credited`` the whole passes' credit less ``give_up``, the give-up padded up to H1's window
+grid.  There the totals' whole MACs (``checked_macs`` and the ``excluded_a``, ``excluded_b`` and ``voluntary`` cells')
+are its ``macs``, and their ``credited`` is at least its ``credited`` and at most that plus ``give_up``; what the
+padding takes off past the totals' credit is the cause ``grid``.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
 remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
@@ -719,16 +724,24 @@ def uncredited(args: argparse.Namespace) -> int:
     if VR.run_commitment(held).hex() != doc["commitment"]:
         return refused("the passes' commitment is not the verify document's")
     got = VR.uncredited_calls(held, doc["draws"], Fraction(doc["delta"]), work["over_cap_draws"])
-    if (got["totals"]["checked_macs"], got["totals"]["credited"]) != (work["macs"], work["credited"]):
-        return refused(f"the calls sum to {got['totals']['checked_macs']:,} checked and {got['totals']['credited']:,} "
+    t = got["totals"]
+    if "give_up" in work:
+        whole = t["checked_macs"] + sum(t.get(x, 0) for x in ("excluded_a", "excluded_b", "voluntary"))
+        if whole != work["macs"] or not work["credited"] <= t["credited"] <= work["credited"] + work["give_up"]:
+            return refused(f"the calls credit {t['credited']:,} of {whole:,} whole MACs, and the verdict's grid form "
+                           f"{work['credited']:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
+        held_to = f"the verdict's grid form, {t['credited'] - work['credited']:,} past its credit (grid)"
+    elif (t["checked_macs"], t["credited"]) != (work["macs"], work["credited"]):
+        return refused(f"the calls sum to {t['checked_macs']:,} checked and {t['credited']:,} "
                        f"credited MACs, and the verdict's credit is {work['macs']:,} and {work['credited']:,}")
+    else:
+        held_to = "the verdict's credit exactly"
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"schema": VR.UNCREDITED_SCHEMA, "verify": str(args.verify), "commitment": doc["commitment"],
                                "records": [p.man["records_root"] for p in held], "uncredited": got}, indent=1) + "\n")
-    t = got["totals"]
     print(f"uncredited: {len(got['calls'])} calls over {len(held)} passes; {t['macs']:,} real MACs, {t['checked_macs']:,} "
-          f"checked, {t['credited']:,} credited, the verdict's credit exactly -> {out.name}", flush=True)
+          f"checked, {t['credited']:,} credited, {held_to} -> {out.name}", flush=True)
     return 0
 
 

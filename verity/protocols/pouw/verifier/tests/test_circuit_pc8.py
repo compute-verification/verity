@@ -24,6 +24,7 @@ from verity.circuits import boolean as BL
 from verity.circuits import partition_object as PO
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+from verity.circuits.types import Array
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity.definitions.ops.fp32 import F32FmaV2
@@ -403,7 +404,7 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     tm, tn = 2, 3
     fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
     assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef
-    assert fn.signature()[0] == hidden.signature()[0] + (("ia", pc8.Array(tm, L.INDEX)), ("jb", pc8.Array(tn, L.INDEX)))
+    assert fn.signature()[0] == hidden.signature()[0] + (("ia", Array(tm, L.INDEX)), ("jb", Array(tn, L.INDEX)))
     assert fn.signature()[1] == hidden.signature()[1]
     rng = random.Random(11)
     ac, bc = ([[rng.getrandbits(8) & 0x77 for _ in range(K)] for _ in range(r)] for r in (tm, tn))
