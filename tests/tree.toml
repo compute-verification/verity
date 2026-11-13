@@ -1,10 +1,11 @@
-# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at four levels: the root,
-# verity/, verity/protocols/ and each protocol's directory.
+# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at five levels: the root,
+# verity/, verity/protocols/, each group's directory there and each protocol's directory.
 #
 # [[tree]] is the tree: each entry's path and what it means.  An entry the tree has and main doesn't hold yet carries
 # the owner who brings it and the day, which top drops once it lands.  `protocol = true` marks the protocols,
-# and the `verity/protocols/NAME/` entries say what each of their directories may hold.  The shape is not changed here
-# without asking top.
+# and the `verity/protocols/NAME/` entries say what each of their directories may hold; a group is a directory of
+# verity/protocols/ that holds protocols, and the `verity/protocols/GROUP/` entries say what else it may hold.  The
+# shape is not changed here without asking top.
 #
 # [[not_yet]] is what main holds and the tree doesn't: each path, where it goes (`to`), its owner and the day.  A day
 # is a date, 6 PM PST on it unless it gives a time.  A move that lands leaves its line for top to delete: the stale
@@ -148,7 +149,7 @@ day = "2026-11-13 08:00 PST"
 
 [[tree]]
 path = "verity/protocols/"
-means = "one directory per protocol, the list flat"
+means = "the protocols, in two layers on the proofs, each group a directory of its own, and compose on top"
 
 [[tree]]
 path = "verity/circuits/"
@@ -175,6 +176,18 @@ path = "verity/pyproject.toml"
 means = "a suite's configuration, where it has one"
 
 # ---- verity/protocols/ ---------------------------------------------------------------------------------------------
+
+[[tree]]
+path = "verity/protocols/proofs/"
+means = "flock, with spot and recursion on it: what the other protocols call to prove; it uses neither layer"
+
+[[tree]]
+path = "verity/protocols/accounting/"
+means = "the accounting layer: pouw, pous, poub and certifier, for compute, memory and network, on the proofs"
+
+[[tree]]
+path = "verity/protocols/policy/"
+means = "the policy layer: inference_only, on accounting and the proofs"
 
 [[tree]]
 path = "verity/protocols/proofs/flock/"
@@ -242,6 +255,12 @@ means = "the tests of verity/protocols' own modules, a suite of its own"
 [[tree]]
 path = "verity/protocols/pyproject.toml"
 means = "a suite's configuration, where it has one"
+
+# ---- each group's directory, beside its protocols ------------------------------------------------------------------
+
+[[tree]]
+path = "verity/protocols/GROUP/__init__.py"
+means = "the package"
 
 # ---- each protocol's directory -------------------------------------------------------------------------------------
 
