@@ -113506,3 +113506,68 @@ Not established:
 - That `OwnReads.lean` compiles against FRAME's head.
 - `ReadsWf` at any real parameters.
 - Anything about `Apart` beyond reading.
+
+## COINMAP, Fri 13 Nov 02:03Z: `CoinMap.lean` (the coin map's definitions: `Frame.place`, `Reading.dev`, `CoinMapLaw`'s statement) compiles in `r20261113-013349-6da9`; `CoinMapLaw.lean` fails on 20 errors I am fixing now; TWOLEG's `DevAgrees.lean` doesn't elaborate at its head, so I dropped my import of it
+
+In plain words: the file that says how a play of the period's game becomes a run of the two-stage verifier, and which
+coin the device gave each stage, now compiles. The proof that this reading costs only the coin trees' hiding term
+(`CoinMapLaw.lean`) does not yet: 20 errors, which I am fixing one compile at a time. The lemmas STAGECOINS asked for
+(the two-stage locator, its `freshCoins` and byte-order lemmas, and `DevFirst`/`DevSecond` at it) and the bounds
+TWOLEG's `FirstElems`/`SecondElems` need are written and pushed, and wait behind `CoinMapLaw.lean` in the same try.
+
+Machine and wait [run]: try13 `r20261113-013349-6da9`, vy-nebius-cpu-11, at `a04e215616`; launched 01:33Z, started
+within a minute, ran 28 minutes (it rebuilt 741 changed files after the base's merge of `main`), exit 1. No Lean slot
+made me wait more than 10 minutes this hour. try10 `r20261113-005117-f651` (cpu-11, the old head with errors already
+fixed) failed as expected; try11 `r20261113-010945-b264` (vy-nebius-2) waited 10 minutes without starting and I
+cancelled it; try12 `r20261113-012032-16cc` (cpu-11, waited about 6 minutes) failed in `DevAgrees.lean`.
+
+### What compiled and what didn't [run]
+
+- `r20261113-013349-6da9`: `✔ Built Proofs.Properties.Verity.SampledTwo.CoinMap`. `CoinMapLaw.lean`: 20 errors (instance
+  synthesis at 128, 212, 221, 330; `rw` at 202; type mismatches at 238, 341, 423, 575, 589, 598, 711, 712, 743; two
+  heartbeat timeouts at 650 and 681). `CoinMapAgree.lean` and `CoinStages.lean` were not reached.
+- `r20261113-012032-16cc`: `DevAgrees.lean` (TWOLEG's, at the base `99da2b9189`) fails: 40:67 `Unknown constant
+  List.take_append_eq_append_take`, 39:21 unsolved goals, 54:2 `omega` (`lt_of_mem_take_finRange`), 70:2 maximum
+  recursion depth (`coinByte_of_elems`).
+
+### What I changed [read]
+
+- `CoinMap.lean` no longer imports `DevAgrees.lean`: `ElemAgrees` states `ElemsBelow`'s body
+  (`∀ j : Fin 65536, j.val < fitOf … → c j = r i j`), which is `ElemsBelow (fitOf …) c (r i)` by definition, so
+  `FirstElems`/`SecondElems` read it with `id`. No second definition: `ElemsBelow` stays TWOLEG's.
+- `CoinStages.lean`, new since 01:13Z:
+  - `freshWide_play`: every play of the period's game has `FreshWide o.log` (each fresh release carries its 512 bits),
+    along `relK` with a leaf predicate `Leaves` (the shape of `FlockSoundness.Game.Leaves`, whose module pulls in
+    Flock's recursion stage, so I didn't import it; a third copy beside `AllRet`, and not one of the vocabulary test's
+    concepts).
+  - `fitOf_ge`, `length_devBits`, `size_le_fit_first`, `stageWidth_le_fit_second`: at `stageLocate`, `b.size ≤ 16 *
+    fitOf (stageLocate ℓ₁ ℓ₂) 0 [] o.log` for the first stage's bytes (given `b.size ≤ SpotFlock.L`), and
+    `stageWidth b j ≤ 16 * fitOf (stageLocate ℓ₁ ℓ₂) (j + 1) [] o.log` for the second's.
+  - `elems_first`, `elems_second`: those with `ElemAgrees`' agreement give `FirstElems`/`SecondElems`' `∃ u`, at
+    `u := fitOf …`.
+- Merged the base at `99da2b9189` (no conflict).
+
+### NEEDS
+
+1. TWOLEG: `DevAgrees.lean` at your head fails on the four errors above [run]. My files no longer import it.
+2. TWOLEG: `elems_first` takes `b.size ≤ SpotFlock.L` for the first stage's bytes. What gives it on an accepted play
+   (`FirstRead`'s `read ≤ L`?) is yours or STAGECOINS's [read].
+3. STAGECOINS (from 01:13Z, still open): `DevSecond` over every `FormAccepts` exchange needs `FreshWide o.log`.
+   `freshWide_play` now gives it for every play of the period's game, so `Good o` or a play premise in `DevSecond`
+   closes it [derived].
+
+### STOP RULE
+
+Kept: I changed no listed guarantee or lock, didn't turn on the accept, and didn't touch Sampled.lean or any file that
+isn't mine.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- None of `CoinMapLaw.lean`, `CoinMapAgree.lean` or `CoinStages.lean` has compiled [run]. Their statements are
+  unproved until a run compiles them.
+
+Branch `cursor/proofs-coinmap-8b0c` at `a04e215616`, pushed; nothing unpushed.
