@@ -1,24 +1,29 @@
 module
 
 public import Proofs.Flock.SpotFlock.Honest.Needed
+public import Proofs.Flock.SpotFlock.Honest.Written
 public import Proofs.Flock.SpotFlock.AddressFacts.PortsOnceOf
 
 /-!
 # The address premise at the instance, from what an accepted design checks
 
-Beside the row goal and `RefPorts R`, the five facts at the instance took two hypotheses (`five_of_portsOnce`). Both
-are read off the design an accepted run evaluates (`two_of_ok`), so they ask nothing of `R`:
+Beside the row goal, the five facts at the instance took `RefPorts R` and two hypotheses more
+(`five_of_portsOnce`). Three of these are read off the design an accepted run evaluates (`two_of_ok`), so they ask
+nothing of `R`:
 
 * each member's circuit names its ports once where the design evaluates (`portsOnce_of_rows`), so at the instance
   `PortsOnce` holds at an accepted run (`portsOnce_of_ok`);
 * each unit's bit is copied at the column the layout reads it at where the design evaluates (`copiesAt_of_two`), and at
   the instance that is `CopiesHeld`, each bit's position being inside its port's row (`copiesHeld_of_at`,
-  `copiesHeld_of_ok`).
+  `copiesHeld_of_ok`);
+* every written bit's row is one of `R`'s ports where the design evaluates (`written_of_two`), the first half of
+  `RefPorts R` (`refPorts_of_ok`).
 
-The width then has no hypothesis (`widthFact_instance`), and the copy, the five facts, the address premise and the
-guarantees' premises take the row goal and `RefPorts R` alone (`copyFact_of_goal`, `five_of_goal`,
-`addressesConnected_of_goal`, `premises_of_goal`). `HonestExists` lacks those two and an accepted run
-(`honest_of_goal`).
+What is left of `RefPorts R` is that no port of `R` is named like an opening row. The width has no hypothesis
+(`widthFact_instance`); the entry and the one tree take the ports' names (`entryFact_of_ports`,
+`oneTreeFact_of_ports`); the copy, the row, the five facts, the address premise and the guarantees' premises take the
+row goal and the ports' names (`copyFact_of_goal`, `rowFact_of_goal`, `five_of_goal`, `addressesConnected_of_goal`,
+`premises_of_goal`). `HonestExists` lacks those two and an accepted run (`honest_of_goal`).
 -/
 
 @[expose] public section
@@ -67,43 +72,79 @@ theorem widthFact_instance : WidthFact (held R B desc q c₀) (addressOf (held R
   intro r hr
   exact widthFact_of_portsOnce R B desc q c₀ (portsOnce_of_ok R B desc q c₀ hr) r hr
 
-/-- **The copy at the instance**, from the row goal and `R`'s ports. -/
+/-- **What the roots ask of `R`'s ports, at an accepted run of the instance**: its design evaluates, so the wiring's
+check put every written bit's row among `R`'s ports, and what is left is that none is named like an opening row. -/
+theorem refPorts_of_ok (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false)
+    {r : CheckedRun (held R B desc q c₀).stage} (hr : r.Ok (held R B desc q c₀)) : RefPorts R := by
+  obtain ⟨s, d, h2⟩ := two_of_ok R B desc q c₀ hr
+  exact refPorts_of_two R B desc q c₀ hP h2
+
+/-- **The copy at the instance**, from the row goal and the ports' names. -/
 theorem copyFact_of_goal
     (hG : AddressRow.RowGoal (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)))
-    (hR : RefPorts R) : CopyFact (held R B desc q c₀) (addressOf (held R B desc q c₀)) := by
+    (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) :
+    CopyFact (held R B desc q c₀) (addressOf (held R B desc q c₀)) := by
   intro r hr
-  exact copyFact_held R B desc q c₀ hG hR (neededBits_held _) (copiesHeld_of_ok R B desc q c₀ hr) r hr
+  exact copyFact_held R B desc q c₀ hG (refPorts_of_ok R B desc q c₀ hP hr) (neededBits_held _)
+    (copiesHeld_of_ok R B desc q c₀ hr) r hr
 
-/-- **The five address facts at the instance**, from the row goal and `R`'s ports. -/
+/-- **The row at the instance**, from the row goal and the ports' names. -/
+theorem rowFact_of_goal
+    (hG : AddressRow.RowGoal (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+      (addressOf (held R B desc q c₀)))
+    (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) :
+    RowFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+      (addressOf (held R B desc q c₀)) := by
+  intro r hr
+  exact rowFact_held R B desc q c₀ hG (refPorts_of_ok R B desc q c₀ hP hr) (neededBits_held _) r hr
+
+/-- **The entry at the instance**, from the ports' names. -/
+theorem entryFact_of_ports (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) :
+    EntryFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+      (addressOf (held R B desc q c₀)) := by
+  intro r hr
+  exact entryFact_held R B desc q c₀ (refPorts_of_ok R B desc q c₀ hP hr) (neededBits_held _) r hr
+
+/-- **One tree a gate at the instance**, from the ports' names: the wiring map moves nothing, and the roots hold at
+each accepted run. -/
+theorem oneTreeFact_of_ports (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) :
+    OneTreeFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
+      (addressOf (held R B desc q c₀)) :=
+  ⟨fun i => by rw [wireMap_held]; exact ⟨rfl, rfl⟩,
+    fun r hr => rootsHold_held R B desc q c₀ (refPorts_of_ok R B desc q c₀ hP hr) (neededBits_held _) r hr⟩
+
+/-- **The five address facts at the instance**, from the row goal and the ports' names. -/
 theorem five_of_goal
     (hG : AddressRow.RowGoal (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)))
-    (hR : RefPorts R) : Five R B desc q c₀ :=
-  ⟨widthFact_instance R B desc q c₀, copyFact_of_goal R B desc q c₀ hG hR,
-    rowFact_held R B desc q c₀ hG hR (neededBits_held _), entryFact_held R B desc q c₀ hR (neededBits_held _),
-    oneTreeFact_held R B desc q c₀ hR (neededBits_held _)⟩
+    (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) : Five R B desc q c₀ :=
+  ⟨widthFact_instance R B desc q c₀, copyFact_of_goal R B desc q c₀ hG hP, rowFact_of_goal R B desc q c₀ hG hP,
+    entryFact_of_ports R B desc q c₀ hP, oneTreeFact_of_ports R B desc q c₀ hP⟩
 
-/-- **The address premise at the instance**, from the row goal and `R`'s ports. -/
+/-- **The address premise at the instance**, from the row goal and the ports' names. -/
 theorem addressesConnected_of_goal
     (hG : AddressRow.RowGoal (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)))
-    (hR : RefPorts R) : AddressesConnected (held R B desc q c₀) :=
-  addressesConnected_held R B desc q c₀ (five_of_goal R B desc q c₀ hG hR)
+    (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) :
+    AddressesConnected (held R B desc q c₀) :=
+  addressesConnected_held R B desc q c₀ (five_of_goal R B desc q c₀ hG hP)
 
-/-- **The two-stage guarantees' premises at the instance**, from the row goal and `R`'s ports. -/
+/-- **The two-stage guarantees' premises at the instance**, from the row goal and the ports' names. -/
 theorem premises_of_goal
     (hG : AddressRow.RowGoal (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)))
-    (hR : RefPorts R) : Premises (held R B desc q c₀) :=
-  ⟨builtWired_held R B desc q c₀, addressesConnected_of_goal R B desc q c₀ hG hR⟩
+    (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) :
+    Premises (held R B desc q c₀) :=
+  ⟨builtWired_held R B desc q c₀, addressesConnected_of_goal R B desc q c₀ hG hP⟩
 
-/-- **What `HonestExists` lacks at the instance**: the row goal, the roots' conditions on `R`'s ports and an accepted
-run. -/
+/-- **What `HonestExists` lacks at the instance**: the row goal, that no port of `R` is named like an opening row,
+and an accepted run. -/
 theorem honest_of_goal
     (hG : AddressRow.RowGoal (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)))
-    (hR : RefPorts R) (hA : Accepts (held R B desc q c₀)) : HonestExists :=
-  honest_of_owed ⟨R, B, desc, q, c₀, addressesConnected_of_goal R B desc q c₀ hG hR, hA⟩
+    (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false)
+    (hA : Accepts (held R B desc q c₀)) : HonestExists :=
+  honest_of_owed ⟨R, B, desc, q, c₀, addressesConnected_of_goal R B desc q c₀ hG hP, hA⟩
 
 end SpotFlock.Honest
