@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.StageCut
+public import Proofs.Properties.Challenger.Coins
+public import Proofs.Properties.Verity.Sampled.RecordDraw
 
 /-!
 # On two windows the first session's read holds none of the second stage's coins
@@ -13,10 +15,12 @@ list every such line (`countFresh_zero`).
 
 The form's check refuses a case whose first session shows such a coin (`interiorUnshown`). It reads that session
 under the interior audit's challenger key, on the boundary's window against the interior audit's, in the interior
-audit's family, as the cut does (`keyOf_challenger`, `secondDraws_parts`); it differs from the cut in two places: it
-reads the session from the evidence's `coins` where the cut reads `firstCoins` (the same without `key`), and it reads
+audit's family, as the cut does (`keyOf_challenger`, `secondDraws_parts`); it differs from the cut in that it reads
 the digest of the interior record where the cut reads the interior commitment's. `firstUnshown_of` gives
 `FirstUnshown` from the check where those agree (`SessionMatches`, a named `Prop` taken as a hypothesis).
+
+`FirstDrawn`, the premise `firstShown_of` takes, is the form's check (`firstDrawn_of`): the run of record's coin check
+reads the cut's first draw, at the record the form holds to the commitment's digest (`digestIs`).
 -/
 
 @[expose] public section
@@ -266,5 +270,92 @@ theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C)
 /-- **`SecondAlone` from the form's check**, where it reads the cut's session. -/
 theorem secondAlone_of_matches (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : SecondAlone C :=
   secondAlone_of C (firstUnshown_of C hC hM)
+
+/-! ## The first stage's draw from the form's check -/
+
+/-- The run of record's coin check reads the interior audit's key, the evidence's copy of main and `coins`, and the
+boundary registration's family. -/
+theorem inputOf_coinsRead (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ ξ₂ : ByteArray)
+    (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
+    (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).key = p.audit.base.challenger.map (·.1) ∧
+      (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).main = Spot.getD e.coins "main" ∧
+      (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).coins = e.coins ∧
+      (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).family = p.boundary.challenger.map (·.2) ∧
+      (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).record = c.record ∧
+      (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).params = p.boundary ∧
+      (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).source = ξ := by
+  first
+    | exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    | (unfold VStar.Recursive.SampledTwo.inputOf
+       split
+       exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
+    | (unfold VStar.Recursive.SampledTwo.inputOf
+       cases VStar.Recursive.SampledTwo.rootsSplit c.record e.interior.base.sessionRoots
+       exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
+
+/-- **The first stage read the cut's draw**: `FirstDrawn` from the form's check. On an accepted play the run of record's
+coin check gave no code, so either the first stage read no byte, or `drawCoins` read the evidence's `coins` under the
+run's key, window and family after the digest of the record the run was given, and the bytes read start them
+(`Coins.coinsReason_none`). The run's key, window and family are the cut's draw's (`inputOf`, `keyOf_challenger`), and
+the form refuses unless the record the run is given has the commitment's digest (`digestIs`, `RECORD_DIGEST`), which
+is the draw's. -/
+theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
+  intro o ha i read hi hread p c e key d ξ hcase hkey hd hξ
+  obtain ⟨k, p', c', e', c₂, ξ₂, r, run, hk, hdec, hin, -, -, -⟩ := inputOn_accepts ha hi
+  obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hdec
+  have hpce := Except.ok.inj (hcase'.symm.trans hcase)
+  simp only [Prod.mk.injEq] at hpce
+  obtain ⟨hp, hc, he⟩ := hpce
+  cases hp
+  cases hc
+  cases he
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨hik, him, hic, hif, hir, hip, his⟩ :=
+    inputOf_coinsRead p { c with record := j₁ } e.source ξ₂ { e with record := j₂ } received₂ vs
+  obtain ⟨_, _, _, _, -, -, -, hcc⟩ := hread
+  have hcc' : Spot.Run.coinsCode (p.audit.base.challenger.map (·.1)) (Spot.getD e.coins "main") e.coins j₁
+      p.boundary.verifier.windowRoot (p.boundary.challenger.map (·.2)) (e.source.extract 0 read) = none := by
+    rw [hik, him, hic, hif, hir, hip, his] at hcc
+    exact hcc
+  rw [his]
+  show Properties.Challenger.bitsOf (e.source.extract 0 read) <+: Properties.Challenger.bitsOf ξ
+  have hK := keyOf_challenger hcase hkey
+  unfold firstDraws at hd
+  cases hb : boundaryOf p with
+  | error _ => simp [hb, Except.toOption] at hd
+  | ok bp =>
+    cases hw : bp.verifier.windowRoot with
+    | none => simp [hb, hw, Except.toOption] at hd
+    | some w =>
+      cases hl : firstLabel p with
+      | none => simp [hb, hl, Except.toOption] at hd
+      | some label =>
+        have h' : some (⟨key, w, label, c.digest⟩ : Properties.Challenger.Draws) = some d := by
+          rw [← hd]
+          simp [hb, hw, hl, Except.toOption]
+        obtain rfl := Option.some.inj h'
+        have hbp : bp = p.boundary := by
+          unfold boundaryOf at hb
+          first | exact (Except.ok.inj hb).symm | (cases hb; rfl)
+        subst hbp
+        have hl' : p.boundary.challenger.map (·.2) = some label := hl
+        have hξ' : drawCoins key w label c.digest e.coins = .ok ξ := hξ
+        unfold Spot.Run.coinsCode at hcc'
+        by_cases hr : (e.source.extract 0 read).isEmpty = true
+        · have hz : (e.source.extract 0 read).size = 0 := by simpa [ByteArray.isEmpty] using hr
+          have hn : Properties.Challenger.bitsOf (e.source.extract 0 read) = [] := by
+            apply List.eq_nil_of_length_eq_zero
+            rw [Verity.Sampled.length_bitsOf, hz]
+          rw [hn]
+          exact List.nil_prefix
+        · rw [if_neg hr, hK, hw, hl', hdig] at hcc'
+          cases hcr : coinsReason key (Spot.getD e.coins "main") e.coins w label c.digest
+              (e.source.extract 0 read) with
+          | some _ => simp [hcr] at hcc'
+          | none =>
+            obtain ⟨ξ₀, hξ₀, -, hpre, -⟩ := Properties.Challenger.Coins.coinsReason_none hcr
+            have hξξ : ξ₀ = ξ := Except.ok.inj (hξ₀.symm.trans hξ')
+            rw [← hξξ, ← hpre]
+            exact bitsOf_extract_prefix _ _
 
 end Verity.SampledTwo

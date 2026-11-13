@@ -259,7 +259,8 @@ theorem sourceRead_holds (C : CaseOf) : SourceRead C := by
   obtain ⟨_, _, _, e, _, _, _, run, _, _, hin, hrun, hsr, hsym⟩ := inputOn_accepts ha hi
   obtain ⟨read', hread', hr⟩ := run_read hrun hsym
   obtain rfl := firstRead_unique hread hread'
-  obtain ⟨-, -, -, -, vs, received₂, -, rfl⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, -⟩ :=
+    VStar.Recursive.SampledTwo.inputAt_ok hin
   rw [inputOf_source]
   exact VStar.Recursive.SampledTwo.sourceRead_le hsr hr
 
