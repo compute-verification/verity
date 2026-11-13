@@ -10,8 +10,8 @@ no composite here: `ofIds` refuses its subprotocols, and it runs only as its own
     product IDS --pins PINS check PARAMS COMMITMENT EVIDENCE [BLOB ...] | serve
 
 The command after `IDS` is the core CLI's (`CoreProtocol.Cli`), of the composite `ofIds IDS` under the auditor's pins
-(`atPins`): PINS, `{"challenger": KEY | null, "sessions": [WINDOW_ROOT, ...]}`, is the auditor's registered challenger
-key and designated sessions, and an acceptance whose sampled components name another key or window root is refused.
+(`atPins`): PINS (`Pins.ofJson`) is the auditor's registered device keys and designated sessions, and an acceptance
+whose components name another device key, or a window root no designated session has, is refused.
 -/
 module
 
@@ -56,24 +56,39 @@ def ofIds (ids : List String) : Except String BlobProtocol :=
 open Lean (Json)
 open Flock (V)
 
-/-- **The auditor's pins**, as the composite reads them: the auditor's challenger's key (none: no challenger is
-pinned) and the window roots of the sessions the auditor designated, each as the bytes of its text. -/
+/-- **The auditor's pins**, as the composite reads them: its challenger's key (none: no challenger is pinned), the
+window roots of the sessions it designated for the challenger, each as the bytes of its text, its memory challenger's
+LMS public key (none: none is pinned) and its network certifiers' keys. -/
 structure Pins where
   challenger : Option Spot.Challenger.ChallengerKey := none
   sessions : List ByteArray := []
+  memory : Option ByteArray := none
+  certifiers : List Spot.Challenger.ChallengerKey := []
 
-/-- The pins file: `{"challenger": KEY | null, "sessions": [WINDOW_ROOT, ...]}`, `KEY` as the sampled parameters
-carry a challenger's key (`ChallengerKey.ofJson`). -/
+/-- A network certifier's pinned key, `{"H": h, "N": n, "W": w, "public": hex}`: its LMS parameters and public key. -/
+def certifierOfJson (j : Json) : V Spot.Challenger.ChallengerKey := do
+  let .obj kvs := j | throw "a certifier's pin is not an object"
+  unless kvs.toArray.map (·.1) == #["H", "N", "W", "public"] do throw "a certifier's pin holds exactly H, N, W and public"
+  pure ⟨⟨← Flock.J.nat j "N" "a certifier's pin", ← Flock.J.nat j "W" "a certifier's pin",
+    ← Flock.J.nat j "H" "a certifier's pin"⟩, ← Flock.unhex (← Flock.J.str j "public" "a certifier's pin")⟩
+
+/-- The pins file: `{"certifiers": [CERTIFIER, ...], "challenger": KEY | null, "memory": hex | null, "sessions":
+[WINDOW_ROOT, ...]}`, `KEY` as the sampled parameters carry a challenger's key (`ChallengerKey.ofJson`), `CERTIFIER` as
+`certifierOfJson` reads it. -/
 def Pins.ofJson (j : Json) : V Pins := do
   let .obj kvs := j | throw "the pins are not an object"
-  unless kvs.toArray.map (·.1) == #["challenger", "sessions"] do
-    throw "the pins hold exactly challenger and sessions"
+  unless kvs.toArray.map (·.1) == #["certifiers", "challenger", "memory", "sessions"] do
+    throw "the pins hold exactly certifiers, challenger, memory and sessions"
   let challenger ← match ← Flock.J.get j "challenger" "the pins" with
     | .null => pure none
     | k => some <$> Spot.Challenger.ChallengerKey.ofJson k
   let sessions ← (← Flock.J.arr j "sessions" "the pins").toList.mapM fun s => do
     pure (← Flock.J.asStr s "the pins' sessions").toUTF8
-  pure { challenger, sessions }
+  let memory ← match ← Flock.J.get j "memory" "the pins" with
+    | .null => pure none
+    | k => some <$> Flock.unhex (← Flock.J.asStr k "the pins' memory")
+  let certifiers ← (← Flock.J.arr j "certifiers" "the pins").toList.mapM certifierOfJson
+  pure { challenger, sessions, memory, certifiers }
 
 /-- The one-stage parameters of a sampled-proofs component, `n`, or none for any other component or parameters that
 don't read (which its own check refuses). -/
@@ -84,23 +99,64 @@ def sampledAt (n : Named) : Option Spot.OneStageZk.Params :=
     | _ => none
   else none
 
+/-- The parameters of a component `n` of `B`'s id, as `B`'s own decoder reads them; none for any other component or
+parameters that don't read (which its own check refuses). -/
+def paramsAt (B : Protocol) (n : Named) : Option B.Params :=
+  if n.id = B.id then (canonicalJson n.params.toUTF8 >>= B.params).toOption else none
+
+/-- A PoUW period component's parameters (`PouwCheck.Period.protocol`'s decoder). -/
+def pouwAt (n : Named) : Option PouwCheck.Period.Params := paramsAt PouwCheck.Period.protocol n
+
+/-- A PoUS run component's parameters (`PousCheck.RunProtocol.protocol`'s decoder). -/
+def pousAt (n : Named) : Option PousCheck.RunProtocol.Params := paramsAt PousCheck.RunProtocol.protocol n
+
+/-- A wipe component's parameters (`MemoryChallenger.WipeProtocol.protocol`'s decoder). -/
+def wipeAt (n : Named) : Option MemoryChallenger.WipeProtocol.Params := paramsAt MemoryChallenger.WipeProtocol.protocol n
+
+/-- A network certifier component's parameters (`NetworkCheck.Period.protocol`'s decoder). -/
+def networkAt (n : Named) : Option NetworkCheck.Period.Params := paramsAt NetworkCheck.Period.protocol n
+
+/-- `k` is the LMS key `q`: the same public key under the same parameters. -/
+def sameKey (k q : Spot.Challenger.ChallengerKey) : Bool :=
+  k.pub.data.toList == q.pub.data.toList && k.params.N == q.params.N && k.params.W == q.params.W &&
+    k.params.H == q.params.H
+
 /-- One sampled component's parameters name only what `P` pins: the challenger its coins come from is the pinned
 key, under the pinned LMS parameters, and its window root is a designated session's. -/
 def spotPinned (P : Pins) (p : Spot.OneStageZk.Params) : Bool :=
-  (p.base.challenger.all fun kl => P.challenger.any fun k =>
-    kl.1.pub.data.toList == k.pub.data.toList && kl.1.params.N == k.params.N && kl.1.params.W == k.params.W &&
-      kl.1.params.H == k.params.H) &&
+  (p.base.challenger.all fun kl => P.challenger.any (sameKey kl.1)) &&
   p.base.verifier.windowRoot.all fun w => P.sessions.any (·.data.toList == w.toUTF8.data.toList)
 
-/-- The composite's parameters `j` name only what `P` pins, in every sampled component; parameters that don't read
-as a composite's pass, since the composite refuses them itself. -/
+/-- A PoUW period's challenger key, where it reads as one, is the pinned challenger's. -/
+def pouwPinned (P : Pins) (p : PouwCheck.Period.Params) : Bool :=
+  match Spot.Challenger.ChallengerKey.ofJson p.key with
+  | .ok k => P.challenger.any (sameKey k)
+  | .error _ => true
+
+/-- Every key a PoUS run trusts is the pinned memory challenger's. -/
+def pousPinned (P : Pins) (p : PousCheck.RunProtocol.Params) : Bool :=
+  p.trusted.all fun t => P.memory.any fun m => t.data.toList == m.data.toList
+
+/-- Every key a wipe trusts is the pinned memory challenger's. -/
+def wipePinned (P : Pins) (p : MemoryChallenger.WipeProtocol.Params) : Bool :=
+  p.trusted.all fun t => P.memory.any fun m => t.data.toList == m.data.toList
+
+/-- A network certifier period's key, under its LMS parameters, is a pinned certifier's. -/
+def networkPinned (P : Pins) (p : NetworkCheck.Period.Params) : Bool :=
+  P.certifiers.any (sameKey ⟨p.lms, p.key⟩)
+
+/-- The composite's parameters `j` name only what `P` pins, in every component that reads a device's key or session:
+sampled proofs', PoUW's, PoUS's, the wipe's and the network certifier's. Parameters that don't read as a composite's
+pass, since the composite refuses them itself. -/
 def paramsPinned (P : Pins) (j : Json) : Bool :=
   match decodeParams j with
-  | .ok ps => (ps.filterMap sampledAt).all (spotPinned P)
+  | .ok ps => (ps.filterMap sampledAt).all (spotPinned P) && (ps.filterMap pouwAt).all (pouwPinned P) &&
+      (ps.filterMap pousAt).all (pousPinned P) && (ps.filterMap wipeAt).all (wipePinned P) &&
+      (ps.filterMap networkAt).all (networkPinned P)
   | .error _ => true
 
 def UNPINNED : String :=
-  "a sampled component's challenger key or window root is not the auditor's pinned key or a designated session"
+  "a component names a device key or a session the auditor's pins don't hold"
 
 /-- `o`, except an acceptance under parameters `j` that name what `P` doesn't pin, which is refused. -/
 def holdPins {α β : Type} (P : Pins) (j : Json) : Outcome α β → Outcome α β
@@ -188,12 +244,22 @@ private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 private def pinsOf (s : String) : Except String Pins := Json.parse s >>= Pins.ofJson
 
 -- the pins file: no challenger and no sessions pins nothing; any other key, or a key that doesn't read, is refused
-#guard match pinsOf "{\"challenger\":null,\"sessions\":[\"ab\"]}" with
-  | .ok P => P.challenger.isNone && P.sessions.map (·.data.toList) == ["ab".toUTF8.data.toList] | .error _ => false
-#guard (pinsOf "{\"challenger\":null}").toOption.isNone
-#guard (pinsOf "{\"challenger\":null,\"sessions\":[],\"extra\":1}").toOption.isNone
-#guard (pinsOf "{\"challenger\":{\"H\":3},\"sessions\":[]}").toOption.isNone
-#guard (pinsOf "{\"challenger\":null,\"sessions\":[1]}").toOption.isNone
+private def noPins (rest : String) : String :=
+  "{\"certifiers\":[],\"challenger\":null,\"memory\":null,\"sessions\":[" ++ rest ++ "]}"
+#guard match pinsOf (noPins "\"ab\"") with
+  | .ok P => P.challenger.isNone && P.memory.isNone && P.certifiers.isEmpty &&
+      P.sessions.map (·.data.toList) == ["ab".toUTF8.data.toList]
+  | .error _ => false
+#guard match pinsOf ("{\"certifiers\":[{\"H\":3,\"N\":64,\"W\":1,\"public\":\"0a\"}],\"challenger\":null," ++
+    "\"memory\":\"0b\",\"sessions\":[]}") with
+  | .ok P => P.memory.map (·.data.toList) == some [0x0b] &&
+      P.certifiers.map (fun k => (k.params.N, k.params.W, k.params.H, k.pub.data.toList)) == [(64, 1, 3, [0x0a])]
+  | .error _ => false
+#guard (pinsOf "{\"challenger\":null,\"sessions\":[]}").toOption.isNone
+#guard (pinsOf "{\"certifiers\":[],\"challenger\":null,\"extra\":1,\"memory\":null,\"sessions\":[]}").toOption.isNone
+#guard (pinsOf "{\"certifiers\":[],\"challenger\":{\"H\":3},\"memory\":null,\"sessions\":[]}").toOption.isNone
+#guard (pinsOf (noPins "1")).toOption.isNone
+#guard (pinsOf "{\"certifiers\":[{\"H\":3}],\"challenger\":null,\"memory\":null,\"sessions\":[]}").toOption.isNone
 -- parameters that aren't a composite's are the composite's to refuse
 #guard paramsPinned {} Json.null
 

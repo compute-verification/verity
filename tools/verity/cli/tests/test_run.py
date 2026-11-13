@@ -345,7 +345,7 @@ def run(tmp: Path, reg: R.Registry, *args: str, cfg: dict | None = None) -> tupl
     s = tmp / "state"
     s.mkdir(exist_ok=True)
     if not (s / "tools.json").exists():
-        (tmp / "pins.json").write_text(json.dumps({"challenger": None, "sessions": []}))
+        (tmp / "pins.json").write_text(json.dumps({"certifiers": [], "challenger": None, "memory": None, "sessions": []}))
         (s / "tools.json").write_text(json.dumps({"product": str(stand_in_product(tmp)), "pins": str(tmp / "pins.json")}))
     rc = R.run_main([str(path), "--state", str(s), *args], reg, in_process=True)
     lines = (s / "record" / "verdicts.jsonl").read_text().splitlines() if (s / "record" / "verdicts.jsonl").exists() else []
