@@ -12,19 +12,15 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import run as C
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import run as C  # noqa: E402
-
 RUN = "r20000101-000000-aaaa"
 COMMIT = "c" * 40
 RECORD = HERE / "fixtures" / "record"

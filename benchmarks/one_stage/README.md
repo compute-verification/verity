@@ -200,7 +200,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   on a statement under the provisional unit cover says the Program was handed and not held to the circuit. With
   `--wide-leaf` every prover and verifier of the run carries `flock-circuit --wide-leaf`, the wide level-0 leaf's
   statement version, and its rows say so (`wide_leaf`); the script's docstring has the rest: the two statement names
-  their Lean verdict is asked under, what `flock-verify` takes and refuses under them, and how a row is held to the
+  their Lean verdict is asked under, what the Lean verifier takes and refuses under them, and how a row is held to the
   version its sessions ran. A row with a refused session, a server process that exited nonzero, a prover out of device
   memory, or a session that ran another statement version than the row's is void: no rate, its reasons in `void`, a
   `VOID` line, and the run exits 1.

@@ -50,17 +50,16 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from verity.commitments.randomness import frame
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.params import SALT_BITS
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.pous.verifier.verifier import MerkleTree, VerifierKey, leaf_hash
-from verity.commitments.randomness import frame
 
 from . import audit, coins, receipts
 from .codec import P2_LAYOUT, P2Codec
 from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
 
-PROTOCOL_ID = "verity/remote-bandwidth/p2/v0"
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/p2-registration/v0\0"
 BLOCK_BYTES = 2056
 UNIT_BLOCKS = 4
