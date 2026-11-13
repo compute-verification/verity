@@ -49,7 +49,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.protocols.poub.verifier import audit, ledger, timing  # noqa: E402
-from verity.protocols.spot import costfit  # noqa: E402
+from verity.protocols.spot.prover import costfit  # noqa: E402
 
 from verity.protocols.poub.verifier.session import wire  # noqa: E402
 
