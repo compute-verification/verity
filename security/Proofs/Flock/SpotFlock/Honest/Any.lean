@@ -16,6 +16,8 @@ them (`held R B desc q c₀`: one template, no wires). Neither conclusion reads 
   design's replay partition cut (`scope_rewired`);
 * `inScope_of_two`, `inScope_of_run`: so some statement is in scope where the design evaluates and a statement
   decodes, and where a run is accepted, whose design evaluated (`CheckedRun.Ok`);
+* `accepts_of`: what an accepted run takes, the fields `CheckedRun.Ok` derives left out: the statement check
+  passing, one unit the two stages check, and a witness in Flock's relation at that unit's session statement;
 * `premises_of_checks`: the premises, where the frame is SPOT's own at the wired program (`BuiltWired`), from five
   facts of the auditor's copies (`addressesConnected_of_firstK`): the reference reads are well formed, no proof
   block is always checked, the boundary registration passes the run's population check, its first stage samples a
@@ -72,6 +74,35 @@ run's design evaluated. -/
 theorem inScope_of_run {h : Held} (hA : Accepts h) : InScope h := by
   obtain ⟨r, Pt, d, spec, hp, -, h2, -⟩ := hA
   exact ⟨r.x, scope_of_two hp h2⟩
+
+/-- **What an accepted run takes**: a statement that parses where the design evaluates, the statement check passing
+its records at some coins, one unit the two stages check there, and a witness in Flock's relation at that unit's
+session statement. The unit's proof block, its replay block and its session's setup follow, as `stmtOpensWired`
+reads them. -/
+theorem accepts_of {h : Held} {x m₁ m₂ : Msg} {s : AuditStatement} {d : Design.Two} {c₀ : FlockDeploy.Coin}
+    {c₁ : Stage h} {wF : Claims.Flock.Wit} {u : ℕ} (hp : parse h x = some s) (h2 : two h s = some d)
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁))
+    (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true) :
+    Accepts h := by
+  obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h h2
+  have hP : partition h s = some (membersPart h.ms) := rfl
+  have hin : InScopeTwo (membersPart h.ms) d s := scopeOk_sound hsc s (parse_prog h hp)
+  have hlt : u < (membersPart h.ms).blocks.length := by
+    have := mem_checked_lt hu
+    rwa [units_base h hp hP] at this
+  obtain ⟨ρ, hρ⟩ := Option.isSome_iff_exists.1 (hin.2.2.2.1 u hlt)
+  obtain ⟨rb, hrb⟩ := replay_block hρ
+  obtain ⟨ins, spec, sts, hset⟩ :
+      ∃ ins spec sts, FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) := by
+    have hs := sessionOk_of_stmtOkAt h (stmtOkAt_unit h hp hok hu)
+    simp only [sessionOk, Bool.and_eq_true] at hs
+    obtain ⟨ins, spec, sts, hset, -⟩ := zkOk_sound hs.1.1.1
+    exact ⟨ins, spec, sts, hset⟩
+  have hr : CheckedRun.Ok h
+      ⟨x, s, [], m₁, m₂, c₀, c₁, [], wF, u, (membersPart h.ms).blocks[u], ρ, rb, ins, sts⟩ :=
+    ⟨membersPart h.ms, d, spec, hp, hP, h2, hin, hok, hu, hck, List.getElem?_eq_getElem hlt, hρ, hrb, hset⟩
+  exact ⟨_, hr⟩
 
 /-- **The premises `SpotKSTwo` takes, at any auditor's copies whose frame is SPOT's own at the wired program**, from
 five facts of the copies: the reference reads are well formed, no proof block is always checked, the boundary
