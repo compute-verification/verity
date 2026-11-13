@@ -247,14 +247,20 @@ def test_the_card_names_each_stage_that_is_not_ok():
 
 
 def test_the_card_reads_each_gates_detail_under_that_gates_id(tmp_path):
-    """The ambiguous count is G2's, tier a and the quarantine are G4's, and the sample is G5's: a detail under another id is not read."""
+    """The ambiguous count is G2's, tier a and the quarantine are G4's, the sample is G5's, non-interference is G1's status, the
+    partition's row is G8's and the holdout cases are G7's: a detail or a status under another id is not read."""
     sample = {"status": "pass", "k": 2, "strata": 4, "seed": 9}
-    detail: dict[str, dict[str, Any]] = {"G2": {"ambiguous": 7}, "G4": {"k": 3, "quarantine": {"specs": 1}}, "G5": {"sample": sample}}
+    detail: dict[str, dict[str, Any]] = {
+        "G2": {"ambiguous": 7}, "G4": {"k": 3, "quarantine": {"specs": 1}}, "G5": {"sample": sample},
+        "G7": {"holdouts": {"case-a": {"pass": True}}}, "G8": {"partition": {"status": "ok"}, "count": 5, "width": {"max_seen": 3, "w_max": 16}}}
     other = {"ambiguous": 99, "k": 99, "quarantine": {"specs": 99}, "sample": {"status": "fail"}}
-    card = CARD.build_card(tmp_path, [GateResult(id=g, name=g, status="pass", detail=detail.get(g, other))
+    card = CARD.build_card(tmp_path, [GateResult(id=g, name=g, status="fail" if g == "G1" else "pass", detail=detail.get(g, other))
                                       for g in ("G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8")])
     assert card.counts["ambiguous"] == 7 and card.counts["sampled_vus"] == "k=2 x 4 strata, seed 9 PASS"
     assert (card.replay["tier_a"]["k"], card.replay["quarantine"], card.replay["sample"]) == (3, {"specs": 1}, sample)
+    assert (card.counts["control_noninterference"], card.counts["vu_partition"]) == ("FAIL", "ok, 5 sets, max w_out 3/16 PASS")
+    top = CARD.top_section(card).splitlines()
+    assert top[top.index("HOLDOUTS") + 1].split() == ["case-a", "PASS"]
 
 
 def test_the_verdict_command_says_the_outcome_first_and_takes_the_commits_exit_code(tmp_path, capsys):
