@@ -151892,3 +151892,24 @@ No declaration's statement changes and no lock changes, as the 16:10Z entry said
 - Where Thursday's memory went, and what "two check lines closed" covered: I did not read the run's logs, which are on cpu-6.
 - Whether a compose ran on Thursday's window and which checks it started: not read.
 - The `remote`, `onsite` and `product` commands: I read that they take `VStar.Recursive.Sampled` among their subprotocols, not every branch inside them.
+
+## RELAX, Fri 13 Nov 16:38Z: pull request 1 of the registration split waits on one thing now, #9702's tree entry (open; its day for proofs is now 14 Nov); chain 2 is on `main`; the word still waits on #9555
+
+**The answer.** Chain 2 is on `main`, and the tree file there does not name `verity/protocols/accounting/registration/`, so pull request 1 is not started. #9702 adds the entry and is open. I built nothing and opened no branch: this is a read of `main` at `5eb1231b2558` and of #9702's head.
+
+- **Chain 2 is on `main`** [run: `gh pr view`, `git log`]: #9734 merged at 15:30Z and #9742 (the tree file's landed lines) at 16:10Z. `main` is `5eb1231b2558`.
+- **The tree file on `main`** names `verity/protocols/accounting/` (`tests/tree.toml:169`) and its four protocols, and no `registration/`. Its not-yet line still sends `verity/hardware/registration.py` "into the hardware file" (`:290-291`) [read].
+- **#9702 adds the entry and is open** [run: `gh pr view`, 16:33Z]: head `8d125685f03e` (16:04Z), based on `main` at `f283f6b2f198`.
+  - Its entry: `verity/protocols/accounting/registration/`, a protocol, owner proofs, **day 2026-11-14**. At `f2a6d393ac47` (my 08:44Z read) the day was 2026-11-20 [read: its `tests/tree.toml:216-221`].
+  - Its not-yet line for the Python: `to = "verity/protocols/accounting/registration/"`, owner top, day 2026-11-15 (`:296-300`) [read].
+- **The move cannot go ahead of #9702** [read: `tests/test_tree.py:73-93`]. The tree test now reads each group's directory, so on `main` a tracked `verity/protocols/accounting/registration` is in no entry and the test fails. With #9702's entry the directory is a protocol's, and `verifier/` and `__init__.py` are what a protocol's directory may hold [derived]. That closes one line of my 09:43Z section 9: the tree test does read inside the group.
+- **What chain 2 changed in the plan** [run: `git grep` on `main`; nothing else run]:
+  - The file is still `verity/hardware/registration.py`. The same 16 files load it: 15 by import (20 lines) and `verity/hardware/tests/test_package.py:27` by a string. Three of them moved with the chains: PoUW's `test_weights.py`, SPOT's `test_one_stage.py:260`, and the difftest, now `verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py`.
+  - The three suite inputs that name the file: `benchmarks/certifier_term/pyproject.toml:43`, `benchmarks/pouw/pyproject.toml:180` and `verity/protocols/compose/verifier/lean/pyproject.toml:45`.
+  - The row of `order` goes between `["verity/protocols/proofs/recursion"]` and `["verity/protocols/accounting/pous"]` (`tests/import_order.toml:28-29`), as the 09:43Z entry derived.
+  - `verity/protocols/accounting/__init__.py` exists, so the mover makes two `__init__.py`, not three.
+- **Still unanswered:** who keeps the listing's `order` (your 08:55Z put it to top). The row rides with the move. I write it where the 09:43Z entry says unless you say otherwise.
+- **What I do next.** When #9702 is on `main` I start the branch from `origin/main`: the map, the mover, the row, the generator, the four suites' inputs, the log out of `verity/hardware`'s `test_package.py`, the certificate, then the importers' suites by `research run`. Until then I prepare nothing that needs a base, by your 09:53Z. If you want the trial on a scratch branch at `5eb1231b2558` before #9702 lands, say so. I check both pull requests hourly.
+- **The word.** #9555 is open at `38b7c6df38ba`. Its last commit is 03:37Z and its merge base with `main` is `a2c3831345e0`, so it is behind both chains and lands only once its owner carries it [run: `gh pr view`, `git merge-base`]. The word waits behind that.
+
+**Not established:** anything run on a tree with chain 2: the mover, the generator, the certificate, any suite.
