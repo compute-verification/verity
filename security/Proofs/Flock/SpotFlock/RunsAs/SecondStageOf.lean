@@ -12,6 +12,7 @@ are distinct (`NamesDistinct`), and the first stage's interior record registers 
 interior registration registering no value), so where the design evaluates (`TwoHolds`) neither is a premise:
 
 * `namesDistinct_of_two`: the templates' names are distinct (`names_nodup_of_two`);
+* `values_nil_of_two`: the interior registration registers no value;
 * `registersNone_of_recordOk`: a record that names a registration's names registers no value where the registration
   registers none;
 * `registersNone_of_two`, `inputsNone_of_two`: so the interior record of a run whose records name their registrations'
@@ -102,12 +103,22 @@ theorem namesDistinct_of_two {h : Held} (hT : TwoHolds h) : NamesDistinct h := b
   obtain ⟨_, _, hd⟩ := two_of_twoHolds hT
   exact names_nodup_of_two h hd
 
+/-- **Where the design evaluates, the interior registration registers no value**: the clause of the registered
+wiring's check (`wiringOk`), read wherever it stands among the check's clauses. -/
+theorem values_nil_of_two {h : Held} {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+    h.interiorNames.values = [] := by
+  have hw : wiringOk h = true := (scoped_wiring_of_two h hd).2
+  unfold wiringOk at hw
+  simp only [Bool.and_eq_true] at hw
+  exact List.isEmpty_iff.1 (by simp only [hw])
+
 /-- **Where the design evaluates, the interior record of a run whose records name their registrations' names
-registers no value**: the design evaluates only where the interior registration registers none (`wiring_of_two`). -/
+registers no value**: the design evaluates only where the interior registration registers none
+(`values_nil_of_two`). -/
 theorem registersNone_of_two {h : Held} (hT : TwoHolds h) {x m₁ : Msg} {rec : Json}
     (hm₁ : jsonMsg m₁ = some rec) (hRec : RecordsHeld h x m₁) : RegistersNone rec := by
   obtain ⟨_, _, hd⟩ := two_of_twoHolds hT
-  obtain ⟨-, -, -, -, -, -, -, -, -, hv⟩ := wiring_of_two h hd
+  have hv : h.interiorNames.values = [] := values_nil_of_two hd
   unfold RecordsHeld recordsOk at hRec
   rw [hm₁] at hRec
   cases hdx : decode x with
