@@ -56,6 +56,8 @@ from verity_vllm.program.compact import hash_operand as _hash_operand
 from verity_vllm.program.compact import n_crosses_step as _n_crosses_step
 from verity_vllm.records.schema_ids import PROGRAM_COMPARE_SCHEMA
 
+__all__ = ["Options", "main"]
+
 _T_RE = re.compile(r"\{T=\d+,")
 
 
