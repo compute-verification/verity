@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod
+public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityMonitoringPeriod
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -32,8 +32,8 @@ namespace Accounting.SecurityProofs.Bridge
 
 open scoped ENNReal
 
-/-- **The integrity audit of a period** (`Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod`). -/
-theorem IntegrityOfIntegrityPeriod : Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod := by
+/-- **The integrity audit of a period** (`Accounting.Guarantees.Bridge.IntegrityOfIntegrityMonitoringPeriod`). -/
+theorem IntegrityOfIntegrityMonitoringPeriod : Accounting.Guarantees.Bridge.IntegrityOfIntegrityMonitoringPeriod := by
   intro ι d α _ C I Ω _ _ r W T q δ hq hδ hqt hA3 R hT hL c p hcert hfin ξ
   have hsub : ∀ x : Ω (r.own .sampled),
       (r.accepts .sampled (Function.update ξ (r.own .sampled) x) ∧
