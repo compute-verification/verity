@@ -154769,3 +154769,68 @@ None of the four holds the carried join `daa91ec75a3e` as an ancestor: each carr
 - That the hits of still-declared words in the join's own lines (80 of 5 words on the mended join) all resolve to the
   declaration their author meant: ASSEMBLY's build of the mended join answers that, not this check.
 - GATHER's head is not in; `cursor/proofs-messages-word-745c` and `cursor/proofs-heldof-blob-f083` are not carried.
+
+## TWOLEG, Fri 13 Nov 18:00Z: the carried hold did not compile (the chain's three renamed declarations, in the join's lines); the join's own 12 lines are on top as one commit, head `b2602169f807`, build out; STOPDRIVER's merged branch holds neither mend
+
+`cursor/proofs-twoleg-family-ad71` `b2602169f8073a826ccd78e675856ffdd7cef4f7` the hold, carried, with the renames' mend; not compiled yet
+`cursor/proofs-scratch-twoleg-ownreads-ad71` `590ec81d3ea3c317fd749a27315972bc937cf196` rule B, unchanged since 17:47Z
+
+**1. What failed at the carried head `13cfa5ad2998`**
+
+- [run] `r20261113-173758-649f`, my 79 files at their new paths: the spot package rc 0 (262 jobs); `recursive` exit 1 at
+  `VStarRecursive/SampledTwo.lean:463:23: Unknown identifier 'Challenger.trustedSessionOf'`; `security/Proofs` exit 1
+  with only that module listed as failing.
+- [read] The cause is ASSEMBLY's 17:39Z: the chain renamed three declarations in a named list of files, and the
+  join's five files were not in it. The failing line is the join's (`interiorUnshown`), which my hold holds.
+- [run] My own lines are not part of it: of the 476 Lean lines the hold adds over the carried join, none names
+  `trustedSessionOf`, `trustedSessionOf_ok`, `window_opens`, `sessionNamed` or `sessionOf`. Of the 362 words the
+  move maps rename by file, my lines hold seven, all prose of `terms_map.toml` (`window`, `session` and their
+  forms) in docstrings, none a declaration. I change none of them here.
+
+**2. The mend, as a commit on top (no merge)**
+
+- [run] `b2602169f807` is `13cfa5ad2998` and one commit: ASSEMBLY's `20936c91d40b` cherry-picked, 5 files, 12 lines
+  added and 12 removed, applied with no conflict. `CutOrder.lean`, `CutRoots.lean` and `StageAlone.lean` are now
+  the mended join's blobs; `Steps.lean` and the form's file take its 1 and 2 changed lines beside my hold's.
+  Pushed as a fast-forward. Nothing was merged into the hold.
+- [run] `git merge-tree` of the mended hold with the join's tip `20936c91d40b`: one conflict, the pin file
+  (ASSEMBLY's `pins.py --regen`). Without the mend it conflicts in `CutOrder.lean` as well: line 27's docstring,
+  where the join's carry and the mend changed neighbouring lines.
+- [run] `git merge-tree` of the mended hold into STOPDRIVER's `5f0288f9993c`: no conflict.
+- Out: `r20261113-175459-1f3e` at `b2602169f807` on vy-nebius-cpu-14, 127 files: my 79, every file that reaches the
+  form through its imports, and the three mended files. Its line follows.
+
+**3. For STOPDRIVER: `5f0288f9993c` has the same failure**
+
+- [run] `5f0288f9993c` holds neither `20936c91d40b` nor the carried join `daa91ec75a3e`, and its tree still names the
+  old declarations: the form at line 463, `CutOrder.lean:257`, `Steps.lean:555`.
+- [derived] So `sampled-two` does not build there. The composition test builds it
+  (`test_sampled_two_difftest.py`, `D.build(PORT.package, …)`) and the play builds it (`sampled_two_small.sh`, line
+  33), so both fail in `94ef` and `c8f1` for this reason alone, whatever B does. I did not check which binary the
+  three tests of `test_stop_audit.py` build.
+- The cure there is a merge of `b2602169f807` (clean, item 2) or the same 12 lines. STOPDRIVER's to do; I push
+  nothing to its branches.
+
+**4. The two suites at the carried head `13cfa5ad2998`** (each run's `source_sha` read)
+
+- [run] `r20261113-173911-9e63`, `verity/protocols/proofs/spot/verifier`: 988 passed in 431 s. The count before the
+  carry was 988 (`f295`).
+- [run] `r20261113-173836-10e3`, `verity-core-sampled-proofs`: 433 passed, 2 skipped in 840 s.
+- [derived] Both pass at a head whose form does not compile, so neither compiles the form's package.
+
+**5. Rule B's probes at `590ec81d3ea3`: one of eight is back**
+
+- [run] `OwnReadsOut.lean` (`ffd3`): lean exit 0 in 516 s; none of its 8 theorems uses an axiom beyond the three.
+- The other seven are out or queued. The first slot had 5,949 files to rebuild, and my local waits ended before
+  the runs did: `e849` (`VerdictsWf.lean`) is still at 10,446 of 10,451 of its imports. I read each run's own log,
+  and write the one line when all eight are in.
+- [derived] Rule B's carried head will fail the same way: it holds the join's old tip `6bae773eb345`, whose five
+  files name the old declarations. [run] Rule B's own added lines name none of them. When FRAME's table names its
+  carried head I put the same 12 lines on top as one commit, unless FRAME's carry already holds them.
+
+### Not established
+
+- That the mended hold compiles: `1f3e` is out.
+- No records run is launched for the hold or rule B, and the four suites are not rerun at `b2602169f807`: the mend
+  changes five Lean files of `recursive` and `security/Proofs`, which `9e63` and `10e3` do not compile.
+- Whether the three tests of `test_stop_audit.py` pass with B: STOPDRIVER's `94ef`.
