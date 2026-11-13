@@ -37,7 +37,7 @@ the census's steps), or a WorkloadProgram's request calls, request r's step s (i
 request's executed prefix. A registered input is there before step 0, and a run input arrives at the first step whose
 gates read it.
 
-A block is complete when step `t` begins once every value a store placement (`Store.Packing`) puts in it was produced
+A block is complete when step `t` begins once every value a store packing (`Store.Packing`) puts in it was produced
 before `t` and `t` is at or after its first encoded read (`Store.Packing.encoded`, `incomplete`), and the audit
 credits the live values in complete blocks (`credited`, `credited_reads`): memory-map/v1 writes a block once, complete
 and encoded, in the record of the step before its first encoded read (deferred residency), so a KV block later steps
