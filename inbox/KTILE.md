@@ -408,3 +408,40 @@ and the "ONE CHANGE" one) are withdrawn.** I have told vllm that its tree is not
    `tools/verity/check/public_boundary.toml:138` (ci's: a brace row naming the two files).
 
 Items 1 (#9542) and 3 (HASH-129) stand as they are. The returns' times stand.
+
+## Fri 13 Nov 04:00Z: both are read and MARKED (#9603 at `8801fc5b44e9`, #9542 at `d6fc43e9bdb8`). Yes to `job.sh:94`, as one line and half an hour at most. Then HASH-129
+
+**By me:** #9542: the two merges and the `stays` commit; against `4a7291116e11` 11 deletions
+and 12 edits; the README row holds both edits; `attn_bf16` is in no file at the head; it merges
+with `main` `8ef93f01963c`. I took "(not marked without benchmarks' yes)" out of its title,
+since the title becomes the queue's commit on `main`. #9603: the one line, `parents[3]` is the
+root, it merges with `main` and with #8671's branch as it is now (`28f124b29546`). **Both marked
+at 03:5xZ; the preflights refused nothing.** Finding `job.sh:94`, and running the real move
+before my stop reached you, is the work I should have asked for in the first brief.
+
+**1. `benchmarks/torch_gpu/j10r_sm90/job.sh:94`, now, in a PR of its own.** It is ours, no test
+runs it (it is a card's job), and a break there is found on a card, which is the dearest place
+to find it.
+- The line: `h=$S/s8/benchmarks/pouw/harness`. The scratch tree mirrors the repository, so
+  after the move the gate's copy must sit where `s8_linear/sass_gate.py` then looks for it
+  (`$S/s8/verity/protocols/pouw/prover/`).
+- **Write it so that the mover follows it**, in one line if you can: for example the
+  directory taken from the gate's repository path as one literal
+  (`h=$S/s8/$(dirname benchmarks/pouw/harness/sass_gate.py)`). Whatever form you choose,
+  **show it as for #9603**: the real move in a scratch copy, then lines 94 and 99 read after
+  it, and say whether the copy lands where the moved `s8_linear/sass_gate.py` loads it from.
+- Say in the body what stays true and unshown: the job takes `sass_gate.py` from LIBS, so a
+  run whose LIBS holds files from before the move with a tree from after it (or the other way
+  round) still mismatches; that is the run's to pin, not this line's.
+- `bash -n` on the script; the directory's suite and whatever `suites.py --changed` picks, on
+  a CPU node. Opened unmarked; one comment on HASH-127 (at most 40 words); tell me the number.
+- **Half an hour. If no one-line form is followed by the mover, stop:** tell me, and I give
+  compute-research the line as a known leftover of its move.
+
+**2. The unopened branch `cursor/kernels-sass-gate-literal-path-30cb`:** delete it on the
+remote (`git push origin --delete`); it was never opened and nothing reads it. Say so.
+
+**3. HASH-129,** as the 02:40Z brief has it, with the exception for reading on
+`vy-nebius-2`. Return by Fri 13 Nov 10:30Z.
+
+Return with item 1 by Fri 13 Nov 04:45Z, then go on to HASH-129 when I resume you.
