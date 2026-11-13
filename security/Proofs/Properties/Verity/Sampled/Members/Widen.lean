@@ -47,11 +47,6 @@ noncomputable def extend (S : Verity.Sampled.Widening) : JointAuditV5 where
     have h := w.hcls k ω.1 hω
     dsimp only [Bridge.execSel] at h ⊢
     exact h
-  hend := by
-    obtain ⟨ω, h⟩ := w.hend
-    refine ⟨(ω, Classical.arbitrary S.T), ?_⟩
-    dsimp only [sampleEnded] at h ⊢
-    exact h
 
 /-- The widened audit samples what the registered audit does at the sample's own coins. By `dsimp`, not `rfl`:
 elaborating the two samples as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
@@ -142,7 +137,7 @@ every proof block of `W` is incorrect is at most the registered sampling design'
 members' `ε_ks` and `ε_bind`, under A3 at the window's bytes and `cr/sha-512` and `ecr/sha-512` at each member's
 session played alone at `τ`. -/
 theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Verity.Sampled.Widening)
-    (τ : Strategy (w.extend S).game)
+    [Nonempty (w.extend S).EndΩ] (τ : Strategy (w.extend S).game)
     (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
       (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberLaw τ k).draw ω)
         (reg ((w.extend S).memberSim τ k))) j

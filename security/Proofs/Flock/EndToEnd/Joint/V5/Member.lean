@@ -77,6 +77,10 @@ theorem avg_ite_subtype {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p
 /-- **The share of the sample's coins at which the sample ended.** -/
 noncomputable def endShare : ℝ≥0∞ := (Fintype.card w.EndΩ : ℝ≥0∞) / Fintype.card w.L.Ω
 
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-- **Where the sample ended, member `k`'s session in the window's audit is its session played alone**: an event `E` of
 member `k`'s part of the sample and its session's transcript, with the sample ended, has in the window's audit the
 probability `E` has in the session played alone times the share of the sample's coins at which the sample ended. -/
@@ -253,6 +257,8 @@ theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.lengt
     (w.memberStrat τ k) hCR hA2)).trans ?_
   rw [mul_add]
   exact add_le_add (w.endShare_mul_epsKs_le τ k) (w.endShare_mul_link_le τ k)
+
+end Ended
 
 /-- **`hcls` from the registration's refusal**: if at every sample that ended member `k`'s part holds between `lo k` and
 `hi k` of its proof blocks, its record's count `kd / nTab I` lies between them too, and `lo k` and `hi k` give the same

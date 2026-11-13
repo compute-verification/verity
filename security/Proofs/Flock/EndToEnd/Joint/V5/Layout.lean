@@ -350,6 +350,10 @@ theorem Laid.prCoin_parts (h : w.Laid) (E : Finset (Fin w.nJ) → Prop) :
 
 variable (w)
 
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-- **The design member `k`'s session is played alone at is the window's marginal where the sample ended**: the earlier
 sessions' coins it samples with the window's don't move its sample, so the ended share of an event's probability at it
 is at most the probability the window's one sample gives the event at member `k`'s part. -/
@@ -363,6 +367,12 @@ the probability that the window's sample misses their places in the population. 
 theorem memberLaw_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
     w.endShare * (w.memberLaw τ k).escape B ≤ w.L.escape (B.image (w.ms.get k).emb) :=
   (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
+
+end Ended
+
+section Ended
+
+variable [Nonempty w.EndΩ]
 
 /-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
 own miss `P_a` of their places in the population, under A3. -/
@@ -399,5 +409,7 @@ theorem Laid.mem_wrongSet (h : w.Laid) (τ : Strategy w.game) (u : Fin w.nJ) :
     have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
     rw [← e, ← w.mem_part k, h.part_wrongSet τ k]
     exact hv
+
+end Ended
 
 end Flock.Guarantees.JointAuditV5

@@ -48,6 +48,25 @@ open Classical
 
 variable (w : JointAuditV5)
 
+/-- **Where no outcome of the sample's coins ends the sample, no run is accepted**: every outcome of the window's
+audit carries a sample that ran out, which `Accepts` refuses. -/
+theorem prob_accepts_of_not_ends (h : ¬ Nonempty w.EndΩ) (τ : Strategy w.game) :
+    prob (fun o => w.Accepts o) w.game τ = 0 := by
+  have hle : prob (fun o => w.Accepts o) w.game τ ≤ avg fun _ : w.L.Ω => (0 : ℝ≥0∞) := by
+    show avg (fun ω => prob (fun o => w.Accepts o)
+      ((w.sessions (w.L.draw ω) τ.1).map fun ts => ((τ.1, w.ended ω), w.L.draw ω, ts)) (τ.2 ω)) ≤ _
+    refine avg_mono fun ω => ?_
+    rw [prob_map]
+    exact (prob_mono (q := fun _ => False)
+      (fun ts (hts : w.Accepts ((τ.1, w.ended ω), w.L.draw ω, ts)) => h ⟨⟨ω, hts.1⟩⟩) _ _).trans_eq (prob_false _ _)
+  have h0 : avg (fun _ : w.L.Ω => (0 : ℝ≥0∞)) = 0 := by
+    simp only [avg, mul_zero, Finset.sum_const_zero]
+  exact le_antisymm (hle.trans_eq h0) zero_le
+
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-- **The window's audit accepts with a sampled proof block incorrect** at the strategy `τ` that plays it: at most
 `Σ_m (ε_ks,m + ε_bind,m)`, under `cr/sha-512` and `ecr/sha-512` at each member's session played alone. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game)
@@ -72,6 +91,8 @@ theorem accepted_drawnWrong_le (τ : Strategy w.game)
   refine ⟨k, Finset.mem_univ _, ?_, hend⟩
   rw [ht]
   exact And.intro (hacc' ⟨v, hv'⟩) ⟨v, hv', hv⟩
+
+end Ended
 
 private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s : Strategy g) :
     prob (fun _ => Q) g s = if Q then 1 else 0 := by
@@ -143,7 +164,7 @@ open scoped ENNReal
 
 /-- **A window's sample over several members, `EndToEndHiddenV5`'s form.** -/
 theorem JointSampledV5 : Flock.Guarantees.JointSampledV5 := by
-  intro w hA3 τ hCR hA2 W
+  intro w _ hA3 τ hCR hA2 W
   classical
   calc prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ
       ≤ prob (fun o => (w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) ∨ ¬ ∃ u ∈ o.2.1, u ∈ W) w.game τ := by
@@ -159,7 +180,7 @@ theorem JointSampledV5 : Flock.Guarantees.JointSampledV5 := by
 
 /-- **A window's sample over several members, the share form.** -/
 theorem JointShareV5 : Flock.Guarantees.JointShareV5 := by
-  intro w hA3 τ hCR hA2 ε
+  intro w _ hA3 τ hCR hA2 ε
   classical
   by_cases hc : ε * w.nJ < (w.wrongSet τ).card
   · have hle : w.pa (w.wrongSet τ) ≤ ⨆ B : {B : Finset (Fin w.nJ) // ε * w.nJ < B.card}, w.pa B.1 :=
@@ -177,7 +198,7 @@ theorem JointShareV5 : Flock.Guarantees.JointShareV5 := by
 
 /-- **A monitoring period of windows of several members, pooled.** -/
 theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
-  intro W T δ ands bits hA3 s hT hL
+  intro W _ T δ ands bits hA3 s hT hL
   classical
   let cr : (t : ℕ) → Strategy (W t).game → Prop := fun t τ =>
     (∀ k ω j, Assumptions.TableCRZAt execArith hs512
