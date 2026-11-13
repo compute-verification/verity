@@ -42,5 +42,5 @@ graphs is `adapters/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.
 - **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms, and `benchmarks/moe_align`,
   which imports `tp_decode`.
 - **Loads:** the vLLM integration's `commit`, `pipeline`, `engine`, `acquire`, `correspondence`, `query` and `protocols`
-  packages; `verity.circuits`, `verity.definitions`, `verity.commitments` and `verity.definitions.kernels`;
+  packages; `verity.circuits`, `verity.definitions`, `verity.commitments` and `verity.circuits.kernels`;
   `benchmarks/harness` (`verity_bench`); torch and vLLM.

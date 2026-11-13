@@ -31,12 +31,12 @@
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
 //
 // The row/v2 digests of the receipt tree's leaves are `hash_words`, over the GPU's one SHA-512 (`sha::`,
-// verity/definitions/kernels/sha512.cuh); the hm96 leaf after its salt and the frame-v3 leaf, pad and node are the GPU's one row
-// commitment (`rc`, verity/definitions/kernels/row_commit.cuh) as reader.cu takes it (`hm96_leaf`, `node_of`, rc's `pad_rt`),
+// verity/circuits/kernels/sha512.cuh); the hm96 leaf after its salt and the frame-v3 leaf, pad and node are the GPU's one row
+// commitment (`rc`, verity/circuits/kernels/row_commit.cuh) as reader.cu takes it (`hm96_leaf`, `node_of`, rc's `pad_rt`),
 // under its pass constants kC, kL, kNodeTpl and gNib, which its rb_set, rb_chain_set and rb_chain set. reader.cu's own
 // kernels (rb_leaves, rb_pads, rb_tree and level_kernel) hash the same tree unfused, one kernel a level: the fused one's
 // cross-check.
-#include "../../../../definitions/kernels/row_commit.cuh"
+#include "../../../../circuits/kernels/row_commit.cuh"
 #include "../codec_tensor/reader.cu"
 
 namespace rb {

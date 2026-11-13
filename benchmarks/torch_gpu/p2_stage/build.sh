@@ -19,7 +19,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
 P2=$(dirname verity/protocols/pous/prover/p2/p2_store/Makefile)
-ship_stage "$P2" "$(dirname verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu)" verity/definitions/kernels
+ship_stage "$P2" "$(dirname verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu)" verity/circuits/kernels
 P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
@@ -47,7 +47,7 @@ fi
 { git -C "$ROOT" rev-parse HEAD
   (cd "$ROOT" && sha256sum verity/protocols/pous/prover/p2/p2_store/p2v1.cu verity/protocols/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/pous/prover/p2/p2_store/p2keys.cuh \
     verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/pous/prover/p2/p2_store/Makefile \
-    verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit verity/definitions/kernels/sha512.cuh); } > "$OUT/source.txt"
+    verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit verity/circuits/kernels/sha512.cuh); } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 cat "$OUT/elf.txt"
 grep -E "registers|spill" "$OUT/lib/libp2v1.so.ptxas" | sort | uniq -c | head -20

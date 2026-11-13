@@ -39,7 +39,7 @@ string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
-the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.definitions.silicon`
+the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.circuits.silicon`
 among them).  `verity.commitments.randomness` is exact stdlib arithmetic too.
 """
 
@@ -76,13 +76,13 @@ DEPENDENCIES = {"numpy"}
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
 #: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and the
 #: reporting grid.  Within them, what may use numpy.
-STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
+STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/spot",
                "verity/protocols/reporting.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
-NUMPY_USERS += ("verity/definitions/cross_call.py", "verity/definitions/kernels", "verity/definitions/ops",
-                "verity/definitions/word.py")
+NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "verity/circuits/ops",
+                "verity/circuits/word.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
 NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/protocols/poub/device/live_verifier",
@@ -145,7 +145,7 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "verity/protocols/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
                                                                       "responder (`benchmarks/pous/band_gpu/harness.py`)",
-    "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
+    "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
@@ -187,7 +187,7 @@ TEST_ONLY = {
 #: Modules that only a prover's or developer's build turns on, which nothing under ``verity/`` outside their own package
 #: names (an import, an attribute or a string), each with the module and why a verifier must not read it.
 PROVER_ONLY = {
-    "trace_cache": ("verity/definitions/ops/boolean/trace_cache.py",
+    "trace_cache": ("verity/circuits/ops/boolean/trace_cache.py",
                     "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
                     "entry for a Definition's gates"),
 }
@@ -286,7 +286,7 @@ def test_a_run_time_read_is_found() -> None:
     distribution; ``verity``'s own package data is not."""
     src = ('P = resources.files("verity_vllm") / "pins"\nm = importlib.import_module("verity_vllm.pins")\n'
            "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
-           'q = resources.files("verity.definitions.ops") / "tables"\nr = resources.files(__package__)\n')
+           'q = resources.files("verity.circuits.ops") / "tables"\nr = resources.files(__package__)\n')
     assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
 
 

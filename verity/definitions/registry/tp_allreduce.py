@@ -106,7 +106,7 @@ from typing import NamedTuple
 import numpy as np
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.prims import ZERO32, const
+from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
