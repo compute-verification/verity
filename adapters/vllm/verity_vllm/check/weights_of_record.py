@@ -86,6 +86,10 @@ from verity_vllm.check.param_digests import param_digests
 from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest import format as MF
+from verity_vllm.records.schema_ids import (
+    WEIGHTS_OF_RECORD_PRIOR_SCHEMA,
+    WEIGHTS_OF_RECORD_SCHEMA,
+)
 
 __all__ = ["CheckpointIndex", "ENGINE_CONSTANT_RE", "EXPERTS_RE", "FUSED", "Options", "PARAM", "SCHEMA", "build_record",
            "check", "compose", "derivation_provenance", "live_param_digests", "main", "program_weight_fields",
@@ -94,8 +98,8 @@ __all__ = ["CheckpointIndex", "ENGINE_CONSTANT_RE", "EXPERTS_RE", "FUSED", "Opti
 
 logger = init_logger(__name__)
 
-SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
-SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
+SCHEMA = WEIGHTS_OF_RECORD_SCHEMA            # v2: host-independent root (analytic entries keyed by their exact inputs)
+SCHEMA_V1 = WEIGHTS_OF_RECORD_PRIOR_SCHEMA    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
 PARAM = "weights"                                   # the Program parameter (a struct) the record is of, and the window circuit's registered value
 

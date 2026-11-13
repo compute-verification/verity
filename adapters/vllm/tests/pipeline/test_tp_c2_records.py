@@ -218,6 +218,16 @@ def test_two_ranks_replays_add_their_populations_by_family_and_join_their_strata
     assert sr["unreplayable"] == [{"family": ALL_REDUCE, "n": 3, "why": "no registered evaluator", "ranks": [0]}] and sr["mismatch"] == [{"step": 1, "rank": 0}]
 
 
+@pytest.mark.parametrize("size, refusal", [("x", ValueError), (["x"], TypeError)], ids=["a word", "a list"])
+def test_a_size_that_is_no_number_is_what_the_fold_refuses_whatever_a_later_ranks_population_is(size, refusal):
+    """The fold reads every rank's size before any rank's families, so the first rank's size is refused, not the second's population."""
+    first = dict(REPLAY, population={"vus": size, "strata_n": 3, "by_family": {"Gemm_v1": 7}})
+    rows = [_run({"0": {"sampled_replay": first, "boundary_linkage": LINKAGE},
+                  "1": {"sampled_replay": dict(REPLAY, rank=1, population="no table"), "boundary_linkage": LINKAGE}})]
+    with pytest.raises(refusal, match=r"int\(\)"):
+        C2.sampled_replay_components(rows, {"sampled_replay": {"of_record": {}}})
+
+
 def test_a_rank_with_no_replay_record_is_not_a_deferred_one():
     rows = [_run({"0": {"sampled_replay": None, "query_population": {"ok": True}}, "1": {"query_population": {"ok": True}}})]
     assert C2.query_population_component(rows, True)["result"] is True
@@ -366,3 +376,19 @@ def test_a_commit_equal_to_a_failed_match_runs_capture_is_compared_and_is_no_pas
     comp = C2.oracle_compare_component(_both(cblock, {"attribution": ATTRIBUTION, "match_oracle": differs}),
                                        {"match_record": {"path": "/match", "tp2_match_verdict": False}}, MANIFEST)
     assert comp["result"] is False and comp["oracle_is_failed_match_run"] is True
+
+
+# the Commit driver's readers of a document's block and list
+
+@pytest.mark.parametrize("doc", [{}, {"name": None}, {"name": {}}, {"name": []}, {"name": 0}, {"name": ""}],
+                         ids=["none", "a null one", "an empty block", "an empty list", "zero", "an empty string"])
+def test_a_block_or_a_list_a_document_does_not_hold_reads_empty(doc):
+    assert (C2.block_of(doc, "name"), C2.list_of(doc, "name")) == ({}, [])
+
+
+def test_a_block_or_a_list_a_document_holds_is_handed_on_as_it_is():
+    block, listed = {"result": None}, [0]
+    doc = {"block": block, "list": listed}
+    assert C2.block_of(doc, "block") is block and C2.list_of(doc, "list") is listed
+    # neither reader types what it hands on: a list in a block's place is the caller's to read
+    assert C2.block_of(doc, "list") is listed and C2.list_of(doc, "block") is block

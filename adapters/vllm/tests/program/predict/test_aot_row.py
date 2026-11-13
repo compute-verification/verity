@@ -62,11 +62,12 @@ def test_the_row_command_prints_six_fields_of_its_record_and_says_on_stderr_what
 def test_a_predicted_row_is_held_to_the_traced_build_of_the_same_row(tmp_path, monkeypatch):
     """`compare_row` reads a single-GPU row's traced Build as its dir holds it (the digests in `build_summary.json`, the request's
     shape in its derive's `result.json`, the manifest beside them) and holds the predicted row's request Program, workload and
-    manifest to it: equal only when each part is, and refused where the traced Build has more than one rank."""
+    manifest to it: equal only when each part is, and refused where the traced Build has more than one rank.  A request the record
+    names otherwise than `write_row` does has no shape to look its traced Program up by: None's AttributeError."""
     _tiny(tmp_path, monkeypatch, 1)
     rec = A.write_row("tiny", str(pred := tmp_path / "row"), config="config.json")
     ((name, digest),) = rec.requests.items()
-    lp, t = A._request_shape(name, "the predicted row")
+    lp, t = A._request_shape(name)
     traced = tmp_path / "traced"
     (traced / "build_step").mkdir(parents=True)
     (traced / "build_request").mkdir()
@@ -84,6 +85,11 @@ def test_a_predicted_row_is_held_to_the_traced_build_of_the_same_row(tmp_path, m
     got = A.compare_row(str(traced), str(pred))
     assert got["equal"] is False and {n: v["equal"] for n, v in got["parts"].items()} == {"workload": True, name: False, "manifest": True}
     assert got["parts"][name] == {"traced": other, "predicted": digest, "equal": False}
+    doc = json.loads((pred / FILE).read_text())
+    (pred / FILE).write_text(json.dumps({**doc, "requests": {"build_request": digest}}))
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'groups'"):
+        A.compare_row(str(traced), str(pred))
+    (pred / FILE).write_text(json.dumps(doc))
     (traced / "build_summary.json").write_text(json.dumps({"ranks": {"rank0": summary, "rank1": summary}}))
     with pytest.raises(UsageError, match="a predicted row is one rank's, and the traced Build has ranks"):
         A.compare_row(str(traced), str(pred))

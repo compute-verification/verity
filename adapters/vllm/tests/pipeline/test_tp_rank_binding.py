@@ -25,7 +25,7 @@ from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
 
 PROGRAM = b"the rank's program"
-PD = hashlib.sha256(PROGRAM).hexdigest()
+PD = hashlib.sha512(PROGRAM).hexdigest()
 RANK = 1
 #: the two collective sites of the stand-in model, and the member each owes on rank 1
 SITES = [("m.proj", LC.ROW_LINEAR), ("m.logits", LC.LOGITS)]
@@ -39,7 +39,7 @@ ENGINE_ROWS = {0: [("id-a", 0, 3), ("id-b", 3, 8)], 1: [("id-a", 0, 1), ("id-b",
 
 
 def _committed(stream: list[list[tuple[str, bytes]]]) -> tuple[Any, Any]:
-    com = NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha256(PROGRAM).digest())
+    com = NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha512(PROGRAM).digest())
     return com, com.commit_offline(stream)
 
 

@@ -43,13 +43,13 @@ if [ -n "${POUW_CHALLENGER:-}" ]; then
   ss -Hltn "sport = :$port" | grep -q . || { echo "served-h1: NO_CHALLENGER: nothing listens on $POUW_CHALLENGER"; exit 13; }
   echo "served-h1: coins from challenger session $POUW_CHALLENGER_SESSION at $POUW_CHALLENGER (development: its root isn't this window's)"
 elif [ -n "${POUW_CHALLENGER_GATE:-}" ]; then
-  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)"; exit 13
+  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py"; exit 13
 else
   echo "served-h1: coins=in-process (not certified)"
 fi
 cd adapters/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/verity/configuration/config:$ROOT/benchmarks/pouw/served_h1
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=$FLASHINFER_ARCH
 echo "served-h1: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --max-min 28 -- timeout 1650 "$PY" "$ROOT/benchmarks/pouw/served_h1/serve.py" --out "$OUT" \

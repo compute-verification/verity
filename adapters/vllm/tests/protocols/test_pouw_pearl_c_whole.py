@@ -24,6 +24,9 @@ from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
 from verity_vllm.protocols.pouw.pearl_c import lanes as L
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
+from verity_vllm.protocols.pouw.pearl_c.host import joined
 from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
 
 NONE, FULL = "NONE", "FULL"
@@ -271,8 +274,9 @@ class Event:
         self.recorded += 1
 
 
-class Calls(PG.GraphCalls, PP.EpochCalls):
-    """`GraphCalls` over CPU tensors: three weights, keys that name their call."""
+class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
+    """`GraphCalls` over CPU tensors, with the run's `PassEnds` (its retained calls): three weights, keys that name their
+    call."""
 
     def __init__(self, torch):
         self.entry, self.hashing, self.graphs = "test", True, True
@@ -286,7 +290,9 @@ class Calls(PG.GraphCalls, PP.EpochCalls):
         self._host_keys, self._host_offs = torch.zeros_like(self.key_slots), torch.zeros_like(self.offs)
         self._slots_copied, self._predicted = Event(), {}
         self.roots_buf, self.flag_buf = torch.zeros(64 * 8, dtype=torch.uint8), torch.zeros((256, 2), dtype=torch.uint8)
+        self.salt, self.salt_key = bytes(range(64)), bytes(range(32))
         self.cur = PPD._Pass(None)
+        self.shapes, self._graphs = {}, {}
 
 
 def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
@@ -398,6 +404,20 @@ def test_a_graph_screens_its_filler_rows_call_only_inside_a_whole_capture_where_
     assert run._graph_key(7, sh, 20)[1] is False              # nothing to screen without hashing
 
 
+def test_a_deferred_a_capture_never_replays_a_call_graph_made_without_splitting_a():
+    """A capture deferring A's trees keys its call graphs apart, so one made earlier under other options (its pipeline
+    unsplit, A's tree inside the commit launch) isn't what it replays."""
+    torch = pytest.importorskip("torch")
+    run = Calls(torch)
+    sh = SimpleNamespace(m16=32)
+    run.whole_defer = True
+    unsplit = run._graph_key(7, sh, 32)
+    run.whole_defer_a = True
+    assert run._graph_key(7, sh, 32)[0] != unsplit[0] and run._graph_key(7, sh, 32)[1] == unsplit[1]
+    run.hashing = False                                       # nothing deferred without hashing
+    assert run._graph_key(7, sh, 32)[0][-1] is False
+
+
 def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whether_it_is_retained():
     torch = pytest.importorskip("torch")
     run = Calls(torch)
@@ -425,31 +445,37 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() is None
 
 
-def test_a_retained_kinds_capture_copies_each_calls_a_words_and_tree_to_the_stage_its_warm_up_made(monkeypatch):
+def test_a_retained_kinds_capture_copies_each_calls_a_words_tree_and_y_to_the_stage_its_warm_up_made(monkeypatch):
     torch = pytest.importorskip("torch")
     run, capturing = Calls(torch), [False]
     monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
-    for name in ("_into", "_replay", "_slot"):
+    graph_y = torch.zeros(48, 16, dtype=torch.bfloat16)
+    for name in ("_replay", "_slot"):
         monkeypatch.setattr(run, name, lambda *a: ("y", True))
+    monkeypatch.setattr(run, "_into", lambda *a: (graph_y, True))
     sh = SimpleNamespace(m16=32, k=8, n=16, xa=torch.zeros(48, 8), b={"tree_a": torch.zeros(100, dtype=torch.uint8)})
     sh.buf = sh.b.__getitem__
     pipe = SimpleNamespace(size={"tree_a": 64})
     run.whole_capture_begin(run.whole_key(True))
-    run._graph_call(7, sh, pipe, 0, 4, 32, 0, None)          # vLLM's warm-up, outside the capture
-    xa, tree = run._stages[7, 32]
-    assert xa.shape == (32, 8) and tree.shape == (64,)
-    sh.xa[:32], sh.b["tree_a"][:64] = 1.5, 7
+    run._graph_call(7, sh, pipe, 0, 4, 20, 0, None)          # vLLM's warm-up, outside the capture
+    xa, tree, y = run._stages[7, 32]
+    assert xa.shape == (32, 8) and tree.shape == (64,) and (y.shape, y.dtype) == ((32, 16), torch.bfloat16)
+    sh.xa[:32], sh.b["tree_a"][:64], graph_y[:] = 1.5, 7, 3.0
+    y.fill_(-1.0)
     capturing[0] = True
-    assert run._graph_call(7, sh, pipe, 0, 4, 32, 0, None) == ("y", True)
+    out = run._graph_call(7, sh, pipe, 0, 4, 20, 0, None)
+    assert out[0] is graph_y and out[1] is True
     assert torch.equal(xa, sh.xa[:32]) and torch.equal(tree, sh.b["tree_a"][:64])
-    assert run.whole_capture_end() == (PG.WholeCall(7, 32, 8, 16, 32, 4),) and not run._whole_retained
-    sh.xa[:32] = 2.0
+    assert torch.equal(y[:20], graph_y[:20]) and bool((y[20:] == -1.0).all())   # y's real rows, the m the forward fixes
+    assert run.whole_capture_end() == (PG.WholeCall(7, 20, 8, 16, 32, 4),) and not run._whole_retained
+    sh.xa[:32], graph_y[:] = 2.0, 4.0
     run.whole_capture_begin(run.whole_key(False))
-    run._graph_call(7, sh, pipe, 0, 4, 32, 0, None)
+    run._graph_call(7, sh, pipe, 0, 4, 20, 0, None)
     run.whole_capture_end()
-    assert float(xa[0, 0]) == 1.5                            # an unretained kind's capture leaves the stages alone
+    assert float(xa[0, 0]) == 1.5 and float(y[0, 0]) == 3.0  # an unretained kind's capture leaves the stages alone
     run._graphs = {}
-    assert [t.dtype for t in run._graph_buffers()] == [torch.uint8, torch.uint8]
+    run._poison_graphs(0xA5)
+    assert all(bool((t.view(torch.uint8) == 0xA5).all()) for t in (xa, tree, y))
 
 
 def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commits_after_each_replay(monkeypatch):
@@ -493,21 +519,28 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
     run = Calls(torch)
     run.weights = {7: SimpleNamespace(excluded=(3,)), 9: SimpleNamespace(excluded=())}
     run.cur = PPD._Pass(tmp_path)
-    run._stages = {(9, 32): (torch.full((32, 4), 2.0), torch.full((16,), 4, dtype=torch.uint8)),
-                   (7, 32): (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8))}
-    calls = (PG.WholeCall(9, 32, 4, 16, 32, 2), PG.WholeCall(7, 32, 8, 16, 32, 4))
+    ys = {w: torch.arange(32 * 16, dtype=torch.float32).reshape(32, 16).to(torch.bfloat16) + w for w in (7, 9)}
+    run._stages = {(9, 32): (torch.full((32, 4), 2.0), torch.full((16,), 4, dtype=torch.uint8), ys[9]),
+                   (7, 32): (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8), ys[7])}
+    calls = (PG.WholeCall(9, 32, 4, 16, 32, 2), PG.WholeCall(7, 30, 8, 16, 32, 4))
     run.flag_buf[32 + 5, 0] = 1                               # weight 7's call: row 5 fails the screen
     run.whole_capture_begin(run.whole_key(True))              # replays follow a capture, which leaves its state behind
     run.whole_capture_end()
     run.whole_replay(calls)
     run.whole_replayed(calls)
     want = []
-    for mm, (w, ex) in zip(run.cur.matmuls, ((9, ()), (7, (5,))), strict=True):
-        want.append(PPD.PW.UnitRecord(mm, 32, mm.shape.k, ex, run.weights[w].excluded))
+    for mm, c, (w, ex) in zip(run.cur.matmuls, calls, ((9, ()), (7, (5,))), strict=True):
+        want.append(PPD.PW.UnitRecord(mm, c.m, mm.shape.k, ex, run.weights[w].excluded))
     assert run.cur.records == want
     assert [f["tree"]["path"] for f in run.cur.files] == ["calls/0.tree", "calls/1.tree"]
+    joined(run.cur.writes)                                    # the files are written behind the calls: the pass's end joins them
     assert (tmp_path / "calls/1.tree").read_bytes() == bytes([3]) * 64
     assert (tmp_path / "calls/0.rows.bf16").read_bytes() == torch.full((32, 4), 2.0).to(torch.bfloat16).view(torch.uint8).numpy().tobytes()
+    real = ys[7][:30].view(torch.uint8).numpy().tobytes()     # weight 7's call: its 30 real rows of y, not its stage's 32
+    assert [f["y"]["rows"] for f in run.cur.files] == [{"path": "y/0.rows.bf16", "bytes": 2 * 32 * 16},
+                                                      {"path": "y/1.rows.bf16", "bytes": len(real)}]
+    assert (tmp_path / "y/1.rows.bf16").read_bytes() == real
+    assert run.cur.files[1]["y"]["root"] == SY.commit_y(real, 16, run.salt, 1, run.salt_key)[0].hex()
     run.cur = PPD._Pass(None)
     run.whole_replay(calls)
     run.whole_replayed(calls)                                 # an unretained pass keeps nothing
@@ -523,11 +556,13 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
     run, capturing = Calls(torch), [False]
     run.weights = {7: SimpleNamespace(k=8, excluded=(1,)), 8: SimpleNamespace(k=4, excluded=())}
     monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
-    for name in ("_into", "_replay", "_slot"):
+    for name in ("_replay", "_slot"):
         monkeypatch.setattr(run, name, lambda *a: ("y", True))
+    monkeypatch.setattr(run, "_into", lambda w, s, *a: (s.y, True))
     sizes = ((64, 64), (16, 8))                               # (m₁₆, m): the larger size first, the smaller with filler rows
     sh = {(w, m16): SimpleNamespace(m16=m16, k=wt.k, n=16, xa=torch.zeros(m16 + 16, wt.k),
-                                    b={"tree_a": torch.zeros(4 * m16, dtype=torch.uint8)})
+                                    b={"tree_a": torch.zeros(4 * m16, dtype=torch.uint8)},
+                                    y=torch.zeros(m16 + 16, 16, dtype=torch.bfloat16))
           for w, wt in run.weights.items() for m16, _ in sizes}
     for s in sh.values():
         s.buf = s.b.__getitem__
@@ -538,17 +573,19 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
         for i, w in enumerate(run.weights):                   # vLLM's warm-up forward, outside the capture
             run._graph_call(w, sh[w, m16], pipe[m16], 0, m16 // 4, m, i, None)
         capturing[0] = True
-        for i, w in enumerate(run.weights):                   # each call's A words and tree as its steps leave them
+        for i, w in enumerate(run.weights):                   # each call's A words, tree and y as its steps leave them
             s = sh[w, m16]
             s.xa[:m16] = torch.arange(m16 * s.k, dtype=torch.float32).reshape(m16, s.k) + 1000 * w + m16
             s.b["tree_a"][:] = (w + m16) % 251
+            s.y[:m16] = (torch.arange(m16 * 16, dtype=torch.float32).reshape(m16, 16) % 97 + 100 * w + m16).to(torch.bfloat16)
             run._graph_call(w, s, pipe[m16], 0, m16 // 4, m, i, None)
         capturing[0] = False
         calls[m16] = run.whole_capture_end()                  # vLLM stores the size's graph: the next one's calls begin
         run.whole_capture_begin(run.whole_key(True))
     run.whole_capture_end()
     assert {k: tuple(t.shape for t in v) for k, v in run._stages.items()} == {
-        (7, 64): ((64, 8), (128,)), (8, 64): ((64, 4), (128,)), (7, 16): ((16, 8), (32,)), (8, 16): ((16, 4), (32,))}
+        (7, 64): ((64, 8), (128,), (64, 16)), (8, 64): ((64, 4), (128,), (64, 16)),
+        (7, 16): ((16, 8), (32,), (16, 16)), (8, 16): ((16, 4), (32,), (16, 16))}
     run.flag_buf[3, 0] = 1                                    # the first call's row 3 fails the screen
     for m16, m in sizes:
         assert calls[m16] == tuple(PG.WholeCall(w, m, wt.k, 16, m16, m16 // 4) for w, wt in run.weights.items())
@@ -556,10 +593,15 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
         run.whole_replay(calls[m16])
         run.whole_replayed(calls[m16])
         for i, (mm, w) in enumerate(zip(run.cur.matmuls, run.weights, strict=True)):
-            run._retained(alone, mm, m, run.flag_buf[i * m:(i + 1) * m], *run._kept(sh[w, m16], pipe[m16]))
+            run._retained(alone, mm, m, run.flag_buf[i * m:(i + 1) * m], *run._kept(sh[w, m16], pipe[m16]),
+                          y=sh[w, m16].y[:m])
+        for p in (run.cur, alone):
+            joined(p.writes)
         assert run.cur.records == alone.records and run.cur.records[0].excluded_a == (3,)
         assert run.cur.files == alone.files and len(alone.files) == 2
-        for f in (p for x in alone.files for p in (x["rows"]["path"], x["tree"]["path"])):
+        assert [x["y"]["rows"]["bytes"] for x in alone.files] == [2 * m * 16] * 2
+        for f in (p for x in alone.files for p in (x["rows"]["path"], x["tree"]["path"], x["y"]["rows"]["path"],
+                                                   x["y"]["tree"]["path"])):
             assert (tmp_path / f"whole-{m16}" / f).read_bytes() == (tmp_path / f"alone-{m16}" / f).read_bytes()
 
 
@@ -658,6 +700,9 @@ class Stage:
     def __init__(self, log, current, name):
         self.log, self.current, self.name = log, current, name
 
+    def __getitem__(self, rows):
+        return self
+
     def copy_(self, other):
         self.log.append(f"{self.name} staged on {self.current[0].name}")
 
@@ -691,7 +736,7 @@ def test_a_deferred_a_capture_runs_each_calls_a_tree_beside_its_forming_and_gemm
     for w, sh in shapes.items():
         run._graphs[run._graph_key(w, sh, 32)[0]] = PG._Graph(torch.zeros(1), torch.zeros(1), "graph",
                                                                [step(w, x) for x in names], (2, 4), 1)
-    run._stages = {(w, 32): (Stage(log, current, f"{w}:rows"), Stage(log, current, f"{w}:tree")) for w in shapes}
+    run._stages = {(w, 32): tuple(Stage(log, current, f"{w}:{x}") for x in ("rows", "tree", "y")) for w in shapes}
 
     def forward(retained):
         run.whole_capture_begin(run.whole_key(retained))
@@ -717,9 +762,13 @@ def test_a_deferred_a_capture_runs_each_calls_a_tree_beside_its_forming_and_gemm
     log.clear()
     forward(True)
     assert [x for x in log if "staged" in x or x == "main waits for tree"] == [
-        *(x for w in shapes for x in ("main waits for tree", f"{w}:rows staged on main", f"{w}:tree staged on main"))]
+        *(x for w in shapes for x in ("main waits for tree", f"{w}:rows staged on main", f"{w}:tree staged on main",
+                                      f"{w}:y staged on main"))]
     log.clear()
+    split = {w: run._graphs[run._graph_key(w, sh, 32)[0]] for w, sh in shapes.items()}
     run.whole_defer_a = False                                 # the same graphs, the tree on the capturing stream
+    assert all(run._graph_key(w, sh, 32)[0] not in run._graphs for w, sh in shapes.items())   # not replayed unasked
+    run._graphs.update({run._graph_key(w, sh, 32)[0]: split[w] for w, sh in shapes.items()})
     forward(False)
     assert "tree waits for main" not in log and log[:4] == main(7, "rows_a", "tree_seed_a", "forming", "gemm")
 
@@ -918,8 +967,45 @@ def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_
     assert pipe.beside == 0
     run.whole_tree_sm = False
     assert [b for _, b in forward()] == [0] * 6
+    g = run._graphs[run._graph_key(7, sh, 32)[0]]
     run.whole_tree_sm, run.whole_defer_a = True, False         # A's tree on the capturing stream: nothing beside the GEMM
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
     assert [b for _, b in forward()] == [0] * 6
+
+
+def test_a_pd_shared_capture_launches_every_step_with_the_pipelines_pd_shared_set(monkeypatch):
+    """Under ``whole_pd_shared`` (with hashing) every step a call launches into a whole capture, deferred or not, sees the
+    pipeline's ``pd_shared`` set, so its pd_commit and pd_tree take half an SM's shared memory, and the pipeline is left
+    without it; the capture's key carries ``pd_shared``, its call graphs' don't.  Without the option, or without hashing,
+    no step sees it and no key carries it."""
+    torch = pytest.importorskip("torch")
+    run, log = Calls(torch), []
+    run.whole_defer, run.whole_defer_a, run.whole_pd_shared, run.device, run._graphs = True, True, True, "cuda", {}
+    run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
+    _lanes(monkeypatch, torch, log)
+    monkeypatch.setattr(PG, "_capturing", lambda: True)
+    sh, pipe, seen = SimpleNamespace(m16=32, k=8, n=16), SimpleNamespace(b={}, size={"tree_a": 64}, pd_shared=False), []
+    names = ("rows_a", "tree_seed_a", "eprime_a", "gemm", "hash_leaf", "scatter")
+    steps = [lambda x=x: seen.append((x, pipe.pd_shared)) for x in names]
+    g = PG._Graph(torch.zeros(1), torch.zeros(1), "graph", steps, (2, 4), 1)
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
+
+    def forward():
+        seen.clear()
+        run.whole_capture_begin(run.whole_key(False))
+        run._graph_call(7, sh, pipe, 1, 4, 32, 0, None)
+        run.whole_capture_end()
+        return seen
+
+    assert forward() == [(x, True) for x in names] and not pipe.pd_shared and "pd_shared" in run.whole_key(False)
+    assert "pd_shared" not in run._graph_key(7, sh, 32)[0]
+    run.whole_defer = run.whole_defer_a = False               # the steps in order on the capturing stream
+    run._graphs[run._graph_key(7, sh, 32)[0]] = g
+    assert forward() == [(x, True) for x in names] and not pipe.pd_shared
+    run.whole_pd_shared = False
+    assert forward() == [(x, False) for x in names] and "pd_shared" not in run.whole_key(False)
+    run.whole_pd_shared, run.hashing = True, False
+    assert "pd_shared" not in run.whole_key(False) and not run._pd_shared()
 
 
 def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
@@ -1085,7 +1171,7 @@ def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_e
 
     lags: list[bool] = []
 
-    def end(lag=False):
+    def end(lag=False, behind=False):
         lags.append(lag)
         return {}
     run.end, run.begin = end, (lambda *a, **kw: None)

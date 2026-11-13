@@ -4,13 +4,14 @@
 machine-model counts NAME --check         every ncu observation against the closed form, and its bound"""
 from __future__ import annotations
 
+import argparse
 import json
 
 from verity_machine_model import counts as cf
 from verity_machine_model import eps as E
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     n = sub.add_parser("counts")
     n.add_argument("name")
     n.add_argument("shape", nargs="*", type=int)
@@ -19,7 +20,7 @@ def add(sub) -> None:
     n.add_argument("--json", action="store_true")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     if args.shape and len(args.shape) != 3:
         raise SystemExit("counts NAME M N K")
     c = cf.load(args.name, args.data)
