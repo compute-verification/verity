@@ -10,25 +10,25 @@ from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Callable
 from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 import pytest
-
-from verity.protocols.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import canonical_json
-from verity_vllm.pipeline import serve_day as SD
-from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_tie as TIE
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.spot.verifier.one_stage import registration as REG
 
 from tests.pipeline.test_serve_day import OTHER, _day, _opts
 from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server
 from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS, _reusing
 from tests.protocols.test_pouw_h1_served import _unit
+from verity_vllm.pipeline import serve_day as SD
+from verity_vllm.pipeline import serve_h1 as SH
+from verity_vllm.pipeline import serve_tie as TIE
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import commit as CT
 
 #: what the tie hears of a sealed window (`serve_commit.CommitWindows`' seal line)
 SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}
@@ -41,7 +41,8 @@ class WindowCommit:
 
     def __init__(self, runs: dict[int, Any], *, edit: Callable[[dict], dict] = lambda r: r, rc: int = 0, write: bool = True,
                  then: Callable[[], Any] = lambda: None) -> None:
-        self.runs, self.edit, self.rc, self.write, self.then, self.calls = runs, edit, rc, write, then, []
+        self.runs, self.edit, self.rc, self.write, self.then = runs, edit, rc, write, then
+        self.calls: list[dict[str, Any]] = []
 
     def __call__(self, argv: list[str], log: Any) -> int:
         self.then()
@@ -54,7 +55,9 @@ class WindowCommit:
 
 
 def _tied(tmp_path, monkeypatch, closer: Any, **commit: Any) -> tuple[_Server, SH.H1Windows, WindowCommit, dict, list]:
-    srv, runs, flushed = _Server(monkeypatch), {}, []
+    srv = _Server(monkeypatch)
+    runs: dict[int, Any] = {}
+    flushed: list[str] = []
     wc = WindowCommit(runs, **commit)
     tie = TIE.WindowTie("v3c-window-commit", tmp_path / "serve", flush=lambda: flushed.append("flush"), runner=wc)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),

@@ -1,9 +1,9 @@
 """A stop class's stop population audited to its record: the stop blocks `two_stage.py first` registered and sampled
-(a class's ``stage1.json``, its ``stop``), each sampled block proved in one `--zk` session, verified by Lean
-(`flock-verify verify --zk --registered`), and the stop stream's outcome with its audit record.
+(a class's hand-off, the file that command writes: its ``stop``), each sampled block proved in one `--zk` session,
+verified by Lean (`verify --zk --registered`), and the stop stream's outcome with its audit record.
 
-    python benchmarks/one_stage/stop_audit.py --stage1 F --boundary DIR --stop JSON --design rate:NUM/DEN \\
-      --bin flock-circuit --lean flock-verify --out DIR [--boundary-outcome F] [--firewall flock-firewall] [--forge I,J]
+    python benchmarks/one_stage/stop_audit.py --handoff F --boundary DIR --stop JSON --design rate:NUM/DEN \\
+      --bin flock-circuit --lean LEAN --out DIR [--boundary-outcome F] [--zk-server ZK] [--forge I,J]
 
 * **The statement** (`member`, `bound`, `circuit`, from public items: the stop block and the stop population's
   partition, which the verifier takes from its own layout and holds the prover's circuit file to). One
@@ -17,11 +17,11 @@
   serve's rows, salts and frame-v3 paths, so each row's ``b || c`` is the one the serve committed. ``--forge`` is a
   negative's prover: those spans' `b.stop` word is committed with bit 0 flipped, a length that is not the rule's, and
   proved with the prover's self-check skipped.
-* **The verifier's half** (`resume`, `reads`, `circuit`, `decide`), from ``stage1.json``, the verifier's own check template, stop
+* **The verifier's half** (`resume`, `reads`, `circuit`, `decide`), from the hand-off, the verifier's own check template, stop
   rule and sampling design, and the session's public files; it opens no file of the class's directory.
   The boundary record is the one the class's boundary stream registers again (`two_stage.resume`), never one rebuilt
   from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R7) and samples it
-  again on the bytes its sample read; each is held to ``stage1.json``. The ``--registered`` file is the verifier's
+  again on the bytes its sample read; each is held to the hand-off. The ``--registered`` file is the verifier's
   own: the two parameters' ports as `boundary_stop.stop_registration` gives them, and ``o0`` at the stop record's
   root.
 * **The audit record** is the stop stream's (`Stream.outcome`: ``verity/one-stage/audit/v0``, Lean's `Record.record`).
@@ -31,10 +31,12 @@
       m0-verifier/stop     the session's own verdict and its sample
       registered-reads     Lean's verdict names the verifier's own ``--registered`` file and reports its roots
       cross-stream-order   Lean's verdict on the read across the two streams (`across`: the Lean verifier's piece
-                           ``across``, `Record.across`), never ``stage1.json``'s ``order``: the stop record's
+                           ``across``, `Record.across`), never the hand-off's ``order``: the stop record's
                            ``previous`` is a record of the boundary stream's log, and the challenger's signed log
-                           shows the boundary registration's coins before the stop registration's, which the stop
-                           sample read whole
+                           shows the coins released after the boundary registration, at least one and in
+                           whatever family, all before the first released after the stop registration, and the
+                           stop sample read whole the stop stream's family of coins, every one of them released
+                           after the stop registration
       boundary-audit       the boundary stream's outcome on that record (``--boundary-outcome``, a record of that
                            stream's `Stream.records`): null when none is handed; refused when it is not that
                            registration's accept, or Lean's verdict on its audit record refuses it; null, with
@@ -124,7 +126,7 @@ def sha512(obj: Any) -> str:
 # --- public: the statement --------------------------------------------------------------------------------------------
 
 def member(layout: BR.Layout, values: Mapping[str, np.ndarray] | None = None, **more: Any) -> PL.Member:
-    """The stop population as the proof leg's one member: the verifier's stop block, its two parameters' rows (each of
+    """The stop population as one `PL.Member`: the verifier's stop block, its two parameters' rows (each of
     its boundary value's words) and its one output row, all bit rows of the class's schema. ``values``: the prover's
     rows, by parameter."""
     rows = [(r, BR.SCHEMA, 16 * layout.words(port), [r]) for r, port in BS.STOP_READS.items()]
@@ -185,10 +187,10 @@ def opened(c: BR.Committed, forge: Sequence[int] = ()) -> dict[str, Any]:
 
 
 def staged(c: BR.Committed, out: Path, forge: Sequence[int] = ()) -> dict[str, Any]:
-    """The prover's statement of the class's stop blocks under ``out`` (`prove_leg.stage`: a0's statement dict, with
+    """The prover's statement of the class's stop blocks under ``out`` (`PL.stage`: a0's statement dict, with
     ``roots``, the trees' roots it opens its rows under): every block on the serve's own rows, salts and paths
     (`opened`), each port a registered read, so no row is committed a second time. ``forge``: `opened`'s, staged as
-    `prove_leg`'s forged member is. ValueError (`prove_leg.OutsideShape`) for a population whose statement is outside
+    `PL`'s forged member is. ValueError (`PL.OutsideShape`) for a population whose statement is outside
     Flock's shape."""
     L = c.layout
     mine = opened(c, forge)
@@ -202,28 +204,28 @@ def staged(c: BR.Committed, out: Path, forge: Sequence[int] = ()) -> dict[str, A
     return {**st, "roots": mine["roots"]}
 
 
-def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str, lean: str, firewall: str | None = None,
+def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str, lean: str, zk_server: str | None = None,
             forged: bool = False, timeout: float = 3600) -> dict[str, Any]:
     """One `--zk` session over statement ``st`` (`staged`'s, with the verifier's ``registered_file``) serving exactly
-    the sampled ``units`` (`a0.session`, behind the ZK server when ``firewall`` names Lean's frame), then Lean's
+    the sampled ``units`` (`a0.session`, behind the ZK server when ``zk_server`` names its binary), then Lean's
     verdict of record on it (`a0.lean_verify`). ``forged``: the prover's self-check is skipped. -> what `decide` takes:
     the session's records' SHA-512, the units it served and proved, its instances, the verdicts and its timing."""
     out.mkdir(parents=True, exist_ok=True)
     n, local = st["n"], sorted(int(u) for u in units)
-    (out / "draw.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
+    (out / "sample.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
                                               sort_keys=True))
-    env = {**a0.prover_env(firewall, st), **({"FC_ZK_SELF_CHECK": "skip"} if forged else {})}
+    env = {**a0.prover_env(zk_server, st), **({"FC_ZK_SELF_CHECK": "skip"} if forged else {})}
     t = time.time()
-    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", PL.free_port(), out, draw_file=out / "draw.json",
+    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", PL.free_port(), out, draw_file=out / "sample.json",
                               zk=True, env=env, prove_timeout=timeout)
     seconds = round(time.time() - t, 1)
     lv = a0.lean_verify(lean, st, n, out, zk=True)
-    draw = (record or {}).get("unit_draw") or {}
-    v = V.check_draw(draw, {"population": n}, {"law": "subset", "k": len(local)})
+    sampled = (record or {}).get("unit_draw") or {}
+    v = V.check_draw(sampled, {"population": n}, {"law": "subset", "k": len(local)})
     m0 = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True and v.ok,
           "why": ((record or {}).get("verdict") or {}).get("why") or (live or {}).get("why"), "draw_check": v.to_json()}
     return {"sessions": [a0.sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))],
-            "served": [int(u) for u in draw.get("units", [])], "proved_units": a0.proved_units(st["header"], live or {}),
+            "served": [int(u) for u in sampled.get("units", [])], "proved_units": a0.proved_units(st["header"], live or {}),
             "instances": (live or {}).get("instances", 0),
             "verdicts": {LEAN: {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"},
                          M0: m0},
@@ -258,31 +260,34 @@ class Resumed:
         return self.registration.record["previous"]
 
 
-def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str, *, delta: float = 0.5,
+def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str, *, delta: float = 0.5,
            proof_deadline: float = TS.PROOF_DEADLINE_S) -> Resumed:
-    """The class's stop stream again from its ``stage1.json``, under the verifier's own check template, stop rule and
+    """The class's stop stream again from its hand-off, under the verifier's own check template, stop rule and
     sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
     record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
-    registered (R1 to R7) and sampled again on the bytes its sample read. `Unlogged` when that log holds no such
-    record; ValueError when the first stage sampled no stop block, or
-    the Spec, the record, its registration or the sample isn't ``stage1.json``'s; `service.Refused` as the streams
+    registered (R1 to R7) and sampled again on the bytes its sample read, as coins of the challenger's family the
+    first stage read them from (the hand-off's, as `two_stage.resume` takes a class's own). `Unlogged` when that
+    log holds no such record; ValueError when the first stage sampled no stop block, or
+    the Spec, the record, its registration or the sample isn't the hand-off's; `service.Refused` as the streams
     refuse."""
-    s = stage1.get("stop")
+    s = handoff.get("stop")
     if not isinstance(s, Mapping) or "units" not in s:
-        raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or stage1.get('error')}")
-    root = stage1.get("window_root")
-    first = TS.resume(stage1, check, delta=delta, window_root=root, stop=stop)
+        raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
+    root = handoff.get("window_root")
+    first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop)
     layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
     received, boundary = logged[s["record"]["previous"]]
+    coins = TS.Staged(bytes.fromhex(s["read"]))
+    coins.family = s.get("family")
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
-                      challenger=TS.CHALLENGER, coins=TS.Staged(bytes.fromhex(s["read"])), log=[boundary])
+                      challenger=TS.CHALLENGER, coins=coins, log=[boundary])
     if stream.spec.digest() != s["spec"]:
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
-    held = BS.stop_registration(stage1["commit"], check, stop, boundary)
-    want = BS.stop_record(stage1["commit"], check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
+    held = BS.stop_registration(handoff["commit"], check, stop, boundary)
+    want = BS.stop_record(handoff["commit"], check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
     if R.digest(want) != R.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
@@ -310,24 +315,24 @@ def reads(r: Resumed) -> dict[str, Any]:
     return {**r.held.file, "ports": dict(sorted(ports.items()))}
 
 
-def link(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def link(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
     window's root, the boundary stream's own log (``first``'s `Stream.log`), the boundary stream's audit record
-    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence and the
-    bytes it read (``stage1``'s ``stop``)."""
-    s = stage1["stop"]
-    return {"window": stage1.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
+    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence, the
+    challenger's family it read those coins from and the bytes it read (``handoff``'s ``stop``)."""
+    s = handoff["stop"]
+    return {"window": handoff.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
             "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None,
-            "later": dict(s["record"]), "coins": s.get("evidence"), "read": s["read"]}
+            "later": dict(s["record"]), "coins": s.get("evidence"), "family": s.get("family"), "read": s["read"]}
 
 
-def across(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def across(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Lean's verdicts on the stop record's read across the class's two streams (`Record.across`, the Lean verifier's
     piece ``across``, on `link`'s read): ``logged``, ``order`` and ``audit``, each ``{"accepted", "why"}``, ``audit``
     with ``complete`` too (whether the boundary stream's audit record says every one of its entries ran), with
     ``case``, the boundary record's index in the log (``received``) and the two registrations' digests (``earlier``,
     ``later``). ``{"refused": reason}`` where Lean refuses the input or can't run."""
-    return V.lean("across", link(stage1, first, outcome))
+    return V.lean("across", link(handoff, first, outcome))
 
 
 def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -> dict[str, Any]:
@@ -411,14 +416,14 @@ def reads_entry(file: Mapping[str, Any], lean: Mapping[str, Any]) -> dict[str, A
             "reads": got["chunks"][MEMBER]["reads"]}
 
 
-def verdicts_of(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], proved: Mapping[str, Any],
+def verdicts_of(r: Resumed, handoff: Mapping[str, Any], file: Mapping[str, Any], proved: Mapping[str, Any],
                 outcome: Mapping[str, Any] | None = None) -> dict[str, dict[str, Any]]:
     """The audit record's verdicts (module docstring): the session's, Lean's of record naming the sessions delivered,
     Lean's on the read across the two streams (`across`), and the driver's entries."""
     got = {k: dict(v) for k, v in proved["verdicts"].items()}
     got[LEAN] = {**got[LEAN], "of_record": True, "sessions": list(proved["sessions"])}
     got[READS] = reads_entry(file, got[LEAN])
-    lean = across(stage1, r.first, outcome)
+    lean = across(handoff, r.first, outcome)
     refused = {"accepted": False, "why": f"Lean refused the read: {lean.get('refused')}"}
     got[BOUNDARY_AUDIT] = boundary_entry(r.boundary, outcome, refused if "refused" in lean else lean.get("audit") or {})
     got[ORDER] = order_entry(r, lean, got[BOUNDARY_AUDIT]["audit"])
@@ -427,7 +432,7 @@ def verdicts_of(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], 
     return got
 
 
-def decide(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], proved: Mapping[str, Any],
+def decide(r: Resumed, handoff: Mapping[str, Any], file: Mapping[str, Any], proved: Mapping[str, Any],
            outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop stream's outcome of its sample: the sessions delivered (`Stream.deliver`), then `Stream.outcome` on the
     verdicts (`verdicts_of`) with the stop sample's coin evidence. The audit record's own checks hold the roots Lean's
@@ -435,12 +440,12 @@ def decide(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], prove
     values, and the output row as the session's root of `b.stop` (none when the verdict did not accept, which fails
     ``roots``). -> ``accepted``, the outcome's record and symbol and the audit record; or ``refused``, with no audit
     record, when the stream refuses the delivery or the outcome."""
-    verdicts = verdicts_of(r, stage1, file, proved, outcome)
+    verdicts = verdicts_of(r, handoff, file, proved, outcome)
     lean = proved["verdicts"][LEAN]
     opened = (lean.get("registered") or {}).get(OUT) if lean.get("accepted") is True else None
     try:
         o = r.stream.deliver(r.sample, proved["sessions"]) or r.stream.outcome(
-            r.sample, verdicts, proved["statement"], coins=stage1["stop"].get("evidence"),
+            r.sample, verdicts, proved["statement"], coins=handoff["stop"].get("evidence"),
             proved_units=proved["proved_units"], instances=proved["instances"], served=proved["served"],
             session_roots={BR.STOP: (opened or {}).get("root")})
     except (S.Refused, S.Pending) as e:
@@ -474,7 +479,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--stage1", required=True, help="the class's stage1.json (two_stage.py first --stop)")
+    ap.add_argument("--handoff", required=True, help="the class's hand-off, the file two_stage.py first --stop writes")
     ap.add_argument("--boundary", required=True, help="the class's directory, its private files too: the prover's half reads it")
     ap.add_argument("--stop", required=True, help=TS.STOP_HELP)
     ap.add_argument("--design", required=True, help="the verifier's own sampling design over the stop blocks, a rate: "
@@ -482,9 +487,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--boundary-outcome", help="the boundary stream's outcome record on the class's boundary record (an "
                                                "entry of its Stream.records); without it the boundary-audit entry is null")
     ap.add_argument("--bin", required=True, help="flock-circuit")
-    ap.add_argument("--lean", required=True, help="flock-verify")
-    ap.add_argument("--firewall", help="Lean's flock-firewall: the session behind the ZK server; without it the prover "
-                                       "runs prove --zk itself, as SPOT[Flock]'s proof server does")
+    ap.add_argument("--lean", required=True, help="the Flock verifier's Lean binary")
+    ap.add_argument("--zk-server", help="Lean's ZK server binary: the session runs behind it; without it the prover "
+                                        "runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--forge", default="", help="a negative's prover: these spans' b.stop word committed with bit 0 "
                                                 "flipped, the class's commitment holding that tree's root")
     ap.add_argument("--delta", type=float, default=0.5)
@@ -494,7 +499,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    stage1 = json.loads(Path(a.stage1).read_text())
+    handoff = json.loads(Path(a.handoff).read_text())
     outcome = json.loads(Path(a.boundary_outcome).read_text()) if a.boundary_outcome else None
     forge = [int(i) for i in a.forge.split(",") if i]
 
@@ -505,11 +510,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                                    sort_keys=True, default=str))
         return code
     try:
-        check, stop = TS.template_fn(stage1["commit"]["check"]), TS._stop(a.stop)
+        check, stop = TS.template_fn(handoff["commit"]["check"]), TS._stop(a.stop)
         if stop is None:
             raise ValueError("a stop population is audited under the verifier's own stop rule: --stop")
-        # the verifier's half, from stage1.json and its own copies
-        r = resume(stage1, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline)
+        # the verifier's half, from the hand-off and its own copies
+        r = resume(handoff, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline)
         file = reads(r)
         (out / "registered.json").write_bytes(canonical_json(file))
         mine = {**files(r.layout, out / "verifier"), "registered_file": out / "registered.json"}
@@ -521,11 +526,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if st["roots"][BR.STOP] != file["ports"][OUT]["root"]:
             raise ValueError("the prover's b.stop tree is not the one the stop record registers"
                              + ("" if forge else ": a class forged at registration is proved with --forge"))
-        proved = session({**st, **mine}, r.sample.units, out / "session", bin_=a.bin, lean=a.lean, firewall=a.firewall,
+        proved = session({**st, **mine}, r.sample.units, out / "session", bin_=a.bin, lean=a.lean, zk_server=a.zk_server,
                          forged=bool(forge), timeout=a.session_timeout)
-        got = decide(r, stage1, file, proved, outcome)
+        got = decide(r, handoff, file, proved, outcome)
     except Unlogged as e:
-        lean = across(stage1, e.first, outcome)
+        lean = across(handoff, e.first, outcome)
         return done(1, {"format": FORMAT, "accepted": False, "complete": False, "length_held": False,
                         "refused": [ORDER], "case": lean.get("case"), "across": lean, "error": f"{ORDER}: {e}"})
     except S.Refused as e:

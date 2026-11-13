@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity.definitions.registry import cuda_rmsnorm as C
 
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 BF16 = torch.bfloat16
 
@@ -61,7 +69,7 @@ class CudaRmsNormRule(InPlaceRule):
             return r
         if not isinstance(ctx.val(out), (Alloc, Coll)):
             return "out is not an allocation/value"
-        if shape(ctx, w) != (shape(ctx, x)[-1],):
+        if shape(ctx, w) != (known(shape(ctx, x))[-1],):
             return f"weight {shape(ctx, w)} vs hidden {shape(ctx, x)[-1]}"
         if shape(ctx, out) != shape(ctx, x):
             return "out shape differs from x"
@@ -113,7 +121,7 @@ class CudaFusedAddRmsNormRule(InPlaceRule):
             return "x/residual is an unwritten allocation"
         if shape(ctx, x) != shape(ctx, res):
             return "x and residual differ in shape"
-        if shape(ctx, w) != (shape(ctx, x)[-1],):
+        if shape(ctx, w) != (known(shape(ctx, x))[-1],):
             return "weight shape vs hidden size"
         if not isinstance(eps, float):
             return "eps is not a static float"

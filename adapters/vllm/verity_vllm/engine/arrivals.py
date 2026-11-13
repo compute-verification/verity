@@ -41,20 +41,17 @@ and hooks directly); existing records are not reinterpreted.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.engine.engine_driver import external_id
-from verity_vllm.engine.handle import scheduler_or_none
+from verity_vllm.engine.handle import (
+    engine_of,
+    scheduler_or_none,
+    structural_output_lag,
+)
 
-
-def structural_output_lag(eng: Any) -> int | None:
-    """The output lag the engine's architecture implies: 1 for vLLM V1 (`engine_core`), 0 for V0 (`model_executor`, no core), None
-    when the engine is of no known kind (the measured lag is then kept)."""
-    if getattr(eng, "engine_core", None) is not None:
-        return 1
-    if getattr(eng, "model_executor", None) is not None:
-        return 0
-    return None
+__all__ = ["ForwardCounter", "realized_arrive_steps", "run_requests_arrivals"]
 
 
 def _snapshot_computed(sched: Any) -> dict[str, int] | None:
@@ -172,7 +169,7 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
     duration is host time around ``step()``; it includes the device work only
     where vLLM synchronizes inside the step, as it does to return sampled tokens.
     """
-    eng = llm.llm_engine
+    eng: Any = engine_of(llm)
     sched = scheduler if scheduler is not None else scheduler_or_none(llm)
     reqs = list(requests)
     pending = sorted(range(len(reqs)), key=lambda i: (int(getattr(reqs[i], "arrive_step", 0) or 0), i))
