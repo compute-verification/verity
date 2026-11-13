@@ -2,15 +2,31 @@
 
 Exact checks of the premises PoUW's resource accounting rests on: each script decides one claim a premise or a Lean
 docstring makes, exhaustively at a small width or over a modelled ISA. A script stays here only while a test or the
-Lean reads it.
+Lean reads it, or a recorded run names its command.
 
 Most of them are about the fold receipts: the duo step and the fx1 and li folds that the served H1 and J10-R designs
 absorb committed words with, and the TS premises their accounting reads (`Accounting.Assumptions.TS`: `FoldOpt`,
 `NoSum`, `ScalarRoute`, `SideUnits`, `WordsWritten`). Dither, PoUW's no-fold design, has none of them. When the TS fold
 premises are retired, their scripts are deleted with them.
 
+The directory is scripts run by their paths, and no package. Seven are imported by another script here, under their
+bare names: `checked_strip.py`, `cpw_sass_count.py`, `fold_kernel_check.py`, `fold_opt_fx.py`, `fold_root_sweep.py`,
+`fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take, and every other
+name is the script's own. Outside the directory only `checked_strip.py` is read: the references of `../edited_gemm/`
+load it by file (`cgemm_ref.py`) and `../tests/test_segment_h1.py` imports it. No Python here touches a GPU: the
+sm_120 probes are the `*.sh` jobs. A script starts only `gcc` and the C program it built, and `run.py` the checks; each
+writes only in a temporary directory and where its command says (`--verdict`, `--json`, `--out`).
+
 ## Running
 
+- **The runner** is `run.py`: every check, one after another, each in its own process.
+
+  ```text
+  uv run python benchmarks/pouw/theory/run.py [--quick] [--mutations] [--verdict PATH] [NAME ...]
+  ```
+
+  It passes when every script exits 0, and `NAME ...` runs those alone. Without `--quick`, `fold_wide32.py` searches
+  for CPU-hours. `--verdict PATH` writes the run's verdict there and each script's beside it.
 - **A check** runs on `exact_kit`'s registry (`exact_kit/README.md`):
 
   ```text
@@ -78,7 +94,7 @@ What each one checks, and the Lean or the test that reads it.
 ### The checked strip and attention's noise
 
 - `checked_strip.py`: the exact check of the two-sided noise whose served output is a checked word. It is the one module
-  other code imports (`edited_gemm`'s `cgemm_ref.py`, `fpx_design`, `tests/test_segment_h1.py`), and `edited_gemm`'s
+  other code reads (`edited_gemm`'s `cgemm_ref.py` and `tests/test_segment_h1.py`), and `edited_gemm`'s
   references build on its `pv_words`, `pv_served`, `co32c_words` and `digits`.
 - `narrow_u.py`: that check with U on ±N for N = 8, 16, 32 (`edited_gemm`'s `co32c-u*`).
 - `zero_routes_check.py`: `checked_strip.py`'s priced zero-instance routes.
@@ -94,3 +110,14 @@ What each one checks, and the Lean or the test that reads it.
 - `cpw_floor.py`: the unit's floor from the sm_120 headline's Lean bound, beside what each checkpoint route adds.
 - `a2u_sat.sh` with `a2u_sat.cu`, counted by `a2u_sat_count.py`: whether a uniform-datapath instruction takes an issue
   slot beside a saturating FFMA stream (`Sheet.lean`'s `SheetDispatch`, A2u).
+
+### The lead's coins
+
+Neither script is on `exact_kit`'s registry, so `run.py` runs neither and no test does. Each prints its own result
+and writes it with `--json PATH`.
+
+- `coin_tail.py`: the lead's coin-branch tail (`Tail.coinTail_le`, `security/Proofs/Pouw/Lead/Tail/Repeats.lean`)
+  at the three points and decode, and each order's read sets on a small layout with the coins as the layout flips
+  them.
+- `adaptive_dw.py`: what a prover that branches on the coins saves on the lead's committed words, built word for
+  word for each design and each choice of data.
