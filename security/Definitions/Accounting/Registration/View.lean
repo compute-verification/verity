@@ -33,10 +33,15 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
 * **The parts of the registered hardware** (`Site.Accountable`, `Site.parts`): each device's compute, each memory leaf's
   memory held and memory read, the device model's resources (`Accounting.Resource`) at the leaf's tier, and each
   boundary link's egress, by the id that holds it.
-* **What each protocol accounts for** (`Registration.Lists`): the composite's protocols, and for each the parts it
-  accounts for at each id. Its values come from each protocol's account in code (`Core.Account`: each amount's `part`
-  and `place`, whose leaves `Core.Account.Part.leaves` names). `Registration.AccountedFor` holds when every part of the
-  registered hardware is accounted for by some protocol of the composite.
+* **What each protocol accounts for** (`Registration.Accountant`, `Registration.accounts`): each protocol accounts for
+  one kind of part, fixed by its definition (`Accountant.part`), at the ids its verifier's answer covers
+  (`Registration.Answers`, read off each amount's `part` and `place` in code, `Core.Account`, whose leaves
+  `Core.Account.Part.leaves` names). The composite's lists (`Registration.Lists`) say which protocols each composite
+  runs.
+* **Accounted for** (`Registration.AccountedFor`): every part of the registered hardware is accounted for by a protocol
+  on the composite's list, and each device's memory, by its sheet's capacity, is covered by memory leaves under it that
+  PoUS's answer covers or is named unaccounted with its bytes (`View.unaccounted`). A Site with no device, memory leaf
+  or boundary link has nothing to account for.
 
 **Not covered.** `RegistrationSound` reads the spec's check (`Registration.Valid`); that the code's check decides it is
 a property of the code (`Properties.Registration.Checks`). Nothing here ties a builder's digest to the compiler it
@@ -173,21 +178,54 @@ end View
 def Chained (D : Digests) (c : Composite) (log : Registration) : Prop :=
   ∀ i (h : i < log.length), log[i].previous = head D c (log.take i)
 
-/-- **The composite's lists, and what each protocol on them accounts for**: the protocols `P` of each composite, and
-the parts of the registered hardware protocol `p` of composite `k` accounts for at id `x` of Site `S`
-(`accounts k p S x`). A deployment's values come from each protocol's account in code (`Core.Account`): `p` accounts for
-part `r` at `x` when one of its amounts' parts is of `r`'s kind and its leaves at `S` (`Core.Account.Part.leaves`)
-hold `x`. -/
-structure Lists (P : Type) where
-  protocols : Composite → Finset P
-  accounts : Composite → P → Site → String → Set Site.Accountable
+/-- **A protocol that accounts for parts of the registered hardware**: PoUW, PoUS, the bandwidth audit and the network
+certifier. -/
+inductive Accountant
+  | pouw
+  | pous
+  | bandwidth
+  | certifier
+  deriving DecidableEq, Repr
 
-/-- **The registered hardware is accounted for** by composite `k`'s protocols: every part the view's Site holds
-(`Site.parts`) is accounted for by some protocol on `k`'s list. It is about the list, before any challenge: whether a
-protocol's answer then certifies the part is the accounting's, which charges at capacity a part no accepted answer
-covers. -/
-def AccountedFor {P : Type} (L : Lists P) (v : View) (k : Composite) : Prop :=
-  ∀ x r, (x, r) ∈ v.site.parts → ∃ p ∈ L.protocols k, r ∈ L.accounts k p v.site x
+/-- **The one kind of part each protocol accounts for**, fixed by its definition: PoUW a device's compute, PoUS memory
+held, the bandwidth audit bits read, and the network certifier a boundary link's egress. -/
+def Accountant.part : Accountant → Site.Accountable
+  | .pouw => .resource .compute
+  | .pous => .resource .capacity
+  | .bandwidth => .resource .bandwidth
+  | .certifier => .egress
+
+/-- **What each protocol's verifier answered**: the ids of the Site its accepted answer covers. In code each is read off
+the protocol's account (`Core.Account`: an amount's `part` and `place`, whose leaves `Core.Account.Part.leaves`
+names). -/
+abbrev Answers := Accountant → Finset String
+
+/-- **Protocol `p` accounts for part `r` at id `x`**, under the answers `a`: `r` is the kind of part `p` accounts for
+(`Accountant.part`), and `p`'s answer covers `x`. -/
+def accounts (a : Answers) (p : Accountant) (x : String) (r : Site.Accountable) : Prop := p.part = r ∧ x ∈ a p
+
+/-- **The composite's lists**: the protocols each composite runs. -/
+structure Lists where
+  protocols : Composite → Finset Accountant
+
+/-- **Device `x`'s memory no protocol accounts for**, in bytes, under the digests `D`, the lists `L`, the answers `a`
+and the composite `k`: its sheet's memory (`Site.Sheet.mem`) less the bytes of the memory leaves directly under it that
+PoUS's answer covers, with PoUS on `k`'s list; none when `x` names no registered sheet, which `View.Devices` refuses. -/
+def View.unaccounted (v : View) (D : Digests) (L : Lists) (a : Answers) (k : Composite) (x : Loc) : ℕ :=
+  match v.site.sheet? D.sheet x with
+  | none => 0
+  | some s => s.mem - ((v.site.locs.filter fun y =>
+      y.kind = .memory ∧ y.parent = some x.id ∧ Accountant.pous ∈ L.protocols k ∧ y.id ∈ a .pous).map (·.bytes)).sum
+
+/-- **The registered hardware is accounted for** by composite `k`'s protocols, under the answers `a`, with the device
+memory `unaccounted` named: every part the view's Site holds (`Site.parts`) is accounted for by a protocol on `k`'s
+list (`accounts`), and each device whose memory the protocols leave uncovered (`View.unaccounted`) is named in
+`unaccounted` with those bytes. It is about the lists and the answers: the accounting charges at capacity a part no
+accepted answer covers. -/
+def AccountedFor (D : Digests) (L : Lists) (a : Answers) (v : View) (k : Composite)
+    (unaccounted : List (String × ℕ)) : Prop :=
+  (∀ x r, (x, r) ∈ v.site.parts → ∃ p ∈ L.protocols k, accounts a p x r) ∧
+    ∀ x ∈ v.site.locs, x.kind = .device → 0 < v.unaccounted D L a k x → (x.id, v.unaccounted D L a k x) ∈ unaccounted
 
 end Registration
 

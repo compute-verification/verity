@@ -23,6 +23,10 @@ public import Proofs.Core.Site
   θ value by its name; and `Registration.Valid.declarations_nodup`: the log declares each day once
   (`Registration.Valid.days_nodup`).
 
+At the same witness site, its GPU's memory, which no memory leaf registers, is unaccounted whatever the protocols
+answer (`Registration.Witness.accountedFor_names_gpu`), and the site is accounted for with it named
+(`Registration.Witness.accountedFor`).
+
 `RegistrationSound_honest` and `RegistrationSound_nontrivial`, at the witness site of
 `Definitions.Accounting.Registration.Guarantees.Witnesses`: its log passes the check by evaluation, and a log whose
 device names no sheet finds no sheet for it.
@@ -275,6 +279,69 @@ theorem Valid.theta_nodup {l : Registration} (h : Valid D A c l) : (l.theta.map 
 theorem Valid.declarations_nodup {l : Registration} (h : Valid D A c l) :
     ((l.filterMap Entry.declared?).map (·.day)).Nodup := by
   simpa [days, List.map_filterMap] using h.days_nodup
+
+namespace Witness
+
+/-! ### Accounted for, at the witness site
+
+Its GPU's sheet has 64·2^30 bytes of memory and no memory leaf is registered under it, so whatever the protocols
+answer, all of it is unaccounted and `AccountedFor` names it; with PoUW covering the GPU and the network certifier the
+uplink, that is all it needs. -/
+
+/-- PoUW and the network certifier, onsite and remote. -/
+def lists : Lists := ⟨fun _ => {.pouw, .certifier}⟩
+
+/-- PoUW's answer covers the GPU, and the network certifier's the uplink. -/
+def answers : Answers
+  | .pouw => {"gpu0"}
+  | .certifier => {"uplink0"}
+  | _ => ∅
+
+/-- **The witness GPU's memory is all unaccounted**: no memory leaf is under it. -/
+theorem unaccounted_gpu (L : Lists) (a : Answers) :
+    (view digests .onsite log).unaccounted digests L a .onsite gpu = 64 * 2 ^ 30 := by
+  simp [View.unaccounted, view, log, entry, gpu, sheet, digests, Site.ofLog, Site.sheet?, Entry.added]
+
+/-- **`AccountedFor` at the witness site names the GPU's 64·2^30 bytes unaccounted**, whatever the lists and
+answers. -/
+theorem accountedFor_names_gpu {L : Lists} {a : Answers} {u : List (String × ℕ)}
+    (h : AccountedFor digests L a (view digests .onsite log) .onsite u) : ("gpu0", 64 * 2 ^ 30) ∈ u := by
+  have hg := h.2 gpu (by simp [view, log, entry, Site.ofLog, Entry.added]) rfl
+  rw [unaccounted_gpu] at hg
+  exact hg (by norm_num)
+
+/-- **The witness site is accounted for** with PoUW covering the GPU, the network certifier the uplink, and the GPU's
+memory named unaccounted. -/
+theorem accountedFor : AccountedFor digests lists answers (view digests .onsite log) .onsite [("gpu0", 64 * 2 ^ 30)] := by
+  refine ⟨?_, fun x hx hd hu => ?_⟩
+  · rintro x r (⟨y, hy, hk, he⟩ | ⟨y, hy, hk, -⟩ | ⟨l, hl, hb, he⟩)
+    · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at hy
+      rcases hy with rfl | rfl | rfl | rfl
+      · cases hk
+      · cases hk
+      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
+        exact ⟨.pouw, by simp [lists], rfl, by simp [answers, gpu]⟩
+      · cases hk
+    · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at hy
+      rcases hy with rfl | rfl | rfl | rfl <;> cases hk
+    · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at hl
+      rcases hl with rfl | rfl
+      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
+        exact ⟨.certifier, by simp [lists], rfl, by simp [answers, uplink]⟩
+      · exact absurd hb (by decide +kernel)
+  · simp only [view, log, entry, Site.ofLog, Entry.added, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl
+    · cases hd
+    · cases hd
+    · rw [unaccounted_gpu]
+      simp [gpu]
+    · cases hd
+
+end Witness
 
 end Registration
 
