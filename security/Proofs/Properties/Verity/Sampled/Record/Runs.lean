@@ -6,11 +6,11 @@ public import Proofs.Flock.Claims.Sampling.Prefix
 /-!
 # Every checked unit's session is the record's one Flock session (`SessionRuns`)
 
-At the record's statement the verifier runs `DRAW_ROUNDS` draw rounds and the draw file round, then one session of
-flock-verify `--zk` at the statement the draw file sets up (`prefixAt`: `SamplingDeploy.PrefixAt` with the draw file
+At the record's statement the verifier runs `DRAW_ROUNDS` sample rounds and the sample file round, then one session of
+flock-verify `--zk` at the statement the sample file sets up (`prefixAt`: `SamplingDeploy.PrefixAt` with the sample file
 round's check `okAt`); there is no unit anywhere else (`eq_xOf_of_nPU`). Every unit's rounds are the session's, and
-`sessionOf` reads a view whose draw file round passed as the session's statement and the rounds after it, and one whose
-draw file round refused as `refused`, so `SessionRuns` is `SamplingDeploy.sessionRuns_prefix` at flock-verify `--zk`
+`sessionOf` reads a view whose sample file round passed as the session's statement and the rounds after it, and one whose
+sample file round refused as `refused`, so `SessionRuns` is `SamplingDeploy.sessionRuns_prefix` at flock-verify `--zk`
 against SHA-512 (`flockAt_sha512`).
 -/
 
@@ -23,7 +23,7 @@ open Claims Claims.Sampling
 variable (A : Live) (o : Own) (e : Ext)
 
 open Classical in
-/-- **The draw file round's check**, on the messages and coins so far: `drawOk` at the draw file and the draw coins. -/
+/-- **The sample file round's check**, on the messages and coins so far: `drawOk` at the sample file and the sampling coins. -/
 noncomputable def okAt (as : List Msg) (cs : List FlockDeploy.Coin) : Bool :=
   decide (drawOk A o (as.getD DRAW_ROUNDS []) (cs.take DRAW_ROUNDS))
 
@@ -57,7 +57,7 @@ theorem record_session_xOf (u : ℕ) (v : Seen) : (record A o e).session (xOf A 
   (record_session A o e (xOf A o) u v).trans (ite_eq_left rfl)
 
 open Classical in
-/-- **The record's verifier is a prefix, then one session**: the draw rounds answer a coin, the draw file round answers
+/-- **The record's verifier is a prefix, then one session**: the sample rounds answer a coin, the sample file round answers
 `[]` where `okAt` passes and refuses elsewhere, and past it each round is flock-verify `--zk`'s at the session's
 statement, with `kS` rounds where `okAt` passed (`numsOk`). -/
 theorem prefixAt :
@@ -94,7 +94,7 @@ theorem prefixAt :
     exact h3
 
 /-- **`SessionRuns` at the record**: every checked unit's session is the record's one flock-verify `--zk` session, on
-the rounds after the draw file round. -/
+the rounds after the sample file round. -/
 theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
   SamplingDeploy.sessionRuns_prefix FlockDeploy.sha512 (record A o e) SamplingDeploy.flockAt_sha512
     (fun _ => DRAW_ROUNDS + 1) (fun _ => kS A o) (fun _ => okAt A o) (fun _ => sessStmt A o)

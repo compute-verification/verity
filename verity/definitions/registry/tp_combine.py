@@ -32,7 +32,7 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
   residual written as one row (the MoE's) is read without being cut.
 * A producer's whole row. A wire reads its writer's output row whole, so a rank's partial written as one row of N elements (the
   MoE's `ResidualAdd_v2{N=6144}`) reaches the chunk units through `RowChunks_v1{N,C}`, a copy of it as N / C output rows.
-  Unchunked, a token's row of 6,144 is past one C-Flock block: the fused call's unit by its ANDs alone, and every all-reduce of
+  Unchunked, a token's row of 6,144 is past one Flock block: the fused call's unit by its ANDs alone, and every all-reduce of
   it with its rows' slots (verity/definitions/tests/test_tp_combine.py).
 """
 from __future__ import annotations
