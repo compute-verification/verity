@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.RemoteBinding
 public import Proofs.Accounting.Lemmas.RemoteBinding
+public import Proofs.Flock.Claims.Finder
 public import Proofs.Hash.RowBinding
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -199,14 +200,55 @@ theorem fork_le_finder [Fintype X] [Nonempty X] (D : Remote.Draw.Run n m s κ X)
     (R.fork D prf rest t).toReal ≤ (R.finder D prf rest t q).Pr (fun u => (R.hash u).bytes) := by
   rw [Receipts.fork, toReal_pr, Claims.Finder.Pr, claims_pr]
   refine prob_mono (Ω := DrawCoins n κ X × DrawCoins n κ X) fun y hy => ?_
-  have hex : ∃ uv, R.Finds D prf rest t y.1 y.2 uv := by
-    obtain ⟨p, hp, hp', h | h⟩ := hy
-    · obtain ⟨u, hu, v, hv, hc⟩ := h
-      exact ⟨(u, v), hc, p, hp, hp', Or.inl ⟨hu, hv⟩⟩
-    · obtain ⟨u, hu, v, hv, hc⟩ := h
-      exact ⟨(u, v), hc, p, hp, hp', Or.inr ⟨hu, hv⟩⟩
-  refine ⟨hex.choose.1, hex.choose.2, ?_, hex.choose_spec.1⟩
-  simp [Receipts.finder, hex]
+  let e : List Hash.Msg → Option (Hash.Msg × Hash.Msg) := fun l =>
+    Claims.findColl (l.map fun u => (u, (R.hash u).bytes))
+  let outer : ℕ → List Hash.Msg := fun p =>
+    Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t y.1 p) (R.rank t y.1 p) (R.opened t y.1 p) ++
+      Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t (cont t y.1 y.2) p) (R.rank t (cont t y.1 y.2) p)
+        (R.opened t (cont t y.1 y.2) p)
+  let inner : ℕ → List Hash.Msg := fun p =>
+    Hash.RowLeaf.innerHashed R.hash (R.verifier t y.1 p) (R.opened t y.1 p) ++
+      Hash.RowLeaf.innerHashed R.hash (R.verifier t (cont t y.1 y.2) p) (R.opened t (cont t y.1 y.2) p)
+  have hout : (R.finder D prf rest t q).out y = ((D.opened prf rest t y.1).sort (· ≤ ·)).findSome? fun p =>
+      if p ∈ D.opened prf rest t (cont t y.1 y.2) then (e (outer p)).orElse fun _ => e (inner p) else none := rfl
+  have hev : ∀ l : List Hash.Msg, ∀ x ∈ l.map (fun u => (u, (R.hash u).bytes)),
+      (fun u => (R.hash u).bytes) x.1 = x.2 := by
+    intro l x hx
+    obtain ⟨m, -, rfl⟩ := List.mem_map.1 hx
+    rfl
+  have hsome : ∀ l, Hash.CollisionIn R.hash l → (e l).isSome := by
+    rintro l ⟨u, hu, v, hv, hne, huv⟩
+    cases hf : e l with
+    | some _ => rfl
+    | none =>
+      exact absurd (Claims.findColl_none _ hf (u, (R.hash u).bytes) (List.mem_map_of_mem hu) (v, (R.hash v).bytes)
+        (List.mem_map_of_mem hv) huv) hne
+  obtain ⟨p, hp, hp', h⟩ := hy
+  have hg : (if p ∈ D.opened prf rest t (cont t y.1 y.2) then (e (outer p)).orElse fun _ => e (inner p)
+      else none).isSome := by
+    rw [if_pos hp']
+    rcases h with h | h
+    · obtain ⟨a, ha⟩ := Option.isSome_iff_exists.1 (hsome _ h)
+      rw [ha]
+      rfl
+    · cases ho : e (outer p) with
+      | some _ => rfl
+      | none => exact hsome _ h
+  have hfs : (((D.opened prf rest t y.1).sort (· ≤ ·)).findSome? fun p =>
+      if p ∈ D.opened prf rest t (cont t y.1 y.2) then (e (outer p)).orElse fun _ => e (inner p)
+      else none).isSome :=
+    List.findSome?_isSome_iff.2 ⟨p, (Finset.mem_sort _).2 hp, hg⟩
+  obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hfs
+  refine ⟨u, v, hout.trans huv, ?_⟩
+  obtain ⟨p', -, hp''⟩ := List.exists_of_findSome?_eq_some huv
+  split_ifs at hp''
+  cases ho : e (outer p') with
+  | some a =>
+    rw [ho] at hp''
+    exact Claims.findColl_spec _ _ (hev _) u v (ho.trans hp'')
+  | none =>
+    rw [ho] at hp''
+    exact Claims.findColl_spec _ _ (hev _) u v hp''
 
 end Binding
 

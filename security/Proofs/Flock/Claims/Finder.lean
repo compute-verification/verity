@@ -127,6 +127,27 @@ theorem findColl_mem :
     · obtain ⟨h1, h2⟩ := ih u v h
       exact ⟨List.mem_cons_of_mem _ h1, List.mem_cons_of_mem _ h2⟩
 
+/-- `findColl` finds nothing only if no two pairs of `l` share an output with different inputs. -/
+theorem findColl_none : ∀ l : List (Msg × Msg), findColl l = none → ∀ p ∈ l, ∀ q ∈ l, p.2 = q.2 → p.1 = q.1
+  | [], _ => by simp
+  | (q₀, a) :: tl, h => by
+    simp only [findColl] at h
+    split at h
+    · simp at h
+    · rename_i hf
+      have ih := findColl_none tl h
+      have hno : ∀ p ∈ tl, ¬ (p.1 ≠ q₀ ∧ p.2 = a) := by
+        intro p hp hc
+        have := List.find?_eq_none.1 hf p hp
+        simp [hc.1, hc.2] at this
+      intro p hp q hq hpq
+      simp only [List.mem_cons] at hp hq
+      rcases hp with rfl | hp <;> rcases hq with rfl | hq
+      · rfl
+      · by_contra hne; exact hno q hq ⟨fun e => hne e.symm, hpq.symm⟩
+      · by_contra hne; exact hno p hp ⟨hne, hpq⟩
+      · exact ih p hp q hq hpq
+
 section B
 
 variable {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]

@@ -480,8 +480,20 @@ noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
 
 theorem out₀ (ω : finder₀.S) : finder₀.out ω = none := by
-  have h := drawnHashed₀ ω
-  exact dif_neg (by rw [h]; exact no_collision₀)
+  change Claims.findColl ((R₀.drawnHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀
+    (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω).map fun m => (m, (Verity.sha512 m).bytes)) = none
+  rw [drawnHashed₀ ω]
+  cases hf : Claims.findColl (L₀.map fun m => (m, (Verity.sha512 m).bytes)) with
+  | none => rfl
+  | some uv =>
+    obtain ⟨u, v⟩ := uv
+    have hev : ∀ p ∈ L₀.map (fun m => (m, (Verity.sha512 m).bytes)),
+        (fun m => (Verity.sha512 m).bytes) p.1 = p.2 := by
+      intro p hp
+      obtain ⟨m, -, rfl⟩ := List.mem_map.1 hp
+      rfl
+    obtain ⟨hu, hv⟩ := Claims.findColl_mem _ u v hf
+    exact absurd ⟨u, by simpa using hu, v, by simpa using hv, Claims.findColl_spec _ _ hev u v hf⟩ no_collision₀
 
 theorem cost₀ (ω : finder₀.S) : finder₀.cost ω = 0 := rfl
 

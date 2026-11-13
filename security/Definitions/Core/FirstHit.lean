@@ -56,16 +56,14 @@ noncomputable def sampleFinderAt {T : Type} [Fintype T] [Nonempty T] [Fintype Ω
   cost q :=
     c q.1 q.2.1 + loopCostAt (op q.1) (chk q.1) (c₂ q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2
 
-open Classical in
 /-- **The pair the by-position finder outputs**, from `coll`, which reads two runs' tapes and a node: `coll` at the
 first run, a further run that is the first to open some node the first run opened, and that node, where that is a
-pair. What it reads of the further run is what that node costs there, which the loop charges. -/
-noncomputable def outOfAt (op : Ω → P → Option V) (coll : Ω → Ω → P → Option (Msg × Msg)) (K : ℕ) (ω : Ω)
-    (ρ : Fin K → Ω) : Option (Msg × Msg) :=
-  if h : ∃ jp : Fin K × P, ((op ω jp.2).isSome ∧ firstIdx op jp.2 K ρ = some jp.1) ∧
-      (coll ω (ρ jp.1) jp.2).isSome then
-    coll ω (ρ h.choose.1) h.choose.2
-  else none
+pair. It searches the further runs' indices and the nodes in order, and outputs the first pair it finds. What it reads
+of the further run is what that node costs there, which the loop charges. -/
+noncomputable def outOfAt [Fintype P] (op : Ω → P → Option V) (coll : Ω → Ω → P → Option (Msg × Msg)) (K : ℕ)
+    (ω : Ω) (ρ : Fin K → Ω) : Option (Msg × Msg) :=
+  (List.finRange K ×ˢ (univ : Finset P).toList).findSome? fun jp =>
+    if (op ω jp.2).isSome ∧ firstIdx op jp.2 K ρ = some jp.1 then coll ω (ρ jp.1) jp.2 else none
 
 variable {Q : Type}
 
