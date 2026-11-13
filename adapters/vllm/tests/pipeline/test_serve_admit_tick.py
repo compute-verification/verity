@@ -367,6 +367,25 @@ def test_an_open_gate_adds_a_lost_releases_request_at_once_like_any_other():
     assert g.sched.added == ["r0", "r1"] and g.gate.lost == {0, 1} and g.gate.counts["dropped"] == 0
 
 
+def test_a_dropped_requests_abort_stops_at_the_gate():
+    """The gate keeps the id of each request it drops for a lost release, the one it held when the line came and the
+    one that comes after it, and takes it out of ``finish_requests``' ids as it does a held request's: the scheduler is
+    handed no id of a request it never saw, whatever it would do with one. An id is kept only until its abort."""
+    g = Gated()
+    for n in range(4):
+        g.release(n, bucket=0)
+    g.arrive("r0")
+    g.arrive("r1")
+    g.mark(4, lost=[0, 2])                           # r0 is held when its line comes
+    g.arrive("r2")                                   # r2 comes after it
+    g.arrive("r3")
+    assert g.sched.added == [] and sorted(g.gate.held) == [1, 3]
+    assert g.gate.finished(["r0", "probe", "r3", "r2"]) == ["probe"]                  # r3 is held: its abort drops it, as before
+    assert g.gate.dropped_ids == set() and g.gate.finished("r0") == ["r0"]
+    assert counts(g) == {"admitted": 0, "lost": 2, "dropped": 2, "aborted": 1, "held_now": 1}
+    assert g.step() and g.sched.added == ["r1"]
+
+
 def test_unnumbered_aborted_passed_and_new_runs():
     g = Gated()
     g.arrive("probe", out=5)

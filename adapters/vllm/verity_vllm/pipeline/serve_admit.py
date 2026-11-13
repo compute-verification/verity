@@ -348,7 +348,9 @@ class TickGate:
     one it held is dropped, never added to the scheduler, and so is one that comes later (`add`). ``next`` steps over N
     as soon as it reaches it, with no hold, so the releases after N are admitted in order at their buckets. An open gate
     orders nothing, lost or not: it has added what it held, and adds a lost release's request at once like any other.
-    The frontend still owns a dropped request's answer and its abort: the gate only keeps it from the scheduler."""
+    The frontend still owns a dropped request's answer and its abort: the gate only keeps it from the scheduler, and
+    keeps its id (``dropped_ids``) until that abort comes, which it takes out of ``finish_requests``' ids, so the
+    scheduler is never handed the id of a request it never saw."""
 
     def __init__(self, tick: Tick, *, hold_s: float, clock: Callable[[], float] = time.monotonic,
                  pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
@@ -357,6 +359,7 @@ class TickGate:
         self.run: str | None = None
         self.runs: list[str] = []
         self.keys: dict[str, tuple[str, int]] = {}      # a release's key -> (run, N)
+        self.dropped_ids: set[str] = set()              # the requests the gate dropped, until their aborts come
         self.opened: str | None = None
         self.counts = {"admitted": 0, "unordered": 0, "stale": 0, "late": 0, "skipped": 0, "lost": 0, "dropped": 0,
                        "aborted": 0, "past_end": 0, "bucket_mismatch": 0, "watermark_errors": 0}
@@ -433,6 +436,7 @@ class TickGate:
         held = self.held.pop(n, None)
         if held is not None:
             self.held_ids.pop(held[0].request_id, None)
+            self.dropped_ids.add(held[0].request_id)
             self.counts["dropped"] += 1
         self._event("lost", n=n, dropped=held is not None)
 
@@ -456,7 +460,10 @@ class TickGate:
                 self._event(why, key=key, n=None if k is None else k[1])
             if why == "late":
                 self.skipped.discard(k[1])
-            return None if why == "dropped" else add(request)
+            if why == "dropped":
+                self.dropped_ids.add(request.request_id)
+                return None
+            return add(request)
         n = k[1]
         self.held[n] = (request, add)
         self.held_ids[request.request_id] = n
@@ -472,13 +479,17 @@ class TickGate:
         add(request)
 
     def finished(self, ids: str | Iterable[str] | None) -> Iterable[str] | None:
-        """``finish_requests``' ids less the held requests among them, which are dropped (their N won't come); for every
-        request (None), the held ones are added first."""
+        """``finish_requests``' ids less the gate's own among them, which the scheduler never saw: the held requests,
+        which are dropped (their N won't come), and the ones it dropped for a lost release, whose ids it forgets here.
+        For every request (None), the held ones are added first."""
         if ids is None:
             self.open("every request finished")
             return None
         rest = []
         for rid in (ids,) if isinstance(ids, str) else ids:
+            if rid in self.dropped_ids:
+                self.dropped_ids.discard(rid)
+                continue
             n = self.held_ids.pop(rid, None)
             if n is None:
                 rest.append(rid)
