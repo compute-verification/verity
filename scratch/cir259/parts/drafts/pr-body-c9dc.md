@@ -96,8 +96,10 @@ The table is `RETIRED` at the head, written the way `parse()` words it. [read]
   - The retired-terms lint's `sites()` on `stage.py` finds one site, `caps` in `getattr(st.low, "caps", None)`, which `main`'s `stage.py` holds too. [run]
 - **At `bbcfd2356a59`:**
   - The nine suites this PR's paths select gave "9 suites: 8 passed (0 cached), 1 failed" (`r20261113-180845-6cde`). The failure was `benchmarks/served_units`' `test_retired`: "LookupError: template GreedyChunk_v1{N=16384,FIRST=false} names no registered Definition". `c9dcea5b385` fixes it. [run]
-  - The full `suites.py` (`r20261113-171018-712b`, 130 suites selected): FULLRUN_VERDICT [run]
-- **The head differs from `bbcfd2356a59` in the files of `c9dcea5b385` only, so the other suites of those runs stand for the head.** FULLRUN_STANDS [inferred]
+  - The full `suites.py` (`r20261113-171018-712b`, 130 suites selected) ended at its 3-hour timeout: "cancelled rc=137 class=STAGE_TIMEOUT", with no summary line. [run]
+    - 119 suites passed, and `benchmarks/served_units` failed on `test_retired`, as above.
+    - 10 didn't finish. `verity-vllm` was killed by SIGTERM after 10,508 s at 87% of its tests, and `verity-flock` after 6,555 s at 74%; the progress lines `stdout.log` keeps show no failure in either. The other eight never started: `research`, `verity-circuit-check`, `verity/commitments/windows`, `verity/circuits`, `verity-numerical`, `verity/commitments`, `verity-ops` and `verity-core-evaluate`.
+- **The head differs from `bbcfd2356a59` in the files of `c9dcea5b385` only, so the other suites of those runs stand for the head: the 119 that passed in `r20261113-171018-712b`.** [inferred] The 10 unfinished suites aren't covered by any run at either head.
 - **Before the carry** [run]:
   - Suites (`suites.py --changed 5f0c008aa040`, without `--quick`): at `4dff5ca9743`, 9 of 9 passed, none cached (`r20261112-201917-61b8`). At `9b280baba610`, 9 of 9 passed, none cached (`r20261112-234331-2cc5`). At `fe800897e74d`, 9 of 9 passed, none cached, 0 failed (`r20261113-011713-d278`).
   - `--unbound` against `main`'s staging, with four stagings each (head `--unbound`, `main`'s `stage.py`, `31b1b56aec2a`'s `stage.py`, head bound): `fp8-coord:K=256` and `census:SiluMul_v2{I=256}` at N=2 (`r20261112-201828-47ac`, source `4dff5ca9743`); `--public-weights` (`r20261112-202406-85e0`, source `4aafb2af879`).
@@ -114,6 +116,7 @@ The table is `RETIRED` at the head, written the way `parse()` words it. [read]
 - **No replacement has a Lean accept at a full statement's count.** Every Lean accept here and in CENSUSBIND's table is at 1 or 2 units, `token-select`'s v2 pair included. The one full statement, W13 at 2,048 units, ran on the GPU without Lean. [run]
 - **Only one chunk position of the v2 cut was staged, `OFF=7744`.** The other 18 chunks of the census's cut weren't staged here. [run]
 - **The carry check wasn't rerun at the head**, for the reason above. [run]
+- **Ten suites have no verdict at either head:** `verity-vllm`, `verity-flock` and the eight that never started, all cut off by `r20261113-171018-712b`'s timeout. They weren't rerun. [run]
 - **`--packed --public-weights` at `K=256`** stages on none of the three stagers: "public inputs: leaf 132 reads a row word inside word 16, which holds a public word". `main`'s `stage.py` refuses it the same way, so this change doesn't cause it (`r20261112-202406-85e0`). [run]
 - **The steady head block at `FIRST=true`** wasn't staged here; only the `FIRST=false` row's pin was compared with `main`'s. [run]
 - **The new `MAIN_ZK` and `MAIN_M0` were taken on sm_120**, where `main`'s were taken with `SM=90`. The prover's transcripts are device-independent, but no sm_90 run of the new default was made. [inferred from `gpu_proofs_match_cpu`]
