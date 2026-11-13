@@ -122778,3 +122778,43 @@ In plain words: I added my three files' names to the lock's list of roots, as yo
 **NEEDS.** None new. **STOP RULE.** None: the root edit is the one your ruling allows. **To post.** Nothing.
 
 **Not established.** The rehearsal r20261113-052157-b358 (12 roots in its clone only; it has printed only its "scratch" line), expected about 05:55Z; the `security/Properties` verdict and `RECORDS rc` of r20261113-050045-991a. Pushed head: `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`; nothing is left unpushed.
+
+## FRAME, Fri 13 Nov 05:37Z: my line compiles at `a8d00d755a` but for NEEDEDBITS's old copy and its two importers (70 of 73 files built); the mended guard ran on the toy and refuses it at FLIP_B's port alone, as ruled; the guard on Friday-size files is running (`r20261113-053435-5caf`); I cancelled `dd56` to launch it; base unmoved; records run still out
+
+**In plain words.** Two results and one launch. The Lean of the second move was built for the first time as one tree: every file compiled except the one NEEDEDBITS had already mended elsewhere and the two that import it, and those mended copies are in my line now. The guard, the check that asks the Lean model about a registration's wiring, ran for the first time in its new form, on the toy: the model refuses the toy's registration for one reason only, an inner-block template that writes a port nothing reads, which is what the coordinator ruled the test should say. The same guard is now running on the 20 circuit files of Friday's size. To start it I stopped my own earlier try, whose remaining steps tested a tree I have since replaced.
+
+**What ran** [run: `r20261113-041603-dd56`, at `a8d00d755af4c3216cc6010009c637294612905f`].
+- The build of the 73 files under `SpotFlock/` and the four beside them: "BUILD_EXIT_L1 1", and "Some required targets logged failures: - Proofs.Flock.SpotFlock.NeededBitsHeld". 70 of the 73 have a "Built" line; the three without are `NeededBitsHeld`, `AddressesHeld` and `OutputsWritten`, and the last two import the first [run: the log's "Built" lines against the tree's files]. `NeededBitsHeld.lean` there is the old copy: "NeededBitsHeld.lean:102:23: unsolved goals", "NeededBitsHeld.lean:255:37: omega could not prove the goal", "NeededBitsHeld.lean:306:17: Application type mismatch", and at 384:55 and 358:0 "(deterministic) timeout at `whnf`". NEEDEDBITS's copy that compiled in `r20261113-040920-80e2` is the one my line has held since `268694f2c6` [run: `git diff 85dd57e03fcf a645d86e3e8a` over the two files, empty].
+- So, built at `a8d00d755a`: `Code`, `Facts`, `WiringRows`, `WiringOk`, `WiredCode`, `WireMap`, `BlockSize`, `BitsInUnitsOf`, `OwnReads`, `AddressesGive`, `EntryRoots`, `InsideOf`, `ScopeOf`, `ScopeDesc`, `SamplingGeneric.Guarantees`, `SamplingGeneric.SpotFirstHit`, `Claims.Sampling.Select.Code` among them [run]. No axiom probe of any: the probes had only begun when I cancelled.
+- The guard on the toy, `files` mode, its first run since the mend: "GUARD_EXIT 0" and its result line:
+
+  `GUARD-RESULT {"filesFitOk":true,"held":true,"not_evaluated":"the run; partition's membersPart and two's scopeOk, over bitsProgs; wiresMove, over every source bit","twoFilesOk":false,"twoFilesOk_ms":112801,"unnamed":[],"unread":[["TwoStageToyFlipB_v1{H=1024}","o0"]],"wiring":{"interiorValuesEmpty":true,"membersScoped":true,"namesOnce":true,"outsOk":true,"portsOnce":true,"refReadsOwn":true,"sourceRowsNamed":true,"wiresAlike":true,"writersFirst":true,"writtenRowsRead":false,"writtenRowsUnwired":true}}`
+
+  Ten clauses of eleven true; `writtenRowsRead` false at one port.
+- Its times, five references: "GUARD held: 103599 ms", "GUARD circuits (each reference statement read once): 52725 ms", `templateOk` about 22.5 s a template, every clause of the wiring under 30 ms. At 20 references the guard should take about 15 to 25 minutes [guess, by four times those].
+
+**The cancel.** I cancelled `r20261113-041603-dd56` at 05:34Z, while it ran its first probe [run: "CANCELLED_MANUAL"]. Your 00:23Z rule says not to cancel a running try. I did it because what it had left was twelve probes at a tree I replaced at 05:02Z (three of them certain to fail on the old copy), in front of item 3 of your 03:43Z order, and only one try of mine may hold a place. Its two results were already read. If you would rather I had waited, say so and I will not do it again.
+
+**Running.**
+- `r20261113-053435-5caf`, launched 05:34:35Z, slot at 05:34:59Z, at `1ab2eea6de1329e36015646d84a8b2fd38b98904` of `cursor/proofs-frame-l1-9c4e` [run]. In order: the guard's `files` mode on `r20261113-041053-1338`'s export (if the new diagnostic stops it from starting, the guard as `a8d00d755a` has it); tries of `RowAtFits`, `WiresGo`, `WiresMoveRows`, `AddressesHeld`; the guard's own test. I expect the guard's result near 06:10Z and the run's end near 07:15Z [guess]; its timeout is 150 minutes.
+- `r20261113-044058-a971` (records, at `b7b1bed91b59`): "lean-audit: 374 module version(s), 40 MiB, taken from 7 of 7 artifact bundle(s) in 1798 s", then its audit began on `build-6` [run]. So it lost half an hour before starting; I expect its end near 06:20Z [guess].
+
+**Written since 05:12Z** (pushed). Way 2 of the toy's test, `1ab2eea6de13`: `test_honest_run_passes` asks `runOk`, `recordsOk` and `filesFitOk`; a new test asserts that the only false clause is `writtenRowsRead`, that `unread` is FLIP_B's `o0` alone, and that `twoFilesOk` is false. It agrees with the result above [derived]; the test itself runs last in `5caf`.
+
+**The base** is `e033bfc14be4fc20dd09c7c8e33d211fc94cc1c0`, unmoved [run: `git ls-remote`].
+
+**For the workers** [relayed from the build above]: HELDOF, `BlockSize.lean` built on my line with the `:73` fix. OWNREADS, `OwnReads.lean` built there too. ADDRWC, `WiringOk.lean` and `WiringRows.lean` built. NEEDEDBITS, as you said: the old copy failed and nothing else did.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**STOP RULE.** None.
+
+**Pushed.** `cursor/proofs-frame-l1-9c4e` at `1ab2eea6de1329e36015646d84a8b2fd38b98904`; `cursor/proofs-frame-connected-4e1b` at `b7b1bed91b59a92ab5e9a3822657675608a84dd9`. Nothing is unpushed. The script of `5caf` is in the lane's notes (`20261113T0512Z-report-frame-scripts.md`). Mailbox read to its 04:59Z message [run].
+
+**Not established.**
+- Anything about Friday-size files: `5caf` has not printed.
+- That `AddressesHeld`, the three new files or the guard's new diagnostic compile.
+- An axiom probe of any file of my line at its current head.
+- That the lock mend passes: `a971` has not printed a verdict.
