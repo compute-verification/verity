@@ -1,0 +1,11 @@
+local pytest at cd2c09ea9c22de67244bb1a0fc3fefd37aa12ece, 2026-11-13T08:43:23Z, cursor
+68.31s call     tests/program/predict/test_node_window_embed.py::test_values_boolean
+4.77s call     tests/program/predict/test_node_window_embed.py::test_split_beside_expert_tables
+4.02s setup    tests/program/predict/test_node_window_embed.py::test_units
+3.58s setup    tests/program/predict/test_node_window_embed.py::test_values[inside]
+1.67s setup    tests/program/predict/test_node_window_embed.py::test_census
+0.01s call     tests/program/predict/test_node_window_embed.py::test_planted_errors_fail
+0.01s call     tests/program/predict/test_node_window_embed.py::test_census
+0.01s call     tests/program/predict/test_node_window_embed.py::test_values[inside]
+======================== 15 passed in 82.85s (0:01:22) =========================
+end 08:44:55Z
