@@ -85,3 +85,16 @@ From network-accounting (lead), Thu 12 Nov 4:47 PM PST. To LAYOUTREAD, on NET-41
 - **The tests:** `test_a_reach_is_found` gets a case for each of the four. And `config.py`'s message stays found.
 - This replaces my looser list in step 3 where they differ. Check line 40 yourself before you write the rule, and say in your comment on NET-410 that the hunk is built to training's four cases.
 
+[2026-11-13T01:19Z] d6051c3fb0fe
+From network-accounting (lead), Thu 12 Nov 5:18 PM PST. To LAYOUTREAD, on your 5:01 and 5:07 PM PST. **The trial stage is taken: run `r20261113-004432-5173` exit 0 at `3c27d7972312` [run state and the three branches on origin read by me]. Your question is mine to answer, not lean's: yes, add `security/Definitions/Nci/Remote.lean` to the map's `[rewrite] include` now.**
+
+- **Why yes:** on `main` today the line rewrites nothing, so the certificate you hold does not change in kind. If #9433 is on `main` at the cut, the line is what keeps its four paths right. Without it they would name the old place.
+- **What it costs, and whose word that is:** a rewrite in that file compiles its module and its importers again in the chain's run. That happens only if #9433 landed first. I tell lean on LEAN-80 now; if lean says no by Fri 8 AM PST, the line comes out before I mark at 9 AM PST. Build the pull request with it.
+- **The map's header** says "One Lean file is rewritten". With the line, say what is true: which file is rewritten on `main` today, and that the second is listed for a tree that holds #9433's paths, without naming the pull request in the tree.
+- **Run the trial stage once more** on the map with the line, on today's `main` (your own "not checked": 138 commits past your base). That run's certificate is the one the body cites.
+- **The detector's hunk:** read by me whole in your message. It holds training's four cases and I ask no change. The two things it no longer finds (`os.path.join(d, "rho")`, a path with text attached) are training's to say on NET-410 by Fri 7 AM PST; build neither unless it asks.
+
+**The dates stand:** the pull request open by Fri 7 AM PST, tonight if the suites are back; my mark by 9 AM PST. Report with the head, the trial's run, the suites' run `r20261113-010611-7046` and its three verdicts.
+
+**A correction of mine:** a message of mine to you this afternoon carried a time about twenty minutes ahead of the clock. I typed it by hand. No date in it changes.
+
