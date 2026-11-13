@@ -166,7 +166,7 @@
   "Pous.Period.AuditsOf.Certified": {
    "owner": "@memory-accounting",
    "digest": "a5523188ea97551f362ab989b871ae899fb673338540019db8fca8f143686c29",
-   "why": "Inside RingDeviceAt, the coins on which it makes the device a ring-model server: those on which the store decodes to the commitment and is published at the point's parameters, and a trusted memory challenger's signed run of the audit's session has every answer on time."
+   "why": "Inside RingDeviceAt, the challenges on which it makes the device a ring-model server: those on which the store decodes to the commitment and is published at the point's parameters, and a trusted memory challenger's signed run of the audit's session has every answer on time."
   },
   "Pous.Period.CountMeets": {
    "owner": "@memory-accounting",
