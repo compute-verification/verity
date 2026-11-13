@@ -449,7 +449,7 @@ def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Tra
     (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the sample."""
     def key_of(digest: bytes) -> tuple[Key | None, str | None]:
         if recorded.round <= committed_round:
-            return None, "the draws' recorded round is not after the commitment"
+            return None, "the sample's recorded round is not after the commitment"
         return replay_key(recorded, transcript.commitment.root, digest, epoch.salt), None
 
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
@@ -599,7 +599,7 @@ def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
     import numpy as np
 
     if hasattr(scheme, "tile_cap"):
-        raise ValueError(f"{scheme.name} brings its own debit, not one additive over a tile's words")
+        raise ValueError(f"{scheme.name} brings its own count of inert work, not one additive over a tile's words")
     au = D.debit_units(1, 0, scheme.prices, scheme.device, zeros=0)
     fa = D.debit_units(0, 0, scheme.prices, scheme.device, zeros=1)
     scale = lcm(au.denominator, fa.denominator)
