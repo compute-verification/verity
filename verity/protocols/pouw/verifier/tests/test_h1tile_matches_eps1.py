@@ -15,7 +15,7 @@ import random
 import pytest
 
 from verity.circuits.defs import bind
-from verity.definitions.ops import s8 as OS8
+from verity.circuits.ops import s8 as OS8
 from verity.protocols.pouw.prover.circuit import eps1_reference as EPS
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import segment as SG

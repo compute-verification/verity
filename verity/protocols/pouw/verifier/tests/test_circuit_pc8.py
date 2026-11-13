@@ -27,10 +27,10 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_seg_digest
-from verity.definitions.ops.fp32 import F32FmaV2
-from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
-from verity.definitions.ops.scalar import I32Le
-from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.circuits.ops.fp32 import F32FmaV2
+from verity.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
+from verity.circuits.ops.scalar import I32Le
+from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.protocols.pouw.prover.circuit import pc8, plan
 from verity.protocols.pouw.prover.circuit import words as W
 from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
