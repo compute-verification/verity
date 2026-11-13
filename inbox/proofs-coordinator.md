@@ -136818,3 +136818,26 @@ Clock: `date -u` read 10:58Z. Pen: mine. Mailbox: nothing after your 06:09Z. Thi
 - Any suite at my head.
 
 Runs: none of mine out. One last timer, for about 11:45Z, to read `9715`'s verdict. If it names no file of mine I post one closing line and hold no timer after it; your message resumes me.
+
+## REDRAW, Fri 13 Nov 10:59Z: the session pull request is open, #9728, unmarked, no ready line yet: `2b97` ended with two reds, both the stale pin the head already mends; the nine suites run again at the head (`032e`)
+
+Your 10:54Z message is read: the one-call witness on `Internal.credited` is the whole ask, the case writer's fourteen fields are enough, `= .ok [0]` or ∃ whichever the check takes first [relayed]. I go on as I am; I did not read the adapter's writer.
+
+**`r20261113-102627-2b97`** (vy-nebius-cpu-7, 32 GB, at `d75b179659ed`) ended failed, exit 1: `9 suites: 7 passed (0 cached), 2 failed; 38.7 min of test time` [run].
+
+- Passed: `verity/protocols/inference_only/rho` 612, `verity-graph` 220, `benchmarks/inference_only` 21, `verity/protocols/pouw/verifier` 2006, `verity-check` 995, `verity-flock` 1470, `verity/definitions/ops` 949 [run].
+- Failed: `verity/protocols/pous/verifier`, 1 failed (`test_trusted_hashes_are_current`); `repository`, 1 failed (`tests/test_pins.py::test_no_pin_is_stale`) [run].
+- Both are one fact. At `d75b179659ed` the pins test says `verity/protocols/pous/lean/TRUSTED.sha256 is stale (security/Proofs/lakefile.toml)` and nothing else; at the head `36d6e37cbc7b` it passes (`1 passed, 3 deselected`) [run, the one test on my VM at each commit].
+- The repository suite's warnings are bookkeeping: the retired word at `verity/protocols/spot/verifier/README.md:559`, which I take in the follow-up, and two caps of retired terms, `law` in Lean names (155 > 133) and SPOT's older name [read, the log's lines 40 to 62]. Neither cap's growth is this branch's: its added lines hold no "sampled proofs" and its added Lean names hold no `law` [run, `git diff -U0 8130cf7e15e2..HEAD`]. **One thing of mine to know:** the branch adds six Lean names with the word "escape" in the JSON sense (`NoEscape`, `noEscape_append`, `noEscape_intercalate`, `noEscape_str`, `noEscape_canon`, `escapesSurrogate_false`, in `Plain.lean`) [run]. The test did not warn on that word, so its cap has room [derived]; say so if you want them renamed before the ready line (a build and a records run).
+
+**At the head** `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`: PoUS's suite passed (`r20261113-103238-da9d`, 555 passed) [run]; the nine suites again, `r20261113-105619-032e` (vy-nebius-cpu-1 by `--on auto`, 32 GB asked, no wait), sent 10:56Z, about 11:26Z [guess].
+
+**The pull request:** https://github.com/compute-verification/verity/pull/9728, "Security proofs: the challenger's reader accepts an honest session withheld", head `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`, opened 10:58Z, not marked [run]. Its body has `Lane proofs`, the two statements, the files, the lock's lines (the list from 184 entries to 182, the cap from 185 to 182), a section saying PoUS's pin moved for the lakefile's new roots only, and the checks as they stand; I edit its last line when `032e` ends [read]. It starts at #9717's head and lands after it.
+
+**No ready line yet.** It comes when `032e` is green; then it waits for the carry with #9717, as you ruled at 09:14Z [relayed].
+
+**Credit branch:** unchanged since 10:54Z, head `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `r20261113-102457-87d9` still running at 10:55Z [run]; the one-call records run goes when it ends.
+
+**Heads, all pushed, nothing unpushed** [run]: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d`; `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`; `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
+
+**I wait on:** `r20261113-102457-87d9` (vy-nebius-2, about 11:08Z [guess]) and `r20261113-105619-032e` (about 11:26Z [guess]). One timer of mine is set for about 11:12Z.
