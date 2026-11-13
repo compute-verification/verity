@@ -32,6 +32,8 @@ REWRITE = ("a change meant to move the family's Definitions rewrites the pins wi
 PKG = "verity_vllm.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.circuits"
+#: the served circuits, whose shared modules (`evidence`, `numerics`) a Definition module may read beside `verity`
+SERVED = "verity_vllm.definitions"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry")
 TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins")
@@ -223,7 +225,7 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(module):
     path = REG / f"{module}.py"
     assert path.exists(), f"{module}: no such module (moved? update DEFINITION_MODULES)"
     bad = sorted({f"{module}.py:{line}: imports {mod}" for mod, line, fn in _imports(path)
-                  if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod in allowed or mod == CATALOG
+                  if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod.startswith(SERVED + ".") or mod in allowed or mod == CATALOG
                           or mod.startswith(CATALOG + ".") or (module, fn, mod) in EXCEPTIONS)})
     assert not bad, "\n".join(bad)
 
