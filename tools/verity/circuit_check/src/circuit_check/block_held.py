@@ -1,4 +1,4 @@
-"""The Definitions circuit-check checks whole whose Flock block (``block``, `checks.block_range`) is past C-Flock's proved
+"""The Definitions circuit-check checks whole whose Flock block (``block``, `checks.block_range`) is past Flock's proved
 range of 2^27 bits and that the report holds rather than fails (`checks.summarize`), each with why: none stages it whole
 as one Flock unit, or it is served and serving stages it in units that fit, or its calls are to move to a chunked form.
 

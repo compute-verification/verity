@@ -9,8 +9,8 @@ from pathlib import Path
 
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
 

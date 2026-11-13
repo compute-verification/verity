@@ -1,11 +1,11 @@
-"""A Program holds no data (`verity.definitions.circuits.constants`): what a program brings is a registered input, what a request brings a run
+"""A Program holds no data (`verity.circuits.constants`): what a program brings is a registered input, what a request brings a run
 input, and a constant is an operation's own bits. `program_data` names every constant held anywhere else, by its Definition."""
 from __future__ import annotations
 
 import pytest
 
 from verity.circuits import codec
-from verity.definitions.circuits import constants as K
+from verity.circuits import constants as K
 from verity.circuits import partition_object as PO
 from verity.circuits.boolean import is_boolean
 from verity.circuits.evaluation import evaluate_region
@@ -13,8 +13,8 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinit
 from verity.circuits.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import I32Add
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import I32Add
 
 I32 = Value(32)
 TEMP, TOP_P, SEVEN, POS, EPS = 0x3F4CCCCD, 0x3F733333, 7, 255, 0x3727C5AC

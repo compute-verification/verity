@@ -15,12 +15,12 @@ SHA-512, each premise discharged at the deployed record:
 * binding: the record's trace commitment is `A`'s at a circuit file of `sha512/row/v2` rows (`record_commit`), and that
   binds since no port of such a file is segmented (`segs_of_rowsV2`, `Flock.Bridge.commitDepL_binds`);
 * Flock's masked KS (`FlockDeploy.KS.zk_KS_untrim`) and its decoder within the radius (`listWithin_deployZk`), with the
-  draw fixed before the session (`drawFixed`), every checked unit's session the record's one (`sessionRuns`) and the
-  inner numbers Flock's (`innerNumbers`, where a reference draw file exists);
+  sample fixed before the session (`drawFixed`), every checked unit's session the record's one (`sessionRuns`) and the
+  inner numbers Flock's (`innerNumbers`, where a reference sample file exists);
 * `SessionOpens` at a session v2 sets up (`sessionOpens`), the interior roots the statement's (`interiorFixed`), the
-  draw law (`drawLaw`) and the scope refusal (`refuses_of_scopeOk`).
+  sampling design (`drawLaw`) and the scope refusal (`refuses_of_scopeOk`).
 
-Every premise is a fact about the statement and the owner's files, never about a prover: the reference draw file
+Every premise is a fact about the statement and the owner's files, never about a prover: the reference sample file
 exists wherever v2 accepts a session (`refOk_of_accepts`).
 -/
 
@@ -46,7 +46,7 @@ theorem record_binds (A : Live) (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A
 set_option synthInstance.maxSize 1024 in
 /-- **Knowledge soundness at the record**, at SHA-512: at a session v2 sets up (`SetsUp`, `Names` and v2's reads, as
 `sessionOpens` takes them), a circuit file of `sha512/row/v2` rows, the statement in scope (`ScopeOk`), a reference
-draw file (`RefOk`) and equal roots at the leaf map having one domain (`hroots`), the record's compiled sampled
+sample file (`RefOk`) and equal roots at the leaf map having one domain (`hroots`), the record's compiled sampled
 verifier is knowledge sound (`SamplingDeploy.ks_compiled`). -/
 theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
