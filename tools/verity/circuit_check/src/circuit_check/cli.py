@@ -1012,10 +1012,12 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 stats["errors"].append(r["target"])
             elif untraced:
                 stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
-            elif CC.store(cache, keys[i], REPO, got, r, worker) is None:
-                stats["changed"].append(r["target"])
             else:
-                stats["stored"] += 1
+                lost = len(CC.LOST)
+                if CC.store(cache, keys[i], REPO, got, r, worker) is not None:
+                    stats["stored"] += 1
+                elif len(CC.LOST) == lost:
+                    stats["changed"].append(r["target"])
         if log:
             across = (r.get("partition") or {}).get("recomputed_across")
             qc = (r.get("partition") or {}).get("q_call") or {}
@@ -1477,6 +1479,9 @@ def main(argv: list[str] | None = None) -> int:
         progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
+        if (ex := CC.expire(cache))["gone"] or ex["left"]:
+            print(f"circuit-check: {len(ex['gone'])} checker version(s) no run used for {CC.EXPIRE_S // 3600} hours removed "
+                  f"from {cache}" + (f"; left: {ex['left'][:3]}" if ex["left"] else ""), file=sys.stderr)
         if (why := prebuild(log=None if a.quiet else print)) is not None:
             print(f"circuit-check: refused: {why}", file=sys.stderr)
             return 2
@@ -1532,11 +1537,14 @@ def _bindings_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
 
 
 def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
-    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored."""
+    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored, or lost it to its version's
+    removal (`cache.expire`), which costs a later run the records and fails nothing."""
     t0 = time.time()
     rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb, slices=a.slices)
     rep["seconds"] = round(time.time() - t0, 1)
-    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]):
+    if CC.LOST:
+        rep["lost"] = list(CC.LOST)
+    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]) and not CC.LOST:
         rep["why"] = f"{len(rep['rebuilt']) - rep['stored']} not stored: the tree changed while they were built"
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1) + "\n")
@@ -1546,7 +1554,8 @@ def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
           + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
              if "bytes" in rep else "")
           + (f"; {rep['slices']['bindings']} bindings' slices in {a.slices} ({rep['slices']['bytes']} bytes, the shared part "
-             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
+             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else "")
+          + (f"; {len(rep['lost'])} lost: their checker version was removed while they were stored" if "lost" in rep else ""))
     return 1 if "why" in rep else 0
 
 

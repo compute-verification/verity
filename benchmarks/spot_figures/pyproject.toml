@@ -14,8 +14,15 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The figure of record's driver (breakeven/headline.py) counts GLM-5.3's sparse-MLA heads from the registry
 # (`sparse_mla.SPARSE_MLA_GLM53`): that module and what its import opens. Its 128k lever (breakeven/mla128.py) counts
 # the serve plan's requests (`serve_tax/prefix_plan.jsonl`) by the registry's split rule (`sparse_mla_split.py`): that
-# module, what its import opens, and the table a split row's bind reads.
+# module, what its import opens, and the table a split row's bind reads. Its table's row of a census block's Boolean
+# version is paired with the block by `verity bench prove`'s pairing (`verity_bench.boolean`, and the census name's
+# spelling, `verity_bench.prove`), which loads every registered Boolean Definition: the registry, ops and numerics
+# whole, and what their imports open beside them.
 inputs = ["verity/__init__.py", "verity/errors.py", 
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/boolean.py",
+          "benchmarks/harness/verity_bench/prove.py", "verity/definitions/boolean.py", "verity/definitions/call_scope.py",
+          "verity/definitions/registry", "verity/definitions/ops", "verity/definitions/numerics",
+          "verity/definitions/silicon/fp32.py", "verity/definitions/silicon/fp4.py", "verity/definitions/silicon/tc_step.py",
           "verity/hardware/record.py", "verity/protocols/spot/verifier/profile.py", "verity/protocols/reporting.py",
           "verity/protocols/spot", "verity/claims", "verity/circuits",
           "verity/definitions/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",

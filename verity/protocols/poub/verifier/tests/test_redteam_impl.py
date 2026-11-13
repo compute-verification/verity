@@ -1,13 +1,13 @@
-"""The red team's exploits against the remote bandwidth audit as implemented: each test asserts the property the
+"""The red team's exploits against PoUB as implemented: each test asserts the property the
 audit's claim needs, and was marked xfail with its finding id while the reference broke it; RB-1, RB-2 and RB-3 are
 fixed and pass.  The exploits run on `test_remote_bandwidth`'s store and drivers."""
 
 from __future__ import annotations
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import N, SCHEDULE, drive, finish, params, store  # noqa: F401
+from test_remote_bandwidth import SCHEDULE, N, drive, finish, params, store  # noqa: F401
+
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun
 
@@ -20,7 +20,7 @@ def window_shortfall(w: audit.WindowRecord) -> float:
     return 1 - w.receipts * BLOCK / (CAPACITY * (w.deadline_ns - w.released_ns) / 1e9)
 
 
-def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa: F811
+def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:
     """The claim is the hybrid: short by under 0.15% over the horizon and by under 1% in every window.
     `GammaTerms.floor` is the every-window half, but it is only the openings' bound on a window's wrong receipts.  A
     prover that reads one block a pass through window 5 (every receipt correct, every one opened) is accepted with
@@ -43,7 +43,7 @@ def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa:
     assert led.worst.window == led.worst_horizon.window == led.to_json()["worst"]["window"] == idle
 
 
-def test_rb2_the_record_names_its_codec(store) -> None:  # noqa: F811
+def test_rb2_the_record_names_its_codec(store) -> None:
     """`Record.public()` repeats the receipt kind and `bind` "since what its receipts rest on depends on them", and
     `ledger` checks `link` against `bind`.  μ_rebuild rests on the codec (field, k, mask), and the record omitted it: a
     session under `p512/k2`, unmasked and resting on the unmeasured assumption 7, had a public record of the same shape
@@ -85,7 +85,7 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
     return out[0], out[1]
 
 
-def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> None:  # noqa: F811
+def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> None:
     """`AuditRun(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
     (`PROTOCOL.md` §5), and it was optional: left out, it failed open.  Two sessions run at once over one clock, both
     told they may start at 0, as only a verifier that runs them at once would; each block is read once a pass and

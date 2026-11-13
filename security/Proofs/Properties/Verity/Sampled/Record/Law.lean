@@ -204,11 +204,11 @@ theorem nPU_record : nPU (record A o e) (xOf A o) = A.n := by
   exact hlen
 
 theorem drawn_of_ok {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .ok (u, rd)) : drawn A src = u.toList := by
+    (h : _root_.Spot.Draw.drawUnits A.design A.n src = .ok (u, rd)) : drawn A src = u.toList := by
   simp only [drawn, h]
 
 theorem drawn_of_error {src : ByteArray} {err : String}
-    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .error err) : drawn A src = List.range A.n := by
+    (h : _root_.Spot.Draw.drawUnits A.design A.n src = .error err) : drawn A src = List.range A.n := by
   simp only [drawn, h]
 
 /-- **The record's draw law.** -/
@@ -242,7 +242,7 @@ theorem drawLaw : DrawLaw (record A o e) := by
     · exact (Pr_congr fun _ => iff_false_intro hE).trans_le Pr_false.le
   · refine (Ex_ind _).trans_le ?_
     have hPa : (stmtA A).design.Pa (partA A) B =
-        (_root_.Properties.Spot.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
+        (_root_.Properties.Spot.oneStageOf A.design).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
       Flock.Bridge.pa_partOf A.P hns _ B hB
     rw [hPa]
     rcases B.eq_empty_or_nonempty with rfl | ⟨v0, hv0⟩
@@ -253,15 +253,15 @@ theorem drawLaw : DrawLaw (record A o e) := by
       rw [V_k_xOf]
       omega
     refine (Pr_mono fun r hr => ?_).trans ((pr_drawBytes hk fun b => ∃ units read,
-      _root_.Spot.Draw.drawUnits A.law A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
+      _root_.Spot.Draw.drawUnits A.design A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
       (Flock.Bridge.drawUnits_miss_le A.hlaw hns B hB drawLen))
     have hr' : ∀ v ∈ B, ∀ p : Fin A.n, (drawn A (drawBytes (coinsAt r)))[p.val]? ≠ some v := fun v hv p => by
       have h := hr v hv ⟨p.val, by rw [hnPU]; exact p.isLt⟩
       rwa [record_checked_xOf] at h
-    show ∃ units read, _root_.Spot.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
+    show ∃ units read, _root_.Spot.Draw.drawUnits A.design A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
       ∀ u ∈ B, u ∉ units
     have hv0n : v0 < A.n := Finset.mem_range.1 (hB hv0)
-    cases hd : _root_.Spot.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) with
+    cases hd : _root_.Spot.Draw.drawUnits A.design A.n (drawBytes (coinsAt r)) with
     | error err =>
       have h := hr' v0 hv0 ⟨v0, hv0n⟩
       rw [drawn_of_error A hd] at h
@@ -284,7 +284,7 @@ law's one-stage rule is well formed over the population's strata. The program's 
 (`Flock.Bridge.topological_progOf`). -/
 def ScopeOk : Prop :=
   (partA A).Partitions (stmtA A).prog ∧
-    (_root_.Properties.Spot.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+    (_root_.Properties.Spot.oneStageOf A.design).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
 
 theorem inScope_of_scopeOk (h : ScopeOk A) : InScope (partA A) (stmtA A) :=
   ⟨Flock.Bridge.topological_progOf, h.1,

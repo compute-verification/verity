@@ -10,11 +10,11 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 | no dead reference after a move | `test_doc_paths.py`, `test_module_strings.py`, `test_gate_paths.py`, `test_pythonpath_entries.py` |
 | prose that stays true | `test_retired_terms.py`, `test_provider_names.py`, `test_glossary_lean_names.py` |
 | the Lean packages, their pins, and a verifier's cost | `test_lean_packages.py`, `test_pins.py`, `test_verifier_cost.py` |
-| how tests run | `test_no_wall_clock.py`, `test_circuit_check_inputs.py`, `test_uv_pin.py`, `test_merge_drivers.py` |
+| how tests run | `test_no_wall_clock.py`, `test_no_environment_in_asserts.py`, `test_circuit_check_inputs.py`, `test_uv_pin.py`, `test_merge_drivers.py` |
 | indexes and conventions | `test_benchmarks_index.py`, `test_examples.py`, `test_cli_conventions.py`, `test_seed_ports.py` |
 
 A test's docstring states its rule. Where a rule has exceptions, they are named in the test, one reason each (an `ALLOWED`
-table in the boundary, wall-clock, retired-term, seed and verifier-cost tests).
+table in the boundary, wall-clock, environment, retired-term, seed and verifier-cost tests).
 
 ## Lint ratchets
 

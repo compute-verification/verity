@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# The ship preamble the builds here source (attn_bf16's, s8_linear's, units' and p2_stage's build.sh): the
+# The ship preamble the builds here source (attn_bf16's, s8_linear's and p2_stage's build.sh): the
 # toolkit, the cubin flags and the ship's layout. Sourced first, under `set -euo pipefail`; sets ROOT, the source tree's
 # root, and each function below reads or sets CUDA, OUT and FLAGS.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)

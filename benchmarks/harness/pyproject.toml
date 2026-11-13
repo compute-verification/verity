@@ -39,7 +39,8 @@ untraced = ["tests/test_bench.py", "tests/test_steady_point.py", "tests/test_ste
 # names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
 # write each run's records after its timed run, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
-# experimental Pearl-C arm's call check, which a test runs on a fake device run. The served table reads each result's
+# experimental Pearl-C arm's call check, which a test runs on a fake device run; `served_passes.py arm` writes a spec's
+# Pearl-C arm as serve-openai's --protocols-config, which a test runs on the H200 spec. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
 # directory remote. A steady-state point refuses a node that can't run `gpu-lease` and names the lease tool's script to
 # put on its path, which a test checks is that script of the tree.
@@ -47,6 +48,7 @@ inputs = [
     "tools/research/src/research/store/labels_sync.py",
     "tools/research/src/research/pods/sh/gpu_lease.sh",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
     "benchmarks/pouw/settings.py",
     "benchmarks/harness/README.md",
     "benchmarks/served_commit/arm.py",
@@ -90,6 +92,7 @@ inputs = [
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
     "adapters/vllm/verity_vllm/protocols/spot.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
     "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",

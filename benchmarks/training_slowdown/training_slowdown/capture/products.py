@@ -14,7 +14,8 @@ too (`raw_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
 
 What the capture measures and what a price adds are apart: `raw_on_dial` gives the rows with their operands' dtypes
 and no price, as a job's record keeps them, and `priced` makes a raw row the row `rows` states, so a record's rows are
-priced where they are read.
+priced where they are read. A product is priced in the dtype it was traced in (`traced_dtype`), the dtype the step's
+circuit counts it in; the one exception is the rule of the captures before `PRICED_AS_TRACED_FROM` (`priced_dtype`).
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates here are keyed by the capture's values
@@ -36,9 +37,16 @@ from training_slowdown.capture.structure import (
 from training_slowdown.work import is_paid
 from training_slowdown.policy import CONSOLE
 
-#: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has
-#: them is distinguishable from one traced before them
-CAPTURE = "4.12.9"
+#: the capture's version of these rows (training_slowdown's VERSION when they, or the rule that prices them, last
+#: changed), so a trace that has them is distinguishable from one traced before them
+CAPTURE = "4.23.0"
+#: the first capture whose every product is priced in the dtype it was traced in (`priced_dtype`)
+PRICED_AS_TRACED_FROM = "4.23.0"
+#: the captures whose raw rows are read: this one, and the one the stored records were traced by
+READS = ("4.12.9", CAPTURE)
+#: the dtype the routes' autocast casts a step's forward to, which the rule of the captures before
+#: `PRICED_AS_TRACED_FROM` prices a wider forward or backward product in
+AUTOCAST = "bfloat16"
 ORDER = "unknown"
 #: the console's dial's k levels in bits: each of its block sizes, the reference's, the served demo's block and the
 #: console's default
@@ -110,22 +118,48 @@ def _passed_width(vs, n, a) -> int:
     return b
 
 
-def _gemm_price(phase: str, op: str, dtype: str | None, gemm_dtype: str | None) -> tuple[float, float]:
-    """(gates a MAC, gates a gadget) of a GEMM: its operands' dtype's Definition, or `gemm_dtype`'s for a forward or
-    backward GEMM whose operands are wider (CPU autocast runs scaled-dot-product attention's math backend in fp32, a GPU
-    in the autocast dtype)."""
-    from training_slowdown.capture.structure import _dtype_bits
+def _gemm_price(phase: str, op: str, dtype: str | None) -> tuple[float, float]:
+    """(gates a MAC, gates a gadget) of a GEMM: its dtype's Definition."""
     from training_slowdown.gates import PRICES, gates, kind_of, per_mac
 
-    if gemm_dtype and phase in ("forward", "backward") and dtype is not None and \
-            _dtype_bits(getattr(torch, dtype)) > _dtype_bits(getattr(torch, gemm_dtype)):
-        dtype = gemm_dtype
     kind = kind_of(phase, "", op, dtype)[0]
     (name, _), = PRICES[kind]
     return per_mac(kind), float(gates(name))
 
 
-def step_gates(graph, gemm_dtype: str | None = None) -> float:
+def traced_dtype(row: dict) -> str | None:
+    """The dtype a raw row's product was traced in, operand A's: what the trace's circuit prices it at
+    (`capture.structure`'s GEMMs)."""
+    return row["dtypes"][0]
+
+
+def priced_dtype(row: dict, capture: str | None) -> str | None:
+    """The dtype a raw row's product is priced at, for a trace of `capture`: the one it was traced in
+    (`traced_dtype`). Under bf16 autocast that is float32 for attention's products: the capture runs attention on
+    torch's math path, which computes them from upcast operands, and the train-step circuit wires them so. The one
+    exception is the rule of the captures before `PRICED_AS_TRACED_FROM`, whose traces hold the same float32
+    products: a forward or backward GEMM they traced wider than `AUTOCAST` is priced at `AUTOCAST`, and the trace's
+    circuit is not (`work.repriced`). The rule lasts as long as the stored records traced by those captures: the
+    rebuild that retraces them deletes it."""
+    from training_slowdown.capture.structure import _dtype_bits
+
+    dtype = traced_dtype(row)
+    if not _priced_as_traced(capture) and row["phase"] in ("forward", "backward") and dtype is not None and \
+            _dtype_bits(getattr(torch, dtype)) > _dtype_bits(getattr(torch, AUTOCAST)):
+        return AUTOCAST
+    return dtype
+
+
+def _priced_as_traced(capture: str | None) -> bool:
+    """Whether a trace of `capture` is `PRICED_AS_TRACED_FROM`'s or later; one that states no capture, or none that
+    is a version, is not."""
+    try:
+        return [int(x) for x in str(capture).split(".")] >= [int(x) for x in PRICED_AS_TRACED_FROM.split(".")]
+    except ValueError:
+        return False
+
+
+def step_gates(graph) -> float:
     """The step's |C| in gates for a step captured by capture_step, each counted op at
     training_slowdown.gates' price for its dtype as training_slowdown.capture.structure prices it: GEMMs (`_gemm_price`),
     elementwise multiplications and dense linear algebra (`_other_macs`), and the forward's other ops that combine an
@@ -147,7 +181,7 @@ def step_gates(graph, gemm_dtype: str | None = None) -> float:
         gs = _gemms(n)
         if gs:
             for g in gs:
-                total += _macs(g.dims) * _gemm_price(ph, name, _dtype_name(g.operands[0]), gemm_dtype)[0]
+                total += _macs(g.dims) * _gemm_price(ph, name, _dtype_name(g.operands[0]))[0]
             continue
         k, kind = _other_macs(n)
         if kind:
@@ -749,7 +783,7 @@ def _gemm_rate(vs: _Values, n, g, R, k: float) -> float:
     return r_tok * d["k"] / max(spread, 1)
 
 
-def rows(graph, k: float = CONSOLE[1], gemm_dtype: str | None = "bfloat16") -> dict:
+def rows(graph, k: float = CONSOLE[1]) -> dict:
     """The measured step's products (module docstring) at policy k: {"capture", "k", "order", "tokens", "gates",
     "rows", "p_match", "elementwise_products"}, each row {"count", "phase", "op", "dims", "token_dims", "macs",
     "outputs", "affected", "widths", "rates", "paid", "self", "b_c", "gates_per_mac", "cell_gates", "gathered"} (MACs
@@ -761,8 +795,7 @@ def rows(graph, k: float = CONSOLE[1], gemm_dtype: str | None = "bfloat16") -> d
     vs = _Values(graph)
     made = _made(vs)
     block = _raw(vs, graph, k, made, _gathered(vs, made))
-    return _priced_block(block, gemm_dtype) | {"gates": _gates(vs, graph, gemm_dtype),
-                                               "elementwise_products": _elementwise_products(vs)}
+    return _priced_block(block) | {"gates": _gates(vs, graph), "elementwise_products": _elementwise_products(vs)}
 
 
 def raw_on_dial(graph) -> dict:
@@ -776,13 +809,13 @@ def raw_on_dial(graph) -> dict:
     return _raw_on_dial(_Values(graph), graph)
 
 
-def priced(row: dict, gemm_dtype: str | None = "bfloat16") -> dict:
-    """A raw row (`raw_on_dial`'s, a job's trace's) as `rows` states it: its `dtypes` replaced by what they price.
-    `macs` and `outputs` are its dims' (one GEMM's of its count), `paid` whether each operand is paid at its passed
-    width (`is_paid` of its rate), `b_c` the partial sums' width (`ACC_BITS`), and `gates_per_mac` and `cell_gates`
-    its price (`_gemm_price` of its phase, its op and operand A's dtype, at `gemm_dtype`)."""
+def priced(row: dict, capture: str | None) -> dict:
+    """A raw row (`raw_on_dial`'s, a job's trace's) of a trace of `capture` as `rows` states it: its `dtypes`
+    replaced by what they price. `macs` and `outputs` are its dims' (one GEMM's of its count), `paid` whether each
+    operand is paid at its passed width (`is_paid` of its rate), `b_c` the partial sums' width (`ACC_BITS`), and
+    `gates_per_mac` and `cell_gates` its price (`_gemm_price` of its phase, its op and `priced_dtype`)."""
     d = row["dims"]
-    gpm, cell = _gemm_price(row["phase"], row["op"], row["dtypes"][0], gemm_dtype)
+    gpm, cell = _gemm_price(row["phase"], row["op"], priced_dtype(row, capture))
     return {"count": row["count"], "phase": row["phase"], "op": row["op"], "dims": dict(d),
             "token_dims": list(row["token_dims"]), "macs": _macs(d), "outputs": d["batch"] * d["m"] * d["n"],
             "affected": list(row["affected"]), "widths": list(row["widths"]), "rates": list(row["rates"]),
@@ -815,14 +848,14 @@ def _merged(rows: list[dict]) -> list[dict]:
     return list(merged.values())
 
 
-def _priced_block(block: dict, gemm_dtype) -> dict:
-    """A raw block ({"k", "rows", "p_match"}, with the capture's header when it has one) with its rows priced: rows
-    that differ only in a dtype their price doesn't read are one row."""
-    return block | {"rows": _merged([priced(r, gemm_dtype) for r in block["rows"]])}
+def _priced_block(block: dict) -> dict:
+    """This capture's raw block (`_raw`'s) with its rows priced: rows that differ only in a dtype their price doesn't
+    read are one row."""
+    return block | {"rows": _merged([priced(r, block["capture"]) for r in block["rows"]])}
 
 
-def _gates(vs: _Values, graph, gemm_dtype) -> float | None:
-    return step_gates(graph, gemm_dtype) if vs.region is None else (graph.formalism or {}).get("gates")
+def _gates(vs: _Values, graph) -> float | None:
+    return step_gates(graph) if vs.region is None else (graph.formalism or {}).get("gates")
 
 
 def _raw(vs: _Values, graph, k: float, made: dict, gathered: set) -> dict:

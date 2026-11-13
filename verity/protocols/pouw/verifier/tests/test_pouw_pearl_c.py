@@ -21,11 +21,11 @@ from verity.commitments.crypto.turboshake import turboshake128
 from verity.definitions.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16
-from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 
 # the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))

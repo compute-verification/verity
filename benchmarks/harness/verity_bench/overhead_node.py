@@ -22,6 +22,8 @@ item no report holds, refuses the run), and writes `overhead.json`: per point, t
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
+Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's entry), which the table's
+note reads.
 """
 
 from __future__ import annotations
@@ -244,7 +246,8 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
                  for b in (result.get("sass_gate") or {}).get("binaries") or []]
         sha = _sha256(cubin) if cubin else None
         doc["arm"] = {"name": arm, "cubin_art": a.cubin_art if cubin else None, "cubin_sha256": sha,
-                      "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier")}
+                      "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier"),
+                      "commits_y": sch.commits_y}
         if not str(doc["arm"]["cubin_art"] or "").startswith("art:"):
             whys.append("the run was sent no cubin art (`run --cubin ART`): a cubin built in the run is development only")
         elif bench_json.is_file() and sha not in {b["sha256"] for b in gated if b["ok"]}:

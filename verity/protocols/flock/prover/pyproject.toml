@@ -57,6 +57,7 @@ untraced = [
     "tests/test_lean_typed_statement.py",
     "tests/test_lean_typed_template.py",
     "tests/test_lean_verifier.py",
+    "tests/test_lean_verify_members.py",
     "tests/test_lean_width_refusals.py",
     "tests/test_lean_zk.py",
     "tests/test_lean_zk_mask.py",
@@ -227,6 +228,7 @@ tests = [
     "tests/test_lean_typed_reads.py",
     "tests/test_lean_typed_statement.py",
     "tests/test_lean_typed_template.py",
+    "tests/test_lean_verify_members.py",
 ]
 paths = ["tools/research/src/research"]
 

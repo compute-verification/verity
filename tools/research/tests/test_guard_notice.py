@@ -94,4 +94,5 @@ def test_a_command_line_research_asks_first_whichever_copy_then_runs(tmp_path, m
     at_main.reexec(["status"], tmp_path, tmp_path / "cache", lambda *a: asked.append("ran another copy"))      # no checkout
     monkeypatch.setenv(at_main.OPT_OUT, "1")
     at_main.reexec(["status"], tmp_path, tmp_path / "cache", lambda *a: asked.append("ran another copy"))
-    assert len(asked) == 2 and all(env is os.environ for env in asked)
+    own = [env is os.environ for env in asked]
+    assert own == [True, True]

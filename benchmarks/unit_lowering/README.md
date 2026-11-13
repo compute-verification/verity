@@ -10,7 +10,7 @@ What writing a PoUW H1 circuit file costs, and the file it writes, for three sta
 
 The tile is a parameter. 32 × 32 is the H1 kernel's warp tile, never a choice made for proving. The lane and the combine are
 what can be proved once the tile is past the block (`verity/protocols/pouw/verifier/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).
-`lanes.py` stages each one as `h1_lanes/run.py`'s `stager` does, with its `RC` set to the leaf, bound to the Program a served
+`lanes.py` stages each one as `h1_lanes/leaf.py`'s `stager` does, with its `RC` set to the leaf, bound to the Program a served
 window's verifier derives for it. They exist only at an R that is a multiple of 16: a lane reads the leaf's R admit bits as
 one row, and a row is whole 16-bit words (`h1zy._leaf`). So at 4 × 8 and 8 × 8 the tile itself is the statement; a 4 × 8 tile
 is one lane. Every lowering runs with `HZ_STAGE=fast` and with `H1_TMPL` unset (flat) or `structural`.

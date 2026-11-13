@@ -2,6 +2,7 @@
 real launch_request runs."""
 from __future__ import annotations
 
+import calendar
 import json
 import os
 import subprocess
@@ -27,6 +28,12 @@ def _dead_pid() -> int:
     p = subprocess.Popen([PY, "-c", "pass"])
     p.wait()
     return p.pid
+
+
+def _claimed(run_dir: Path) -> Path:
+    """A run directory as a launch has it when it asks for memory: made (remote.launch_request's claim)."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
 
 
 @pytest.fixture
@@ -101,9 +108,9 @@ def test_the_machines_reservations_count_against_the_slice_not_the_runs_own_scop
         (machine["ram"] / f"check-{slot}.json").write_text(json.dumps({"owner": "check", "gb": 594.5}))   # 30 + 2 x 594.5 = 1,219
     s = M.snapshot(machine["ram"])
     assert (s["source"], s["reserved_gb"], s["available_gb"]) == (str(machine["cg"]), 1219, 357)
-    assert M.admit(128, ramlock_dir=machine["ram"], run_id="r128", run_dir=machine["root"] / "r128")["available_gb"] == 357
+    assert M.admit(128, ramlock_dir=machine["ram"], run_id="r128", run_dir=_claimed(machine["root"] / "r128"))["available_gb"] == 357
     with pytest.raises(remote.MemoryNotAvailable, match=r"asked 300 GB; available 229 GB = limit 1718 \(v2 "):
-        M.admit(300, ramlock_dir=machine["ram"], run_id="r300", run_dir=machine["root"] / "r300")
+        M.admit(300, ramlock_dir=machine["ram"], run_id="r300", run_dir=_claimed(machine["root"] / "r300"))
     for f in machine["ram"].glob("*.json"):
         f.unlink()
     s = M.snapshot(machine["ram"])
@@ -183,11 +190,11 @@ def test_mem_wait_admits_when_memory_frees_up_within_the_wait(machine, monkeypat
     blocker = machine["ram"] / "someone.json"
     blocker.write_text(json.dumps({"owner": "someone", "gb": 45}))
     clock.at(5.0, blocker.unlink)
-    out = M.admit(20, ramlock_dir=machine["ram"], run_id="w", run_dir=machine["root"] / "w", wait_s=10, poll_s=1)
+    out = M.admit(20, ramlock_dir=machine["ram"], run_id="w", run_dir=_claimed(machine["root"] / "w"), wait_s=10, poll_s=1)
     assert out["waited_s"] == 5.0 and out["available_gb"] == 50
     blocker.write_text(json.dumps({"owner": "someone", "gb": 45}))
     with pytest.raises(remote.MemoryNotAvailable, match="waited 3s"):
-        M.admit(20, ramlock_dir=machine["ram"], run_id="w2", run_dir=machine["root"] / "w2", wait_s=3, poll_s=1)
+        M.admit(20, ramlock_dir=machine["ram"], run_id="w2", run_dir=_claimed(machine["root"] / "w2"), wait_s=3, poll_s=1)
 
 
 def test_two_simultaneous_admissions_cannot_both_take_the_last_memory(machine):
@@ -197,7 +204,7 @@ def test_two_simultaneous_admissions_cannot_both_take_the_last_memory(machine):
     def one(i: int) -> None:
         barrier.wait()
         try:
-            got.append(M.admit(30, ramlock_dir=machine["ram"], run_id=f"c{i}", run_dir=machine["root"] / f"c{i}"))
+            got.append(M.admit(30, ramlock_dir=machine["ram"], run_id=f"c{i}", run_dir=_claimed(machine["root"] / f"c{i}")))
         except remote.MemoryNotAvailable as e:
             lost.append(str(e))
 
@@ -215,6 +222,88 @@ def test_a_terminal_run_dirs_reservation_is_stale(machine):
     (rd / "status.json").write_text(json.dumps({"state": "failed"}))
     (machine["ram"] / "research-ended.json").write_text(json.dumps({"owner": "research", "gb": 40, "pid": os.getpid(), "run_id": "ended", "run_dir": str(rd)}))
     assert M.snapshot(machine["ram"])["available_gb"] == 50
+
+
+def _no_pid(machine, run_id: str, gb: float, run_dir: Path, started: str = "2026-10-01T09:00:00Z") -> Path:
+    """A run's reservation as admit() writes it: no pid yet, and the run's directory."""
+    path = machine["ram"] / f"research-{run_id}.json"
+    path.write_text(json.dumps({"owner": "research", "gb": gb, "started": started, "pid": None, "run_id": run_id, "run_dir": str(run_dir), "note": ""}))
+    return path
+
+
+def test_a_reservation_with_no_pid_whose_run_directory_is_gone_is_not_counted_and_its_line_says_how_to_remove_it(machine, monkeypatch):
+    """A launch that dies between reserving and starting its runner leaves a reservation that names no pid, so no process's
+    end ever ends it.  Once its run's directory is removed nothing holds it, and counted it takes its whole size from every later
+    run for as long as its file lies there.  While the directory is there it counts whole, as a run that is starting does, and
+    one with no pid that names no directory (written by hand) counts as it did."""
+    monkeypatch.setattr(M, "time", FakeClock(calendar.timegm((2026, 10, 19, 9, 0, 0))).module)
+    rd = _claimed(machine["root"] / "runs" / "r-gone")
+    res = _no_pid(machine, "r-gone", 40, rd)
+    s = M.snapshot(machine["ram"])
+    row = {x["file"]: x for x in s["reservations"]}
+    assert (s["reserved_gb"], s["available_gb"]) == (70, 10) and row[res.name]["live"] and row[res.name]["why"] == "no pid"
+    rd.rmdir()
+    s = M.snapshot(machine["ram"])
+    row = {x["file"]: x for x in s["reservations"]}
+    assert (s["reserved_gb"], s["available_gb"]) == (30, 50), "only the hand-written 30 GB, which names no directory"
+    assert row["p2p4-addr-equiv.json"]["live"] and row["p2p4-addr-equiv.json"]["why"] == "no pid"
+    assert (row[res.name]["live"], row[res.name]["gb"], row[res.name]["outstanding"]) == (False, 40, 0)
+    assert row[res.name]["why"] == (f"stale: 40 GB reserved 18 d ago for run r-gone, which names no pid and whose directory {rd} is gone, "
+                                    f"so nothing holds it; `rm {res}` removes it")
+    assert "; not counted: integrator-gone.json (pid " in M.describe(s) and f", {res.name} ({row[res.name]['why']})" in M.describe(s)
+    assert M.admit(45, ramlock_dir=machine["ram"], run_id="next", run_dir=_claimed(machine["root"] / "runs" / "next"))["available_gb"] == 50
+    res.write_text(json.dumps({**json.loads(res.read_text()), "started": "t"}))
+    (row,) = [x for x in M.reservations(machine["ram"]) if x["file"] == res.name]
+    assert not row["live"] and "stale: 40 GB reserved at a time its record doesn't give (started 't') for run r-gone, " in row["why"]
+    assert [M._ago(t) for t in ("2026-10-19T08:15:00Z", "2026-10-18T03:00:00Z", "2026-10-17T09:00:00Z")] == ["45 min ago", "30 h ago", "2 d ago"]
+
+
+def test_a_reservation_with_no_pid_whose_run_ended_or_was_refused_is_not_counted(machine):
+    """A reservation with no pid whose run directory is there goes by that run's own record: one that ended, or that the machine
+    refused, holds nothing."""
+    for run_id, record, doc in (("r-ended", "status.json", {"state": "cancelled"}), ("r-refused", "refused.json", {"reason": "no"})):
+        rd = _claimed(machine["root"] / "runs" / run_id)
+        (rd / record).write_text(json.dumps(doc))
+        _no_pid(machine, run_id, 40, rd)
+    s = M.snapshot(machine["ram"])
+    assert (s["reserved_gb"], s["available_gb"]) == (30, 50)
+    assert {x["file"]: x["why"] for x in s["reservations"] if x["file"].startswith("research-")} == {
+        "research-r-ended.json": "run r-ended ended", "research-r-refused.json": "run r-refused ended"}
+
+
+def test_admit_reserves_only_for_a_run_directory_that_is_there(machine):
+    """admit() writes a reservation with no pid, which counts by its run's directory: for a directory that isn't there it would
+    write one that counts for nothing, and the next run would be admitted to the same memory."""
+    with pytest.raises(ValueError, match="the run directory .*r-unmade isn't there.*make the directory before asking for its memory"):
+        M.admit(20, ramlock_dir=machine["ram"], run_id="r-unmade", run_dir=machine["root"] / "runs" / "r-unmade")
+    assert not (machine["ram"] / "research-r-unmade.json").exists()
+
+
+def test_a_run_that_is_starting_keeps_its_reservation_until_its_runners_pid_is_named(machine, tmp_path, monkeypatch):
+    """A launch reserves before its runner exists, so its reservation names no pid from admit() until set_pid(), which follows
+    the runner's start with nothing to wait on between.  All that time the run's directory is there (the launch claims it before
+    it asks for memory), so the reservation counts whole and the next launch can't take the same memory."""
+    seen: dict = {}
+    set_pid = M.set_pid
+
+    def at_the_end_of_the_window(path, pid) -> None:
+        (seen["row"],) = [x for x in M.reservations(machine["ram"]) if x["file"] == Path(path).name]
+        seen["doc"], seen["available_gb"] = json.loads(Path(path).read_text()), M.snapshot(machine["ram"])["available_gb"]
+        set_pid(path, pid)
+
+    monkeypatch.setattr(M, "set_pid", at_the_end_of_the_window)
+    gate = Gate(tmp_path / "gate")
+    try:
+        first = remote.launch_request(_request(machine, "starting", 40, gate=gate))
+        assert first["started"], first
+        run_dir = machine["root"] / "runs" / "starting"
+        assert seen["doc"]["pid"] is None and seen["doc"]["run_dir"] == str(run_dir)
+        assert (seen["row"]["live"], seen["row"]["why"], seen["row"]["outstanding"], seen["available_gb"]) == (True, "no pid", 40 * GB, 10)
+        assert json.loads((machine["ram"] / "research-starting.json").read_text())["pid"] == first["runner_pid"]
+        gate.release()
+        assert _wait(run_dir)["state"] == "done", (run_dir / "launcher.log").read_text()
+    finally:
+        gate.close()
 
 
 def test_cli_mem_gb_needs_a_machine_and_research_mem_prints_the_reading(machine, capsys):
@@ -273,16 +362,16 @@ def test_a_big_head_waiter_is_admitted_when_room_frees_and_later_smaller_runs_wa
         blocker.write_text(json.dumps({"owner": "someone", "gb": 20}))        # available 30
         (seen["big"],) = M.waiters(ram)
         with pytest.raises(remote.MemoryNotAvailable) as e:
-            M.admit(10, ramlock_dir=ram, run_id="small", run_dir=rd / "small")
+            M.admit(10, ramlock_dir=ram, run_id="small", run_dir=_claimed(rd / "small"))
         seen["refused"] = str(e.value)
         with pytest.raises(remote.MemoryNotAvailable) as e:
-            M.admit(10, ramlock_dir=ram, run_id="small-w", run_dir=rd / "small-w", wait_s=2, poll_s=1)
+            M.admit(10, ramlock_dir=ram, run_id="small-w", run_dir=_claimed(rd / "small-w"), wait_s=2, poll_s=1)
         seen["held"], seen["after_held"] = str(e.value), _in_line(ram)
         seen["later"] = _ticket(ram, seen["big"]["ns"] + 10, 5, "later")      # a later waiter that fits all along
 
     clock.at(1002.0, room_for_small)
     clock.at(1006.0, blocker.unlink)                                          # available 50
-    out = M.admit(45, ramlock_dir=ram, run_id="big", run_dir=rd / "big", wait_s=60, poll_s=1)
+    out = M.admit(45, ramlock_dir=ram, run_id="big", run_dir=_claimed(rd / "big"), wait_s=60, poll_s=1)
 
     assert seen["big"]["run_id"] == "big" and seen["big"]["gb"] == 45 and seen["big"]["pid"] == os.getpid()
     assert seen["refused"].startswith("held behind 1 older waiter(s), first come first served (research.mem), oldest first: big 45 GB")
@@ -292,9 +381,9 @@ def test_a_big_head_waiter_is_admitted_when_room_frees_and_later_smaller_runs_wa
     assert out["waited_s"] == 6.0 and out["available_gb"] == 50 and (ram / "research-big.json").exists()
     assert _in_line(ram) == ["later"], "the admitted waiter's ticket is gone, the later one still waits"
     with pytest.raises(remote.MemoryNotAvailable, match="held behind 1 older waiter.*later 5 GB"):
-        M.admit(5, ramlock_dir=ram, run_id="next", run_dir=rd / "next")      # 5 GB is free, but "later" asked first
+        M.admit(5, ramlock_dir=ram, run_id="next", run_dir=_claimed(rd / "next"))      # 5 GB is free, but "later" asked first
     seen["later"].unlink()
-    assert M.admit(5, ramlock_dir=ram, run_id="next", run_dir=rd / "next")["available_gb"] == 5
+    assert M.admit(5, ramlock_dir=ram, run_id="next", run_dir=_claimed(rd / "next"))["available_gb"] == 5
 
 
 def test_a_dead_or_reused_pids_ticket_holds_no_place_and_is_removed(machine):
@@ -302,21 +391,21 @@ def test_a_dead_or_reused_pids_ticket_holds_no_place_and_is_removed(machine):
     dead = _ticket(ram, 1, 10, "gone", pid=_dead_pid())
     reused = _ticket(ram, 2, 10, "reused", start=-1)                          # this pid, but another process's start time
     assert _in_line(ram) == []
-    assert M.admit(20, ramlock_dir=ram, run_id="r", run_dir=machine["root"] / "r")["available_gb"] == 50
+    assert M.admit(20, ramlock_dir=ram, run_id="r", run_dir=_claimed(machine["root"] / "r"))["available_gb"] == 50
     assert not dead.exists() and not reused.exists()
 
 
 def test_a_waiter_larger_than_the_limit_blocks_nobody_and_takes_no_place(machine, monkeypatch):
     ram = machine["ram"]
     huge = _ticket(ram, 1, 150, "huge")                                       # the limit is 100 GB: it can never fit
-    assert M.admit(20, ramlock_dir=ram, run_id="r", run_dir=machine["root"] / "r")["available_gb"] == 50
+    assert M.admit(20, ramlock_dir=ram, run_id="r", run_dir=_claimed(machine["root"] / "r"))["available_gb"] == 50
     assert huge.exists(), "it is live: only ignored, not removed"
     clock = FakeClock()
     monkeypatch.setattr(M, "time", clock.module)
     seen = []
     clock.at(1.0, lambda: seen.append(_in_line(ram)))
     with pytest.raises(remote.MemoryNotAvailable, match="asked 150 GB.*waited 3s"):
-        M.admit(150, ramlock_dir=ram, run_id="huge2", run_dir=machine["root"] / "huge2", wait_s=3, poll_s=1)
+        M.admit(150, ramlock_dir=ram, run_id="huge2", run_dir=_claimed(machine["root"] / "huge2"), wait_s=3, poll_s=1)
     assert seen == [["huge"]], "a run asking for more than the limit waits without a ticket"
 
 
@@ -331,7 +420,7 @@ def test_the_ticket_is_removed_when_the_wait_ends_by_an_exception(machine, monke
 
     clock.at(1.0, interrupt)
     with pytest.raises(KeyboardInterrupt):
-        M.admit(60, ramlock_dir=machine["ram"], run_id="w", run_dir=machine["root"] / "w", wait_s=10, poll_s=1)
+        M.admit(60, ramlock_dir=machine["ram"], run_id="w", run_dir=_claimed(machine["root"] / "w"), wait_s=10, poll_s=1)
     assert seen == [["w"]] and list((machine["ram"] / M.WAITING).iterdir()) == []
 
 

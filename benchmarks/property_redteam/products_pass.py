@@ -7,7 +7,7 @@ additions and wiring. Every s8-family lane whose two multiplicands both depend o
 unit whatever their width or range: an exact product of two data values is a universal gate (an AND of two bits is one,
 and a bitwise codec computes any function with them for free otherwise, `Accounting.SecurityProofs.Gates.
 EncodeChainRefuted`, `bitwise_codec.py`). Every other nonlinear op is a budgeted unit, as property/v1 counts it.
-`Property` caps the data products per certified byte read, beside the budgeted classes.
+`Property` bounds the data products per certified byte read, beside the budgeted classes.
 
 `ProductsPass` is property/v1's pass (`verity.definitions.circuits.stacking`) that also counts each family step's data products,
 lane by lane, under ``units["products"]``. A lane reads one leaf of each multiplicand, whose run dependence is its
@@ -28,11 +28,12 @@ class counts, unchanged) plus those.
 from __future__ import annotations
 
 import json
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
-from verity.definitions.circuits import stacking as P
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import is_input
+from verity.definitions.circuits import stacking as P
 
 #: (Definition, statics, which parameters depend on a run input): the served shapes measured, Llama-3.1-8B's head dim
 SHAPES: tuple[tuple[str, dict, tuple[bool, ...]], ...] = (

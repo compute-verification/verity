@@ -35,6 +35,7 @@ from verity.definitions.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import history as HT, row_table as RT
 from verity.commitments.gates import embedding as E
+from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
@@ -247,6 +248,30 @@ def test_mismatches_are_the_units_whose_outputs_are_not_the_definitions():
     wrong[7] ^= 1
     bad.record(COORD, ins, [wrong])
     assert bad.mismatches() == {TID: [7]}
+
+
+def test_a_boolean_templates_units_are_recorded_as_words_and_checked_as_bits():
+    """A Boolean-profile template's units are recorded as its ports' words (a `Digest` port eight u64 words, a carry
+    u16 words) and `mismatches` evaluates and compares them as their bits: `sha512_stream`'s row at H = 3, W = 3 (no
+    whole block: its output the chaining value as given and the 9 pending bytes, the last high byte zero)."""
+    row = SS.row(3, 3)
+    tid = descriptor_id(row)
+    rng = np.random.default_rng(5)
+    cv = rng.integers(0, 2**63, (4, 8), dtype=np.uint64)
+    carry, data = (rng.integers(0, 2**16, (4, n), dtype=np.uint16) for n in (2, 3))
+    pend = [bytes(c.astype("<u2").tobytes()[:3]) for c in carry]
+    want = [SS.row_reference(c.tolist(), p, d.tolist()) for c, p, d in zip(cv, pend, data)]
+    o0 = np.array([w[0] for w in want], dtype=np.uint64)
+    o1 = np.array([SS.carry_words(w[1]) for w in want], dtype=np.uint16)
+    assert np.array_equal(o0, cv) and o1.shape == (4, 5) and not (o1[:, -1] >> 8).any()
+    win = I.Window(I.Circuit("stream", ((row, 4),)), RUN, LAW, 4)
+    win.record(row, [cv, carry, data], [o0, o1])
+    assert win.mismatches() == {}
+    bad = I.Window(I.Circuit("stream", ((row, 4),)), RUN, LAW, 4)
+    wrong = o1.copy()
+    wrong[2, 0] ^= 1
+    bad.record(row, [cv, carry, data], [o0, wrong])
+    assert bad.mismatches() == {tid: [2]}
 
 
 ROUND, WIDEN = bind(BG.F2fpBf16), bind(BC.Bf16ToF32)
@@ -649,7 +674,7 @@ def declared(**edit) -> I.Circuit:
             (I.Read(G8ID, "w", "weights", at=0, radix=(3, 2), base=0, step=(0, 128)),
              I.Read(GID, "w", "weights", at=0, radix=(3,), base=256, step=(0,))),
             (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
-            (I.Opening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),)),
+            (I.TableOpening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),)),
         ingress=(I.Ingress(EID, "tok", 0, 2, 0),))
     return I.Circuit("declared", ((EMB, 3), (G8, 6), (GEMM, 3)), **{**parts, **edit})
 
@@ -691,7 +716,7 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
     the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block
     past 2^27 bits."""
-    assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == 21
+    assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == I.PACK_LOG
     wide = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
     with pytest.raises(ValueError, match=re.escape(f"{descriptor_id(wide)} cut {{'w': 256}}: x 32 B, w 256 rows of 32 B, "
                                                    "o0 512 B: 258 rows, past a proof block's 256")):
@@ -702,27 +727,66 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
         I.check_proof_block(bind(G.Gemm, K=2048, N=48, **G.GEMM_AMPERE))
 
 
-def test_the_proof_block_limits_are_c_flocks_composers():
-    """`check_proof_block`'s sizes are Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
-    holding every gate range's k_log at or above it: a row has a compression before its last block exactly past
-    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block room."""
-    from verity_flock import circuit as FC
+def test_proof_block_k_log_is_the_composers_arithmetic():
+    """`proof_block_k_log` is `circuit.compose`'s ``k_log`` for one proof block a VU: on random rows, split into inputs and
+    outputs, and logic of up to 2^26 rows, the k_log `circuit._ranges` gives its sha512x3, hm96, logic and mask ranges at
+    the most VUs compose's packing loop takes (and at one VU, ``packed=False``), the logic's slot `ir_lower.layout`'s cells (each port group a power of two
+    of `ir_lower.WORD`-bit words, the logic between, a constant last). A row has a compression before its last block
+    exactly past ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block
+    room."""
+    from verity_flock import circuit as FC, ir_lower as IL
+
+    def cells(row_bytes: list[int]) -> int:
+        return IL.WORD * IL.ceil_pow2(max(1, -(-8 * sum(row_bytes) // IL.WORD))) if row_bytes else 0
+
+    def composed(ins: list[int], outs: list[int], ands: int) -> tuple[int, int]:
+        ports = [FC.Port(f"r{j}", b // 2, 8 * b) for j, b in enumerate(ins + outs)]
+        n_sha, n_hm, i, o = FC._row_slots(ports)[0], FC._pow2(len(ports)), cells(ins), cells(outs)
+        logic = FC._slot_log((-(-(i + ands) // o) * o if o else i + ands) + o + 1)
+
+        def fits(G: int) -> int:
+            return FC._ranges([("unit", FC.SHA_LOG, G * n_sha, {"packed": True}), ("unit", FC.HM_LOG, G * n_hm, {}),
+                               ("unit", logic, G, {}), ("mask", FC.MASK_LOG, 1, {})])[1]
+
+        G, k1 = 1, fits(1)
+        while 2 * G <= 4096 and fits(2 * G) <= max(k1, I.PACK_LOG):
+            G *= 2
+        return k1, fits(G)
 
     assert FC.HM_LOG == FC.SHA_LOG and FC._ranges([("mask", FC.MASK_LOG, 1, {})])[1] == I.K_MIN
     assert all((FC.Port("r", b // 2, 8 * b).comps > 0) == (b > I.LAST_BLOCK_BYTES) for b in range(2, 2048, 2))
     rng = np.random.default_rng(0)
     for n in (*range(1, 10), 16, 17, 100, 255, 256, 257):
-        for _ in range(4):
+        for _ in range(8):
             rb = [int(b) for b in 2 * rng.integers(1, rng.choice([56, 1 << 9, 1 << 17]), n)]
-            ports = [FC.Port(f"r{j}", b // 2, 8 * b) for j, b in enumerate(rb)]
-            if (n_sha := FC._row_slots(ports)[0]) == 0:
+            if all(b <= I.LAST_BLOCK_BYTES for b in rb):
                 continue
-            rows = [("unit", FC.SHA_LOG, n_sha, {"packed": True}), ("unit", FC.HM_LOG, FC._pow2(n), {}),
-                    ("mask", FC.MASK_LOG, 1, {})]
-            assert I.rows_k_log(rb) == FC._ranges(rows)[1], rb
-            gates = ("unit", int(rng.integers(7, 26)), int(rng.integers(1, 64)), {"packed": bool(rng.integers(2))})
-            assert I.rows_k_log(rb) <= FC._ranges([*rows, gates])[1]
-    assert I.rows_k_log([112] * I.MAX_ROWS) == I.K_MAX < I.rows_k_log([112] * (I.MAX_ROWS + 1))
+            cut, ands = int(rng.integers(0, n + 1)), int(rng.integers(0, 1 << int(rng.integers(1, 27))))
+            ins, outs = rb[:cut], rb[cut:]
+            assert (I.proof_block_k_log(ins, outs, ands, packed=False),
+                    I.proof_block_k_log(ins, outs, ands)) == composed(ins, outs, ands), (rb, cut, ands)
+    assert I.proof_block_k_log([112] * I.MAX_ROWS) == I.K_MAX < I.proof_block_k_log([112] * (I.MAX_ROWS + 1))
+
+
+@pytest.mark.slow
+def test_proof_block_k_log_is_the_composed_k_log():
+    """Staged as `UnitStager` stages `unit_rows`, a template's composed META ``k_log`` (the Lean verifier's
+    ``HmRow.kLogOf``) is `proof_block_k_log` of its rows and its logic (ANDs, table reads' rows and assertions): GEMM at
+    2^PACK_LOG, two proof blocks to a Flock block; GEMM cut into 10 rows, its hm96 range deciding; and a GEMM whose
+    sha512x3 range and logic decide, one past `check_proof_block`'s k_log at no logic. It catches a change to compose's
+    packing or the lowering's layout, which `test_proof_block_k_log_is_the_composers_arithmetic` mirrors. A proof block
+    whose logic alone decides has over 2^22 ANDs, a minute or more to stage, so that test holds that case to the
+    composer's ranges."""
+    from verity_flock import class_statement as CS
+
+    long = bind(G.Gemm, K=1024, N=1, **G.GEMM_AMPERE)
+    for fn, cuts, k, vus in ((GEMM, None, 22, 2), (bind(G.Gemm, K=64, N=8, **G.GEMM_AMPERE), {"w": 8}, 23, 1),
+                             (long, None, 23, 1)):
+        st, lay = CS.UnitStager(fn, "unit/k-log", *I.unit_rows(fn, cuts)), I.layout(fn)
+        logic = st.low.layout.counts["ands"] + st.low.layout.counts["asserts"]
+        est = I.proof_block_k_log([2 * w for _p, w, _ps in lay.cut(cuts)], [2 * w for _p, w in lay.outs], logic)
+        assert (st.meta["k_log"], st.meta["vus_per_block"]) == (est, vus) and est == k, descriptor_id(fn)
+    assert I.check_proof_block(long) == 22
 
 
 def sliced_values(seed: int = 0) -> tuple[list[np.ndarray], ...]:
@@ -951,7 +1015,7 @@ def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_tabl
                                        histories=(latent(),)))
     reg = I.Registered({}, (), (), (I.TableRead(EID, "root", "latent", "root", 0, 3),
                                     I.TableRead(EID, "domain", "latent", "domain", 0, 3)),
-                       (I.Opening(EID, "latent", "tok", ("row", "salt", "path"), "o1", 0, 3),),
+                       (I.TableOpening(EID, "latent", "tok", ("row", "salt", "path"), "o1", 0, 3),),
                        histories=(latent(words=16, out="o0", writer=EID, runs=[
                            {"start": 0, "count": 3, "writer": EID, "out": "o0", "radix": [3], "base": 0, "step": [1]}],
                            capacity=4),))
@@ -1045,11 +1109,12 @@ def test_coalesce_merges_runs_of_like_patterns():
 
 
 class Held:
-    """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` u16 words,
-    one salt a row, a root and each row's path (a stand-in's), and a statement's table of the rows at some positions."""
+    """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` leaves of
+    ``word_bits``, one salt a row, a root and each row's path (a stand-in's), and a statement's table of the rows at some
+    positions."""
 
-    def __init__(self, name: str, rows: np.ndarray) -> None:
-        self.name, self.rows, self.words, self.leaves = name, rows, rows.shape[1], len(rows)
+    def __init__(self, name: str, rows: np.ndarray, word_bits: int = 16) -> None:
+        self.name, self.rows, self.words, self.leaves, self.word_bits = name, rows, rows.shape[1], len(rows), word_bits
         self.value = name
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(CS.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
@@ -1058,7 +1123,8 @@ class Held:
         return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
 
     def entry(self):
-        return {"value": self.name, "root": self.root.hex(), "leaves": self.leaves, "words": self.words, "domain": "ef" * 64}
+        return {"value": self.name, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
+                **({"word_bits": self.word_bits} if self.word_bits != 16 else {}), "domain": "ef" * 64}
 
     def statement(self, positions):
         return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
@@ -1091,14 +1157,19 @@ REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM"
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 
-def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = ()) -> tuple[I.Window, Held]:
-    w = Held("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
-    circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,),
-                                                                        values=held))
-    win = I.Window(circuit, RUN, LAW, cap, registered={"w": w})
+def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = (), formats: dict | None = None,
+               by_reference: bool = False) -> tuple[I.Window, Held]:
+    """A window of ``n`` units reading ``w`` (`READ`), committed in its format's leaves; ``by_reference``: ``wrow`` recorded
+    by reference, so the window commits it as the value's rows (`rows.ValueRows`)."""
+    reg = I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,), values=held, formats=formats or {})
+    schema, bits = I.value_format(reg, "w")
+    rows = np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16).view(f"<u{bits // 8}")
+    w = Bound("w", rows, bits, schema) if by_reference else Held("w", rows, bits)
+    win = I.Window(I.Circuit("reads", ((COORD, n),), registered=reg), RUN, LAW, cap, registered={"w": w})
     ins, _ = values(n)
     ins[2] = w.rows[np.arange(n) // 2].view(np.uint8)
-    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.record(COORD, [None if by_reference and i == 2 else x for i, x in enumerate(ins)],
+               [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
     return win, w
 
 
@@ -1252,6 +1323,114 @@ def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_und
         twice.close()
 
 
+def test_a_port_reading_a_tables_parameter_is_a_row_seg_row():
+    """A port whose reads read a declared table's parameter is an ``hm96-sha512/row-seg/v1`` row (`seg_ports`) in its
+    template's statement, its members (the verifier's, derived from the record, the same) and its ``--registered`` file,
+    every other port a ``row/v2`` row; a port reading a table's rows and another parameter's is refused."""
+    table = I.Table("w", "w", 0, K // 2, 6)
+    circuit = I.Circuit("seg", ((COORD, 12),), registered=I.Registered({"w": 6 * K // 2}, (table,), reads=(READ,)))
+    assert I.seg_ports(circuit.registered) == {TID: {"wrow"}}
+    win = I.Window(circuit, RUN, LAW, 4)
+    assert {s for m in win.window.members for p, s in m.schemas if p == "wrow"} == {SEG}
+    assert {s for m in win.window.members for p, s in m.schemas if p != "wrow"} == {V2}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert {p: s for p, s, _b, _ps in doc["statements"][TID]["in_rows"]} == {p: SEG if p == "wrow" else V2
+                                                                             for p, _w in I.layout(COORD).rows}
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert mine.members == win.window.members
+    pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": 6, "words": K // 2, "domain": "ef" * 64}}
+    assert {f["ports"]["wrow"]["row_schema"] for f in I.registered_reads(doc, mine, pin, registered=REG).values()} == {SEG}
+    both = I.Registered({"w": 6 * K // 2, "v": 6 * K // 2}, (table,), reads=(
+        I.Read(TID, "wrow", "w", 0, (3, 2), 0, (K // 2, 0)), I.Read(TID, "wrow", "v", 6, (3, 2), 0, (K // 2, 0))))
+    with pytest.raises(ValueError, match="one row schema"):
+        I.seg_ports(both)
+
+
+#: FP32 words in row-seg rows, as Pearl+'s trees commit a call's A rows and y
+FP32_SEG = {"row_schema": SEG, "word_bits": 32}
+
+
+def test_a_value_of_a_declared_format_is_read_in_it(tmp_path):
+    """`Registered.formats`: ``w`` declared 32-bit leaves in ``row-seg/v1`` rows is read in them. Its port is a ``row-seg/v1``
+    row in its template's statement and its members (the verifier's, from the record, the same), its program takes it as
+    32-bit leaves, the window commits its rows (a leaf's two words low first), by reference as in full (`_same_commit`),
+    `read_shape` gives its rows in 32-bit words, and the ``--registered`` file names its pin's 32-bit words. A 16-bit pin
+    of it or 16-bit committed value is refused."""
+    win, w = registered(formats={"w": FP32_SEG})
+    reg = win.circuit.registered
+    assert I.value_format(reg, "w") == (SEG, 32) and I.seg_ports(reg) == {TID: {"wrow"}}
+    held = replace(reg, values=("w",))
+    assert I.program_values(held) == (("w", 6 * K // 4, 32),)
+    assert replace(win.circuit, registered=held).program()[0].fn.signature()[0][0] == ("w", Array(6 * K // 4, Value(32)))
+    assert I.read_shape(win.circuit, "w") == {"value": "w", "words": K // 4, "rows": 6, "word_bits": 32, "row_schema": SEG}
+    assert {s for m in win.window.members for p, s in m.schemas if p == "wrow"} == {SEG}
+    c, m1 = win.close(salt_key=bytes(32)), win.window.members[1]
+    assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]].view("<u2")) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
+    _same_commit(registered(formats={"w": FP32_SEG})[0], registered(formats={"w": FP32_SEG}, by_reference=True)[0], tmp_path)
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert doc["registered"]["formats"] == {"w": FP32_SEG} and I.Registered.of(doc["registered"]) == reg
+    assert {p: s for p, s, _b, _ps in doc["statements"][TID]["in_rows"]} == {p: SEG if p == "wrow" else V2
+                                                                             for p, _w in I.layout(COORD).rows}
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert (mine.partition_digest, mine.members) == (win.window.partition_digest, win.window.members)
+    pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": 6, "words": K // 4, "word_bits": 32, "domain": "ef" * 64}}
+    assert I.registered_reads(doc, mine, pin, registered=REG)[m1.key] == {"format": REG.READS_V1, "ports": {"wrow": {
+        "value": "w", "root": "cd" * 64, "leaves": 6, "words": K // 4, "word_bits": 32, "domain": "ef" * 64,
+        "row_schema": SEG, "reads": [2, 2, 3, 3], "reads_from": 4}}}
+    for bad in ({**pin["w"], "words": K // 2, "word_bits": 16}, {k: v for k, v in pin["w"].items() if k != "word_bits"}):
+        with pytest.raises(ValueError, match="not the port's 32 16-bit words in 32-bit leaves"):
+            I.registered_reads(doc, mine, {"w": bad}, registered=REG)
+    with pytest.raises(ValueError, match="committed as 6 rows of 32 16-bit leaves, not the 192 16-bit leaves"):
+        I.Window(win.circuit, RUN, LAW, 4, registered={"w": Held("w", w.rows.view("<u2"))})
+
+
+def test_a_values_format_is_a_row_schema_and_width_its_reads_rows_hold():
+    """A format is refused (ValueError) unless it is a registered parameter's other than a table's, a row schema and a leaf
+    width other than the default, and its 16-bit leaves are whole leaves of that width; a read whose port rows aren't whole
+    leaves of its parameter's format is refused, and so is a port reading values of two formats."""
+    base = I.Registered({"w": 6 * K // 2}, reads=(READ,))
+    assert replace(base, formats={"w": FP32_SEG}).formats == {"w": FP32_SEG} and "formats" not in base.doc()
+    for bad in ({"v": FP32_SEG}, {"w": {**FP32_SEG, "row_schema": "x"}}, {"w": {**FP32_SEG, "word_bits": 8}},
+                {"w": {**FP32_SEG, "word_bits": 32.0}}, {"w": {"row_schema": V2, "word_bits": 16}},
+                {"w": {"row_schema": SEG}}, {"w": {**FP32_SEG, "x": 0}}):
+        with pytest.raises(ValueError, match="'s format"):
+            replace(base, formats=bad)
+    with pytest.raises(ValueError, match="'s format"):
+        replace(base, tables=(I.Table("w", "w", 0, K // 2, 6),), formats={"w": FP32_SEG})
+    with pytest.raises(ValueError, match="'s format"):
+        replace(base, params={"w": 6 * K // 2 + 1}, formats={"w": FP32_SEG})
+    with pytest.raises(ValueError, match="their formats"):
+        I.Registered.of({**base.doc(), "formats": {"w": "fp32"}})
+    with pytest.raises(ValueError, match=r"rows of 1 16-bit words, not whole 32-bit leaves of 'w'"):
+        I.Circuit("odd", ((COORD, 12),), registered=replace(base, reads=(I.Read(TID, "o0", "w", 0, (12,), 0, (1,)),),
+                                                             formats={"w": FP32_SEG}))
+    both = I.Registered({"w": 6 * K // 2, "v": 6 * K // 2}, reads=(
+        I.Read(TID, "wrow", "w", 0, (3, 2), 0, (K // 2, 0)), I.Read(TID, "wrow", "v", 6, (3, 2), 0, (K // 2, 0))),
+        formats={"w": FP32_SEG})
+    with pytest.raises(ValueError, match="two formats"):
+        I.seg_ports(both)
+
+
+def test_an_output_port_reading_a_row_seg_value_is_a_row_seg_output_row():
+    """A port in ``seg`` is a ``row-seg/v1`` row whether it is a parameter or an output (`unit_rows`): a read of an output
+    row of a value declared ``row-seg/v1`` rows makes the row one in the members (the verifier's the same) and the
+    template's statement, and its ``--registered`` file names it."""
+    assert I.unit_rows(COORD, None, {"wrow", "o0"}) == (
+        [(p, SEG if p == "wrow" else V2, 16 * n, [p]) for p, n in I.layout(COORD).rows], [(SEG, (0,))])
+    reg = I.Registered({"y": 12}, reads=(I.Read(TID, "o0", "y", 0, (12,), 0, (1,)),),
+                       formats={"y": {"row_schema": SEG, "word_bits": 16}})
+    win = I.Window(I.Circuit("out", ((COORD, 12),), registered=reg), RUN, LAW, 4)
+    assert {s for m in win.window.members for p, s in m.schemas if p == "o0"} == {SEG}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert doc["statements"][TID]["out_rows"] == [[SEG, [0]]]
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert mine.members == win.window.members
+    pin = {"y": {"value": "y", "root": "cd" * 64, "leaves": 12, "words": 1, "domain": "ef" * 64}}
+    files = I.registered_reads(doc, mine, pin, registered=REG)
+    assert [f["ports"]["o0"]["row_schema"] for f in files.values()] == [SEG] * 3
+    assert files[mine.members[1].key]["ports"]["o0"]["reads"] == [4, 5, 6, 7]
+
+
 def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     """`chain` with each layer's ``w`` a registered row: every member is a shared-row member, its wired ``x`` a table of its
     units' own rows, and the wiring check reads a unit's string through its ref, the row its statement reads. The verifier
@@ -1283,13 +1462,14 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
 
 
 class Bound(Held):
-    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`): 16-bit leaves, its row
-    schema and each row's ``b || c`` under its salt."""
+    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`): its row schema and each
+    row's ``b || c`` under its salt, over the row's bytes (a 32-bit leaf's two u16 words, low first)."""
 
-    def __init__(self, name: str, rows: np.ndarray) -> None:
-        super().__init__(name, rows)
-        self.word_bits, self.schema, inner = 16, V2, CS._inner(V2, self.words)
-        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+    def __init__(self, name: str, rows: np.ndarray, word_bits: int = 16, schema: str = V2) -> None:
+        super().__init__(name, rows, word_bits)
+        self.schema, inner = schema, CS._inner(schema, CS.value_words(self))
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key,
+                                          inner(np.ascontiguousarray(r, dtype=f"<u{word_bits // 8}").tobytes()), s)
                     for r, s in zip(rows, self.salts)]
 
 
@@ -1684,10 +1864,12 @@ def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
 
 REFUSED = {
     "a value of another row width": (_value_rows(value=lambda v: Bound("w", v.rows.reshape(-1, 128))),
-                                     "rows of 128 words, not 256"),
+                                     "rows of 128 16-bit leaves, not 256 16-bit words"),
+    "a value of 32-bit leaves, so another row width": (_value_rows(value=lambda v: _like(v, word_bits=32)),
+                                                       "rows of 256 32-bit leaves, not 256 16-bit words"),
     "a value of another schema": (_value_rows(value=lambda v: _like(v, schema=CS.TABLE_SCHEMA)),
                                   f"{CS.TABLE_SCHEMA} rows, not {V2}"),
-    "a value of 8-bit leaves": (_value_rows(value=lambda v: _like(v, word_bits=8)), "8-bit leaves, not 16"),
+    "a value of 8-bit leaves": (_value_rows(value=lambda v: _like(v, word_bits=8)), "8-bit leaves, not 16 or 32"),
     "a position past the value's rows": (_value_rows(positions=(LAYERS,)), f"positions outside its {LAYERS} rows"),
     "a negative position": (_value_rows(positions=(-1,)), f"positions outside its {LAYERS} rows"),
     "two rows for the port's one": (_value_rows(positions=(0, 1)), "2 rows, not 1"),
@@ -1699,8 +1881,8 @@ REFUSED = {
 
 @pytest.mark.parametrize("edit, why", REFUSED.values(), ids=REFUSED)
 def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(monkeypatch, edit, why):
-    """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width, schema or
-    leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
+    """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width (in u16
+    words: a 32-bit value's leaves are two each), schema or leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
     than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
     reference in a window with row tables,
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
@@ -1734,7 +1916,7 @@ def embedding(**edit) -> I.Circuit:
     """Three embedding reads of `Table`, their tokens free."""
     reg = I.Registered({"embed": 64}, (I.Table("embed", "embed", 0, 16, 4),), (),
                        (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
-                       (I.Opening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
+                       (I.TableOpening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
     return I.Circuit("embedding", ((EMB, 3),), **{"registered": reg, **edit})
 
 
@@ -1886,7 +2068,7 @@ def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
     with pytest.raises(ValueError, match="didn't pin"):
         I.registered_reads(doc, mine, {}, registered=REG)
     win.registered = {**win.registered, "embed/opened": Held("embed/opened", np.ones((1, 3), dtype=np.uint16))}
-    with pytest.raises(ValueError, match="rows of 3 words"):
+    with pytest.raises(ValueError, match="rows of 3 16-bit leaves, not the port's 1 16-bit words"):
         win.close(salt_key=bytes(32))
 
 

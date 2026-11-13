@@ -1,6 +1,7 @@
 """`verity bench memory`: the share of a node's memory read rate that one accepted PoUB session leaves uncertified, at
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
 one line of JSON (`value`, `unit`, `commit`, `run`). A session that wasn't accepted prints no number and exits 1.
+The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for that γ, and the term no δ holds.
 
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
     verity bench memory --from RUN [--session K]  a recorded run
@@ -69,6 +70,9 @@ SETTINGS = of(__file__)
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
+#: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
+#: ledger, and the windows' PRF advantages are in no δ
+ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
 ROLE = "LLAMA32_1B_BF16"
 REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
@@ -85,10 +89,12 @@ READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured
 BYTES = "bytes over the session's span"
 #: where a capacity's rate comes from, which its unit says
 OWN_RATE = "the verifier's own figure for the node (its timing.py), not the registered hardware's"
-#: the result's error: which of the record's two it is, and what it leaves out
+#: the result's error: which of the record's two it is, how the whole error reads (`ERROR_FORM`), and so what this
+#: number leaves out
 ERROR = ("probability that the verified amount doesn't hold, read window by window as the share is: the ledger's error "
-         "with the sketch's term and the sample's rejection and binding terms added; the windows' PRF advantages, "
-         "which the record names with no value, are not in it")
+         "with the sketch's term and the sample's rejection and binding terms added. The whole error reads "
+         f"{ERROR_FORM}, this number its δ: the windows' PRF advantages, which the record names with no value, are "
+         "not in it")
 #: the wipe run's label states its bound in words
 WIPE = re.compile(r"foreign <= ([\d,]+) bits\b.*\bM = ([\d,]+) B\b")
 #: minutes the node run waits for a launched run's record: the fire run's own bound and its publish
@@ -399,7 +405,8 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
       place.
     - `error`: the probability the verified amount doesn't hold, read window by window as γ is: the record's declared
       error at the first reading, which adds the sketch's term and the sample's rejection and binding terms to the
-      ledger's own and holds no PRF advantage (`ERROR`). The rate isn't in it, so every reading's is the same.
+      ledger's own and holds no PRF advantage, so its unit says how the whole error reads (`ERROR`, with
+      `ERROR_FORM`'s words). The rate isn't in it, so every reading's is the same.
 
     A measurement whose keys the record doesn't hold as numbers is left out."""
     run = [doc["run"]] if doc["run"] else []
@@ -440,10 +447,12 @@ def result(held: Path, measured: list[dict]) -> None:
 
 
 def text(doc: dict) -> str:
-    """The printed lines of a document: the number, what it was measured on, and the references."""
+    """The printed lines of a document: the number and how its error reads, what it was measured on, and the
+    references."""
     rate = doc.get("rate_bytes_per_s")
     lines = [f"memory: {doc['value']:.3f} of the node's memory read rate is left uncertified by this session, at the "
-             f"data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")]
+             f"data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")
+             + f"; its error reads {ERROR_FORM}, δ in the verifier's ledger"]
     if doc["loopback"]:
         lines.append(f"  {LOOPBACK}")
     elif doc["value"] >= 1:

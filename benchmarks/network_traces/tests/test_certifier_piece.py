@@ -139,15 +139,19 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
     return d
 
 
+def _stub_lean(tmp_path: Path, answer: dict) -> Path:
+    """A stand-in `network-period` that keeps the three files it reads in TMP/seen and answers ``answer``."""
+    lean, seen = tmp_path / "network-period", shlex.quote(str(tmp_path / "seen"))
+    (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
+    lean.write_text(f"#!/bin/sh\nmkdir -p {seen} && cp \"$2\" \"$3\" \"$4\" {seen}/\n"
+                    f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
+    lean.chmod(0o755)
+    return lean
+
+
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
-    """The piece's command, its `network-period` a stand-in that keeps the three files it reads in TMP/seen and
-    answers ``answer``."""
-    if lean is None:
-        lean, seen = tmp_path / "network-period", shlex.quote(str(tmp_path / "seen"))
-        (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
-        lean.write_text(f"#!/bin/sh\nmkdir -p {seen} && cp \"$2\" \"$3\" \"$4\" {seen}/\n"
-                        f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
-        lean.chmod(0o755)
+    """The piece's command, its `network-period` `_stub_lean`'s answering ``answer``."""
+    lean = lean or _stub_lean(tmp_path, answer)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
@@ -296,7 +300,7 @@ def test_a_step_leaves_no_process_of_its_group_behind_however_it_ends(tmp_path, 
         started.append(p := real(*a, **kw))
         os.kill(os.getpid(), signal.SIGTERM)
         return p
-    was = signal.signal(signal.SIGTERM, CP.ended)
+    was = signal.signal(signal.SIGTERM, CP.ended("CERTIFIER_TIMEOUT"))
     try:
         with pytest.raises(CP.NotRun, match="SIGTERM: the piece's time limit"):
             CP.run_group(["bash", "-c", f'(trap "" TERM; {LOOP}) & echo "$$ $!" > "$0"; kill -TERM "$PPID"; {LOOP}',
@@ -534,6 +538,123 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert not any(p.is_file() for p in hold.rglob("*"))
 
 
+def _v3c(serve: Path, period: dict | None = None, committed: bool = True) -> Path:
+    """V3c's directory beside the window (`served_verdicts.sh`'s ``$D/v3c-w<K>-<class>``): its committed window (only
+    its registration, which the chain step looks for) and, given, its period.json."""
+    v3c = serve / "v3c-w3-8-32-4-4-16"
+    (v3c / "window").mkdir(parents=True)
+    if committed:
+        (v3c / "window" / "registration.json").write_text("{}")
+    if period is not None:
+        (v3c / "period.json").write_text(json.dumps(period))
+    return v3c
+
+
+def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
+    """The split piece's ``step`` as `served_verdicts.sh`'s ``certifier_step`` runs it: ``bash -c CMD _ D K DIR V3C`` in
+    the tree, its output DIR/<step>.log."""
+    cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} {step} \"$@\" " + \
+        " ".join(map(shlex.quote, args))
+    dir_.mkdir(parents=True, exist_ok=True)
+    with open(dir_ / f"{step}.log", "w") as log:
+        return subprocess.run(["bash", "-c", cmd, "_", str(d), str(K), str(dir_), str(v3c)], cwd=ROOT, stdout=log,
+                              stderr=subprocess.STDOUT, check=False).returncode
+
+
+def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int = 0) -> list[str]:
+    """``chain``'s arguments: a chain that leaves `_chain_out`'s report, its scan's summary naming V3c's window (``v3c``;
+    None: no V3c window), and notes what it was given in TMP/chain-args."""
+    out = _chain_out(tmp_path / "chain", verdict, w)
+    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
+    note = shlex.quote(str(tmp_path / "chain-args"))
+    return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
+                           f'cp -r {shlex.quote(str(out / "out"))} "$RESEARCH_RUN_DIR/"']
+
+
+def _lean(tmp_path: Path, answer: dict) -> list[str]:
+    return ["--lean", str(_stub_lean(tmp_path, answer))]
+
+
+#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins: the period check here is a stub)
+PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"v3c": 2}, "steps": 0}
+
+
+def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
+                                                                            monkeypatch):
+    """The chain step runs the chain with its scan on V3c's window (``--class w63k4 --v3c V3C/window`` first in
+    CR_SCAN_ARGS) and marks DIR/chain.json; the period step reads that chain's report again, without running it, and
+    checks the rows case whose one compute audit is V3c's period.json, its answer the one `pieces` reads (with
+    CERTIFIER_CMD ``true``, as `served_verdicts.sh` sets it) into the block record, its case written and both steps'
+    logs kept."""
+    accept = period.reference(period.case("accept", 1, "clock"))
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
+    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, w=warden["w"]), "CR_SCAN_ARGS=--x 1") == 0
+    assert (piece / "chain.log").read_text().splitlines()[-1] == (
+        f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json")
+    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted", "v3c": str(v3c)}
+    assert f"CR_SCAN_ARGS=--class w63k4 --v3c {v3c / 'window'} --x 1" in (tmp_path / "chain-args").read_text()
+    assert not (piece / "answer.json").exists()
+    (v3c / "period.json").write_text(json.dumps(PERIOD))
+    assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
+    params = json.loads((tmp_path / "seen" / "params.json").read_text())
+    assert params["audits"] == [{k: PERIOD[k] for k in ("free", "program", "steps")}]
+    assert json.loads(bytes.fromhex(json.loads((piece / CP.CASE).read_text())["commitment"]))["audits"] == [
+        PERIOD["registration"]]
+    got = S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD="true"))
+    assert (got["certifier"]["verdict"], got["certifier"]["rc"]) == ("accept", 0)
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, CP.CHAINED, "chain",
+                                                                  "chain.log", "period.log", "piece.log"}
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    assert BR.check(rec) == {} and line["verdicts"]["the network certifier"] == "accept"
+
+
+def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp_path, warden):
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
+    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, "refused", warden["w"])) == 1
+    a = json.loads((piece / "answer.json").read_text())
+    assert a["verdict"] == "reject" and a["reason"].startswith("the chain refused") and not (piece / CP.CHAINED).exists()
+    assert _hook("period", d, piece, v3c, *_lean(tmp_path, {})) == 1
+    assert json.loads((piece / "answer.json").read_text()) == a and not (tmp_path / "seen").exists()
+
+
+@pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json"])
+def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, warden):
+    """The chain step refuses without V3c's committed window, which its scan reads, and when its limit
+    (CERTIFIER_TIMEOUT) ends it; the period step then refuses too, naming the chain's refusal. The period step refuses
+    where no chain step accepted in DIR, where the chain's scan read no V3c window, and where V3c wrote no period.json:
+    DIR keeps its logs and refused.txt, and the certifier is missing."""
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window"), \
+        tmp_path / "pieces" / "certifier"
+    args = _chained(tmp_path, None if case == "a scan of no v3c" else v3c, w=warden["w"])
+    if case == "time limit":
+        args = ["--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
+    if case != "no chain step":
+        _hook("chain", d, piece, v3c, *args)
+    assert _hook("period", d, piece, v3c, *_lean(tmp_path, {})) == 3
+    why = (piece / CP.REFUSED).read_text()
+    assert {"no v3c window": f"V3c committed no window at {v3c / 'window'}",
+            "time limit": "SIGTERM: the piece's time limit (CERTIFIER_TIMEOUT)",
+            "no chain step": "no chain.json in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run",
+            "a scan of no v3c": f"the chain's scan read no V3c window, not {v3c / 'window'}",
+            "no period.json": "the period's rows case: FileNotFoundError"}[case] in why, why
+    logs = {"chain.log", "period.log"} - ({"chain.log"} if case == "no chain step" else set())
+    assert {p.name for p in piece.iterdir()} == {CP.REFUSED, *logs}
+    said = (piece / "period.log").read_text()
+    assert ("CERTIFIER refused at the chain: " if case in ("no v3c window", "time limit") else "CERTIFIER refused: ") \
+        in said
+    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
+
+
+def test_each_steps_time_limit_names_its_own():
+    for limit in ("CERTIFIER_TIMEOUT", "CERTIFIER_PERIOD_TIMEOUT"):
+        with pytest.raises(CP.NotRun, match=rf"^SIGTERM: the piece's time limit \({limit}\) ended it"):
+            CP.ended(limit)(signal.SIGTERM, None)
+
+
 def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
     assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
     assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
@@ -555,7 +676,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
         "warden-rehearse --peer vy-dc-h200 --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     prompts = json.loads((tmp_path / "prompts.json").read_text())
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
     kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
@@ -567,6 +688,11 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
+    assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
+                    str(tmp_path / "key"), "--scan-class", "w63"]) == 0
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
@@ -599,11 +725,12 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     relay, warden = ran
     assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
     at = warden.index("--ids")
-    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000)]
+    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
     doc = json.loads((out / "session.json").read_text())
     assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
-                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --window-per-group")
+                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --scan-class w63k4 "
+                              "--window-per-group")
     assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
 
 
@@ -701,7 +828,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
     assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer vy-dc-h200 --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json",

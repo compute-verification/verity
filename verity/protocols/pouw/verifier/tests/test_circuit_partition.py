@@ -7,13 +7,15 @@ from collections import Counter
 import pytest
 
 from verity.circuits import partition_object as PO
+from verity.circuits.codec import encode_program
 from verity.circuits.cut import CallGraph, check_cut
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array
-
-from verity.protocols.pouw.prover.circuit import ncp2
+from verity.protocols.pouw.prover.circuit import ncp2, traced_as
 from verity.protocols.pouw.prover.circuit import partition as P
+from verity.protocols.pouw.verifier.protocol import DomainError
 
 SHAPE = ncp2.Shape(32, 64, 32)
 
@@ -110,11 +112,6 @@ def test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule():
     assert not wr.ok
     assert {us[u].role for u, _ob, _og in wr.too_wide} == set(P.POUW_ROLES) - {"form_y"}
     # the verifier never takes this Program: it builds its own and compares digests
-    from verity.circuits.codec import encode_program
-    from verity.circuits.program import Program
-    from verity.protocols.pouw.prover.circuit import traced_as
-    from verity.protocols.pouw.verifier.protocol import DomainError
-
     t = traced_as("ncp-v2-shift24", SHAPE.m, SHAPE.k, SHAPE.n)
     t.check_descriptor(encode_program(Program(t.definition)))
     with pytest.raises(DomainError):

@@ -355,7 +355,7 @@ theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S 
     (fun v u hu hv => Prog.correct_mono (Prog.refIn_mono hext) (hι v u hu hv)) hcar hcov
   let a : ℕ → Bool := fun g =>
     if g ∈ freeInputs s.prog (lay s) (k s) then traceVal s.prog (w.val H D.commit s) g else false
-  refine ⟨hl, hD, _, hF, a, ⟨fun g _ hg => if_pos hg, fun g hg => if_neg hg⟩,
+  refine ⟨hl, hD, _, hF, a, ⟨fun g _ hg => ite_eq_left hg, fun g hg => ite_eq_right hg⟩,
     heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s))),
     fun g b h => faultyGate_of_heldAdv h, ?_, ?_⟩
   · have hinp : valOver s.prog ((lay s).inputOf (k s) ((List.range (k s)).map fun i => op i (o.take i))

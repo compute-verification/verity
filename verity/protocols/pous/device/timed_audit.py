@@ -39,12 +39,16 @@ from __future__ import annotations
 
 import argparse
 import copy
+import dataclasses
 import gc
 import hashlib
+import importlib.util
 import json
+import logging
 import os
 import re
 import resource
+import shutil
 import socket
 import struct
 import sys
@@ -52,6 +56,13 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from verity.protocols.pous.verifier import audit as pous_audit
+from verity.protocols.pous.verifier import protocol, schemes
+from verity.protocols.pous.verifier.band import BandParams
+from verity.protocols.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
+
+log = logging.getLogger(__name__)
 
 OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
 HEADER = 24
@@ -86,11 +97,6 @@ class LogicalClock:
 def params_of(name: str, manifest: dict[str, Any]) -> Any:
     """The scheme's geometry from its manifest: its fields, and nothing it does not give back as its own manifest.  A name
     that is not registered is P2 at another width (a `p2` manifest), else the band at another in-degree."""
-    import dataclasses
-
-    from verity.protocols.pous.verifier import schemes
-    from verity.protocols.pous.verifier.band import BandParams
-
     if name in schemes.REGISTRY:
         cls = type(schemes.get(name).params)
     else:
@@ -106,18 +112,18 @@ def scheme_of(name: str, params: Any) -> Any:
     """The scheme `name` at `params`: a registered one, the band at another in-degree `d` (`band-chain/d{d}/v1`), or P2 at
     another width (`p2-{w}/v3`, the CPU tests'): the registered class at those parameters, with no byte-format name
     registered for it and no certificate."""
-    from verity.protocols.pous.verifier import schemes
-
     if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
+    refused = []
     for cls in (schemes.Band, schemes.P2, schemes.P2ChaCha):
         try:
             scheme = cls(params)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            refused.append(f"{cls.__name__}: {e}")
             continue
         if scheme.name == name:
             return scheme
-    raise KeyError(f"no POUS scheme {name!r} at {params!r}")
+    raise KeyError(f"no POUS scheme {name!r} at {params!r}" + (f" ({'; '.join(refused)})" if refused else ""))
 
 
 class LiveResponder:
@@ -216,11 +222,10 @@ def thread_rusage() -> dict[str, int]:
 
 def cgroup_cpu() -> dict[str, int]:
     """The container's CPU throttling counters (cgroup v2 `cpu.stat`): a throttled period stalls the responder and the verifier."""
-    try:
-        with open("/sys/fs/cgroup/cpu.stat") as f:
-            stat = dict(line.split() for line in f if line.strip())
-    except OSError:
+    path = Path("/sys/fs/cgroup/cpu.stat")
+    if not path.is_file():
         return {}
+    stat = dict(line.split() for line in path.read_text().splitlines() if line.strip())
     return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
 
 
@@ -247,9 +252,6 @@ def audit(host: str, port: int, scheme: Any, vk: Any, *, audits: int, pings: int
     With `research=False` (`--strict`) the memory challenger refuses an audit its certificate does not cover: no challenge is
     sent, and the record says why (`refused`).  Each audit's challenge source is `os.urandom(32)`, or `seeded_source(seed, j)`
     with `seed` (the logical clock's runs alone)."""
-    from verity.protocols.pous.verifier import audit as pous_audit
-    from verity.protocols.pous.verifier import protocol
-
     if seed is not None and not isinstance(clock, LogicalClock):
         raise ValueError("a seeded audit runs on the logical clock alone: a timed audit's challenges come from os.urandom")
     cert = scheme.certificate
@@ -348,10 +350,6 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
     refusal.  Otherwise each answer's `[correct, on_time]`, each audit's acceptance and the count, the gaps, `k`, the limit,
     the audit of record's (the first's) storage profile when it is accepted, and `accepted` when there is an audit and every
     one is."""
-    from verity.protocols.pous.verifier import audit as pous_audit
-    from verity.protocols.pous.verifier import protocol, schemes
-    from verity.protocols.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
-
     def need(ok: Any, part: str) -> None:
         if not ok:
             raise RecordFault(part)
@@ -366,8 +364,8 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
         try:
             params = params_of(ready["scheme"], ready["params"])
             scheme = scheme_of(ready["scheme"], params)
-        except Exception:
-            raise RecordFault("ready") from None
+        except Exception as e:
+            raise RecordFault("ready") from e
         need(type(scheme) is schemes.P2 and scheme.name == ready["scheme"] and hexed(ready.get("salt"))
              and len(ready["salt"]) == 48, "ready")
         need(len(leaves) == params.blocks * DIGEST_BYTES, "leaves")
@@ -381,7 +379,7 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
         need(root == vk.root.hex(), "root")
         need(limit == deadline + rtt, "limit")
         cert = scheme.certificate
-        k = doc["k"] if "k" in doc else cert.k if cert is not None else pous_audit.CHALLENGES
+        k = doc.get("k", cert.k if cert is not None else pous_audit.CHALLENGES)
 
         def timed(source: bytes, clock: Callable[[], int]) -> Any:
             return protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline,
@@ -424,8 +422,6 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
 def pous_check() -> Any:
     """`pous_check`'s `timed_audit.py`, which runs `pous-timed-audit` through `verity_difftest`, loaded by path: the Lean
     check is a tree of its own (`tests/test_boundaries.py`'s `SEPARATE`)."""
-    import importlib.util
-
     path = Path(__file__).resolve().parents[4] / "verity/protocols/pous/verifier/check/timed_audit.py"
     spec = importlib.util.spec_from_file_location("pous_check_timed_audit", path)
     module = importlib.util.module_from_spec(spec)
@@ -444,8 +440,6 @@ VERDICTS = {"python": verdict, "lean": lean_verdict}
 def lean_unavailable() -> str | None:
     """Why the Lean verdict can't run in this process (no `lake` on the PATH, or `pous_check`'s `timed_audit.py`, which
     serves it, not loadable beside this Python, which it is where `verity_difftest` isn't importable), or None."""
-    import shutil
-
     if shutil.which("lake") is None:
         return "lake is not on the PATH"
     try:
@@ -470,6 +464,7 @@ def judge(ready: Any, leaves: bytes, doc: dict[str, Any], by: str | None = None)
         try:
             verdicts["lean"] = VERDICTS["lean"](ready, leaves, doc)
         except Exception as e:
+            log.exception("the Lean verdict raised; the record keeps it as failed")
             verdicts["lean"] = {"failed": f"{type(e).__name__}: {e}"}
     by = by or (VERDICT if why is None else "python")
     v = verdicts[by]
@@ -506,10 +501,6 @@ def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: i
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.protocols.pous.verifier import audit as pous_audit
-    from verity.protocols.pous.verifier import schemes
-    from verity.protocols.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
-
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)
     ap.add_argument("--leaves", required=True)
@@ -553,6 +544,11 @@ def main(argv: list[str] | None = None) -> int:
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted"] == doc["audits"] else 1
 
+
+__all__ = ["ALLOWANCE_KIND", "DISAGREE", "HEADER", "OP_CHALLENGE", "OP_CLOSE", "OP_PING", "TRACE_OVER_NS", "VERDICT",
+           "VERDICTS", "LiveResponder", "LogicalClock", "audit", "calibrate", "calibrate_only", "cgroup_cpu", "host_trace",
+           "judge", "lean_unavailable", "lean_verdict", "limit_of", "main", "params_of", "quantiles", "scheme_of",
+           "seeded_source", "verdict"]
 
 if __name__ == "__main__":
     sys.exit(main())

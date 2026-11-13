@@ -16,17 +16,18 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
+
+import frontier as F
+import units as U
+
+from verity.circuits.defs import REGISTRY, bind
+from verity.definitions.circuits import stacking as P
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import frontier as F  # noqa: E402
-import units as U  # noqa: E402
-from verity.definitions.circuits import stacking as P  # noqa: E402
-from verity.circuits.defs import REGISTRY, bind  # noqa: E402
 
 
 def registry() -> Any:

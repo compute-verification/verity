@@ -107,10 +107,27 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
 
 
+def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_the_plans_request():
+    """``--scan-class w63k4`` is passed to the gate, which takes prompts of its KI = 32 ids and 4 tokens out, and the
+    plan's session run is the plan's request: its class, prompt ids, tokens and vocabulary."""
+    a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "32", "--tokens", "4", "--prompts", "4",
+                                "--requests", "4", "--height", "10"])
+    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
+    doc = SS.plan(a, json.dumps(ps).encode())
+    assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes {a.minutes} --requests 4 "
+                              "--height 10 --scan --prompts --tokens 4 --scan-class w63k4")
+    session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
+    assert {k: v for k, v in vars(session).items() if k in vars(a)} == {**vars(a), "cmd": "session"}
+    assert "--scan-class" not in SS.plan(SS.parser().parse_args(["plan", "--minutes", "10"]), b"[[1]]")["request"]
+
+
 @pytest.mark.parametrize("flags, why", [
     (["--tokens", "65"], "1 to KO = 64"),
     (["--tokens", "0"], "1 to KO = 64"),
     (["--prompt-ids", "1025"], "1 to KI = 1024"),
+    (["--scan-class", "w63k4", "--prompt-ids", "33", "--tokens", "4"], "1 to KI = 32"),
+    (["--scan-class", "w63k4", "--prompt-ids", "32"], "1 to KO = 4"),
     (["--prompts", "200", "--prompt-ids", "1024"], "the gate refuses it: --prompts: over 1048576 bytes"),
     (["--requests", "100000", "--minutes", "60"], "the gate refuses it: --requests '100000'"),
     (["--minutes", "5"], "the gate refuses it: --minutes 5"),

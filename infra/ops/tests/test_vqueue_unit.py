@@ -226,9 +226,13 @@ def sweep(tmp_path: Path) -> None:
 
 
 def test_the_sweep_takes_what_a_launch_left_40_minutes_ago_and_nothing_else(tmp_path):
+    """A launch's train tree and its log, check.py's Lean deps, and the tree of a job of the steps after a landing that was
+    killed before it removed its own (`research merge`'s `_own_tree`)."""
     trains, tmp = tmp_path / "trains", tmp_path / "tmp"
-    old = [trains / "train-0123456789ab-1of3", trains / "train-0123456789ab-1of3.log", tmp / "check-lean-deps-x", tmp / "train-why.abc"]
-    new = [trains / "train-ba9876543210-2of3", trains / "train-ba9876543210-2of3.log", tmp / "check-lean-deps-y"]
+    old = [trains / "train-0123456789ab-1of3", trains / "train-0123456789ab-1of3.log", tmp / "check-lean-deps-x", tmp / "train-why.abc",
+           trains / "research-after-land-0123456789ab-k1ll3d"]
+    new = [trains / "train-ba9876543210-2of3", trains / "train-ba9876543210-2of3.log", tmp / "check-lean-deps-y",
+           trains / "research-after-land-ba9876543210-runs0n"]
     others = [tmp / "drive-launches", tmp / "research-merged-1"]
     for p in old + others:
         left(p, LIMIT + 1)

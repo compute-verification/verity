@@ -45,6 +45,8 @@ KINDS: dict[str, str] = {
     "run-files/v1": "the files a result.json pointed at, as one tree",
     "run-record/v1": "every file of a run dir (stdout.log, stderr.log, launcher.log, job.json, status.json, outputs; markers excluded) as one "
                      "tree, named by its attempt as outputs.run_record: the run's custody on the remote (store.custody); meta {run_id, files, bytes}",
+    "run-file/v1": "one file of a run's out/, put by the run's runner while its workload ran (`research run-preserve`, "
+                   "store.run_preserve): payload file; meta {run_id, path (run-dir relative)} over whatever the workload's --meta gave",
     "node-data/v1": "a path of a node's working set, preserved by `research keep --preserve` (research.retention): payload its file or "
                     "tree; meta {path, node, owner}; its retention record names the id",
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
@@ -102,16 +104,19 @@ KINDS: dict[str, str] = {
     "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
                            "plan/commit_plan.json (the key and the producer facts) + the plan stage's logs; meta {row, program_digest, "
                            "plan_key, stage_status}; refs.build = the vllm-build/v1 planned from",
-    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
-                            "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
-                            "match_ok?}; refs.build = the vllm-build/v1 consumed",
+    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, global_match.json, versions.json (never the raw "
+                            "capture planes, nor the token records, which hold the requests' and served token ids and stay on the "
+                            "node); meta {row, program_digest, match_ok?}; refs.build = the vllm-build/v1 consumed",
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
-                       "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
+                       "commit_summary.json (compat), never a C2 replay's facts of record (sampled_replay*.json, served tokens), "
+                       "which stay on the node; meta {row, verdict, ...}; refs.build, refs.match",
     "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
-                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
-    "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
-                             "telemetry; meta {row, stage}",
+                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
+                           "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
+                           "requests and served tokens, opened weights) and stays on the node",
+    "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
+                             "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
     "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
                           "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "

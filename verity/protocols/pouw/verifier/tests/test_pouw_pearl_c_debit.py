@@ -10,7 +10,9 @@ from pathlib import Path
 
 import pytest
 
+from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import HOPPER_E4M3_K32
+from verity.protocols.pouw.prover.circuit import words as W
 from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
@@ -92,14 +94,55 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     ops = s.encode(ctx, s.noise(ctx), spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike),
                    Tile(tuple(range(t)), tuple(range(t))))
     assert s.admissible(ctx, ops)
-    atoms, zeros = D.chain_debit(ops.a.codes, ops.b.codes)
+    atoms, zeros, elements = D.tile_debit(ops.a.codes, ops.b.codes, formed(ops))
+    assert (atoms, zeros) == D.chain_debit(ops.a.codes, ops.b.codes)
     assert atoms == sum(sum(D.word_flags(a, b)) for a in ops.a.codes for b in ops.b.codes) and zeros == 0
-    debit = D.debit_units(atoms, D.forming_elements(ops.a.codes, ops.b.codes), zeros=zeros)
+    assert elements == elements_by_definition(ops)
+    debit = D.debit_units(atoms, elements, zeros=zeros)
     cap = s.cap * s.credit_of(Shape(t, k, t))
     if spike:
         assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and debit > 14 * cap
     else:
-        assert debit < cap / 10
+        assert elements == 0 and debit < cap / 10
+
+
+def formed(ops) -> list[tuple[int, list[int], int]]:
+    return list(zip(ops.a.alpha, ops.a.x, ops.a.beta))
+
+
+def elements_by_definition(ops) -> int:
+    """`tileDebitDev`'s elems over the whole tile, element by element: salt-dead (the circuit's `PouwHopperE4m3SaltDead` on
+    f32(α·x) and c_β), or its atom block flagged by every word of its row."""
+    flags = [[D.word_flags(a, b) for b in ops.b.codes] for a in ops.a.codes]
+    return sum(1 for i, (alpha, x, beta) in enumerate(formed(ops)) for l, w in enumerate(x)
+               if all(f[l // 32] for f in flags[i]) or W.PouwHopperE4m3SaltDead.evaluate(fp32.mul(alpha, w), D.flat_code(beta)))
+
+
+def test_salt_dead_is_the_circuits_bit():
+    """`salt_dead` is the hidden cap's bit (`circuit.words.PouwHopperE4m3SaltDead`) on     f32(α·x) and c_β: on a row of
+    accumulators from ±0, where the ends are f32(α·x) ± 88·c_β, to past ±448, where both saturate to one code."""
+    rng = random.Random("pearl-c/salt-dead")
+    beta = P.f32_bits(P.f32(0.37))
+    x = [0, 0x80000000, *(P.f32_bits(P.f32(v)) for v in (1e-3, 2.0, 300.0, 448.0, 1e4, -1e4, -448.0))]
+    x += [P.f32_bits(P.f32(rng.choice((1, -1)) * 10 ** rng.uniform(-4, 5))) for _ in range(512 - len(x))]
+    alpha = P.f32_bits(P.f32(1.0))
+    dead = D.salt_dead(alpha, x, beta)
+    assert dead == [bool(W.PouwHopperE4m3SaltDead.evaluate(fp32.mul(alpha, w), D.flat_code(beta))) for w in x]
+    assert not dead[0] and dead[6] and 50 < sum(dead) < 450
+
+
+def test_forming_elements_count_every_flagged_block_and_the_salt_dead():
+    """`forming_elements`: a block every word of its row flags counts whole, one some word leaves unflagged counts its
+    salt-dead elements alone, and a row whose blocks are all flagged never reads its salt-dead elements."""
+    t, f = [True] * 4, [False] * 4
+    read = []
+
+    def dead(i):
+        read.append(i)
+        return [l % 3 == 0 for l in range(128)]
+    flags = [[t, t], [[True, False, True, False], [True, True, False, False]], [f, t]]
+    assert D.forming_elements(flags, dead) == 128 + (32 + 32) + 43
+    assert read == [1, 2]
 
 
 def zero_promos(a: list[int], b: list[int]) -> int:

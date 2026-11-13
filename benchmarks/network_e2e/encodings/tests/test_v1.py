@@ -5,7 +5,8 @@ the registration's, never the string's; each value is charged to A5's window, an
 the decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak
 bound's `hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a sent
-shortfall) are among them."""
+shortfall) are among them. A trace vLLM's scheduler served with a draft goes to and from its schedule, each row's kept
+count in the string and charged to its step's window."""
 
 from __future__ import annotations
 
@@ -37,17 +38,21 @@ def _load(name: str):
 V, R, C, CV = _load("v1"), _load("replay"), _load("code"), _load("code_v1")
 from verity.protocols.certifier.verifier import advice as I1  # noqa: E402
 from verity.protocols.certifier.verifier import replay_chain as RC  # noqa: E402
+from verity_vllm.pipeline.advice_code import kept as KP  # noqa: E402
+from verity_vllm.pipeline.advice_code import schedule_code as SC  # noqa: E402
 
 CASES = sorted(p.stem for p in FIXTURES.glob("*.jsonl"))
+DRAFT = Path(__file__).parent / "fixtures_draft"
+DRAFT_CASES = sorted(p.stem for p in DRAFT.glob("*.jsonl"))
 EOS = 2
 STOPS = (128009, 128001, 128008)
 
 
-def step_trace(name: str):
+def step_trace(name: str, fixtures: Path = FIXTURES):
     """A replay fixture (`test_replay`'s), each request given tokens where the trace has none: its own prompt id, and
     outputs that end on the stop id exactly when it stopped there."""
-    tok = FIXTURES / f"{name}.tokens.json"
-    t = R.read_step_trace(FIXTURES / f"{name}.jsonl", tokens=json.loads(tok.read_text()) if tok.exists() else None)
+    tok = fixtures / f"{name}.tokens.json"
+    t = R.read_step_trace(fixtures / f"{name}.jsonl", tokens=json.loads(tok.read_text()) if tok.exists() else None)
     t.requests = [r if r.tokens is not None else dataclasses.replace(
         r, tokens=(1000 + i,) * r.prompt_len + (3,) * (r.output_len - r.eos) + (EOS,) * r.eos)
         for i, r in enumerate(t.requests)]
@@ -81,6 +86,41 @@ def test_decode_inverts_encode(name, book):
     assert 0 <= 8 * len(data) - sum(charge.values()) < 8
     assert sum(charge.values()) < I1.total_bits(adv) // 100
     assert V.decode_bits(exact_bits(data, rec, reg), rec, reg) == adv
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+def test_a_trace_served_with_a_draft_round_trips_through_its_schedule(name):
+    """vLLM's own scheduler under 1, 3 and 5 drafts a row, sync and async, with prefix hits, a tight pool and a light
+    load: the string of the trace's schedule decodes to every step vLLM ran and every count its rows kept. Each count
+    is charged in its step's window, never one after the window that releases its row's first output; each window's
+    charge holds its length terms and its kept terms' second segment; and I1 v0, which can't say such a serve, is
+    refused by name."""
+    t = step_trace(name, DRAFT)
+    rec = V.record_of(t, (EOS,))
+    reg = V.Registered(t.engine, (EOS,), row_order="scheduling", T=20)
+    K, served = t.engine.num_speculative_tokens, V.schedule_of(t, rec)
+    assert K and [len(c) + sum(c) for c in served.kept] == [len(q.output) for q in rec.requests]
+    data = SC.encode(served, rec, reg)
+    assert SC.decode(data, rec, reg) == served
+    charge = V.bits_by_window(data, rec, reg)
+    assert len(charge) == V.windows(rec, reg.T) and 0 <= 8 * len(data) - sum(charge.values()) < 8
+    order = list(served.arrival)
+    first = {k: s for s in reversed(range(len(served.steps))) for k, _, _ in served.steps[s]}
+    with KP.emitting() as emitted:
+        rp, _, _ = V.replay_record(rec, reg, reg.engine, order, lambda i, k: k >= first[order[i]], served.kept)
+    terms = V.kept_terms(rec, reg, order, rp, emitted)
+    assert {order[i]: c for i, c in enumerate(terms.by_request())} == dict(enumerate(served.kept))
+    alone, counts, out = CV.Encoder(V.book_of(reg)), KP.Counts(K, terms.outputs), [0] * len(order)
+    for w, ks in enumerate(terms.windows):
+        alone.window()
+        for i, c in ks:
+            assert w <= rec.requests[order[i]].release[out[i]] // reg.T
+            out[i] += 1 + c
+            counts.put(alone, i, c)
+    second, lengths = alone.finish().lens, [sum(w) for w in V.length_widths(rec, reg)]
+    assert sum(second) > 0 and all(charge[w] >= lengths[w] + second[w] for w in charge)
+    with pytest.raises(V.AdviceCodeError, match="^the registered engine drafts, and I1 v0's rows emit one output each"):
+        V.decode(data, rec, reg)
 
 
 def test_the_case_set_covers_hits_resumes_and_async():
@@ -368,7 +408,7 @@ def _tiny(windows: int):
     e = R.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)
     reqs = tuple(V.Request(f"u{k}", (10 + k,) * 6, 4, (5, 5, EOS), end, (end, end, end + 1))
                  for k, end in enumerate((0, 0, 3 * (windows - 1))))
-    history = [[CV.Window(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
+    history = [[CV.Advice(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
     caps = CV.Caps(arrived=7, hits=1, hit_units=1, resumes=1, order=1, order_len=1, gap=1, index=1, lag=1)
     return V.Record(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps), send_lengths=False)
 

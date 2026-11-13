@@ -60,6 +60,6 @@ def test_the_compression_checks_are_the_python_s():
         num = H.j10r_compressions(m, n, k) * units
         assert num.denominator == 1 and f"callCompressionsNum {m} {n} {k} 32 32 = {num.numerator}" in text
     lay = H.Layout(32, 32, 4096)
-    assert f"rb 4096 = {lay.rb} ∧ cb 4096 = {lay.cb} ∧ (Layout.mk 32 32 4096).blocks = {lay.blocks}" in text
+    assert f"rb 4096 = {lay.rb} ∧ cb 4096 = {lay.cb} ∧ (NoiseLayout.mk 32 32 4096).blocks = {lay.blocks}" in text
     assert f"unitCompressions ⟨32, 32, 4096⟩ = {H.unit_compressions(4096)}" in text
     assert f"unitCompressions ⟨32, 32, 14336⟩ = {H.unit_compressions(14336)}" in text

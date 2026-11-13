@@ -91,12 +91,12 @@ noncomputable def faultSet [Fintype U] (φ : (u : U) → Option (P.writes u → 
   univ.filter fun u => (φ u).isSome
 
 /-- **An assignment's fault pattern names exactly its incorrect units.** -/
-theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.wrong f σ := by
+theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.incorrect f σ := by
   ext u
   have key : (P.faultsOf f σ u).isSome = true ↔ ¬ P.Correct f σ u := by
     simp only [faultsOf]
     split_ifs with hc <;> simp [hc]
-  simpa [faultSet, wrong] using key
+  simpa [faultSet, incorrect] using key
 
 /-- **A checked population's faulted function**: the values on the slots `eg` of its run at the inputs `a` with the
 fault pattern `φ`. -/
@@ -414,7 +414,7 @@ theorem faithful_of_tie {U S : Type} [Fintype U] (P : Population.Dataflow U S) (
     (θ : Θ) (r : R) (l : List (Served O V Tick Adv))
     (htie : ∀ n < count L l, ∀ w, l[n]? = some w → w.accepted → ∃ σ : S → V,
       (∀ s ∈ P.input, σ s = inp θ ((Ou.query r (view Ou L r l n)).1, w.adv) s) ∧
-        (P.wrong f σ).card ≤ w.incorrect ∧ w.egress = fun o => σ (eg o)) :
+        (P.incorrect f σ).card ≤ w.incorrect ∧ w.egress = fun o => σ (eg o)) :
     Faithful (fun θ x => P.faultedOut h f eg (inp θ x.1) x.2) (fun φ => (P.faultSet φ).card) Ou L θ r l := by
   intro n hn w hw ha
   obtain ⟨σ, hin, hcard, heg⟩ := htie n hn w hw ha

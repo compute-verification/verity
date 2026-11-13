@@ -137,6 +137,21 @@ def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm,
     assert ("(not the served stack)" in capsys.readouterr().out) is not served
 
 
+@pytest.mark.parametrize("row, served", [({"async_scheduling": True, "source": "w.json"}, True),
+                                         ({"async_scheduling": False, "source": "w.json"}, False), (None, False)])
+def test_a_commit_arm_served_async_is_the_served_stack_when_its_row_declares_async(tmp_path, monkeypatch, row, served):
+    """``<arm>-async`` is the served stack when serve-openai held its engine to a bench row that declares async scheduling
+    (serve.json's ``row_scheduling``); not when the row declares sync (served_util.sh's bypass) or serve.json names none."""
+    (serve := tmp_path / "serve").mkdir()
+    (serve / "serve.json").write_text(json.dumps({"row_scheduling": row}))
+    out = tmp_path / "util.json"
+    monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
+                                      str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", "noseal-async",
+                                      "--serve-dir", str(serve), "--out", str(out)])
+    assert U.main() == 0
+    assert json.loads(out.read_text())["served_stack"] is served
+
+
 def test_too_few_full_steps_is_said(tmp_path):
     got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8)
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]

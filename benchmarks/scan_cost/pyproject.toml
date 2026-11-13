@@ -1,0 +1,20 @@
+# The scan's cost (`run.sh`, `result.py`): proving seconds and the Lean verifier's CPU seconds for each second of
+# execution phase, read from one scan's kept files. Not a package: the suite holds the result's arithmetic, the guard and the
+# comparison on files built in the tests in the form a scan keeps them, with a stand-in for the evidence store and one
+# for the scan, so no scan runs in it (`uv run tools/verity/check/suites.py benchmarks/scan_cost`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# the result is written through the harness kit's writer, whose settings.py is built on verity_config's registry
+inputs = [
+    "verity/configuration/config/verity_config",
+    "verity/__init__.py",
+    "verity/settings.py",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/settings.py",
+]
+# run.sh's tests start bash, which the read guard can't trace: keyed on the suite's whole tree
+untraced = ["tests/test_scan_cost.py"]

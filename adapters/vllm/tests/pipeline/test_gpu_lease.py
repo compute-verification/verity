@@ -261,7 +261,7 @@ def _toolchain(tmp_path: Path) -> tuple[str, str, Path]:
         (info / "RECORD").write_text(f"{d.split('-')[0]}/__init__.py,sha256=x,1\n")
     (tmp_path / "cuda" / "include").mkdir(parents=True)
     (tmp_path / "cuda" / "include" / "cuda.h").write_text("#define CUDA_VERSION 12090\n")
-    tree = tmp_path / "src" / "0123456789abcdef" / "integrations" / "vllm"
+    tree = tmp_path / "src" / "0123456789abcdef" / "adapters" / "vllm"
     (tree / "verity_vllm" / "acquire").mkdir(parents=True)
     (tree / "verity_vllm" / "acquire" / "tap.py").write_text("import triton\n\n\n@triton.jit\ndef k(x):\n    pass\n")
     (tree / "verity_vllm" / "row.py").write_text("STAGES = 1\n")
@@ -272,7 +272,7 @@ def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kern
     py, cuda, a = _toolchain(tmp_path)
     k = RD.jit_key(py, cuda, PRO, str(a))
     assert re.fullmatch(r"[0-9a-f]{16}", k)
-    b = tmp_path / "src" / "fedcba9876543210" / "integrations" / "vllm"
+    b = tmp_path / "src" / "fedcba9876543210" / "adapters" / "vllm"
     shutil.copytree(a, b)
     (b / "verity_vllm" / "row.py").write_text("STAGES = 2\n")
     assert RD.jit_key(py, cuda, PRO, str(b)) == k                                  # another sync, its change outside the kernels
@@ -291,7 +291,7 @@ def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kern
 
 
 def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_other_directory_is_kept(tmp_path):
-    tree, c, k = str(tmp_path / "src" / "0123456789abcdef" / "integrations" / "vllm"), tmp_path / "cache", "00ff00ff00ff00ff"
+    tree, c, k = str(tmp_path / "src" / "0123456789abcdef" / "adapters" / "vllm"), tmp_path / "cache", "00ff00ff00ff00ff"
     env = {"TRITON_CACHE_DIR": str(c / "triton" / "0123456789abcdef"), "VLLM_CACHE_ROOT": str(c / "vllm" / "0123456789abcdef")}
     RD.jit_cache(env, tree, lambda: k)
     assert env == {"TRITON_CACHE_DIR": str(c / "triton" / f"k-{k}"), "VLLM_CACHE_ROOT": str(c / "vllm" / f"k-{k}"),
@@ -306,7 +306,7 @@ def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_ot
     RD.jit_cache(scratch, tree, never)
     assert scratch["TRITON_CACHE_DIR"] == str(tmp_path / "scratch" / "rk" / "triton")
     checkout = {"TRITON_CACHE_DIR": str(c / "triton" / "verity")}                 # a checkout, not `job_tree.sh`'s copy
-    RD.jit_cache(checkout, str(tmp_path / "verity" / "integrations" / "vllm"), never)
+    RD.jit_cache(checkout, str(tmp_path / "verity" / "adapters" / "vllm"), never)
     assert checkout["TRITON_CACHE_DIR"] == str(c / "triton" / "verity")
 
 

@@ -55,6 +55,27 @@ FORM(bf16_n256, float, 128, 2)
 FORM(bf16_n128, float, 64, 2)
 FORM(tf32_n256, float, 128, 3)
 FORM(b1_n256, int, 128, 0)
+FORM(e4m3_n8, float, 4, 1)
+FORM(e4m3_n16, float, 8, 1)
+FORM(e4m3_n32, float, 16, 1)
+FORM(e4m3_n64, float, 32, 1)
+FORM(f16_n8, float, 4, 4)
+FORM(f16_n64, float, 32, 4)
+FORM(f16_n128, float, 64, 4)
+FORM(bf16_n8, float, 4, 2)
+FORM(bf16_n64, float, 32, 2)
+FORM(tf32_n8, float, 4, 3)
+FORM(tf32_n64, float, 32, 3)
+FORM(tf32_n128, float, 64, 3)
+FORM(b1_n8, int, 4, 0)
+FORM(b1_n64, int, 32, 0)
+FORM(b1_n128, int, 64, 0)
+// FP16 accumulate: an f16x2 register holds two outputs
+FORM(f16f16_n8, uint32_t, 2, 4)
+FORM(f16f16_n256, uint32_t, 64, 4)
+FORM(e4m3f16_n8, uint32_t, 2, 1)
+FORM(e4m3f16_n256, uint32_t, 64, 1)
+FORM(e5m2f16_n256, uint32_t, 64, 1)
 #undef FORM
 struct F_s8_n256_rs {  // A from registers: each thread's 4 words of the 64 x 32 A fragment
   using Acc = int;
@@ -82,4 +103,21 @@ DC_DEV void group4(typename F::Acc (&d)[F::NA], const Tiles& t) {
   F::mma(d, t, 1);
   F::mma(d, t, 1);
   wgmma_commit();
+}
+
+// A form's rate alone: 4 wgmma a commit group, then wait_group W.
+template <class F, int W>
+DC_DEV void wg_alone(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
+  typename F::Acc d[F::NA] = {};
+  OP_BEGIN
+  OP_LOOP(it) {
+    group4<F>(d, t);
+    wgmma_wait<W>();
+  }
+  wgmma_wait<0>();
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ threadIdx.x)
 }
