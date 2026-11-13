@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from models import LoRA, TinyLM, lm_loss, lora
-from training_slowdown.capture import capture_fn, capture_step
+from training_slowdown.capture import capture_step, capture_steps
 
 B, S, V, NH, L = 2, 4, 32, 2, 2
 T = B * S
@@ -22,6 +22,11 @@ def lm_batch():
 
 def trainable(m):
     return [p for p in m.parameters() if p.requires_grad]
+
+
+def deep(g, d) -> int:
+    """The MACs of the forward's updated nodes with at least `d` updated MACs per token upstream of them."""
+    return sum(macs for _, upstream, macs, _, _ in g.structure()["updated"] if upstream >= d)
 
 
 # --- T2: dependence ----------------------------------------------------------------------------------------------------
@@ -65,11 +70,11 @@ def test_merged_and_unmerged_lora_agree():
     assert weight_differs(me) > 10 * weight_differs(um)
     adapters = L * 2 * (2 * r * H + H)   # x·Aᵀ, (xA)·Bᵀ and the scaling by s, per token, q and v of each layer
     assert um.updated_macs() - me.updated_macs() == T * adapters
-    d_u, d_m = max(u for u, _ in um.depth_profile()), max(u for u, _ in me.depth_profile())
+    d_u, d_m = (max(row[1] for row in g.structure()["updated"]) for g in (um, me))
     assert 0 <= d_u - d_m <= adapters and (d_u - d_m) / d_m < 2 * r / H
     for D in (0, H, d_m // 2, d_m):
-        assert 0 <= um.deep_macs(D) - me.deep_macs(D) <= T * adapters
-        assert um.deep_macs(D) / me.deep_macs(D) - 1 < 2 * r / H + 1e-9
+        assert 0 <= deep(um, D) - deep(me, D) <= T * adapters
+        assert deep(um, D) / deep(me, D) - 1 < 2 * r / H + 1e-9
 
 
 def test_tied_lookup_only_update_is_deep():
@@ -88,7 +93,7 @@ def test_tied_lookup_only_update_is_deep():
     per_layer = 4 * h2 + 2 * H + 2 * att + 2 * hi   # q k v o, SDPA's scalings of q and k, QK and PV, up and down
     head = fwd[-1]
     assert head.params[1] == "emb.weight" and head.upstream_macs == L * per_layer
-    assert g.phi(L * per_layer) == pytest.approx(T * H * Vt / g.c_macs) and g.phi(L * per_layer) > 0
+    assert deep(g, L * per_layer) == T * H * Vt   # the head, under every block
     assert g.cut_bits == 32 * Vt * H
 
 
@@ -156,9 +161,14 @@ def ef_batch():
     return torch.empty(N, D_IN), torch.empty(N, D_OUT)
 
 
+def second_of_three(step):
+    """The second of three such steps of one run: what its forward reads is the first's, and the third's reads its."""
+    return capture_steps([step] * 3, EF(), ef_batch(), measured=1, token_dims=[(0,), (0,)])
+
+
 def test_sign_update_with_error_feedback_is_one_bit_per_value():
-    g = capture_fn(sign_ef, EF(), ef_batch(), token_dims=[(0,), (0,)])
-    assert g.dependent == ["err", "fc.weight"] and g.sinks == ["fc.weight"]
+    g = second_of_three(sign_ef)
+    assert g.trained == {"fc.weight"} and len(g.sinks) == 1   # the next forward reads the new weight, never the error
     assert g.updated_macs() == N * D_IN * D_OUT
     # the sign bits and the scale: every path from the gradient to the new weight crosses them
     assert g.cut_bits == D_IN * D_OUT + 32 and sorted(b for _, b in g.cut) == [32, D_IN * D_OUT]
@@ -176,8 +186,8 @@ def momentum_through_a_copy(m, batch, _opts, lr=1e-3):
 
 
 def test_an_update_through_a_buffer_copied_onto_itself_reads_the_gradient():
-    g = capture_fn(momentum_through_a_copy, EF(), ef_batch(), token_dims=[(0,), (0,)])
-    assert g.dependent == ["err", "fc.weight"] and g.sinks == ["fc.weight"]
+    g = second_of_three(momentum_through_a_copy)
+    assert g.trained == {"fc.weight"} and len(g.sinks) == 1
     # the copy's source is the buffer, so the gradient reaches the new weight through it, at its 32 bits an element
     assert g.cut_bits == 32 * D_IN * D_OUT
 

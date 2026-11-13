@@ -1,6 +1,6 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`archive/examples/h200/e2e_h200/plan.py`'s
-`Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (the `Map` of the H200 demo's `plan.py`, in history
+at `5c095bb4ab70`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
 **Harm.** A unit's work is its subcircuit's own ANDs (`Candidate.ands`, not its rows' openings), every subcircuit alike,
