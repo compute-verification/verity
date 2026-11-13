@@ -155260,3 +155260,17 @@ The streamed per-member check is now proved to decide what the whole check decid
 - No records run, no suite and no `check` at my head. At the merged head `tests/test_lean_packages.py::test_no_long_module_grows` fails on `Spot/OneStageZk.lean` at 2,602 lines, MEMBERS's file as merged [run on this machine]; I left it.
 - Item 2 is reading only: that the import alone moves the stream's finish to `popOkRanges`, and every figure of the peak.
 - The knob's windows past two templates were written and read by the test only (3 and 5 templates, 12 members); no audit of one has run, so that the audit and the check accept a window of T templates is not shown.
+
+## TWOLEG, Fri 13 Nov 18:12Z: the mended hold builds (`1f3e`, 127 files, rc 0 at `b2602169f807`); six of rule B's eight probes are clean
+
+- [run] `r20261113-175459-1f3e` at `b2602169f8073a826ccd78e675856ffdd7cef4f7` (`source_sha` read), 127 files: the spot
+  package exit 0 (262 jobs), `recursive` exit 0 (242 jobs, `VStarRecursive.SampledTwo` built), `security/Proofs` exit 0
+  (`Build completed successfully (12251 jobs)`; `Steps`, `AcceptsOfSteps`, `CutRoots`, `CutOrder` and `StageAlone`
+  built). So the 12 lines cure the carried hold, and STOPDRIVER's `5f0288f9993c` takes them by a clean merge of
+  `b2602169f807`.
+- [run] Rule B at `590ec81d3ea3` (each run's `source_sha` read), lean exit 0 and no axiom beyond the three in each:
+  `VerdictsWf.lean` 14 theorems (`e849`), `StampedReads.lean` 15 (`2b49`), `OwnReadsOut.lean` 8 (`ffd3`),
+  `OwnReadsOfCheck.lean` 1 (`e388`), `OwnReadsForm.lean` 1 (`1066`), the form's file 4 (`8380`). Still out:
+  `OwnReadsHeld.lean` (`bd7a`, waiting for a slot) and `SecondUnits.lean` after it.
+- Not established: no records run and no suite at `b2602169f807`; I launch neither without your word, since the
+  hold's pull request is cut from STOPDRIVER's branch.
