@@ -5,7 +5,7 @@ one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the referen
 
 - **The cubin** is the file `$VERITY_BENCH_CUBIN` names (the art the door sent), listed in the build record's ``binaries``
   so the SASS gate passes it before anything is timed. Without it the arm builds one into the run's directory
-  (``build.sh`` with ``CUBIN_ONLY=1``), for development only (the record's ``cubin.source``). The cubin of record is
+  (``build.sh``: the cubin and its SASS gates), for development only (the record's ``cubin.source``). The cubin of record is
   `PINNED`'s art (`pinned`), the one `verity bench overhead run --scheme pearl-plus --cubin ART` sends: the record's
   ``cubin.art`` names it when the loaded bytes are its, and is None otherwise.
 - **The call** (`prepare`): one `PearlCDeviceRun` a weight (the operand set's B, BF16, read in place; its root and weight
@@ -35,7 +35,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -119,12 +118,11 @@ def cubin_of(sent: str | None, out_dir: Path, build: Callable[[Path], Path] | No
 
 
 def build_dev(out: Path) -> Path:
-    """build.sh's cubin and SASS gates alone (``CUBIN_ONLY=1``) into `out`."""
+    """build.sh's cubin and SASS gates into `out`."""
     log = out.with_name(out.name + ".log")
     out.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as f:
-        rc = subprocess.run(["bash", str(HERE / "build.sh"), str(out)], env={**os.environ, "CUBIN_ONLY": "1"}, stdout=f,
-                            stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(["bash", str(HERE / "build.sh"), str(out)], stdout=f, stderr=subprocess.STDOUT).returncode
     if rc:
         raise RuntimeError(f"build.sh exited {rc} (see {log}): send the cubin instead (`verity bench overhead run --cubin ART`)")
     return out / "pearl_c_sm90.cubin"
