@@ -21,8 +21,9 @@ is what the Lean is checked against; after, the Python is held to the Lean.
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`
   keeps one server open, compares outputs as canonical JSON, requires reject parity (both reject or neither; reasons may
   differ), treats an undeclared exception or a protocol fault as a difference, and fails a vacuous run (no output, or no
-  reject unless waived). A failure is a `Mismatch` naming the minimal input and the seed that finds it again. Runs are
-  derandomized, with no example database and no deadline.
+  reject unless waived). A failure is a `Mismatch` naming the minimal input and the seed that finds it again (under
+  `shrink=False`, the first input the sides differ on, as sampled). Runs are derandomized, with no example database and
+  no deadline.
 - Protocol mode drives a protocol's own `serve` executable, the interface's `Protocol.serve`
   (`verity/protocols/interface/README.md`): a `ProtocolPort` sends each case line and compares the
   outcome's `verdict`, `commitment`, `public` and `profile` exactly and its `reason` not at all, through the same server,
