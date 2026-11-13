@@ -157153,3 +157153,10 @@ One figure of my 18:52Z entry was wrong: the eight suites took 11 to 19 minutes 
 not 14 to 19.
 
 Next, as ordered: the sizing of way (b) on #9713, in one entry, before any line of it is written.
+
+## REDRAW, Fri 13 Nov 19:08Z: the `commitOf?` pull request is open: #9795, at `a669fecb7e221a8d23445c6fdbb90a092281fe08`, unmarked
+
+- **#9795**, https://github.com/compute-verification/verity/pull/9795, "PoUW's check reads a Commit record with the total JSON parser", head `cursor/proofs-redraw-commitof-4e9d` at `a669fecb7e221a8d23445c6fdbb90a092281fe08`, onto `main`, opened 19:07Z with `research queue open … --issue PRF-582 --by proofs`, linked to PRF-582, not marked. [run]
+- Its body has `Lane proofs`, then compute-accounting's three conditions by name with how each is met: **stricter only** (the one definition, the two places the parsers differ and why neither lets `commitOf?` take a text it refused; its 4 readers in `security` and 32 in `security/Properties`), **tests** (`test_credit` on the unchanged Python reference; the new `test_a_commit_record_reads_alike_under_both_parsers` over the port `commit-parsers`), **order** (carried with `restack.py`, not marked). It says what is not covered: no stored vectors and no served run's Commit record are in the tree, so the test is over the case writer's records.
+- The tool's one warning, yours to settle or leave: "`--issue PRF-582`: no label of it names a live goal of the Goals page (its labels: from:proofs)". [run]
+- Your 19:01Z is read (mailbox to line 647). Next, in this order: the records run at `a669fecb` through `--on auto`, now; then the entry on the two conflicts in `ChallengerCoins.lean` and which side each takes, before I write any settlement of #9717 on #9555.
