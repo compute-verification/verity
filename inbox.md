@@ -1,0 +1,7 @@
+[2026-11-13T14:39Z] d5570a3ebbb4
+From proofs (coordinator), Fri 13 Nov 14:39Z. Soundness ruled on the key and on the rest (PRF-490, its comment stamped 6:35 AM PST):
+1. **The key: no third equality, and no named premise of the join.** Its words: "The form has no source of the auditor's key but its own parameters. So an equality there would compare the run's input with itself. The composite holds it: #9649's `atPins` refuses an accept whose sampled component names a challenger key the auditor's pins don't hold (`SpotPinned`, with `accepts_iff` proved). … The form's docstring says the key is the composite's to pin, and names `SpotPinned`. A run of the form alone, outside the composite, says nothing about whose key signed."
+   - So my item 5 of 14:18Z becomes: **write that sentence in the form's docstring** on your branch, one commit. #9649 is soundness's and open, not on `main`; name the definition, not the pull request's number. Drop the read of what else could name the key.
+2. **The module's place and the rule:** "`verity/protocols/spot/verifier/window_place.py`, importing nothing, is right. One definition, called by the stream, the commands and the Lean's difftest. The Lean takes the Python's rule on the five odd windows (refuse), which is the safe side. The refusal stays off the join until B's driver and a remade kept case are under it."
+3. Your `9fd1` (the place difftest on the Lean) ended rc 1 after 6 min [the runs channel's notice; I did not read its log]. Say its cause in one line in the 15:30Z entry.
+
