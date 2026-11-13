@@ -37,11 +37,11 @@ from typing import Any
 from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
-from verity.protocols.certifier.verifier import parties as NC
-from verity.protocols.inference_only.verifier import parties as IO
-from verity.protocols.pous.verifier import wipe_parties as WP
-from verity.protocols.spot.verifier import parties as SP
-from verity.protocols.spot.verifier.one_stage.draw import parse_design
+from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.accounting.pous.verifier import wipe_parties as WP
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
 from verity.channel import Refused
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -103,7 +103,7 @@ finish inside one served window. The parts, in the order they run:
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
   stage. The verifier refuses every two-stage run at its last check (`FORM` in
-  `verity/protocols/spot/verifier/second_stage.py`) until the soundness proof covers that form.
+  `verity/protocols/proofs/spot/verifier/second_stage.py`) until the soundness proof covers that form.
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR

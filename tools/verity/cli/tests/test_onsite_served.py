@@ -18,8 +18,8 @@ import pytest
 from verity import config as K
 from verity.protocol import Channel
 from verity.channel import Refused
-from verity.protocols.certifier.verifier import parties as NC
-from verity.protocols.inference_only.verifier import parties as IO
+from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)

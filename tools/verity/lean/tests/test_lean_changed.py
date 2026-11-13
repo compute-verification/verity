@@ -2144,12 +2144,12 @@ def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_pa
 def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
     path alone refused it as matching no package, after the run had waited for its slot."""
-    pkgs = ["verity/protocols/certifier/verifier/lean", "verity/protocols/inference_only/verifier/nci/lean", "security"]
+    pkgs = ["verity/protocols/accounting/certifier/verifier/lean", "verity/protocols/policy/inference_only/verifier/nci/lean", "security"]
     for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
         (tmp_path / p).mkdir(parents=True)
         (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
-    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
-    assert LC.matching("verity/protocols/certifier/verifier/lean/", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
-    assert LC.matching("certifier/verifier/lean", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/protocols/accounting/certifier/verifier/lean"]
+    assert LC.matching("verity/protocols/accounting/certifier/verifier/lean/", pkgs, tmp_path) == ["verity/protocols/accounting/certifier/verifier/lean"]
+    assert LC.matching("certifier/verifier/lean", pkgs, tmp_path) == ["verity/protocols/accounting/certifier/verifier/lean"]
     assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
     assert LC.matching("network_check", pkgs) == []
