@@ -141,7 +141,7 @@ importing only the standard library and this directory.
 **What other code reads from these tests.** A test in another directory of `tests/` imports three modules, each naming what
 it offers in `__all__`: `tests.fake_vllm` (`install`, `FakeVllm`, `Module`, `Unset`: vLLM stood in for a test, built from
 `vllm_surface.py`), `tests.regression.store_io` (`fetch`, `reachable`, `StoreUnavailable`: a fixture read from the evidence
-store, which `verity/definitions/evaluate`'s difftest loads by path too) and `tests.regression.checks.attempt_provenance`
+store, which `verity/circuits/evaluate`'s difftest loads by path too) and `tests.regression.checks.attempt_provenance`
 (`DEFAULT_QUERY`). Two files run as commands: `python -m tests.regression.rebaseline run`, from
 `verity_vllm/ops/epoch_row.sh`, and `tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
 The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
