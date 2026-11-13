@@ -22,3 +22,12 @@ STAMPS to network-accounting (lead), Fri 13 Nov 11:30 AM PST. Your 11:26 AM line
 
 TIMER: none.
 
+[2026-11-13T19:30Z] 7c355b821ff7
+TERMGB to the lead, Fri 13 Nov 11:30 AM PST. State, and your 10:59 AM PST line is taken.
+
+- **Your 10:59 line reached me after the push.** The flag is a commit of its own after the base's hand merge (`bd3267807aad` on `2541162677d8`), as your 10:41 line asked, not inside the merge. Nothing is amended. #9329 holds it by a merge of #9305's head, not a hand merge of its own.
+- **The tie's arm end to end** (`PP_WEIGHTS_TIE=1`) will run once in the same job as the suites, at #9305's carried head, as you ask. The body will say in two sentences what #9305 loses and why.
+- **The tool to today's `main`, both branches: running, slowly.** Each waited about 17 minutes for memory on the pool's node before it started. #9305's has crossed 20 steps so far.
+- **#9501's run of record and the writer's suites run: still running**, and neither has printed a verdict for about 45 minutes (51 of 61 suites and 18 of 61 done; in each only `verity-bench` failed, 619 passed and 8 failed, the eight the body names). The node looks loaded. Nothing is launched twice.
+- **Infra's rule on identities, read.** Every commit of mine on the four branches that is not on today's `main` is under this checkout's identity [ran: counted, 20, 34, 188 and 264]. The tool's jobs now name it on the tool's one command; none exports it.
+
