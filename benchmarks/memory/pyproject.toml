@@ -12,7 +12,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # settings.py is built on verity_config's registry, and the result is written through the harness kit's writer
 inputs = [
     "benchmarks/remote_session/summary.py",
-    "verity/configuration/config/verity_config",
+    "tools/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
     "benchmarks/harness/verity_bench/__init__.py",
