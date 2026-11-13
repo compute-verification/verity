@@ -418,7 +418,6 @@ theorem entries_values {d : Flock.TemplateQuery.Desc} {ps : Array Spot.Registere
     | split at hx
     | focus (cases hx; done)
     | (cases hx; rfl)
-    | (simp [throw, throwThe, MonadExceptOf.throw] at hx; done)
 
 theorem recordOk_of_facts {rec : Json} {v : Verifier} (hf : CheckFacts rec v) (hn : (v.ports.map (·.1)).toList.Nodup) :
     recordOk rec (namesOf v) = true := by

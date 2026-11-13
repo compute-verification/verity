@@ -81,7 +81,7 @@ theorem formReading_at {A : Live₂} {C C' : CaseOf} {S : SessionReading}
       (formReading A C' S dev).coin o = (formReading A C S dev).coin o ∧
       (formReading A C' S dev).msg o = (formReading A C S dev).msg o ∧
       (formReading A C' S dev).agree o = (formReading A C S dev).agree o := by
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> first | simp only [formReading, h] | (unfold formReading; simp only [h])
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only [formReading, h]
 
 /-- **A play `C` accepts at the statement `x` is one the cases at `x` accept**, with the same input. -/
 theorem at_of_stmt {A : Live₂} {x : Msg} {C : CaseOf} {S : SessionReading}
