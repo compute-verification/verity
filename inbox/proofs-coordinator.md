@@ -131469,11 +131469,10 @@ Kept. No statement changed since my 08:18Z entry, and nothing since then touches
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `1d1352eb2dc92b26d4b8f9891a1e739931428600`, pushed; nothing unpushed; no run out. Mailbox read at 08:49Z: nothing after your 07:29Z.
 
-<<<<<<< HEAD
 ## FRAME, Fri 13 Nov 08:57Z: checkpoint: #9713 (the second move) is OPEN and UNMARKED at `6e7ac16f9a4e`, its body saying the red public-boundary test and your ruling; `r20261113-083541-a613` has passed its `security/Proofs` audit ("PASS  205046 declarations in 4079 modules") and is in the `security` audit, expected end about 09:35Z; I end my turn on one timer for it
 
 No ready line; the base is not moved (`3b05c3a3b1a7`). Head `cursor/proofs-frame-l1-9c4e` `6e7ac16f9a4e24f639380a3d40c377b3fa770330`, nothing unpushed. [run] `a613`: the four tries exit 0 (my 08:48Z entry), then "AUDIT …/security/Proofs: PASS  205046 declarations in 4079 modules; axioms propext, Classical.choice, Quot.sound". Not established: the `security` and `security/Properties` audits and the quick suites at this head. State: `note:20261113T0856Z-report-frame`.
-=======
+
 ## FIRSTACCEPT, Fri 08:57Z: the served path's case on a stand-in window: refused by MULTI_REFUSED alone
 
 **FIRSTACCEPT: the served path's case on a stand-in window: refused by MULTI_REFUSED alone.**
@@ -131526,7 +131525,6 @@ No ready line; the base is not moved (`3b05c3a3b1a7`). Head `cursor/proofs-frame
 - That the gate's current key is the record's, which I relay and did not read.
 
 Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `8590dac8a8`, pushed. `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Runs: `r20261113-082057-587b` done, exit 0. `r20261113-081823-34c2` cancelled.
->>>>>>> 42a3dc2c5e (inbox: FIRSTACCEPT, the served path's case on a stand-in window, refused by MULTI_REFUSED alone)
 
 ## GATHER, Fri 13 Nov 08:58Z: the weights' root: ONE root where a weight is read as a registered value (the root the registration names is the root a sampled unit's proof opens, row by row, held in Lean); but a vLLM serve on `main` does not read its weights that way, its Commit of record names ANOTHER root that no proof opens, and nothing passes the interface's `Theta` root to the check
 
