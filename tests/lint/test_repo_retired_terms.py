@@ -82,12 +82,13 @@ LIVE = {
     "reference run": "a run whose output another is compared with is live; the training-cost reference is retired",
 }
 #: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
-#: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, and the stacking property's caps as its Lean names
-#: them (``Gates.Caps``, ``FoolingCap``), none of them Pearl's
+#: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
+#: them (``Gates.Caps``, ``FoolingCap``), and a kernel's bound on its launch grid (``grid_cap``), none of them Pearl's
 OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?"
                           r"|power[ ._-]draws?)|(?<![^\W_])(?:audit_cap|AUDIT_CAP|auditCap|cap_ns|CAP_NS"
                           r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])"
-                          r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap)(?!\w)")
+                          r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap"
+                          r"|grid_cap)(?!\w)")
 #: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
 OWN_CAPS = {
     "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
@@ -516,6 +517,16 @@ def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_sen
     assert said("R_cap is the cap; R_capRows, caps.totals, FoolingCaps, a compute cap, compute_cap_max and its cap",
                 "benchmarks/stacked_share/beta.py") == [(1, "cap"), (1, "cap"), (1, "caps"), (1, "Caps"), (1, "cap"),
                                                          (1, "cap"), (1, "cap")]
+
+
+def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
+    """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
+    count in the same file."""
+    path = "benchmarks/pouw/masked_gemm/sgemm.cu"
+    theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
+    assert said(theirs, path) == []
+    assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [
+        (3, "cap"), (3, "CAP"), (3, "capOK"), (3, "capOK"), (3, "cap_check")]
 
 
 def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
