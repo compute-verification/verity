@@ -112754,3 +112754,29 @@ The records run failed before it reached the lock. It has to build the whole pro
 **To post.** Nothing.
 
 **Not established.** The lock check. Whether my three files still elaborate after `main` came in through the base: [guess] they should, since none of their imports changed text in the merge, but the new run decides it. Pushed head: `65810fa781`; nothing is left unpushed.
+
+## PERIODREAD, Fri 01:45Z: READY #9537 at `44b84839217d` (its records run passed and moved no record); `committedOnce : CommittedOnce` elaborates with the three axioms only, as do all 47 theorems of the period's proofs, so its hour moves earlier
+
+**Ready line: #9537 at `44b84839217d06e9cc0f6b8d50cfc7cc5a27e9b6`**, https://github.com/compute-verification/verity/pull/9537, unmarked, `Lane proofs`.
+
+- **Records run** `r20261112-231708-ddb2`, exit 0, on this head [run]: `lean_changed.py --records verity/protocols/spot/verifier/lean --update` audited SPOT's verifier, the certifier's verifier, `security` and `security/Properties`; `AUDIT: PASS` for each; axioms `propext`, `Classical.choice`, `Quot.sound` only.
+- **No lock record moved** [read: `regenerated` is `{}` and `failed` is `[]` in each of the run's four `audit.json`; the one lock the run kept, SPOT's verifier's, is byte for byte the tree's (`cmp`)].
+- **Quick tier** on this head: 61 of 61 suites, `r20261112-203704-77ca` (53) and `r20261112-215441-6715` (8) [run].
+- **Build and difftest** `r20261112-202226-a838`, exit 0, at `7639eb10259f`; the head after it changes the test file only [run].
+- **Merge**: `git merge-tree` against `main` at `e86d920413` exits 0 [run on the VM]. The body is updated.
+- It adds no statement and no lock entry. The records run is a slot-path result (no kernel replay, no tests): the candidate's check runs those.
+
+**The period's proofs (PR 4, `cursor/proofs-prf600-period-proofs-4c9a`).**
+
+- **All 47 theorems of `security/Proofs/Properties/Spot/Period.lean` elaborate** at `8fbc099b92`: `lean exit 0 in 366 s`, and the axiom probe says none of the 47 uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound` [run `r20261113-012610-3281`, vy-nebius-2; log saved]. Among them `ledgerMeans : LedgerMeans`, `acceptMeans : AcceptMeans` and **`committedOnce : CommittedOnce`**, each `depends on axioms: [propext, Classical.choice, Quot.sound]`. The six fixes from the first compile were all it needed.
+- **The device's ledger lemmas** (`Challenger/Lines.lean`): 9 of its 12 theorems elaborate; the three that do not have one cause, my definition `SeqInv` left its entry's type to be inferred [run `3281`]. Fixed and pushed at `493e1bf652`; `r20261113-014041-b335` (vy-nebius-2) compiles it now and, if it passes, `ledgerLinesOfDevice` and `ledgerOfDevice` after it, about ten minutes.
+
+**`CommittedOnce`'s hour.** You asked me to say whether Fri 22:00Z moves earlier: it does. Two of the four checks hold now (it elaborates; only the three axioms). What is left is a records run of PR 4's tree and a second reader for the statement. I send the records run as soon as `b335` passes, and expect it back by **Fri 06:00Z** if the line stays as short as it is now. To post, if you want it: "`CommittedOnce` elaborates with the three axioms only (run `3281`); records run and a second reader still to come."
+
+**A second reader is yours to assign.** The statements are in PR 3's branch (`cursor/proofs-prf600-period-statements-e2a7` at `f2889fd3ce`): `security/Properties/Spot/Period.lean` (`LedgerMeans` :76, `AcceptMeans` :130, `CommittedOnce` :149) and `security/Properties/Spot/PeriodLedger.lean` (`LedgerLinesOfDevice` :56, `LedgerOfDevice` :79). I open PR 3 next so the reader has a diff.
+
+**Machines and waits** [read: each run's `slot.json`]: `3281` vy-nebius-2, waited 3.5 minutes (01:26:45Z to 01:30:18Z); `b335` vy-nebius-2, waited 35 seconds. `r20261112-232219-a005` (PR 2's quick tier, vy-nebius-2) has run since 00:56:36Z and has not ended.
+
+**Not established.** Nothing here is replayed by the kernel or by a full `check.py`. No second reader has attacked any of the five statements. `Lines.lean` at its new head and `PeriodLedger.lean` have never compiled clean, so neither form of the device's ledger is proved. I have not checked that `Window.lean`'s refactor moves no lock record (PR 4's records run says). PR 3's five statements had their axiom probe at `d3825441e7cf`, not at `f2889fd3ce`.
+
+I can pause: no, results come back in minutes. Mailbox read at `23c3e423be` (01:42Z), nothing new. Pushed: PR 4 `493e1bf652`; nothing unpushed. Still open from me: may I run `lean` on the VM on a scratch file that imports core only?
