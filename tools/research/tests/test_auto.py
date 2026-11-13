@@ -2,6 +2,7 @@
 small runs never wait behind two that hold all 48 of the share's cores for hours while cpu-1's cores sit idle."""
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import math
@@ -691,6 +692,17 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
     assert target == (CPU1, "research") and f"{N2}'s share wasn't read" in why
     with pytest.raises(auto.Unplaceable):
         auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
+
+
+def test_a_probe_a_test_starts_is_handed_no_path_of_the_machine_the_tests_run_on(tmp_path):
+    """The probe reads its machine at the paths `payload` hands it, so a test that leaves one where the module names it reads
+    the machine it runs on: on a node 2 one lane had whole, a probe handed the module's HOLD_FILE answered with the node's
+    hold in place of the share its test had set up. `a_bare_machine` pins each, a path `payload` gains too: of what it hands
+    the probe, only the null device is the machine's."""
+    head = auto.payload(tmp_path, 4, None, []).decode().removesuffix(auto.PROBE)
+    handed = {k: ast.literal_eval(v) for k, _, v in (line.partition(" = ") for line in head.splitlines())}
+    machines = {k: v for k, v in handed.items() if isinstance(v, str) and os.path.isabs(v) and not Path(v).is_relative_to(tmp_path)}
+    assert machines == {"NULL": auto.NULL_DEVICE}, "pin it in `a_bare_machine`: a probe a test starts would read this machine's"
 
 
 @pytest.fixture
