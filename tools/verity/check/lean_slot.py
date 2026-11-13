@@ -26,8 +26,9 @@ where it would hold its run's cores for a slot that can't come: the refusal name
 pool's line, where the steward says why, and the fix, a machine whose `--status` lists a slot of that pool. A waiter already
 in line when the steward lowers its pool to 0, for a timed window, stays there and takes a slot once the N is raised again.
 
-`python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
-JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
+`python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters, and a pool at 0 as
+closed, with its comment; --json, the same as one JSON object (`status_doc`: the comments are its `notes`), which `check.py
+--slots` reads from every machine. Stdlib only: it runs before uv.
 
 From Python (`tools/verity/lean/check.py --build`, `lean_changed.py --records`): `hold(pool)` takes a slot for the calling
 process and returns its descriptor, which the process keeps open until it exits (None: no cap here, or a slot is held
@@ -91,7 +92,7 @@ def notes(text: str) -> dict[str, str]:
 
 
 def closing(pool: str, note: str | None) -> str:
-    """The line of SLOTS that closes ``pool``, as a refusal quotes it: `POOL 0`, with its comment (``note``)."""
+    """The line of SLOTS that closes ``pool``, as a refusal and `--status` quote it: `POOL 0`, with its comment (``note``)."""
     return f"`{pool} 0{'  # ' + note if note else ''}`"
 
 
@@ -146,19 +147,24 @@ def pool_docs(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("
 
 
 def status(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("/proc"), only: str | None = None,
-           before: str | None = None) -> list[str]:
-    """`pool_docs` as lines: each slot with its holder, then the pool's waiters."""
+           before: str | None = None, why: dict[str, str] | None = None) -> list[str]:
+    """`pool_docs` as lines: each slot with its holder, then the pool's waiters. With ``why`` (`--status`: SLOTS's `notes`), a
+    pool at 0 is first said to be closed, quoting its line; a waiter's listing passes none, and its first line gives the N."""
     out = []
     for pool, p in pool_docs(pools, d, now, proc, only, before).items():
+        out += [f"{pool}: closed on this machine ({closing(pool, why.get(pool))})"] if why is not None and not p["n"] else []
         out += [f"{pool}/{s['index']}{' (past N)' if s['past_n'] else ''}  {SLOT.held_text(s['holder'])}" for s in p["slots"]]
         out += [f"{pool}: {SLOT.waiter_text(w)}" for w in p["waiters"]]
     return out
 
 
 def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
-    """`--status --json`: SLOTS and its pools (`pool_docs`; null without SLOTS, so audits here run uncapped)."""
+    """`--status --json`: SLOTS, its pools (`pool_docs`; one whose `n` is 0 is closed) and each pool's comment there (`notes`);
+    both null without SLOTS, so audits here run uncapped."""
+    text = SLOTS.read_text() if SLOTS.exists() else None
     return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}",
-            "pools": pool_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc) if SLOTS.exists() else None}
+            "pools": None if text is None else pool_docs(parse(text), SLOTS.parent, now, proc),
+            "notes": None if text is None else notes(text)}
 
 
 def asker(by: str | None = None) -> dict:
@@ -246,7 +252,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         elif not SLOTS.exists():
             print(f"no Lean audit cap on this machine ({SLOTS})")
         else:
-            print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
+            text = SLOTS.read_text()
+            print("\n".join(status(parse(text), SLOTS.parent, now(), why=notes(text))))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
     val = {k: opts[opts.index(k) + 1] for k in ("--pool", "--by") if k in opts[:-1]}

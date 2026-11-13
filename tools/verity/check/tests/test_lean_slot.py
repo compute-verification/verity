@@ -350,6 +350,27 @@ def test_status_lists_each_pool_s_slots_and_waiters(slots, monkeypatch, capsys):
     os.close(held)
 
 
+def test_status_says_a_pool_at_0_is_closed_quoting_its_line_and_json_adds_each_pool_s_comment(slots, capsys):
+    """A pool at 0 has no slot to list, so `--status` says it is closed, quoting its line with the comment the steward left
+    there, above a slot of it still held from before it closed. `--status --json` keeps each pool's document as it is, the
+    closed pool's with `n` 0, and adds every pool's comment beside them."""
+    LS.SLOTS.write_text("audit 0   # closed for a test\nbuild 0\ncheck 1 # check's lean-audit step\n")
+    past = _hold(slots / "lean-audit-0.lock")
+    _proc_locks(slots / "proc", {slots / "lean-audit-0.lock": 4242})
+    assert LS.main(["--status"], now=lambda: NOW) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "audit: closed on this machine (`audit 0  # closed for a test`)", "audit/0 (past N)  held by pid 4242: (gone)",
+        "build: closed on this machine (`build 0`)", "check/0  free"]
+    assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert sorted(doc) == ["file", "notes", "now", "pools"] and list(doc["pools"]) == ["audit", "build", "check"]
+    assert doc["notes"] == {"audit": "closed for a test", "check": "check's lean-audit step"}
+    assert doc["pools"]["build"] == {"n": 0, "slots": [], "waiters": []}
+    audit = doc["pools"]["audit"]
+    assert audit["n"] == 0 and [(s["index"], s["past_n"], s["holder"]["pid"]) for s in audit["slots"]] == [(0, True, 4242)]
+    os.close(past)
+
+
 def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch, capsys):
     """`--status --json`, which `check.py --slots` reads from each machine; null pools where no cap is set (node 2)."""
     held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander", "took": "2026-10-03T16:40Z"})
@@ -374,7 +395,8 @@ def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch
         os.close(fd)
     monkeypatch.setattr(LS, "SLOTS", slots / "absent")
     assert LS.main(["--status", "--json"], now=lambda: NOW) == 0
-    assert json.loads(capsys.readouterr().out) == {"file": str(slots / "absent"), "now": "2026-10-03T17:00Z", "pools": None}
+    assert json.loads(capsys.readouterr().out) == {"file": str(slots / "absent"), "now": "2026-10-03T17:00Z", "pools": None,
+                                                   "notes": None}
     with pytest.raises(SystemExit, match="usage: lean_slot.py --status"):
         LS.main(["--status", "--all"])
 
