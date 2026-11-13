@@ -160125,3 +160125,37 @@ Your 20:19Z read (`469d07483341`).
 - When the head's run ends. `verity-vllm` took 4649 s in the first run, and `verity-flock` has taken more than 80 minutes there so far.
 
 **To post:** nothing. **Runs going on:** `r20261113-171916-e22e`, `r20261113-185310-3a57`. **Next entry by 21:41Z**, sooner when the head's suites run ends, with #9792's ready line or its red.
+
+## WINDOWAT, Fri 13 Nov 20:42Z: your 20:19Z is done: #9520's head merged (no file changes), no record committed, #9817 open and unmarked with `Lane proofs`; it waits for MEMBERS's split under my line
+
+Your 20:19Z is read, by the hook and in the mailbox.
+
+**In plain words.** The branch has one new commit, the merge of #9520's head, and its files are exactly what they were. The pull request is https://github.com/compute-verification/verity/pull/9817. I marked nothing.
+
+**1. The merge** [run, 20:33Z]
+
+- `cursor/proofs-windowat-hcls-b2b4` is at `bbcaac1cf46e5b1a616fa22defae12eea5ed29fa`, pushed by a plain push. Its parents are the carried head `5961fa466d1e` and #9520's head `b5bb54bfb0dd`, which had not moved [run: fetch, then `gh pr view 9520`].
+- Its tree is `c395901b19f1`, the carried head's own, so the build, the records and the suites I reported stand for it.
+- `merge.py` printed the same two notes as in memory (`Spot.Challenger.openOf`, removed, taken without regenerating it, in two locks).
+
+**2. The regenerated `security/Properties` record:** not committed, as ruled. It stays in run `fbb7`'s reports.
+
+**3. The pull request** [run, 20:39Z; read back with `gh pr view` and `research queue status`]
+
+- #9817, base `main`, head `bbcaac1cf46e`, open, not a draft, no label, GitHub says mergeable. The queue reads it: owner `proofs`, "not marked ready at bbcaac1c".
+- Title: "Flock: the several-member audit's guarantees take no premise that the sample ends (JointSampledV5, JointShareV5, JointHorizonV5 restated)".
+- Its body holds what you listed: the first paragraph with the two reds; what it is stacked on (the carried switch `097b85eff21b`, by content, 19 files, +500/−206 over it; and #9520's head); the three statements with each `unfolded_hash` before and after; the eight record differences in a table, four of them this change's (the three statements and their module's reads) and four the lines' below; the five of `security/Properties`; the red test with its cause; what ran.
+- **One thing differs from #9576, say if it must be mended.** I opened it with the Cursor pull request tool and not with `research queue open`: my instructions bind me to that tool for creating a pull request. So its author shows as `danielreuter`, not the app; its body sits between the tool's markers with the agent's footer, which `queue.py` knows (`CURSOR_BODY`, `edited_body`). I wrote `Refs PRF-371` and `Goal proofs/sampled-audits-sound` by hand, as `open` writes them; `research queue link 9817 --issue PRF-371` answered "was linked already". If you want it opened by the app instead, say so and I ask you to close this one: I close nothing myself.
+- The issue is PRF-371, the same as #9576's, since you named none. Say if it should be another (PRF-490 is the soundness lane's for the several-member part).
+- One fact I had not written before, found while writing the body: MEMBERS's carried commit `097b85eff21b` is not an ancestor of my head. The two lines were carried separately, and my line holds the switch by content (`git diff 097b85eff21b bbcaac1cf46e` is my 19 files). The body says so. Against `main` the diff is 149 files; the switch alone is 144. The head merges with `main` at `f479876a8758` in memory without conflict.
+
+**4. The mark:** none. I do nothing to `Spot/OneStageZk.lean` or to the cap.
+
+**Not established.**
+
+- How MEMBERS's split comes under my line: a merge of its carried line, or a carry by FRAME. I merge nothing of MEMBERS's before you name the commit.
+- The kernel replay, the slow tiers, the other suites: not run.
+
+**STOP RULE.** No mark, no merge of another line, no lock edit, no change to #9576.
+
+**Next.** I wait for your word naming the commit that holds the split. Then: merge it at your word, the four quick suites again on a node I name, the records run if the merge changes a Lean file of mine or what my files import, and my ready line.
