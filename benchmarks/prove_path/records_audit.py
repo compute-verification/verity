@@ -177,9 +177,9 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity import device as ST  # noqa: E402
 from verity.hardware import registration as G  # noqa: E402
-from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
 
@@ -638,7 +638,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.device import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -856,7 +856,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     # the directory of `zk_mutants.py` and the modules it imports beside it
-    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/agreement/zk_mutants.py").parent))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -937,7 +937,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.protocols.spot.device import challenger as Ch, remote as SPR
+            from verity.protocols.proofs.spot.device import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
