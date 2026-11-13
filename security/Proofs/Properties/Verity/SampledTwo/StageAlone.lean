@@ -311,46 +311,46 @@ theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
   cases he
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨hik, him, hic, hif, hir, hip, his⟩ :=
-    inputOf_coinsRead p' { c' with record := j₁ } e'.source ξ₂ { e' with record := j₂ } received₂ vs
+    inputOf_coinsRead p { c with record := j₁ } e.source ξ₂ { e with record := j₂ } received₂ vs
   obtain ⟨-, -, -, -, hcc⟩ := hread
-  have hcc' : Spot.Run.coinsCode (p'.audit.base.challenger.map (·.1)) (Spot.getD e'.coins "main") e'.coins j₁
-      p'.boundary.verifier.windowRoot (p'.boundary.challenger.map (·.2)) (e'.source.extract 0 read) = none := by
+  have hcc' : Spot.Run.coinsCode (p.audit.base.challenger.map (·.1)) (Spot.getD e.coins "main") e.coins j₁
+      p.boundary.verifier.windowRoot (p.boundary.challenger.map (·.2)) (e.source.extract 0 read) = none := by
     rw [hik, him, hic, hif, hir, hip, his] at hcc
     exact hcc
   rw [his]
-  show Properties.Challenger.bitsOf (e'.source.extract 0 read) <+: Properties.Challenger.bitsOf ξ
+  show Properties.Challenger.bitsOf (e.source.extract 0 read) <+: Properties.Challenger.bitsOf ξ
   have hK := keyOf_challenger hcase hkey
   unfold firstDraws at hd
-  cases hb : boundaryOf p' with
+  cases hb : boundaryOf p with
   | error _ => simp [hb, Except.toOption] at hd
   | ok bp =>
     cases hw : bp.verifier.windowRoot with
     | none => simp [hb, hw, Except.toOption] at hd
     | some w =>
-      cases hl : firstLabel p' with
+      cases hl : firstLabel p with
       | none => simp [hb, hw, hl, Except.toOption] at hd
       | some label =>
-        have h' : some (⟨key, w, label, c'.digest⟩ : Properties.Challenger.Draws) = some d := by
+        have h' : some (⟨key, w, label, c.digest⟩ : Properties.Challenger.Draws) = some d := by
           rw [← hd]
           simp [hb, hw, hl, Except.toOption]
         obtain rfl := Option.some.inj h'
-        have hbp : bp = p'.boundary := by
+        have hbp : bp = p.boundary := by
           unfold boundaryOf at hb
           first | exact (Except.ok.inj hb).symm | (cases hb; rfl)
         subst hbp
-        have hl' : p'.boundary.challenger.map (·.2) = some label := hl
-        have hξ' : drawCoins key w label c'.digest e'.coins = .ok ξ := hξ
+        have hl' : p.boundary.challenger.map (·.2) = some label := hl
+        have hξ' : drawCoins key w label c.digest e.coins = .ok ξ := hξ
         unfold Spot.Run.coinsCode at hcc'
-        by_cases hr : (e'.source.extract 0 read).isEmpty = true
-        · have hz : (e'.source.extract 0 read).size = 0 := by simpa [ByteArray.isEmpty] using hr
-          have hn : Properties.Challenger.bitsOf (e'.source.extract 0 read) = [] := by
+        by_cases hr : (e.source.extract 0 read).isEmpty = true
+        · have hz : (e.source.extract 0 read).size = 0 := by simpa [ByteArray.isEmpty] using hr
+          have hn : Properties.Challenger.bitsOf (e.source.extract 0 read) = [] := by
             apply List.eq_nil_of_length_eq_zero
             rw [Verity.Sampled.length_bitsOf, hz]
           rw [hn]
           exact List.nil_prefix
         · rw [if_neg hr, hK, hw, hl', hdig] at hcc'
-          cases hcr : coinsReason key (Spot.getD e'.coins "main") e'.coins w label c'.digest
-              (e'.source.extract 0 read) with
+          cases hcr : coinsReason key (Spot.getD e.coins "main") e.coins w label c.digest
+              (e.source.extract 0 read) with
           | some _ => simp [hcr] at hcc'
           | none =>
             obtain ⟨ξ₀, hξ₀, -, hpre, -⟩ := Properties.Challenger.Coins.coinsReason_none hcr
