@@ -33,7 +33,7 @@ order = [
     ["verity/protocols/certifier"],
     ["verity/protocols/remote"],
     ["verity/protocols/onsite"],
-    ["verity/composite"],
+    ["verity/protocols/compose"],
     ["security"],
     ["adapters"],
     ["tools"],
@@ -74,7 +74,7 @@ directory = "verity/protocols/inference_only/nci"
 owner = "compute-accounting"
 
 [[distribution]]
-directory = "verity/composite/device/live_challenger"
+directory = "verity/protocols/compose/device/live_challenger"
 owner = "proofs"
 
 [[distribution]]
@@ -130,10 +130,10 @@ files = [
 ]
 
 [[against]]
-loader = "verity/composite"
+loader = "verity/protocols/compose"
 loaded = "benchmarks"
 files = [
-    "verity/composite/device/live_challenger/auditor.py",
+    "verity/protocols/compose/device/live_challenger/auditor.py",
 ]
 
 [[against]]
