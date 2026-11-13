@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 # A period whose communication audit is the network certifier's period of sampled audits (trusted)
 
 `Accounting.PeriodRun` leaves the network certifier's claim (`commWithin`) and its verdict (`accepts .network`) as
-fields. `RealizesCommOfPeriodLeakAccepted` is a run whose communication audit is the monitoring period of `n` windows
+fields. `RealizesCommOfMonitoringPeriodLeakAccepted` is a run whose communication audit is the monitoring period of `n` windows
 that `NetTiming.Guarantees.PeriodLeakAccepted` is about: each window audited by the sampled verifier at a statement
 registered as `sw i`, the network certifier recording each window's observations and registering its records at the
 transfer gates (its openings `tops s`). The run's claim at `K` is that every window meets `NetTiming.WindowGood`, the
@@ -85,7 +85,7 @@ bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the dep
   `PeriodLeakAccepted` names, which the registration's commitment binds; no proof here gives it. `window_le` is the
   per-window bound that the trusted network certifier's records give; deriving it from `PeriodLeakAccepted` at the
   deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
-structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
+structure RealizesCommOfMonitoringPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin : Type} [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] {A : Arg Coin}
     (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Compiled Coin A) (L Kₒ S : ℕ)
@@ -148,7 +148,7 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
       (RLeakCertifier H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
       D.E (stmt ξ i) (prover ξ i)
 
-attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty
-  RealizesCommOfPeriodLeakAccepted.connFintype
+attribute [instance] RealizesCommOfMonitoringPeriodLeakAccepted.tapeFintype RealizesCommOfMonitoringPeriodLeakAccepted.tapeNonempty
+  RealizesCommOfMonitoringPeriodLeakAccepted.connFintype
 
 end Accounting.JointBridge
