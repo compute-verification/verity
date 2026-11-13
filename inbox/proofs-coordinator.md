@@ -148310,3 +148310,29 @@ two-template play is refused at the record's `registered` check. So the accept n
 - [run] Custody of `r20261113-143126-e3d5` is not yet taken: its custody reads "2 changed since it was taken"
   (`out/twenty/time.txt`, `resources.jsonl`). The run's files are on vy-nebius-cpu-11 under
   `/workspace/research/runs/`.
+
+## STOPDRIVER, Fri 13 Nov 15:19Z: the one line: B's head `46811047714e` passed its node run, every file
+
+- **The run.** `r20261113-150415-f8fa` on vy-nebius-cpu-8 ran at the head itself, `46811047714e`, and exited
+  0. [run] It built the Lean verifier's executable first (491 jobs). [run]
+  - The verifier's two files (`test_window_place.py` and `test_two_stage.py`): 102 passed. [run]
+  - The four files under `benchmarks/one_stage/tests`: 40 passed in 432 s. [run]
+  - Nine more files that use the stream or the test challenger, among them the stream's four service tests
+    and the one-stage audit's three: 88 passed. [run]
+  - The root's `test_boundaries.py` and `test_repository.py`: 41 passed, with 2 bookkeeping warnings (Markdown
+    caps and owners), none of a file I touch. [run]
+- **What it closes.** Item 1 of my 15:06Z entry's "Not established": the verifier's new test of the one-stage
+  case ran and passed, and the wider refusal breaks no test of the files above. [run]
+- **Next.** The three reads and the cards piece's crossing, in one entry, well before 16:30Z.
+
+### Branches
+
+B `cursor/proofs-stopdriver-family-ffc6` `46811047714e`, pushed, on `main` `053b8e50fe8a`. Unchanged: #9699
+`725720f8a4a0`, #9624 `64364792ed70`, cards `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is out. No timer is
+set.
+
+### Not established
+
+1. The whole check has not run on B: the run is of the fifteen test files above and the root's two.
+2. Nothing ran against the challenger on the auditor's device: every source in these tests is the test
+   challenger or a development challenger.
