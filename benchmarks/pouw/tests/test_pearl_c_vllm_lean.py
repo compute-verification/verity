@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import socket
 import stat
 import sys
 from pathlib import Path
@@ -44,6 +45,8 @@ SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "se
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 W = "d7" * 64
+#: the clock the fixture's ``verify`` ran on (`served_passes.CLOCK`'s two readings) and this host as `check_cost` names it
+VERIFY_CLOCK, NODE = (100.0, 107.5), socket.gethostname().split(".")[0]
 pytestmark = pytest.mark.slow
 
 
@@ -55,6 +58,8 @@ def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(PV, "coins", lambda n: SOURCE[:n])
+        # `served_verify` runs the module under this name now, another object than `SP` once a test file loaded it again
+        mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
         for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
             mp.delenv(k, raising=False)
         a, b = (T.proved_pass(tmp / name, H100, ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
@@ -101,6 +106,21 @@ def test_an_agreeing_lean_verdict_is_written_where_the_compose_reads_it_with_bot
     assert (check["reason"], check["differ"], check["lean"], check["python"]) == (None, [], got, SP.python_answer(doc))
     assert check["exe_sha256"] == hashlib.sha256(exe.read_bytes()).hexdigest() and check["rc"] == 0
     assert answer["work"] == doc["answer"]["public"]["work"] and answer["source"] == SOURCE.hex()
+
+
+def test_each_check_records_its_wall_seconds_and_the_node_it_ran_on(run, tmp_path, monkeypatch):
+    """``verify``'s document and ``lean``'s check document each hold what their check cost (`check_cost`): its wall
+    seconds on the step's clock and this host's name, the Python check's beside its processes. An executable that gives no
+    verdict still cost what it ran, and a step that refuses before the executable runs records none."""
+    d, verify, doc = run
+    assert doc["check_cost"] == {"seconds": 7.5, "node": NODE, "jobs": 1}
+    monkeypatch.setattr(SP, "CLOCK", iter((10.0, 13.25, 20.0, 20.5)).__next__)
+    rc, _answer, check = lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))
+    assert rc == 0 and check["check_cost"] == {"seconds": 3.25, "node": NODE}
+    rc, _answer, check = lean(tmp_path, verify, d, stub(tmp_path, "lake: no such target\n", 1))
+    assert rc == 2 and check["check_cost"] == {"seconds": 0.5, "node": NODE}
+    rc, _answer, check = lean(tmp_path, verify, d, tmp_path / "none")
+    assert rc == 2 and check["check_cost"] is None
 
 
 def test_a_lean_verdict_that_differs_on_any_held_field_writes_no_answer_and_removes_one_there(run, tmp_path):

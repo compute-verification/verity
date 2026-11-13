@@ -108,7 +108,8 @@ of one salt and, but under ``--test-instance`` (a test instance's passes, whose 
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
-PouwCheck).
+PouwCheck).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the draw through the
+last replayed tile, on the node it ran on and in how many processes.
 
 ``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them and held to the names and SHA-256s
@@ -121,8 +122,9 @@ rule, each opened tile's verdict, and an accepted run's work), and its ``tie`` t
 both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
 printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
-line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
-0 on a written accept, 1 on a written reject and 2 when it wrote no answer.
+line, the executable's SHA-256 and, once the executable ran, its cost (``check_cost``, `check_cost`: its wall seconds on
+the node it ran on) go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits 0 on a written
+accept, 1 on a written reject and 2 when it wrote no answer.
 
 ``uncredited`` is where an accepted run's linears' MACs went uncredited, call by call (`verify_run.uncredited_calls`, the
 verify document's ``uncredited``), for a verdict whose document predates it: the passes in DIR (``pass-*/manifest.json``,
@@ -215,6 +217,14 @@ SEEDED_ALONE = ("serve --seeded fixes the coins and the hm96 salt key, so its co
                 "verdict may read: it takes --no-retain and no PEARLC_CHALLENGER_GATE")
 #: what makes two serves' documents one load in `same`, beside the engine's batched tokens
 LOAD = ("spec", "arm", "requests", "prompt_tokens", "output_tokens")
+#: the clock `verify` and `lean` time their check on (a test's own in its place)
+CLOCK = time.perf_counter
+
+
+def check_cost(seconds: float, **more: int) -> dict:
+    """What a check of Pearl+'s cost where it ran, in its own document: its wall ``seconds`` and the ``node`` it ran on
+    (this host: the served node wherever the piece runs there), with `more` (the Python check's ``jobs``)."""
+    return {"seconds": round(seconds, 3), "node": socket.gethostname().split(".")[0], **more}
 
 
 def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
@@ -584,11 +594,13 @@ def verify(args: argparse.Namespace) -> int:
         period = (((served or {}).get("coins") or {}).get("reserved") or {}).get("period")
         draw = BA.live_draw(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
                             settings.PEARLC_CHALLENGER_LANE, period=period) or VR.node_draw
+        t0 = CLOCK()
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
                                     dropped=dropped, record=record, draw=draw,
                                     over_cap=over_cap_rule(VR.verify_passes, args.over_cap),
                                     test_instance=args.test_instance))
+        doc["check_cost"] = check_cost(CLOCK() - t0, jobs=args.jobs)
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -652,7 +664,8 @@ def lean(args: argparse.Namespace) -> int:
     out.unlink(missing_ok=True)
     doc = json.loads(Path(args.verify).read_text())
     rec = {"schema": LEAN_SCHEMA, "verify": str(args.verify), "exe": str(exe), "exe_sha256": None, "argv": None, "rc": None,
-           "stderr": None, "lean": None, "python": python_answer(doc), "differ": None, "answer": None, "reason": None}
+           "stderr": None, "lean": None, "python": python_answer(doc), "differ": None, "answer": None, "reason": None,
+           "check_cost": None}
 
     def done(reason: str | None, rc: int) -> int:
         rec["reason"] = reason
@@ -687,10 +700,13 @@ def lean(args: argparse.Namespace) -> int:
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
                             Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_CAP[0]),
                             doc.get("test_instance", False), of_record=live)
+    t0 = CLOCK()
     try:
         p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
+        rec["check_cost"] = check_cost(CLOCK() - t0)
         return done(f"the Lean gave no verdict within {args.timeout} s", 2)
+    rec["check_cost"] = check_cost(CLOCK() - t0)
     rec["rc"], rec["stderr"] = p.returncode, p.stderr[-2000:] or None
     said = p.stdout.strip().splitlines()
     try:
