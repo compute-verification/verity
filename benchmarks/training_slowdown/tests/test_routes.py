@@ -12,6 +12,7 @@ from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
+from training_slowdown.routes import _codes as codes
 from training_slowdown.routes import ema, qat, subset
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
@@ -502,3 +503,73 @@ def test_a_muon_job_with_coded_deltas_is_counted_traced_and_scored_on_what_its_e
     assert len(enc) == last["e_bytes"] and len(plan.keys(enc)) == 10
     rebuilt = theta | plan.decode(enc, {k: theta[k] for k in plan.keys(enc)})
     assert run.theta_sha256(rebuilt) == last["output_sha256"]
+
+
+def test_a_codes_grid_is_its_levels_and_a_value_on_it_codes_to_itself():
+    """At b bits a code takes 2^b − 1 levels, (c − L)/L in f16 with L = 2^(b−1) − 1, and at one bit ±1; E's codebook pads
+    them to 2^b. The scale is the group's largest magnitude times 1 + 2^-9, in f16, so a group on the grid at a scale
+    f16 holds codes to itself, whatever the random values."""
+    assert torch.equal(codes.grid(4), torch.tensor([(c - 7) / 7 for c in range(15)]).half().float()) and codes.grid(1).tolist() == [-1.0, 1.0]
+    assert len(codes.codebook(8)) == 256 and codes.codebook(8)[255] == 0 and codes.zero(8) == 127 == codes.levels(8) // 2
+    torch.manual_seed(0)
+    c = torch.randint(0, 15, (3, 8))
+    s = torch.tensor([0.5, 0.25, 2.0], dtype=torch.float16)
+    x = codes.values(c, s, codes.grid(4), (3, 8))
+    got, scale = codes.encode_at(x, s, 8, codes.grid(4))
+    assert torch.equal(got, c)
+    _, own = codes.encode(x, 8, codes.grid(4))
+    assert torch.equal(own, (x.abs().amax(1) * (1 + 2 ** -9)).half())
+
+
+def test_a_codes_rounding_is_one_level_at_most_and_unbiased():
+    """Each entry rounds to one of the two levels around it, so a value is within one level (s / L) of x, and the
+    rounding is stochastic in proportion, so its mean over many roundings is x."""
+    torch.manual_seed(0)
+    x = torch.randn(4, 64)
+    grid = codes.grid(4)
+    c, s = codes.encode(x, 64, grid)
+    v = codes.values(c, s, grid, x.shape)
+    assert ((v - x).abs() <= s.float()[:, None] / 7 + 1e-7).all()
+    mean = sum(codes.values(*codes.encode(x, 64, grid), grid, x.shape) for _ in range(4000)) / 4000
+    assert (mean - x).abs().max() < 0.02 * x.abs().max()
+
+
+def test_a_packed_message_is_its_bits_as_bool_planes_and_f16_scales_in_a_rotated_basis():
+    """A message waits between blocks as `bits` bool planes and an f16 scale a group, the widths the trace prices; in
+    a rotated basis (an orthonormal H·D) the rounding's error is a level an entry of the rotated group, and the
+    unpacked message is back in the original basis."""
+    torch.manual_seed(0)
+    rot = codes.rotation(64)
+    assert torch.allclose(rot @ rot.T, torch.eye(64), atol=1e-6)
+    x = torch.randn(256)
+    x[3] = 40.0
+    planes, s = codes.pack(x, 4, 64, codes.grid(4), rot)
+    assert planes.dtype == torch.bool and planes.shape == (4, 4, 64) and s.dtype == torch.float16
+    back = codes.unpack(planes, s, x.shape, codes.grid(4), rot)
+    err = ((back - x).reshape(4, 64) @ rot).abs()
+    assert (err <= s.float()[:, None] / 7 + 1e-5).all()
+    plain_s = codes.pack(x, 4, 64, codes.grid(4))[1]
+    assert s[0] < plain_s[0]
+
+
+def test_a_stored_groups_scale_stays_until_a_value_outgrows_it():
+    """A step added to the codes keeps each group's scale while the new values fit under it; a group that outgrows
+    it takes `HEADROOM` times its new largest magnitude. The codes are uint8."""
+    torch.manual_seed(0)
+    grid = codes.grid(8)
+    c = torch.full((2, 4), codes.zero(8), dtype=torch.uint8)
+    s = torch.tensor([1.0, 1.0], dtype=torch.float16)
+    step = torch.tensor([[0.5, -0.25, 0.0, 0.0], [3.0, 0.0, 0.0, -1.0]])
+    new_c, new_s = codes.sticky_add(c, s, step, 4, grid)
+    assert new_c.dtype == torch.uint8 and new_s[0] == 1.0 and new_s[1] == torch.tensor(3.0 * codes.HEADROOM).half()
+    v = codes.values(new_c, new_s, grid, step.shape)
+    assert ((v - step).abs() <= new_s.float()[:, None] / 127 + 1e-6).all()
+
+
+def test_a_vote_is_the_sign_with_a_random_one_for_a_zero():
+    torch.manual_seed(0)
+    x = torch.tensor([2.0, -0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    b = codes.vote_pack(x)
+    assert b.dtype == torch.bool and b[:2].tolist() == [True, False]
+    signs = torch.stack([codes.vote_unpack(codes.vote_pack(x)) for _ in range(64)])
+    assert set(signs[:, 2:].unique().tolist()) == {-1.0, 1.0} and (signs[:, 0] == 1).all()
