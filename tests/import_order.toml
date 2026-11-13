@@ -450,7 +450,6 @@ loads = [
     "verity/commitments",
     "verity/commitments/randomness",
     "verity/protocols/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/protocols/spot/verifier",
     "verity/protocols/spot/verifier/profile.py",
     "verity/runtime",
@@ -463,9 +462,7 @@ reaches = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/hardware/record.py",
-    "verity/periods",
     "verity/protocols/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/protocols/spot/verifier",
     "verity/protocols/spot/verifier/profile.py",
     "verity/runtime",
@@ -492,10 +489,8 @@ reaches = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/hardware/record.py",
-    "verity/periods",
     "verity/protocols/poub/verifier",
     "verity/protocols/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/protocols/spot/verifier",
     "verity/protocols/spot/verifier/profile.py",
     "verity/runtime",
@@ -517,9 +512,7 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
     "verity/protocols/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -544,8 +537,6 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 reaches = [
@@ -555,8 +546,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
