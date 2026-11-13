@@ -299,7 +299,7 @@ Rows the leads parked under the first form. "Its lead" means the lead confirmed 
 | 5. Remote demo | lean | Inference-only policy proved for served traffic | not known: network-accounting holds the policy and sets the date by Mon 16 Nov 6 PM. It is not Fri 20 Nov: by Thursday night's read 25 parts were still needed and 10 had no date from their owner | its lead |
 | 5. Remote demo | lean | Honest signed session's proof sized | Mon 16 Nov noon, as dated. The worker's report came in today, two days early; its three gaps are on LEAN-309 | its lead |
 | 5. Remote demo | soundness | Sampled proofs sound as deployed | Fri 20 Nov | its lead |
-| 5. Remote demo | soundness | Remote demo's soundness fully proved | Mon 30 Nov, as goal 8's "fully proved" | its lead |
+| 5. Remote demo | soundness | Remote demo's soundness fully proved | not known: soundness gives one Mon 16 Nov 6 PM. Its Mon 30 Nov rested on the lock's bulk date for open entries (459 of 479 carry it), not on a worker (corrected 9:12 AM) | its lead |
 | 5. Remote demo | soundness | Deployed remote theorem's honest witness runs a session | not known; I say on Tue 17 Nov | its lead |
 | 6. Onsite demo | compute-accounting | Onsite demo's proof covers Pearl+ | Tue 24 Nov | its lead |
 | 6. Onsite demo | memory-accounting | Memory verdicts on the onsite record | vllm's day for goal 6 | its lead |
