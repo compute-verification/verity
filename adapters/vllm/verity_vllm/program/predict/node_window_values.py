@@ -677,15 +677,17 @@ def run(ck: Check, seed: int, log: Callable[[str], None] = print, most: int = SA
 
 # ---- planted errors
 
-def plant_wire_row(c: IF.Circuit, family: str, port: str, row: int) -> tuple[IF.Circuit, str, dict[str, Any]]:
-    """``c`` with the first wire into ``family``'s ``port`` at cut row 0 moved to cut row ``row``."""
+def plant_wire_row(c: IF.Circuit, family: str, port: str, row: int, keep: bool = False) -> tuple[IF.Circuit, str, dict[str, Any]]:
+    """``c`` with the first wire into ``family``'s ``port`` at cut row 0 moved to cut row ``row``; with ``keep``, copied there
+    beside the original, so row 0 stays wired and only row ``row`` is wrong."""
     for i, x in enumerate(c.wires):
         if x.reader.startswith(family) and x.port == port and tuple(x.cut) == (0, 1):
             moved = IF.Wire(x.reader, x.port, x.writer, x.out, x.at, x.radix, x.base, x.step, (row, 1))
             ws = list(c.wires)
-            ws[i] = moved
+            ws[i:i + 1] = [x, moved] if keep else [moved]
             return dataclasses.replace(c, wires=tuple(ws)), x.reader, {"wire": i, "reader": x.reader, "port": port,
-                                                                      "from": list(x.cut), "to": list(moved.cut)}
+                                                                      "from": list(x.cut), "to": list(moved.cut),
+                                                                      "kept": keep, "units": x.reader_units}
     raise ValueError(f"no wire into {family} {port} at cut row 0")
 
 
