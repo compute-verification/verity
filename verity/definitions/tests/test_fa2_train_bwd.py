@@ -203,15 +203,18 @@ def _tiny_bf16(rng, shape, lo: int, hi: int):
     return (x.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _dpsum(do, o, fused: bool) -> int:
-    """The dP sum of one row at D = 64 written out as `dot_do_o` runs it: eight threads of eight head dims, each by FMUL and then
-    FFMA into its sum (`fused`) or FMUL and FADD, and the butterfly's FADDs."""
+#: the order a thread takes its eight dims' products in: the kernel's, and the source's
+DIM_1_FIRST, IN_TURN = (1, 0, 2, 3, 4, 5, 6, 7), tuple(range(8))
+
+
+def _dpsum(do, o, fused: bool, order=DIM_1_FIRST) -> int:
+    """The dP sum of one row at D = 64 written out as `dot_do_o` runs it: eight threads of eight head dims, each thread's first
+    product in `order` by FMUL and the rest by FFMA into its sum (`fused`) or FMUL and FADD, then the butterfly's FADDs."""
     f32 = [[int(x) << 16 for x in a] for a in (do, o)]
     sums = []
     for t in range(8):
-        dims = range(8 * t, 8 * t + 8)
         acc = None
-        for d in dims:
+        for d in (8 * t + e for e in order):
             a, b = f32[0][d], f32[1][d]
             if acc is None:
                 acc = P.F32MulV2.evaluate(a, b)
@@ -226,7 +229,7 @@ def _dpsum(do, o, fused: bool) -> int:
 
 def test_the_dp_sum_is_fmul_then_ffma() -> None:
     """dO and O at 2^-75 to 2^-60, so products fall under f32's normal range, where FMUL then FADD rounds each product and FFMA
-    does not: the dP sum is the FFMA chain the kernel's SASS holds, and on these rows the FADD chain is another."""
+    does not: the dP sum is the FFMA chain, and on these rows the FADD chain is another."""
     rng = np.random.default_rng(4207)
     N, D = 64, 64
     do, o = _tiny_bf16(rng, (N, D), -75, -60), _tiny_bf16(rng, (N, D), -75, -60)
@@ -234,6 +237,22 @@ def test_the_dp_sum_is_fmul_then_ffma() -> None:
     got = [int(evaluate(pre, _ints(do[i]), _ints(o[i]), [0])[0]) for i in range(N)]
     assert got == [_dpsum(do[i], o[i], True) for i in range(N)]
     assert sum(g != _dpsum(do[i], o[i], False) for i, g in enumerate(got)) > N // 10
+
+
+def test_the_dp_sum_multiplies_a_thread_s_second_dim_alone() -> None:
+    """A thread's products -2^127 and 2^128 at dims 0 and 1: its second dim's product is the FMUL, which overflows alone, so the
+    sum is inf; swapped, 2^128 is fused into -2^127 and the sum is 2^127.  Taking dim 0 first, the source's order, gives the
+    other result on each row."""
+    D = 64
+    pre = bind(W.Fa2TrainBwdPre, D=D)
+    for (do01, o01), want in ((((2 ** 63, 2 ** 64), (-(2 ** 64), 2 ** 64)), 0x7F800000),
+                              (((2 ** 64, 2 ** 63), (2 ** 64, -(2 ** 64))), 0x7F000000)):
+        do, o = np.zeros(D, np.uint16), np.zeros(D, np.uint16)
+        do[:2] = (np.array(do01, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+        o[:2] = (np.array(o01, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+        got = int(evaluate(pre, _ints(do), _ints(o), [0])[0])
+        assert got == want == _dpsum(do, o, True)
+        assert _dpsum(do, o, True, IN_TURN) != want
 
 
 def _dq(parts, D: int, NS: int, ftz: bool, first: bool) -> list[int]:

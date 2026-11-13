@@ -29,8 +29,9 @@ i and key j:
     dQ part of row i = sum_j bf16(dS) k_j     k16 steps over the block's keys in turn, from +0
 
 dPsum_i is dO_i . O_i in f32 as `dot_do_o` adds it: a thread holds 8 head dims of each page of W (64 at a D that is a multiple of
-64, else 32), takes them in turn, the first by FMUL and each after it by FFMA into the sum (nvcc contracts the multiply-add), and
-the W / 8 threads of the row add by a butterfly, xor W / 16 down to 1.  After the loop dV_j = bf16(acc) and dK_j = bf16(acc *
+64, else 32): its second dim's product by FMUL, then its first and each after the second, in turn, by FFMA into the sum (nvcc
+contracts the source's first add, p0 + p1, on p0, and each later multiply-add), and the W / 8 threads of the row add by a
+butterfly, xor W / 16 down to 1.  After the loop dV_j = bf16(acc) and dK_j = bf16(acc *
 D^-0.5).  A row's dQ parts are added in f32: thread block x adds the parts of key blocks x, x + NS, .. in turn into its own
 buffer from +0 by atomic adds that flush to zero (`red.add.f32`, FTZ in the SASS), `flash_bwd_convert_dq_kernel` adds the
 buffers in turn to +0 by FADD, and dQ_i = bf16(sum * D^-0.5).  NS is the kernel's split count under deterministic algorithms, ceil(SMs / (B H)).  Without
@@ -134,14 +135,15 @@ def _rows(S, n: int, t=BF16):
            conformance=CONFORMANCE, refuse=_refuse)
 def Fa2TrainBwdPre(B, S, do, o, lse):
     """A query row's dP sum and scaled LSE: dPsum = dO . O, each of the row's W / 8 threads (W = 64 at a D that is a multiple of
-    64, else 32) taking its 8 head dims of each page in turn, the first by FMUL and each after it by FFMA into the sum, and the
-    threads adding by a butterfly; ms = guard(lse) * log2 e."""
+    64, else 32) taking its 8 head dims of each page, the second by FMUL, then the first and the rest in turn by FFMA into the
+    sum, and the threads adding by a butterfly; ms = guard(lse) * log2 e."""
     D = S.D
     W = 64 if D % 64 == 0 else 32
     x = []
     for t in range(W // 8):
         acc = None
-        for d in (page * W + 8 * t + e for page in range(D // W) for e in range(8)):
+        dims = [page * W + 8 * t + e for page in range(D // W) for e in range(8)]
+        for d in (dims[1], dims[0], *dims[2:]):
             a, b = B.call(P.Bf16ToF32, do[d]), B.call(P.Bf16ToF32, o[d])
             acc = B.call(P.F32MulV2, a, b) if acc is None else B.call(P.F32FmaV2, a, b, acc)
         x.append(acc)
