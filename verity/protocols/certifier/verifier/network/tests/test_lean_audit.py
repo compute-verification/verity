@@ -431,7 +431,7 @@ def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
 
 
 def test_the_clients_certificate_refusals_are_the_references(lean):
-    """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.LinkWindow`) gives
+    """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.TransferBlocks`) gives
     `audit.certificate_refusals`'s refusal of each certificate and clock certificate of a served window: another key's,
     another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
     direction, an ingress clock certificate and one signing a digest that `seen` holds, and in another session every

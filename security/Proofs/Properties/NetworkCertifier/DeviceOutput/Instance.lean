@@ -168,7 +168,7 @@ theorem syncsDeclared : SyncsDeclared config trace := by unfold SyncsDeclared; d
 
 theorem syncsAdmitted : SyncsAdmitted config trace := by unfold SyncsAdmitted; decide +kernel
 
-theorem sessionFits : SessionFits issuer := by unfold SessionFits; decide +kernel
+theorem attachmentFits : AttachmentFits issuer := by unfold AttachmentFits; decide +kernel
 
 /-- The device's coins give it `salt` for every record. -/
 def salts : Nat → ByteArray := fun _ => salt
@@ -183,9 +183,9 @@ theorem leavesLeft : LeavesLeft issuer 0 config trace := by
 
 /-- **`DeviceOutputAccepted`'s honest case holds** on this configuration, issuer and run, `Digested` aside. -/
 theorem deviceOutputAccepted_hypotheses : Ticking config ∧ FieldsFit config ∧ Distinct config ∧
-    ValidKey issuer.key ∧ SessionFits issuer ∧ SaltsFit salts ∧ Closed config trace ∧ NoFault config trace ∧
+    ValidKey issuer.key ∧ AttachmentFits issuer ∧ SaltsFit salts ∧ Closed config trace ∧ NoFault config trace ∧
     SyncsDeclared config trace ∧ SyncsAdmitted config trace ∧ LeavesLeft issuer 0 config trace :=
-  ⟨ticking, fieldsFit, distinct, toyKey_valid, sessionFits, saltsFit, closed, noFault, syncsDeclared, syncsAdmitted,
+  ⟨ticking, fieldsFit, distinct, toyKey_valid, attachmentFits, saltsFit, closed, noFault, syncsDeclared, syncsAdmitted,
     leavesLeft⟩
 
 /-- So, if its grids have a `parameters_digest`, the check accepts this run's output. -/
@@ -194,7 +194,7 @@ theorem deviceOutputAccepted_instance (hdg : Digested config) :
       ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams config issuer.key issuer.session)
         (commitment crs bytes)
         (evidence config trace) :=
-  Proofs.deviceOutputAccepted_proof config trace issuer 0 salts ticking fieldsFit distinct hdg toyKey_valid sessionFits
+  Proofs.deviceOutputAccepted_proof config trace issuer 0 salts ticking fieldsFit distinct hdg toyKey_valid attachmentFits
     saltsFit closed noFault syncsDeclared syncsAdmitted leavesLeft
 
 end Properties.CertifierNetwork.Instance

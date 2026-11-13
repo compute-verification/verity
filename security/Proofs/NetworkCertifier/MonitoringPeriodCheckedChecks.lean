@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.SampledAuditAccepted
@@ -46,10 +46,10 @@ import Std.Tactic.BVDecide.Normalize.Bool
 
 `CheckedWitness` bounds a check's miss on the runs it is given. `SampledLeakChecked` reads it at the trace's run
 (`traceRun`): the circuit on the trace's committed values, an incorrect proof block's committed gates held at them,
-`false` where the trace opens nothing. `PeriodLeakChecked` reads it at the run at the network certifier's rows
+`false` where the trace opens nothing. `MonitoringPeriodLeakChecked` reads it at the run at the network certifier's rows
 (`certifierRun`), which holds those gates at the trace filled in with the network certifier's openings. The two differ
 at a gate the network certifier opens and the trace leaves unopened, and these checks show that the difference decides
-the statement: held to the trace's run, `PeriodLeakChecked`'s first part is false.
+the statement: held to the trace's run, `MonitoringPeriodLeakChecked`'s first part is false.
 
 **The toy** (`freeL`): one input gate and its exclusive or with itself, the egress presence gate, in one proof block
 sampled at rate `0`; the verifier accepts every run and has no session, so the extracted witness opens nothing; the
@@ -61,13 +61,13 @@ frame at the slot, which every run of the circuit that holds no gate meets. The 
 * `freeL_traceRun_checked`: the check's miss on the trace's run is `0`.
 * `freeL_noWit`: no witness is in `RLeakCertifierChecked` at the network certifier's openings.
 * `freeL_traceRun_insufficient`: so the first part's premises hold at the trace's run, and its bound fails.
-* `periodLeakChecked_traceRun_fails`: the first part of `PeriodLeakChecked`, with `traceRun` in place of
+* `monitoringPeriodLeakChecked_traceRun_fails`: the first part of `MonitoringPeriodLeakChecked`, with `traceRun` in place of
   `certifierRun` and nothing else changed, is false.
 * `freeL_certifierRun_miss`: on the run at the network certifier's rows the check misses with probability `1` at the
-  toy, so the toy meets `PeriodLeakChecked`'s premise at no miss below `1`, and does not refute it.
+  toy, so the toy meets `MonitoringPeriodLeakChecked`'s premise at no miss below `1`, and does not refute it.
 
-**The statement's nontrivial lemma.** `PeriodLeakChecked_nontrivial`: its acceptance conclusion fails at the accepting
-verifier `certL`, as `PeriodLeakAccepted`'s does, at the check every run passes, which misses with probability `0` on
+**The statement's nontrivial lemma.** `MonitoringPeriodLeakChecked_nontrivial`: its acceptance conclusion fails at the accepting
+verifier `certL`, as `MonitoringPeriodLeakAccepted`'s does, at the check every run passes, which misses with probability `0` on
 any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RLeakCertifier`
 (`rLeakCertifier_of_rLeakCertifierChecked`), and none is (`certL_noWit`).
 
@@ -497,7 +497,7 @@ end Toy
 /-- **`CheckedWitness` at the trace's run does not carry the first part's bound.** At `freeL Bool`, SHA-512 and the
 statement `[]`: the compiled verifier is knowledge sound, its commitment binds, the statement is in the audit's scope,
 and the checks `r 1 = false` and `True` each miss with probability `0` on the trace's run (`CheckedWitness` at
-`traceRun`). Yet the bound of `PeriodLeakChecked`'s first part fails at the silent prover, at one step at `δ = 0` with
+`traceRun`). Yet the bound of `MonitoringPeriodLeakChecked`'s first part fails at the silent prover, at one step at `δ = 0` with
 no input registered: no witness is in `RLeakCertifierChecked` (`freeL_noWit`). -/
 theorem freeL_traceRun_insufficient :
     (freeL Bool).KS FlockDeploy.sha512 ∧ (freeL Bool).commit.Binds FlockDeploy.sha512 ∧
@@ -520,11 +520,11 @@ theorem freeL_traceRun_insufficient :
     freeL_bound_fails FlockDeploy.sha512 _ ((freeL Bool).κ 0 [] + 0 + 0) [] (freeL_noWit FlockDeploy.sha512 _ [])
       (by linarith [freeL_κ (Coin := Bool) []])⟩
 
-/-- **`PeriodLeakChecked`'s first part with the check held to the trace's run is false**: the first part as
-`Guarantees.PeriodLeakChecked` states it, with `traceRun` in place of `certifierRun` in its two premises and nothing
+/-- **`MonitoringPeriodLeakChecked`'s first part with the check held to the trace's run is false**: the first part as
+`Guarantees.MonitoringPeriodLeakChecked` states it, with `traceRun` in place of `certifierRun` in its two premises and nothing
 else changed, fails at `freeL Bool` (`freeL_traceRun_insufficient`). The first part reads none of the monitoring
 period's parameters, so the statement with that premise fails with it at every period. -/
-theorem periodLeakChecked_traceRun_fails :
+theorem monitoringPeriodLeakChecked_traceRun_fails :
     ¬ ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
       (H : Msg → Msg) (D : Compiled Coin A) (_ : D.KS H) (L K S : ℕ)
       (lay : Claims.Sampling.AuditStatement → BoundaryGates L S) (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ)
@@ -548,11 +548,11 @@ theorem periodLeakChecked_traceRun_fails :
 
 /-! ## The statement's nontrivial lemma -/
 
-/-- **`PeriodLeakChecked`'s acceptance conclusion fails at the accepting verifier** `certL`, at one step at `δ = 0`,
+/-- **`MonitoringPeriodLeakChecked`'s acceptance conclusion fails at the accepting verifier** `certL`, at one step at `δ = 0`,
 with no input registered, at the checks every run passes and the misses `0`: at the statement `[]`, its silent
 prover's bound fails, since no witness is in `RLeakCertifierChecked` (`rLeakCertifier_of_rLeakCertifierChecked`,
 `certL_noWit`). -/
-theorem PeriodLeakChecked_nontrivial :
+theorem MonitoringPeriodLeakChecked_nontrivial :
     ¬ PrBad FlockDeploy.sha512 (certL Bool).V
         (RLeakCertifierChecked FlockDeploy.sha512 (certL Bool).commit (certL Bool).parse (certL Bool).partition 1 1 1
           (fun _ => notLay) (fun _ => 1) 0 (fun s => AsReg s.prog notLay 1 ∅) (fun _ _ => True ∧ True) 1
