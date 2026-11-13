@@ -129833,3 +129833,51 @@ What it does not cover:
 Mailbox read at `67c8fba9e1`; my file last changed at `9b4fa7248f`, and my newest message is yours of 07:54Z. No `~/wt/.pen`. No try sent this hour, so no machine and no wait to report. Branch `cursor/proofs-windowat-5e4b` at `e977fbc96f`, pushed, unchanged. Runs: `r20261113-054307-ec73` running (timeout 08:43Z); `8c61` and `5849` done, rc 0.
 
 **To post** (PRF-490, for soundness): "WINDOWAT: (1) `1ca22d7e7e`, the link-first refusal, is not in #9520 at `e2865001c4`; is its merge still coming? (2) `Window.hcls` is a field, so the builder gives no window where a member's link points move with the sample; the check's `link-points` reads `Registration.Verifier.members`, which no parser fills. Does your builder read `linkRefused`, and through which field?"
+
+## COUNT, Fri 13 Nov 08:19Z: #9621's fix is on a scratch merge and `benchmarks/harness`'s suite passes there (651 of 651, run `r20261113-081554-1ea0`); the cause was the reader, on real runs too; the window is read from the run's own boundary record, not assumed. No ready line: I wait on "carry"
+
+**In plain words, for Daniel.** The pull request that prints what a served run's audit showed was taken out of the queue because a change landing beside it now requires every verdict to name the class it is about together with the window it was served in, and ours named the class by a folder's name, which holds no window. The fault was in our reader, on real runs as well as in the test. It is fixed on a side branch that holds both changes: the class's name is now read from the registration the served run itself made, nothing is assumed, and where the run's files don't hold a name the print leaves it out and says so. Every test of that package passes there. The fix goes onto the real branch when the coordinator says so, after tonight's moves.
+
+### What failed, and where the cause is
+
+- [run] The mark is gone: the label history of `pr:9621@13a60635abb2…` holds `ready=true` by proofs at 06:32:12Z, `reviewed=land` at 06:41:17Z and `ready=false` by ci at 07:19:10Z; the queue's status at 08:03Z reads "not marked ready at 13a60635". I marked nothing.
+- [run] Reproduced on a local tree of `main` `9182900fb94e` with #9673's head `cdf0f4a9047a` and #9621's head `13a60635abb2` merged in: `tests/test_served_row.py`, 12 failed, each `ValueError: the section's record holds `class` 'p4-o2'`. It is raised where the tests hand the section's verdict record to the command's own reader of verdict records (`exfiltration.verdict`), which #9673 makes hold a class to `w<window>/p<P>-o<O>`.
+- **The cause is the reader, not the fixture alone.** [run] At #9621's head the reader gives the real runs' files a directory's name: `p256-o2` for the served run (second stage `r20261112-104451-3dfe` with first stage `r20261112-103510-5217`) and `p4-o2` for the rehearsal (`r20261112-191841-86b4`). [read] `two_stage.py first` files a class's `stage1.json` under the class's own directory name and drops the window's (`dest = out / Path(d).name`), and the second stage's summary names that path, so no path either stage writes holds the window.
+- [run] The fixture was short of a real file as well: its first stage's file held no boundary record, and both real ones hold one (`record`, whose `window` has `row`, `prompt` and `outputs` as integers).
+
+### The fix, and which lines change
+
+Scratch branch `cursor/proofs-count-scratch-class-7d3a`, head `77c5473205cbaf8fa0a3bfd688e8979affc20735`: #9673's head with #9621's head merged in (`a9693b0014`), then one commit. It is never to be opened. Against that merge: 5 files, 131 insertions, 45 deletions. Line numbers are the scratch tree's.
+
+- `benchmarks/harness/verity_bench/served_record.py` (34 added, 14 removed). New `class_of(stage1)`, lines 179 to 193: the name `w<row>/p<prompt>-o<outputs>`, ending `-nostop` where the window holds a stop rule and `stopped` is not true, read from `stage1["record"]["window"]`. In `shown`, lines 263 to 267: the record's `class` is that name only where the first stage's file's `registration` is the one the second stage read, else None. The rest is docstrings (the module's, lines 39 to 47; `_class`, which stays for the directory tie; `shown`).
+- `benchmarks/harness/verity_bench/served_row.py` (9 added, 6 removed). `verdict_record`, lines 269 to 270: a name the files don't give is left out of the record, where it was written as null. `render`, lines 405 to 406: the sentence that says which names the record lacks reads their absence. Two docstrings.
+- `benchmarks/harness/tests/test_served_record.py` (59 added, 9 removed): the fixture's first stage holds its class's boundary record; the class asserted is `w1/p4-o2`; one new test of `class_of` (the name, `-nostop`, a window that names no class, a file of another registration, a file with no boundary record, a second stage that names no registration).
+- `benchmarks/harness/tests/test_served_row.py` (20 added, 11 removed): the helper that holds the section's record to the command's reader passes with a reader that keeps the names too; the case with the second stage's files alone, and one with no serve.
+- `benchmarks/exfiltration/README.md` (9 added, 5 removed): the two bullets that describe `class` and the names.
+
+**Read or assumed: read.** The window is the `row` of the `window` in the class's boundary record, which the first stage's file holds whole and whose digest is the registration the second stage read. Nothing stands in where it is absent: with no first stage's file under that registration the `class` is None, the verdict's record leaves it out, and the section says "The record names no `class`".
+
+- [run] On the real files with the fix: `w1/p256-o2` for the served run and `w0/p4-o2` for the rehearsal. With #9673's reader, each section's verdict record is taken, `class` and `registration` kept as written.
+
+### What it does not do, and two things beyond ci's cure
+
+- [read] The reader does not recompute the boundary record's digest: it takes the file's `record` as the one its `registration` names. The driver's writer (`benchmarks/one_stage/verdict_record.py`) does recompute it.
+- [read] The rule for a class's name is now typed twice, in the driver's `class_of` and in the reader's. Under #9673 the command's reader holds both to the form; nothing holds their `-nostop` rule to each other. The one-writer pull request, already approved for after #9621, removes the reader's copy.
+- Beyond the cure, veto either. (1) Names left out, not null: [run] #9673's reader refuses the record with a null `serve` ("holds `serve` None") as it refuses a class with no window, and a served run read without its serve's directory would print one. (2) With the second stage's files alone the class is no longer named; it was the directory's name.
+
+### Checked
+
+- [run] `r20261113-081554-1ea0` on vy-nebius-cpu-3 at `77c5473205cb`: `suites.py benchmarks/harness --quick --fresh`, 1 suite, 1 passed, none cached: verity-bench 651 passed.
+- [run] On my machine at that head, one file a command: `test_served_row.py` 17 passed, `test_served_record.py` 10, `test_exfiltration.py` 41; ruff clean on the four Python files.
+- [run] The same commit on #9621's own head, without #9673 (a local tree, nothing pushed): 17 and 10 passed. So the fix holds whether or not #9673 is on `main` at the carry, at the form its head has now; if it lands with another form the fix follows `main`.
+- [run] The guard's head `60e10f61eed8` merged onto the fix in a local tree: no conflict, `test_served_row.py` 25 passed. The guard needs no change for the fix.
+
+### The guard
+
+- [run] `r20261113-072923-691e` on vy-nebius-cpu-9 at `60e10f61eed86e26a1b87f48ed68ce7bccb1e6b9`, `--changed origin/main --quick`: 3 of 3 suites passed, none cached (verity-bench 655, repository 388, verity-graph 220). Not opened: it waits behind #9621.
+
+### What I wait on
+
+- Your word "carry". Then I carry #9621's branch with `tools/move/restack.py`, put the fix's commit on it, run the changed suites on a node and give you the ready line.
+- #9621 on `main`, then the guard's pull request; then the security level at the served run's sizes and the one writer.
+- Untouched: #9621's branch is still at `13a60635abb2`, no `main` is merged into any branch of mine, and I have built nothing of the join of the two readers.
