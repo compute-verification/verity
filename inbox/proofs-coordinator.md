@@ -118997,3 +118997,65 @@ Branch `cursor/proofs-accepts-7d08` at `3dde8747b8`, pushed. Nothing is unpushed
 2. The 03:00Z NEEDS 1 (the form hands the run each record as the proved verifier's parser reads it, for `RecordsRead`) stands.
 
 **To post.** Nothing.
+
+## SESSIONCOINS, Fri 13 Nov 03:59Z: COINMAP's `a36ddec487` is merged and `SessionDev.lean` is a root; `fitOf` at the run's locator is mine and written (`fitOf_run_stage`, `SessionDev.lean`, head `68faced794`), not compiled; nothing new has compiled since `ce92`; `SessionFits.lean`'s try `2580` holds a check slot and waits for a Lean slot
+
+### In plain words
+
+The coin map's definitions are now on my branch, so the file that ties my statements to the coin map can be built. The fact the join was missing, that the coin map counts the same coin elements at the run's locator as at the stages', took a few lines beside the one I already had, and I wrote it. None of today's new lines has been through a run yet. My VM was reset between turns, which cost the unpushed copy of this work. I rebuilt it from this session's text and pushed it.
+
+### Branch
+
+`cursor/proofs-sessioncoins-e4a0` at `68faced794`, pushed; nothing unpushed. Since my 03:29Z entry:
+- `b417401849`: `SessionRecord.lean` (root): `coin_record`, `agree_record`. The coin the check read for a session's round is its record's coins, through `DevReads`, a statement of how `dev` reads a round's releases. So this file does not import the coin map. `devReads_run` in `SessionDev.lean` gives `DevReads` at the coin map's release.
+- `a076f42ad0`: merge of `a36ddec4875b2cbc6b1dc5765ad8b1ca79597af9` (COINMAP), as your 03:43Z word says. It is not COINMAP's tip. It merged with no conflict.
+- `68faced794`: the `fitOf` lemmas (section 1); `SessionOpened.lean` (section 2); `SessionDev` and `SessionOpened` added as roots.
+
+TWOLEG's two reverts (`2b92d76759`, `016c9128dc`) stay on my branch, as you say. I drop them once a try shows `accepted_fits` and `stagesFit` compile, and I will say so when I do.
+
+### Mailbox
+
+Your 03:35Z and 03:43Z messages and your 03:58Z resume. Each item is answered below.
+
+### 1. `fitOf` at the run's locator: mine, written [read; checked on a stand-in, not in a run]
+
+`SessionDev.lean` at `68faced794`, beside `dev_run_stage`:
+- `usedOf_congr`, `devBits_congr`, `fitOf_congr`: two locators that put the same releases on round `n` count the same elements there, read the same bits, and count the same elements that fit. `dev_congr` is now these lemmas in two lines.
+- `fitOf_run_stage A Ls tab hLs hn pre log : CoinMap.fitOf (runLocate A Ls tab) n pre log = CoinMap.fitOf Ls n pre log`, for `n ≤ A.h.stage`. The hypotheses are the ones `dev_run_stage` has.
+- `elemAgrees_run_stage`: `CoinMap.ElemAgrees (runLocate A Ls tab) A x reads o r` gives `CoinMap.ElemAgrees Ls A x (fun i => reads i ∧ i ≤ A.h.stage) o r`. This is the coin map's agreement at the run's locator carried to the stages' locator, at the stages' rounds. That is the form in which COINMAP's `elems_first` and `elems_second` read it.
+
+At `Ls := CoinMap.stageLocate ℓ₁ ℓ₂`, `hLs` is `fun _ _ _ _ _ => rfl` [read: `CoinStages.lean:49`]. The text is the text of a stand-in that elaborated on my VM with no error before the VM reset [run, on the VM: `lake env lean` of `SessionDev.lean` from "The run's locator" on, over copies of the coin map's definitions]. It has not been in a run.
+
+ASSEMBLY can take `fitOf_run_stage` or `elemAgrees_run_stage` from my branch, at `68faced794` or later.
+
+### 2. New: `SessionOpened.lean` [read; not in a run]
+
+This is the converse of `located_own`. On a play the form accepts, where session `t`'s record gives coins of the stream and round its round `j` is, `located_opened` says that the releases the session-round locator puts on that round, in the log the check read, are exactly one opening carrying those coins. `MembersHeld.opened` is the step: the tree shows the round opened (`Trees.round_held`), the read opens that stream more often than the round's number (`opening_lt_openedOf`), and the opening after exactly that many is the one on session `t`'s round (`MembersHeld.place`, `readLog_named`). With `coin_record`, this pins the coin the check read for every round a record names, not only the rounds that have a release.
+
+### 3. `SessionFits.lean` and the two probes [run]
+
+- `r20261113-032657-2580` (vy-nebius-2, `SessionFits.lean --siblings` at `2607ff0783`): launched 03:27Z. It took check slot p17 at 03:49Z and waits for a Lean slot of pool build, "2 ahead in line; 12 of its 12 slot(s) held". The 20-minute wait cap returned "exit 79". Nothing was cancelled. `SessionFits.lean` is unchanged at `68faced794`, so its verdict holds for my head. It is two places from starting, so I keep it rather than start over at the back of the line.
+- The two probes owed for 07:00Z are the axiom probes of `SessionCoins.lean` and `SessionHeld.lean` themselves. Neither has run. Once `2580` ends, I launch one run on vy-nebius-2 that tries, one after another: `SessionDev.lean --siblings`, `SessionOpened.lean --siblings`, `SessionRecord.lean`, `SessionCoins.lean`, `SessionHeld.lean`. Other proofs workers already run this shape, a loop of `lean_changed.py --try` in one run (`r20261113-024812-7b19`). It is one try at a time on one slot. Say if you want them as separate `verity lean try` runs.
+
+### 4. Do my theorems stand at the form's accept? [read]
+
+Yes. Every theorem of mine about the read takes `FormAccepts C o` as a hypothesis (`sessionsFit_of`, `located_own_accepted`, `located_opened`, `coin_record`, `sessionsAgree_run`, `coinsAgree_run`, `stmtReadsNone`). If the form accepts no play, they hold and say nothing. Their proofs unpack the acceptance through `accepted_steps`, `inputAt_ok` and `membersRun_held` (`SessionHeld.lean`). If merging #9555 into the form changes those steps or what `membersRun` reads, `SessionHeld.lean` is the file that breaks. I will rebuild it on TWOLEG's cured head when one is named.
+
+### STOP RULE
+
+Nothing. No lock, accept or `Sampled.lean` touched; no file of another worker's edited. COINMAP's files came in only through the merge of the head you named.
+
+### NEEDS
+
+1. Coordinator: nothing to decide unless you want the five tries as separate runs (section 3).
+2. [ASSEMBLY](bc-20b18121-d066-5cc6-989c-3dbdcb1942b8), for your reading: `fitOf_run_stage` and `elemAgrees_run_stage` (section 1); `hLs` at `stageLocate` is `fun _ _ _ _ _ => rfl`.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing written since `ce92` has compiled in a run: not `SessionFits.lean`, `SessionRecord.lean`, `SessionDev.lean` or `SessionOpened.lean`.
+- The probes of `SessionCoins.lean` and `SessionHeld.lean`.
+- That `SessionDev.lean` builds against COINMAP's real `CoinMap.lean` and not only against my stand-in's copy of its definitions.
