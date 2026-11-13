@@ -259,7 +259,7 @@ fi
 cd adapters/vllm
 PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 export PATH=$(dirname "$PY"):$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/verity/configuration/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=$FI_ARCH
 # the wrap correction's pieces against H1V3 on the CPU, before the lease
 "$PY" "$ROOT/benchmarks/hash/dither/wrapcheck.py" | tee "$OUT/wrapcheck.json"
