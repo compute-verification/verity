@@ -132518,3 +132518,57 @@ Nothing.
 ## Not established
 - `SessionMatches` is a hypothesis.
 - That every honest play passes `RECORD_DIGEST`: TWOLEG's replay ran three plays [relayed]; I ran none.
+
+## LOOSEMAP, Fri 13 Nov 09:21Z: CERTIFIED with two hand patches: `cursor/proofs-loosemap-0917` at `56561c89bb4a` on chain 2's base `5b2c1e735b92`, and with both patches (`cursor/proofs-loosemap-0917-hand-patch` at `bf5b5eb2e469`) the suite that failed passes, `verity-check` 1001 passed, and the root suite passes, 355 passed. The variant for after the difftest map is pushed (`cursor/proofs-loosemap-0917-after-difftest` at `6fc27ced33de`) and its rehearsal is running
+
+**In plain words.** My 09:10Z entry said the move leaves two tests of the check's own tooling failing. The patch that mends them is now a file on the patch branch, beside the README's, and a run on the moved tree with both patches passes the suite that failed and the suite of the whole tree's tests. So the map certifies as before, and it takes two patch files after it, not one. Your 09:14Z message asks for a second form of the map, for a stager who places it after top's difftest map: that form is pushed, with two words of `[roots]` changed and nothing else, and a run is rehearsing it in that place on top's trial branch.
+
+Clock: `date -u` read 09:21Z. Mailbox read at 09:17Z: your 09:14Z message. Its point 2 (one title for `dac7` and `7460`) is my 09:10Z entry, sections 3 and 4: the group map alone changes 24 of 36 keys, the four among them, and rewrites the same two lines of the helper, so what you posted on TOP-398 holds and is now run.
+
+**1. The two hand patches** (both go on the commit the map makes, before the group map; either order, they touch different files)
+- **Branch:** `cursor/proofs-loosemap-0917-hand-patch` at `bf5b5eb2e4697b193da25c8b7d0f65ba604b82ab`. `0d456883ef9d`, which you posted, is its parent and holds the first file only.
+- `proofs_loose_map_hand.patch`: `verity/protocols/flock/prover/README.md`, 4 lines in and 3 out (unchanged).
+- `proofs_loose_map_hand_2.patch`: `tools/verity/check/tests/test_check.py`, 4 lines in and 3 out.
+  - Line 79: `(flock / "agreement" / "ci.py")` for `(flock.parent / "agreement" / "ci.py")`.
+  - Lines 1062-1063: a change to the agreement is expected to touch `["verity/protocols/flock/prover/", "verity/protocols/flock/prover/agreement/"]`, where the test expected the second alone.
+- **`git am` of both on the staged commit `b73b48dc64ba`** gives the tree of `3f774f731771`, the head of `cursor/proofs-loosemap-0917-on-chain2` [my VM: both trees `1c65bc899601`].
+- The test file and `tools/verity/check/tool.py` are the same bytes on chain 1's head, on `5b2c1e735b92` and on top's trial branch [my VM: `git diff --stat`, empty], and the second patch applies on chain 1's moved tree [my VM: `git apply --check` on `edea1506d5a7`].
+
+**2. With both patches** [run `r20261113-090849-cd23`, cpu-9, rc 0; on the pushed `3f774f731771`, `--cwd source`; `suites.py --changed 546575e05f79 --quick`, which picks the three suites the second patch reaches]
+- "passed  verity-check  1001 passed in 307 s". Without the second patch: "999 passed, 2 failed" on chain 1's moved tree (`r20261113-082338-f6dc`) and on chain 2's (`r20261113-084411-37ea`).
+- "passed  repository  355 passed in 332 s": the root `tests/`, which holds the four root tests.
+- "passed  verity-graph  220 passed in 22 s".
+- The no-growth lints over the second patch: "ratchet gate 546575e05f79..3f774f731771: 1 change(s), 0 failed".
+- **Which tree it imported:** a pushed commit of the moved tree; it printed `verity /workspace/research/src/3f774f731771…/verity/__init__.py` and `verity_flock /workspace/research/src/3f774f731771…/verity/protocols/flock/prover/python/verity_flock/__init__.py`.
+
+**3. Is any other path built the way the first test built it** [my VM: `git grep` over the staged tree `b73b48dc64ba`, the maps left out]
+- **From a parent directory by `.parent`, then `"agreement"` or `"pod"`: one place in the tree**, the test line the second patch changes.
+- **From a counted parent (`parents[N] / "agreement"` or `/ "pod"`): 25 places**, all under `verity/protocols/flock/prover/` (its tests and `verity_flock/challengers.py`). Each resolves to a directory the moved tree holds [my VM: each path computed from its file's place]. The mover lowered the count where the directory moved (`test_ci_fetch.py:12`, `parents[2]` to `parents[1]`).
+- Inside the moved directories, the two places that reach outside by counting were rewritten rightly: `circuit_type_agree.py:24` (`parents[1] / "prover" / "tests"` became `parents[1] / "tests"`, and the file is there) and `prover/tests/lean/generate_inner_claims.sh:16` (`../../../agreement/` became `../../agreement/`).
+- This is a search, not a proof: the suites are the check, and two runs of them have not ended.
+
+**4. The variant for a place after `difftest_map.toml`**
+- **Branch:** `cursor/proofs-loosemap-0917-after-difftest` at `6fc27ced33de24bf95ad3fc037b1d6d4fa8b6348`: `56561c89bb4a` and one commit. The file has the same name; two lines differ, the two tables of `[roots]`, which name `verity_difftest` at `tools/difftest/python/verity_difftest`. No other byte differs [my VM: `git diff 56561c89bb4a 6fc27ced33de`, 2 lines in, 2 out].
+- The trial branch has not moved: `f14ded183a6b` [my VM: `git fetch`, 09:17Z].
+- **Its rehearsal** [run `r20261113-091909-2d1b`, cpu-8, running; base `583fcd1f212`, the trial tip and this file]: it stages `compose_map.toml`, `configurations_map.toml`, `world_map.toml`, applies ONSITE's listing patch, stages `artifacts_map.toml`, `live_challenger_map.toml`, `difftest_map.toml`, then this map, applies both hand patches by `git am`, and runs the listing's check, the four root tests and `pins.py --stale` before this map and after it, `PYTHONPATH` cleared, and the two tests of section 1.
+- **A caution on what it can show.** I do not know which hand steps top applies between its three maps (the listing after the challenger service's move, for one). If the tree before this map is red there, I report the tests before and after by name, and whether this map changes the set.
+- I expect it to end about 09:55Z [guess: six maps to stage before this one; three took nine minutes].
+
+**NEEDS**
+1. Nothing to go on.
+
+**To post** (as it is):
+
+> Proofs' loose paths map takes two hand patches after it, both on `cursor/proofs-loosemap-0917-hand-patch` at `bf5b5eb2e469` (the head posted before, `0d456883ef9d`, holds the first only): `proofs_loose_map_hand.patch` (one README) and `proofs_loose_map_hand_2.patch` (three lines of `tools/verity/check/tests/test_check.py`). Without the second, the suite `verity-check` fails two tests on the moved tree; with both it passes (1001 passed) and the root suite passes (355 passed), on `5b2c1e735b92` with the map (`r20261113-090849-cd23`). Both go by `git am` on the commit the map makes, before the group map. For a place after `difftest_map.toml` the map is `cursor/proofs-loosemap-0917-after-difftest` at `6fc27ced33de` (two words of `[roots]` differ); its rehearsal on the trial branch is running.
+
+**Not established**
+- The variant's certificate and tests after `difftest_map.toml` (`r20261113-091909-2d1b`, running).
+- The other suites on the moved trees: `r20261113-084411-37ea` (chain 2's base and this map: 30 of 96 passed and `verity-check` failed, as said, at 09:16Z) and `r20261113-082338-f6dc` (chain 1's tree: 82 passed and the same one failed). Another suite may still fail.
+- The two patches after the lane's other three maps and on the trial branch: the first applied there by `git am` (`r20261113-083849-4498`, `r20261113-084801-7460`); the second is not run there, though its file is the same bytes on those trees. The variant's run applies both on the trial branch.
+
+**Pushed heads**
+- `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone; unchanged).
+- `cursor/proofs-loosemap-0917-after-difftest` `6fc27ced33de` (the variant alone).
+- `cursor/proofs-loosemap-0917-hand-patch` `bf5b5eb2e469` (both patch files).
+- `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771` (chain 2's base, the map, its move, both patches).
+- `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`; `cursor/proofs-loosemap-0917-moved` `3fa6c6c82dc6` (superseded).
