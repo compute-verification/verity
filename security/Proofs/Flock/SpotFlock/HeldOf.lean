@@ -359,7 +359,7 @@ theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   obtain ⟨ns', hns, hc⟩ := hc
   split at hc
   · rename_i grain replay k hk
-    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq,
+    simp only [Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq,
       Prod.mk.injEq] at hc
     obtain ⟨ids, hids, ks', hks, rfl, rfl⟩ := hc
     exact
