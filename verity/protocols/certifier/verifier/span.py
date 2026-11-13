@@ -39,7 +39,7 @@ from __future__ import annotations
 import hashlib
 import struct
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import Any
 
 from verity.commitments import domains
@@ -59,8 +59,8 @@ PARAMS_KEYS = ["key", "link", "lms", "schedule", "session"]
 #: with the registered hardware: `head` and `site` come together
 REGISTERED_KEYS = ["head", "key", "link", "lms", "schedule", "session", "site"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
-#: with the bound on a response's length: every field but the egress form and the lengths rows' form
-BOUNDED_SCHEDULE_KEYS = sorted(f.name for f in fields(Schedule) if f.name not in ("egress", "lengths"))
+#: with the bound on a response's length (`max_tokens_cap`), the one field beside them that `scheduleOf` reads
+BOUNDED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 PHASE_KEYS = ["certificates", "phase", "registration"]
 ROWS_KEYS = ["cell_bytes", "certificate", "direction", "domain", "format", "layout", "link", "parameters", "root",
