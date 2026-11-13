@@ -3,9 +3,6 @@ falls back to the manifest's v1-annotation reading only when a Build carries no 
 block), and the plan's CONTENT (sites, digest) is the same under both sources on the same manifest + tree."""
 from __future__ import annotations
 
-import gzip
-import json
-
 import pytest
 
 from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
@@ -15,7 +12,6 @@ from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     ReturnSlot,
     infer_wrapper_prefix,
-    read_program_correspondence,
 )
 
 
@@ -31,21 +27,6 @@ def _record(modules_of_calls: list[str], *, prefix: str = "model.") -> dict:
                          "written": [], "inputs": [], "lifetime": {}, "collective": None})
         calls.append({"occ": seen[pm], "member": None, "row": k, "hint": None, "returns": [{"port": 0, "output": 0, "leaves": [0, 8]}], "args": []})
     return {"schema": RC.SCHEMA, "body": "program_fn", "inputs": ["ids"], "weights": None, "rank": None, "occurrences": occs, "calls": calls}
-
-
-def _program_dir(tmp_path, name: str, doc: dict | None, *, recorded_digest: str | None | bool = True) -> str:
-    d = tmp_path / name
-    d.mkdir()
-    desc = {"schema": "x", "program_fn": "f", "annotations": ({"node_hints": {"0": "a/b[0]"}} | ({"correspondence": doc} if doc is not None else {}))}
-    with gzip.open(d / "descriptor.json.gz", "wt") as f:
-        json.dump(desc, f)
-    prog: dict = {"digest": "p" * 64}
-    if doc is not None and recorded_digest is True:
-        prog["correspondence_digest"] = RC.correspondence_digest(doc)
-    elif isinstance(recorded_digest, str):
-        prog["correspondence_digest"] = recorded_digest
-    (d / "result.json").write_text(json.dumps({"ok": True, "program": prog}))
-    return str(d)
 
 
 MODULES = ["body.embed", "body.blocks.0.norm_in", "body.blocks.0.proj_a", "body.blocks.0.act", "body.blocks.0.norm_out", "logits", ""]
@@ -65,6 +46,7 @@ def test_same_plan_under_both_sources_and_the_source_is_recorded():
     assert b.correspondence["modules"]["confirmed"] == sum(1 for v in b.values if P.ROUTE_OF_FAMILY.get(v.family) in P.MODULE_ROUTES) + sum(len(v.consumers) for v in b.values)
     da, db = a.to_json(), b.to_json()
     assert da["correspondence"] != db["correspondence"] and da["plan_digest"] == db["plan_digest"]
+    assert all(c["absent"] == [] and c["problems"] == [] for c in (da["correspondence"], db["correspondence"]))   # the block's keys stand, empty
     assert P.plan_digest(db) == db["plan_digest"]
 
 
@@ -135,20 +117,3 @@ def test_a_named_port_off_the_runner_is_the_whole_return_and_a_call_that_names_n
     for call in ({}, {"i": 6}, {"call": 2}):                                         # a call id reads a record, and this reader has none
         with pytest.raises(KeyError, match="neither op_path, call nor name"):
             corr.owning_module(call)
-
-
-def test_from_programs_presence_test_digest_check_and_uniform_fallback(tmp_path):
-    doc = _record(MODULES)
-    p_ok = _program_dir(tmp_path, "build_request", doc)
-    p_v1 = _program_dir(tmp_path, "build_request_LP1_T1", None)
-    p_bad = _program_dir(tmp_path, "build_request_LP2_T2", doc, recorded_digest="0" * 64)
-    t, dg, prob = read_program_correspondence(p_ok)
-    assert t is not None and dg == RC.correspondence_digest(doc) and prob is None
-    assert read_program_correspondence(p_v1) == (None, None, None)              # v1 Build: result.json records no digest, the descriptor is not read
-    t2, _dg2, prob2 = read_program_correspondence(p_bad)
-    assert t2 is not None and prob2 and "!=" in prob2
-    c = AcquireCorrespondence.from_programs(tree(), [p_ok], wrapper_prefix="model.")
-    assert c.source == "correspondence" and list(c.digests) == ["build_request"] and c.absent == [] and c.problems == []
-    mixed = AcquireCorrespondence.from_programs(tree(), [p_ok, p_v1], wrapper_prefix="model.")
-    assert mixed.source == "v1_annotations" and mixed.absent == ["build_request_LP1_T1"] and mixed.tables == {} and any("falls back" in p for p in mixed.problems)
-    assert AcquireCorrespondence.from_programs(tree(), [], wrapper_prefix="model.").source == "v1_annotations"

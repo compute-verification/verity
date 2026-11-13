@@ -3,6 +3,14 @@
 The measurements PoUB's timing cites (`verity/protocols/poub/verifier/timing.py`): how fast a node's writers can
 fill a tier with labels, and how much a card holds on chip. Each probe is one Attempt on a GPU node.
 
+**Run:** `verity bench bandwidth chip|write_gpu|write_host [ARGS]` (`run.sh`) runs one probe's script, named below, as
+the command of a `research run`. `uv run tools/verity/check/suites.py benchmarks/bandwidth` tests the runner, on any
+machine.
+
+**Writes:** a probe's records are its result, under its run's `$OUT`: `chip.json` and `ur.jsonl` (`chip`),
+`write.jsonl` (`write_gpu`) and `write_host.jsonl` (`write_host`), beside the build's and the device's logs. Each
+script's header lists its files. No code reduces a probe's records to one number, so no probe writes a `result.json`.
+
 ## Write ceilings
 
 The write ceilings of PoUB, `timing.GPU_WRITE_BYTES_PER_S` and
@@ -13,7 +21,7 @@ control that writes nothing rejected).
 - `write.cu` (`bwwrite`) on one card: labels derived on the device by 16-byte stores (plain and evict-first) and by
   bulk (TMA) stores from shared memory, the driver's memset, labels streamed in over PCIe by the copy engines (H2D)
   and by the SMs (zero copy), and the card's D2H into pinned host memory. `run_write_gpu.sh` is one Attempt under the
-  queue's GPU; its header lists the outputs.
+  queue's GPU.
 - `write_host.c` (`bwwrite_host`) on the host's cores: labels by non-temporal and by cached stores, and `rep stosb`,
   one thread a core over 1, 2, 4, ... cores and each NUMA node's. `run_write_host.sh` is one Attempt on the CPUs the job
   was given.

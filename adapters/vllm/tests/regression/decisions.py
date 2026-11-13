@@ -19,6 +19,9 @@ from typing import Any
 
 from . import resolver
 
+#: the columns a reason or a need is wrapped to: a line of 132 less the 13 of its label
+WRAP = 119
+
 
 def listing() -> list[dict[str, Any]]:
     fx = resolver.load_fixtures()
@@ -62,20 +65,20 @@ def retirements() -> list[dict[str, Any]]:
     return out
 
 
-def render_retired(rows: list[dict[str, Any]], *, width: int = 132) -> str:
+def render_retired(rows: list[dict[str, Any]]) -> str:
     lines = [f"retired checks in {resolver.FIXTURES.relative_to(resolver.VLLM_ROOT)}: {len(rows)}", ""]
     for r in rows:
         lines.append(f"{'MALFORMED ' if r['problem'] else ''}#{r['row']} {r['check']}  since {r['since']}")
         if r["problem"]:
             lines.append(f"    PROBLEM  {r['problem']}")
         for label, text in (("reason", r["reason"]), ("needs", r["needs"])):
-            for i, chunk in enumerate(textwrap.wrap(text, width=width - 13) or []):
+            for i, chunk in enumerate(textwrap.wrap(text, width=WRAP) or []):
                 lines.append((f"    {label:<8} " if i == 0 else "             ") + chunk)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render(rows: list[dict[str, Any]], *, width: int = 132) -> str:
+def render(rows: list[dict[str, Any]]) -> str:
     findings = {(d["finding"], d["row"]) for d in rows}                      # one decision = one finding on one row; a block per check it touches
     n_pending = sum(1 for d in rows if d["status"] == "pending_review")
     lines = [(f"labelled decisions in {resolver.FIXTURES.relative_to(resolver.VLLM_ROOT)}: {len(findings)} (by finding x row), "
@@ -91,7 +94,7 @@ def render(rows: list[dict[str, Any]], *, width: int = 132) -> str:
             lines.append(f"    pins     {rel}: {pin.get('bytes')} B / {str(pin.get('sha256') or '')[:16]}…")
         if d["problem"]:
             lines.append(f"    PROBLEM  {d['problem']}")
-        for i, chunk in enumerate(textwrap.wrap(d["reason"], width=width - 13) or []):
+        for i, chunk in enumerate(textwrap.wrap(d["reason"], width=WRAP) or []):
             lines.append(("    reason   " if i == 0 else "             ") + chunk)
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"

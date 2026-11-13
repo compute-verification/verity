@@ -45,7 +45,7 @@ RANK_CALLS = ("tp2_commit_install", "tp2_commit_finalize", "tp2_commit_open", "t
 
 
 def _program(rank: int) -> bytes:
-    return hashlib.sha256(b"the Program of rank %d" % rank).digest()
+    return hashlib.sha512(b"the Program of rank %d" % rank).digest()
 
 
 class _Committer:
