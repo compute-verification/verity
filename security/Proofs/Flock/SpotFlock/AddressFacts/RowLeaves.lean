@@ -43,8 +43,8 @@ variable {h : Held}
 /-- **Each wire is one the second stage's check reads**, decided on the auditor's copies: no link names the wire's
 reader port, and the first wire at that port (`heldWire`, the one `SecondStage.readOk` takes) names the wire's writer
 port. The wires the design derives are one a reader port (`SecondStage.wireRuns`, through `gather`), so the second
-clause holds of them; the first fails only where one template's port reads a parameter of the outer block in one
-caller and a node's output in another. -/
+clause holds of them (`RowWires`); the first is not a fact of the derivation, which gathers the links and the wires
+apart: it fails where a derived link and a derived wire name one port of one template. -/
 def wiresChecked (h : Held) : Bool :=
   (h.wires.getD #[]).all fun w =>
     (heldLink h w.template w.port).isNone &&

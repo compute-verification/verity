@@ -8,7 +8,8 @@ public import Proofs.Properties.Challenger.Coins
 
 On a play whose logs the check read and found the device's (`ReadIsDevice`), every fresh coin the play's log shows of
 the first stage's family is released after the boundary registration's digest, and every one of the second stage's
-family after the interior registration's (`oneRoot_first`, `oneRoot_second`; `OneRootIn`).
+family after the interior registration's (`oneRoot_draws`, at the cut's two draws; `oneRoot_second`, the second
+stage's in the case's words; `OneRootIn`).
 
 A session's read shows a fresh coin of a family only after a root its log's lines show of that family
 (`readLog_fresh`), and those are the roots `releasedRootsOf` lists (`Sampled.releasedRootsOf_ok`). The challenger's
@@ -319,17 +320,7 @@ theorem oneRoot_draws {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.se
       exact ⟨oneRootIn_of_read (hdev _ hl) (oneRootIn_append (hall₁ _ _ ho₁) (hall₂ _ _ (hx₂ cm₂ roots₂ ht₂))),
         oneRootIn_of_read (hdev _ hl) (oneRootIn_append (hall₁ _ _ (hx₁ cm₁ roots₁ ht₁)) (hall₂ _ _ ho₂))⟩
 
-/-! ## In the case's words -/
-
-theorem firstDraws_after {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
-    {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
-    (h : firstDraws key p c e = some d) : d.after = c.digest := by
-  unfold firstDraws at h
-  obtain ⟨_, -, h⟩ := bind_some h
-  obtain ⟨_, -, h⟩ := bind_some h
-  obtain ⟨_, -, h⟩ := bind_some h
-  obtain rfl := Option.some.inj h
-  rfl
+/-! ## The second stage, in the case's words -/
 
 theorem source_draws {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws} {key : ChallengerKey}
     {label : String} (h : oneStageZkSource p c = some d) (hch : p.base.challenger = some (key, label)) :
@@ -337,23 +328,6 @@ theorem source_draws {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
   unfold oneStageZkSource oneStageSource at h
   rcases hw : p.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h <;> cases h
   exact ⟨rfl, rfl⟩
-
-/-- **The play's log shows the first stage's family after the boundary registration's digest alone**: the family the
-first stage's coin evidence's segment names, on a play whose logs the check read and found the device's
-(`ReadIsDevice`), where on two windows each session shows the other stage's family after that stage's digest alone
-(`OtherRoots`). -/
-theorem oneRoot_first {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.sent)
-    {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
-    {l : String} (hcase : caseOf o.sent = .ok (p, c, e))
-    (hl : Spot.getD (Spot.getD e.coins "segment") "label" = .str l) : OneRootIn l c.digest o.log := by
-  obtain ⟨p', c', e', key, d₁, c₂, d₂, ξ, h1, -, h3, h4, -, -, ho, -⟩ := oneRoot_draws hg hx
-  have hpce := Except.ok.inj (h1.symm.trans hcase)
-  simp only [Prod.mk.injEq] at hpce
-  obtain ⟨rfl, rfl, rfl⟩ := hpce
-  obtain ⟨_, _, -, hseg, -⟩ := Properties.Challenger.Coins.drawCoins_ok h4
-  have hlab : d₁.label = l := Json.str.inj (hseg.symm.trans hl)
-  rw [← hlab, ← firstDraws_after h3]
-  exact ho
 
 /-- **The play's log shows the second stage's family after the interior registration's digest alone**: the family the
 interior audit's parameters name for its challenger, on a play whose logs the check read and found the device's

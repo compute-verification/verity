@@ -1357,7 +1357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--stop", help=STOP_HELP)
     g.add_argument("--devices", help="the audit's proof server's cards, their indices comma-separated (0,1): a prover a "
                                      "card (`flock-circuit prove --zk --gpu`, a device build); without it one CPU prover. "
-                                     "Never with --firewall, whose sessions are process pairs on the CPU")
+                                     "Never with --firewall, whose sessions prove on the CPU")
     g.add_argument("--replay-record", help="the record the replay wrote beside --capture (replay.json): its seconds and "
                                            "cards go in the summary's `replay`, which this command has no clock over")
     g.add_argument("--delta", type=float, default=0.5)

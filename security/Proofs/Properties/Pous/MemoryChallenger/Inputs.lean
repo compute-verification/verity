@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 public import Batteries.Data.List.Basic
 import Batteries.Lean.Except
 import Mathlib.Data.Finset.Attr

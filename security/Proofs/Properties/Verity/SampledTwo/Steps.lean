@@ -13,7 +13,8 @@ accepts at the switch `form` (`accepted_steps`):
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`), each registration's record the one the
   verifier's parser reads from its canonical text (`readBack`, read by `readBack_ok`), the boundary's with the
-  commitment's digest (`digestIs`, read by `digestIs_ok`);
+  commitment's digest (`digestIs`, read by `digestIs_ok`), and the interior's, as given and as read back, with the
+  interior commitment's (`interiorDigestIs`, read by `inputAt_interior`);
 * neither stage's bytes run past one coin's (`stagesFit`, read as `ξ.size ≤ STAGE_BYTES` and `ξ₂.size ≤ STAGE_BYTES`
   by `accepted_fits`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
@@ -21,7 +22,11 @@ accepts at the switch `form` (`accepted_steps`):
   first session's log shows no second-stage coin after the interior's digest (`interiorUnshown`, read by
   `interiorUnshown_roots`), and the stages' sessions are in order on one ledger (`stagesOrdered`, by
   `accepted_ordered`, read by `orderReason_none` and `Ordered.stagesOrdered_order`), and on two windows no line of the
-  first session's log is a coin tree's (`firstTreeless`, by `accepted_treeless`, read by `firstTreeless_lines`);
+  first session's log is a coin tree's (`firstTreeless`, by `accepted_treeless`, read by `firstTreeless_lines`), and
+  the second session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`, by
+  `accepted_repOrdered`, read by `repStreamsOrdered_trees` and `repStreamOrder_before`: of two rounds the log shows
+  opened of one tree, neither its last, the one opened first is of a stream the tree's spec lists earlier, or an
+  earlier round of the same stream);
 * the interior audit's verdict at its coins, over the sessions' verdicts, is the accept, with the check's public
   outputs and profile.
 
@@ -84,6 +89,22 @@ theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Reg
          cases h)
       | (simp at h; done)
 
+/-- **What `interiorDigestIs` passed**: both records' digests are the one named. -/
+theorem interiorDigestIs_ok {record j : Json} {d : ByteArray} (h : interiorDigestIs record j d = .ok ()) :
+    Registration.digest record = .ok d ∧ Registration.digest j = .ok d := by
+  unfold interiorDigestIs at h
+  obtain ⟨d₁, hd₁, h⟩ := bind_ok h
+  obtain ⟨d₂, hd₂, h⟩ := bind_ok h
+  split at h
+  · rename_i heq
+    rw [hd₁, hd₂, heq.1, heq.2]
+    exact ⟨rfl, rfl⟩
+  · first
+      | (cases h; done)
+      | (simp only [throw, throwThe, MonadExceptOf.throw] at h
+         cases h)
+      | (simp at h; done)
+
 /-- **What `inputAt` computed** where it returned: the run of record's input is `inputOf` at each registration's
 record as `readBack` returned it, and the boundary's so returned has the commitment's digest (`digestIs`). -/
 theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
@@ -110,9 +131,41 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
       obtain ⟨u, hd, h⟩ := bind_ok h
       cases u
       obtain ⟨j₂, hj₂, h⟩ := bind_ok h
+      obtain ⟨u₂, -, h⟩ := bind_ok h
+      cases u₂
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, rfl, rfl, rfl⟩ := h
       exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, j₁, j₂, h6, rfl, hj₁, hj₂, digestIs_ok hd⟩
+    · cases h
+
+/-- **The interior's records have the interior commitment's digest** where `inputAt` returned (`interiorDigestIs`):
+the evidence's interior record, which `interiorUnshown` reads the digest of, and its read-back, which the run of
+record is given. -/
+theorem inputAt_interior {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input}
+    (h : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
+    Registration.digest e.record = .ok c₂.digest ∧
+      ∃ j₂, readBack e.record = .ok j₂ ∧ Registration.digest j₂ = .ok c₂.digest := by
+  unfold inputAt at h
+  obtain ⟨s, -, h⟩ := bind_ok h
+  obtain ⟨c₂', -, h⟩ := bind_ok h
+  obtain ⟨ξ₂', -, h⟩ := bind_ok h
+  obtain ⟨r', -, h⟩ := bind_ok h
+  cases h5 : r'.all
+  · simp [h5] at h
+    cases h
+  · simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨vs, -, h⟩ := bind_ok h
+    split at h
+    · obtain ⟨j₁, -, h⟩ := bind_ok h
+      obtain ⟨u, -, h⟩ := bind_ok h
+      cases u
+      obtain ⟨j₂, hj₂, h⟩ := bind_ok h
+      obtain ⟨u₂, hd₂, h⟩ := bind_ok h
+      cases u₂
+      simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := h
+      exact ⟨(interiorDigestIs_ok hd₂).1, j₂, hj₂, (interiorDigestIs_ok hd₂).2⟩
     · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/
@@ -141,6 +194,7 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     obtain ⟨u', hu, hp⟩ := bind_ok hp
     obtain ⟨u'', -, hp⟩ := bind_ok hp
     obtain ⟨u₃, -, hp⟩ := bind_ok hp
+    obtain ⟨u₄, -, hp⟩ := bind_ok hp
     obtain ⟨law, hl, hp⟩ := bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
@@ -182,6 +236,106 @@ theorem accepted_treeless {form : Bool} {p : Params} {c : OneStage.Commitment} {
     obtain ⟨u, ht, -⟩ := bind_ok hp
     cases u
     exact ht
+
+/-- **An accepted two-stage check found each coin tree's rounds opened stream by stream** (`repStreamsOrdered`). -/
+theorem accepted_repOrdered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : repStreamsOrdered p e = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨u, ho, -⟩ := bind_ok hp
+    cases u
+    exact ho
+
+/-- **A round that comes before one that comes before a third comes before the third** (`Challenger.roundBefore`). -/
+theorem roundBefore_trans {a b c : Nat × Nat} (hab : Challenger.roundBefore a b = true)
+    (hbc : Challenger.roundBefore b c = true) : Challenger.roundBefore a c = true := by
+  unfold Challenger.roundBefore at hab hbc ⊢
+  simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hab hbc ⊢
+  omega
+
+/-- **Where each round comes before the next, each comes before every later one** (`Challenger.roundsRise`). -/
+theorem roundsRise_pairwise : ∀ {ps : List (Nat × Nat)} {a : Nat × Nat}, Challenger.roundsRise a ps = true →
+    (a :: ps).Pairwise fun x y => Challenger.roundBefore x y = true
+  | [], a, _ => List.pairwise_singleton _ a
+  | b :: ps, a, h => by
+    unfold Challenger.roundsRise at h
+    rw [Bool.and_eq_true] at h
+    have ih := roundsRise_pairwise h.2
+    refine List.pairwise_cons.2 ⟨fun y hy => ?_, ih⟩
+    rcases List.mem_cons.1 hy with rfl | hy'
+    · exact h.1
+    · exact roundBefore_trans h.1 ((List.pairwise_cons.1 ih).1 y hy')
+
+/-- **Where each round comes before the next, each comes before every later one** (`Challenger.roundsOrdered`). -/
+theorem roundsOrdered_pairwise {ps : List (Nat × Nat)} (h : Challenger.roundsOrdered ps = true) :
+    ps.Pairwise fun x y => Challenger.roundBefore x y = true := by
+  cases ps with
+  | nil => exact List.Pairwise.nil
+  | cons a ps => exact roundsRise_pairwise h
+
+/-- **Where a coin tree's rounds are opened stream by stream, a round opened earlier is an earlier round**: where
+`Challenger.repStreamOrder` passes the tree `t`, of two rounds the release log shows opened of it, the `i`-th before
+the `j`-th and neither its last, the `i`-th is of a stream the tree's spec lists before the `j`-th's
+(`Challenger.streamPlace`), or an earlier round of the same place's stream (`Challenger.roundBefore`). So before the
+log opens a round's challenges, the only rounds of the tree it has opened are that stream's earlier rounds and rounds
+of streams the spec lists earlier. -/
+theorem repStreamOrder_before {t : Challenger.LoggedTree} (h : Challenger.repStreamOrder t = true) {i j : Nat}
+    (hij : i < j) (hj : j + 1 < t.opened.size) :
+    Challenger.roundBefore
+      (Challenger.streamPlace t.spec (t.opened[i]'(by omega)).stream, (t.opened[i]'(by omega)).round)
+      (Challenger.streamPlace t.spec (t.opened[j]'(by omega)).stream, (t.opened[j]'(by omega)).round) = true := by
+  have hp : (t.opened.pop.toList.map fun o => (Challenger.streamPlace t.spec o.stream, o.round)).Pairwise
+      fun x y => Challenger.roundBefore x y = true := roundsOrdered_pairwise h
+  rw [List.pairwise_iff_getElem] at hp
+  have hlen : (t.opened.pop.toList.map fun o => (Challenger.streamPlace t.spec o.stream, o.round)).length =
+      t.opened.size - 1 := by simp
+  have := hp i j (by omega) (by omega) hij
+  simpa using this
+
+/-- **What `treesOrdered` passed**: `Challenger.repStreamOrder` passes each of the trees. -/
+theorem treesOrdered_ok {ts : Array Challenger.LoggedTree} (h : treesOrdered ts = .ok ()) :
+    ∀ t ∈ ts, Challenger.repStreamOrder t = true := by
+  unfold treesOrdered at h
+  by_cases ha : ts.all Challenger.repStreamOrder = true
+  · exact fun t ht => (Array.all_eq_true'.1 ha) t ht
+  · simp [ha] at h
+
+/-- **What `repStreamsOrdered` passed**: the interior audit read its session's coin trees (`OneStageZk.treesOf`, the
+trees `OneStageZk.membersRun` holds the second stage's sessions to), and the log opens each one's rounds stream by
+stream (`Challenger.repStreamOrder`, read by `repStreamOrder_before`). -/
+theorem repStreamsOrdered_trees {p : Params} {e : Evidence} (h : repStreamsOrdered p e = .ok ()) :
+    ∃ ts, OneStageZk.treesOf p.audit.base e.interior.base = .ok ts ∧
+      ∀ t ∈ ts, Challenger.repStreamOrder t = true := by
+  unfold repStreamsOrdered at h
+  obtain ⟨ts, hts, h⟩ := bind_ok h
+  exact ⟨ts, hts, treesOrdered_ok h⟩
+
+/-- **In an accepted two-stage check, a round of a second-stage coin tree opened earlier is an earlier round**: the
+interior audit read its session's coin trees, and of two rounds the log shows opened of one of them, the `i`-th
+before the `j`-th and neither the tree's last, the `i`-th is of a stream the tree's spec lists before the `j`-th's,
+or an earlier round of the same place's stream. The check's refusal `Challenger.REP_STREAM_ORDER` is what holds the
+log to it; no premise on the play enters. -/
+theorem accepted_roundsBefore {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    ∃ ts, OneStageZk.treesOf p.audit.base e.interior.base = .ok ts ∧
+      ∀ t ∈ ts, ∀ (i j : Nat) (_hij : i < j) (hj : j + 1 < t.opened.size),
+        Challenger.roundBefore
+          (Challenger.streamPlace t.spec (t.opened[i]'(by omega)).stream, (t.opened[i]'(by omega)).round)
+          (Challenger.streamPlace t.spec (t.opened[j]'(by omega)).stream, (t.opened[j]'(by omega)).round) = true := by
+  obtain ⟨ts, hts, hall⟩ := repStreamsOrdered_trees (accepted_repOrdered h)
+  exact ⟨ts, hts, fun t ht i j hij hj => repStreamOrder_before (hall t ht) hij hj⟩
 
 /-- **On two windows no line of the first session's log is a coin tree's**: where the check's `firstTreeless` passed,
 the boundary's window is `w₁`, the interior audit's is `w₂` and another, and the first session's log reads as the

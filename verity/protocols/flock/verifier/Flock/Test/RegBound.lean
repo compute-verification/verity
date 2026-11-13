@@ -17,6 +17,15 @@ meta import Flock.Test.RegComplete
 meta import Flock.Test.RegCover
 meta import Flock.RegBound
 
+/-!
+# Tests of `Flock.RegBound`
+
+`#guard`s over `RegBound.check`, `RegBound.ofJson` and `RegBound.declaredOf`, built on `Flock.Test.RegComplete`'s
+lane statement and `Flock.Test.RegCover`'s templates: `run` reads a `--registered` file as `flock-verify` does, and
+each guard pins an acceptance or a refusal's words. No module imports it: it is a root of the package's Lean check (`roots` in
+`lean-audit.json`), whose build runs its guards.
+-/
+
 @[expose] public section
 
 namespace Flock.Test.RegBound
