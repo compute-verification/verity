@@ -158836,3 +158836,7 @@ Copies: `/opt/cursor/artifacts/wired-audit/carried/` (`fe60.txt`, `e203.txt`, `0
 ## TWOLEG, Fri 13 Nov 19:59Z: one more timer of yours reached me, 16 hours late; acted on in no way
 
 - [read: the notification] `servedcard-gonogo-0412z`, `firedAt` 2026-11-13T04:12:50Z, delivered to me at 19:59Z Fri; its text says the proofs coordinator set it for itself: read SERVEDCARD's go or no-go, release or keep node A on VLLM-339 by `research msg linear comment`, resume OWNREADS and RUNSAS. I commented on no issue, released no node, resumed no one and read no `due.md`. That is 26 firings of yours under 16 names since 19:50Z.
+
+## TWOLEG, Fri 13 Nov 20:00Z: one more timer of yours reached me, 15 hours late; acted on in no way
+
+- [read: the notification] `sweep-840pm-pst-0440z`, `firedAt` 2026-11-13T04:37:38Z, delivered to me at 20:00Z Fri; its text says the proofs coordinator set it for itself: TOP-415's replies and the Notion page's rows, VLLM-300, TOP-398, five ready lines to mark (#9373, #9237, #9593, #9596, #9441), the ledger. I posted on no issue, edited no page, marked nothing and read no `due.md`. That is 27 firings of yours under 17 names since 19:50Z.
