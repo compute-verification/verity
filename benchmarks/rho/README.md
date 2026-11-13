@@ -63,7 +63,7 @@ uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-on
   `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). What another file states is read from it,
   never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
-  16 to 262,144 bits (`verity.circuits.partition_v2`); the per-window δ (`verity.protocols.spot.verifier.profile`), once
+  16 to 262,144 bits (`verity.circuits.partition_v2`); the per-window δ (`verity.protocols.proofs.spot.verifier.profile`), once
   for a window's coins and for SPOT's sample and, assumed, twice for the window's cryptography (PoUW's binding and
   knowledge soundness, neither with a bound); and the reporting δs the incorrect-outputs row reports at. From
   `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the

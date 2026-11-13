@@ -18,8 +18,8 @@ if args[:1] == ["--max-hellos"]:
 serve = Path(args[0]).resolve()
 sys.path.insert(0, str(serve.parents[2]))
 
-from verity.protocols.spot.device import challenger as C  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger as C  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 
 rng = random.Random(" ".join(args[1:]))
 

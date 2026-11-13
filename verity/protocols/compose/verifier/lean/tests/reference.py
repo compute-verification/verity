@@ -4,13 +4,13 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
 names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
-certificates and one-stage's answers, `verity/protocols/certifier/verifier/network/tests/test_network_period_protocol.py`), the
+certificates and one-stage's answers, `verity/protocols/accounting/certifier/verifier/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
-`verity/protocols/certifier/verifier/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
+`verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
 `spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
-`verity/protocols/spot/verifier/lean/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
+`verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
 recursive form's params refused by name (`RECURSIVE_REFUSED`), the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
@@ -51,9 +51,9 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
-from verity.protocols.pouw.verifier import core_check, credit, period_check
-from verity.protocols.spot.device import challenger as CH
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.pouw.verifier import core_check, credit, period_check
+from verity.protocols.proofs.spot.device import challenger as CH
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -75,17 +75,17 @@ def module(name: str, path: Path) -> ModuleType:
 
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
 #: `subset_law` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
-ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/spot/verifier/lean/tests/test_difftest.py")
+ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
-POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/pouw/verifier/lean/check/tests/pouw_period_cases.py")
+POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
-PERIOD = module("network_period_difftest", ROOT / "verity/protocols/certifier/verifier/network/tests/test_network_period_protocol.py")
+PERIOD = module("network_period_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_network_period_protocol.py")
 #: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
 #: protocol's decoders, and `drawn` samples a declaration's case with one change.
-INFERENCE = module("inference_only_protocol_difftest", ROOT / "verity/protocols/certifier/verifier/network/tests/test_inference_only_protocol.py")
+INFERENCE = module("inference_only_protocol_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
-WIPE_CASES = module("wipe_protocol_case", ROOT / "verity/protocols/pous/device/lean/tests/wipe_protocol_case.py")
+WIPE_CASES = module("wipe_protocol_case", ROOT / "verity/protocols/accounting/pous/device/lean/tests/wipe_protocol_case.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:

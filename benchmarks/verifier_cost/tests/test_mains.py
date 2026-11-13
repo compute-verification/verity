@@ -26,9 +26,9 @@ ROOT = HERE.parents[1]
 #: each Lake package a main is elaborated in, with the libraries `lake env` gives there (its own, and Flock's where it
 #: requires Flock's package by path). A main goes in the first that holds every library it imports, so a main that reads
 #: Flock alone builds neither of the others.
-PACKAGES = (("verity/protocols/flock/verifier", {"Flock"}),
-            ("verity/protocols/inference_only/verifier/nci/lean", {"NciCheck", "Flock"}),
-            ("verity/protocols/spot/verifier/lean", {"Spot", "Flock"}))
+PACKAGES = (("verity/protocols/proofs/flock/verifier", {"Flock"}),
+            ("verity/protocols/policy/inference_only/verifier/nci/lean", {"NciCheck", "Flock"}),
+            ("verity/protocols/proofs/spot/verifier/lean", {"Spot", "Flock"}))
 MAINS = sorted(p.parent.name for p in HERE.glob("*/Main.lean"))
 assert MAINS, f"no <name>/Main.lean under {HERE}: this suite would hold nothing"
 
