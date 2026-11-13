@@ -153,23 +153,25 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/whole_run.sh run toy 146 1000 10000 50000
 ~~~
 
-`members_files.sh N...` times the per-member form's pass over every member's files against the members of one circuit
-file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`, an
-audit's `window/case-v2-members.json`), or the one the two-member audit of `benchmarks/one_stage`'s test writes, run
-there on Flock's prover, the Lean verifier and the ZK server; the compiled check must accept it. `members_files/Main.lean`,
-built in a scratch Lake package against the checkout's verifier, hands the case's first member in N times over and
-times `OneStageZk.membersFiles` as the compiled check runs it (`membersFilesKept`: the blobs' lookup tables read once,
-the circuit file read and parsed once, `Spot/CircuitKept.lean`'s summary kept of it) and the pass as stated,
-`Member.files` a member, each parsing the file itself (`membersFiles_eq_kept` proves them equal). It exits 1 where the
-two disagree on a check's result or a member's files are not held. The stated pass runs up to `REF_MAX` members
-(default 4096). The compiled pass's microseconds at N less those at 1, over N - 1, are its work on one more member of
-a file; the stated pass's over N are a member's with the file's parse. `$OUT` gets members_files.jsonl, the case's row
-(its blobs, their bytes, the circuit file's) and one row per N and pass (members, microseconds, peak RSS, the result's
-digest).
+`members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
+circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
+an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one unit over
+two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
+template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
+verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.
+`members_files/Main.lean`, built in a scratch Lake package against the checkout's verifier, takes the case's first N
+members of one circuit file (`all`: every member of the case) and times `OneStageZk.membersFiles` as the compiled
+check runs it (`membersFilesKept`: the blobs' lookup tables read once, a circuit file read and parsed once,
+`Spot/CircuitKept.lean`'s summary kept of it) and the pass as stated, `Member.files` a member, each parsing its file
+itself (`membersFiles_eq_kept` proves them equal). It exits 1 where the two disagree on a check's result or a member's
+files are not held. The stated pass runs up to `REF_MAX` members (default 150). The compiled pass's microseconds at N
+less those at 1, over N - 1, are its work on one more member of a file; the stated pass's over N are a member's with
+its file's parse. `$OUT` gets members_files.jsonl, the case's row (its members, blobs and bytes, the circuit file's)
+and one row per N and pass (members, circuit files, microseconds, peak RSS, the result's digest).
 
 ~~~sh
 research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 -- \
-  bash benchmarks/verifier_cost/members_files.sh 1 2 64 512 4096 32768
+  bash benchmarks/verifier_cost/members_files.sh 1 2 16 150 all
 ~~~
 
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`

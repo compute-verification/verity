@@ -1,13 +1,14 @@
 import Spot
 
 /-!
-`members-files-time PARAMS COMMITMENT BLOBS N... [--ref-max R]`: the per-member form's pass over every member's
+`members-files-time PARAMS COMMITMENT BLOBS N|all... [--ref-max R]`: the per-member form's pass over every member's
 files (`OneStageZk.membersFiles`, as the compiled check runs it) against the pass as it is stated, `Member.files` a
 member, each reading the blobs and parsing its circuit file itself (`membersFiles_eq_kept` proves them equal), on one
 per-member case's parameters, registration record and files, as the executable's `check` takes them; BLOBS is a file
-of the blobs' paths, a line each. The case's first member is handed in N times over, so a row is N members of one
-circuit file. Each is timed once the case is parsed and the blobs are read and hashed; one `PHASE {json}` line each
-on stdout. The stated pass runs up to R members.
+of the blobs' paths, a line each. A row is the case's first N members of its first member's circuit file, in the
+parameters' order, so N members of one circuit file; `all` is every member of the case. Each pass is timed once the
+case is parsed and the blobs are read and hashed; one `PHASE {json}` line each on stdout. The stated pass runs up to R
+members.
 
 The guard, without which no figure counts: both return every member's statement with its files held, and the two
 agree on every check's result of every statement; exit 1 otherwise. `members_files.sh` builds it against the
@@ -55,15 +56,16 @@ def timed (f : List Member → Files) (ms : List Member) : IO (Files × Nat) := 
   let t1 ← IO.monoNanosNow
   return (r, (t1 - t0) / 1000)
 
-def usage : String := "usage: members-files-time PARAMS COMMITMENT BLOBS N... [--ref-max R]"
+def usage : String := "usage: members-files-time PARAMS COMMITMENT BLOBS N|all... [--ref-max R]"
 
 def main (args : List String) : IO UInt32 := do
   let params :: commitment :: blobs :: rest := args
     | do IO.eprintln usage; return 2
-  let (ns, refMax) := match rest.span (· != "--ref-max") with
-    | (ns, [_, r]) => (ns.filterMap String.toNat?, r.toNat?)
-    | (ns, _) => (ns.filterMap String.toNat?, none)
-  if ns.isEmpty || ns.length != (rest.span (· != "--ref-max")).1.length then
+  let (sizes, refMax) := match rest.span (· != "--ref-max") with
+    | (sizes, [_, r]) => (sizes, r.toNat?)
+    | (sizes, []) => (sizes, none)
+    | _ => ([], none)
+  if sizes.isEmpty || sizes.any (fun s => s != "all" && s.toNat?.isNone) then
     IO.eprintln usage
     return 2
   let p ← IO.ofExcept (Core.canonicalJson (← IO.FS.readBinFile params) >>= paramsEitherOfJson)
@@ -77,16 +79,23 @@ def main (args : List String) : IO UInt32 := do
   let files ← paths.mapM fun (f : String) => IO.FS.readBinFile f
   let bs := Core.Blobs.ofArray files
   let slice := fun (x : Member) => x.slice c.record roots
+  let same := ms.toList.filter (·.own.circuit == m.own.circuit)
   let circuit := match bs.get m.own.circuit "circuit" with
     | .ok b => b.size
     | .error _ => 0
-  let head := Json.mkObj [("fn", Json.str "case"), ("member", Json.str m.name), ("case_members", toJson ms.size),
+  let head := Json.mkObj [("fn", Json.str "case"), ("members", toJson ms.size), ("circuit_members", toJson same.length),
     ("blobs", toJson files.size), ("blob_bytes", toJson (files.foldl (· + ·.size) 0)),
     ("circuit_bytes", toJson circuit)]
   IO.println s!"PHASE {head.compress}"
   let mut bad := false
-  for n in ns do
-    let handed := List.replicate n m
+  for size in sizes do
+    if size.toNat?.any (· > same.length) then
+      IO.eprintln s!"{size} members asked of a circuit file the case holds {same.length} members of"
+      return 2
+    let handed := match size.toNat? with
+      | some n => same.take n
+      | none => ms.toList
+    let n := handed.length
     let mut got : Array String := #[]
     for (name, f) in [("membersFiles", membersFiles slice bs), ("Member.files", filesRef slice bs)] do
       if name == "Member.files" && refMax.any (n > ·) then continue
@@ -98,7 +107,8 @@ def main (args : List String) : IO UInt32 := do
       got := got.push text
       bad := bad || !held
       let hwm ← statusKb "VmHWM:"
-      let row := Json.mkObj [("fn", Json.str name), ("members", toJson n), ("us", toJson us),
+      let row := Json.mkObj [("fn", Json.str name), ("members", toJson n),
+        ("circuit_files", toJson (handed.map (·.own.circuit)).eraseDups.length), ("us", toJson us),
         ("hwm_mb", toJson (hwm / 1024)), ("held", Json.bool held),
         ("result_sha512", Json.str (Flock.hexOf (Flock.Sha512.hash text.toUTF8)))]
       IO.println s!"PHASE {row.compress}"
