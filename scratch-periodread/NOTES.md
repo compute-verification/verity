@@ -287,3 +287,18 @@ Reading a records run: `result.json` (`outcome`, `records` per package), the `re
 Roots rule, checked: each of the eight new files has its `lakefile.toml` root (or, for `Spot/PeriodAudit.lean`, its import in `Spot.lean`) in the commit that adds it. The locks' `roots` lists got `Properties.Spot.Period`, `Properties.Spot.PeriodLedger` (in `06ac8f46e7`) and `Proofs.Properties.Challenger.Lines`, `Proofs.Properties.Spot.Period`, `Proofs.Properties.Spot.PeriodLedger` (in `36dc4d568f`) in a later commit of the same pull request; `PeriodSigned` and `PeriodMain` in the adding commit. Every head has both.
 
 Ready lines: #9595's given 06:0xZ (see the entry). #9581 after A passes; #9625 after B; #9665 after C. If a run regenerates a record: say which and why in the body before the line.
+
+## State at Fri 06:55Z (read this first on a new machine)
+
+Words since 06:00Z (mailbox read at `85aac3b746`):
+
+- 06:05Z: #9595 marked at `41a71836c348` on `1199` and my reading (no records run of its own). Roots inside a pull request: does not matter, rewrite no history. The third records run: when one of the two ends. #9581, #9625, #9665 get their lines IN THAT ORDER as the runs pass; the coordinator marks each the same hour and asks soundness for the second read of #9581 and #9665 when all are in.
+- 06:09Z: the roots rule's second half: a lock root must also be under a root of the package's `lakefile.toml` (else the records audit stops in `build-roots` on "unknown module"). Checked at the three heads for `security/Properties`, `security/Proofs` and spot's package: no lock root is under no lakefile root. My four `Proofs.Properties…` roots sit beside their siblings (places 113 to 116 of 172), not at the list's end; `merge.py` merges `roots` as a list of names.
+
+Records runs:
+
+- C `r20261113-055510-d3ba` (#9665 `5edf7e30ee`): DONE rc 0 at 06:51:21Z, 3,323 s. `OUTCOME pass`: `security/Properties` (3,298 declarations, 97 modules, 466 guarantees), `security/Proofs` (199,119 declarations, 3,971 modules, the three axioms), `security` (27,133 declarations, 1,111 guarantees); `failed` and `regenerated` empty in both `audit.json`. #9665's body has it (`l-body.md`, posted 06:53Z). Its line waits for #9581's and #9625's.
+- A `r20261113-055441-2c57` (#9581 `e230e76f63`): at 06:46Z spot's package, the certifier's verifier and `security` (with `security/Proofs`, 198,512 declarations) had passed, `regenerated` empty in the first two; left: `security/Properties` (with `security/Proofs`). Limit 08:56Z. `research fetch --all` on it while it writes can fail on a special file: fetch without `--all`, or again.
+- B `r20261113-065139-a60b` (#9625 `2f3c3e6022`, from `wt-pr4`, `--records security/Properties --update`): check slot p0 at 06:52:09Z, limit 08:52Z; expect about 07:45Z.
+
+When A passes: add the run to #9581's body (`pr3-body.md`, Checks), then its ready line. When B passes: `pr4-body.md` the same, then #9625's line and #9665's with it.
