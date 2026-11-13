@@ -74,7 +74,7 @@ from verity.protocols.proofs.spot.device.coins import ran_out as draw_ran_out
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 from verity.circuits import codec, partition_object as PO
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from verity.circuits.program import Program, input_id, is_input
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
@@ -6029,7 +6029,7 @@ def test_a_composite_keyed_with_an_input_id_is_refused(pieces, key, first):
     Calls a composite keyed with one, and Lean refuses it in the decoder's words in `unit_gates`, `slots` and `select`,
     under a template query that doesn't list the composite, under one that lists it, and under `Q_call`."""
     desc = _keyed(key, first)
-    registry = Registry()
+    registry = DefinitionTable()
     registry.add(XOR8)
     with pytest.raises(ValueError) as why:
         codec.decode_program(copy.deepcopy(desc), registry)
