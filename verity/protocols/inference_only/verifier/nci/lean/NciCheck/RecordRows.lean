@@ -13,6 +13,10 @@ a block's rows are, over the record's templates, the template's units in a block
 are the same in every block, as the summary's gates are. A row here is a computed row of a circuit file, never one
 of a unit's input rows, which `Record` classes and counts in bits.
 
+A row counts once here. The sampling claims count the same file at three gates a row: there a row is lowered to three
+gates (`Bridge.progOf`), and a unit's proof block holds the `3m` gates of its rows
+(`Spot.FilePart.FilePart.block`). That count is the claims' own, and nothing here reads it.
+
 Each template's `m` comes in a table, by the template's id. This module reads no circuit file: whoever calls it
 says where the table is from.
 
