@@ -108,7 +108,7 @@ theorem Valid.onsite {l : Registration} (h : Valid D A c l) : (view D c l).Onsit
 
 /-- θ's values, each under its item's key, are among the keys of the log's items. -/
 theorem theta_keys_sublist (log : Registration) :
-    (log.theta.map fun t => "theta " ++ t.value) <+ log.items.map Item.key := by
+    List.Sublist (log.theta.map fun t => "theta " ++ t.value) (log.items.map Item.key) := by
   unfold theta
   generalize log.items = is
   induction is with
@@ -124,7 +124,7 @@ theorem Valid.theta_nodup {l : Registration} (h : Valid D A c l) : (l.theta.map 
   | nil => simp [theta, items]
   | append_singleton l e _ =>
     have ho : e.ItemsOnce l := (valid_append_singleton.mp h).2.2.1
-    have hk : ((l ++ [e]).items.map Item.key).Nodup := by
+    have hk : ((items (l ++ [e])).map Item.key).Nodup := by
       simpa [Entry.ItemsOnce, items, List.flatMap_append] using ho
     have hs := hk.sublist (theta_keys_sublist _)
     rw [show (fun t : Theta => "theta " ++ t.value) = ("theta " ++ ·) ∘ (·.value) from rfl, ← List.map_map] at hs
@@ -155,7 +155,7 @@ declared, passes the check, and its Site has a device. -/
 theorem RegistrationSound_honest :
     Valid Example.digests Example.auditor .onsite Example.declaredLog ∧
       Example.device "gpu0" "node0" Example.sheetA ∈ (Site.ofLog Example.declaredLog).locs :=
-  ⟨Example.declaredLog_valid.1, by decide +kernel⟩
+  ⟨Example.declaredLog_valid.1, by simp [Example.declaredLog, Example.onsite, Example.node, Site.ofLog, Entry.added]⟩
 
 /-- **`RegistrationSound`'s nontrivial lemma: its conclusion fails at a check that accepts everything.** A log whose
 device names no sheet: the device's sheet lookup finds none, so its view holds no registered facts. -/
