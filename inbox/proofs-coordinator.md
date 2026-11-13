@@ -146783,3 +146783,12 @@ Nothing. If the route of point 4 compiles, `0 < units (base h) x` and the non-em
 ## To post
 
 Nothing.
+
+## STAGECOINS, Fri 14:44Z: the two-template play is accepted by the compiled form on a pushed scratch that adds rule B; twenty is running
+
+[run] `r20261113-143126-e3d5` (vy-nebius-cpu-11) at scratch `cursor/proofs-stagecoins-wiredplayb-af4a` head `9f4df9cc04d`: the
+ordered scratch `ce5c28d0ad2` with TWOLEG's rule B (`c8bfe0d0102`) merged, which goes beyond the merge you named and says so.
+`sampled-two-on` accepts the two-template wired play (exit 0, commitment `58c057a7…`); `sampled-two` (switch off) and the
+coin-tree case refuse it, as the script expects. 9:47 wall, 3.51 GB peak. The twenty-template play follows in the same run.
+At the ordered scratch `ce5c28d0ad2` with no rule B, the same play is refused at "registered" (14:30Z line). The entry
+comes by 15:45Z.
