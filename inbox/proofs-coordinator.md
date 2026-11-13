@@ -121198,3 +121198,37 @@ All are in the same try, not compiled.
 **To post:** nothing.
 
 **Not established:** that `488e6131f4` compiles.
+
+## MAJORITY, Fri 05:04Z: the records audit r20261113-040212-1843 printed NOTHING: it sat 32 minutes on the node's artifact lock and I cancelled it; the audit is now r20261113-050045-991a on vy-nebius-cpu-11 at my head `a7cacd92709df11273ea65e682bed82903cc7d39`, building since 05:02Z
+
+In plain words: the records audit you asked for never reached its build on vy-nebius-2. It took its two places there and then waited on a lock for the node's store of compiled modules, doing nothing, for 32 minutes. I cancelled it and launched the same audit on a CPU node, at my newer head, where the same step took 5 seconds. So there is still no audit verdict to give you. My 04:41Z entry said the old run was "running" and would end about 04:50Z; that was wrong, and two of its times were my reckoning, not read from a clock.
+
+**The old run** [run: its fetched `slot.json`, `stderr.log`, `logs/stall-20261113T044535Z.txt`, `resources.jsonl`, `status.json`]
+- r20261113-040212-1843 took check slot p15 at 04:21:23Z and Lean slot build/10 at 04:30:08Z.
+- Its whole `stdout.log` is one line: "lean-records: this run audits security/Proofs, then security (with security/Proofs), then security/Properties (with security/Proofs): a `--records` run for any of them beside this one audits it again". No AUDIT line and no `RECORDS rc` line.
+- The stall record at 04:45:35Z says "no progress in /workspace/research/runs/r20261113-040212-1843 for 902 s", with the main thread at `_lock (lean_audit.py:1106)` under `take (lean_audit.py:1388)` under `audit_records (lean_changed.py:1466)`.
+- At 05:02:20Z its `python3` had used 5.06 s of CPU in all and was asleep.
+- [run] I cancelled it at 05:02Z: "ran 59 min since 2026-11-13T04:04Z: waited 17 min for a check slot, then checked 41 min in slot p15". Its status is `failed`, rc 143.
+- [read: `lean_audit.py` at my head] `take` unpacks other nodes' bundles under an exclusive lock on the node's artifact store. [guess] Other runs on vy-nebius-2 held that lock in turn; I could not see which.
+
+**The new run** [run] r20261113-050045-991a, `research run --on auto --as proofs --cpus 16 --mem-gb 32 --max-min 120 … lean_changed.py --records security/Proofs`, placed on vy-nebius-cpu-11.
+- It audits `a7cacd92709df11273ea65e682bed82903cc7d39`, the head with `SampledTwo/Binding.lean`, not `c4c6c19c13`. That is the head I ask ASSEMBLY to merge, so it is the one worth auditing.
+- It took check slot r6 at 05:02:18Z and Lean slot build/0 at 05:02Z.
+- It printed: "lean-audit: 422 module version(s), 48 MiB, taken from 12 of 12 artifact bundle(s) in 5 s" and "lean-records: taking the slot path: check.py on /home/research/.cache/verity-check/lean-records/build-0, which keeps its build between runs".
+- [guess] It ends between 06:00Z and 06:30Z. REDRAW's two records runs took about an hour each from their Lean slot.
+
+**Corrections to my 04:41Z entry**
+- "started by 04:29Z" and "[guess] It ends about 04:50Z": the run held its Lean slot from 04:30:08Z and was blocked from then. `research status` showed `running` for a run that was waiting on a lock.
+- The times "04:40Z" and "04:41Z" in that entry were my estimates. [derived] From the commands' own durations, the status was read at about 04:42Z and the entry was written at about 04:44Z.
+
+**My machine** [run: `uptime -s`, `git reflog`] It was replaced again: this one booted at 04:53:47Z with a fresh clone on `main`. Nothing was lost, since both branches were pushed. `~/wt/.pen` does not exist, and I see no commit, cancel or launch that is not mine.
+
+**Other people's events** [run] Between 04:53Z and 04:56Z this conversation received about 20 events that are yours: a Linear issue, Slack messages, four task-finished notices and a dozen of your old timers. I acted on none of them.
+
+**STOP RULE.** None.
+
+**NEEDS.** None.
+
+**To post.** For infra, if you think it worth a line: on vy-nebius-2 a records run waited from 04:30Z to 05:02Z on the artifact store's lock (`lean_audit.py` `take`) while holding a check slot and a Lean slot; the same step took 5 s on vy-nebius-cpu-11. Run r20261113-040212-1843 has the stall record.
+
+**Not established.** The records audit at any head of mine. Pushed head: `a7cacd92709df11273ea65e682bed82903cc7d39`; nothing is left unpushed.
