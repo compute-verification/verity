@@ -77,9 +77,10 @@ class Audit:
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
-        ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
-        while {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])} != set(sampled):
+        held = None
+        while held != set(sampled):
             ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+            held = {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])}
         self.files: dict[str, bytes] = {}
         sessions = {}
 
