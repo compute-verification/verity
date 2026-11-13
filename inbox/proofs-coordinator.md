@@ -158788,3 +158788,43 @@ Next, in order: the carry's end, the fix commit, `pins.py --stale`, the push to 
 ## TWOLEG, Fri 13 Nov 19:58Z: one more timer of yours reached me, 18 hours late; acted on in no way
 
 - [read: the notification] `history-try-4d04`, `firedAt` 2026-11-13T01:47:15Z, delivered to me at 19:58Z Fri: read the Lean try `r20261113-012543-4d04` of HISTORY's branch, send CUT its errors if its files fail, count the running workers, resume HISTORY and OWNREADS, and record it in `due.md`. I read no run of another worker, wrote in no mailbox but this one, resumed no one and read no `due.md`. That is 24 firings of yours under 14 names since 19:50Z.
+
+## GATHER — 19:59Z Fri 13 Nov — merge GATHER at 462ef981d91ef258bd5ab7416fee1a8e54391d3f
+
+`cursor/proofs-gather-wired-layout-6a9b` `462ef981d91ef258bd5ab7416fee1a8e54391d3f` my live line
+
+**Step 5 of your 18:49Z: the build, the plays and the tests at that head are all green** [run]. Each ran on a node I named with `--pool research`, none on cpu-6, none through `auto`, and no two copies of one job ran at once [run]. Steps 1 to 4 are in my 19:17Z and nothing in them changed [run].
+
+| Run | Node | What | Verdict |
+|---|---|---|---|
+| `r20261113-191249-fe60` | vy-nebius-cpu-7 | `lean_changed.py --build` of 62 named files | rc 0; `"failed": {}`, `"skipped": {}` |
+| `r20261113-191356-e203` | vy-nebius-cpu-11 | the plays, the toy and their tests | six steps, each rc 0 |
+| `r20261113-192415-05fb` | vy-nebius-cpu-8 | the verifier's builds, the difftest and the Python tests | nine steps, each rc 0 |
+
+- **The Lean build, `fe60`** [run]. Six packages, each `exit 0`: the verifier's package (265 jobs), the recursive verifier's (241), the remote compose verifier's (301), the onsite one's (362), `security/Proofs` (14,057 jobs, 1,715 s) and `security/Properties` (115). No line of its log starts with `error` and none holds `✖` [run]. Two `declaration uses sorry` warnings are ArkLib's own files replayed, none of this tree's [run]. So the mend's five files, all 91 files under `SampledTwo` and every other module that imports one of the line's six Lean files compile over this line's `wiresOk`, `Registration.check` and `paramsParsed` [derived: the 62 named files reach all 504, my 19:17Z].
+- **The plays, `e203`** [run]. Two templates and twenty, `first` then `second`, inputs committed: each `SMALL` line is true in all eight fields, `"refused": null`, `"round_two": {"ok": true, "codes": []}`, the audit `accepted`, `complete` and `registered_reads` true. Round 2 ran in Python [run]. The toy end to end: rc 0, both `TWO` lines `as_expected` true. The audit's wiring, second-stage, gates and two-members tests: 42 passed. The windows' and wiring tests: 96 passed. The toy's tests: 10 passed.
+- **The tests, `05fb`** [run]. `flock-verify` and `flock-firewall` built (378 jobs); the verifier's Lean package built whole in the clone (530 jobs); the recorded fixtures fetched. The difftest with the twin and the refusal tests: 134 passed, 2 skipped. The verifier's per-member form, two-stage and served-select tests: 169 passed. Its registration, service-output and interior-span tests: 78 passed. The audit of two members and the windows' interface tests: 92 passed. The one-stage driver tests: 18 passed. The vLLM adapter's interior-rows test: rc 0 (21 tests; its log has no summary line).
+- Every count is the one the same step gave at `15b7af3dcd28` [run: `merged-head/` beside `carried/`]. No step that ran there was left out here, but the records run, which you said is the join's to count [relayed: your 18:49Z].
+- `05fb` is the one relaunch of `r20261113-191320-c832`, which never took a slot on cpu-9: the memory there was reserved by other live runs [run: its `slot.json`]. I cancelled it by its id at 19:24Z, before the relaunch [run].
+
+**What the head holds** [run: read at 19:57Z].
+
+- The mended join `20936c91d40bd5bf4143d22770786677f5243bb8` and `main` `4ae17f7eafd7` are ancestors of it. Over the mended join it holds 20 files, +486 −88, six of them Lean.
+- The branch on the remote is at that head, the worktree clean. No commit was added since 19:05Z, so no mend of the line was needed.
+- Friday's two are unmoved: `984cb027efa3` and `496aa183544b`.
+
+**One thing for ASSEMBLY that is not in your order: the join's tip is past the mended join, and one of its new proofs unfolds a definition this line changes.**
+
+- The join's tip is `1bdb77ac7d99ed35cc62d288af723e9cfc83d9b3`, four first-parent commits past the mended join: MESSAGES's replay line, SESSIONOF2's params line, the roots and the listing, and `PortsOfParams`'s move [run: `git log --first-parent`]. They change nine files, six of them new Lean files in `security/Proofs` [run].
+- This line and those four commits change no file in common, and `git merge-tree` of the two gives no conflict, tree `ce1705f12af7` [run].
+- `security/Proofs/Flock/SpotFlock/ParamsWf.lean`, new in the join, proves `paramsParsed_reads` by `unfold Spot.OneStage.paramsParsed` and a walk of its `do` block, the ports' function included [read]. This line changes that function: its `exactly` call takes the keys `domain`, `leaves`, `wired` where the entry has a string `wired` [read: `git diff 20936c91d40b HEAD -- Spot/OneStage.lean`]. `PortsOfParams.lean` imports it [read].
+- Whether that proof still compiles over this line is not established [run: nothing has built it]. I expect it does: the walk splits the function's binds and drops the first, the `exactly` call, without reading it [guess, from reading the proof].
+- To settle it before ASSEMBLY's merge, a build of the six new files is out on a scratch merge of the join's tip over my head: `r20261113-195725-db6b`, vy-nebius-cpu-8, `lean_changed.py --build`, waiting for a slot at 19:58Z [run]. The scratch merge is commit `0869e2f70646`, detached, in a worktree of its own, pushed nowhere; my branch does not hold it [run]. `pins.py --stale` on it: exit 0, nothing printed [run].
+- Its one earlier copy, `r20261113-195251-1a57` on cpu-7, never started: every slot there is under a window until 23:48Z [run: its `slot.json`]. I cancelled it by its id before the relaunch [run].
+- I write its verdict when it ends, in a short entry of its own [derived]. If it is red, the red is in `ParamsWf.lean`'s walk, and I say which step [derived].
+
+**Not established.** `security/Proofs` whole at this head: `fe60` built the 504 files that reach the line's six, not every root [run]. No records run at this head, so no lock record at it; at the head before the carry `7e59` moved six `reads` records and no other key [run: my 19:17Z]. No play through the compiled form, which is STAGECOINS's [relayed: your 14:18Z]. `verity check` was not run [run].
+
+**Held to.** No pull request, no mark, nothing forced, no `main` merged by itself, nothing rebased, no build on my machine, no lock committed [run].
+
+Copies: `/opt/cursor/artifacts/wired-audit/carried/` (`fe60.txt`, `e203.txt`, `05fb.txt`, `lean-files.txt`, `lean-closure.txt`, `dry/lean-files.txt`) and the launcher `launch-carried.sh` beside it [run].
