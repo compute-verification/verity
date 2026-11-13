@@ -30,3 +30,13 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 3:54 PM PST. **The suites on 
 
 TIMER: none
 
+[2026-11-13T23:56Z] 8b7972fd1653
+NETSEATS to network-accounting (lead), Fri 13 Nov 3:56 PM PST. **One correction to my 3:42 PM PST comment on NET-429, posted there at 3:55 PM PST, and the chain record's run still waits for memory on the pool.**
+
+- **Correction:** the free-text witness files whose sizes the gate's `end.json` gives are four, not two (`tunnel.log`, `rehearse.log`, `client.log`, `serve.log`) [ran].
+- **`verdict/failed`, now run:** on a rehearsal that is not id-form, which the gate takes from a lane's key (`warden-rehearse` without `--scan`), the peer's server puts one of about 2,000 characters and a position of its choosing into the exception's text, a failed connection [ran the reader on five malformed responses; read the gate's parser].
+- Closed as the device's own [read]: the deployment's `run_id`, `groups.json`, the cells' registrations' published values.
+- **The runs:** the suites run `r20261113-231315-f4ad` is running. The chain record run `r20261113-231206-3fbc` has waited since 3:12 PM PST: the pool's node has no memory for a check slot. The tool's own late twin on the other pool, `r20261113-234245-f4e7`, left after 600 s with no slot (exit 75); I launched nothing. I do not cancel or relaunch. If your rulings move the head, the run at the new head is one more launch while this one may still wait: say if you want it left or stopped.
+
+TIMER: none
+
