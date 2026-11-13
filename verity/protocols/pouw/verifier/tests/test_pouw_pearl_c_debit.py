@@ -1,5 +1,6 @@
-"""Pearl-C's debit replay (`pearl_c_debit`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
-checked from scratch on skips, additive over a tile's words, and over the cap on the aligned-spike tile."""
+"""Pearl-C's inert-work replay (`pearl_c_debit`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
+checked from scratch on skips, additive over a tile's words, and over the inert-work bound on the aligned-spike
+tile."""
 
 from __future__ import annotations
 
@@ -85,9 +86,9 @@ def spiked_rows(k: int, count: int, seed: int, spike: float | None) -> list[byte
 
 
 @pytest.mark.parametrize("spike", [300.0, None])
-def test_aligned_spike_tile_is_over_the_cap(spike):
+def test_aligned_spike_tile_is_over_the_inert_work_bound(spike):
     """The negative control: the R = 300 aligned-spike tile, formed by the scheme's own `encode`, passes the domain and has
-    74.6% of its atom-words flagged, about 15x the cap; without spikes the debit is far below it."""
+    74.6% of its atom-words flagged, about 15x the inert-work bound; without spikes its inert work is far below it."""
     k, t = 4096, 4
     s = C.PearlC(k_min=128, tile=(t, t), forming="v1", hashing="h0")
     ctx = Context(b"\x11" * 32, Matmul(0, Shape(t, k, t), 0), b"\x22" * 32, b"\x33" * 32)
@@ -98,12 +99,12 @@ def test_aligned_spike_tile_is_over_the_cap(spike):
     assert (atoms, zeros) == D.chain_debit(ops.a.codes, ops.b.codes)
     assert atoms == sum(sum(D.word_flags(a, b)) for a in ops.a.codes for b in ops.b.codes) and zeros == 0
     assert elements == elements_by_definition(ops)
-    debit = D.debit_units(atoms, elements, zeros=zeros)
-    cap = s.cap * s.credit_of(Shape(t, k, t))
+    inert = D.debit_units(atoms, elements, zeros=zeros)
+    bound = s.cap * s.credit_of(Shape(t, k, t))
     if spike:
-        assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and debit > 14 * cap
+        assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and inert > 14 * bound
     else:
-        assert elements == 0 and debit < cap / 10
+        assert elements == 0 and inert < bound / 10
 
 
 def formed(ops) -> list[tuple[int, list[int], int]]:
@@ -119,8 +120,9 @@ def elements_by_definition(ops) -> int:
 
 
 def test_salt_dead_is_the_circuits_bit():
-    """`salt_dead` is the hidden cap's bit (`circuit.words.PouwHopperE4m3SaltDead`) on     f32(α·x) and c_β: on a row of
-    accumulators from ±0, where the ends are f32(α·x) ± 88·c_β, to past ±448, where both saturate to one code."""
+    """`salt_dead` is the hidden inert-work bound's bit (`circuit.words.PouwHopperE4m3SaltDead`) on f32(α·x) and c_β:
+    on a row of accumulators from ±0, where the ends are f32(α·x) ± 88·c_β, to past ±448, where both saturate to
+    one code."""
     rng = random.Random("pearl-c/salt-dead")
     beta = P.f32_bits(P.f32(0.37))
     x = [0, 0x80000000, *(P.f32_bits(P.f32(v)) for v in (1e-3, 2.0, 300.0, 448.0, 1e4, -1e4, -448.0))]
