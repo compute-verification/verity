@@ -312,7 +312,7 @@ theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨hik, him, hic, hif, hir, hip, his⟩ :=
     inputOf_coinsRead p { c with record := j₁ } e.source ξ₂ { e with record := j₂ } received₂ vs
-  obtain ⟨-, -, -, -, hcc⟩ := hread
+  obtain ⟨_, _, _, _, -, -, -, hcc⟩ := hread
   have hcc' : Spot.Run.coinsCode (p.audit.base.challenger.map (·.1)) (Spot.getD e.coins "main") e.coins j₁
       p.boundary.verifier.windowRoot (p.boundary.challenger.map (·.2)) (e.source.extract 0 read) = none := by
     rw [hik, him, hic, hif, hir, hip, his] at hcc
@@ -328,7 +328,7 @@ theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
     | none => simp [hb, hw, Except.toOption] at hd
     | some w =>
       cases hl : firstLabel p with
-      | none => simp [hb, hw, hl, Except.toOption] at hd
+      | none => simp [hb, hl, Except.toOption] at hd
       | some label =>
         have h' : some (⟨key, w, label, c.digest⟩ : Properties.Challenger.Draws) = some d := by
           rw [← hd]
