@@ -160265,3 +160265,30 @@ Your 20:31Z is read, and `main`'s AGENTS.md reread at `f479876a8758` [read].
 **Then:** the touched test files one at a time here, the adapter's lint files by name, the push, and the two runs on nodes I name. If the records run regenerates a lock I compare it with the committed one before any commit.
 
 Mailbox: none at 20:50Z. Nothing marked; nothing on Linear or Slack.
+
+## MEMBERS, Fri 13 Nov 20:52Z: your 20:19Z is done: the three pull requests are open, unmarked: #9820 (the import), #9821 (the twin), #9822 (the cost row); ready to mark #9822 at `b000aeebb942`; the other two wait on their quick tier
+
+**ready to mark #9822 at `b000aeebb942d5005d698c634dfc47b626927487`** (the cost row): the three suites its change reaches passed whole, slow tests included, none cached [run `r20261113-184725-02a3`, cpu-14: `benchmarks/verifier_cost` 10, `repository` 362, `verity-graph` 246].
+
+### What I did, in order [read: your 20:19Z by the hook at 20:43Z and in the mailbox]
+
+- **#9820, the import, at `fb3e260c42d1`**: open, unmarked, `Lane proofs`, linked to PRF-371. Its body says: the change reaches 63 suites; 55 passed with their slow tests, none failed (54 in `r20261113-170545-ec7a`; `research`, 5,018 passed, in `r20261113-200310-d959` before I cancelled it); eight have no verdict.
+- **The eight, at the quick tier**: `r20261113-195315-3f45` and `r20261113-200310-d959` ran without `--quick`, so I cancelled each by its id at 20:47Z and launched `verity-vllm`, `verity-flock`, `verity-numerical`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows` and `verity/definitions` with `--quick` [run `r20261113-204756-e64b`, cpu-14, 180 minutes, output written as it goes].
+- **#9821, the twin, at `d18fa66a95aa`**: open, unmarked. Its body says: 52 suites passed with their slow tests, none failed, `verity-vllm` among them [run `r20261113-174635-438e`]; the rest have no verdict. My two slow-tier runs for the rest never took a slot on cpu-1 (33 minutes waiting); cancelled by id, and the rest launched with `--quick` [run `r20261113-205009-9cba`, cpu-14; it prints the list of reached suites at its start].
+- **#9822, the cost row, at `b000aeebb942`**: open, unmarked; the ready line is above.
+- **One difference from your words.** You wrote `--changed origin/main --quick`. Each run's base is the commit its branch was cut from (`d119240998be`, `af9b13440693`), not `origin/main` as it is now (`f479876a8758`): against a later `main` the diff would count `main`'s own later commits as the branch's change. Say if you want the other.
+- The ready lines for #9820 and #9821 come when their quick tiers pass.
+
+### The machine
+
+- This machine is new since 20:43Z: `/tmp/w`, the worktrees and the pen were gone. I took the pen again by one `mkdir`, made the worktrees again from the pushed heads, and rebuilt the two pull requests' bodies from the session's own record; nothing was unpushed, and no head moved.
+- `research notes sync` failed at 20:17Z ("repository not found"); I try it again after this entry.
+
+### Next
+
+The split of `Spot/OneStageZk.lean`, now, on a branch of my own cut from `097b85eff21b`: the cut at line 1604, `Spot/OneStageZkStatement.lean` opening with `@[expose] public section`, taken by `public import`, the `#guard`'s helper spelling `NO_FILE`'s value, no `import all` of a module in the tree. Built on a node I name. I write you the head when it builds.
+
+### Not established
+
+- The quick tier's verdict for #9820 and #9821.
+- The full list of suites the twin's change reaches (the run prints it).
