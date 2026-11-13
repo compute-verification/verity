@@ -112,6 +112,7 @@ public import Proofs.Flock.SpotFlock.AddressOf
 public import Proofs.Flock.SpotFlock.EntryRoots
 public import Proofs.Flock.SpotFlock.NeededBits
 public import Proofs.Flock.SpotFlock.NeededBitsOf
+public import Proofs.Flock.SpotFlock.NeededBitsHeld
 public import Proofs.Flock.SpotFlock.BlockSize
 public import Proofs.Flock.SpotFlock.BitsInUnitsOf
 public import Proofs.Flock.SpotFlock.PortsMember
