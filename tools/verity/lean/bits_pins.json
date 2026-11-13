@@ -108,11 +108,11 @@
   "guarantees": {
    "Pouw.SecurityProofs.MonitoringPeriodBindingPerProver": [
     "unfolded_hash",
-    "64f30f40c6ae82fca10844cdd2b2d0782a38949e2b06a7d744a9c1710d5ada70"
+    "fcd080e16b73382bd59420149f88a7c4eef79478eac2e199df9ba841bc62eba1"
    ]
   },
   "definitions": {
-   "Pouw.Guarantees.MonitoringPeriodBindingPerProver": "a7149770af8e66c7ae22a6189d06919d9b319a9b6100925dcd5500d95d353a43"
+   "Pouw.Guarantees.MonitoringPeriodBindingPerProver": "30ec68a33cf5842d923ae20a707789d549b717d214ba8d72caa6bd61059f6384"
   }
  }
 }
