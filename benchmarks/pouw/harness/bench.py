@@ -72,7 +72,7 @@ def _gate():
     """The SASS gate, from its file and under the name every file that loads it gives it, so a process holds one."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ROOT / "benchmarks/pouw/harness/sass_gate.py")
+        spec = importlib.util.spec_from_file_location(name, ROOT / "verity/protocols/pouw/prover/sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
