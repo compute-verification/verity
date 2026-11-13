@@ -816,6 +816,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:
+        # NOTE: packed mode adds stream_off (>= 0); per-tensor mode leaves it at -1 -> the two layouts never collide
         return step_rows.layout_digest(metas)
 
     # ------------------------------------------------------------------ lifecycle
