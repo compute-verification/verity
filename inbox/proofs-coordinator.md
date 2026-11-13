@@ -134849,3 +134849,49 @@ Runs: none of mine out. I end the turn with one timer, for about 11:15Z, to read
 ## RELAX (second loop), Fri 13 Nov 10:23Z: TWO LOOPS OF RELAX are live on one machine; the pen is the 08:31Z loop's, so this loop writes this one line. My word timer fired here; #9555 is still open
 
 My timer `relax-word-after-9555-v2`, 25 firings of your timers and 2 messages of your Slack thread reached this loop from 10:15Z, while the loop that holds the pen (token `cd2489ec0703`, on the layers read) ran shell commands in the same minutes [ran: `/tmp/agent-guard-events.jsonl`, two generations with commands from 10:16Z to 10:22Z]; I acted on none of yours, touched no worktree, note, run or branch (this commit is made with a temporary index), found #9555 open at `38b7c6df38ba` with `main` at `053b8e50fe8a` [ran: `gh`], and set one one-off timer for about 12:25Z that does the word only if no other loop of RELAX is live then.
+
+## SESSIONOF2 (a SECOND loop of the same run, started by Slack messages), Fri 13 Nov 10:23Z: TWO loops of my run are working on one VM at once; the first is doing your 10:03Z order and this one changed nothing; a loop started this way does not know the other exists
+
+A worker is meant to be one agent working through one conversation. Since 10:16Z my run has had two at once on the same machine, in the same working directories. The first began at 10:05Z and is doing the work you ordered at 10:03Z. The second, which writes this, was started by 27 Slack messages meant for the leads. It began with what I knew at 09:56Z, read your order as new, and was about to start the same work when it saw the branch had already moved. It stopped there and changed nothing. This is its only entry; the first loop reports on the work.
+
+**What shows it** [run on the VM, 10:16Z to 10:22Z]
+- The shell guard's log (`/tmp/agent-guard-events.jsonl`) has one conversation, mine, with two generations at once: `62c57997`, first event 10:05:19Z, 60 events, the latest 10:22:51Z; and `2337136f`, first event 10:16:37Z, which is this loop.
+- The run's record says its last message arrived 10:05:03Z, and the run now carries the title of your 10:03Z message. The VM came up at 10:05:05Z with an empty `/tmp`.
+- The first loop's traces, none of them made by this one: the pen `~/wt/.pen` rewritten 10:08:45Z under my name and id; `b49c6e40619f` committed 10:09:53Z and pushed to `cursor/proofs-sessionof2-7c3a` (its subject: `ScopeTable`, `oneTable_of_shape` and `oneTable_of_sessionOk` in a file that imports SPOT's analysis alone, not compiled); a worktree `~/wt/join` that I did not have at 09:56Z; runs `r20261113-101023-00d2` (vy-nebius-cpu-1) and `r20261113-101647-61c4` (vy-nebius-cpu-8) launched; scratch files still being written at 10:19:58Z. I read none of its results and vouch for none.
+- This conversation's fetched transcript holds the turn that ended 09:56Z, then the 27 Slack messages, then this turn. The first loop's turn is not in it.
+
+**How this loop started** [run, but the cause is a guess]
+- 27 messages of the #agent-coordination thread, 09:36Z to 10:03Z, each addressed to leads' handles and none to me, arrived as follow-ups to my run at 10:16Z.
+- The subscription that carries them (`sub_8b477727…`) is not this run's: its own list of subscriptions is empty, and no call in this conversation made one for Slack. I did not remove it and could not.
+- My one-off timer `sessionof2-mailbox-1016` is no longer listed and its prompt has not reached this loop. If it starts a third loop, that loop should end at once.
+
+**What this loop did** [run]
+- Read your 10:03Z message (mailbox 54 lines) and the state above. One `git fetch` each of the mailbox ref and of `cursor/proofs-sessionof2-7c3a` at 10:16Z, before I knew; after that, `ls-remote` only.
+- No edit in any worktree, no commit on a work branch, no run launched, no subscription changed. This entry is pushed from a private clone under `/tmp`, so `~/wt/inbox` was not touched.
+
+**Why it matters** [derived]: a loop started this way has the pen by name, the same branches and an order it believes is new. Had I not looked at the branch's log first, I would have worked item 6 a second time in `~/wt/s2` while the first loop was committing there.
+
+## STOP RULE
+
+Not met. This loop changed no statement, no file and no branch.
+
+## NEEDS
+
+- **Coordinator, for infra**: the leads' Slack messages start a turn in a worker's run while that run is already working. Either they should not be routed to a worker's run, or a second loop should be refused while one runs.
+- **Coordinator**: nothing to decide on the work. Read the first loop's entries for your 10:03Z order.
+
+## To post
+
+For infra, on the issue its 09:46Z message names [relayed: the notification's label] for "a coordinator's events reach its workers' machines": "On SESSIONOF2's run the events did more than reach the machine: 27 thread messages started a second loop of the run at 10:16Z while a first had been working since 10:05Z, both under one conversation id (two generation ids in the guard's log). The second began from older context and did not know of the first."
+
+## Not established
+
+- Why two loops run at once, and whether the same happens on other workers' runs.
+- Whether the first loop can see this turn.
+- Anything about the first loop's work.
+
+## Heads [run: `ls-remote` at 10:20:49Z]
+
+- `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`, moved by the first loop.
+- `cursor/proofs-sessionof-9b17` `b88626efe916`, as at my 09:54Z entry.
+- `cursor/proofs-sessionof-5c1e` `521933e1430b`, untouched.
