@@ -291,7 +291,7 @@ def test_history_stubs_are_restored(tmp_path):
     assert sha256_file(stub) == (m.payload.sha256, m.payload.bytes)
 
 
-@pytest.mark.parametrize("place", [Path("artifacts.json"), Path("fixtures") / "artifacts.json"], ids=["at-the-root", "under-fixtures"])
+@pytest.mark.parametrize("place", [Path("artifacts.json"), Path("fixtures", "artifacts.json")], ids=["at-the-root", "under-fixtures"])
 def test_the_cli_fetches_through_the_public_url_alone(tmp_path, served, place):
     """`--repo DIR` is a tree other than the code's own, read by a research of another age (a run's launcher's, the mark's
     preflight's): one from before the registry moved to the root holds it under `fixtures/`, and is fetched into all the same."""

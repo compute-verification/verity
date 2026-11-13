@@ -1242,7 +1242,7 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
     git_dir = tmp_path / "verity.git"
     work = tmp_path / "work"
     (work / "fixtures").mkdir(parents=True)
-    root, before = Path("artifacts.json"), Path("fixtures") / "artifacts.json"
+    root, before = Path("artifacts.json"), Path("fixtures", "artifacts.json")
 
     def git(*a, date=0):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=work, check=True, capture_output=True,

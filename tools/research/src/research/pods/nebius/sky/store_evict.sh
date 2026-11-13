@@ -90,7 +90,8 @@ git = ["git", "-c", "safe.directory=*", "--git-dir", g]
 shas = subprocess.run([*git, "for-each-ref", "--sort=-committerdate", f"--count={n}", "--format=%(objectname)", "refs/research/src"],
                       capture_output=True, text=True, check=True).stdout.split()
 ids = {}
-# where a commit holds the registry (research's REPLICA_MAPS): the root, and under fixtures/, as commits from before it moved do
+# where a commit holds the registry (research's REPLICA_MAPS): the root, and under fixtures/, as commits from before it moved
+# do; the second in two parts, which a rerun of that move's rewrite of the registry's path leaves two places
 places = ("artifacts.json", "/".join(("fixtures", "artifacts.json")))
 for s in shas:
     for place in places:

@@ -107,8 +107,8 @@ def test_LOW_a_sibling_tree_named_relatively_from_another_tree_or_from_src_keeps
 # ---- what a ship and a test run leave still lets a tree go -------------------------------------------------------------------
 
 #: where a tree holds the registry: at the root, and where a tree shipped from a commit before the registry moved holds it.
-#: Spelled here, the second as a join, so a rewrite of the registry's path that left the code one place fails these tests
-ROOT, BEFORE = Path("artifacts.json"), Path("fixtures") / "artifacts.json"
+#: Spelled here, the second in two parts, so a rewrite of the registry's path that left the code one place fails these tests
+ROOT, BEFORE = Path("artifacts.json"), Path("fixtures", "artifacts.json")
 LAYOUTS = pytest.mark.parametrize("place", [ROOT, BEFORE], ids=["at-the-root", "under-fixtures"])
 
 
