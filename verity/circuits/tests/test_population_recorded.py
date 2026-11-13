@@ -37,12 +37,16 @@ REWRITE = "`uv run python tools/verity/check/pins.py --write verity/circuits/tes
 #: the population programs' own families, which the sidecars bind as roots too: not templates of a population here
 POPULATIONS = ("TemplateInstances", "TemplatePopulations")
 SIDECARS = ((PACKAGE, ()), *((PACKAGE.parent / "definitions" / d, pre) for d, pre in (("circuits", ()), ("ops", ("ops",)), ("silicon", ("silicon",)))))
+#: the packages under `verity/circuits` whose sidecars the record never held: `kernels` and `private_circuits`, which move
+#: here from `verity/definitions` with `ops` and `silicon`
+UNRECORDED = ("kernels", "private_circuits")
 
 
 def _templates() -> list[Any]:
     """Each complete composite root of the catalog's sidecars (`SIDECARS`), by the path each had in the one tree and root function, once each."""
     out: dict[str, Any] = {}
-    for _, p in sorted(((*pre, *p.relative_to(d).parts), p) for d, pre in SIDECARS for p in d.rglob("*.circuit-check.py")):
+    for _, p in sorted(((*pre, *p.relative_to(d).parts), p) for d, pre in SIDECARS for p in d.rglob("*.circuit-check.py")
+                       if d != PACKAGE or p.relative_to(d).parts[0] not in UNRECORDED):
         spec = importlib.util.spec_from_file_location(f"_population_recorded_{len(out)}_{p.stem.replace('.', '_')}", p)
         m = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(m)
