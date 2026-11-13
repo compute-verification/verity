@@ -119,8 +119,8 @@ def canonical(value: Any) -> str:
 
 #: Lake builds a path require in place, and ports share theirs (`lean/` here, the core protocol interface), so two ports'
 #: builds at once, as two suites in one `check` run them, compile one module's C in one directory together, and clang
-#: reads it while the other rewrites it
-BUILD_LOCK = Path(__file__).resolve().parents[2] / "lean" / ".lake" / "harness-build.lock"
+#: reads it while the other rewrites it.  Written from the root, as each verifier that takes it writes it
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/difftest/lean" / ".lake" / "harness-build.lock"
 
 
 @functools.cache
