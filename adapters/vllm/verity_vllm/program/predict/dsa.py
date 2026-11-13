@@ -174,8 +174,8 @@ class Net:
             facts.append(str(e))
         if facts:
             _refuse("; ".join(facts))
-        self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
-        env = phi.engine.get("env")
+        env = phi.engine.get("env")   # the switches the engines run under; a φ that states none sets none
+        self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), env if env else {})
         self.long_rows = None if env is None or all(env.get(k) == v for k, v in DSA_TOPK_ENV.items()) else (
             f"a row past INDEX_TOPK ({int(C['INDEX_TOPK'])}) keys under an engine whose environment sets "
             f"{', '.join(f'{k}={env.get(k)!r}' for k in DSA_TOPK_ENV)}, not {DSA_TOPK_ENV} (the kernels' own order past INDEX_TOPK, "
