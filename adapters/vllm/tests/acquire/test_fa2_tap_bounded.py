@@ -207,7 +207,6 @@ def _digest(staged):
 def test_bounded_equals_unbounded(seqlens, cap_seqs):
     h, M, NB, BN, D = GEOM["h"], GEOM["M"], GEOM["NB"], GEOM["BN"], GEOM["D"]
     layers = 3
-    per = fa2_tap_words_per_seq(h, M, NB, BN, D)
     cap_words = fa2_tap_buffer_words(cap_seqs, h, M, NB, BN, D)
     ref, _ = unbounded_path(seqlens, h, M, NB, BN, D, layers)
     got, boundbuf, peak, groups = bounded_path(seqlens, h, M, NB, BN, D, layers, cap_words)

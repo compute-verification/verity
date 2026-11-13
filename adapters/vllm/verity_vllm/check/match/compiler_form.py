@@ -57,7 +57,8 @@ def fold_in_form(fold, dirs: Iterable[str]) -> dict:
 
 def _in_form(d: str) -> bool:
     try:
-        dg = json.load(open(os.path.join(d, "derive-report.json"))).get("dead_gates")
+        with open(os.path.join(d, "derive-report.json")) as f:
+            dg = json.load(f).get("dead_gates")
     except (OSError, ValueError):
         return False
     return (isinstance(dg, dict) and dg.get("dead_computed_gates") == 0 and dg.get("approximate") is False) or _swapped(d)
@@ -69,7 +70,8 @@ def _swapped(d: str) -> bool:
     Program is in the form whatever dead gates it counts: those no rule of the form removes (an int8 linear read in part:
     `ScaledMmS8_v1` is no `prune.COLUMNS` linear, so the last layer's qkv on the prompt rows before the last keeps its query columns)."""
     try:
-        hist = json.load(open(os.path.join(d, "result.json")))["spec_histogram"]
+        with open(os.path.join(d, "result.json")) as f:
+            hist = json.load(f)["spec_histogram"]
         bases = {_base(k)[1] for k in hist}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
@@ -189,7 +191,8 @@ def _narrowed(inst: list[dict], compact: bool) -> tuple[list[dict], collections.
                     if k in spans:
                         sp = spans[k]
                         sp[0], sp[1] = min(sp[0], lo), max(sp[1], hi)
-    by, out, made = {}, list(inst), collections.Counter()
+    by, out = {}, list(inst)
+    made: collections.Counter[str] = collections.Counter()
     for k, (N, i, scope, base, statics, (s, e)) in cand.items():
         a, b = spans[k]
         if b <= a or (a, b) == (0, N):

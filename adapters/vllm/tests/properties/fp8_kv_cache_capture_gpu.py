@@ -22,8 +22,8 @@ from typing import Any
 
 import numpy as np
 import torch
-
 from verity.definitions.ops.kv_cache import kv_cache_append_e4m3_word
+
 from verity_vllm.engine.hooks import Hooks
 
 SCHEMA = "verity-vllm/fp8-kv-cache-capture/v1"
