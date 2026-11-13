@@ -87,7 +87,7 @@ from typing import Any, Callable, NamedTuple, Sequence
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import const_bits
 from verity.circuits.boolean.trace import word_of
-from verity.definitions.circuits.census import silicon_step
+from verity.circuits.census import silicon_step
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops import fp32 as F
 from verity.circuits.ops import gemm as G
