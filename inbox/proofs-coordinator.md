@@ -130654,3 +130654,130 @@ The two-stage join needs, for each template, that a member's session sets up one
 - The congruence, and so `PartSame`: not written.
 
 **Heads, all pushed.** `cursor/proofs-sessionof2-7c3a` `d45f63a86c22e58989d6c0e88ab7309fe0a58c76`; `cursor/proofs-sessionof-9b17` `e7bbad0a4689ac43a7e91efb82e78757bdebb454`; `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5` (untouched by me). Runs: `cfb5` done rc 0; `9f87` done rc 1; `ab7a` done rc 0; `c289` done rc 0. Mailbox read at 08:40Z: one message, yours of 08:23Z, answered here.
+
+## LOOSEMAP, Fri 13 Nov 08:41Z: CERTIFIED on chain 1's tree `41c1cdf99377`: `cursor/proofs-loosemap-0917` at `56561c89bb4a`, seven rows, a pure move (34 renames, 217 path-only edits) alone, after the lane's other three moves and before the group map; on chain 2's base `5b2c1e735b92` the same rehearsal is running, and I title again when it ends, about 09:15Z. NEW: the move changes the audit key of four Lean packages through one test helper
+
+**In plain words.** The map now moves seven loose paths of the proof system's two directories into their prover's directories, and leaves the eighth (`flock/sigma/`) for a map of its own, as you ruled. Run on the tree chain 1 leaves, the certificate accepts it as a move that changes nothing but paths, and the checks of the whole tree I was told to run pass on the result. Your 08:30Z message names a newer base for chain 2 (ci's `5b2c1e735b92`, which holds chain 1 and two more pull requests): I have not certified there yet, two runs are doing it now, and until they end this entry certifies chain 1's tree only. One thing a reader should know before staging the map: one helper file of a test, which loads a moved script by its path, counts as an input of a Lean package, so four Lean packages are checked again after this move, though no Lean file changes.
+
+Clock: `date -u` read 08:41Z. Mailbox read at 08:39Z: your 08:12Z, 08:15Z and 08:30Z messages, all acted on. Neither of your two reasons is wrong: three scripts of `agreement/` import `verity_flock`, and `plancheck.py` imports `.optimize` [read: `verity/protocols/spot/plancheck.py`, `from .optimize import`].
+
+**On your 08:30Z message**
+- **Chain 2's base.** `5b2c1e735b92` holds chain 1's head and, after it, #9461, #9237 and their lock records [my VM: `git log --first-parent`]. #9237 changes SPOT's verifier (16 files) and none of my seven paths, nor the README of the hand commit, nor `tests/import_order.toml` [my VM: `git diff --stat 41c1cdf99377 5b2c1e735b92`]. `layout.py --modules` there prints the map's seven `[modules]` rows [my VM].
+- **Two runs on it**, both with `PYTHONPATH` cleared and the two `__file__` lines printed:
+  - `r20261113-083812-b2d4` (cpu-8): `5b2c1e735b92` and the map (`18203bab278`), this map alone.
+  - `r20261113-083849-4498` (cpu-14): `5b2c1e735b92`, `468878c8f37c` merged in, and the map (`1cefb506b2a`); it stages `compose_map.toml`, `configurations_map.toml` and `world_map.toml` in that order, applies ONSITE's listing commit after the carve (`3d2497789142`, as a patch), then stages this map, applies the hand patch by `git am`, and runs the listing's check and the four root tests before and after this map.
+- **The trap, for each test I quote below:**
+  - The certificate (`stage.py`, `verity check move`) and `resolve_check.py` ran in the run's clone, which is the tree before the move, as the certificate is defined: the base's code judges the move.
+  - **The four root tests, `import_order.py --check`, `pins.py --stale` and `tests/test_tree.py HEAD` ran in a scratch copy** (a git worktree of the staged commit, with the hand commit) **with the runner's `PYTHONPATH` as it was** [runs `r20261113-081843-4ce0`, `r20261113-081914-984a`, `r20261113-082856-7ea9`]. So a package they import by name could have come from the tree before the move. Each of the six takes the tree's root from its own file's path, so the files they judged were the scratch copy's [read: `tests/test_repository.py:21`, `tests/test_boundaries.py:64`, `tests/test_lean_packages.py:17`, `tools/verity/check/import_order.py:23`, `tools/verity/check/pins.py:55`]. I did not print `verity.__file__` in those runs. The two runs on chain 2's base do.
+  - **The no-growth lints and the suites** [run `r20261113-082338-f6dc`] run on a pushed commit of the moved tree, `edea1506d5a7`, with `--cwd clone`: the clone is the moved tree.
+
+Everything below the rule is written so that you can post it as it is. [run] is a run on a node, with its id; [my VM] is a command I ran on my machine; [read] names the place.
+
+---
+
+**THE LOOSE PATHS' MAP, from proofs: one map, seven rows, and one hand commit.**
+
+**1. Where the stager takes it**
+- **The map:** `tools/move/proofs_loose_map.toml` on `cursor/proofs-loosemap-0917` at `56561c89bb4ac412d580313b31963169e4515079`. The branch is `main` `9182900fb94e` and that one file. No pull request.
+- **Not the file of the same name** on `cursor/top-tree-inventory-485d` (`18d8854a006d`), which sends `agreement/` to `tools/` and `plancheck.py` to the verifier, and moves `sigma/` and the fixtures.
+- **Its `[roots]` are chain 1's:** `verity_config` at `tools/config/verity_config`. It does not run on `main` as `main` is.
+
+| Row | From | To |
+|---|---|---|
+| 1 | `verity/protocols/flock/pod/` (41 files) | `verity/protocols/flock/prover/pod/` |
+| 2 | `verity/protocols/flock/tool.py` | `verity/protocols/flock/prover/tool.py` |
+| 3 | `verity/protocols/flock/agreement/` (33 files) | `verity/protocols/flock/prover/agreement/` |
+| 4 to 7 | `verity/protocols/spot/candidates.py`, `costfit.py`, `optimize.py`, `plancheck.py` | `verity/protocols/spot/prover/`, the same names |
+
+- 79 files move, one is made (`verity/protocols/spot/prover/__init__.py`, empty), 171 others are rewritten [run `r20261113-081843-4ce0`: `git diff -M --name-status`, 79 R, 1 A, 171 M].
+- `verity/protocols/flock/sigma/` stays where it is and keeps its not-yet line. `tests/tree.toml` is not rewritten; the seven not-yet lines whose move landed are top's to delete (the tree test prints one bookkeeping line for each).
+
+**2. The order**
+- **After chain 1, before the group map.** After chain 1, because the map names `verity_config` where the config map leaves it. Before the group map, because its rows name `verity/protocols/flock/…` and `verity/protocols/spot/…`, which the group map moves whole.
+- **Against the lane's other three maps** (`compose_map.toml`, `configurations_map.toml`, `world_map.toml`): either order. It names no path of theirs. Certified before them [run `r20261113-081843-4ce0`, `r20261113-081914-984a`] and after them, on ONSITE's staged tree `3d2497789142` with the map on it: "certified 2ab2897b9423..821f8e3185f7 is a pure move (34 renames, 217 path-only edits)", "0 issue(s)", "the same", "69 passed" [run `r20261113-082856-7ea9`, rc 0]. On that tree `pins.py --stale` names four pins, all through `security/Proofs/lake-manifest.json`, and names the same four before this map [my VM, on `2ab2897b9423`]: they are the three moves' to regenerate, and this map adds none.
+- **The group map** (`protocol_groups_map.toml`, top's `cursor/top-protocol-groups-f911` at `a21f150fcce8`) names none of the seven paths, old or new, in a row, a `[split]` key or a `[modules]` row: its eight rows are whole directories, `verity/protocols/flock/` and `verity/protocols/spot/` among them [my VM: the map read as TOML, each path searched]. So it carries what this map placed.
+- **Tried, on the group map's own base** (`a21f150fcce8`, which is not on chain 1, so this map's `[roots]` were given that tree's `verity_config` for the trial):
+  - the group map alone: "a pure move (1263 renames, 1949 path-only edits)" [run `r20261113-082501-3eb1`, rc 0];
+  - this map and then the group map on its commit: both certify. This map: "certified 412b4f774f84..c3b5dd9370d4 is a pure move (34 renames, 217 path-only edits)". The group map after it: "certified c3b5dd9370d4..61673d14496b is a pure move (1264 renames, 1949 path-only edits)", one rename more than alone, the empty `spot/prover/__init__.py` [run `r20261113-082434-c53d`, rc 0]. After both, `verity/protocols/proofs/flock/prover/pod/` holds 44 files, `proofs/flock/prover/agreement/` 33 and `proofs/spot/prover/` 5, and nothing is left under `verity/protocols/flock/` or `verity/protocols/spot/`.
+  - Not run after both: the hand patch (it goes between the two) and any test.
+- **If it had to run after the group map**, every path in it gains `proofs/` after `verity/protocols/`: the seven rows, `[retired]`, `[modules]`, `[rewrite.keep_in]`, the root `verity_flock`, three `include` lines and one `exclude` line. I have not written or run that form.
+
+**3. The hand commit after the move**
+- **What it is:** three lines of `verity/protocols/flock/prover/README.md` (4 in, 3 out). Nothing else.
+- **Why:** the README named two pod scripts from the directory above (`../pod/74-gemm-hill.sh`). The mover would write them with no leading dot, a form the certificate refuses in Markdown. The map keeps the two as written (`[rewrite.keep_in]`), and `keep_in` keeps a path wherever the file names it, so two commands lower in the same README that name the same two scripts from the root are kept too. After the move all four name a path that is gone.
+- **As a patch file:** `proofs_loose_map_hand.patch`, at the root of `cursor/proofs-loosemap-0917-hand-patch` (`0d456883ef`). `git am` it on the commit this map makes, before the group map runs: the group map moves the README, and then the patch no longer applies.
+- **Tried:** `git am` on the node's staged commit `a84a0a5722f2` gives the tree of the node's hand commit `edea1506d5a7` [my VM].
+- **The same as steps, which do not go stale:** in `verity/protocols/flock/prover/README.md`, under "Hill-climb points in GPU sessions", write `verity/protocols/flock/prover/pod/74-gemm-hill.sh` and `verity/protocols/flock/prover/pod/gemm_hill.py` for the four places that name `74-gemm-hill.sh` and `gemm_hill.py` under `../pod/` or `verity/protocols/flock/pod/`.
+- **Without it** I expect no test to fail and have not run them so: of the four root tests only `tests/test_doc_paths.py` reads a README's paths, and it warns [derived]. The commit is there so that no README names a dead command.
+- **The same map keeps two more paths**, in `verity/protocols/flock/prover/live/PROTOCOL.md:1024,1096` (`../agreement/firewall_finish_agree.py`, `../agreement/firewall_controls.sh`). They need no hand line: written from `flock/prover/live/`, they name the right files once `agreement/` is in `flock/prover/` [my VM: the staged tree holds both files there].
+- **The whole order on one branch, to read:** `cursor/proofs-loosemap-0917-on-chain1` at `edea1506d5a7`: chain 1's head `41c1cdf99377`, the map (`f3036fe2715e`), the node's staged commit (`a84a0a5722f2`), the hand commit.
+
+**4. What it certifies, on chain 1's tree** [run `r20261113-081843-4ce0`, cpu-1, base `f3036fe2715e`, which is `41c1cdf99377` and the map; rc 0]. On chain 2's base: not yet, see above.
+- `stage.py`: rc 0, "staged 1 move … `a84a0a5722f2`".
+- `verity check move`: "move-check: certified f3036fe2715ee527bc1911a330fa82a2527975ce..a84a0a5722f231849880245d681258672495c17a is a pure move (34 renames, 217 path-only edits)".
+- `resolve_check.py`: "0 issue(s)". `pins.py --stale`: rc 0, nothing stale.
+- **On the moved tree with the hand commit** (`edea1506d5a7`; the first two in a scratch copy, the third on the pushed commit, as said above):
+  - `tests/test_boundaries.py`, `tests/test_tree.py`, `tests/test_lean_packages.py`, `tests/test_doc_paths.py` by name: "69 passed, 6 warnings".
+  - `import_order.py --check`: "tests/import_order.toml: the same".
+  - The no-growth lints: "ratchet gate f3036fe2715e..a84a0a5722f2: 1 change(s), 0 failed" for the move and "a84a0a5722f2..edea1506d5a7: 1 change(s), 0 failed" for the hand commit [run `r20261113-082338-f6dc`].
+- **The same on ONSITE's branch** (`468878c8f37c`, chain 1's head with the other three maps' files): the same certificate line with its own commits (`f2f62c4b20d1..c20a1bbe1de8`, 34 and 217), "0 issue(s)", "the same", "69 passed" [run `r20261113-081914-984a`, cpu-7, rc 0].
+- **The suites the move changes** (`suites.py --changed f3036fe2715e --quick` on `edea1506d5a7`): run `r20261113-082338-f6dc`, cpu-7, running. I expect it to end about 09:35Z [guess: the same command on the first rehearsal's tree runs 131 suites on a node with no pass kept, `r20261113-081210-6735`, and is still running after 18 minutes].
+
+**5. The import listing: no step after this map**
+- **What the mover rewrites in `tests/import_order.toml`:** nine lines, each a file's path, in three lists [my VM: `git diff f3036fe2715e a84a0a5722f2 -- tests/import_order.toml`].
+  - `[[against]]` Flock to `tools/`: `agreement/tool.py`, `pod/catalog.py`, `tool.py`, now under `verity/protocols/flock/prover/`.
+  - `[[against]]` Flock to `benchmarks/`: `pod/gemm_hill.py`, `pod/read_gadget.py`, now under `verity/protocols/flock/prover/pod/`.
+  - The `[[place]]` of `verity/protocols/spot/verifier`: its four planner files, now `verity/protocols/spot/prover/…`. The place keeps them, as you ruled.
+- **No row of `order`, no distribution, no other place and no `loads`, `reaches` or `loaded_by` list changes.** The place of `verity/protocols/flock/sigma` is untouched.
+- **The generator after it changes nothing:** its check says "the same" on the staged tree [run `r20261113-081843-4ce0`, `r20261113-081914-984a`]. So the listing's worker has nothing to run for this map.
+- **`tests/test_boundaries.py` passes on the moved tree** with no step taken: it is in the 69.
+- **The planner's tests** stay in the verifier's suite and import `verity.protocols.spot.prover`. The listing's check does not refuse them: `test_a_verifier_loads_no_prover_code` passes, and its docstring says "Tests are no loaders here" [read: `tests/test_boundaries.py:1425-1432`]. No test moved.
+
+**6. Lean: four audit keys change, and no Lean file does**
+- **No Lean input is in the move:** of the 251 files it touches, none is a `.lean` file, a lakefile, a Lake manifest, a lock or a toolchain file [my VM: `git diff --name-only f3036fe2715e edea1506d5a7`, 0 such]. No Lake package moves.
+- **Four packages' inputs keys change all the same** [my VM: `tools/verity/lean/lean_changed.py --inputs-key … --head` at `f3036fe2715e` and at `edea1506d5a7`; the node's run of `lean_audit.key` over all 36 packages agrees, `r20261113-081843-4ce0`]: `core_firewall` (`verity/protocols/recursion/verifier/firewall`), `security`, `security/Properties`, `security/Proofs`. The other 32 keep theirs, Flock's verifier, `core_sigma` and SPOT's Lean check among them.
+- **The cause is one file:** `verity/protocols/recursion/verifier/firewall/tests/_release.py`, a helper of the ZK server's release side's tests. It loads `firewall_agree.py` by its path under `flock/agreement/`, so the move rewrites that one line. The Lean check counts it as the package's own file, since only `test_*.py` and `conftest.py` are left out by name [read: `tools/verity/lean/lean_audit.py:208-223`]. `security/Properties` and `security/Proofs` require that package by path, and `security` is proved in `security/Proofs`.
+- **No map avoids it:** the helper names the moved script's path, so any move of `agreement/` changes it, `tools/flock_agreement/` too, and so does the group map, which moves `flock/` [derived].
+- **One line the map leaves for Lean's run:** the lakefile of SPOT's Lean check names `verity/protocols/spot/plancheck.py` in a comment (`verity/protocols/spot/verifier/lean/lakefile.toml:52`). Rewritten, it changed 14 keys in place of 4 [my VM, on the first rehearsal's tree]. The map excludes it, as the flat files' map does.
+- **Not run:** the Lean check of the four on the moved tree. I can launch the fast path (`lean_changed.py --records verity/protocols/recursion/verifier/firewall`) if you want it; ONSITE's took about 70 minutes.
+
+**7. What still names an old path after the move and the hand commit** [run `r20261113-081843-4ce0`: `git grep` of the seven old paths and module names, the maps, the tree file and research's recorded moves left out: 3 lines]
+- `security/Definitions/Claims.lean:57` and `:366`, two docstrings that name `verity/protocols/flock/agreement/agree.py`. No map rewrites Lean sources. `tests/test_doc_paths.py` warns on them, beside about 190 lines it warns on today.
+- `verity/protocols/spot/verifier/lean/lakefile.toml:52`, the comment above.
+- `AGENTS.md:25` names the agreement as `flock/agreement/`, a short form no mover reads. It should read `flock/prover/agreement/` in the change that deletes the not-yet lines.
+
+**8. `flock/sigma/`, for its own map later**
+- On the first rehearsal's tree, where the map still moved it to `flock/verifier/sigma/`, its suite built the package at the new place and passed: "passed verity/protocols/flock/verifier/sigma 4 passed in 318 s" [run `r20261113-081210-6735`, on `main`'s tree, still running its other suites].
+- Its key and Flock's verifier's key did not change there: the Lean check leaves a nested package's files out of the outer package's, and reads a required package by its content and not its path [my VM: `lean_audit.key` on both trees; read: `lean_audit.py:218-223`, `:493-520`].
+- It needs one hand line, `HELD_AS_VERITY` in `tests/test_boundaries.py:91` loses the entry; with it the four root tests passed, "69 passed" [run `r20261113-081139-d9f5`].
+- Not shown: the Lean check of `core_sigma` at the new place.
+
+**9. `fixtures/`, sized; nothing of it moved**
+- **On `main`:** 228 tracked files: `bench-instances/` 84, `typed-obligation-v0/` 141, `proof-format-v3/` 2, and the registry `artifacts.json` [my VM: `git ls-files fixtures`].
+- **Chain 1 takes the 84** (`bench_instances_map.toml`, to `benchmarks/numerical/bench-instances/`). On chain 1's tree 144 are left.
+- **`fixtures/artifacts.json`** is top's line ("to the root"). It pins nothing tracked under `fixtures/`: it maps 184 `art:` ids to the path each fetched fixture is restored to, and 173 of those paths are not tracked. On chain 1's tree two of them are under `fixtures/`: `fixtures/lean-vectors` and `fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json`, both ignored by `.gitignore`. 84 files name the registry (36 in `tools/`, 14 in `verity/`, 12 in `adapters/`, 8 in `benchmarks/`, 7 in `tests/`) [my VM, on `main`'s tree].
+- **`typed-obligation-v0/`** (141 vectors: 29 accept, 52 reject, 55 identity, 5 binding): no code in the tree reads the tracked 141 by path. One test reads the fetched K = 1536 vector (`benchmarks/numerical/tests/checker/conftest.py:15`), and `verity/definitions/circuits/targets/target.py:35,75` names the directory in a docstring as the format's examples [my VM: `git grep typed-obligation`]. Their reader went with the archive.
+- **`proof-format-v3/`** (a README and `vectors.json`): no reader. Its README names two, neither in the tree (`tests/test_doc_paths.py:54-55` allows the two names: "veritor's test", "D-SP1's guest, deleted with the archive"), and `adapters/vllm/verity_vllm/check/codes.py:3` names the directory in a docstring.
+- **Can a map do it:** `typed-obligation-v0/` yes, one row of a directory, once someone rules which reader it sits beside (top's worker proposes `verity/definitions/circuits/targets/`); the registry's one path and the `.gitignore` line follow it, the second by hand [guess: I have not run it]. `proof-format-v3/` is a deletion, not a move.
+- **Earliest:** after the chain. The map and its rehearsal are about an hour of runs once the place is ruled.
+
+**Stop rule:** not met. The move changes no statement, no named assumption and nothing a verifier accepts: no lock and no Lean source changes, and under a `verifier/` or a `device/` it changes eight test files, one test helper, two READMEs and two suites' settings, and no other file [my VM: `git diff --name-only f3036fe2715e a84a0a5722f2`].
+
+**NEEDS**
+1. Whether you want the Lean fast path of the four packages run on the moved tree tonight.
+2. Nothing else. I write again when the two runs on chain 2's base end, with the title you asked for: CERTIFIED with that base, or NOT TONIGHT with what stopped it.
+
+**To post:** nothing yet. Sections 1 to 7 are written to be posted once the title names chain 2's base.
+
+**Not established**
+- **The certificate on chain 2's base `5b2c1e735b92`**, alone and after the lane's other three maps (`r20261113-083812-b2d4`, `r20261113-083849-4498`, running).
+- Where `verity` and `verity_flock` were imported from in the tests of the three earlier rehearsals.
+- The suites on the moved tree (`r20261113-082338-f6dc`, running; chain 1's tree).
+- The Lean check of the four packages whose key changes.
+- The hand patch and any test after the group map.
+
+**Pushed heads**
+- `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone).
+- `cursor/proofs-loosemap-0917-hand-patch` `0d456883ef` (the patch file at its root).
+- `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7` (the whole order, to read).
+- `cursor/proofs-loosemap-0917-moved` `3fa6c6c82d` is the first rehearsal's tree on `main`, with `sigma/` moved: superseded, kept only for section 8.
