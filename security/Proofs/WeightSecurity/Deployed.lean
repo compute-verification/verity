@@ -12,10 +12,16 @@ its timing bucket and on its advice, and then the window's audit runs (`JointAud
 session on one live sample). The probability that it leaves `M` incorrect proof blocks undetected is at most
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
-knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le`). Its sample misses its `w` incorrect proof blocks
-with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block miss: a
+knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le_of_ends`). Its sample misses its `w` incorrect proof
+blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block miss: a
 premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata each have
 `(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
+
+The two SHA-512 premises are asked only of a window where some outcome of its stream ends its sample. Where none
+does, the window's audit rejects every run (`JointAuditV5.prob_accepts_of_not_ends`) and the window has no incorrect
+proof block on record (`JointAuditV5.wrongSet` is empty there, so `servedRec`'s `incorrect` is `0`). `Served.Local`
+then allows that window's release no changed slot, so any change there is counted in the bound's last term, the
+probability that the releases are not local: at such a window the bound is weaker, never stronger.
 -/
 
 @[expose] public section
