@@ -128,6 +128,81 @@ def test_a_hole_with_no_fix_declared_is_open(repo):
     assert _by_hole(S.status([], store=Store({}), root=repo.root)) == {REDRAWN: "not known", RECOMMITTED: "open"}
 
 
+@pytest.fixture
+def changes(tmp_path):
+    """A repository whose fix changes a file, for the checks that read what a run's tree holds: `commit(text, msg)`
+    writes `f.txt` and commits it, returning the commit."""
+
+    root = tmp_path / "changes"
+    root.mkdir()
+    _git(root, "init", "-q", "-b", "main")
+
+    def commit(text: str, msg: str) -> str:
+        (root / "f.txt").write_text(text)
+        _git(root, "add", "f.txt")
+        _git(root, "commit", "-q", "-m", msg)
+        return _git(root, "rev-parse", "HEAD")
+
+    commit("a\n", "base")
+    return SimpleNamespace(root=root, commit=commit, head=lambda: _git(root, "rev-parse", "HEAD"))
+
+
+def test_a_reverted_fix_is_open_and_names_its_revert(changes):
+    """An ancestor is not enough: a fix reverted after it is no longer in the run's code."""
+
+    fix = changes.commit("a\nfix\n", "fix")
+    assert S.closes(changes.root, fix, fix) == {"status": "closed", "why": None}
+    _git(changes.root, "revert", "--no-edit", fix)
+    revert = changes.head()
+    got = S.closes(changes.root, fix, revert)
+    assert got["status"] == "open" and got["why"] == f"reverted by {revert[:12]}, which reverts the fix"
+    assert S.holes(revert, changes.root, {REDRAWN: fix, RECOMMITTED: fix})[REDRAWN]["status"] == "open"
+
+
+def test_a_reverted_merge_that_brought_the_fix_is_open(changes):
+    """`git revert -m 1` of the landing's merge, as a red step's culprit is reverted, takes the fix out with it."""
+
+    _git(changes.root, "checkout", "-q", "-b", "side")
+    fix = changes.commit("a\nfix\n", "fix")
+    _git(changes.root, "checkout", "-q", "main")
+    (changes.root / "g.txt").write_text("other\n")
+    _git(changes.root, "add", "g.txt")
+    _git(changes.root, "commit", "-q", "-m", "other")
+    _git(changes.root, "merge", "-q", "--no-ff", "-m", "land the fix", "side")
+    merge = changes.head()
+    assert S.closes(changes.root, fix, merge)["status"] == "closed"
+    _git(changes.root, "revert", "--no-edit", "-m", "1", merge)
+    revert = changes.head()
+    got = S.closes(changes.root, fix, revert)
+    assert got["status"] == "open"
+    assert got["why"] == f"reverted by {revert[:12]}, which reverts the merge {merge[:12]} that brought it in"
+
+
+def test_a_revert_of_the_revert_closes_the_hole_again(changes):
+    """A revert a later revert undoes doesn't count; undoing that one puts the first revert back in force."""
+
+    fix = changes.commit("a\nfix\n", "fix")
+    _git(changes.root, "revert", "--no-edit", fix)
+    first = changes.head()
+    _git(changes.root, "revert", "--no-edit", "HEAD")
+    assert S.closes(changes.root, fix, changes.head()) == {"status": "closed", "why": None}
+    _git(changes.root, "revert", "--no-edit", "HEAD")
+    again = S.closes(changes.root, fix, changes.head())
+    assert again == {"status": "open", "why": f"reverted by {first[:12]}, which reverts the fix"}
+
+
+def test_a_fix_whose_patch_no_longer_reverses_at_the_run_is_not_known(changes):
+    """The belt under the revert line: a tree that took the fix out with no revert's message, or rewrote its lines,
+    can't be told to hold it."""
+
+    fix = changes.commit("a\nfix\n", "fix")
+    changes.commit("a\nrewritten\n", "rewrite the fix's line")
+    got = S.closes(changes.root, fix, changes.head())
+    assert got["status"] == "not known" and "doesn't apply in reverse at the run's tree" in got["why"]
+    changes.commit("a\nfix\n", "put it back")
+    assert S.closes(changes.root, fix, changes.head())["status"] == "closed"
+
+
 def test_the_fixes_file_names_only_holes_by_full_commit(repo):
     repo.data.write_text(json.dumps({"fixes": {"another hole": repo.fix1}}))
     with pytest.raises(ValueError, match="names another hole, which is no hole of"):
