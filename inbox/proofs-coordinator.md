@@ -121581,3 +121581,209 @@ All places are at #9555's head, `38b7c6df38ba`.
 - `main` is `fa0877afdc12786a182a9d8dfb2de268734e0442`; all three merge with it clean (`git merge-tree --write-tree`, exit 0 each), so by your ruling (c) I moved none. [run]
 - Runs: `r20261113-031530-8504` done, rc 0, pass. `r20261113-030646-1057` ended, rc 1 (part one 0, part two the `research` suite above). [read]
 - I wait on: your decision on PRF-582, and your word if lean wants the records run at the head.
+
+## STOPDRIVER, Fri 13 Nov 05:12Z: the four answers on the verdicts' readers; `stream_registration` is built; one control of the three exists today; the rows are open as #9655; the cards branch's ready line
+
+In plain words. The field soundness asked for is built and pushed. Of the three controls network lists as ours, one
+exists today (the stop record's), one needs a forged prover that the second stage's driver does not have, and one has
+no verifier at all, so no verdict and no control (the certified read). The class's boundary record is the object
+network's reader digests, with that digest, but it does not state the two rates: each stream's own registration
+record states its rate, as a design and a count, not as text. The two rate texts differ, and no reader accepts both
+today; one line in our writer makes one text serve both. A control can carry benchmarks' four fields under network's
+reader, but those fields cannot agree with the honest verdict's, for any control of ours.
+
+I read #9501 at `7eab5a6e27b2f220142043af2d4e6a184e3c0ece` whole (`benchmarks/network_traces/stop_verdicts.py`, 469
+lines; `verity/protocols/certifier/verifier/class_charge.py`, 197 lines) and ran its reader on our records from a
+worktree at that commit [run: `/tmp/sd/q4.py`, 05:07Z].
+
+### The four answers
+
+**1. The three controls: which are ours to produce, and what each names.**
+
+- **Stop record, `stop_word`: ours, and it exists.** [read] `stop_audit.py --forge I,J` is the negative's prover:
+  those spans' `b.stop` word is committed with bit 0 flipped (a length that is not the rule's, the count off by one)
+  and proved with the prover's self-check skipped; Lean's verdict on the session refuses it, and the summary is
+  `{"format": "verity/one-stage/stop-audit/v0", "accepted": false, ...}`. The rehearsal's `length` case
+  (`stop_audit_small.sh`) is this control at small statics, no engine. It names module
+  `benchmarks/one_stage/stop_audit.py` and the commit of the tree the audit ran from. [read] Both readers match a
+  control to a verdict by the verifier's module and commit, so the control and the honest audit must run from one
+  commit: the control is a second audit in the same run, or a run at the same head.
+- **Certified read, `max_tokens`: there is no verifier, so no verdict and no control. Not ours today, nor anyone's.**
+  [read] `stop_audit.py` carries it as its entry `request-row` with `accepted: null` and the premise "request row:
+  the engine's words, not held to the certified request". [read] Network's ingress tie (`IoTieRequest`,
+  `certifier/verifier/io_request.py`) holds each request's prompt length and arrival ordinal to the certified
+  ingress cells, says of itself "Nothing here is in a Spec or proved", and reads no `max_tokens` (its three uses
+  are `max_tokens=0` in a length template). [argued] A `max_tokens` changed in the committed request row with the
+  stop word left is refused by the stop audit, as the stop record's verifier; one changed with a stop word that
+  follows it is refused by nothing in the tree. That second case is what the certified read must refuse. It needs
+  a verifier that reads the certified ingress (network's) and the class's `b.request` row (ours); the record writer
+  follows it.
+- **Compute audit's second stage, `output`: the module is ours to name, `benchmarks/one_stage/two_stage.py`; no
+  control can be produced today.** [read] `two_stage.py` has no forged prover (the word `forge` is not in the file).
+  Its summary's `negatives` are the audit record decided again with one input altered (no verifier of record, a
+  session root that is not the registered one, a read opened against another root, a served share that is not the
+  sample); none is a changed committed output. The mechanism exists one layer down: `prove_leg.Member.forge` flips
+  bit 0 of an instance's first output word before commitment and skips the self-check, and `prove_leg`'s own legs
+  use it; the two-stage driver's interior does not pass it. To build: a `--forge` on `two_stage.py second` and a
+  case in `two_stage_small.sh`, about the size of the stop audit's. [read] Its `summary.json` also carries no
+  `format` (the stop audit's does), so `stop_verdicts.FORMATS` has nothing to list for it until one is given.
+
+  Formats to list at #9501 for ours: `verity/one-stage/stop-audit/v0` for the stop record [read:
+  `stop_audit.FORMAT`]; none exists yet for the second stage or the certified read.
+
+**2. Is the class's boundary record the object, with that digest? Yes.** [run] `two_stage.py first` writes the
+class's first-stage file with the boundary record and `registration` = `registration.digest(record)`, which is
+`SHA-512(format, 0, canonical JSON)` with the record's own format (`verity/registration/v1`, or `v2` where it
+registers values). Network's `digest_of` calls the same function: on our records `digest_of(boundary record)`
+equals the first-stage file's `registration`, and `digest_of(stop record)` equals the verdict's
+`stream_registration`. [run] The writer's test on a first stage registered by the driver itself holds the same.
+Two things it is not: [read] it is one class's record in one execution phase, not the serve's (a serve of C classes
+in W execution phases has C·W of them), and it does not state the two rates (answer 3).
+
+**3. Where the rate is stated: in each stream's own registration record, as `law` and `population`, never as text,
+and not in the boundary record.** [read] A registration record states its sampling design at `law`
+(`{"law": "subset", "k": K}`) and its count at `population`; the verifier's R1 and R2 hold both to its own design
+and count before any coin. The rate is K of N, computed. [run] The boundary record's is the compute audit's replay
+sample (K of N requests, `1/3` in the test's class); the stop record's rate is in the stop record, a second
+registration record whose `previous` is the boundary record, and whose digest is the verdict's
+`stream_registration`. [run] At network's two placeholder paths our boundary record and our stop record both read
+`None`, so its reader says "states no rate for the stop record" and holds the class at its whole schedule.
+So, in place of `rates.stop_record` and `rates.response_tie` in one object: **for each verdict, the record whose
+digest is its `stream_registration`, held to `previous == registration`, and there `law.k` over `population`**
+(`verdict_record.rate` is that function). `out/serve-registrations.jsonl` then holds every registration record of
+the class, the boundary record and each later stream's.
+It is not one place for the stop record and the certified read: [read] the certified read registers nothing today
+(no verifier, no population). [argued] Built as one block a request it would be a stream of its own after the
+boundary record, with its rate at the same two keys of its own record. Where the response tie's population is
+registered is network's to say; if it is a one-stage stream after the boundary record, the same two keys.
+[argued] I would not add a `rates` object of texts beside the record: R1 and R2 hold `law` and `population`, and
+nothing would hold a second statement of the same design.
+
+**4. The text: no text is accepted by both today, and only network's reader reads one.** [run] Network's reader at
+#9501 accepts exactly `rate:1/1`, as the registered text and as the record's: with `1/1` on either side it says
+"the registration registers the stop record at `1/1`, not `rate:1/1`" or "states `1/1` under a registration that
+registers `rate:1/1`". [run] Our writer writes `1/1`. [run] Benchmarks' reader, on `main` and at #9551's head
+`c6014df8def6` alike, keeps seven fields of a record and reads no `rate`, `registration`, `serve` or `class`; the
+reader that requires them is not in either tree.
+**The smallest change: our writer writes `rate:NUM/DEN`.** One return line in `verdict_record.rate` and six test
+lines; no record of ours is written yet. [run] It is the proof system's own design text:
+`draw.parse_rate("rate:1/1")` is `(1, 1, 1)` and `draw.parse_rate("1/1")` is `None`, and it is the text the stop
+audit takes as `--design`. [derived] `rate:K/N` in lowest terms resolves on N to exactly K. The other way is
+network's constant `EVERY_BLOCK` and its tie's writer. Either way network's reader has to compute the registered
+rate from `law` and `population` (answer 3) rather than read a text. I change ours on your word; NET-390's line
+would then read `rate:NUM/DEN`.
+
+**Can a control in network's form carry benchmarks' four fields? Under network's reader, yes; under benchmarks'
+reader on `main`, a control in network's form is refused; and the four fields on a control cannot agree with the
+honest verdict's.**
+
+- [run] `control_lacks` returns nothing for network's form with `registration`, `serve`, `class` and `rate` added,
+  and `_refuses` counts it: the reader looks at the four control fields and no other.
+- [run] Benchmarks' reader on `main` refuses the same record: it "lacks `piece`, `proved_by`, `open`", wants
+  `verdict` as one of four words where network's is an object, [read] reads controls from `out/verdicts.jsonl`
+  beside the verdicts, never `out/*-controls.jsonl`, and [run] refuses the control names `stop_word` and `output`
+  (its two are `id` and `max_tokens`). So one control line cannot serve both readers today: two lines, one a reader.
+- [argued, from read] A control changes a committed value, so a root, so a registration record, so its digest. The
+  stop-word control's changed root is in the stop record, and its boundary record differs too: a challenger opens a
+  run's root once, so the forged class is registered under another run root (`stop_audit_small.py`: the wrong class
+  is "in the window of the serve `NONCE-wrong`"). At small statics it is of no serve at all. So benchmarks' rule
+  that "the four pieces and their controls agree on `registration`, `serve` and `class`" cannot be met by any
+  control of ours. Network's rule can: a control names no head, class or serve and is held to its verdict by the
+  verifier's module and commit. The ask to benchmarks: hold a control to its piece and its verifier (module and
+  commit) only.
+
+Two more things the run showed, both about network's shape at the ties' serve:
+
+- [run] Our record in benchmarks' shape is no verdict record to network's rule (`class_charge.lacks`: "its
+  `verdict` is no object"), and [read] one record that does not read holds every execution phase at its whole
+  schedule. [run] `out/verdicts.jsonl` does not match `out/*-verdicts.jsonl`, so network's reader never opens our
+  file. It must keep that name: benchmarks' shape in a file named `*-verdicts.jsonl` would hold everything.
+- [read] Network's verdict object needs `link`, `window`, `class`, `head`, `accepted`, `complete` and `format`,
+  and its `class` is an integer, the class's index in the certifier's schedule, inside `verdict`. Ours is the text
+  `w<window>/p<P>-o<O>` at the record's top level. Our verifiers know no link, no schedule index and no signed
+  head. For network's shape our writer must be handed the head's registration and which schedule index a class
+  (P, O) is: network's to say.
+
+### Built since 04:16Z
+
+- **`stream_registration`, on the records branch** `cursor/proofs-stopdriver-verdict-records-ffc6` at
+  `b3d3c01f9983e49de9ab05dd1eea330473848e95` (pushed). Each record carries `stream_registration`, the digest of its
+  own stream's registration record (the stop record for the stop audit; the interior registration for the second
+  stage, handed with `--stream` as the second stage's `interior/registration.json` and held to the digest its
+  summary names), and `stream_names_boundary`, true where that record's `previous` is the class's boundary record.
+  A stream registered after another record gets no verdict record at all, as a summary that names another class
+  gets none. A second stage that refused before it registered an interior carries null in both, and its word is
+  `refuse`. [run] 9 tests pass, the test on the driver's own first stage among them; ruff passes. [run] The ratchet
+  gate fails on one site, the constant that spells the registration record's own key `law` once; the gate is a warn
+  step. [read] On the second stage's `rate`: it is the boundary record's, the replay sample's K of N. The interior
+  registration registers every proof block of the sampled spans, and the count sampled in each is the Spec's, in no
+  record's `law`.
+- **The rows are open: #9655**, unmarked, `cursor/proofs-stopdriver-stop-tie-rows-ffc6` at
+  `08acea32de756f0f1a06168baf62c088fd24c630`. [run] `r20261113-045243-62bf` (vy-nebius-cpu-12,
+  `suites.py --changed e2665bcddcda --quick`): 3 suites, 3 passed, 0 failed (`benchmarks/sampling_plan` 61,
+  `repository` 388, `verity-graph` 220). [run] The ratchet gate passes. **Ready line: #9655 at `08acea32de75`.**
+  A correction to 04:16Z: the charge is the exact count bound (`Stratified.count_bound`) times the block's output
+  bits, not the planner's certificate, which rounds a full sample's leak up to `5e-324` and not to 0. [read] Not in
+  it: the break-even planner's strata do not read the two populations, and the stop block counted is the rule's
+  Boolean Definition, not the served `EgressStop_v1`, which has no lowering.
+
+### The cards branch: ready line
+
+**Ready: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`.**
+
+- [run] The quick suites at `bdd91c5b7bcb`, 76 suites, on two machines: `r20261113-024507-eed6` (vy-nebius-cpu-12)
+  74 passed, 2 failed (`benchmarks/serve_tax`, `repository`); `r20261113-023239-4995` (vy-nebius-2) 73 passed, 3
+  failed (the same two and `research`).
+- [run] `benchmarks/serve_tax` passes at `c7b2df24848b` (`r20261113-033724-4b39`, 234 passed) and `repository` at
+  `08b5d4b3c0a6` (`r20261113-041050-c382`, 352 passed, with `verity-graph` 220).
+- [run] `research`'s two `tests/test_auto.py` tests fail on vy-nebius-2 and pass on vy-nebius-cpu-12 at the same
+  head, and fail on vy-nebius-2 on a branch cut from `origin/main` too (`fb74`): the machine's, not the branch's.
+  [read] #9596 is open on them.
+- [run] The one-card rehearsal `r20261113-023309-5129` passed at `bdd91c5b7bcb`; since then two test files changed
+  and nothing else (`git diff --stat`: `benchmarks/serve_tax/tests/test_replay.py`,
+  `tests/test_vllm_public_api.py`).
+- [run] No one run holds all 76 suites at the last head: each suite the two files reach was run again at the
+  commit that changed it (`4b39`, `c382`) and passed, and no other file changed.
+
+### Runs out
+
+- `r20261113-050647-a59f` (vy-nebius-2): the records branch's quick suites at `b3d3c01f9983`; launched 05:06Z,
+  expected about 05:50Z. Its pull request follows it.
+- `r20261113-035442-fb74` (vy-nebius-2): #9624's suites at `0e1df517c65d`; 51 passed, 1 failed (`research`, the
+  machine's two) at 05:08Z; expected about 05:40Z. `r20261113-035111-3f05` ended: `Spot/Pieces.lean` builds, exit
+  0. Still owed on #9624: the try of `Spot/RecordAcross.lean` and the suites at its head `64364792ed70`.
+
+Fri 22:00Z holds for the second build: the fields are in; what remains is the pull request after `a59f` and
+whichever text answer 4 gets.
+
+STOP RULE: I stop on the records branch when its pull request is open with `a59f`'s verdicts; on #9624 when the
+try and the suites at its head are read and its body says so. I build no control writer and no forged second stage
+without your word.
+
+NEEDS:
+1. Answer 4: `rate:NUM/DEN` in our writer, yes or no.
+2. Who builds the second stage's forged prover (the `output` control) and who builds the certified read's
+   verifier. Until the second exists, a stop class has three verdicts at most.
+3. From network, for its shape: which schedule index a class (P, O) is, and that the head's registration is
+   handed to our writer.
+
+To post (yours):
+- NET-403: "Of the three: the stop record's `stop_word` control is ours and exists (`benchmarks/one_stage/stop_audit.py
+  --forge`, format `verity/one-stage/stop-audit/v0`); the compute audit's `output` control is ours to build
+  (`benchmarks/one_stage/two_stage.py` has no forged prover, and its summary names no format yet); the certified
+  read has no verifier in the tree, so no verdict and no control. The registration your reader digests is the
+  class's boundary record, with `one_stage.registration.digest`. It states no rate as text: each stream's own
+  registration record states its design and count (`law`, `population`), and the stop record's is the stop record,
+  named on each verdict as `stream_registration` and chained to the boundary record by `previous`. A control in
+  your form may carry four more fields; your reader ignores them."
+- NET-390: "Each verdict also carries `stream_registration` and `stream_names_boundary`, as soundness asked. To
+  benchmarks: a control changes a committed value, so its registration cannot be the honest verdict's; hold a
+  control to its piece and its verifier's module and commit."
+
+Not established: that the forged stop audit refuses on a served class's own values (the control is at small
+statics, a class of its own); where the response tie's population is registered; the reader benchmarks will write
+(read: only what is on `main` and at #9551); the full 76 suites at the cards branch's last head.
+
+Heads, all pushed: records `b3d3c01f9983e49de9ab05dd1eea330473848e95`; rows `08acea32de756f0f1a06168baf62c088fd24c630`
+(#9655); across `64364792ed70bb0b934d5cb5fac96f3779d8047f` (#9624); cards
+`08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`; #9458 at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`.
