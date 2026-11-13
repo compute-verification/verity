@@ -134,13 +134,15 @@ def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, 
 
 
 def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: bytes, rows: int = 64, cols: int = 64,
-                       units: int = 1, cross: int = 64) -> list[dict]:
+                       units: int = 1, cross: int = 64, scalar: bool = False) -> list[dict]:
     """The raised adder on a whole audit tile that the scheme's own code forms, admits, checks and holds to its tile rule:
     `PearlC.encode` at forming v1 with -h3's SHA-512 row seeds and lines, `admissible`, `checked`'s ticket words, and
     `clear_work.check_opened`, the per-row rules and the inert-work bound on the tile and on each credited row, all on
     `fast_tile`'s batch forms (the served verifier's `--fast`). The two programs' words are computed on the scheme's
     codes and compared with `checked`'s on every word, and `cross` of `checked`'s words are recomputed with the scalar
-    chain. One row of the result per n of `ns`: the forming does not read n, the bound, the credit and the price do."""
+    chain. One row of the result per n of `ns`: the forming does not read n, the bound, the credit and the price do.
+    `scalar` leaves the batch forms out: the forming, the check and the tile rule then run on the scalar reference, and
+    only the count of flagged atoms in planted groups is the batch form's, held to the reference's total."""
     sys.path.insert(0, str(HERE / "pearl_c_vllm"))
     sys.path.insert(0, str(HERE.parents[1] / "verity" / "protocols" / "pouw" / "clear"))
     import clear_work as CW
@@ -151,7 +153,7 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
     C.set_atom("hopper")
     sch = PC.PearlC(forming="v1", device=H100)
     scalar_chain = PC.chain
-    undo = FT.install(sch)
+    undo = (lambda: None) if scalar else FT.install(sch)
     try:
         clock = {"start": time.perf_counter()}
 
@@ -216,7 +218,8 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
             per_word = Fraction(sch.credit_of(s), s.m * s.n)
             for name, (equal, atoms) in programs.items():
                 cost, credit = T._raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
-                out.append({"class": "raised-adder", "forming": "PearlC v1, -h3 SHA-512 lines", "program": name, "fill": fill,
+                out.append({"class": "raised-adder", "forming": "PearlC v1, -h3 SHA-512 lines",
+                            "forms": "scalar reference" if scalar else "fast_tile batch", "program": name, "fill": fill,
                             "shape": (s.m, k, n), "groups": groups, "units": units, "salt": salt.hex()[:16],
                             "admitted": admitted, "tile_rule": rule, "planted_codes_as_designed": planted_ok,
                             "largest_other_code_in_later_atoms": largest, "words": rows * cols, "equal": equal,
@@ -241,6 +244,7 @@ def main() -> None:
     ap.add_argument("--raised", default="", help="k:n:groups:fill[:program] (fill: zero or gauss; program: one-atom or skip), comma separated")
     ap.add_argument("--raised-scheme", default="", help="k:groups:fill, comma separated")
     ap.add_argument("--salt-from", type=int, default=0, help="the first salt's index, for --raised-pearlc")
+    ap.add_argument("--scalar", action="store_true", help="--raised-pearlc on the scalar reference, without fast_tile's batch forms")
     ap.add_argument("--raised-pearlc", default="", help="k:n[+n...]:groups:fill, comma separated: whole tiles on the scheme's code")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
@@ -268,7 +272,8 @@ def main() -> None:
         k, ns, groups, fill = spec_.split(":")
         for i in range(args.salt_from, args.salt_from + args.salts):
             for r in raised_pearlc_tile(int(k), [int(n) for n in ns.split("+")], int(groups), fill,
-                                        hashlib.sha512(b"raised/salt/%d" % i).digest()[:32], units=args.units):
+                                        hashlib.sha512(b"raised/salt/%d" % i).digest()[:32], units=args.units,
+                                        scalar=args.scalar):
                 out["scheme"].append(r)
                 print(json.dumps(r), flush=True)
     rows, cols = map(int, args.tile.split("x"))
