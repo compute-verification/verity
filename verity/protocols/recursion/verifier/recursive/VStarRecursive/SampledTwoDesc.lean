@@ -432,7 +432,10 @@ def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondS
     (vi.registered.map (·.1)).toList.isEmpty && portsOnce T circ && outsOk T circ
 
 /-- **The two-stage descriptor check** (module docstring), at the form's params `p`, its blobs `bs`, and the run of
-record's input `i` and interior `it`. -/
+record's input `i` and interior `it`. Its bound on a unit (`memberOk`) is stricter than `Spot.Partition`'s, which counts
+a unit's returned output bits alone: this one counts its input bits too, so it refuses a unit whose returned bits fit a
+size class and whose inputs with them pass `UNIT_CLASS_MAX`. A unit of 2,048 input bits returning 48 counts 2,096 here,
+and one of 4,096 returning 32 counts 4,128. What it refuses beyond `Spot.Partition` costs completeness alone. -/
 def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Bool :=
   match firstOf i, cellsOf i it, refsOf p bs with
   | some f, some (ns, ks), some rs =>
