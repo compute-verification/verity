@@ -163,7 +163,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix", "Proofs.Properties.Verity.SampledTwo.SessionCoins",
   "Proofs.Properties.Verity.SampledTwo.SessionAgrees", "Proofs.Flock.SpotFlock.ScopeTable",
   "Proofs.Properties.Verity.SampledTwo.OneTable", "Proofs.Properties.Verity.SampledTwo.TableName",
-  "Proofs.Properties.Verity.SampledTwo.SessionFits", "Proofs.Properties.Verity.SampledTwo.SessionHeld",
+  "Proofs.Properties.Verity.SampledTwo.AttachmentFits", "Proofs.Properties.Verity.SampledTwo.SessionHeld",
   "Proofs.Properties.Verity.SampledTwo.SessionRecord", "Proofs.Properties.Verity.SampledTwo.Accepts",
   "Proofs.Properties.Verity.SampledTwo.AcceptsProof", "Proofs.Properties.Verity.SampledTwo.Cover",
   "Proofs.Properties.Verity.SampledTwo.ReadsOnly", "Proofs.Properties.Verity.SampledTwo.Reached",
