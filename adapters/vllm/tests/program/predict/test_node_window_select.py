@@ -31,7 +31,7 @@ WORDS = np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x4000, 0x3F81, 0x0001, 0x7F80
 
 
 def _token(fn, rows: np.ndarray) -> np.ndarray:
-    got = np.asarray(evaluate_batch(fn, rows)).reshape(len(rows), -1).astype(np.uint64)
+    got = np.asarray(evaluate_batch(fn, rows, kernel="reference")).reshape(len(rows), -1).astype(np.uint64)
     return got[:, 0] if got.shape[1] == 1 else got[:, 0] | (got[:, 1] << 16)
 
 
@@ -41,7 +41,7 @@ def _units(Vs: int, rows: np.ndarray) -> np.ndarray:
     for u in G.plan(Vs):
         wires = {p: outs[k] for p, k, _f in u.wires}
         args = [rows[:, u.lanes[0]:u.lanes[1]] if p == "logits" else wires[p] for p, _t in u.defn.signature()[0]]
-        outs[u.key] = np.asarray(evaluate_batch(u.defn, *args)).reshape(len(rows), -1)
+        outs[u.key] = np.asarray(evaluate_batch(u.defn, *args, kernel="reference")).reshape(len(rows), -1)
     got = outs[("combine",)].astype(np.uint64)
     return got[:, 0] | (got[:, 1] << 16)
 
@@ -49,7 +49,8 @@ def _units(Vs: int, rows: np.ndarray) -> np.ndarray:
 @pytest.mark.parametrize("Vs", [200, 130])
 def test_v4_is_the_stages(Vs):
     """On rows of a small V whose lanes are `WORDS`' (ties, signed zeros, infinities, NaNs, a NaN first logit, an all-NaN row),
-    `TokenSelect_v4`, `TokenSelect_v1`, `GreedySelect_v1` and the plan's units one by one give the same token, the twin's."""
+    `TokenSelect_v4`, `TokenSelect_v1`, `GreedySelect_v1` and the plan's units one by one, each its own circuit by the
+    reference evaluator (not `numerics.rows`' argmax), give the same token, the twin's."""
     rng = np.random.default_rng(Vs)
     rows = WORDS[rng.integers(0, len(WORDS), (48, Vs))]
     rows[1, 0] = rows[2, :] = 0x7FC0
