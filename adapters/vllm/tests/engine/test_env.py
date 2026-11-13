@@ -185,6 +185,32 @@ def test_a_fixed_case_whose_repo_is_pinned_at_two_revisions_is_refused_with_both
     assert prof.checkpoint_for("B0", m) == first
 
 
+def test_two_pins_are_refused_before_a_snapshot_is_looked_for(tmp_path) -> None:
+    """Each refusal of two pins stands before the checkpoint's snapshot is looked for.  Where the pin that would have been read (a
+    role's first, a fixed case's later) is not downloaded, or its snapshot is gone, the refusal is the two pins' and not that
+    pin's, which alone is refused for itself."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.profiles.cases import CASES
+
+    (tmp_path / "there").mkdir()
+    there = {"repo": CASES["B0"]["repo"], "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "there")}
+    m = tmp_path / "checkpoints.json"
+    for unread in ({"downloaded": False}, {"local_path": str(tmp_path / "gone")}):
+        absent = dict(there, revision="4e20de362430" + "1" * 28, **unread)
+        m.write_text(json.dumps({"checkpoints": [dict(absent, role="ROLE_X")]}))
+        with pytest.raises(SystemExit, match="is not downloaded on this pod|local snapshot .* missing"):
+            prof.checkpoint_for("ROLE_X", m)
+        m.write_text(json.dumps({"checkpoints": [dict(absent, role="ROLE_X"), dict(there, role="ROLE_X")]}))
+        with pytest.raises(SystemExit, match="2 pins carry role 'ROLE_X'"):
+            prof.checkpoint_for("ROLE_X", m)
+        m.write_text(json.dumps({"checkpoints": [dict(there, role="B0"), dict(absent, role="B0_NEXT")]}))
+        with pytest.raises(SystemExit, match="2 pins of .* differ in revision"):
+            prof.checkpoint_for("B0", m)
+
+
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
     is not the execution order the fold takes it to be."""
