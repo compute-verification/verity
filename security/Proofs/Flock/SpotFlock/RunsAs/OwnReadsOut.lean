@@ -16,7 +16,9 @@ two-stage run (`AcceptedTwo`):
   the second stage's statement check passed through `SecondStage.readOk` (`reported_stated`: the check holds the
   reported reads to the statements', `SecondStage.check_ok`, and every read of a statement to `readOk`,
   `SecondStage.stmtCodes_nil`), or its root prints as null, which is how a value reported under two roots is reported;
-* so each read left out is `HeldRead` or has such a root (`accepted_ownReads`);
+* so each read the verdicts report for the record is `HeldRead` or has such a root (`accepted_ownReads`), and each
+  read left out is `HeldRead` unless the record's port of its name has a root that prints as null
+  (`accepted_leftOut`);
 * and `readOk` holds a read of one of the interior record's ports to an entry of a record, arm by arm (`readOk_port`).
 
 **The link-named case.** At a port a link names, `readOk` holds the read to the interior registration's registered
@@ -147,8 +149,10 @@ theorem reported_stated {allow : Bool} {own : Spot.SecondStage.Own} {ss : Array 
     have hget : ss.toList.getD k .null = j := by
       rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk, Option.getD_some, hkj]
     obtain ⟨s', p, hs', hf, -, -, hc⟩ := hst k hk'
-    rw [hget, hs] at hs'
-    cases hs'
+    have hss' : s' = s := by
+      rw [hget, hs] at hs'
+      exact (Option.some.inj hs').symm
+    rw [hss'] at hf hc
     obtain ⟨-, -, -, -, -, -, hr, -, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil hc
     have hok := Array.all_eq_true_iff_forall_mem.1 hr (port, e) hpe
     have hjr' : Spot.jeq r (Spot.getD e "root") = true := by
@@ -239,7 +243,7 @@ theorem readOk_port {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Second
       cases hf : (Spot.Record.byPort own.interior).find? (·.1 == v) with
       | none =>
         rw [hf] at hp
-        cases hp
+        simp at hp
       | some kx =>
         obtain ⟨k, x⟩ := kx
         simp only [hf, Bool.and_eq_true, beq_iff_eq] at hok
@@ -258,11 +262,10 @@ def HeldRead (i : Spot.Run.Input) (it : Spot.Run.Interior) (v : String) (r : Jso
       Spot.jeq r (Spot.getD e "root") = true ∧
       Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate it.record) p port e = true
 
-/-- **Each read the record's checks leave out is one the second stage's statement check held**: at an accepted
-two-stage run, a read that `Record.lessOwnReads` takes out of the reads `Record.checks` is handed for the interior
-record (the verdicts' own, `Record.ownRegistered` of `Record.sessionRegistered`) is `HeldRead`, or its root prints as
-null (a value the verdicts report under two roots is reported so). By `lessOwnReads_out` the read names one of the
-interior record's ports at that port's root, so `readOk_port` says what its statement's check held it to. -/
+/-- **Each read the verdicts report for the interior record is one the second stage's statement check held**: at an
+accepted two-stage run, each of the reads the interior record's checks start from (the verdicts' own for the record's
+ports and registered values, `Record.ownRegistered` of `Record.sessionRegistered`) is `HeldRead`, or its root prints
+as null (a value the verdicts report under two roots is reported so). -/
 theorem accepted_ownReads {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j)
     {opened : Array (String × Json)}
     (ho : Spot.Record.ownRegistered it.record (Spot.Record.sessionRegistered i.verdicts) = some opened)
@@ -291,5 +294,25 @@ theorem accepted_ownReads {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Jso
     unfold HeldRead
     exact ⟨runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂, ss, ps, hss, hc, rfl, rfl, hp, k', hk',
       s, p, port, e, hs, hf, hpe, hval, hjr, hok⟩
+
+/-- **The fact `Record.checks` rests on at the reads a two-stage run hands it**: the run of record and the form's
+last step both call `Spot.Record.checks` for the interior record at
+`Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered verdicts))`. At an accepted two-stage
+run, each read `Record.lessOwnReads` takes out of the verdicts' own names one of the interior record's ports at that
+port's root, and is `HeldRead`: the second stage's statement check held it through `SecondStage.readOk`
+(`readOk_port` says to what, arm by arm). The other disjunct is a port of the interior record whose root prints as
+null. -/
+theorem accepted_leftOut {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j)
+    {opened : Array (String × Json)}
+    (ho : Spot.Record.ownRegistered it.record (Spot.Record.sessionRegistered i.verdicts) = some opened)
+    {v : String} {r : Json} (hv : (v, r) ∈ opened)
+    (hno : (v, r) ∉ (Spot.Record.lessOwnReads it.record (some opened)).getD #[]) :
+    ∃ x, (v, x) ∈ Spot.Record.byPort it.record ∧ Spot.jeq (Spot.getD x "root") r = true ∧
+      (Spot.jeq (Spot.getD x "root") .null = true ∨ HeldRead i it v r) := by
+  obtain ⟨x, hx, hxr⟩ := lessOwnReads_out hv hno
+  refine ⟨x, hx, hxr, ?_⟩
+  rcases accepted_ownReads ha ho hv with hn | hh
+  · exact Or.inl (jeq_trans hxr hn)
+  · exact Or.inr hh
 
 end SpotFlock.RunsAs
