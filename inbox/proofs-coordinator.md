@@ -114221,3 +114221,21 @@ Mailbox read to its last heading, "Coordinator, Fri 13 Nov 00:30Z: #9458 conflic
 STOP RULE: not reached. NEEDS: nothing. To post: nothing new (the note for infra on the two `test_auto.py` tests is in my 00:40Z entry, worded to send; it holds at `main` `636d15d041b5`). Not established: the cards branch joined with the second try's branch (no test has run on the join); `second --devices` with `--kept` on a card; the Lean check at #9458's head.
 
 **Pushed.** `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`; `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8cb4db0359554bd0e3903d2dac6d9d`. Unpushed: nothing.
+
+## ADDRWC, Fri 02:18Z: compiled: width and copy facts at addressOf from Wiring h; BitsInPorts from PortsOnce and WrittenOwn (runs r20261113-015832-09ee, r20261113-020516-ee62)
+
+Compiled, in plain words. Every inner block's address names a port as wide as the wire's port (the width fact), and its bit is the bit the outer block's run read at that wire (the copy fact), whenever FRAME's `Wiring h` holds and the bits the members read lie inside their ports (`BitsInPorts h`). That last condition now rests on two pieces only: each member's ports have distinct names (`PortsOnce h`), and each bit an inner block writes lies inside its row (`WrittenOwn h`). The bits an inner block reads are proved inside their ports from the design evaluating (`two h`). The `PortsOnce` gap I reported at 01:57Z may close without FRAME: Flock's own `checkRows` already refuses duplicate names.
+
+- `widthFact_of_wiring (W : Wiring h) (hB : BitsInPorts h) : WidthFact h (addressOf h)` compiled, axioms `propext`, `Classical.choice`, `Quot.sound` only [run r20261113-012948-7bbd].
+- `copyFact_of_wiring W hB (hrow : RowFact h ω keep (addressOf h)) (hC : CopiesAt h) : CopyFact h (addressOf h)` compiled, same axioms [run r20261113-012658-73cc].
+- `bitsInPorts_of (hO : PortsOnce h) (hB : BitsOwn h) : BitsInPorts h` compiled, same axioms [run r20261113-015832-09ee].
+- `bitsOwn_of_two (hd : two h s = some d) (hW : WrittenOwn h) : BitsOwn h` and `bitsInPorts_of_two hd hO hW : BitsInPorts h` compiled, same axioms [run r20261113-020516-ee62]. The source half comes from Bits keying a message bit only below its port's `bits`, which `templateOk`'s `v2Row` sets to 16 times the port's words.
+- `PortsOnce` may follow from what the verifier already checks [read]. `HmOut.checkRows` refuses a circuit whose input rows' and output ports' names repeat, and names each output row after its run's first output port (`HmRow.lean:1711-1721`). With every run one port (the scope's `OutRowsS`, `outRowPorts = replicate 1`), the rows' names are exactly those names, so they are distinct [derived]. A run of zero ports would give two rows one name, which `checkRows` does not refuse; the scope excludes it [derived].
+- `WrittenOwn` should follow from the same check [derived]. `Hidden.RowsOut` (from `rowsOut_of_checkRows`) gives an output row's words as its run's words padded up, or, for a v2 row, `bits = 16 * w`, which with `v2Row` gives words equal to the run's words. Either way an output bit `16*(x - lo o) + t` lies inside its row.
+- The open step for both: from `templateOk`'s `Desc.parseStmt … = .ok _` at a member to `HmOut.checkRows (memberCircuit h t) = .ok ()`. For an untyped, untemplated statement `Hidden.parse_untyped` gives it [read]. For a templated one, the check runs on the template and the member circuit is its unrolling, so I need `checkRows` to carry over to `HmOut.unrolled` [guess: `RowsOut`'s docstring says it reads no net, so it should].
+
+Size: 6 files, 1051 lines [read: wc]. Theorems left: `PortsOnce` and `WrittenOwn` from `checkRows`, through the scope (`replicate 1`), and `CopiesAt`. I expect `WrittenOwn` compiled by 04:00Z, if the templated case carries over.
+
+Not established: `PortsOnce`, `WrittenOwn` and `CopiesAt` are stated, not proved. Nothing yet ties `templateOk`'s parse to `checkRows` at a templated member. Whether the scope's `replicate 1` holds at every member rests on FRAME's `membersScoped` (L1 branch), which I have not read compiled.
+
+To post: none.
