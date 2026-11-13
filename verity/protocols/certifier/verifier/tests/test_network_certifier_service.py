@@ -311,8 +311,8 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
     is."""
     lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
-    assert lw.unit.id == "NetworkLinkWindow_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
-    assert declared.unit.id == "NetworkLinkWindow_v5{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
+    assert lw.unit.id == "NetworkTransferBlocks_v5{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
+    assert declared.unit.id == "NetworkTransferBlocks_v5{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
     assert lw.spec.check.program != declared.spec.check.program and lw.spec.check.query != declared.spec.check.query
     defs = codec.encode_program(P.population_program(declared.unit, 1))["definitions"]
     pins = json.loads(HC.PINS.read_text())["digests"]
