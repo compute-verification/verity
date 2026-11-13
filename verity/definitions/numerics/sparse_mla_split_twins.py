@@ -123,9 +123,10 @@ def _operands(what: str, q_nope, q_rope, kv, T: int, DR_: int, DV: int) -> tuple
             np.concatenate([kv[:, :, :DV], np.zeros((R, T, DR_), dtype=np.uint16)], axis=2))
 
 
-def _blocks(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, sbits: int, dot16):
+def _blocks(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, sbits: int, dot16, units: bool = False):
     """Blocks [b0, b1) last to first (the first visited one FIRST, the keys' last block zero-padded): after each, its state
-    (m, l, o of width DR + DV) and the rows whose dot read a non-finite operand."""
+    (m, l, o of width DR + DV) and the rows whose dot read a non-finite operand; with ``units`` the state also holds what its
+    scores unit returns beside m and l, bf16(P) of its visible keys and its rescale (None for the first visited block)."""
     R, KW = q.shape
     m = l = o = None
     for b in range(b1 - 1, b0 - 1, -1):
@@ -133,9 +134,9 @@ def _blocks(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, sbits: int, dot16):
         kblk, vblk = (np.zeros((R, BN, KW), dtype=np.uint16) for _ in range(2))
         kblk[:, :hi - lo], vblk[:, :hi - lo] = kb[:, lo:hi], vb[:, lo:hi]
         first = b == b1 - 1
-        m, l, o, f = DR.attn_block(q, kblk, vblk, m, l, o, D=KW, NVIS=hi - lo, FIRST=first, dot16=dot16, check=first,
-                                   scale_bits=sbits)
-        yield (m, l, o), f
+        m, l, o, f, *more = DR.attn_block(q, kblk, vblk, m, l, o, D=KW, NVIS=hi - lo, FIRST=first, dot16=dot16, check=first,
+                                          scale_bits=sbits, scores=units)
+        yield (m, l, o, *more), f
 
 
 def _split(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, DV: int, sbits: int, dot16) -> tuple[tuple, np.ndarray]:
@@ -147,32 +148,37 @@ def _split(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, DV: int, sbits: int,
 
 
 def chain_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
-               dot16=DR.tc_dot16_hopper) -> tuple[list[tuple[np.ndarray, np.ndarray, np.ndarray]], np.ndarray]:
+               dot16=DR.tc_dot16_hopper, units: bool = False) -> tuple[list[tuple], np.ndarray]:
     """A head's `SparseMlaHeadBlock_v1{.., DR, DV, BN, DOT, SCALE}` chain over its T keys (`sparse_mla.visits`): q_nope (R, DV),
     q_rope (R, DR), kv (R, T, DV + DR) or (T, DV + DR) bf16 words -> (each block's returned (m (R,), l (R, 4), o (R, DV)) f32
-    words in visit order, nonfinite (R,)).  `head_end_rows` of the last block's l and o is `SparseMlaHead_v1`."""
+    words in visit order, nonfinite (R,)).  `head_end_rows` of the last block's l and o is `SparseMlaHead_v1`.  With ``units``
+    each block's state is (m, l, o, pb, rescale), the block as its units return it: `SparseMlaHeadScores_v1`'s m, l, bf16(P)
+    of its visible keys (R, NVIS) and rescale (R,) (None for the first visited block), and columns [c G, (c + 1) G) of o
+    `SparseMlaHeadValues_v1{G}`'s on those columns."""
     q, kb, vb = _operands("chain_rows", q_nope, q_rope, kv, T, DR_, DV)
     nf, states = np.zeros(q.shape[0], dtype=bool), []
-    for (m, l, o), f in _blocks(q, kb, vb, 0, -(-T // BN), T=T, BN=BN, sbits=M.scale_log2_bits(scale), dot16=dot16):
-        states.append((m, l, o[:, :DV]))
+    for (m, l, o, *more), f in _blocks(q, kb, vb, 0, -(-T // BN), T=T, BN=BN, sbits=M.scale_log2_bits(scale), dot16=dot16,
+                                       units=units):
+        states.append((m, l, o[:, :DV], *more))
         nf |= f
     return states, nf
 
 
 def split_chain_rows(q_nope, q_rope, kv, *, T: int, NS: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
-                     dot16=DR.tc_dot16_hopper) -> tuple[list[list[tuple[np.ndarray, np.ndarray, np.ndarray]]], np.ndarray]:
+                     dot16=DR.tc_dot16_hopper, units: bool = False) -> tuple[list[list[tuple]], np.ndarray]:
     """A head's `SparseMlaHeadBlock_v1` chains over its NS splits (`sparse_mla_split.split_blocks`), each split's blocks as
     `chain_rows` visits a head's: `chain_rows`' operands -> (per non-empty split, each block's returned (m, l, o) in visit
-    order, nonfinite (R,)).  `split_end_rows` of a split's last state is its `SparseMlaSplitEnd_v1` (whose columns
-    [C G, (C + 1) G) and lse are `SparseMlaSplitEndCols_v1{G, C}`'s), and at NS = 1 the one chain is `chain_rows`'."""
+    order, nonfinite (R,)); with ``units`` each block's state as `chain_rows` gives its units'.  `split_end_rows` of a split's
+    last state is its `SparseMlaSplitEnd_v1` (whose columns [C G, (C + 1) G) and lse are `SparseMlaSplitEndCols_v1{G, C}`'s,
+    and `SparseMlaSplitEnd_v1{DV = G}`'s on those columns of o), and at NS = 1 the one chain is `chain_rows`'."""
     W.check_split_statics(T, NS)
     q, kb, vb = _operands("split_chain_rows", q_nope, q_rope, kv, T, DR_, DV)
     sbits = M.scale_log2_bits(scale)
     nf, out = np.zeros(q.shape[0], dtype=bool), []
     for b0, b1 in W.split_blocks(T, NS, BN):
         states = []
-        for (m, l, o), f in _blocks(q, kb, vb, b0, b1, T=T, BN=BN, sbits=sbits, dot16=dot16):
-            states.append((m, l, o[:, :DV]))
+        for (m, l, o, *more), f in _blocks(q, kb, vb, b0, b1, T=T, BN=BN, sbits=sbits, dot16=dot16, units=units):
+            states.append((m, l, o[:, :DV], *more))
             nf |= f
         out.append(states)
     return out, nf

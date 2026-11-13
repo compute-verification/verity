@@ -21,4 +21,14 @@ inputs = [
     "verity/configuration/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
+    # the advice line is the scheduler replay's loader's, which reads the adapter's advice code
+    "benchmarks/network_e2e/encodings/replay.py",
+    "adapters/vllm/verity_vllm/__init__.py",
+    "adapters/vllm/verity_vllm/pipeline/__init__.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/__init__.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/pool.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/replay.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/schedule.py",
+    # the record of the value settings in force, which the suite makes as the benchmark does (serve_tax.value_settings)
+    "adapters/vllm/verity_vllm/settings.py",
 ]

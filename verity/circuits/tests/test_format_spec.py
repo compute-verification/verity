@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits import codec, cut, partition_object as PO
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.layout import resolve
 from verity.circuits.parts import n_members
 from verity.circuits.program import INPUT_ID, Program, input_id, is_input
@@ -44,7 +44,7 @@ TSum4 = _prim("TSum4", [("x", Array(4, V32))], V32)
 TSum6 = _prim("TSum6", [("x", Array(6, V32))], V32)
 TWide = _prim("TWide", [("x", Array(cut.WIDE_FAN_IN, V32)), ("a", V32)], V32)
 TNarrow = _prim("TNarrow", [("x", Array(4, V32)), ("a", V32)], V32)
-REG = Registry()
+REG = DefinitionTable()
 for _p in (TAdd, TWiden, TSum2, TSum4, TSum6, TWide, TNarrow):
     REG.add(_p)
 

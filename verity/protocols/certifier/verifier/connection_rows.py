@@ -1,15 +1,17 @@
 """The network certifier's connection rows: what it signs of the connections it released in an execution phase of a
 link, as tables of rows committed as its cells' rows are (`warden_rows`) and listed in one head for that execution
 phase, which it signs once. A schedule has them only where its parameters say so (`WardenParams.lengths`): a schedule
-without them has no such head, and its records, cells' heads and certificates are the ones it had. Today the head
-lists two tables, the lengths rows and the fails rows. Its format takes any number, so a later table of the same
-connections joins the list under the same signature, and no proof block opens a row of them under any other head.
+without them has no such head, and its records, cells' heads and certificates are the ones it had. The head lists
+the lengths rows and the fails rows and, where the schedule has content rows (`WardenParams.content`), three tables
+a class after them. Every table of the same connections is under the one signature, and no proof block opens a row
+of them under any other head.
 
 **The lengths and fails tables** (`tables`) of execution phase w (`window` w in the code and the records) are made from
 the releases the network certifier hands at execution phase w + 1's close (`warden.Released`, by slot stride:
 `warden`'s "The lengths rows"). The certifier writes them from the cells it cut and released itself, never from the
-server's report, so they say what its records of the same execution phases say, in another order: that the two agree
-rests on the network certifier's own code (`trusted-host`), and no proof ties them. Each table is T / `every` rows,
+server's report, so they say what its records of the same execution phases say, in another order (`of_records` is
+that reading of the records in the clear): that the two agree rests on the network certifier's own code
+(`trusted-host`), and no proof ties them. Each table is T / `every` rows,
 row j slot stride j's releases in release order in its first slots, K = `WardenParams.stride_releases` slots a row and
 the rest zero, every field little-endian:
 
@@ -24,6 +26,11 @@ the rest zero, every field little-endian:
 
 So a table's size is the schedule's whatever the load, and which slots hold a request, each one's bytes, n and outcome
 are values. `releases` reads the two tables back and refuses rows that aren't of this form.
+
+**The content tables** of the same execution phase are made from the same hand, in which each release then carries
+its request's bytes and its ids (`content_rows`' "The tables"): `request.i`, `response.i` and `end.i` for each class
+i the schedule lists, each of the class's rows, a release's rows in the class `content_rows.file` gives it. `tables`
+is that rule's one caller. They rest on `trusted-host` as the lengths and fails tables do.
 
 **A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a
 proof block's outputs fit one public size class, so a row has at most (`UNIT_CLASS_MAX` − 2·16) / 96 slots. It is the
@@ -48,7 +55,8 @@ network certifier's to hand to the prover alone.
     entry = u16be len(name) ‖ name ‖ u32be rows ‖ u32be row bytes ‖ domain (64 bytes) ‖ root (64 bytes)
     digest = tagged_sha512(HEAD_TAG, H)
 
-with the tables in the order the schedule's parameters list them (`tables_of`: `lengths`, then `fails`). Its
+with the tables in the order the schedule's parameters list them (`tables_of`: `lengths`, then `fails`, then each
+class's `request.i`, `response.i` and `end.i`). Its
 certificate is `Issuer.sign`'s of the digest for the link's egress in execution phase w, the one whose releases it
 holds, though it is signed an execution phase later. A record's, a clock's and a cells' head's certificates of the
 same execution phase sign other digests, so none verifies as it (each would need a SHA-512 preimage). `parameters` is
@@ -63,7 +71,9 @@ the schedule's digest, which holds the connection rows' form.
 A table's `value` is its registered value's name (`<link>/<name>/<window>`), `words` a row's leaves of `word_bits` =
 16 bits (a slot's fields low word first), and `layout` its rows' order: for the lengths and fails tables
 `{"strides", "every", "first_bucket", "slots", "slot_bytes"}`, row j the releases of buckets first_bucket + j·every …
-first_bucket + (j + 1)·every − 1 in `slots` slots of `slot_bytes`. `check_registration` is the verifier's read of it:
+first_bucket + (j + 1)·every − 1 in `slots` slots of `slot_bytes`; for a content table
+`{"class", "prompt_ids", "ids", "first_bucket", "buckets"}`, row r the r-th release of buckets first_bucket …
+first_bucket + buckets − 1 filed in the schedule's class `class`. `check_registration` is the verifier's read of it:
 the head is the execution phase's, it lists the schedule's tables and no other, each one's domain, rows and layout
 are the ones the schedule's parameters give, and its one certificate verifies under the network certifier's key in the
 session over the head's digest.
@@ -89,9 +99,13 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.rowleaf import row_leaf
+from verity.protocols.certifier.verifier import content_rows as CT
+from verity.protocols.certifier.verifier.active import DATA, PAD
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
-from verity.protocols.certifier.verifier.warden import Released, WardenParams
+from verity.protocols.certifier.verifier.grid import BlockGrid, row_count
+from verity.protocols.certifier.verifier.io_tie import parse_cell
+from verity.protocols.certifier.verifier.warden import END, FAIL, Released, WardenParams, read_cell
 from verity.protocols.certifier.verifier.warden_rows import OWNER, SALT_BYTES, WORD_BITS, bc
 from verity.protocols.spot.verifier.one_stage import produced
 from verity.protocols.spot.verifier.one_stage import registered as G
@@ -127,18 +141,22 @@ def strides_of(params: WardenParams) -> int:
 
 
 def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
-    """The tables a schedule's head lists, in its order: each one's (name, rows, a row's bytes). ValueError for a
-    schedule without connection rows."""
+    """The tables a schedule's head lists, in its order: each one's (name, rows, a row's bytes). The lengths table,
+    the fails table, then the content tables of a schedule that has them (`content_rows.tables_of`). ValueError for
+    a schedule without connection rows."""
     if params.lengths is None:
         raise ValueError("the schedule has no connection rows (WardenParams.lengths)")
-    return tuple((name, strides_of(params), params.stride_releases * SLOT[name].size) for name in (LENGTHS, FAILS))
+    return (*((name, strides_of(params), params.stride_releases * SLOT[name].size) for name in (LENGTHS, FAILS)),
+            *CT.tables_of(params))
 
 
 def tables(params: WardenParams, strides: Sequence[Sequence[Released]]) -> dict[str, list[bytes]]:
-    """An execution phase's lengths and fails tables (the module docstring's) from its releases by slot stride, as the
-    network certifier hands them. ValueError for a schedule without them, or releases that aren't one execution
-    phase's of it."""
-    (_, T, size), (_, _, fails_size) = tables_of(params)
+    """An execution phase's tables, every one its head lists and in the head's order, from its releases by slot
+    stride, as the network certifier hands them: the lengths and fails tables (the module docstring's) and, in a
+    schedule with content rows, each class's three, every release in the class the network certifier's rule files it
+    in (`content_rows.file`, of which this is the one caller). ValueError for a schedule without connection rows, or
+    releases that aren't one execution phase's of it."""
+    (_, T, size), (_, _, fails_size) = tables_of(params)[:2]
     K = params.stride_releases
     if len(strides) != T or any(len(stride) > K for stride in strides):
         raise ValueError(f"an execution phase's releases are {T} slot strides of at most {K}")
@@ -153,14 +171,17 @@ def tables(params: WardenParams, strides: Sequence[Sequence[Released]]) -> dict[
                                      for r in stride).ljust(size, b"\0"))
         out[FAILS].append(b"".join(SLOT[FAILS].pack(int(r.failed), r.outputs if r.failed else 0)
                                    for r in stride).ljust(fails_size, b"\0"))
+    if params.content is not None:
+        released = [r for stride in strides for r in stride]
+        out |= CT.tables(params, released, [CT.file(params, r) for r in released])
     return out
 
 
 def releases(params: WardenParams, lengths: Sequence[bytes], fails: Sequence[bytes]) -> list[list[Released]]:
     """The releases by slot stride that `tables` lays out as these two tables, or ValueError naming how they aren't
     the schedule's: a row's size, a slot after an empty one, a fails slot that isn't its lengths slot's (class 0 and
-    at 0, or class 1 and at = n), or anything in an empty slot."""
-    (_, T, size), (_, _, fails_size) = tables_of(params)
+    at 0, or class 1 and at = n), or anything in an empty slot. A release reads back without its content."""
+    (_, T, size), (_, _, fails_size) = tables_of(params)[:2]
     if len(lengths) != T or len(fails) != T or any(len(x) != size for x in lengths) or \
             any(len(x) != fails_size for x in fails):
         raise ValueError(f"an execution phase's tables are {T} rows of {params.stride_releases} slots each")
@@ -180,6 +201,55 @@ def releases(params: WardenParams, lengths: Sequence[bytes], fails: Sequence[byt
             stride.append(Released(order - 1, request, n, bool(cls)))
         out.append(stride)
     return out
+
+
+def of_records(params: WardenParams, ingress: Sequence[BlockGrid],
+               egress: Sequence[BlockGrid]) -> dict[int, tuple[tuple[Released, ...], ...]]:
+    """The releases a run's records hold, read in the clear (a rehearsal's reading, as `warden.audit` is, and
+    nothing a verifier runs): each execution phase's by slot stride, as the network certifier hands them and `tables`
+    takes them. A release is an `END` in the ingress record, in its bucket's slot stride; N is its place among the
+    run's, by bucket and then by connection; its request is its connection's ingress `DATA` and `END` payloads; its
+    outputs are its connection's egress `DATA` cells, with content rows each one's id; and it failed where its
+    egress ends in a `FAIL`. `ingress` and `egress` are each direction's records from the run's first execution
+    phase, one each and in order, since N counts from the run's first release. An execution phase with a release
+    whose connection hasn't ended in the records has no entry. ValueError for a schedule without connection rows,
+    records that aren't a run's from its first, or a cell that isn't the schedule's."""
+    if params.lengths is None:
+        raise ValueError("the schedule has no connection rows (WardenParams.lengths)")
+    windows = list(range(len(ingress)))
+    if [r.window for r in ingress] != windows or [r.window for r in egress] != windows:
+        raise ValueError("a run's records are each direction's from its first execution phase, one each, in order")
+    B, content, n = params.cell_bytes, params.content is not None, 0
+    cut: dict[int, bytearray] = {}
+    live: dict[int, list] = {}  # by connection, a release that hasn't ended: [N, its request, its ids, how it ended]
+    out: dict[int, list[list[list]]] = {}
+    for w, (a, b) in enumerate(zip(ingress, egress)):
+        out[w] = [[] for _ in range(strides_of(params))]
+        for t, (row_in, row_out) in enumerate(zip(a.grid, b.grid)):
+            for f in row_in[:row_count(row_in)]:
+                kind, o, payload = read_cell(f, B)
+                if kind in (DATA, END):
+                    cut.setdefault(o, bytearray()).extend(payload)
+                if kind == END:
+                    live[o] = [n, bytes(cut.pop(o)), bytearray(), None]
+                    out[w][t // params.every].append(live[o])
+                    n += 1
+            for f in row_out[:row_count(row_out)]:
+                kind, o, _ = read_cell(f, B)
+                if o not in live or kind == PAD:
+                    continue
+                read = parse_cell(f) if kind == DATA else None
+                if kind not in (END, FAIL) and read is None:
+                    raise ValueError(f"egress bucket {w * params.window + t}: connection {o}'s cell is no DATA cell "
+                                     f"of the id egress form, END or FAIL")
+                if read is not None:
+                    live[o][2] += read.id.to_bytes(CT.U32_BYTES, "little")
+                else:
+                    live.pop(o)[3] = kind == FAIL
+    return {w: tuple(tuple(Released(order, len(request), len(ids) // CT.U32_BYTES, failed,
+                                    *((request, bytes(ids)) if content else ()))
+                           for order, request, ids, failed in stride) for stride in strides)
+            for w, strides in out.items() if all(e[3] is not None for stride in strides for e in stride)}
 
 
 def domain(params: WardenParams, session: bytes, link: str, window: int, table: str, rows: int,
@@ -339,7 +409,10 @@ def attest(issuer: Issuer, link: str, window: int, strides: Sequence[Sequence[Re
 
 
 def _layout(params: WardenParams, window: int, table: str) -> dict[str, int]:
-    return {"strides": strides_of(params), "every": params.every, "first_bucket": window * params.window,
+    first = window * params.window
+    if table not in SLOT:
+        return CT.layout(params, table) | {"first_bucket": first, "buckets": params.window}
+    return {"strides": strides_of(params), "every": params.every, "first_bucket": first,
             "slots": params.stride_releases, "slot_bytes": SLOT[table].size}
 
 
@@ -404,8 +477,8 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
 
 def port(head: Head, table: str, reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a population of one proof block a row of the head's table `table`:
-    proof block `reads_from + j` reads row j, a slot stride's every slot, held or not, so the head alone fixes its
-    reads. ValueError for a table the head doesn't list."""
+    proof block `reads_from + j` reads row j, a slot stride's every slot or a class's every row, held or not, so the
+    head alone fixes its reads. ValueError for a table the head doesn't list."""
     if table not in [e.name for e in head.tables]:
         raise ValueError(f"the head lists {[e.name for e in head.tables]}, not a table {table!r}")
     e = head.table(table)

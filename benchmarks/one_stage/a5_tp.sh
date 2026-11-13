@@ -14,7 +14,8 @@
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
-#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is.
+#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
+#     sparse-mla:units is its --units, each key block served as its scores unit and its values units.
 #     The STANDIN entry topp is a5_topp.py: test_serving_rows_stages' window (GumbelTopPTokenSelectSharedGreedy rows cut into
 #     their stages, each stage on bits and each carried row wired to the unit that wrote it: at V = 64, split count 1's stats,
 #     probs and step blocks; A5_TOPP its other statics, a5_topp.py's arguments, e.g. '--v 128 --splits 1,2', or
@@ -235,9 +236,9 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "${e%%:*}" = topp ]; then
-      case $e in row-tables|sparse-mla) FORM=();; topp) FORM=(${A5_TOPP:-});; topp:slots) FORM=(--stages slots ${A5_TOPP:-});;
-        *) echo "STANDIN $e: topp or topp:slots"; exit 3;; esac
+    if [ "$e" = row-tables ] || [ "${e%%:*}" = sparse-mla ] || [ "${e%%:*}" = topp ]; then
+      case $e in row-tables|sparse-mla) FORM=();; sparse-mla:units) FORM=(--units);; topp) FORM=(${A5_TOPP:-});;
+        topp:slots) FORM=(--stages slots ${A5_TOPP:-});; *) echo "STANDIN $e: sparse-mla:units, topp or topp:slots"; exit 3;; esac
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; B=${e%%:*}; mkdir -p $O/$N
       $TIME $PY benchmarks/one_stage/a5_${B//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \

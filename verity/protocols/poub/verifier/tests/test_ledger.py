@@ -6,13 +6,24 @@ paced ones refused for an unpaced session, a record of one window or a pass that
 from __future__ import annotations
 
 import dataclasses
+import json
 import math
 from fractions import Fraction
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
+from test_remote_bandwidth import (  # noqa: F401
+    SCHEDULE,
+    A,
+    N,
+    challenger,
+    drive,
+    finish,
+    params,
+    partial,
+    store,
+)
+
 from verity import claims
 from verity.protocols.poub.verifier import audit, codec, ledger, line, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Pace
@@ -200,18 +211,18 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     W, X, P = audit.pooled(r)[0], 3.0, r.passes
     assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
-    draws = len(r.windows) * r.samples
-    assert draws == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
+    sampled = len(r.windows) * r.samples
+    assert sampled == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
     assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
-                          + ledger.binding(r, n) + ledger.sketch(r, n) + draws * 2.0 ** -64)
+                          + ledger.binding(r, n) + ledger.sketch(r, n) + sampled * 2.0 ** -64)
     d = ledger.delta_parts(r, n)
     assert d == {"profile": r.windows[0].profile.delta, "slack": P * 2.0 ** -audit.SLACK_LOG2,
                  "hiding": ledger.hiding(r), "binding": ledger.binding(r, n), "sketch": ledger.sketch(r, n),
-                 "rejection": draws / 2 ** 64}
+                 "rejection": sampled / 2 ** 64}
     assert tuple(d) == ledger.DELTA_PARTS
     parts = d["profile"] + d["slack"] + d["hiding"] + d["binding"] + d["sketch"] + d["rejection"]
-    assert snap.delta == parts and draws > 0
-    assert Fraction(d["rejection"]) == Fraction(draws, 2 ** ledger.REJECTION_LOG2)
+    assert snap.delta == parts and sampled > 0
+    assert Fraction(d["rejection"]) == Fraction(sampled, 2 ** ledger.REJECTION_LOG2)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
 
 
@@ -226,9 +237,49 @@ def test_the_coin_commitments_hiding_is_charged(store) -> None:
 
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:
-    """`LineHeld`'s Σ_t Adv(prf t) has no numeric value, so the ledger names it by the claim that prices it
-    (`PRF_CLAIM`, an assumption of the registry) and puts it in no part of δ."""
+    """`LineHeld`'s Σ_t adv_t has no numeric value: nothing prices it and the line doesn't assume it.  The ledger names
+    it by its claim (`PRF_CLAIM`, which the registry holds as an assumption of the protocols that do take it) and puts
+    it in no part of δ."""
     assert claims.get(ledger.PRF_CLAIM).kind == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
+
+
+def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1) -> None:
+    """A δ of PoUB's is never read alone: it reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed),
+    in those words (`DELTA_FORM`).  So every object of the declared outputs that carries a δ or an error (a memory
+    line's `delta`, γ's `error`) names the term in itself, with its claim, no value, in no total, and its status."""
+    assert ledger.DELTA_FORM == "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
+    term = {"claim": "prf/sha-512", "term": "Σ_t adv_t", "value": None, "in_total": False,
+            "status": "SHA-512 stream as PRF: not priced, not assumed"}
+    assert ledger.NAMED_TERMS == {"prf_advantage": term}
+
+    def names(x: object) -> bool:
+        """Whether `x` or an object inside it names the term."""
+        return isinstance(x, dict) and (x.get("named") == ledger.NAMED_TERMS or any(names(v) for v in x.values()))
+
+    def bare(x: object, at: str = "declared") -> list[str]:
+        """The objects under `x` that carry a δ without the term beside it, or an error that names it nowhere."""
+        if isinstance(x, list):
+            return [p for i, v in enumerate(x) for p in bare(v, f"{at}[{i}]")]
+        if not isinstance(x, dict):
+            return []
+        mine = [at] if "delta" in x and x.get("named") != ledger.NAMED_TERMS else []
+        mine += [f"{at}.error"] if "error" in x and not names(x["error"]) else []
+        return mine + [p for k, v in x.items() for p in bare(v, f"{at}.{k}")]
+
+    def unnamed(x: object) -> object:
+        """`x` with the term taken out of every object under it."""
+        return {k: unnamed(v) for k, v in x.items() if k != "named"} if isinstance(x, dict) else x
+
+    r, _ = k1
+    out = ledger.declared(r, node()).to_json()
+    lines = [x for x in out["memory"].values() if "delta" in x]
+    assert len(lines) == len(ledger.FORMS) and all(x["named"] == ledger.NAMED_TERMS for x in lines)
+    assert len(out["gamma"]) == 2 and all(names(g["error"]) for g in out["gamma"].values())
+    assert bare(out) == []
+    stripped = json.loads(json.dumps(out))
+    del stripped["memory"][ledger.SNAPSHOT]["named"]
+    stripped["gamma"]["spec"]["error"] = unnamed(stripped["gamma"]["spec"]["error"])
+    assert bare(stripped) == ["declared.gamma.spec.error", f"declared.memory.{ledger.SNAPSHOT}"]
 
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
@@ -242,14 +293,14 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
-    drawn = [w.profile.drawn["receipt"] for w in r.windows]
-    assert len(drawn) > 1 and max(drawn) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
+    sampled = [w.profile.drawn["receipt"] for w in r.windows]
+    assert len(sampled) > 1 and max(sampled) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
     d = ledger.draw(r, n)
     assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and not hasattr(d, "hiding")
     fc = n.sketch_outside * ledger.compressions(r, n)
     L = (2 ** 64 - 1) * r.codec.max_blocks
     want = len(r.windows) * math.sqrt(L * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5
-    realized = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, drawn)) / 2 ** 256.5
+    realized = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, sampled)) / 2 ** 256.5
     assert d.binding == ledger.binding(r, n) == pytest.approx(want, rel=1e-12) and realized < d.binding < 2.0 ** -100
     paced = dataclasses.replace(r, pace=audit.Pace(1), append_coins=0)
     assert ledger.binding(paced, n) == pytest.approx(
@@ -257,9 +308,7 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     with pytest.raises(ValueError, match="session's bounds"):
         ledger.binding(dataclasses.replace(r, samples=None), n)
     assert d.total == d.rejection + d.binding
-    assert d.to_json() == {"binding": d.binding, "rejection": d.rejection,
-                           "named": {"prf_advantage": {"claim": "prf/sha-512", "term": "Σ_t Adv(prf t)",
-                                                       "value": None, "in_total": False}}}
+    assert d.to_json() == {"binding": d.binding, "rejection": d.rejection, "named": ledger.NAMED_TERMS}
     g = ledger.gamma(r, n, n.spec_bytes_per_s)
     assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
 
@@ -268,15 +317,15 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
     record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
-    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
+    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
-    rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
+    rounding.  A record whose samples aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
     s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     k = [r.samples] * len(r.windows)
-    U, drawn = [w.receipts for w in r.windows], [w.profile.drawn["receipt"] for w in r.windows]
-    assert k == [70] * 3 and U == [80, 60, 60] and drawn == [70, 60, 60] and r.public()["samples"] == 70
+    U, sampled = [w.receipts for w in r.windows], [w.profile.drawn["receipt"] for w in r.windows]
+    assert k == [70] * 3 and U == [80, 60, 60] and sampled == [70, 60, 60] and r.public()["samples"] == 70
     deltas = {line.delta for line in ledger.memory(r, n)}
     assert len(deltas) == 1
     D = Fraction(deltas.pop())
@@ -285,8 +334,8 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
             + Fraction(ledger.binding(r, n)))
     slack, rounding = Fraction(r.passes, 2 ** audit.SLACK_LOG2), 5 * D / 2 ** 53
-    assert D >= held and abs(D - held - slack) <= rounding < slack
-    assert D - Fraction(sum(k) - sum(drawn), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
+    assert held <= D and abs(D - held - slack) <= rounding < slack
+    assert D - Fraction(sum(k) - sum(sampled), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)
     with pytest.raises(ValueError, match="states no samples|a record no session made doesn't state"):
@@ -296,7 +345,7 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
     """On `k1`'s schedule: s = (0, 1, 350, 650, 950), the arrivals 300 later each, so e_0 = 350, L = 650 − 1 and
     Σ = 950 − 350; no receipt is wrong, so the line charges the chip and 2L·(X·(Σ + 2L) + B) over Σ, B the rebuild
-    and disk bursts and, link-charged, the link window too."""
+    and disk bursts and, link-charged, the link burst too."""
     r, _ = k1
     X = 1e-3
     n = node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, bursts=(2, 3, 0))
@@ -312,7 +361,7 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
-    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link window
+    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
     `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
