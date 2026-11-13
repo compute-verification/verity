@@ -12,7 +12,7 @@ run = "smollm2-135m-step"
 structure = "train-step-v1"
 batch = { value = 8, unit = "sequence", source = "TrainStep_v1's B", status = "declared" }
 seq_len = { value = 512, unit = "token", source = "TrainStep_v1's S", status = "declared" }
-gates = { value = 3119517145616196, unit = "gate", source = "TrainStep_v1{L=30,B=8,S=512}'s gates (AND, XOR and NOT), the circuits census's (verity.definitions.circuits.census) count by class: 2,678,375,243,722,752 in tensor-core dots, 441,139,404,615,942 in CUDA-core gates", status = "measured" }
+gates = { value = 3119517145616196, unit = "gate", source = "TrainStep_v1{L=30,B=8,S=512}'s gates (AND, XOR and NOT), the circuits census's (verity.circuits.census) count by class: 2,678,375,243,722,752 in tensor-core dots, 441,139,404,615,942 in CUDA-core gates", status = "measured" }
 ands = { value = 1032863473843566, unit = "gate", source = "TrainStep_v1{L=30,B=8,S=512}'s AND gates, the circuits census's count by class: 879,553,933,283,328 in tensor-core dots, 153,309,540,560,238 in CUDA-core gates", status = "measured" }
 products = { value = 1877353168896, unit = "product", source = "TrainStep_v1{L=30,B=8,S=512}'s bf16 multiply-adds, the circuits census's served MACs: 16 a dot, over 61,605,937,152 whole dots (HopperBF16WgmmaDot16_v2) and 55,728,635,904 dot steps (HopperBf16Dot16Step_v1, StepFirst_v1)", status = "measured" }
 products_steps = { value = 891658174464, unit = "product", source = "the products in TrainStep_v1's dot steps, the circuits census's count: the split-K weight gradients, the LM head's input gradient, attention's batched GEMMs and the split-K routes' padded lanes", status = "measured" }
