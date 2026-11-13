@@ -334,6 +334,8 @@ REFERENCES = {
     "m-t20-1.1x-shallow-depthshare-8": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "m-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
+    "m-t20-2x-hybrid-grow-depth-18": (grown, CLOSE_BF16),
+    "m-t20-2x-hybrid-grow-depth-18-b": (grown, CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),

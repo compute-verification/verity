@@ -528,3 +528,28 @@ shapes = [[]]
 count = 4
 macs = 4
 why = "the program's running total of the loss, which it prints: each forward's loss times its share of the batch"
+
+[held."m-t20-2x-hybrid-grow-depth-18"]
+run = "r20261103-161953-18b2"
+art = "art:93bcd6ceda9addc30f9d1a421aca999e9652b38680dbd2c96916ae6500489045"
+path = "out/run/run.json"
+sha256 = "c8e9de52db0be91a38f9243837deefc8029afc1e5ab86c783ea7d5576c44ee9b"
+partial = "none"
+step = { counted = 3, why = "the gains of each repeated copy sit behind its zeroed output projections, so they get no gradient at the first step and undecayed AdamW leaves them θ′'s: they leave it at the second step, and the third is the first a later step's structure has" }
+
+[[held."m-t20-2x-hybrid-grow-depth-18".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "mul"
+shapes = [[]]
+count = 4
+macs = 4
+why = "the program's running total of the loss, which it prints: each forward's loss times its share of the batch"
+
+[held."m-t20-2x-hybrid-grow-depth-18-b"]
+run = "r20261103-063831-714f"
+art = "art:24056ffd4fb535d17bc7ff13c7c8880db9ed2c2de898fea0ce75104f4aa3f2c3"
+path = "out/run/run.json"
+sha256 = "88d66c68efebb500f587127241401bbfe4405e31bdd79bc3dbd5c391b9f90414"
+partial = "none"
+step = { counted = 3, why = "the gains of each repeated copy sit behind its zeroed output projections, so they get no gradient at the first step and undecayed AdamW leaves them θ′'s: they leave it at the second step, and the third is the first a later step's structure has" }
