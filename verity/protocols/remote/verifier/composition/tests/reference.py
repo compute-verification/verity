@@ -325,8 +325,8 @@ PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
 def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
     """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
     ``verify.json``), framed as `PouwCheck.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
-    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the draws
-    asked for, the tiles drawn and the passes (`profileJson`)."""
+    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the samples
+    asked for, the tiles sampled and the passes (`profileJson`)."""
     a, digest = verified["answer"], hashlib.sha512(PEARL_PLUS_TAG.encode() + b"\0" + commitment).digest()
     if a["verdict"] != ACCEPT:
         return P.outcome(PEARL_PLUS.id, a["verdict"], a["reason"], digest)

@@ -4,7 +4,7 @@ the remote composite reads them (`Core.Remote`: each period window's Commit reco
 **The toy** (`_toy`): a one-layer Llama of hidden 2048 at the exact-int8 checkpoint, vocabulary 512, at class (1 slot,
 prompts of 32, 2 outputs). So H1's window has 2 rounds, round 0 the prompt's 32 rows and round 1 one decode row, and its
 tables at K = 2048 are M = 32 rows a call and 3 calls a round (vLLM's fused qkv, o and gate/up). Its proof blocks can be
-proved: C-Flock's composer needs a row past 111 bytes in every template, which takes prompts of at least 27 ids
+proved: Flock's composer needs a row past 111 bytes in every template, which takes prompts of at least 27 ids
 (`TokenFeed_v1`) and a vocabulary of at least 448 (the token select). H1's window Program is a stand-in digest, since the tie
 reads only its digest, its open root and its tables' names.
 
@@ -20,7 +20,7 @@ reads only its digest, its open root and its tables' names.
 `reuse` makes each table W's entry of it under the circuit's name.
 **One flipped table row** (slow): flipping a bit of round 1's o-projection row changes W's leaf there alone, so the honest
 reader's row opens against no root W registers and `reuse` refuses W'; that reader is the one proof block of a template
-of its own, which `stratified:1` always draws; and a prover who records the flipped row has that proof block off its
+of its own, which `stratified:1` always samples; and a prover who records the flipped row has that proof block off its
 Definition, so its proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take minutes): credit's ROOTS1 on R
@@ -326,7 +326,7 @@ def _check(written, toy, W: dict, R: dict):
 @RECORDS
 def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_accepts(toy, written):
     """R registers the four tables at W's entries and nothing else, chained right after W; its sampling design (R1 holds
-    it to the verifier's own) draws a reader of every table, each table's readers templates of their own; ROOTS1 holds
+    it to the verifier's own) samples a reader of every table, each table's readers templates of their own; ROOTS1 holds
     W's tables to it, H1 names it as its Commit record, credit's digest of it is one-stage's, and R1-R7 accept it."""
     run, R, W = toy.h1, written.R, toy.h1.W
     assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)

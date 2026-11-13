@@ -10,11 +10,11 @@ public import PouwPearlPlus.Records
   each call's y).
 * **The run's commitment** (`runCommitment`) binds the retained passes and their records, before the coin:
   `tagged("verity/pouw/pearl-plus/run/v1", per pass: transcript root, records root, salt, each call's y root or empty)`.
-* **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v2`; v1, which names no draw, read for development) is
+* **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v2`; v1, which names no sample, read for development) is
   the verifier's record of its coin against that commitment, and of where the coin came from (its `draw`, `Coins`). A
   verdict over passes whose commitment is another, or with another source, is refused (`after-coin`): neither a retention
-  nor a give-up can follow the coin, and a retry never redraws.
-* **The draw** keys `t` work-weighted draws over every pass's tickets together on the coin
+  nor a give-up can follow the coin, and a retry never resamples.
+* **The sample** keys `t` work-weighted samples over every pass's tickets together on the coin
   (`derive(source, "verity/pouw/pearl-plus-run-draw/v1", {run})`, `clear_work.draw`). A tile's ticket is its credited
   cells' share of `wref` at |K| (`clear_work.ticket_cell`, the scheme's own `wref` on the H100), scaled to integers by the
   lcm of the denominators.
@@ -98,7 +98,7 @@ def runCommitment (passes : List Pass) : ByteArray :=
   tagged RUN_TAG (passes.flatMap fun p =>
     [.bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++ p.yRoots.map fun y => .bytes (y.getD ByteArray.empty))
 
-/-- The verifier's record of its coin: the run commitment it was drawn on, the source (a challenger draw coin's 64 bytes,
+/-- The verifier's record of its coin: the run commitment it was sampled on, the source (a challenger sampling coin's 64 bytes,
 or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.drawReason` reads it). -/
 structure CoinRecord where
   commitment : ByteArray
@@ -128,16 +128,16 @@ def tickets (passes : List Pass) : List ((Nat × Nat) × Nat) :=
   let den := ws.foldl (fun l (_, (_, d)) => Nat.lcm l d) 1
   ws.map fun (id, (n, d)) => (id, n * (den / d))
 
-/-- The run's draw key on the verifier's source. -/
+/-- The run's sample key on the verifier's source. -/
 def drawKey (source root : ByteArray) : Except String ByteArray := key? source RUN_DRAW_DOMAIN [("run", .bytes root)]
 
-/-- `t` work-weighted draws over every pass's tickets together, each a (pass, tile id), in the draw's order. -/
+/-- `t` work-weighted samples over every pass's tickets together, each a (pass, tile id), in the sample's order. -/
 def draw (passes : List Pass) (key : ByteArray) (t : Nat) : Except String (List (Nat × Nat)) := do
   let tk := tickets passes
   let picks ← pearlDraw key (tk.map (·.2)) t
   pure (picks.map fun i => (tk[i]!).1)
 
-/-- The tiles the verdict opens, (pass, tile id), in its order: each pass's drawn tiles in the draw's order, then its
+/-- The tiles the verdict opens, (pass, tile id), in its order: each pass's sampled tiles in the sample's order, then its
 exclusion tiles. -/
 def todo (passes : List Pass) (drawn : List (Nat × Nat)) : List (Nat × Nat) :=
   passes.zipIdx.flatMap fun (p, i) =>

@@ -13,14 +13,14 @@ caller's blobs.
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
 
-    {"coins": epoch coins, "draws": t, "record": {"commitment": hex, "draw": draw, "schema": s, "source": hex}}
+    {"coins": epoch coins, "draws": t, "record": {"commitment": hex, "draw": sample, "schema": s, "source": hex}}
 
 the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor host's challenger, or an in-process one's), the
-number of draws, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
-writes it: its schema and its draw), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
-input here, so the coin is always the one drawn on the run. The verdict is of record (`ofRecord`, `--of-record` as
-`served_pearlplus.sh` runs it): only a challenger draw on live coins is taken (`ofRecordReason`), so in-process coins, the
-node's draw and a v1 record are refused as `of-record`.
+number of samples, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
+writes it: its schema and its sample), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
+input here, so the coin is always the one sampled on the run. The verdict is of record (`ofRecord`, `--of-record` as
+`served_pearlplus.sh` runs it): only a challenger sample on live coins is taken (`ofRecordReason`), so in-process coins, the
+node's sample and a v1 record are refused as `of-record`.
 
 **Commitment**, canonical JSON with exactly these keys:
 
@@ -50,7 +50,7 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 
 **Public**, on acceptance: the credit (`credited`, `credited_tiles`, `macs`, `rho`, `epsilon`) and `delta`.
 
-**Profile**: the draws asked for, the tiles drawn and the passes.
+**Profile**: the samples asked for, the tiles sampled and the passes.
 -/
 
 @[expose] public section
@@ -249,7 +249,7 @@ private def run (manifests : String) : ByteArray := runIn manifests (windowOf wi
     let i := inputOf p c
     pure (i.tie == some c.window && i.rounds == some [1] && i.dropped == [2] &&
       some (Flock.hexOf c.windowDigest) == (Flock.WindowRecord.digestHex c.window).toOption)).toOption == some true
--- the verdict is of record, on the record's schema and draw: in-process coins are no verdict of record
+-- the verdict is of record, on the record's schema and sample: in-process coins are no verdict of record
 #guard (do
     let p ← paramsOf (← Core.canonicalJson (params record))
     let i := inputOf p (← commitmentOf (run "[{}]"))

@@ -11,7 +11,7 @@ A program that branches on the coins skips a tile only where it can predict the 
 At fixed coins the tiles' distinct values are at least their number less the equal pairs (`card_le_image_add_pairs`).
 A revisit, a tile returning at step `t` to its value at an earlier step `t'` (chosen data walking a row back over values
 it already holds), needs the tile's difference to vanish. That difference is the step-`t` coins' term plus
-a term the step-`t` coins don't enter, which is fixed when those coins are drawn. So a revisit is bounded by the step-`t`
+a term the step-`t` coins don't enter, which is fixed when those coins are flipped. So a revisit is bounded by the step-`t`
 coins alone (`fresh_card_le`).
 
 * **Fresh coins** (`fresh_card_le`): a condition `φ x = g y` on independent coordinates `x` and `y` holds on at most
@@ -157,7 +157,7 @@ theorem card_rotLanes : rotLanes.card = 2 ^ 21 := by
   norm_num
 
 /-- **`-rot`, one 16 × 8 tile, one step**: rows alternate the two classes, so of the `2^16·(2^21)^8 = 2^184` bits and
-triples the step draws for the tile, at most `2^21` hit any target. -/
+triples the step samples for the tile, at most `2^21` hit any target. -/
 theorem rot_tile_solutions_le (c : Fin 16 → Fin 8 → ℤ) :
     ((Fintype.piFinset (fun _ : Fin 16 => ({0, 1} : Finset ℤ)) ×ˢ Fintype.piFinset (fun _ : Fin 8 => rotLanes)).filter
       fun p => (fun i j => p.1 i + ∑ k, rotRow i.val k * p.2 j k) = c).card ≤ 2 ^ 21 := by
