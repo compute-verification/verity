@@ -283,7 +283,7 @@ def test_each_pass_reads_main_with_the_token_its_source_gives_then_never_one_fro
     monkeypatch.setattr(T, "gh_token", lambda: next(tokens))
     monkeypatch.delenv("GH_TOKEN", raising=False)
     for now in (NOW, NOW + 3600):
-        T.sweep_pass(state, ring, {"main": lambda: T.main_stalled(state, ring, now)})   # noqa: B023 (called in this turn)
+        T.sweep_pass(state, ring, {"main": lambda: T.main_stalled(state, ring, now)})
     assert github.sent == ["Bearer dummy-first", "Bearer dummy-second"]
     assert [to for to, _, _ in ring.rings] == ["ci"] and next(tokens, None) is None
 
