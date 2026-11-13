@@ -1,4 +1,4 @@
-"""The network certifier's manifest on the deployment layer (`verity.configuration.deploy`): its parties and the two
+"""The network certifier's manifest on the deployment layer (`verity.runtime`): its parties and the two
 channels its output value takes, which a deployment configuration's table declares from here. It is the manifest alone.
 No party of it runs under the layer's runtime, so this module holds no party and no `ProtocolDef`.
 
@@ -34,8 +34,8 @@ reads, the core command line ``network-period check PARAMS COMMITMENT EVIDENCE``
 from __future__ import annotations
 
 from verity.commitments.domains import CERTIFIER_PROTOCOL
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.wire import Body, Int, Schema, Str
+from verity.protocol import Channel, Manifest, Role
+from verity.channel import Body, Int, Schema, Str
 from verity.protocols.spot.verifier import parties as SP
 
 from . import out_commit as O

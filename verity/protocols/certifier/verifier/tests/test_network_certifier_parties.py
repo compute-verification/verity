@@ -12,9 +12,9 @@ import pytest
 
 from verity.commitments import domains
 from verity.commitments.crypto import lms
-from verity.configuration import wire
-from verity.configuration.deploy.manifest import Role, place, site_of
-from verity.configuration.wire import Message, Refused
+from verity import channel as wire
+from verity.protocol import Role, place, site_of
+from verity.channel import Message, Refused
 from verity.protocols.certifier.verifier import out_commit as O
 from verity.protocols.certifier.verifier import parties as NC
 from verity.protocols.certifier.verifier.tests import signers as S

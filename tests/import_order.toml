@@ -401,7 +401,7 @@ loads = [
     "verity/circuits",
     "verity/commitments",
     "verity/commitments/crypto",
-    "verity/configuration/deploy",
+    "verity/runtime",
     "verity/configuration/wire",
     "verity/protocols/spot/verifier",
 ]
@@ -446,10 +446,10 @@ paths = [
     "verity/protocols/inference_only/verifier",
 ]
 loads = [
-    "verity/configuration/deploy",
+    "verity/runtime",
 ]
 reaches = [
-    "verity/configuration/deploy",
+    "verity/runtime",
     "verity/configuration/wire",
 ]
 

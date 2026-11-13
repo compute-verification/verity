@@ -1,4 +1,4 @@
-"""The inference-only policy's manifest on the deployment layer (`verity.configuration.deploy`): its one party, the
+"""The inference-only policy's manifest on the deployment layer (`verity.runtime`): its one party, the
 verifier, which a deployment configuration's table declares from here. It is the manifest alone.
 
 The policy has no rounds and reads no coins: its check answers from the registered circuit, its division into inference
@@ -16,7 +16,7 @@ core command line ``inference-only check PARAMS COMMITMENT EVIDENCE`` (``alpha``
 
 from __future__ import annotations
 
-from verity.configuration.deploy.manifest import Manifest, Role
+from verity.protocol import Manifest, Role
 
 ID = "verity/inference-only/v0"
 VERSION = 1

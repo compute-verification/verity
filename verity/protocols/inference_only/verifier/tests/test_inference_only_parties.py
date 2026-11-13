@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.configuration.deploy.manifest import Role, place, site_of
-from verity.configuration.wire import Refused
+from verity.protocol import Role, place, site_of
+from verity.channel import Refused
 from verity.protocols.inference_only.verifier import parties as IO
 from verity.protocols.spot.verifier import parties as SP
 
