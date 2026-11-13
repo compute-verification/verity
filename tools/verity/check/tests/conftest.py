@@ -9,7 +9,8 @@ import os
 import pytest
 
 CLEARED = ("AWS_", "R2_", "RESEARCH_", "CLOUD_AGENT_")      # the last: or, R2_ cleared, the store reads a VM's shell that lost its secrets
-SET_BY_CHECK = ("CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION")
+#: the last: what the check's own slot books (slot.py), which would cap the grants of a test that sets the slot's mem=
+SET_BY_CHECK = ("CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION", "CHECK_SLOT_BOOK_GB")
 #: the packages' `proved_in` as their policies name them, for a test that resolves this tree's plans (`check.audit_provers`):
 #: reading every package's lean-audit.json would make each one an input of this suite, which most Lean changes rewrite
 PROVERS = {"security": ["security/Proofs"], "security/Properties": ["security/Proofs"]}
