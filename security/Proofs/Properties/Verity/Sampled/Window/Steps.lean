@@ -743,7 +743,8 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
       (∃ w, z = (Pos.root (roundCuts V θ F c (sessionReading W.rounds tb ev record₀ recordDigest))
         (M.start ω)).toStop.back w) →
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ z) → P (CoinTape.run (V.game θ F c) σ z) →
-      WindowSessions W tb ev filesDec ((W.extend M.widening).L.draw ω) (CoinTape.run (V.game θ F c) σ z)) :
+      ((W.extend M.widening).joint t).ended ω = true ∧
+        WindowSessions W tb ev filesDec ((W.extend M.widening).L.draw ω) (CoinTape.run (V.game θ F c) σ z)) :
     MemberSteps V θ F c k P W t (sessionReading W.rounds tb ev record₀ recordDigest) σ
       (fun _ => sessionDecoders reg tb filesDec) M
       (fun _ _ => linkEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1))
@@ -752,14 +753,15 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
   have hP := windowReadingAt_picks (R := W.rounds) #[tb] 1026 (sessionReveal #[tb] ev) record₀ recordDigest
   refine memberSteps_of_verdicts V θ F c k P W t _ σ _ M _ _ _ (fun ω r => ?_)
     (fun ω i m p q r out hm hd hI hpi _ hmr hqr _ hacc => ?_) (fun ω i m p r hm hd hI => ?_)
+    (fun ω r hpr hacc => (hses ω r.tape hpr.through hacc.1 hacc.2.2).1)
   · exact ⟨[], _, fun _ => True, [], fun _ => rfl, stopOf_rootStop V θ F c _ σ (M.start ω) hP, walked_nil _ _,
       (sessDone_nil _ _ _).of_eq (drawnBefore_zero _ _).symm, Pos.Past.refl _⟩
   · obtain ⟨pre, f, a, done, hf, hSO, hW, hDn, hrp⟩ := hI
     have hdS : (m.part ((W.extend M.widening).L.draw ω)).Nonempty := hd
-    have hWS := hses ω r.tape (hrp.trans (hmr.past.trans hqr)).through hacc.1 hacc.2.2
+    obtain ⟨hE, hWS⟩ := hses ω r.tape (hrp.trans (hmr.past.trans hqr)).through hacc.1 hacc.2.2
     obtain ⟨a₀, bs, keys, s, record, spec, tabs, rest, proofs, units, J, sess, w, τ, sts, hst, hv, hdr, hs, hA,
       hτ, hev, hfd⟩ := hWS.specAt hMA hm hdS
-    have hmP := m.mPts_eq t hs hdr ((W.extend M.widening).hcls m (List.mem_of_getElem? hm) ω)
+    have hmP := m.mPts_eq t hs hdr ((W.extend M.widening).hcls m (List.mem_of_getElem? hm) ω hE)
     have hTr : (openedTrees (CoinTape.run (V.game θ F c) σ r.tape).log).length * 1026 ≤ W.rounds :=
       (Nat.mul_le_mul_right 1026 (hWS.trees.trans (drawnBefore_le _ _ _))).trans (Nat.le_of_eq W.rounds_eq.symm)
     obtain ⟨⟨pre'', f'', a'', done'', hf'', hSO'', hW'', hDn''⟩, hB, hPt, hRp, hPf⟩ :=

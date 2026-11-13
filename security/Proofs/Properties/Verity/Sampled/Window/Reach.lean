@@ -399,7 +399,8 @@ theorem WindowReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ :
     {B : WindowRoundHold} {o : W.Out × CoinTape (V.game θ F c) σ}
     (h : WindowReaches V θ F c W t rd σ D M BL B o) :
     ∃ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
-      o.1.1 = windowReg V θ F c W rd σ D ∧ o.1.2.1 = (W.extend M.widening).L.draw ω ∧
+      o.1.1 = (windowReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω) ∧
+      o.1.2.1 = (W.extend M.widening).L.draw ω ∧
       SeqChain D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) 0
         ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω)) o.1.2.2 r ∧
       o.2 = r.tape := by
@@ -438,6 +439,11 @@ structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Pr
     (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
     ((W.extend M.widening).joint t).ms[i]? = some m → ¬ (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
     I ω r i p → I ω r (i + 1) p
+  ends : ∀ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
+    (Pos.root (roundCuts V θ F c rd) (M.start ω)).Past r →
+    V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
+      P (CoinTape.run (V.game θ F c) σ r.tape) →
+    ((W.extend M.widening).joint t).ended ω = true
 
 /-- **The decoders' premise at the window, a member at a time** (`WindowDecodes`): it holds wherever the decoders'
 premise holds at each member's session (`MemberDecodes`), at any invariant of the position a member's session starts
@@ -450,8 +456,9 @@ theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchan
       Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (h : MemberDecodes V θ F c k P W t rd σ D M BL B I) : WindowDecodes V θ F c k P W t rd σ D M BL B := by
   intro o ho hacc
-  obtain ⟨ω, r, -, hS, hc, ht⟩ := ho.chain
+  obtain ⟨ω, r, hR, hS, hc, ht⟩ := ho.chain
   rw [ht] at hacc
+  have hE := h.ends ω r hc.past hacc
   have hri := hc.inv (Pos.inv_root (roundCuts V θ F c rd) (M.start ω))
   have hf : List.Forall₂ (fun (m : Flock.Guarantees.MemberV5 ByteArray W.nJ) ts =>
       (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
@@ -467,8 +474,9 @@ theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchan
         subst e
         exact ⟨h.skip ω _ m p r hk (not_nonempty_of_memberDrawn hd) hI,
           fun hne => absurd hne (not_nonempty_of_memberDrawn hd)⟩
-  have ho1 : o.1 = (o.1.1, (W.extend M.widening).L.draw ω, o.1.2.2) := Prod.ext rfl (Prod.ext hS rfl)
+  have ho1 : o.1 = ((windowReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω),
+      (W.extend M.widening).L.draw ω, o.1.2.2) := Prod.ext hR (Prod.ext hS rfl)
   rw [ho1]
-  exact hf
+  exact And.intro hE hf
 
 end Verity.Sampled
