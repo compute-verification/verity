@@ -9,7 +9,11 @@ from typing import cast
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+    Shape,
+)
 from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 

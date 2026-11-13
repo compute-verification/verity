@@ -15,7 +15,11 @@ from typing import Any, cast
 
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, transcript_domain
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Epoch,
+    Workload,
+    transcript_domain,
+)
 from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul
 from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
