@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
@@ -263,7 +264,7 @@ def test_the_compiler_is_total_on_every_truncation_and_bit_flip_of_an_advice():
     inputs += [rng.randbytes(rng.randrange(64)) for _ in range(200)]
     planned = 0
     for x in inputs:
-        outcomes = []
+        outcomes: list[tuple[Any, ...]] = []
         for _ in range(2):
             try:
                 plan = plan_steps(reg, x, ingress, partial=False)
@@ -573,6 +574,7 @@ def test_a_resume_reads_its_own_kv_past_its_prompt():
     """Request 0 (LP 20) is preempted at position 33 and resumes on a hit of 32 tokens of its own KV, past its prompt: I1's replay
     holds that run (the request computed those positions), its resume recomputes position 32 and computes 33 anew."""
     reg = _registered()
+    rows: list[list[tuple[Any, ...]]]
     rows = [[(0, 0, 20)]] + [[(0, 20 + k, 1)] for k in range(13)] + [[(0, 32, 2, {"cache_hit": 32, "preempted": True,
                                                                                "sources": (I1.Source(0, 32),)})], [(0, 34, 1)]]
     c = compile_steps(reg, *_session([(20, 16, {**GREEDY, "max_tokens": 16})], rows))
@@ -777,6 +779,7 @@ def _scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, se
     left; a request leaves once it has its max_tokens outputs. Steps with nothing to run are dropped, as the idle engine brings the
     next arrival forward."""
     done, outs = [0] * len(reqs), [0] * len(reqs)
+    running: list[int]
     waiting, running, steps, e = sorted(range(len(reqs)), key=lambda i: reqs[i][0]), [], [], 0
     while waiting or running:
         left, rows = budget, []
@@ -830,6 +833,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
         assert B._unit(a) == B._unit(u) and len(a.launch) == len(u.launch)
     assert cut and [u.chunks for u in plan.requests] == [(), (), (64, 64, 64, 39), (64, 1), (64, 64, 59), (), (22, 64, 64, 64, 42),
                                                          (33, 64, 4)]
+    summary: dict[str, Any]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}", "stop": u.stop} for u in plan.requests]}
     (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
@@ -877,7 +881,7 @@ def test_the_builds_chunked_request_wrapper_runs_drives_forwards_at_its_launch_s
     import torch
     from verity_vllm.program.frontend import vllm_meta as vm
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
-    seen = []
+    seen: list[tuple[Any, ...]] = []
 
     class Toy(torch.nn.Module):
         def forward(self, ids, positions):
@@ -1302,11 +1306,19 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
     advice, ingress = _session([(20, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}),
                                 (6, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})], steps)
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 8, "max_num_batched_tokens": 16})
+    seen: list[tuple[Any, ...]]
     seen, tokens, keys = [], CM._Launch.tokens, CM._Launch.keys
-    monkeypatch.setattr(CM._Launch, "tokens", lambda self, own, sampled=False: (
-        seen.append((self.step, own, sampled)), tokens(self, own, sampled))[1])
-    monkeypatch.setattr(CM._Launch, "keys", lambda self, own, without=(): (
-        seen.append((self.step, tuple(own), "keys")), keys(self, own, without))[1])
+
+    def seen_tokens(self, own, sampled=False):
+        seen.append((self.step, own, sampled))
+        return tokens(self, own, sampled)
+
+    def seen_keys(self, own, without=()):
+        seen.append((self.step, tuple(own), "keys"))
+        return keys(self, own, without)
+
+    monkeypatch.setattr(CM._Launch, "tokens", seen_tokens)
+    monkeypatch.setattr(CM._Launch, "keys", seen_keys)
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.chunks, u.T, sorted(c.refused), c.batch_rule) == ((8, 8, 4), 2, [1], None)

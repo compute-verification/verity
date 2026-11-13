@@ -111,8 +111,8 @@ def test_a_seed_is_charged_nothing_only_where_the_program_returns_its_seed_rule(
                                                "window.seed_salt holds nothing the sampler reads, which is 64 bits a request")
     assert R.refusals(tuple(f for f in unchecked if (f.record, f.name) not in R.SEED)) == []
     g = R.gate(A_WHOLE)
-    for read, at in ((lambda: g.requests[0].seed, "request.seed"), (lambda: g.seed_salt, "advice.seed_salt")):
-        with pytest.raises(R.UndeclaredRead, match=re.escape(f"the compiler reads the advice's {at}: a stochastic request's seed is "
+    for read, field in ((lambda: g.requests[0].seed, "request.seed"), (lambda: g.seed_salt, "advice.seed_salt")):
+        with pytest.raises(R.UndeclaredRead, match=re.escape(f"the compiler reads the advice's {field}: a stochastic request's seed is "
                                                              f"certified")):
             read()
 
