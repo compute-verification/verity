@@ -8,9 +8,9 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 

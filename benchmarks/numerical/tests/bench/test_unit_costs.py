@@ -1,6 +1,7 @@
 """F6's unit-cost inventory: pinned Boolean counts of small subcircuits, the exact affine check, the sample and the work model."""
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from math import comb
 
@@ -66,6 +67,20 @@ def test_block_excess_affine_or_curved():
          "block_checks": {80: {"built": head(80, 11)}, 144: {"built": {**head(144, 22), "nnz_AB": 3 * 144 + 7 + 25}}}}
     U.block_excess(r)
     assert r["method"] == "model" and r["block_curvature"] == {"nnz_AB": 3}
+
+
+def test_reuse_reads_an_earlier_inventory_and_rederives_the_attention_fit(tmp_path):
+    gemm = {"template": "gemm-coordinate", "params": {"K": 64}, "method": "exact", "ands": 5, "notes": ["stale"]}
+    head = {"template": "attention-head", "params": {"BN": 64}, "method": "affine", "per_extra_block": {"ands": 11},
+            "block_curvature": {"nnz_AB": 3}, "fit": {m: ["3/2", "7"] for m in U.METRICS}}
+    path = tmp_path / "unit-costs.json"
+    path.write_text(json.dumps({"subcircuits": [gemm, head]}))
+    subs = U.reuse(str(path))
+    assert set(subs) == {U._key("gemm-coordinate", {"K": 64}), U._key("attention-head", {"BN": 64})}
+    assert subs[U._key("gemm-coordinate", {"K": 64})] == {k: v for k, v in gemm.items() if k != "notes"}
+    got = subs[U._key("attention-head", {"BN": 64})]
+    assert got["method"] == "model" and got["_fit"] == {m: (Fraction(3, 2), Fraction(7)) for m in U.METRICS}
+    assert "per_extra_block" not in got and "block_curvature" not in got
 
 
 def test_missing_piece_is_reported_not_guessed():

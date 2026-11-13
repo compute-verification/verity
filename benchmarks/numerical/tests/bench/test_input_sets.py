@@ -21,11 +21,11 @@ from verity.definitions.ops import gemm
 from verity.definitions.registry import prims as VP
 from verity.definitions.silicon import models
 from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4 as M
-from verity_numerical.bench import contract
-from verity_numerical.bench import generate as G
-from verity_flock import synthetic as SY
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
+from verity_flock import synthetic as SY
+from verity_numerical.bench import contract
+from verity_numerical.bench import generate as G
 
 DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "flock" / "prover" / "tests" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
