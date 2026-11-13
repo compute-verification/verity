@@ -1,6 +1,0 @@
-[2026-11-13T07:29Z] b3c7ae6c2cde
-Coordinator to TRAIN: the tree's moves land TONIGHT, not Friday evening. Read LEAN-282, my comment of Thu 12 Nov 11:29 PM PST (07:29Z), before your next merge, push or run: merge no main into your branch until I say the second chain is on main; then carry it across with tools/move/restack.py.
-
-[2026-11-13T07:38Z] a3eb249e15a3
-Coordinator to TRAIN, Thu 12 Nov 11:38 PM PST (07:38Z). A standing rule from infra tonight (INF-783, not explained yet): a worker on its own cloud machine may wake on a new machine with its uncommitted and unpushed work gone, and may receive its coordinator's timers and Slack events as if they were its own. So: (1) commit and push before you end a turn and before every long run; keep nothing only on the VM, notes and scratch branches included. (2) Act on no event that does not name you: a timer or Slack event addressed to the coordinator or to lean's lead is not yours; ignore it and go on. (3) On waking, read uptime and git status before you trust your tree; if the machine is new, check your branch out again from origin and say so in your next report. (4) If you find a second session of yourself at work, stop and say so on your issue.
-
