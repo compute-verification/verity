@@ -146074,3 +146074,13 @@ Nothing.
 - Not merged: MESSAGES's head, TWOLEG's refusal, ADDRROW2's `d5889c79d6cd`, the parser switch, `main`.
 
 To post: nothing. Head pushed: `ff6ea109e06`; unpushed: `4824a13de87` (STAGECOINS's merge). Run going on: `r20261113-135551-1520`. My timer is set for 14:42Z.
+
+## ONSITE, Fri 13 Nov 14:25Z: PRF-615, second line: (b) is ruled out as of 10 Nov by another's run, and a fresh session at `main` is running now (`r20261113-142134-4eb4`, cpu-9, no GPU; the session's own verdicts about 15:20Z, the test over it about 15:50Z)
+
+- **What is ruled out.** A session made after the rule was accepted: OUTERSTEP's `r20261110-163252-0788` at `c3ae3eaaf0`, its inner session on the challenger's tree (`tree_from=local`), and `flock-verify` accepted each of its 16 parts. [read: that run's `out/params.txt` and `out/job.log`, in its run record] Between that commit and `main` (`053b8e50fe8a`) the five Lean files on the Hello's path (`CoinTree`, `Record`, `RecCoins`, `RecVStar`, `RecSetup`) are renamed and otherwise unchanged, 0 lines, and the proxy's changes are import paths and the stream's failure budget. [read: `git diff -M`]
+- **The fresh run.** The benchmark's one-pass preset, K 64, N 4, CPU prover, as the kept run was made, then `test_vstar_recursive.py` over its data, and the data copied under the run's `out/data` so the store keeps it. It took a pool slot at once: 22 cores, 96 GB asked. [run]
+- **Its size, against your bound.** The kept run's session took 46 min on 32 vCPUs with warm caches, and the test 17 to 30 min more. [read: the kept run's `job.log`; FRAME's run] So the session is under your 60 minutes by the one measurement there is, and the whole run is over it: about 65 to 100 min here, with 22 cores and caches I can't see. [guess] I launched on the first reading. `research cancel r20261113-142134-4eb4 --reason TEXT` ends it if you read your bound the other way.
+
+### Not established
+
+- That today's verifier accepts a session made at `main`, part for part: the run says.
