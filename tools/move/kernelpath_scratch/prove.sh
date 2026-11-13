@@ -8,7 +8,7 @@
 # into the tree (--at, generator) are for a run's own clone. Each step's output is $OUT/STEP.log and its exit a line of
 # $OUT/exits.txt; a failed step doesn't stop the next, and the script exits 1 when any failed.
 #
-# Steps: sync tools host heavy guard cold wheels boundaries root lints generator movecheck ratchet terms
+# Steps: sync tools host heavy guard cold wheels boundaries root lints generator movecheck ratchet terms remedy
 # MOVES and RANGES, each "BASE TOP;BASE TOP;...", are what movecheck and ratchet take; the defaults are the first proof's.
 set -u
 : "${OUT:?run it under research run, or set OUT to a directory}"
@@ -134,6 +134,49 @@ fs = [e["file"] for e in json.load(open("tests/lint/allowlists/repo_retired_term
 print(len(fs), "entries;", sum(1 for a, b in zip(fs, fs[1:]) if b < a), "stand before their place in sorted order")
 print([f for f in fs if "pouw_cuda" in f])'
   $PY pytest tests/lint/test_repo_retired_terms.py -q $NOCACHE
+}
+
+# The other way to pass the gate, tried in the run's own clone with commits that are never pushed: a change before the move
+# records the three row_table sources' sites at the adapter's path, and the mover's commit carries the three entries to the
+# new path as it carries ncp2_fused.cu's. REMEDY_BASE is the commit under the mover's commit REMEDY_MOVER, REMEDY_PICKS the
+# hand commits above it, REMEDY_SAME a commit whose tree the result should equal. The gate runs as REMEDY_BASE has it.
+remedy() {
+  list=tests/lint/allowlists/repo_retired_terms.json
+  old=adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda; new=verity/protocols/pouw/prover/kernels/pouw_cuda
+  g="git -c user.name=kernelpath -c user.email=kernelpath@users.noreply.github.com"
+  git show "$REMEDY_BASE:adapters/vllm/tools/ratchet_gate.py" > "$d/gate.py" || return 1
+  add() {
+    python3 - "$list" "$1" <<'EOF'
+import sys
+path, at = sys.argv[1:]
+text = open(path).read()
+line = f'    {{"file": "{at}/ncp2_fused.cu", "count": 4}},\n'
+assert text.count(line) == 1, (at, text.count(line))
+more = "".join(f'    {{"file": "{at}/{f}", "count": {n}}},\n'
+               for f, n in (("row_table.cu", 5), ("row_table.cuh", 13), ("row_table_host.cpp", 4)))
+open(path, "w").write(text.replace(line, line + more))
+EOF
+  }
+  gate() { python3 "$d/gate.py" "$1" "$2" < /dev/null 2>&1 | cut -c1-1200; r=${PIPESTATUS[0]}; echo "ratchet_gate, $3 ($1 $2): exit $r"; return $r; }
+  lint() { $PY pytest tests/lint/test_repo_retired_terms.py -q $NOCACHE 2>&1 | tail -n 3; r=${PIPESTATUS[0]}; echo "retired-terms lint at $1: exit $r"; return $r; }
+  rc=0
+  git checkout -q --detach "$REMEDY_BASE" || return 1
+  add "$old" && git add "$list" && $g commit -q -m "scratch: the three row_table sources' sites, recorded at the adapter's path" || return 1
+  X=$(git rev-parse HEAD); lint "the entries at the old path" || rc=1
+  git read-tree -u --reset "$REMEDY_MOVER" && add "$new" && git add "$list" \
+    && $g commit -q -m "scratch: the mover's commit, carrying the three entries" || return 1
+  M=$(git rev-parse HEAD)
+  $g cherry-pick $REMEDY_PICKS > /dev/null || return 1
+  H=$(git rev-parse HEAD); lint "the result" || rc=1
+  echo "the list's diff across the scratch mover's commit:"; git diff "$X" "$M" -- "$list" | grep '^[+-] ' | cut -c1-140
+  echo "tree of the result: $(git rev-parse "$H^{tree}"); tree of $REMEDY_SAME: $(git rev-parse "$REMEDY_SAME^{tree}")"
+  [ "$(git rev-parse "$H^{tree}")" = "$(git rev-parse "$REMEDY_SAME^{tree}")" ] || rc=1
+  $PY python tools/verity/check/move_check.py "$X" "$M" < /dev/null; r=$?; echo "move_check $X $M: exit $r"; [ $r -eq 0 ] || rc=1
+  gate "$REMEDY_BASE" "$X" "the entries at the old path, alone" || rc=1
+  gate "$X" "$M" "the mover's commit carrying them, alone" || rc=1
+  gate "$X" "$H" "the mover's commit, the mend and the test as one change" || rc=1
+  gate "$REMEDY_BASE" "$H" "the entries, the move, the mend and the test as one change (told, not counted in this step's exit)"
+  return $rc
 }
 
 # one compound command, so the shell has read all of it before --at takes this file out of the tree
