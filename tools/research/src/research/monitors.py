@@ -726,7 +726,7 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
 
 
 def fixtures_public(ctx: Ctx) -> list[Finding]:
-    """A fixture main's `fixtures/artifacts.json` registers that the public export, where nodes and pods without the store's key
+    """A fixture main's `artifacts.json` registers that the public export, where nodes and pods without the store's key
     fetch fixtures, doesn't hold (its manifest, by anonymous HEAD). The control pod's export loop copies new ones every 5 min."""
     from .store import fetchset, fixtures
 

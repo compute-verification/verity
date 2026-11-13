@@ -410,7 +410,7 @@ arriving = true
 note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
 
 [[not_yet]]
-path = "fixtures/artifacts.json"
+path = "artifacts.json"
 to = "the root"
 owner = "top"
 day = "2026-11-14 12:00 PST"
