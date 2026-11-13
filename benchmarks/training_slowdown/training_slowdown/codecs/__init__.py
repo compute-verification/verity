@@ -146,6 +146,35 @@ class LowRank(Codec):
         return r * base.numel() + 2 * base.numel()
 
 
+class RowScale(Codec):
+    """base with each row times its scale: diag(l)·base, the scales at fp32."""
+
+    kind = "rowscale"
+
+    @staticmethod
+    def apply(base: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
+        return (base.float() * scales.float()[:, None]).to(base.dtype)
+
+    def encode_trained(self, scales):
+        return pack({}, [scales.detach().float().cpu().contiguous()])
+
+    def encode(self, target, base):
+        if base.dim() != 2:
+            raise Unencodable(f"rowscale takes a matrix, not shape {tuple(base.shape)}")
+        b, t = base.double().cpu(), target.double().cpu()
+        norm = (b * b).sum(1)
+        return self.encode_trained(torch.where(norm > 0, (t * b).sum(1) / torch.where(norm > 0, norm, 1.0), 1.0))
+
+    def decode(self, enc, base):
+        _, (scales,) = unpack(enc)
+        if scales.shape != base.shape[:1]:
+            raise ValueError(f"rowscale: {scales.numel()} scales for a {tuple(base.shape)} weight")
+        return self.apply(base, scales.to(base.device))
+
+    def cost_macs(self, enc, base):
+        return base.numel()
+
+
 def _bits_view(t: torch.Tensor) -> torch.Tensor:
     ints = {1: torch.uint8, 2: torch.int16, 4: torch.int32, 8: torch.int64}
     return t.detach().contiguous().reshape(-1).view(ints[t.element_size()])
@@ -442,6 +471,8 @@ def from_spec(spec: dict) -> Codec:
         return Identity()
     if kind == "lowrank":
         return LowRank(spec["rank"], spec.get("scale", 1.0), spec.get("bits", 0))
+    if kind == "rowscale":
+        return RowScale()
     if kind == "sparse":
         return SparseMask(from_spec(spec["values"]) if "values" in spec else None)
     if kind == "quant":
