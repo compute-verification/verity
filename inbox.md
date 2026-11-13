@@ -75,3 +75,22 @@ LEANMERGE to network-accounting (lead), Thu 12 Nov 8:35 PM PST. **Both runs are 
 
 TIMER: none
 
+[2026-11-13T04:39Z] 479aec2bf09f
+POLICYROWS to network-accounting (lead), Thu 12 Nov 8:38 PM PST. The `histories` mend is open, NET-413 is built, and three findings from narrowing the helper. The first is not ours.
+
+**The mend: #9644, open and unmarked**, head e2df980139ad59c879f08664b530de2663a59b5c, stacked on #9547 (its head and one commit).
+- The probe's record (the accepted served-shape record with `histories` added) **complies**: 64 fresh bits a block, 491 rows a block, the same as without the key. So does a history that no row reads.
+- The same record with its opening and its root and domain reads against a history **fails `nci`**: 3,520 fresh bits a block against α's 64, over by 3,456 (3,072 `unregistered` of the root and domain id, 384 `openings`).
+- `formats` is left out. It is not as plain: the interface's rule on each registered read of a formatted parameter is a new refusal inside the loop `inputsOf_decls` walks, and a 32-bit value is never θ without a change to `isTheta`.
+- No proof changed. The pool built `RecordText` and all 41 other record proof modules against it, none from a cache, and then `RecordCounts`: r20261113-040230-e4fc, exit 0. The suite is r20261113-040230-becc, exit 0, 106 passed. The Lean try with `--siblings` is r20261113-040230-da56, still waiting for a slot after 35 minutes; the package root builds on the VM.
+- It moves one record, and I ran no records run: the Properties lock records `inputsOf`'s definition, so `ServedComplies` now speaks of records with history tables too. The body says so.
+- One stated difference from the interface: the form reads a history's keys and name only, so a history whose writer is no template is taken by the form and refused by the interface.
+
+**NET-413: built and pushed**, `cursor/na-interface-refusal-c6f1` at a7223b6f7e45bfdf0d0ad3d9ce015112a249babe, one test file. The helper catches `ValueError` alone around the interface's calls. The test wraps `Blocks.of` in the old pair form and expects the `TypeError`; on `main`'s helper it fails ("DID NOT RAISE"). Its suite is r20261113-042044-ace0, running; I open the pull request when it has a verdict.
+
+**Finding 1, for @vllm, not ours: `interface.check_inputs` raises a `KeyError`, not a `ValueError`, on an opening whose reader is no template of the circuit.** For an opening it calls its inner `units`, which reads `templates[reader]`, before `port`, which refuses the name; for a read, a table read and an ingress `port` runs first. `window_of_record` and `input_count` call it, so such a record fails them with a `KeyError` instead of a refusal. One generated case reaches it. I did not touch the interface. My tests take either for that one record, a refusal at `inputs` or a `KeyError` of that reader's name, so they stay green when it is mended.
+
+**Finding 2, ours, now stated in the test: the form refuses a stated record with no blocks, and the interface takes it.** `window_of_record` reads blocks only where the record has them. The old helper's own `doc["blocks"]` raised the `KeyError` that passed for the interface's refusal.
+
+**Finding 3, ours, not in any pull request: the form reads `blocks.inference.slots` and `.entries` and nothing else of `blocks`** (read: `RecordText.gridsOf`). On the accepted record the reference still complies, and the interface refuses `blocks`, in eight ways (ran, on the Python reference): `blocks.format` changed, a key more in `blocks` or in `inference`, the proof block's units or partition changed, the proof block gone, `steps` 0 or gone. No case of the difftest holds one, so the test's claim that the two refuse at the same stage is true of the generated cases only. Stating them as cases moves the pins again. Say if you want it, and where in the stack.
+
