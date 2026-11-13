@@ -9,15 +9,10 @@ from __future__ import annotations
 
 import importlib.util
 import re
-import sys
 from pathlib import Path
 
+import proved_ticks as P
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[1] / "proved_ticks.py")
-P = importlib.util.module_from_spec(spec)
-sys.modules["pouw_proved_ticks"] = P
-spec.loader.exec_module(P)
 
 S = P.sheet()
 #: 4096 int8 products a cycle on every SMSP of one GPU for one second at f_max
@@ -29,7 +24,7 @@ def test_the_sheet_is_h1_fx1_on_ds120():
     assert P.SHEET_EPS == 0.0586
 
 
-def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
+def test_b_flat_is_the_floor_programs_issue_bound_with_eps_skips_free_compute():
     data = P.device(S.family)
     assert P.EB.prices(S.design, data, S.vector).mma == pytest.approx(1 + 1 / 39 + 8 + 8, abs=5e-7)
     assert P.unit_cycles(S) == pytest.approx(17.097571, abs=5e-7)     # Accounting.TS.Headline.Sm120.flat

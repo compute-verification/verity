@@ -67,7 +67,9 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
           "tools/research/src/research/store/labels_sync.py",
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
-          "infra/control/vy-control-gate", "infra/control/door_setup.sh"]
+          "infra/control/vy-control-gate", "infra/control/door_setup.sh",
+          # the coordinators' launcher, whose `tell` is tested here with the registry above
+          "infra/cursor/launch_coordinator.py"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

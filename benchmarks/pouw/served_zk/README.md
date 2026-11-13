@@ -37,6 +37,8 @@ and the window's Lean port with their Python references, each case against the v
 
 `served_commit.py` is `job`'s commitment, challenger and check; `stage_tile.py` stages one sampled tile as a Flock `--zk`
 unit; `statement.py` commits a served pass's rows in the statement's format: `pearl_c_vllm/e2e.py` loads it, and the
-adapter's `adapters/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py` takes its `Statement`; `of_record.py` runs each of PoUW's checks on the
-challenger's path in Lean and in its Python reference on one input. Their tests are the `test_served_zk*.py` files
-under `benchmarks/pouw/tests/`.
+adapter's `adapters/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py` takes its `Statement`; `rows_bench.py` is the
+GPU row commitments `statement.py` loads; `of_record.py` runs each of PoUW's checks on the challenger's path in Lean and
+in its Python reference on one input. `replay_core.py`, `replay_window.py`, `rows_bench.py` and `statement.py` list in
+`__all__` the names other files read, the tests' included. Their tests are the `test_served_zk*.py` files under
+`benchmarks/pouw/tests/`.

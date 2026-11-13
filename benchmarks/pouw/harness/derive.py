@@ -17,6 +17,12 @@ from dataclasses import dataclass
 import fill as F
 import numpy as np
 
+#: what `bench.py`, `chain.py` and the tests read
+__all__ = [
+    "FAMILY_KIND", "FAMILY_SHORTCUT", "INPUT_KIND", "KINDS", "SRC", "a_bytes", "check", "derive", "e2m1_rne",
+    "e4m3_rne", "load", "preflight_y", "scaled", "sf_offsets",
+]
+
 SRC = {"bf16": 0, "int32": 1, "f32": 2}
 
 

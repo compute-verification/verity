@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["CertifierDevice"],
  "exempt": {
   "CertifierDevice.DifftestMain": "the difftest against active.Proxy, under `runs`: compiled evaluation of CertifierDevice.Difftest.main, audited under CertifierDevice, a test and not a proof",
@@ -62,11 +63,12 @@
    "why": "the driver: the device over core_world's World, with Lean core's IO and channels, nothing of Security"
   },
   "CertifierDevice.Issuer": {
-   "imports": ["CertifierDevice.Driver", "Lms.Sign"],
+   "imports": ["CertifierDevice.Driver", "Lms.Sign", "NetworkCheck.Check"],
    "except": [],
-   "why": "the issuer is code: the driver's World and lms's signing, which reuses network_check's encodings; no Mathlib and nothing of Security"
+   "why": "the issuer is code: the driver's World, lms's signing and network_check's encodings and certificate; no Mathlib and nothing of Security"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "0c5a18cab8f8b383b6c81edc7cd11faeb4ff3bb4d9236d2c07c3d7e5b670fa29"
  }

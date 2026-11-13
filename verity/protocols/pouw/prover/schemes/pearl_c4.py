@@ -121,10 +121,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.errors import InvalidArtifact
 from verity.commitments import domains
 from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
+from verity.errors import InvalidArtifact
 
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exported
@@ -136,9 +136,11 @@ from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exp
     VO_ROTATION,
     check_registration,
 )
+
 from . import pearl_c as C
 from . import pearl_c4_c_L as CL
 from . import pearl_kw as P
+from .pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64
@@ -183,7 +185,7 @@ GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 pro
 #: wall-time window below it, 1.81, is `concurrent-budgets/sm120`'s, not the rule's).
 FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 2
 
-_E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
+E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
 
 
@@ -197,7 +199,7 @@ class Fmt:
     block: int
     one: int
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[Callable[[str], Fmt], tuple[str]]:
         return _format, (self.name,)
 
 
@@ -226,7 +228,7 @@ def e2m1(word: int) -> int:
     """cvt.rn.satfinite.e2m1 of one finite FP32 word: nearest even, ±6 past the top, the sign kept (−0 is 0x8)."""
     v = abs(P.f32_of_bits(_finite(word)))
     code = 0
-    for i, mid in enumerate(_E2M1_MIDPOINTS):
+    for i, mid in enumerate(E2M1_MIDPOINTS):
         if v > mid or (v == mid and (i + 1) % 2 == 0):
             code = i + 1
         else:
@@ -593,17 +595,18 @@ def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
     return dead
 
 
-def _scale_value(fmt: Fmt, byte: int) -> float:
+def scale_value(fmt: Fmt, byte: int) -> float:
     m, e = scale_dyadic(fmt, byte)
     return m * 2.0 ** e
 
 
 def noise_sigma(e_row: Sequence[int], ae: int) -> float:
     """The noise's standard deviation in the atom's C units given this salt's E line: a_E·2^-4·‖E‖·√8.5625 (F uniform)."""
-    return _scale_value(NVFP4, ae) / 16 * math.sqrt(8.5625 * sum(float(e2m1_value(c)) ** 2 for c in e_row))
+    return scale_value(NVFP4, ae) / 16 * math.sqrt(8.5625 * sum(float(e2m1_value(c)) ** 2 for c in e_row))
 
 
-_F2 = (0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12)    # 2·value of each E2M1 code, in half units
+#: 2·value of each E2M1 code, in half units
+E2M1_SIGNED_HALVES = (0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12)
 
 
 def _pmf_conv(a: tuple[int, tuple[float, ...]], b: tuple[int, tuple[float, ...]]) -> tuple[int, tuple[float, ...]]:
@@ -625,7 +628,7 @@ def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
         return 0, (1.0,)
     if m == 1:
         pmf = [0.0] * 25
-        for v in _F2:
+        for v in E2M1_SIGNED_HALVES:
             pmf[v + 12] += 1 / 16
         return -12, tuple(pmf)
     return _pmf_conv(_f_power(m // 2), _f_power(m - m // 2))
@@ -637,8 +640,8 @@ def noise_law(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
     independent (one element's noise is a_E·2^-6·n): (lowest value, pmf over the consecutive integers from it).  F is
     symmetric, so only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one sample's distribution."""
     dist: tuple[int, tuple[float, ...]] = (0, (1.0,))
-    for v in sorted({abs(_F2[c]) for c in e_row} - {0}):
-        lo, pmf = _f_power(sum(1 for c in e_row if abs(_F2[c]) == v))
+    for v in sorted({abs(E2M1_SIGNED_HALVES[c]) for c in e_row} - {0}):
+        lo, pmf = _f_power(sum(1 for c in e_row if abs(E2M1_SIGNED_HALVES[c]) == v))
         stretched = [0.0] * ((len(pmf) - 1) * v + 1)
         stretched[::v] = pmf
         dist = _pmf_conv(dist, (lo * v, tuple(stretched)))
@@ -676,10 +679,10 @@ def modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], sigm
     lo_b = block_scale(fmt, P.f32_bits(max(top - 6 * sigma, 0.0)))[0]
     hi_b = block_scale(fmt, P.f32_bits(top + 6 * sigma))[0]
     if fmt is MXFP4:
-        edges = {s: (3 * _scale_value(fmt, s), 6 * _scale_value(fmt, s)) for s in range(lo_b, hi_b + 1)}
+        edges = {s: (3 * scale_value(fmt, s), 6 * scale_value(fmt, s)) for s in range(lo_b, hi_b + 1)}
     else:
         def mid(s, t):
-            return 3 * (_scale_value(fmt, s) + _scale_value(fmt, t))
+            return 3 * (scale_value(fmt, s) + scale_value(fmt, t))
         edges = {s: (mid(s - 1, s) if s > UE4M3_MIN else 0.0, mid(s, s + 1) if s < UE4M3_TOP else math.inf)
                  for s in range(lo_b, hi_b + 1)}
     return max(edges, key=lambda s: (_below(v, cdf, edges[s][1]) - _below(v, cdf, edges[s][0]), -s))
@@ -691,15 +694,15 @@ def change_probabilities_exact(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Se
     product formula over the bytes the clean amax ± 6σ reaches.  Kept to check that `change_probabilities` charges at
     least it; the rule is `change_probabilities`."""
     e = tuple(e_row)
-    cdf = _below_law(e, _scale_value(NVFP4, ae) / 64)
+    cdf = _below_law(e, scale_value(NVFP4, ae) / 64)
     sigma = noise_sigma(e_row, ae)
     p, modes = [], []
     for b in range(0, len(x), fmt.block):
         v = [P.f32_of_bits(fp32.mul(alpha, w)) for w in x[b:b + fmt.block]]
         mode = modal_byte(fmt, v, cdf, sigma)
         modes.append(mode)
-        vs = _scale_value(fmt, mode)
-        edges = [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS]
+        vs = scale_value(fmt, mode)
+        edges = [-m * vs for m in reversed(E2M1_MIDPOINTS)] + [m * vs for m in E2M1_MIDPOINTS]
         for t, vt in enumerate(v):
             if dead[b + t]:
                 p.append(0.0)
@@ -741,9 +744,9 @@ def b_ovf(n: int) -> Fraction:
 def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
     """The noisy amax interval [lo, hi) whose block takes scale byte s."""
     if fmt is MXFP4:
-        return 3 * _scale_value(fmt, s), 6 * _scale_value(fmt, s)
-    lo = 3 * (_scale_value(fmt, s - 1) + _scale_value(fmt, s)) if s > UE4M3_MIN else 0.0
-    hi = 3 * (_scale_value(fmt, s) + _scale_value(fmt, s + 1)) if s < UE4M3_TOP else math.inf
+        return 3 * scale_value(fmt, s), 6 * scale_value(fmt, s)
+    lo = 3 * (scale_value(fmt, s - 1) + scale_value(fmt, s)) if s > UE4M3_MIN else 0.0
+    hi = 3 * (scale_value(fmt, s) + scale_value(fmt, s + 1)) if s < UE4M3_TOP else math.inf
     return lo, hi
 
 
@@ -778,7 +781,7 @@ def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence
     - 0 on salt-dead codes.
     It charges at least `change_probabilities_exact` in every window.  The atom's one RZ rounding of C + noise, 2^-23
     relative, is not modelled."""
-    cdf = _below_law(tuple(e_row), _scale_value(NVFP4, ae) / 64)
+    cdf = _below_law(tuple(e_row), scale_value(NVFP4, ae) / 64)
     hw = hw_scales(fmt, scales)
     p: list[float] = []
     modes: list[int | None] = []
@@ -789,8 +792,8 @@ def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence
         if mode is None:
             p.extend([0.0] * len(v))
             continue
-        vs = _scale_value(fmt, mode)
-        edges = [-math.inf] + [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS] + [math.inf]
+        vs = scale_value(fmt, mode)
+        edges = [-math.inf] + [-m * vs for m in reversed(E2M1_MIDPOINTS)] + [m * vs for m in E2M1_MIDPOINTS] + [math.inf]
         for t, vt in enumerate(v):
             if dead[b + t]:
                 p.append(0.0)
@@ -809,12 +812,12 @@ def _edge_cdf(cdf: Callable[[float], float], edge: float, v: float) -> float:
 _EXCESS_MAX = 4                    # 0.5 − c·x < 0 from x = 4 on
 
 
-def _pair_excess(js: tuple[int, ...]) -> int:
+def pair_excess(js: tuple[int, ...]) -> int:
     dev = sorted(j for j in js if j)
     return min(sum(dev[:len(dev) - 2]) if len(dev) > 2 else 0, _EXCESS_MAX)
 
 
-_COMBOS = [(js, _pair_excess(js)) for js in itertools.product(range(3), repeat=4)]
+_COMBOS = [(js, pair_excess(js)) for js in itertools.product(range(3), repeat=4)]
 
 
 def _conv(a: Sequence[float], b: Sequence[float]) -> list[float]:
@@ -1115,7 +1118,7 @@ class PearlC4:
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3"):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3") -> None:
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         if hashing not in HASHINGS:
@@ -1142,20 +1145,20 @@ class PearlC4:
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility",
                     "live-verifier"),
             hypotheses=(
-                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
-                "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
-                "of the units whose replayed debit is under the cap for less than their credit less the debit",
-                f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
-                "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090",
+                ("TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
+                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
+                 "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
+                 "of the units whose replayed debit is under the cap for less than their credit less the debit"),
+                (f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
+                 "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090"),
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",
             ),
             allowances=(
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
-                "savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
-                "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
-                "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
-                "(B_OVF, credit_of)",
+                ("savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
+                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
+                 "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
+                 "(B_OVF, credit_of)"),
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
@@ -1169,8 +1172,8 @@ class PearlC4:
                 omega=Fraction(1),
                 claims=(),
                 hypotheses=(),
-                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′, and "
-                            "Pearl-C4 claims NVFP4 alone",),
+                allowances=(("MXFP4 is contrast only: its line is D on honest coverage under F1′, and "
+                             "Pearl-C4 claims NVFP4 alone"),),
                 parameters=self.certificate.parameters,
             )
 
@@ -1232,7 +1235,7 @@ class PearlC4:
     def row_passes(self, words: Sequence[int]) -> bool:
         return row_passes(self.fmt, words)
 
-    def tile_cap(self, record, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
+    def tile_cap(self, record: UnitRecord, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
         """(inert work, its bound) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times
         the credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in
         `last_debit`."""
@@ -1252,7 +1255,7 @@ class PearlC4:
     def _r1_cap(self, k_kept: int, n: int) -> Fraction:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
-    def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
+    def row_debit_ratio(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> Fraction:
         """R1's reading: the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `clear_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
@@ -1261,7 +1264,7 @@ class PearlC4:
         units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
         return units / self._r1_cap(record.k_kept, record.matmul.shape.n)
 
-    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
+    def row_over_debit(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> bool:
         """Whether R1 requires the row excluded (its ratio over 1)."""
         return self.row_debit_ratio(record, ops, side, pos) > 1
 
@@ -1329,6 +1332,19 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1",
-           "form", "hw_scales", "labelled", "line", "line_block", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
-           "unit_seed_a", "word_replay"]
+#: the private names these four had, which readers outside the module still import
+_E2M1_MIDPOINTS, _F2, _pair_excess, _scale_value = E2M1_MIDPOINTS, E2M1_SIGNED_HALVES, pair_excess, scale_value
+
+__all__ = ["ATOM", "B_OVF", "B_OVF_MIN_N", "DEAD_RHO_SQ", "DELTA", "DENSE_CORRECTION", "E2M1_MIDPOINTS",
+           "E2M1_SIGNED_HALVES", "F1_B_OVERFIT", "F1_EPS", "FFMA_UNITS", "FLOOR", "FORMATS", "FORMING_CREDITED",
+           "FORMING_UNCREDITED", "FOUR", "GAMMA_FOLD", "HASHINGS", "HEAD_INTERLEAVE", "INT8_LEAF_SLOTS",
+           "INT8_PATCH_SLOTS", "K_BETA", "LABELS", "LABEL_BLOCKS", "LINES_PER_BLOCK", "MXFP4", "NAMES", "NOISE_F_SCALE",
+           "NVFP4", "ONE", "PEEL_K", "R", "R1_TOLERANCE", "REGISTRATION_STACKS", "ROLE_EA", "ROLE_EB", "ROLE_FA",
+           "ROLE_FB", "ROTATION_8", "SIXTH", "SPAN_K", "TILE", "TOP", "UE4M3_MIN", "UE4M3_NORMAL", "UE4M3_TOP",
+           "VO_ROTATION", "Debit", "Fmt", "Formed", "PearlC4", "b_ovf", "basis", "bf16_row", "block_scale", "chain",
+           "change_probabilities", "change_probabilities_exact", "check_registration", "check_scale_bytes", "clean",
+           "dead_blocks", "dnf", "e2m1", "e2m1_value", "e_tilde", "form", "gram", "hw_scales", "int8_depth_cost",
+           "int8_saving", "labelled", "line", "line_block", "modal_byte", "noise_atom", "noise_sigma", "pair_excess",
+           "parse_row", "peel_factors_a", "peel_factors_b", "pow2_word", "quantize", "row_f1", "row_passes", "row_seed",
+           "salt_dead", "scale_bytes_ok", "scale_dyadic", "scale_value", "seed_b", "split_saving", "split_units",
+           "stats", "tile_debit", "two_four_windows", "ue4m3", "ue4m3_word", "ue8m0_up", "unit_seed_a", "word_replay"]

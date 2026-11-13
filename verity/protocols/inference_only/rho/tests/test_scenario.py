@@ -62,7 +62,7 @@ def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound(
 
 def test_s_times_and_gates_per_flop_come_from_one_source():
     """The bound holds a gate at `u/w = ω_max 2G / (κ s_×)` of the reference's weight, so the FLOP model's `G` beside
-    a Boolean design's measured `s_×` (681 gates a bf16 product) scales every weight counted at `u` (the dark
+    a Boolean design's measured `s_×` (681 gates a bf16 product) scales every weight counted at `u` (the unregistered
     leaves, most of the rate of onsite H200's lower bound, `Overhead.rates`) by `681 w`, about 0.82, with nothing to say
     so. Building refuses the mix;
     with both from that design it builds, and the lower bound moves by that much on the share counted at `u`."""
@@ -76,7 +76,7 @@ def test_s_times_and_gates_per_flop_come_from_one_source():
     base, one = evaluate_named(REG, name), evaluate_named(mixed.override({"units.basis": design}), name)
     w = classes.weight_per_gate(base.families[0].profile, base.scenario.context.units)
     assert base.scenario.structure.basis == base.scenario.context.units.basis == "flop-model"
-    at_u = sum(t.share for t in analysis.attribution(base) if t.name == "dark" or t.name.split(".")[0] in ROUTES)
+    at_u = sum(t.share for t in analysis.attribution(base) if t.name == "unregistered" or t.name.split(".")[0] in ROUTES)
     assert 0.5 < at_u <= 1
     assert one.lo / base.lo == pytest.approx(1 / (at_u / (681 * w) + 1 - at_u), rel=5e-3)
     assert build(REG.override({"units.basis": design}), "reference-onsite-h200-elementary").structure.s_times == 1
@@ -88,7 +88,7 @@ def test_unmonitored_is_the_algorithm_alone():
     no protocol gives `max(1, μ)` for the attack, 1 for the reference's own family, and the reference's time."""
     r = evaluate_named(REG, "unmonitored-h200-kimi")
     f0 = r.scenario.context.fleet
-    mfu = f0.eps_unreg * f0.dark_mfu + (1 - f0.eps_unreg) * f0.mfu_train
+    mfu = f0.eps_unreg * f0.unreg_mfu + (1 - f0.eps_unreg) * f0.mfu_train
     assert r.scenario.mfu == pytest.approx(mfu)
     for f in r.families:
         mu = f.profile.efficiency
@@ -145,7 +145,7 @@ def test_rho_and_the_time_to_the_target_do_not_depend_on_gates_per_flop(name):
 
 def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise():
     """`structure.reference` is `s_×` at the reference's gates per counted product (`2G/κ`, so `u = w` and the overhead
-    is what it was), and every bound that counts uncertified or dark gates there cites `draft:no-straddle`. The
+    is what it was), and every bound that counts uncertified or unregistered gates there cites `draft:no-straddle`. The
     elementary cap (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower
     bound down by `2G/κ` (inference is 0.0% of it), and is what `upto("conditional")` falls back to."""
     r, e = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-remote-h200-elementary")
@@ -165,7 +165,7 @@ def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mf
     adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05 (1.04 with the
     H200's tensor at 1,980 MHz); remote with the floor credit at the card table's clock is above it, and onsite far
     above. Under reference efficiency free compute counts at `MFU₀`, so each is its padded size ratio (3.04 remote);
-    without it the monitored terms shrink by 2.5 and the dark leaves don't (1.22 remote, onsite still above 10)."""
+    without it the monitored terms shrink by 2.5 and the unregistered leaves don't (1.22 remote, onsite still above 10)."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
     assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")

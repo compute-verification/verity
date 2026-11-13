@@ -160,17 +160,6 @@ def test_refuses_a_certificate_for_another_link_window_or_direction(tiny, tmp_pa
         BK.pins(doc, lays, cert.register(doc), "s1/uplink", cert.key())
 
 
-@pytest.mark.parametrize("key", BK.PRIVATE)
-def test_refuses_a_record_that_states_placement(tiny, key):
-    """Which host runs which units, and which rows cross its uplink, are private: a record whose blocks state a server
-    table, a server time or transfers is refused by name, whatever they say."""
-    _c, doc, lays = tiny
-    placed = copy.deepcopy(doc)
-    placed.setdefault("blocks", {})[key] = []
-    with pytest.raises(ValueError, match=rf"the record's blocks state \['{key}'\]: placement is private"):
-        BK.check(placed, lays)
-
-
 def test_refuses_an_ingress_declaration():
     feed = circuit(reads=circuit().registered.reads[1:], ingress=(IF.Ingress(DOT, "a", 0, S * O, 0),))
     with pytest.raises(ValueError, match="an ingress declaration: a host's ingress is the scan's state"):

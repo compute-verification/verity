@@ -66,7 +66,7 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.commitments.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
+from verity.commitments.windows.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -614,6 +614,27 @@ def _block_ranges(n_sha: int, n_hm: int, unit_log: int, units: int, unit_packed:
                     ("mask", MASK_LOG, 1, {"net": "mask"})])
 
 
+def _tail_ranges(stages: list[tuple[int, int]], lookups: dict[str, int], G: int) -> list[tuple]:
+    """A tail's ranges at ``G`` VUs a block (`_block_ranges`' ``extra``): each stage's ``(slot_log, count)`` a VU, then each
+    table's ``lookups[t]`` lookup slots a VU, packed."""
+    from . import tail as TL
+
+    extra = [("unit", sl, G * n, {"net": f"stage{i}"}) for i, (sl, n) in enumerate(stages)]
+    for t, n in lookups.items():
+        b = TL.TABLE_BITS[t]
+        extra.append(("unit", _slot_log(lookup_rows(b, LOOKUP_LO[b], TL.VALUE_BITS)), G * n, {"net": f"lookup:{t}", "packed": True}))
+    return extra
+
+
+def block_log(rows: list[Port], unit_log: int, unit_packed: bool, stage_logs: list[int], lookups: dict[str, int]) -> int:
+    """The ``k_log`` of the block `compose` places one VU of a cut unit in: its ``rows``' sha512x3 and hm96 slots, the unit's
+    slot of 2^``unit_log`` (packed when the tail returns the outputs and no input is public), a slot of 2^L per tail stage
+    for each L of ``stage_logs``, and ``lookups[t]`` lookup slots of each table, in `compose`'s order. `compose` refuses the
+    statement when it is past `K_MAX`."""
+    return _block_ranges(_row_slots(rows)[0], _pow2(len(rows)), unit_log, 1, unit_packed,
+                         _tail_ranges([(sl, 1) for sl in stage_logs], lookups, 1))[1]
+
+
 def _unit_ports(definition, cuts: dict | None = None) -> tuple[list[Port], list[Port]]:
     """``definition``'s rows as `UnitStager` takes them (`verity.commitments.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
     per parameter, or ``k`` of a parameter ``cuts`` cuts ``k`` ways, and one per return field, each whole u16 words."""
@@ -808,17 +829,14 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if n_sha == 0:
         raise ValueError(f"{low.name}: no row has a compression before its last block (the {SHA_NET} range, the pin's, would hold no slot)")
     n_hm = _pow2(len(ports))
+    slots = [(_slot_log(lay.useful), tail.stages[i].count) for i, lay in enumerate(stages)]
 
     def fits(G: int):
-        extra = [("unit", _slot_log(lay.useful), G * tail.stages[i].count, {"net": f"stage{i}"}) for i, lay in enumerate(stages)]
-        for t, c in lookups.items():
-            L = lk[t]
-            extra.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}", "packed": True}))
-        return _block_ranges(G * n_sha, G * n_hm, ul, G * U.n, bool(U.tail_rets and not pins), extra)
+        return _block_ranges(G * n_sha, G * n_hm, ul, G * U.n, bool(U.tail_rets and not pins), _tail_ranges(slots, lookups, G))
 
     if vus_per_block is None:
         G, k1 = 1, fits(1)[1]
-        while 2 * G * U.n <= 4096 and fits(2 * G)[1] <= max(k1, 22):
+        while 2 * G * U.n <= 4096 and fits(2 * G)[1] <= max(k1, PACK_LOG):
             G *= 2
     else:
         G = vus_per_block

@@ -9,14 +9,14 @@ import Proofs.Spot.Exfiltration
 # Detection pressure of the deployed sample
 
 The audit samples `k` of the `n` units uniformly without replacement (`Definitions.Spot.SamplePressure`), so a window
-whose wrong set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
+whose incorrect set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
 
 * `choose_ratio_le_pow`, `choose_ratio_le_exp`: for `K ≤ n` and `k ≤ n`,
   `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`. A sample without replacement escapes no more often than `K`
   independent samples at rate `k/n`.
 * `uniformSample_toReal`, `sum_missing_uniformSample`: the uniform sample gives each sample probability `1 / C(n, k)`,
-  and it misses a wrong set `B` with probability `C(n - |B|, k) / C(n, k)`.
-* `samplePressure`: a window that has the wrong set `B h`, escapes only on the samples that miss it and leaks at most
+  and it misses an incorrect set `B` with probability `C(n - |B|, k) / C(n, k)`.
+* `samplePressure`: a window that has the incorrect set `B h`, escapes only on the samples that miss it and leaks at most
   `Σ_{u ∈ B h} w u`, each `w u ≤ 1`, is under detection pressure `k/n`.
 * `sample_tail_cum`: so through `tail_cum`, with probability at least `1 - δ` what leaves up to and including the first
   detection is below `ℓ + (n/k) ln (1/δ)`, for every adaptive strategy and every horizon.
@@ -100,14 +100,14 @@ theorem uniformSample_toReal (hk : k ≤ n) (s : Verity.Draw.Subset n k) :
   rw [uniformSample, PMF.uniformOfFintype_apply, Fintype.card_finset_len, Fintype.card_fin, ENNReal.toReal_inv,
     ENNReal.toReal_natCast, one_div]
 
-/-- The uniform sample misses the wrong set `B` with probability `C(n - |B|, k) / C(n, k)`. -/
+/-- The uniform sample misses the incorrect set `B` with probability `C(n - |B|, k) / C(n, k)`. -/
 theorem sum_missing_uniformSample (hk : k ≤ n) (B : Finset (Fin n)) :
     Verity.Game.prPMFReal (uniformSample n k hk) (· ∈ missing n k B) = ((n - B.card).choose k : ℝ) / n.choose k := by
   rw [Verity.Game.prPMFReal_mem]
   simp only [uniformSample_toReal, sum_const, card_missing, nsmul_eq_mul, mul_one_div]
 
 /-- **The deployed sample gives detection pressure `k/n`.** At the window after the history `h` the commitment fixes the
-wrong set `B h`; the window escapes only on the samples that miss `B h` and leaks at most `Σ_{u ∈ B h} w u`, with each
+incorrect set `B h`; the window escapes only on the samples that miss `B h` and leaks at most `Σ_{u ∈ B h} w u`, with each
 unit's weight `w u ≤ 1`. Then a window that leaks `ℓ` escapes with probability at most `exp (-(k/n) ℓ)`. -/
 theorem samplePressure (hk : k ≤ n) {A : Strategy (Verity.Draw.Subset n k)}
     (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)

@@ -2,28 +2,16 @@
 and nothing else of it changes. The probes themselves need an H200 or a B200 (dc/uni.sh)."""
 from __future__ import annotations
 
-import importlib.util
 import json
-from pathlib import Path
 
-import pytest
-
-DC = Path(__file__).resolve().parents[1] / "dc"
-
-
-@pytest.fixture(scope="module")
-def uniform():
-    spec = importlib.util.spec_from_file_location("dc_uniform_under_test", DC / "uniform.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+import uniform
 
 
 def _verdict(binary: str, probe: str, top: dict[str, int]) -> dict:
     return {"binary": binary, "probe": probe, "verdict": {"loops": [{"top": top}]}}
 
 
-def test_write_table_gives_each_binary_its_own_rows(uniform, tmp_path, monkeypatch):
+def test_write_table_gives_each_binary_its_own_rows(tmp_path, monkeypatch):
     """An alone chain counts its first opcode and every other probe the MMA, the branch is left out, and an IMAD-form
     binary's rows are P_I."""
     monkeypatch.setattr(uniform, "HERE", tmp_path)
