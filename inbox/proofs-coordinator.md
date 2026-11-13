@@ -136630,3 +136630,60 @@ the first stage take one tree at two ports** [run: `r20261113-103102-cb47`, read
   so it needs the same added names; not run.
 - A one-stage audit of a window whose wired ports have no trees: not run. Only the interior's window and the toy
   build one [read: `interior_rows.py`, `toy.py:242`].
+
+
+## ADDRROW2, Fri 13 Nov 10:53Z: COMPILED HEAD `784042d1035f3606e4e0e675426f1047dcec449e` on `cursor/proofs-addrrow2-5e1b`, with `RowTable.lean:26` changed to `SampledTwo/ScopeTable` (`r20261113-103605-7caa`, rc 0, all five row files). ASSEMBLY: merge this head. It CLEARS the certifier test on the join. It does NOT cut the public-boundary edge: the edge now points at `ScopeTable.lean`, which the export does not copy either (NEEDS 1).
+
+**In plain words.** One of my files read a lemma from a file that, through its other imports, pulled in the network certifier's Lean. SPOT's analysis must import none of the certifier, so a tree-wide test was red on the join. I now read the same lemma from the file SESSIONOF2 split out, which imports SPOT's analysis alone. The five files that depend on the change compile, and the test passes on the join with my head merged in. A second check, the one that says no file the public export copies may need a file it leaves behind, is not helped: the file SESSIONOF2 split out sits in a directory the export leaves behind, so the count of such edges on the join stays at eight. Cutting it takes a move of that file, which is not mine to move.
+
+Clock: `date -u` read 10:52Z when I wrote this. Mailbox: your 10:31Z by the hook; the mailbox file holds nothing newer [run: `git show` of the mailbox at 10:52Z]. Correction to my last entry: its title said 10:26Z and it was pushed at 10:25Z; the title's time was a minute ahead of the clock.
+
+**1. What compiled** [run: `r20261113-103605-7caa`, `--on auto`, vy-nebius-cpu-14, launched 10:36Z, `done rc=0 class=SUCCESS` observed 10:43Z; lines quoted from its `stdout.log`], at `784042d1035f3606e4e0e675426f1047dcec449e`, each file with `--siblings`:
+- `AddressFacts/RowTable.lean` (the file with the changed import): "lean exit 0 in 57 s"; "none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `AddressFacts/RowPlace.lean` (the one file that imports it directly): "lean exit 0 in 56 s"; "none of its 18 theorems uses an axiom …".
+- `AddressFacts/RowSample.lean`: "lean exit 0 in 57 s"; 8 theorems, same probe line.
+- `AddressFacts/RowPublished.lean`: "lean exit 0 in 30 s"; 5 theorems, same probe line.
+- `AddressFacts/RowFirst.lean`: "lean exit 0 in 76 s"; 3 theorems, same probe line.
+- These five are every file that imports `RowTable.lean`, directly or through another [run: `rg` for the five module names over `security/`: no file outside the five imports one of them].
+- The sibling check of each: "no built module of its package that doesn't import [it] declares a name it does", over 1950 built modules (1972 for `RowFirst.lean`); 2256 to 2259 modules (2238 for `RowFirst.lean`) were unchecked for want of a build of their source in that tree. So the name check covers the built part of the package, not all of it.
+- Warnings in files that are mine: `RowTable.lean:185:6` "This simp argument is unused", `RowPlace.lean:160:16` and `:171:10` deprecated `if_pos` and `if_neg`. All three were there before this change; I left them so the compiled text is what ASSEMBLY merges.
+
+**2. `caad17c097` is compiled** [run: `r20261113-102309-0622`, `--on auto`, vy-nebius-cpu-7, `done rc=0` observed 10:34Z]. `RowSample.lean` "lean exit 0 in 327 s", `RowPublished.lean` "lean exit 0 in 30 s", `RowFirst.lean` "lean exit 0 in 207 s"; each probe line clean; no warning in those three files. It is an ancestor of `784042d103`, so ASSEMBLY needs only the newer head.
+
+**3. The merge and the one line** [run: `git merge`, no conflict; `git diff`]. `b49c6e4061` (SESSIONOF2's head, named compiled in its 10:27Z title) is merged as `0ff2731278`. It brought `Properties/Verity/SampledTwo/ScopeTable.lean`, reduced `OneTable.lean`, and added one lakefile root and one lock root. `784042d103` changes line 26 of `AddressFacts/RowTable.lean` from `import Proofs.Properties.Verity.SampledTwo.OneTable` to `import Proofs.Properties.Verity.SampledTwo.ScopeTable` and nothing else. The lemma's name and namespace are the same in both files (`Verity.SampledTwo.oneTable_of_sessionOk`), so no proof line changed.
+
+**4. The certifier test: red on the join, green on the join with this head** [run, on my VM: these are Python scans of import lines, no Lean]. I made a scratch worktree at the join's head `4a4d22b644` (`cursor/proofs-join-42b8`), ran `tests/test_boundaries.py`, merged `784042d103` into it locally, ran it again, and removed the worktree. Nothing of it is pushed.
+- Join alone: "1 failed, 58 passed". The one failure is `test_spot_never_imports_the_network_certifier_in_lean`, and each of its 31 chains ends at `security/Proofs/Flock/SpotFlock/AddressFacts/RowTable.lean`.
+- Join with `784042d103`: "59 passed". The merge had no conflict and changed three files there (`RowPublished.lean`, `RowSample.lean`, `RowTable.lean`), so the join already holds SESSIONOF2's file.
+- On my own branch the same test is still red, through files that are not mine and that the join's copies have mended: `SpotFlock/OwnReads.lean` and `RunsAs/Proved.lean` import `Properties/Verity/Sampled/RecordDraw.lean` and `Sampled/Held.lean` here and do not on the join. The row files themselves are clean here too: `RowLeaves`, `RowTable`, `RowPlace`, `RowSample`, `RowPublished` and `SampleBelow` each reach 0 of the certifier's files [run: the test's own reach function, one file at a time]. `RowFirst.lean` reaches them only through `AddressFacts/Connected.lean`, then `AddressesHeld.lean`, `AddressesGive.lean` and `OwnReads.lean`, which is the mended file.
+
+**5. The public-boundary edge is NOT cut** [run, on my VM: `tools/verity/check/public_boundary.py` in the same scratch worktree, before and after the merge]. The check lists each import by which a file the public export copies needs a file it does not copy.
+- Join alone: "public_boundary: 8 edges, 8 new", the first being `AddressFacts/RowTable.lean:26: lean import Proofs.Properties.Verity.SampledTwo.OneTable -> security/Proofs/Properties/Verity/SampledTwo/OneTable.lean`.
+- Join with `784042d103`: "public_boundary: 8 edges, 8 new", the first being `AddressFacts/RowTable.lean:26: lean import Proofs.Properties.Verity.SampledTwo.ScopeTable -> security/Proofs/Properties/Verity/SampledTwo/ScopeTable.lean`. The other seven lines are the same in both.
+- Why: the export copies `security/Proofs/Flock/…` and does not copy `security/Proofs/Properties/Verity/SampledTwo/…` [run: `public_boundary.py --public` lists `RowTable.lean` and not `ScopeTable.lean`]. The change moved the edge's target to a file with clean imports; it did not move the target to the public side.
+- What would cut it: `ScopeTable.lean`'s three imports (`SpotFlock/Accepting.lean`, `SpotFlock/RunsAs/SecondStageOf.lean`, `Soundness/Discharge/HiddenExec/AcceptsP.lean`) are all in the public set [run: the same listing], so the file can sit under `security/Proofs/Flock/SpotFlock/` and add no edge of its own [derived].
+
+**6. `wiresChecked`: no check computes it** [read]. It says two things of each wire on the auditor's copies: no link names the wire's reader port, and the first wire at that port has this wire's writer and writer port. The second stage's `wiresOk` (`Spot/SecondStage.lean:751`) tests that no link names a wire's *writer* port, not its reader port; the held copies' `wiringOk` (`SpotFlock/Code.lean:749`) and the twelve clauses FRAME's guard names (`TwoGuard.lean:109`) hold no clause of it; the form's steps (`Spot/Run.lean:288` to `291`) only set the links and wires to `replayLinks …` and `replayWires …`. What makes it true of the form's own copies is how those two are derived, not a check: `gather` keeps one wire a reader port, and refuses a port, linked or wired, whose runs do not hold each unit of its template once, while one argument of one node makes a link or a wire and never both [derived, by reading; no lemma states it: `rg` over `security/` for `SecondStage.gather`, `wireRuns` and `replayWires` finds none]. I added no call.
+
+**7. `Depths.countOf_le`.** No swap, as you said. The sentence that names the repeated lines stays in `RowPublished.lean`'s docstring [read: it is there at `784042d103`].
+
+**8. The lock** [run: a count over `security/Proofs/lean-audit.json`]. `roots` holds 310 entries with no duplicate, `ScopeTable` among them. This turn's two commits change no `roots` line of mine; the one new root came with SESSIONOF2's head.
+
+**STOP RULE.** Nothing. This turn changed one import line in a file of mine and merged a head whose title names it compiled. No statement, no named assumption and no guarantee's record changed, and the verifier's code is untouched.
+
+**NEEDS.**
+1. **Coordinator, SESSIONOF2: the public-boundary edge at `RowTable.lean:26` needs `ScopeTable.lean` on the public side.** Three ways, cheapest first. (a) SESSIONOF2 moves the file to `security/Proofs/Flock/SpotFlock/ScopeTable.lean` with its names unchanged, and changes `OneTable.lean`'s import, the lakefile root and the lock root; I then change my line 26 once more and recompile the five files, which took 7 minutes this time. (b) You tell me to make that move on my branch; it touches SESSIONOF2's file, so I do it only on your word. (c) The file is added to the public set in `tools/verity/check/public_boundary.toml`, which that check calls a boundary decision and is not mine or SESSIONOF2's to take. I recommend (a) or (b).
+2. **Coordinator: `wiresChecked`, if you want it gone later.** It would follow, for copies whose links and wires are `replayLinks …` and `replayWires …`, from a lemma about `gather` (item 6). That is a proof about a fold with `findIdx?`, `set!` and `fits`, new Lean in a new file, several hours [guess]. I do not start it unless you say so.
+
+**Not established.**
+- The public-boundary edge is not cut (item 5).
+- `wiresChecked h = true` is a premise of `rowFact_of_firstK` and `addressesConnected_of_firstK`, computed by no check (item 6). It is proved only at HONEST2's instance, which has no wire.
+- The other four premises of `addressesConnected_of_firstK` are unchanged from my last entry: `RefReadsWf h`, no inner block always checked, the population check at some `n`, and `firstK h.reg.first = some K`.
+- The sibling check covers the built modules only (item 1).
+- I ran the two boundary checks on a local trial merge, not on a head ASSEMBLY pushed. ASSEMBLY's own merge may differ if the join has moved past `4a4d22b644`.
+
+**Pushed.** `cursor/proofs-addrrow2-5e1b` at `784042d1035f3606e4e0e675426f1047dcec449e`, compiled (item 1). Nothing is uncommitted.
+
+**Runs.** `r20261113-102309-0622` done rc 0 (item 2). `r20261113-103605-7caa` done rc 0 (item 1). None out.
+
+**To post.** Nothing.
