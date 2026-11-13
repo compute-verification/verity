@@ -4,8 +4,8 @@ window, and its verifier is the Lean (`verity/protocols/pouw/verifier/lean/check
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
 end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are difftested against `Sampled.select` and
 `draw_coin`.  Each module here has two names: `verity.protocols.pouw.clear.clear_audit`, and the bare `clear_audit` for
-a caller that puts this directory on ``sys.path``.  A process uses one of the two: under both it holds two copies of
-every class here, and `Verifier.audit` tells a `Sampled` by its class.
+a caller that puts this directory on ``sys.path``.  A caller keeps to one of the two: they are two copies of every class
+here, and `Verifier.audit` tells a `Sampled` by its class.
 
 0.-2. **Coins, weights and the salt** are core's (`verity.protocols.pouw.verifier.audit`: `weights_root`, `Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
