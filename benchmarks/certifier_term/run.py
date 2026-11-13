@@ -10,6 +10,10 @@ figure is the model's and its name says so (`MODELED`); none is computed from a 
 
 - `metric`: the term of record as the document gives it, in GB, beside the document's target. Its row is the scan's
   over the world's year (`RECORD`).
+- the card's figure, a `metric` named under the card's mark (`CARD`: `simulated`): the same row's term at the other
+  jitter bound, what a network certifier whose network card releases at a set time would be charged, as the document
+  gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its `inputs` open
+  with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
 - `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
@@ -19,8 +23,9 @@ figure is the model's and its name says so (`MODELED`); none is computed from a 
 - `verified`: capacity less free, where both have a value.
 - `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases.
 
-A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `metric` where
-the row is the term of record's, are written with no value and that reason in their `inputs`; its `error` is written.
+A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `metric` and the
+card's figure where the row is the term of record's, are written with no value and that reason in their `inputs`; its
+`error` is written.
 
 Each measurement's `inputs` name what it was computed from, and among them the class the term is at, the most ids a
 response holds, and the scan's δ its error is at, as the document states them (`at_class`, `at_delta`).
@@ -47,6 +52,9 @@ MODELED = "certifier_term/modeled"
 ROW = "scan"
 #: the scope and monitoring period of that row, the document's `value`: the world's year
 RECORD = ("world", "year")
+#: the document's key for the card's figure, that row's term at the other jitter bound with its label and its mark,
+#: and the document's input that is the card, whose source is what the figure rests on
+CARD_FIGURE, CARD = "with_set_time_card", "set_time_card"
 #: the last word of the error's name, the field every resource's benchmark reports its error under
 ERROR = "error"
 #: the calculator's key for a row's ε, which the error is
@@ -140,10 +148,18 @@ def document(lb: Any, argv: Sequence[str]) -> dict:
     return json.loads(text.getvalue())
 
 
+def card_bound(lb: Any) -> str:
+    """The jitter bound the card's figure is at, as a row's `term` names it: the calculator's other than the one of
+    record."""
+    other, = (str(dj) for dj in lb.JITTERS if dj != lb.OF_RECORD)
+    return other
+
+
 def record(lb: Any, argv: Sequence[str], doc: dict) -> dict:
     """The row the term of record is read from (`ROW`, `RECORD`): ``doc``'s where the command ``argv`` asks for its
     scope and monitoring period, and else the same command's document once it asks for them too. It is the row whose
-    term the document gives as its `value`, or the runner refuses."""
+    term the document gives as its `value`, and whose term at the other jitter bound it gives as the card's figure
+    (`CARD_FIGURE`), or the runner refuses."""
 
     def of(d: dict) -> dict | None:
         return next((r for r in d["rows"] if (r["row"], r["scope"], r["period"]) == (ROW, *RECORD)), None)
@@ -153,29 +169,42 @@ def record(lb: Any, argv: Sequence[str], doc: dict) -> dict:
         raise SystemExit(f"certifier_term: the calculator's document gives a term of record, {doc['value']} "
                          f"{doc['unit']}, that isn't its row {ROW}'s over the {RECORD[0]}'s {RECORD[1]} at D_j = "
                          f"{lb.OF_RECORD}: the runner writes no result it can't name the row of")
+    if row["term"][card_bound(lb)]["GB"] != doc[CARD_FIGURE]["value"]:
+        raise SystemExit(f"certifier_term: the calculator's document gives a figure {doc[CARD_FIGURE]['label']}, "
+                         f"{doc[CARD_FIGURE]['value']} {doc[CARD_FIGURE]['unit']}, that isn't its row {ROW}'s over the "
+                         f"{RECORD[0]}'s {RECORD[1]} at D_j = {card_bound(lb)}: the runner writes no result it can't "
+                         "name the row of")
     return row
 
 
 def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> list[dict]:
     """The calculator ``lb``'s document ``doc`` in the fields every resource's benchmark reports, as the kit writer's
-    measurements, each named under `MODELED`: the term of record (`metric`), whose row is ``head`` (`record`), and for
+    measurements, each named under `MODELED`: the term of record (`metric`), whose row is ``head`` (`record`); the
+    card's figure, ``head``'s term at the other jitter bound, a `metric` named under the card's mark; and for
     each scope and monitoring period the document holds, that row's `free`, `capacity`, `verified` and error (`ERROR`),
-    the row being the scan's at the release schedules of record (`ROW`). `metric` and `free` stand against the
-    document's target, in their own units. Capacity is the scope's machines times a machine's uplink ``up`` one way over
-    the period, rounded up; with no uplink, capacity and verified have no value and their inputs say why. A row whose
-    error is 1 or more carries no `free`, no `verified` and, where it is ``head``, no `metric`, and their inputs say
-    why (`unbounded`); its error is written. Every measurement's inputs name the class the term is at and the scan's δ
-    its error is at (`at_class`, `at_delta`), `metric`'s and `free`'s among the document's inputs."""
+    the row being the scan's at the release schedules of record (`ROW`). `metric`, the card's figure and `free` stand
+    against the document's target, in their own units. Capacity is the scope's machines times a machine's uplink ``up``
+    one way over the period, rounded up; with no uplink, capacity and verified have no value and their inputs say why.
+    A row whose error is 1 or more carries no `free`, no `verified` and, where it is ``head``, no `metric` and no card's
+    figure, and their inputs say why (`unbounded`); its error is written. Every measurement's inputs name the class the
+    term is at and the scan's δ its error is at (`at_class`, `at_delta`), `metric`'s, the card's figure's and `free`'s
+    among the document's inputs; the card's figure's open with the card (`CARD`), whose source is the clause the
+    figure rests on."""
     at, target = str(lb.OF_RECORD), doc["target"]["value"]
     basis = [at_class(doc), at_delta(lb, doc)]
-    said = [basis[1] if k == DELTA else stated(k, i) for k, i in doc["inputs"].items()]
+    by = {k: basis[1] if k == DELTA else stated(k, i) for k, i in doc["inputs"].items()}
+    said, card = list(by.values()), doc[CARD_FIGURE]
 
     def stands(value: float, ceiling: float, none: list[str]) -> str | None:
         return None if none else "over target" if value > ceiling else "within target"
 
     none = unbounded(head)
     out = [{"name": f"{MODELED}/metric", "value": None if none else doc["value"], "unit": doc["unit"], "target": target,
-            "verdict": stands(doc["value"], target, none), "inputs": [f"modeled: {doc['name']}", *none, *said]}]
+            "verdict": stands(doc["value"], target, none), "inputs": [f"modeled: {doc['name']}", *none, *said]},
+           {"name": f"{MODELED}/{card['mark']}/metric", "value": None if none else card["value"], "unit": card["unit"],
+            "target": target, "verdict": stands(card["value"], target, none),
+            "inputs": [f"modeled: the row of {MODELED}/metric at D_j = {card_bound(lb)}, {card['label']}: no term of "
+                       "record", by[CARD], *none, *(s for k, s in by.items() if k != CARD)]}]
     for r in doc["rows"]:
         if r["row"] != ROW:
             continue
@@ -206,8 +235,9 @@ def main(argv: Sequence[str]) -> int:
     group.add_argument("--out", type=Path, metavar="DIR",
                        help="also write the result through the harness kit's writer for DIR, which says where the file "
                             "is (DIR/result.json outside a research run): for the scan at two release schedules, each "
-                            f"scope and monitoring period's free, capacity, verified and {ERROR}, and the term of "
-                            "record, every one modeled; a row whose error is 1 or more carries no amount")
+                            f"scope and monitoring period's free, capacity, verified and {ERROR}, the term of record, "
+                            "and beside it the same row's figure with a simulated set-time card, every one modeled; a "
+                            "row whose error is 1 or more carries no amount")
     group.add_argument("--registration", type=Path, metavar="FILE",
                        help="with --out: the registration log a machine's certified boundary link is read from, for "
                             "capacity and verified (default: none, and they are written with no value and why)")
