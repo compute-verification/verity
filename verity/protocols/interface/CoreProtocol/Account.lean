@@ -1308,9 +1308,9 @@ private def everywhere : Account := { sent with amounts := sent.amounts.map fun 
 #guard linkRows [everywhere] [onLink "up0"] ==
   [("sent", "", .certified, some 100000, some 37000, some 63000),
    ("not audited", "eth0", .notAudited, some 400000, some 0, some 400000)]
--- a link's steps are timed by the network certifier on the link. A second certifier in the same auditor's host, on a
--- second uplink of its own: a series the period places on it covers no tick of the first link and adds no amount, as
--- a series with no origin; it times its own link; and an amount about both links is timed by neither certifier
+-- a link's steps are timed by the network certifier on the link. A second certifier, on the first one's clock and on
+-- a second uplink of its own: a series the period places on it covers no tick of the first link and adds no amount,
+-- as a series with no origin; it times its own link; and an amount about both links is timed by neither certifier
 private def second : Site :=
   ⟨[sheet], locs ++ (locs.filter (·.id == "cert0")).map fun x => { x with id := "cert1" },
     links ++ [{ id := "up2", ends := ("node0", "cert1"), β := some 100000000000, latency := 1 },
@@ -1362,8 +1362,8 @@ private def weekRows (S : Site) (premised : List Premised) : List Row :=
 private def twoHosts : Site := ⟨[sheet], hostedBy none ++ [vm "vm1" none], links⟩
 private def other : List Premised := [{ host := "vm1", drift := fig 1 2000, premise := "ClockRateWithin(vm1, 5e-4)" }]
 #guard weekRows twoHosts other == weekRows bare [] ∧ weekRows twoHosts (other ++ onPremise) == weekRows bare onPremise
--- nor does a premise for the host of a certifier that is not on the answer's link: a second certifier, in the second
--- host, on an uplink of its own. A series placed on it takes the premise for its own link, and for the first link none
+-- nor does a premise for the clock of a certifier that is not on the answer's link: a second certifier, on the second
+-- clock, on an uplink of its own. A series placed on it takes the premise for its own link, and for the first link none
 private def apart : Site :=
   ⟨[sheet], hostedBy none ++ [vm "vm1" none] ++
       (locs.filter (·.id == "cert0")).map fun x => { x with id := "cert1", parent := some "vm1" },
