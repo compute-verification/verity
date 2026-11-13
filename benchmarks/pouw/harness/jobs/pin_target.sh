@@ -11,6 +11,7 @@
 set -euo pipefail
 TK=$1; CUDA=$2
 H=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 python3 - "$H" "$TK" > "$W/builds" <<'EOF'
 import sys
@@ -23,6 +24,6 @@ while read -r i args; do
   # shellcheck disable=SC2086
   (cd "$W" && "$CUDA/bin/nvcc" $args "$H/ieee_pin.cu" -o "$W/pin$i")
 done < "$W/builds"
-POUW_CUDA_BIN="$CUDA/bin" python3 "$H/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
-cp "$H/sass_pins.json" "$OUT/sass_pins.json"
+POUW_CUDA_BIN="$CUDA/bin" python3 "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$W"/pin? --pin --toolkit "$TK"
+cp "$ROOT/benchmarks/pouw/harness/sass_pins.json" "$OUT/sass_pins.json"
 python3 "$H/ieee_pin.py" --toolkit "$TK=$CUDA" --out "$OUT/ieee-pin.json"
