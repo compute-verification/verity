@@ -142609,3 +142609,57 @@ Pen mine (taken 13:00Z on a new machine); the mailbox is read to its 13:04Z mess
   `two_stage.resume` took from `stage1.json` and whose root is the hand-off's `window_root`. Only the second
   stage's root is derived (`Run.interiorWindowOk`). So it is the same finding in Lean, for `--challenger local`
   and for a gate; the entry says what differs between the two.
+
+
+## ADDRROW2, Fri 13 Nov 13:10Z: `RowUnlinked.lean` COMPILED under the named hypothesis (`e97aee1794ba0e24fa0ea6958976f23100f274e6`, `r20261113-125901-3aeb`, rc 0); the held-copies file for the join is `cursor/proofs-addrrow2-heldwires-681e` at `8be6ff6e48f403091d70372e28260bffc9b255ae`: COMPILED on a node with `--siblings` (`r20261113-130358-ab22`, rc 0); today's design check passes a design with a link at a wire's reader port [run].
+
+**In plain words.** Your 12:54Z asked for two files. The first is on my branch and compiles: under the one named hypothesis, an accepted run gives "no link names a wire's reader port", and the row fact and the address premise take "the wires are the derived ones" where they took `wiresChecked`. The second is a branch off the join's tip with one commit, for ASSEMBLY: it says that the copies the form builds take their wires and links from the derivation, and it compiles there with the siblings check. I also ran the check itself on a three-line design that has a link at a wire's reader port, and it passes today, so the hypothesis is false of today's check and GATHER's clause is what makes it true.
+
+Clock: `date -u` read 13:10Z when I wrote this. Mailbox: your 12:54Z (`bd12e0702bb2`), by the hook at 12:56Z and in the mailbox file; nothing newer [run: `git show` of the mailbox at 13:10Z].
+
+**1. `AddressFacts/RowUnlinked.lean`, on my branch** [run: `r20261113-125901-3aeb`, vy-nebius-cpu-14, rc 0, at `e97aee1794`].
+- Verdict: "lean exit 0 in 203 s"; siblings clean; "none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". No warning on my files.
+- The named hypothesis: `AddressRow.ReadersUnlinked : Prop := ∀ ps own, SecondStage.wiresOk ps own = true → ∀ w ∈ own.wires.getD #[], (SecondStage.linkOf own w.template w.port).isNone = true`. Its docstring says it is false of `wiresOk` as it stands and is deleted once the check asks it of the reader port. (The tree's text names no worker, so it does not say "GATHER".)
+- The five theorems, each taking `hcl : ReadersUnlinked`:
+  - `CheckedRun.wiresUnlinked_of_ok (hr : r.Ok h) : wiresUnlinked h = true`.
+  - `CheckedRun.wiresChecked_of_ok (hw : h.wires = SecondStage.replayWires P key) (hr : r.Ok h) : wiresChecked h = true`.
+  - `AddressRow.ownLeaves_of_derived (hW : ∀ r, r.Ok h → Wiring h) (hw) : OwnLeaves h`.
+  - `rowFact_of_derived (hW) (hna) (hp) (hK) (hw) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+  - `addressesConnected_of_derived (hWf : RefReadsWf h) (hna) (hp) (hK) (hw) : AddressesConnected h`.
+- What my 12:45Z entry marked [derived] is now compiled: the last step of `wiresUnlinked_of_ok` is `exact hcl _ _ hdes.2 w hmem`, with no rewriting, so the check's lookup `linkOf (ownOf h …)` and the copies' `heldLink h` are one by definition, and so are the two lists of wires.
+- I have no `AddressRow.wiresOk_unlinked`: the first statement exists only as the hypothesis. When GATHER names its lemma, I pass it for `hcl`, delete `ReadersUnlinked` and drop the argument from the five.
+- `RowLeaves.lean` is unchanged from `034f12b9a7` [run: `git diff` of that file between the two heads is empty]. I had pushed a change to `wiresOk_reader` (`944cb341b4`, compiled in `r20261113-125112-1266` with one linter warning) and took it back with a revert commit (`da2588ea30`) after your fact 3.
+
+**2. The hypothesis is false of today's check** [run: `r20261113-125926-bea8`, vy-nebius-cpu-7, rc 0, a scratch file in the run's own clone, in no branch; its text is in my artifacts].
+- The design: one wire read at port `p` of template `t` from port `q` of template `w`; one link at the same port `p` of `t`; that port's rows; the writer's part before the reader's.
+- The run printed: "wiresOk true; linksOk true; designOk true; the link at the wire's reader port: some { template := "t", port := "p", value := "v" }", and the two `#guard`s pass ("lean exit 0 in 2 s").
+- So today `designOk` itself passes a design with a link and a wire at one reader port. This is about the check alone, at a hand-written design; it says nothing new about which registered programs derive such a design.
+
+**3. The held-copies file, for ASSEMBLY** [run: `r20261113-130358-ab22`, vy-nebius-cpu-14, rc 0, at `8be6ff6e48`].
+- Branch `cursor/proofs-addrrow2-heldwires-681e`, off the join's tip `4e986e339ad24a9885d38ac61c10199bd460d4fd` (I fetched at 13:00Z; it is the 12:31Z tip). One commit, `8be6ff6e48f403091d70372e28260bffc9b255ae`: the new file `security/Proofs/Flock/SpotFlock/HeldOfWires.lean` (54 lines), its root in `security/Proofs/lakefile.toml` on a line of its own, and its line in `security/Proofs/lean-audit.json`'s `roots`. Nothing else.
+- Four theorems, in `SpotFlock.HeldOf`. The probe's three, with the two fallbacks dropped: `wires_of_heldOf`, `links_of_heldOf`, `wiresChecked_of_heldOf`. And one more line: `wiresChecked_of_matches (hm : RunsAs.HeldMatches i it h) (hu : AddressRow.wiresUnlinked h = true) : AddressRow.wiresChecked h = true`.
+- Why the fourth, and a correction to my probe [read]: `HeldMatches` already has the fields `wires` and `links` with exactly these two equations (`RunsAs/Statement.lean:78–80`), and `heldMatches_of` proves them by `rfl` (`HeldOf.lean`). I had not read that before the probe. So wherever ASSEMBLY holds `HeldMatches i it h`, the equation is `hm.wires`, with no new lemma. `wires_of_heldOf` adds only that it holds without the premise `PartsAt`, which `heldMatches_of` takes.
+- **Verdict: "lean exit 0 in 174 s"; siblings clean ("no built module of its package that doesn't import Proofs.Flock.SpotFlock.HeldOfWires declares a name it does", 3233 imported, 995 unchecked); "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".** No warning on the file.
+- On my VM, on that commit [run]: `pytest tests/test_lean_packages.py tests/test_boundaries.py tests/test_tree.py tests/test_lean_vocabulary.py tests/test_doc_paths.py`: 119 passed. `tools/verity/check/public_boundary.py` prints the same nine lines as on the join's tip: no new edge.
+
+**4. On your fact 3** [derived from reading the join's tip; not compiled]. `wiresOk_writer` (`InsideOf.lean:81`) reads `h1.1.1.2`. That is the second term of the chain, the writer's part and its rows; the third term, the writer's link, is `h1.1.2`. With GATHER's clause inside the third term, the first two terms keep their places, so neither `wiresOk_writer` nor my `wiresOk_reader` (`h1.1.1.1`) should need a change. No other proof on the join's tip opens `wiresOk` by position: `RunsAs/Top.lean:52` uses `cases … <;> simp_all`. GATHER's own lemma would read `h1.1.2.2`.
+
+**5. Two tests fail on my branch, in files that are not mine** [run, on my VM, the same with and without this hour's commits]: `tests/test_lean_packages.py::test_no_import_all_of_an_in_tree_module` (`Properties/Verity/SampledTwo/FirstSample.lean` has `import all Spot.Run`) and `tests/test_boundaries.py::test_spot_never_imports_the_network_certifier_in_lean`. Both pass on the join's tip, so my branch's base is behind it there. I do not act on them: no merge of the join into my branch without your word.
+
+**STOP RULE.** Nothing. No statement or named assumption of a `lean-audit.json` changed: I added one line to `roots` on each of the two branches. No verifier code changed. `ReadersUnlinked` is a hypothesis of five theorems that no listed guarantee reads.
+
+**NEEDS.**
+1. **Coordinator: GATHER's head and the full name of its lemma**, when its title names it compiled. Then I delete the hypothesis.
+2. **Coordinator: whether to merge the join's tip into my branch** before that, so that `RowUnlinked.lean` is compiled over the join's files. Say yes or no; I do nothing until then.
+
+**Not established.**
+- `wiresChecked h = true` is still a premise of `rowFact_of_firstK` and `addressesConnected_of_firstK`; the `_of_derived` forms rest on `ReadersUnlinked`, which is false today.
+- `RowUnlinked.lean` is compiled on my branch's base, not on the join's tip.
+- That `InsideOf.lean` compiles after GATHER's change (item 4) is read, not run.
+- `HeldOfWires.lean` was compiled alone with its siblings check; nothing on the join uses it yet.
+
+**Pushed.** `cursor/proofs-addrrow2-5e1b` at `e97aee1794ba0e24fa0ea6958976f23100f274e6` (compiled, `3aeb`). `cursor/proofs-addrrow2-heldwires-681e` at `8be6ff6e48f403091d70372e28260bffc9b255ae` (compiled, `ab22`). `cursor/proofs-addrrow2-programs-c41d` at `6dd041406c14e3ffa0589545936489df0605456c`, scratch, unchanged. Nothing is uncommitted.
+
+**Runs.** `r20261113-125112-1266` (rc 0; the head before the revert), `r20261113-125901-3aeb` (rc 0; my head), `r20261113-125926-bea8` (rc 0; the scratch design), `r20261113-130358-ab22` (the held-copies file, vy-nebius-cpu-14): done, rc 0.
+
+**To post.** Nothing from me. For ASSEMBLY: the head in item 3. For GATHER: item 2's design as a negative case of the check itself, and item 4.
