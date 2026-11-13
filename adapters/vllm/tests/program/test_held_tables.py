@@ -1,14 +1,14 @@
 """The tables vLLM's primitives read by index are declared (`PrimitiveDefinition.tables`): the SiLU, RN32 tanh and gelu-tanh
 activations (`silu_bf16`, `tanh_rn`, `gelu_tanh_bf16`) and the int8 LUT softmax's exp2 table (`exp2_lut127`) are the program's,
-registered inputs the primitives still hold, so the guard (`verity.definitions.circuits.operations.program_data`) lists them; FA3's
+registered inputs the primitives still hold, so the guard (`verity.circuits.operations.program_data`) lists them; FA3's
 MUFU.RCP table is the library's, and on bits DeepSeek-V4's MUFU.LG2 table is an operation."""
 from __future__ import annotations
 
 import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
-from verity.definitions.circuits import constants as K
-from verity.definitions.circuits import operations as O
+from verity.circuits import constants as K
+from verity.circuits import operations as O
 from verity.definitions.registry import b1, dense, hopper
 from verity.definitions.registry import boolean_dsv4_moe as BD
 from verity.definitions.registry import dsv4_moe as D
