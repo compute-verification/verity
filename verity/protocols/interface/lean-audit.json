@@ -39,7 +39,7 @@
   "CoreProtocol.Registration": {
    "imports": ["CoreProtocol.Protocol", "CoreProtocol.Site", "Base.Hash"],
    "except": [],
-   "why": "the registration log in code is spec: its property (`Properties.Core.Registration`) is stated over its check, entries and view, so it imports only the interface's `Protocol`, for its command, the Site it folds site entries into, and C-Flock's SHA-512, for its entries' digests"
+   "why": "the registration log in code is spec: its property (`Properties.Accounting.Registration.Code`) is stated over its check, entries and view, so it imports only the interface's `Protocol`, for its command, the Site it folds site entries into, and C-Flock's SHA-512, for its entries' digests"
   },
   "CoreProtocol.Live": {
    "imports": ["CoreProtocol.Protocol"],

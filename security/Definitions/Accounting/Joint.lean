@@ -34,6 +34,15 @@ reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it
 
 namespace Accounting
 
+/-- The resources a joint audit certifies, each by an audit of its own. -/
+inductive Resource
+  /-- work, which PoUW's compute audit certifies -/
+  | compute
+  /-- bits read from device memory, which the bandwidth audit certifies -/
+  | bandwidth
+  /-- device memory held, which PoUS's capacity audit certifies -/
+  | capacity
+
 /-- A joint audit's run on device `d` with accounts `α`: each resource's account and window, the schedule at each value
 of the compute, bandwidth and capacity audits' coins, which fits the device, and each audit's verdict. -/
 structure Run {ι : Type} (d : Device ι) (α : Type) [Fintype α] (ΩW ΩQ ΩS : Type) where

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Site
+public import Definitions.Accounting.Joint
 
 /-!
 # What registration establishes, and what the protocols account for
@@ -15,9 +16,9 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
   values by their committed roots, the registered compiler `B` by its builder, each day's circuit by its program's
   digest, and the heads of the log's chain (`Registration.heads`). It is the spec's copy of the code's view
   (`Core.Registration.View`), which a protocol reads of an accepted log.
-* **Prefix heads** (`Registration.heads`, `Registration.AtHead`): an answer names a head of the accepted log's chain, the
-  head of one of its prefixes, and is read against what that prefix registers. No entry retires what an earlier one
-  registers, so what a prefix registers a longer prefix registers too.
+* **Prefix heads** (`Registration.heads`, `Registration.AtHead`): an answer names a head of the accepted log's chain,
+  the head of one of its prefixes, and is read against what that prefix registers. No entry retires what an earlier
+  one registers, so what a prefix registers a longer prefix registers too.
 * **The readings** (`Registration.Reading`, `View.figures`): a registered device's figures as its sheet states them, or
   as the bound reads them, figure by figure the larger of those and the auditor's estimate (`DeviceFigures.bounding`),
   the reading `Site.device` builds the device model from.
@@ -25,8 +26,8 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
   auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf's host is
   reached by a memory challenger (`View.Onsite`); and θ registers each value once and the log declares each day once
   (`View.Once`), so a lookup by name or by day reads the one registered value or circuit.
-* **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Core.Guarantees.Registration`): a valid
-  log's view holds the registered facts.
+* **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Accounting.Registration.Guarantees`): a
+  valid log's view holds the registered facts.
 * **The parts of the registered hardware** (`Site.Accountable`, `Site.parts`): each device's compute, each memory leaf's
   memory held and memory read, the device model's resources (`Accounting.Resource`) at the leaf's tier, and each
   boundary link's egress, by the id that holds it.

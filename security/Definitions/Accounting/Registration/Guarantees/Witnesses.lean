@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Guarantees.Registration
+public import Definitions.Accounting.Registration.Guarantees
 
 /-!
 # What registration establishes: honest and nontrivial lemmas
@@ -13,7 +13,7 @@ boundary links (`Site.Boundary`). At a small onsite site (`Registration.Witness`
 * `RegistrationSound_nontrivial`: the view of a log whose device names no sheet fails the registered facts, so the
   conclusion fails for a check that accepts every log.
 
-The proofs are in `Security/Proofs/Core/Registration.lean`.
+The proofs are in `Security/Proofs/Accounting/Registration/Sound.lean`.
 -/
 
 @[expose] public section

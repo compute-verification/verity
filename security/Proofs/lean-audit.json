@@ -98,7 +98,7 @@
   "Proofs.Properties.Challenger.ChallengePhase",
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Core.Site",
-  "Proofs.Properties.Core.Registration",
+  "Proofs.Properties.Accounting.Registration.Code",
   "Proofs.Properties.Ties",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Nci.RecordRead",

@@ -100,7 +100,7 @@
   "Properties.Challenger",
   "Properties.Firewall",
   "Properties.Core.Site",
-  "Properties.Core.Registration"
+  "Properties.Accounting.Registration.Code"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -2374,14 +2374,24 @@
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Ties": {
-   "imports": ["Properties.Verity.Game", "Definitions.Core.Registration", "Flock.ProvedScope", "NetworkCheck.Check"],
+   "imports": [
+    "Properties.Verity.Game",
+    "Definitions.Accounting.Registration.View",
+    "Flock.ProvedScope",
+    "NetworkCheck.Check"
+   ],
    "except": [],
-   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Core.Registration`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`); never a proof"
+   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Accounting.Registration.View`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`); never a proof"
   },
   "Properties.Core": {
-   "imports": ["Definitions.Core", "CoreProtocol.Site", "CoreProtocol.Registration", "Properties.Core.Site"],
+   "imports": ["Definitions.Core", "CoreProtocol.Site"],
    "except": [],
-   "why": "the Site's and the registration log's code are stated against their own functions (`Core.Site`, `CoreProtocol.Site`, `Core.Registration`, `CoreProtocol.Registration`) and the spec's Site and registration they copy (`Definitions.Core.Site`, `Definitions.Core.Registration`), the log's over the Site's denotations (`Properties.Core.Site`), never a proof"
+   "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
+  },
+  "Properties.Accounting.Registration": {
+   "imports": ["Definitions.Accounting.Registration", "CoreProtocol.Registration", "Properties.Core.Site"],
+   "except": [],
+   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Accounting.Registration.View`), over the Site's denotations (`Properties.Core.Site`), never a proof"
   },
   "Properties.Remote": {
    "imports": [
@@ -16612,7 +16622,7 @@
     "Verity.RegisteredCircuit.𝓘": "aba61d57f4d8260e4a1cd7b888b9264f789fd3070636876b7efd9ef1a76f35f1"
    }
   },
-  "Definitions.Core.Registration": {
+  "Definitions.Accounting.Registration.View": {
    "digest": "cf08402eeaa931c0c76e47014c8f010bc528aef18e7da910346ff9ecc5d910ca",
    "definitions": {
     "Verity.Registration.View": "c11efcc0a3f3bda548f2ab7d9fcda013f8f7fb9adf6f6df7fcea34ddc82777ae",
@@ -24234,7 +24244,7 @@
     "Properties.Period.spec": "7ea08605ed01e8af886d1b0a6e4e39666218b83a60ee01407d57b06e8068b614"
    }
   },
-  "Properties.Core.Registration": {
+  "Properties.Accounting.Registration.Code": {
    "digest": "6b65486d19de74835419a11b7a7e2ebb3340024aec89df060fdf20aff01487df",
    "definitions": {
     "Properties.Registration.Checks": "d409f431c404d27fe64f64c550b6819e9f6899e30c5eb613b83c6815532df2dc",

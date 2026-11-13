@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Registration
+public import Definitions.Accounting.Registration.View
 public import CoreProtocol.Registration
 public import Properties.Core.Site
 
@@ -17,16 +17,16 @@ over the denotations of `Properties.Core.Site` for the Site and its entries.
 
 Two things the code holds are not the spec's, so the denotation takes them as parameters:
 
-* **The builder's compiler.** The code's builder holds a digest, the format of its advice and a cap, and the spec's holds
-  the compiler itself (`Verity.Registration.Builder.B`). The denotation reads the compiler a builder names (`B`), which
-  no check reads.
+* **The builder's compiler.** The code's builder holds a digest, the format of its advice and a cap, and the spec's
+  holds the compiler itself (`Verity.Registration.Builder.B`). The denotation reads the compiler a builder names (`B`),
+  which no check reads.
 * **An entry's digest.** The code names an entry by `SHA-512(format ‖ 0 ‖ canon(entry))` over all its fields, while a
   spec entry holds fewer (a θ value only its name and root), so no function of a spec entry alone is the code's digest.
   The spec's digests (`digests`) name the Site's sheets and the genesis as the code does, and each entry by the code's
   digest of the first entry of the log checked that denotes it (`names`). Two entries of a log that denote one spec
   entry and differ in code register one item twice or declare one day twice, so the log is refused either way.
 
-`Proofs.Properties.Core.Registration` proves it.
+`Proofs.Properties.Accounting.Registration.Code` proves it.
 -/
 
 @[expose] public section
@@ -93,7 +93,8 @@ def Checks : Prop :=
 /-! ## The witnesses' instances
 
 A log of the two kinds the Site's check doesn't hold, the check that accepts everything, and a log the spec refuses:
-what the guarantee's honest and nontrivial witnesses (`Proofs.Properties.Core.Registration`) are stated at. -/
+what the guarantee's honest and nontrivial witnesses (`Proofs.Properties.Accounting.Registration.Code`) are stated
+at. -/
 
 /-- An information entry registering one value of θ, following the remote composite's genesis. -/
 def infoEntry : Core.Registration.Entry :=

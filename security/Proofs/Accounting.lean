@@ -119,6 +119,7 @@ public import Proofs.Pous.Obligation
 public import Proofs.Accounting.Additive
 public import Proofs.Accounting.Coverage
 public import Proofs.Accounting.ServingBlocks
+public import Proofs.Accounting.Registration.Sound
 public import Proofs.Accounting.ServingBlocks.Witnesses
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Defs.Localization

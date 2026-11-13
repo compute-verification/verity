@@ -47,15 +47,6 @@ instance instFintypeOpClass : Fintype OpClass where
   elems := {.tc, .cuda, .oracle}
   complete o := by cases o <;> simp
 
-/-- The resources a joint audit certifies, each by an audit of its own. -/
-inductive Resource
-  /-- work, which PoUW's compute audit certifies -/
-  | compute
-  /-- bits read from device memory, which the bandwidth audit certifies -/
-  | bandwidth
-  /-- device memory held, which PoUS's capacity audit certifies -/
-  | capacity
-
 /-- A device with side channels `ι`, by its limits. -/
 structure Device (ι : Type) where
   /-- bits of on-chip state (S_chip) -/

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Guarantees.Registration.Witnesses
+public import Definitions.Accounting.Registration.Guarantees.Witnesses
 public import Proofs.Core.Site
 
 /-!
@@ -20,8 +20,8 @@ public import Proofs.Core.Site
   (`Registration.Valid.days_nodup`).
 
 `RegistrationSound_honest` and `RegistrationSound_nontrivial`, at the witness site of
-`Definitions.Core.Guarantees.Registration.Witnesses`: its log passes the check by evaluation, and a log whose device
-names no sheet finds no sheet for it.
+`Definitions.Accounting.Registration.Guarantees.Witnesses`: its log passes the check by evaluation, and a log whose
+device names no sheet finds no sheet for it.
 -/
 
 @[expose] public section

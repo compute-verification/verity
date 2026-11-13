@@ -1,17 +1,18 @@
 module
 
-public import Properties.Core.Registration
+public import Properties.Accounting.Registration.Code
 public import Proofs.Properties.Core.Site
-public import Proofs.Core.Registration
+public import Proofs.Accounting.Registration.Sound
 
 /-!
 # The registration log's check is the spec's: the proofs
 
-The code's check folds a `State`. After a prefix of the log, the State's Site, items, declarations and head are the
-spec's (`Inv`). Each entry's refusal in code is then the spec's refusal of it against the prefix (`refusal_eq`): a site
-entry's by `Properties.Site.refuses`, read at the spec's digests (`entry_refusal_sheet`, since a site entry's checks
-read only sheet digests), an information entry's and a declaration's check for check. The check of the rest then
-follows the spec one entry at a time (`go_says`), by `Verity.Registration.valid_append_singleton_iff_refusal`.
+The code's check folds a `State`. After a prefix of the log, the State's Site, items, declarations, head and prefix
+heads are the spec's (`Inv`). Each entry's refusal in code is then the spec's refusal of it against the prefix
+(`refusal_eq`): a site entry's by `Properties.Site.refuses`, read at the spec's digests (`entry_refusal_sheet`, since a
+site entry's checks read only sheet digests), an information entry's and a declaration's check for check. The check of
+the rest then follows the spec one entry at a time (`go_says`), by
+`Verity.Registration.valid_append_singleton_iff_refusal`.
 -/
 
 @[expose] public section

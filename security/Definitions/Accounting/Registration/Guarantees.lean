@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Registration
+public import Definitions.Accounting.Registration.View
 
 /-!
 # What registration establishes

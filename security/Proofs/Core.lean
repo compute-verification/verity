@@ -53,7 +53,6 @@ public import Proofs.Core.Structure
 public import Proofs.Core.DeviceFigures
 public import Proofs.Core.CapacityWithinEstimate
 public import Proofs.Core.Site
-public import Proofs.Core.Registration
 public import Proofs.Core.QSort
 public import Proofs.Core.Fp32
 public import Proofs.Core.HongKung

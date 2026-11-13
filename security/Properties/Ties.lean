@@ -1,7 +1,7 @@
 module
 
 public import Properties.Verity.Game
-public import Definitions.Core.Registration
+public import Definitions.Accounting.Registration.View
 public import Flock.ProvedScope
 public import NetworkCheck.Check
 

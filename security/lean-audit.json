@@ -36240,13 +36240,13 @@
     "Verity.Guarantees.RecZK": "c2ea38efeb1432568321c801a3f35d51496cf2d18e79c599a9bdc53c79169aa3"
    }
   },
-  "Definitions.Core.Guarantees.Registration": {
+  "Definitions.Accounting.Registration.Guarantees": {
    "digest": "4842a7677750a7ef526c80ecba2001bca999d585013019ab0768b9fa850de3f6",
    "definitions": {
     "Verity.Guarantees.RegistrationSound": "01b138e834d82de977dd28f74334381ce9dc69d4b687a904229a9d002b69cf34"
    }
   },
-  "Definitions.Core.Guarantees.Registration.Witnesses": {
+  "Definitions.Accounting.Registration.Guarantees.Witnesses": {
    "digest": "c0e93c9383c2269a3649c7da2c8327f0bc044b7a2897e8cb078afedfc6559bba",
    "definitions": {
     "Verity.Guarantees.RegistrationSound_honest": "c94c7a36d0931ac6cb017e3c3c01fbef03a6fca8cadea34057efa95161c70ae6",
@@ -36657,7 +36657,7 @@
     "Verity.RegisteredCircuit.𝓘": "aba61d57f4d8260e4a1cd7b888b9264f789fd3070636876b7efd9ef1a76f35f1"
    }
   },
-  "Definitions.Core.Registration": {
+  "Definitions.Accounting.Registration.View": {
    "digest": "4aa097fae86b246ea9e3c9ed58b685e4ee57017b76f9add6e99e14d6e27bde3c",
    "definitions": {
     "Verity.Registration.View": "c11efcc0a3f3bda548f2ab7d9fcda013f8f7fb9adf6f6df7fcea34ddc82777ae",
