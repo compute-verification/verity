@@ -10,8 +10,8 @@
 # the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease. A step
 # that fails ends the run (S8_KEEP_GOING=1: the rest still run). S8_LOCK_MHZ locks the leased GPU's SM clock there for
 # each step (`nvidia-smi -lgc`, where sudo allows it, lock.txt), reset before the lease ends.
-# Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
-# ~/.cache/verity/row_table), the card and Python recorded. The Python with torch and vLLM is benchmarks/harness/env.sh's
+# Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json), the card and
+# Python recorded. The Python with torch and vLLM is benchmarks/harness/env.sh's
 # $VENV (VERITY_BENCH_VENV, else the node's).
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?set OUT}/out}; mkdir -p "$OUT"
@@ -28,7 +28,6 @@ mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$SHIP" && (cd "$S/ship" && sha256sum
   || { echo "s8_linear: the ship $SHIP is missing or fails its MANIFEST" >&2; exit 2; }
 cp "$S/ship/source.txt" "$S/ship/toolchain.txt" "$S/ship/sass.json" "$S/ship/MANIFEST.sha256" "$OUT/"
 export S8_WGMMA_CUBIN=$S/ship/s8_wgmma.cubin
-if [ -d "$S/ship/row_table" ]; then mkdir -p "$HOME/.cache/verity/row_table" && cp -rn "$S/ship/row_table/." "$HOME/.cache/verity/row_table/"; fi
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$OUT/gpus.txt" 2>&1
 "$PY" -c 'import torch, triton; print(torch.__version__, torch.version.cuda, triton.__version__)' > "$OUT/python.txt" 2>&1
 MAX_MIN=${S8_MAX_MIN:-30}

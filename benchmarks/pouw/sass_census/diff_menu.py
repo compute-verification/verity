@@ -41,7 +41,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "facet_break"))
-sys.path.insert(0, str(HERE))
 from loads import class_of  # noqa: E402  the model's own SASS opcode -> census class
 from sass_semantics import classify  # noqa: E402
 
