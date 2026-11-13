@@ -369,7 +369,8 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert c.layout.inline and len(c.layout.templates) == k and len(names) == (N if tables else 0) and pub["ids"]
     assert ret == f"{block}o0"
     assert list(pub["values"]) == [*BR.PORTS, ret, *names]
-    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior")
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
@@ -440,7 +441,7 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
     assert (pub["values"][name]["leaves"], pub["values"][name]["words"]) == (N * k * O, v // k)
     rule_of = TS.rule_of(L, f"rate:{Q}/{N}", K, 60.0)
     assert rule_of.span_values == ()
-    first = TS.first(pub, check, rule_of, FC.Challenger("first"), stop=rule)
+    first = TS.first(pub, check, rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
     assert [x["port"] for x in first.record["roots"]][-2 - len(L.tables):] == [ret, name, *L.tables]
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"), stop=rule)
     with pytest.raises(ValueError, match="--kept"):
@@ -652,8 +653,9 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
     rule_of = TS.rule_of(L, f"rate:{Q}/{spans}", K)
     assert rule_of.span_values == (("logits", outputs * k, (v // k, 16)),)
 
-    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first"), stop=rule)
+    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
     assert [r["port"] for r in got.registration.record["roots"]] == [*BR.PARTS, "o0"]
-    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}", FC.Challenger("stop"), got.record)
+    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}",
+                      FC.Challenger("stop", label=TS.family_of(L, blocks=True)), got.record)
     assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == spans
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q
