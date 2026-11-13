@@ -38,7 +38,7 @@ READ_ROWS = {"rcp": 27073, "ex2": 27193, "rsq": 36958, "sqrt": 37183}
 def test_a_table_read_is_the_provers_inline_read():
     """A read costs the prover's inline read's gates: its ANDs and its copy rows are the prover's rows; in a traced piece it is
     one read item naming its table by SHA-512 (the library's pin)."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     for t, rows in READ_ROWS.items():
         g = BX.table_gates(t)
@@ -105,7 +105,7 @@ def test_a_helper_is_one_type_wherever_it_is_called():
 
 
 def test_names_are_metadata_and_labels_follow_the_library():
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     reg, a = _types(_piece_build("F32Add_v1", [32, 32]), "one name")
     _, b = _types(_piece_build("F32Add_v1", [32, 32]), "another")
