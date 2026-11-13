@@ -150061,3 +150061,48 @@ Your 15:58Z reached me at 16:02Z.
 - If `4752` had failed I would be mending; it did not. I read `1722`'s last two packages when it ends and send them.
 
 To post: nothing. Run going on: `1722`. My timer is set for it.
+
+## MESSAGES, Fri 13 Nov 16:07Z: your 16:03Z is read and held to; #9740 holds nothing the join will not, so it is to be closed by your word; the side branch compiles twice more (`2af8`, `61f2`), with `FixedBefore` restated in my own file so the statements' round can be fixed; try `adbc` is out on its last head, which I name when it is in
+
+**1. Your 16:03Z (`e8c5d4eb392e`)** [read]
+
+- Nothing more goes to `-point2-745c`, `-setups-745c` or `-rise-745c`. All three are at `2658eaf78153b19e3f3bdeaef1521484785fcea3`, as at 15:24Z. [run: `git rev-parse`]
+- **#9740**: once `2658eaf78153` is inside the join it holds nothing the join does not. Over `1ce63fda6bb` it is `LastSlot.lean`, `SessionAsk.lean`'s and `PrefixFixed.lean`'s prose and SESSIONCOINS's two files, all in that one head. It is to be closed by your word. I do not close it.
+- No line of mine has a merge of `main` or a rebase, and none gets one. [run: `git log --merges`: the one merge is SESSIONCOINS's `8aefa1adc70`]
+- The side branch `-replay-745c` is named in one line when `adbc` is in. After that line I commit nothing more on it.
+
+**2. Compiled since 15:24Z** [run]
+
+- `r20261113-152240-2af8`, rc 0, at `e886e90673c2`: `RoundPrefix.lean`, "lean exit 0 in 487 s", 10 theorems, probe clean, siblings clean. This closes "Not compiled yet" in my 15:24Z.
+- `r20261113-154125-61f2`, rc 0, at `990c92aa96ff`: `MessagesOpen.lean` is on the join's text for the first time (title mended), with `FixedBefore` restated (point 3), and built as `RoundPrefix.lean`'s import; `RoundPrefix.lean` "lean exit 0 in 1278 s", 11 theorems, probe clean, siblings clean.
+- **Out**: `r20261113-160600-adbc` at `ec033a945fd74215df0d4e8b4f40bfda371a2677` (two more lemmas). One run, two files one after the other: `MessagesOpen.lean` for its own probe, then `RoundPrefix.lean`. Local lints at that head: 41 passed.
+
+**3. What I changed in my own file, and why**
+
+- [read] The old `FixedBefore` asked the play at a history's completion (the coins the history shows, default coins at every other round, so not an accepted play) to fix the same value as the accepted play. That can hold only of a value read off the device's log before the round.
+- [read] The statements' round has no such value. Each session statement's sample is its own session's record's (`SessionMsgs.stmtAtCase`: `drawBytes record`), and the device's log fixes that record only when that session closes, after the earlier sessions' coins. What holds the sample is a check: `second-sample` (`Spot/SecondStage.lean` line 1076) holds it to the verifier's own sample of the second stage's coins (`ownDraw`). So the statements' message is fixed before the sessions' coins on accepted plays only.
+- [run: `61f2`] So `FixedBefore Fr Rd Fx Opn i` asks only this: two plays of one tape that each open what they fix, the second at coins that agree with the coins the first's history before round `i` shows, fix one value. At the strings (`stringsOpn`) a play that opens is accepted and its log is the device's. `openingBy` keeps a play only where its own history before the round is the given one and reads the value that play fixes; the finder reads it at its first play. `missBoundBy`, `reachedBy`, `messagesFixedBy`, `reachedStrings` and `messagesFixedStrings` conclude what they concluded. The old form gives the new (`fixedBefore_of_eq`).
+- [run: `rg`] `MessagesOpen.lean` is imported by `RoundPrefix.lean` and by no file of the join. No statement the join reads changes, and no listed guarantee, named assumption or lock entry beyond two roots on the side branch.
+- New, to be compiled by `adbc`: `fixedBefore_strings` (two accepted plays at coins the history shows alike that read the same digests and context) and `fixedBefore_strings_before` (the digests read off the log before the round, by `CoinMap.before`).
+
+**4. Where the word due Sat 02:00Z stands** [derived, from the files read; the facts still to prove are named]
+
+- **Rounds a release is put on** (round 1; a session's link slot and its rep slots): the digest is that release's own `answers`, which `CoinMap.before` returns with the log before it. `FixedBefore` there is a theorem (`fixedBefore_strings_before` with `before_session`). Left: that the digest is the SHA-512 of the string (`ShowsStrings`) and that the message is read off the string (`Explains`).
+- **Rounds 0 and 2 to `stage`**: the message is `[]`. Nothing to fix.
+- **The statements' round**: digests: the interior's, and the params' own digests of each template's circuit and public file and the pinned tables. Strings: the interior record and those blobs. Context: the stage's coins as the check read them. Left: `second-sample`'s JSON equality gives equal sample bytes; the verifier's own sample is a function of the interior record, the params and the coins read; two accepted plays at the same stage coins read the same coins.
+- **A session's last slot**: no release is put on it (`locOf_ne_last`), and that session's closing opening lies in the log before it (`members_read`'s third clause), answering the SHA-512 of the session's evidence. `SessionCoins.MembersHeld` drops that the closing answers the evidence's SHA-512, so this goes back to `members_read`. Left: the evidence's bytes give back the record and the proof files.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock beyond the side branch's two roots.
+
+## NEEDS
+
+Nothing.
+
+## Not established
+
+- `adbc`'s outcome.
+- `ShowsStrings` and `Explains` at any round of the form. Point 4's "left" facts are read off the checks, not proved.
+- That two accepted plays at the same stage coins read the same coins needs the sizes of the stages' bytes fixed by the params and the interior record. [guess: not read]
+- The tie's discharge, and `sessionsRun` from `SessionReplay.lean`: not started, as ordered.
