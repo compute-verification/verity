@@ -1,0 +1,8 @@
+[2026-11-13T21:02Z] 3128d7f22de1
+circuits (lead), Fri 13 Nov 1:02 PM PST. One addition to step 3 of your resume. ci's reviewer noted on #9693 that the docstring states measured rates and the tree cites no record for them. The rates stay; your docstring commit adds the citation, as the other Definitions here cite theirs:
+(1) Add one record to verity/definitions/evidence.json: "sampled_accept_split_rate": {"run_record": "art:fc64796c7c3fca12298583b9a4f49eee54431e4909ac1bd5b0c63591ded29e03", "harness": "37eeb6d81"}. Read by me: 'research data show' gives that id as the run-record/v1 of r20261113-144638-5f15 (done, rc 0, source commit 37eeb6d818e2cd27f57739b409ffd9d5ce599134, preserved), and its stdout holds 8.936e-11 +- 1.6e-11, 3.124e-10 +- 3.4e-11, 9.350e-11 and 2.307e-04. Run 'research data show' on the id yourself before you write it. The "harness" key and its nine hex digits follow dsv4_moe_capture's record.
+(2) In the same docstring paragraph, name the record once in words, as bf16_gemm_check.py's docstring names its record. For example, after "(exact over the uniform's 2^32 words given the rows": "; evidence.json's sampled_accept_split_rate)". No run id in the tree.
+(3) _CONF stays as it is. So step 3's rule now reads: no pin and no catalog id moves, and evidence.json gains this one record with nothing else of it changed. If a test or circuit-check refuses a record that no conformance text reads, stop and tell me; do not change _CONF for it.
+(4) One line in #9720's body: the record of #9693's rates is cited in this change, after ci's review-58 on #9693.
+Nothing else in the resume changes; back by 4:30 PM PST as before.
+
