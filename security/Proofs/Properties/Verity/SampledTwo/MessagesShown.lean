@@ -99,7 +99,9 @@ theorem stepWith_msg_lt (vn : List Msg → Claims.OC Out) :
     ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (j : ℕ),
       t.msgs.length + j + 1 < (stepWith H P x ω vn f hist as t).msgs.length →
       ∃ e mm, (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + j]? = some e ∧ e.2 = .msg mm
-  | 0, _, _, t, j, h => by simp [stepWith] at h
+  | 0, _, _, t, j, h => by
+    simp only [stepWith] at h
+    omega
   | f + 1, hist, as, t, j, h => by
     rcases hvb : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H with ⟨o, lo⟩
     cases o with
@@ -115,8 +117,9 @@ theorem stepWith_msg_lt (vn : List Msg → Claims.OC Out) :
         rw [← hrest]
         simp
       | succ j =>
-        have := stepWith_msg_lt vn f _ _ { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, .msg mm)],
-                 pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo } j
+        have := stepWith_msg_lt vn f _ _
+          { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, .msg mm)],
+                   pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo } j
           (by simp only [List.length_append, List.length_singleton] at h ⊢; omega)
         simp only [List.length_append, List.length_singleton] at this
         rwa [Nat.add_right_comm, Nat.add_assoc] at this
@@ -163,7 +166,7 @@ theorem run_agree_on {Ω C : Type} [Inhabited C] (H : Msg → Msg) (P : Prover �
       have hl1 : (((Claims.run H P Vr x ω r).msgs.take l).map Prod.fst ++
           [((P.next x (((Claims.run H P Vr x ω r).msgs.take l).map RecDeploy.histOf) ω).eval H).1]).length =
           l + 1 := by
-        simp [hnew]
+        simp only [List.length_append, List.length_map, List.length_singleton, hnew]
       rw [hl1]
       exact h l hl hlt)).1
   simp only [List.length_nil, Nat.zero_add] at this
@@ -245,7 +248,9 @@ theorem shownAt_some {hist : List (Msg × Msg)} {j : ℕ} {c : FlockDeploy.Coin}
   unfold shownAt at h
   cases he : hist[j]? with
   | none => rw [he] at h; cases h
-  | some e => rw [he] at h; exact ⟨e, rfl, h⟩
+  | some e =>
+    rw [he, Option.bind_some] at h
+    exact ⟨e, rfl, h⟩
 
 /-- **A run's answer at round `j`** is the verifier's on the run's first `j + 1` messages and coins. -/
 theorem run_answer {Ω : Type} (P : Prover Ω) (Vr : Verifier FlockDeploy.Coin) (x : Msg) (ω : Ω)
@@ -283,8 +288,8 @@ theorem runShown_of {A : Live₂} {x : Msg} (hO : AnswersOwn A.L.V) (hS : Answer
     intro j hji hj hm
     obtain ⟨e, he, he2⟩ := run_answer P A.L.V x ω r hj
     unfold shownAt
-    rw [runHist_of hji he]
-    show shownCoin (Claims.Recursion.outMsg e.2) = some (r ⟨j, hk j hj⟩)
+    rw [runHist_of hji he, Option.bind_some]
+    simp only [RecDeploy.histOf]
     rw [outMsg_eq, he2, hm]
     exact shownCoin_of _
   refine ⟨?_, fun r' hsh => ?_⟩
@@ -303,15 +308,15 @@ theorem runShown_of {A : Live₂} {x : Msg} (hO : AnswersOwn A.L.V) (hS : Answer
     rw [outMsg_eq, he2] at hb
     have := hO x (((Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take (j.val + 1)).map Prod.fst)
       ((List.range (j.val + 1)).map (coinSeq r)) c
-      (List.ne_nil_of_length_pos (by simp only [List.length_map, List.length_take]; omega))
-      (by simp only [List.length_map, List.length_range, List.length_take]; omega) hb.symm
+      (List.ne_nil_of_length_pos (by rw [List.length_map, List.length_take]; omega))
+      (by rw [List.length_map, List.length_map, List.length_range, List.length_take]; omega) hb.symm
     rw [this, List.length_map, List.length_take,
       Nat.min_eq_left (show j.val + 1 ≤ (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.length by omega),
       Nat.add_sub_cancel, getD_range_map _ (Nat.lt_add_one j.val), coinSeq_lt r j.isLt]
   · refine run_agree_on FlockDeploy.sha512 P A.L.V x ω r r' i fun l hl hlr => ?_
     rw [hasEq l hlr]
     have hlen : (((Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take (l + 1)).map Prod.fst).length = l + 1 := by
-      simp only [List.length_map, List.length_take]
+      rw [List.length_map, List.length_take]
       omega
     refine (hS x (((Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take (l + 1)).map Prod.fst)
       ((List.range (l + 1)).map (coinSeq r)) ((List.range (l + 1)).map (coinSeq r'))
@@ -455,7 +460,7 @@ theorem decidedAt_congr {xS : Msg} {as : List Msg} {cs cs' : List FlockDeploy.Co
     rw [← List.length_eq_zero_iff, ← List.length_eq_zero_iff, List.length_take, List.length_take, hl]
   have key : (∃ c, FlockDeploy.act true xS (as.take j) (cs.take j) = .coin c) ↔
       (∃ c, FlockDeploy.act true xS (as.take j) (cs'.take j) = .coin c) := by
-    rw [act_coin_iff, act_coin_iff, hnil]
+    rw [act_coin_iff, act_coin_iff, ne_eq, ne_eq, hnil]
   cases h1 : SpotFlock.decidedAt xS as cs j <;> cases h2 : SpotFlock.decidedAt xS as cs' j
   · rfl
   · exfalso
@@ -483,14 +488,14 @@ theorem act_eq_last {zk : Bool} {x : Msg} {As : List Msg} {Cs Cs' : List FlockDe
   obtain ⟨D, e, rfl⟩ : ∃ D e, Cs = D ++ [e] := ⟨_, _, (List.dropLast_concat_getLast hne).symm⟩
   obtain ⟨D', e', rfl⟩ : ∃ D e, Cs' = D ++ [e] := ⟨_, _, (List.dropLast_concat_getLast hne').symm⟩
   have hD : D' = D := by simpa using hd
-  subst hD
+  rw [hD]
   by_cases ha : ∃ t, As.getLast? = some (0 :: t)
   · obtain ⟨t, ht⟩ := ha
     rcases hsx : FlockDeploy.setupOf zk x with _ | ⟨s, spec, sts⟩
     · simp only [FlockDeploy.act, hsx]
     · exfalso
       exact hnc (act_coin_iff.2 ⟨by simp [hsx], ⟨t, ht⟩, by simp⟩)
-  · push_neg at ha
+  · push Not at ha
     cases D with
     | nil =>
       obtain ⟨a, rfl⟩ := List.length_eq_one_iff.1 (by simpa using hlen.symm)
@@ -569,7 +574,8 @@ theorem answersOwn : AnswersOwn (V h) := by
   change msgOf ((next h x as cs).eval FlockDeploy.sha512).1 = c.bytes at hc
   rcases answers_spot h x as cs hne hcs with he | he
   · rw [he] at hc
-    exact (RecDeploy.coin_bytes_injective (show (cs.getD (as.length - 1) default).bytes = c.bytes from hc)).symm
+    simp only [msgOf] at hc
+    exact (RecDeploy.coin_bytes_injective hc).symm
   · rw [he] at hc
     exact absurd hc.symm (coin_bytes_ne c)
 
@@ -606,7 +612,7 @@ theorem answersShown : AnswersShown (V h) := by
   by_cases hle : as.length ≤ h.stage + 1
   · rw [next_coin h x hne hcs' hle, next_coin h x hne hcs hle]
     split_ifs with hc
-    · have e := hlast (by rw [next_coin h x hne hcs hle, if_pos hc]; rfl)
+    · have e := hlast (by rw [next_coin h x hne hcs hle, if_pos hc]; simp only [OC.eval, msgOf])
       rw [e]
     · rfl
   by_cases hst : as.length = h.stage + 2
@@ -673,7 +679,7 @@ theorem answersShown : AnswersShown (V h) := by
       rw [hAs, hCs]
       unfold FlockDeploy.next
       rw [hc]
-      simp only [OC.eval, markOut, msgOf]
+      simp only [OC.eval, Claims.Sampling.markOut, msgOf]
       rw [hcj]
     by_cases hcoin : ∃ c, FlockDeploy.act true xS (as.drop (off h t)) (cs.drop (off h t)) = .coin c
     · obtain ⟨c, hc⟩ := hcoin
@@ -685,7 +691,7 @@ theorem answersShown : AnswersShown (V h) := by
         dsimp only
         unfold FlockDeploy.next
         rw [hc]
-        simp only [OC.eval, markOut, msgOf]
+        simp only [OC.eval, Claims.Sampling.markOut, msgOf]
         rw [← hcs, getD_of_getLast?_drop default (Claims.Bridge.act_coin hc)]
       have hall : cs'.drop (off h t) = cs.drop (off h t) := by
         refine eq_of_getD default (by simp only [List.length_drop, hcs, hcs']) fun j hj => ?_
