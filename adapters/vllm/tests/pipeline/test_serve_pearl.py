@@ -23,11 +23,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, weights_root
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, weights_root
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_openai as so
