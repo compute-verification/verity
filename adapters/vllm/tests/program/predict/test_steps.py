@@ -48,7 +48,7 @@ from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry import stop_check as SC
 from verity.definitions.registry.topp_geometry import registered_splits
 
-import verity.protocols.certifier.verifier.advice as I1
+import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.partition_object import calls
