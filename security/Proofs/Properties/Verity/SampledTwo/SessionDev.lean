@@ -22,6 +22,10 @@ and second stages and nothing else. At `runLocate`, for any `Ls`:
   below 65536 elements the coin map's count of the releases that fit (`CoinMap.fitOf`) is the count of all of them
   (`fitOf_eq_usedOf`).
 
+* `coinsAgree_run`, `sessionsAgree_run`: the piece at the coin map's release: `CoinsAgree` at the sessions' rounds
+  and `SessionsAgree`, at the run's locator and the coin map's agreement there, from the cut's `InteriorLogged` and
+  `HeldSize`.
+
 At a stage's round the run's locator puts what `Ls` puts, where `Ls` puts no opening on a round
 (`locAt_run_stage`; the session-round locator puts a release only past the statements' round, `locOf_past`), so the
 coin map reads the same release there at either (`dev_congr`, `dev_run_stage`).
@@ -237,5 +241,27 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
     exact hfit o hA hG i.val hg
   rw [fitOf_eq_usedOf L i.val [] o.log hle, hu]
   exact he
+
+/-! ## The piece at the coin map's release -/
+
+/-- **The sessions' coins agree as the device's releases do, at the coin map's release** (`CoinsAgree` at the
+sessions' rounds, as `ProjectionOf` takes it): at the run's locator over any stages' locator, from the cut's
+`InteriorLogged`. -/
+theorem coinsAgree_run (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String) (Ls : CoinMap.Locate)
+    (Good : Exchange → Prop) (hlog : InteriorLogged C Good) :
+    CoinsAgree A (formReading A C (withCoins A C tab (CoinMap.dev (runLocate A Ls tab)) Ms)
+      (CoinMap.dev (runLocate A Ls tab))) (FormAccepts C) Good .sessions :=
+  coinsAgree_sessions A C Ms tab _ Good (devLocal_of A tab _ (locates_run A Ls tab)) hlog
+
+/-- **The sessions' releases agree with the run's coins, at the coin map's release and its agreement**
+(`SessionsAgree`, as `devAgrees_formReading` takes it): at the run's locator over any stages' locator and the coin
+map's agreement there on the rounds the run's verifier reads, from the cut's `InteriorLogged` and `HeldSize`. -/
+theorem sessionsAgree_run (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+    (Ls : CoinMap.Locate) (Good : Exchange → Prop) (hsz : HeldSize) (hlog : InteriorLogged C Good) :
+    SessionsAgree A x (withCoins A C tab (CoinMap.dev (runLocate A Ls tab)) Ms) (CoinMap.dev (runLocate A Ls tab))
+      (FormAccepts C) Good (CoinMap.ElemAgrees (runLocate A Ls tab) A x (readsAt A.h)) :=
+  sessionsAgree_accepted A x C Ms tab _ Good _ hsz hlog
+    (devElems_of A x tab _ (readsAt A.h) (FormAccepts C) Good (locates_run A Ls tab) (fun _ h => h)
+      (sessionsFit_of A C tab Good hsz hlog))
 
 end Verity.SampledTwo.SessionCoins
