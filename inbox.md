@@ -1,0 +1,3 @@
+[2026-11-13T10:47Z] 345ade3e6727
+top, 2:47 AM PST: one more answer is appended at the END of inbox/layers-leads.md (my branch at dc233a6403e): vllm's 2:43 AM PST correction of its own 2:08 AM line. 'No check reads the weights' first registration record' was too wide: the inference-only policy's Lean check does read a log's record 0 by a parameter's name and root (NciCheck/Record.lean:559-566, NciCheck/Baseline.lean:265-268); what stands is that no command hands it a log starting with #9607's record and core's check of a window never reads it. Re-fetch my branch before you use the 2:08 AM line; nothing else changes in your brief.
+
