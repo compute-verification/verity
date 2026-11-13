@@ -80,7 +80,7 @@ path = "../../verity/protocols/compose/verifier/lean"
 
 [[require]]
 name = "core_onsite"
-path = "../../verity/protocols/onsite/verifier"
+path = "../../verity/protocols/compose/verifier/onsite"
 
 [[require]]
 name = "flock_verifier"
