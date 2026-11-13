@@ -44,13 +44,13 @@ open Plain (PlainChar PlainStr canonStr_plain)
 
 /-! ## Plain strings, decided -/
 
-instance (c : Char) : Decidable (PlainChar c) :=
+instance instDecidablePlainChar (c : Char) : Decidable (PlainChar c) :=
   inferInstanceAs (Decidable (' ' ≤ c ∧ c ≤ '~' ∧ c ≠ '"' ∧ c ≠ '\\'))
 
 theorem plainStr_iff (s : String) : PlainStr s ↔ s.toList.all (fun c => decide (PlainChar c)) = true := by
   simp only [PlainStr, List.all_eq_true, decide_eq_true_eq]
 
-instance (s : String) : Decidable (PlainStr s) := decidable_of_iff _ (plainStr_iff s).symm
+instance instDecidablePlainStr (s : String) : Decidable (PlainStr s) := decidable_of_iff _ (plainStr_iff s).symm
 
 /-! ## Hex -/
 
