@@ -19,10 +19,10 @@ import numpy as np
 import pytest
 
 from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
-from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.prover.circuit import pc8
