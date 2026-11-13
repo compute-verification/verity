@@ -13,11 +13,12 @@
   says, and no other measurement has a target or a verdict;
 - capacity is read from a registered uplink's `beta`, one way: the scope's machines times it times the period's
   ticks, and verified is capacity less free; with no registration both have no value and say why;
-- a row whose error is 1 or more has no bound at its period: its free and verified, and the metric and the card's
-  figure where the row is the term of record's, have no value and say why, and its error is written. At the
-  calculator's default δ those are the datacenter's and the world's rows; at the δ of the result of record every row
-  carries its amounts;
-- every measurement's inputs name the class the term is at and the scan's δ its error is at;
+- with no δ given, each execution phase's scan is at the δ at which the world's year carries the calculator's error
+  over a monitoring period, so every row carries its amounts: the result of record's command gives none;
+- under a δ the command gives, a row whose error is 1 or more has no bound at its period: its free and verified, and
+  the metric and the card's figure where the row is the term of record's, have no value and say why, and its error is
+  written. At a δ that suits one execution phase those are the datacenter's and the world's rows;
+- every measurement's inputs name the class the term is at and the scan's δ its error is at, with where it is from;
 - a registration that isn't the model's machine, a file that is no log, and a second result in one directory are
   refused."""
 from __future__ import annotations
@@ -45,12 +46,15 @@ STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test
 GIVEN = ["--commit", "c0ffee", "--world-requests", "1e16"]
 #: each scope and monitoring period's execution phases, as the calculator's table counts them
 PHASES = {(r.scope.name, r.period): r.phases for r in LB.table(LB.inputs(world_requests=1e16)) if r.name == "scan"}
-#: the error the result of record is run at over the world's year, and the scan's δ that gives it: that error over
-#: the world year's execution phases
-AT_MOST = Fraction(1, 2 ** 20)
+#: the error a row is to carry at most over its monitoring period, the calculator's, and the scan's δ a command that
+#: gives none is at: that error over the world year's execution phases
+AT_MOST = LB.PERIOD_ERROR
 DELTA = AT_MOST / PHASES["world", "year"]
-#: `GIVEN` at that δ, under which every row is bounded
+#: `GIVEN` with that δ given, under which every row is bounded as it is with none given
 BOUNDED = [*GIVEN, "--scan-delta", str(DELTA)]
+#: `GIVEN` at a δ that suits one execution phase, under which a datacenter's and the world's rows have an error of 1
+#: or more
+UNBOUNDED = [*GIVEN, "--scan-delta", str(LB.SCAN_DELTA)]
 #: each amount's unit, by its name's last word
 AMOUNTS = {"free": "bit", "capacity": "bit", "verified": "bit", "error": "probability"}
 #: the term of record's name, and the card's figure's: the term of record's row at the other jitter bound, named under
@@ -139,7 +143,7 @@ def test_the_result_is_the_kits_and_nothing_else_is_written(tmp_path, capsys, mo
     measurement = kit.Writer.measurement
     monkeypatch.setattr(kit.Writer, "measurement", lambda self, **m: written.append(measurement(self, **m)) or written[-1])
     fields = set(kit.writer(tmp_path / "another").measurement(name="a measurement", value=1, unit="bit"))
-    for at, argv in enumerate((GIVEN, BOUNDED)):
+    for at, argv in enumerate((GIVEN, UNBOUNDED)):
         out = tmp_path / str(at)
         del written[:]
         bench(capsys, "--out", str(out), *argv)
@@ -170,30 +174,35 @@ def test_the_names_are_regular_and_every_one_says_modeled(tmp_path, capsys):
 
 
 def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_path, capsys):
-    bench(capsys, "--out", str(tmp_path), *BOUNDED)
-    got, doc = result(tmp_path), document(capsys, *BOUNDED)
-    rows = scans(doc)
-    table = LB.table(LB.inputs(world_requests=1e16, scan_delta=DELTA))
-    exact = {(r.scope.name, r.period): r for r in table if r.name == "scan"}
-    assert list(rows) == [(scope, period) for scope in LB.SCOPES for period in LB.PERIODS] and LB.OF_RECORD == 2
-    for (scope, period), r in rows.items():
-        name, row = f"certifier_term/modeled/{scope}/{period}", exact[scope, period]
-        # the term at two release schedules, and the union of the scans' δ, as the table has them
-        assert got[f"{name}/free"]["value"] == r["term"]["2"]["bits"] == float(row.terms[2].certifier)
-        error = got[f"{name}/error"]
-        assert error["value"] == r["eps"] == float(row.eps) == float(row.phases * DELTA) < 1
-        # the error's inputs name the calculator's own key for it
-        assert error["inputs"][1] == R.UNION and "eps, the calculator's key: a union bound over the period's" in R.UNION
-        assert got[f"{name}/free"]["inputs"][0].startswith("modeled: benchmarks/network_traces/leak_bounds.py's row scan "
-                                                           f"at D_j = 2, scope {scope}, period {period}, ")
-        # the document's inputs, each with its value, its mark and its source, the scan's δ as the command gives it
-        assert got[f"{name}/free"]["inputs"][1:] == [R.at_delta(LB, doc) if k == "scan_delta" else R.stated(k, i)
-                                                     for k, i in doc["inputs"].items()]
-    # the term of record: the world's year's, in GB
-    metric, year = got["certifier_term/modeled/metric"], got["certifier_term/modeled/world/year/free"]
-    assert (metric["value"], metric["unit"]) == (doc["value"], "GB")
-    assert metric["value"] == float(exact["world", "year"].terms[2].certifier / LB.GB)
-    assert metric["inputs"][0] == f"modeled: {doc['name']}" and metric["inputs"][1:] == year["inputs"][1:]
+    """With no δ given and with the same δ given: the same terms and the same errors, each row's its execution phases
+    times the δ at which the world's year carries the calculator's error over a monitoring period."""
+    for at, (argv, delta) in enumerate(((GIVEN, None), (BOUNDED, DELTA))):
+        bench(capsys, "--out", str(tmp_path / str(at)), *argv)
+        got, doc = result(tmp_path / str(at)), document(capsys, *argv)
+        rows = scans(doc)
+        table = LB.table(LB.inputs(world_requests=1e16, scan_delta=delta))
+        exact = {(r.scope.name, r.period): r for r in table if r.name == "scan"}
+        assert list(rows) == [(scope, period) for scope in LB.SCOPES for period in LB.PERIODS] and LB.OF_RECORD == 2
+        for (scope, period), r in rows.items():
+            name, row = f"certifier_term/modeled/{scope}/{period}", exact[scope, period]
+            # the term at two release schedules, and the union of the scans' δ, as the table has them
+            assert got[f"{name}/free"]["value"] == r["term"]["2"]["bits"] == float(row.terms[2].certifier)
+            error = got[f"{name}/error"]
+            assert error["value"] == r["eps"] == float(row.eps) == float(row.phases * DELTA) <= float(AT_MOST)
+            assert (r["scan_delta"], r["eps_target"]) == (float(DELTA), None if delta else float(AT_MOST))
+            # the error's inputs name the calculator's own key for it
+            assert error["inputs"][1] == R.UNION and "eps, the calculator's key: a union bound over the period's" in R.UNION
+            assert got[f"{name}/free"]["inputs"][0].startswith(
+                f"modeled: benchmarks/network_traces/leak_bounds.py's row scan at D_j = 2, scope {scope}, period {period}, ")
+            # the document's inputs, each with its value, its mark and its source, the scan's δ's among them
+            assert got[f"{name}/free"]["inputs"][1:] == [R.stated(k, i) for k, i in doc["inputs"].items()]
+            assert R.at_delta(doc) == R.stated("scan_delta", doc["inputs"]["scan_delta"]) in got[f"{name}/free"]["inputs"]
+        assert got["certifier_term/modeled/world/year/error"]["value"] == float(AT_MOST)
+        # the term of record: the world's year's, in GB
+        metric, year = got["certifier_term/modeled/metric"], got["certifier_term/modeled/world/year/free"]
+        assert (metric["value"], metric["unit"]) == (doc["value"], "GB")
+        assert metric["value"] == float(exact["world", "year"].terms[2].certifier / LB.GB)
+        assert metric["inputs"][0] == f"modeled: {doc['name']}" and metric["inputs"][1:] == year["inputs"][1:]
 
 
 def test_the_cards_figure_is_the_term_of_records_row_at_the_other_jitter_bound_and_names_its_clause(tmp_path, capsys):
@@ -222,7 +231,7 @@ def test_the_cards_figure_is_the_term_of_records_row_at_the_other_jitter_bound_a
     bench(capsys, "--out", str(tmp_path / "over"), *BOUNDED, "--target-gb", "1e12")
     assert result(tmp_path / "over")[CARD]["verdict"] == "within target"
     # the world's year at an error of 1 or more: no value, and why, as the metric's
-    bench(capsys, "--out", str(tmp_path / "unbounded"), *GIVEN)
+    bench(capsys, "--out", str(tmp_path / "unbounded"), *UNBOUNDED)
     none = result(tmp_path / "unbounded")
     assert (none[CARD]["value"], none[CARD]["verdict"], none[CARD]["unit"]) == (None, None, "GB")
     assert absent(none[CARD]) == absent(none[METRIC]) and len(absent(none[CARD])) == 1
@@ -256,7 +265,7 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
     path = log(tmp_path)
     bench(capsys, "--out", str(tmp_path / "out"), "--registration", str(path), *BOUNDED)
     got, doc = result(tmp_path / "out"), document(capsys, *BOUNDED)
-    basis = [R.at_class(doc), R.at_delta(LB, doc)]
+    basis = [R.at_class(doc), R.at_delta(doc)]
     composite, entries = registration.log_of(json.loads(path.read_text()))
     scopes = LB.scopes(LB.inputs(world_requests=1e16))
     assert TICK == Fraction(1, 10 ** 9) and [s.name for s in scopes] == list(LB.SCOPES) and scopes[0].machines == 1
@@ -286,7 +295,7 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
 def test_with_no_registration_capacity_and_verified_have_no_value_and_say_why(tmp_path, capsys):
     bench(capsys, "--out", str(tmp_path), *BOUNDED)
     got, doc = result(tmp_path), document(capsys, *BOUNDED)
-    basis = [R.at_class(doc), R.at_delta(LB, doc)]
+    basis = [R.at_class(doc), R.at_delta(doc)]
     for scope in LB.SCOPES:
         for period in LB.PERIODS:
             name = f"certifier_term/modeled/{scope}/{period}"
@@ -300,10 +309,11 @@ def test_with_no_registration_capacity_and_verified_have_no_value_and_say_why(tm
 
 
 def test_a_row_whose_error_is_1_or_more_carries_no_amount(tmp_path, capsys):
-    """At the calculator's default δ the union bound over a datacenter's or the world's execution phases is over 1, so
-    those rows have no bound at their period, the term of record's among them; a node's rows carry their amounts."""
+    """At a given δ that suits one execution phase, the scan's driver's default, the union bound over a datacenter's
+    or the world's execution phases is over 1, so those rows have no bound at their period, the term of record's
+    among them; a node's rows carry their amounts."""
     assert R.NO_BOUND == "no bound at this period"
-    for at, argv in enumerate((GIVEN, ["--commit", "c0ffee"])):
+    for at, argv in enumerate((UNBOUNDED, ["--commit", "c0ffee", "--scan-delta", str(LB.SCAN_DELTA)])):
         text = bench(capsys, "--out", str(tmp_path / str(at)), "--registration", str(log(tmp_path)), *argv)
         # what is printed is the calculator's still, its terms for those rows among it
         assert LB.main(argv) == 0 and capsys.readouterr().out == text
@@ -347,7 +357,7 @@ def test_the_metric_follows_the_world_s_year_whatever_rows_the_command_asks_for(
     """A command that asks for a node's week alone still writes the term of record, whose row it didn't ask for: the
     metric has a value where the world's year is bounded and none where it isn't, though the node's week is."""
     asked = ["--scope", "node", "--period", "week"]
-    for at, (argv, bounded) in enumerate(((GIVEN, False), (BOUNDED, True))):
+    for at, (argv, bounded) in enumerate(((UNBOUNDED, False), (GIVEN, True))):
         text = bench(capsys, "--out", str(tmp_path / str(at)), *argv, *asked)
         assert LB.main([*argv, *asked]) == 0 and capsys.readouterr().out == text
         got, doc = result(tmp_path / str(at)), document(capsys, *argv)
@@ -363,40 +373,45 @@ def test_the_metric_follows_the_world_s_year_whatever_rows_the_command_asks_for(
 
 
 def test_the_result_of_record_s_command_bounds_every_row(tmp_path, capsys):
-    """The command the README gives for the result of record: the class given, and the scan's δ the error it is run at
-    over the world's year, divided by the world year's execution phases as the calculator's own document counts them.
-    Every row then carries its amounts, and the world's year's error is that error and no more."""
+    """The command the README gives for the result of record: the class given and no δ. Each execution phase's scan is
+    then at the calculator's error over a monitoring period divided by the world year's execution phases, as the
+    calculator's own document counts them and states it. Every row carries its amounts, the world's year's error is
+    that error and no other row's is more, and the amounts are those of the same command with that δ given."""
     ids = str(LB.RESPONSE_IDS // 2)
     asked = ["--commit", "c0ffee", "--response-ids", ids]
-    year = scans(document(capsys, *asked, "--scope", "world", "--period", "year"))["world", "year"]
+    bench(capsys, "--out", str(tmp_path / "none"), "--registration", str(log(tmp_path)), *asked)
+    got, doc = result(tmp_path / "none"), document(capsys, *asked)
+    year = scans(doc)["world", "year"]
     assert Fraction(year["phases"]) == PHASES["world", "year"]
-    delta = AT_MOST / Fraction(year["phases"])
-    argv = [*asked, "--scan-delta", str(delta)]
-    bench(capsys, "--out", str(tmp_path), "--registration", str(log(tmp_path)), *argv)
-    got, doc = result(tmp_path), document(capsys, *argv)
+    assert doc["scan"] == {"delta": float(DELTA), "given": False, "mark": "assumed", "eps_target": float(AT_MOST),
+                           "scope": "world", "period": "year", "phases": year["phases"]}
     assert len(got) == EVERY and all(m["value"] is not None and not absent(m) for m in got.values())
     assert got["certifier_term/modeled/metric"]["value"] == doc["value"]
     errors = {at: got[f"certifier_term/modeled/{at[0]}/{at[1]}/error"]["value"] for at in scans(doc)}
-    assert errors["world", "year"] == max(errors.values()) <= float(AT_MOST) and min(errors.values()) > 0
+    assert errors["world", "year"] == max(errors.values()) == float(AT_MOST) and min(errors.values()) > 0
     assert all(got[f"certifier_term/modeled/{scope}/{period}/free"]["value"] == r["term"]["2"]["bits"]
                for (scope, period), r in scans(doc).items())
+    bench(capsys, "--out", str(tmp_path / "given"), "--registration", str(log(tmp_path)), *asked, "--scan-delta", str(DELTA))
+    assert {name: m["value"] for name, m in result(tmp_path / "given").items()} == {name: m["value"] for name, m in got.items()}
 
 
 def test_every_measurement_names_the_class_and_the_scans_delta(tmp_path, capsys):
     """The most ids a response holds and each execution phase's scan's δ, read from the document: the defaults', and
-    another's where the command gives one, whose terms are another class's and whose errors another δ's."""
+    another's where the command gives one, whose terms are another class's and whose errors another δ's. The δ is
+    stated with where it is from, the error the world's year is to carry or the command, and assumed either way, no
+    scan having run at it."""
     another = LB.RESPONSE_IDS // 2
     got = {}
-    asked = {"default": [], "class": ["--response-ids", str(another)], "delta": ["--scan-delta", str(DELTA)]}
+    asked = {"default": [], "class": ["--response-ids", str(another)], "delta": ["--scan-delta", str(DELTA / 2)]}
     for at, argv in asked.items():
         bench(capsys, "--out", str(tmp_path / at), "--registration", str(log(tmp_path)), *GIVEN, *argv)
         doc, got[at] = document(capsys, *GIVEN, *argv), result(tmp_path / at)
         ids, delta = doc["inputs"]["response_ids"], doc["inputs"]["scan_delta"]
         klass = f"response_ids = {ids['value']} id ({ids['mark']}): {ids['source']}"
-        # the default δ as the document states it; one the command gives as given and assumed, no scan having run at it
-        given = (f"scan_delta = {float(DELTA)} (assumed): each execution phase's scan's δ as the command gives it "
-                 "(--scan-delta), to the document's float; no scan has run at it")
-        said = given if at == "delta" else f"scan_delta = {float(LB.SCAN_DELTA)} (assumed): {delta['source']}"
+        said = f"scan_delta = {float(DELTA / 2 if at == 'delta' else DELTA)} (assumed): {delta['source']}"
+        assert said == R.at_delta(doc) and "no scan has run at it" in said
+        assert ("δ, given (--scan-delta)" in said, f"{AT_MOST}, the error a row is to carry at most" in said) == (
+            (True, False) if at == "delta" else (False, True))
         assert ids["value"] == (another if at == "class" else LB.RESPONSE_IDS) and delta["mark"] == "assumed"
         assert all(klass in m["inputs"] and said in m["inputs"] for m in got[at].values())
         assert all(sum(i.startswith(("response_ids = ", "scan_delta = ")) for i in m["inputs"]) == 2 for m in got[at].values())
