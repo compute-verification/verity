@@ -125992,3 +125992,69 @@ Kept. No file of the tree changed; this entry only.
 
 ### Waiting on
 `r20261113-063039-7ab0` (SESSIONCOINS's three tries at `49dbe8d36f`, vy-nebius-2), still running at 06:47Z [run: `research inspect`]; started 06:31Z, three files in turn, so I expect it by about 07:05Z [guess]. I start `sessionsRun_replay` when it passes. No run of mine is out.
+
+## ASSEMBLY, Fri 06:48Z: JOIN HEAD `8c1063fb59`, WITH the base `3b05c3a3b1`, TWOLEG `870cc9da1b`, STAGECOINS `41720dd161`, COINMAP `44609dc158`, SESSIONCOINS `650835f367`, RUNSAS `e019992865`, OWNREADS `cd6eb12e46`, CUT `8cf4d46672`, HISTORY `4d5a24fe63`; NOT YET SESSIONCOINS `49dbe8d36f` (`7ab0`), RUNCOINS `0210e36675` (`143e`), HISTORY `35388bbd54`; ADDRWC not taken; the first whole compile of `JoinedForm.lean` is `r20261113-064510-6e8c`
+
+**Plain words.** Every head your 06:40Z table lets me take now is on the join, and the join's last three files are building together for the first time. Two merges needed a decision. TWOLEG and ACCEPTS each wrote a different file named `SampledTwo/Accepts.lean`. CUT's `CutFirst.lean` and STAGECOINS's `FirstCoins.lean` each declare `Verity.SampledTwo.FirstShown`, and `JoinsAt.lean` imports both. Both are settled below without changing any statement. The audit-only run is going again at the new head, at 64 GB. Nothing is listed, and the lock's only edit is still `roots`.
+
+**1. `r20261113-060147-df4e` (PROBE at `52d1ff2738`), rc 1** [run: its `stdout.log`]. It stopped in `build-roots` on `error: unknown module Proofs.Properties.Verity.SampledTwo.ClaimInner`, once in each of its three audits, before auditing anything. `lake build` stops at the first unknown module, so `SecondRead` was never reached. `ClaimInner` and `SecondRead` are the two MAJORITY's `4e88` found, and the only two lock roots under no lakefile root at that head [run: my roots script]. `f53493e9f0` made both lakefile roots. My script now fails `--check` on any lock root that isn't under a quoted `Proofs.…` name of the lakefile.
+
+**2. Merged since `3f6a3839cb`**, my roots script rerun after each. The lock is clean: no name missing, none twice, none without a file, none outside the lakefile.
+- The base `3b05c3a3b1` (only `security/lean-audit.json` changed), RUNSAS `e019992865`, OWNREADS `cd6eb12e46` (two roots its files needed: `HeldOfReads`, `ReadsCheck`), SESSIONCOINS `74727ce82a` then `650835f367`, STAGECOINS `41720dd161`, and CUT `8cf4d46672`: no conflict.
+- TWOLEG `870cc9da1b`: one conflict, an add/add on `SampledTwo/Accepts.lean`. TWOLEG's new file there (the check accepts where each step passes) and ACCEPTS's (the form's accept is the run's accept, which `AcceptsProof.lean` imports) are different modules under one name. I kept ACCEPTS's under its name and TWOLEG's, byte for byte, as `SampledTwo/AcceptsOfSteps.lean`, with its lakefile and lock roots. No file of TWOLEG's tree imports it [run: `git grep`]. **TWOLEG: rename it on your branch, or tell me another name.**
+- HISTORY `4d5a24fe63`: one conflict, `DeviceOrder.lean`. The join's copy was `19734e8d9f`'s, and HISTORY's change over it is docstrings only (`LedgerInOrder` taken, not proved). I took HISTORY's copy.
+- **A name two files declare:** `Verity.SampledTwo.FirstShown` is CUT's `FirstShown θ` (`CutFirst.lean`) and STAGECOINS's `FirstShown C Good` (`FirstCoins.lean`). `JoinsAt.lean` imports both through `CutAccept`. On the join, CUT's is `FirstCoinsShown`: a rename of 10 occurrences in `CutFirst.lean` and `CutAccept.lean`, with no statement changed. My static scan of `security/Proofs` finds no other clash among the two-stage files [run: `dup_names.py`]. **CUT: take the rename on your branch.**
+
+**3. `JoinsAt`, changed only as you ruled** (`JoinsAt.lean`; not compiled):
+- `firstReads` and `orderShown` are no longer fields. The join applies CUT's `firstReads θ` and `orderShown θ` (`CutAccept.lean`, compiled in `51b2`).
+- `interiorLogged` became `firstTreeless : SessionCoins.FirstTreeless C`, with `hlog := fun o hA hg => SessionCoins.interiorLogged_read C h.caseIsSent h.firstTreeless o hA hg.1` (SESSIONCOINS's 06:11Z).
+- Docstrings only: MESSAGES's two sentences on `msgOpens` and `digestBefore`. `sessionsRun` and `sessionMsgs` now say they hold at no honest play with two or more rounds a rep, together with the coins `SeqCoinsRead` fixes, at the alternating layout. `SeqCoinsRead` is in ACCEPTS's `Accepts.lean`, so its own docstring is ACCEPTS's to mark. MESSAGES's 06:42Z finding (they hold together at the new layout, on three conditions) lifts the mark once `49dbe8d36f` is in.
+- `joinFrame` and `joinMiss` are untouched until `JoinedForm.lean` has a verdict. Lines that read `joinFrame`, `joinMiss`, `msgOpens` or `digestBefore` [run: `rg`]: `JoinsAt.lean` 8 (2 of them in the module docstring), `JoinElems.lean` 0, `Joined.lean` 21 (3 of them in the module docstring). Outside those three: `JoinedForm.lean` 3 and `JoinedCoupling.lean` 10.
+
+**4. The table of `JoinsAt`'s fields** (24 at `8c1063fb59`) [read; nothing here is compiled at the join]:
+
+| Field | Owner | Status |
+|---|---|---|
+| `ledgerInOrder` | the modelled device (PRF-490) | hypothesis; HISTORY's `DeviceOrder.lean` says it is taken, not proved |
+| `distinctFamilies` | TWOLEG | hypothesis, until the form refuses equal labels |
+| `draws₁`, `draws₂` | TWOLEG (the family), CUT (one root) | hypothesis; CUT's one-root half is not started as Lean |
+| `firstDrawn` | STAGECOINS | hypothesis |
+| `sessionMatches` | STAGECOINS | hypothesis (two conjuncts, by its 06:17Z) |
+| `firstTreeless` | TWOLEG (the refusal), SESSIONCOINS (`firstTreeless_of_plain`) | hypothesis, until TWOLEG's next head |
+| `msgOpens`, `digestBefore` | MESSAGES | cannot be proved as stated; become `ShowsStrings`, `FixedBefore`, `Explains` in step 2 |
+| `heldAt` | HELDOF | hypothesis (`heldMatches_of` with `PartsAt`) |
+| `twoHolds` | HELDOF | hypothesis (`HeldOfRun.lean`) |
+| `recordsHeldAt` | ACCEPTS (with HELDOF's `namesHeld_of`) | hypothesis; becomes `HeldOfAt` and `PortsDistinctAt` at ACCEPTS's next head |
+| `recordsRead` | TWOLEG | hypothesis, until its form change |
+| `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt` | MESSAGES and the sessions' workers | hypothesis |
+| `sessionsRun`, `sessionMsgs` | SESSIONCOINS (layout), MESSAGES | cannot hold at an honest play as stated (alternating layout); SESSIONCOINS's `49dbe8d36f` mends the layout; MESSAGES's `sessionsRun_replay` not written |
+| `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer` | the instance | hypothesis |
+
+These are proved from the check and are no longer fields: `firstReads` and `orderShown` (CUT), `sourcesFit` (ACCEPTS's `Fits.sourcesFit`), the interior's log on the play's (`SessionCoins.interiorLogged_read`), `HeldSize` (`held_size`), the stages' and sessions' coin agreement (`coinsAgree_first_of`, `coinsAgree_second_of`, `coinsAgree_sessions`), and `FreshWide` (`freshWide_play`).
+
+**5. `import all`** [run: `pytest tests/test_lean_packages.py -k import_all` at `8c1063fb59`, on my VM]: 1 failed, 1 passed. It refuses **six** lines, not five:
+- `RunsAs/OfCheck.lean` and `RunsAs/Parsed.lean`: `VStarRecursive.SampledTwo`;
+- `RunsAs/Steps.lean`: `Spot.Record` and `Spot.Run`;
+- `SampledTwo/FirstCoins.lean`: `Spot.Run`;
+- `SampledTwo/FirstSample.lean`: `Spot.Run`. This is the sixth, which TWOLEG's `870cc9da1b` brought.
+I edited none of them.
+
+**6. Runs** (one try, one records run):
+- `r20261113-064510-6e8c`, vy-nebius-2, `--pool proofs`, `--mem-gb 32`, at `8c1063fb59`: `--try` of `JoinsAt.lean`, then `JoinedCoupling.lean`, then `JoinedForm.lean`. It is the first whole compile. Expected end about 07:30Z [guess: about 1100 changed files to build, and the line at the end]. I cancelled `r20261113-063354-5a75`, the try at `3f6a3839cb`, which predated eleven of the merges.
+- `r20261113-064609-4aa9`, vy-nebius-cpu-2, `--on auto`, `--mem-gb 64`: the records run of PROBE at `3daff389fc`, which is the join's `8c1063fb59` without the five files. Expected end about 07:20Z [guess]. I cancelled `r20261113-063112-4e9a`, PROBE at `97f99dc2fc` at 32 GB, likewise stale. vy-nebius-cpu-14 refused 64 GB for want of memory.
+
+**7. The machine was replaced twice** (06:25:58Z and 06:41:48Z). Each time I retook the pen and rebuilt the worktrees from the remote, and nothing was lost.
+
+### STOP RULE
+Kept. The lock's only edits are `roots`; nothing listed; no `unwitnessed` entry; no device lines; nothing written against TWOLEG's next head; PROBE never merges.
+
+### NEEDS
+1. TWOLEG: the name for its `Accepts.lean` beside ACCEPTS's (section 2), or take `AcceptsOfSteps`.
+2. CUT: the rename `FirstShown` → `FirstCoinsShown` on its branch (section 2), so the next merge doesn't bring the clash back.
+
+### Not established
+- `JoinsAt.lean`, `JoinedCoupling.lean`, `JoinedForm.lean` compiled (`6e8c`).
+- Any file compiled at `8c1063fb59` as a whole, beyond each owner's try at its own head.
+- A records run of `security/Proofs` that passes at the join's head; so no ready line.
+
+Join `cursor/proofs-join-42b8` at `8c1063fb59`, PROBE at `3daff389fc`; nothing unpushed.
