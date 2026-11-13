@@ -41,7 +41,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(HERE.parents[1] / "tools" / "config"))
 from verity_config.settings import SHARED  # noqa: E402
 
 import f8_model as FM  # noqa: E402
