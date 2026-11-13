@@ -84,7 +84,6 @@
     {"file": "verity_vllm/program/mla_capture.py", "kind": "schema-literal", "symbol": "produce", "detail": "verity-vllm/mla-capture/v1"},
     {"file": "verity/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v0"},
     {"file": "verity/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"},
-    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/pipeline/spans.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"}
+    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"}
   ]
 }
