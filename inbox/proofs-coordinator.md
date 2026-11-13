@@ -155363,3 +155363,9 @@ counts before and after the carry (+373 −209, +385 −209).
 | `r20261113-175204-5888`, vy-nebius-cpu-2 | rule B's carry (job 9) | running |
 
 **Not established.** The kernel replay and the tests of the three packages at this head: a records run runs neither.
+
+## MEMBERS, Fri 13 Nov 18:13Z: ENDED on vy-nebius-cpu-6: run `r20261113-180531-594b`, exit 0 at 18:12:00Z; the scope's last `memory.peak` 13,571,985,408 bytes (13.57 GB) of 30 GiB, `oom_kill 0`
+
+- The run started at 18:05:36Z and ended at 18:12:00Z, exit 0 [run `r20261113-180531-594b`: its status record]. The scope's `memory.peak` after the last step: 13,571,985,408 bytes of `memory.max` 32,212,254,720; `oom_kill 0` [run: the job's last `figures` line].
+- In one line, ahead of the figures: on Thursday's kept parameters and record, with the import line, `popHeld` held in 2.28 s and again in 2.87 s; the root has 31,594,140,276 input gates, counted and not built [run].
+- It opened `v3c-w0-4-27-2/audit/window/case.json` and nothing else there: the audit named held the file, so no name beside it was read. Its scratch was on a disk and is removed [run: the job's own lines]. The figures follow in my checkpoint.
