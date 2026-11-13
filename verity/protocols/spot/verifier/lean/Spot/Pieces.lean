@@ -65,7 +65,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   accepted and whether it is complete, as the record the caller hands says: nothing holds that record to the one the
   earlier stream's verifier wrote;
 * `across_all`: those verdicts on each read of a list, whether each reaches a class's boundary record through reads of
-  the list, and the list's case (`Record.acrossAll`);
+  the list, the verdict on the last stream's own audit record, and the list's case (`Record.acrossAll`);
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
@@ -644,10 +644,11 @@ def acrossOf (j : Json) : V Record.Across := do
 /-- One read across streams (`acrossOf`) to `Record.across`'s verdicts on it. -/
 def across (j : Json) : V Json := do Record.across (← acrossOf j)
 
-/-- `{"boundary", "links"}` to `Record.acrossAll`'s verdicts on a list of reads across streams: a class's boundary
-record's digest in lowercase hex, and the reads, each as `across` takes one. -/
+/-- `{"boundary", "links", "last"}` to `Record.acrossAll`'s verdicts on a list of reads across streams: a class's
+boundary record's digest in lowercase hex, the reads, each as `across` takes one, and the last stream's own audit
+record or null. -/
 def acrossAll (j : Json) : V Json := do
-  if keys? j != some #["boundary", "links"] then throw "exactly {boundary, links}"
+  if keys? j != some #["boundary", "last", "links"] then throw "exactly {boundary, links, last}"
   let .str boundary := getD j "boundary" | throw "boundary is not lowercase hex"
   let .arr given := getD j "links" | throw "links is not a list"
   let mut links : Array Record.Across := #[]
@@ -655,7 +656,7 @@ def acrossAll (j : Json) : V Json := do
     match acrossOf l with
     | .ok a => links := links.push a
     | .error why => throw s!"link {links.size}: {why}"
-  Record.acrossAll { boundary, links }
+  Record.acrossAll { boundary, links, last := getD j "last" }
 
 /-- `{"record", "scheme", "query", "values": [{"name", "registered"}], "public": [item]}` to the service's public-items
 rule's `{"ok", "codes", "detail"}` (`Service.checkPublic`), the query's digest computed here: a string scheme, the check's query

@@ -330,15 +330,23 @@ def across(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any
     return V.lean("across", link(stage1, first, outcome))
 
 
-def across_all(boundary: str, links: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def across_all(boundary: str, links: Sequence[Mapping[str, Any]], last: Mapping[str, Any] | None) -> dict[str, Any]:
     """Lean's verdicts on a list of reads across streams that rest on one boundary record (`Record.acrossAll`, the
-    Lean verifier's piece ``across_all``): ``boundary`` is that record's digest, and each of ``links`` a read as
-    `link` gives the stop record's. -> ``links``, each read's `across` with ``reaches``, whether its earlier record is
-    ``boundary`` or the later record of a read of the list that reaches it, and the list's ``case``: 2 when a read
-    does not reach the boundary record or is case 2, else 3 when one is case 3, else 4 when one is case 4, else 1. A
-    record the list leaves out is not seen. ``{"refused": reason}`` where Lean refuses the input or can't run. No entry of the audit record
-    reads it: the stop record's is one read, `across`'s."""
-    return V.lean("across_all", {"boundary": boundary, "links": [dict(x) for x in links]})
+    Lean verifier's piece ``across_all``): ``boundary`` is that record's digest, each of ``links`` a read as
+    `link` gives the stop record's, and ``last`` the last stream's own audit record (an outcome record's ``audit``;
+    none when there is none to hand). Each read hands its earlier stream's audit record, so ``last`` is the one no
+    read hands: the audit record of the list's last record, the later record no read of the list reads.
+    -> ``links``, each read's `across` with ``reaches``, whether its earlier record is ``boundary`` or the later
+    record of a read of the list that reaches it; ``last``, the last record's digest (null where the list has no such
+    record or several); ``audit``, the verdict on the audit record handed for it, in `across`'s ``audit``'s form,
+    refused where no one record is last; and the list's ``case``: 2 when a read does not reach the boundary record or
+    is case 2, else 3 when one is case 3 or the last stream's audit record is missing or no accept, else 4 when one
+    is case 4 or that audit record is not complete, else 1. So case 1 says every read is in order and every audit
+    record of the list, the last stream's included, accepted and is complete, as the records handed say. A
+    record the list leaves out is not seen. ``{"refused": reason}`` where Lean refuses the input or can't run. No
+    entry of the audit record reads it: the stop record's is one read, `across`'s."""
+    return V.lean("across_all", {"boundary": boundary, "links": [dict(x) for x in links],
+                                 "last": None if last is None else dict(last)})
 
 
 def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -> dict[str, Any]:
