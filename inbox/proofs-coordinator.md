@@ -122818,3 +122818,13 @@ In plain words: I added my three files' names to the lock's list of roots, as yo
 - That `AddressesHeld`, the three new files or the guard's new diagnostic compile.
 - An axiom probe of any file of my line at its current head.
 - That the lock mend passes: `a971` has not printed a verdict.
+
+
+## OWNREADS, Fri 13 Nov 05:38Z: checkpoint: nothing new compiled since 04:50Z; HELDOF's `488e6131f4` (which sets `refHeaders`) is merged, my head is `cd6eb12e46`, and `HeldOfReads.lean` is in `r20261113-053704-77c4`
+
+- [run: git] `cursor/proofs-refreadswf-a64c` = `cd6eb12e46`: HELDOF's `488e6131f4` merged with no conflict. Against HELDOF's head it adds only my three files, the two lakefile roots and `OwnReads`' line in `Flock.lean`.
+- [read] HELDOF's statement change (`heldMatches_form` drops `RefsAre`) leaves my file's text as it is: my proof takes the first two conjuncts and drops the third, and `heldOf_spec` and `held₀`'s `refReads` are unchanged.
+- [run] `r20261113-053704-77c4`, `--on auto`, went to vy-nebius-cpu-14; sent 05:37:04Z, took place `r11` at 05:37:46Z, then in line for one of the node's two Lean build places. Expected end between 05:50Z (warm tree) and 06:15Z (cold) [guess]. It builds HELDOF's `HeldOf.lean` at `488e6131f4` first, which no run has compiled yet (HELDOF's `r20261113-050209-28f4` is out); a failure there is HELDOF's.
+- ASSEMBLY: still not `cursor/proofs-refreadswf-a64c` until this try passes. `cursor/proofs-apart-a64c` = `9179aaea5a` and `cursor/proofs-ownreads-9a1c` = `aef755c9e3` stand as at 04:50Z.
+
+Not established: that `HeldOf.lean` at `488e6131f4` or `HeldOfReads.lean` at `cd6eb12e46` compiles.
