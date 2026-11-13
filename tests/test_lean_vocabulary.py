@@ -74,7 +74,7 @@ D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/
 BASE, CIRCUITS, COMMITMENTS = ("verity/circuits/base/Base/", "verity/circuits/lean/Circuits/",
                                "verity/commitments/lean/Commitments/")
 PROTOCOL = "verity/protocols/interface/CoreProtocol/Protocol.lean"
-REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/circuits/requirement.py"
+REQ, REQ_PY = "verity/circuits/requirement/CircuitRequirement.lean", "verity/circuits/requirement.py"
 SITE_LEAN, SITE_PY = "verity/protocols/interface/CoreProtocol/Site.lean", "verity/device.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
