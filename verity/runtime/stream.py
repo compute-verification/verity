@@ -30,9 +30,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Protocol, TypeVar
 
-from verity.configuration.wire import Message
+from verity.channel import Message
 
-from .party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
+from verity.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 
 T = TypeVar("T")
 
