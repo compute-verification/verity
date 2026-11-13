@@ -202,10 +202,10 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
     site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
     directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
-    to the session's, and which the device's answers.jsonl keeps. Each session's core case, the one the device's
-    private cases.jsonl keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the toy's store,
-    its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was given, and
-    `session.json` holds only its digest, store and verdict."""
+    to the session's, and which the device's answers.jsonl keeps. Each session's core case, whose digest alone the
+    device's private case-digests.txt keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the
+    toy's store, its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was
+    given, and `session.json` holds only its digest, store and verdict."""
     reg = B.toy(tmp_path / "toy")
     (tmp_path / "challenger").mkdir()
     mc.SessionLog.create(tmp_path / "challenger" / "sessions")
@@ -238,7 +238,9 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         cases.append(case)
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
     assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
-    assert [json.loads(x) for x in (tmp_path / "party" / "private" / "cases.jsonl").read_text().splitlines()] == cases
+    private = tmp_path / "party" / "private"
+    assert (private / p2_party.CASE_DIGESTS).read_text().splitlines() == [p2_party.case_digest(c) for c in cases]
+    assert sorted(p.name for p in private.iterdir()) == [p2_party.CASE_DIGESTS]
     record = {"verdict": "accept"}
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
     with pytest.raises(SystemExit, match="can't be under --out"):
