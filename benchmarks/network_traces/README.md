@@ -447,11 +447,15 @@ passes the scan), so `NetworkCheck.Period` refuses the execution phase by name (
 whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
 `SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
-requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, an execution phase whose scan's
-state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
-(`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
-that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
-refused at that proof block's o1; the block round's registration names it as `scan/state`.
+requests from its own registered `SCAN_STATE`, and the check refuses, by name, an execution phase whose scan's
+state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVERY` units read each slot entry, which
+one-stage's registration check lets through only with each lane's `prog<j>` named tied (`lane_kinds`), and its answer
+then names them (`rests_on_period_check`); the check refuses, last, by name, an execution phase whose scan's answer
+names under that key anything that is no lane's `prog<j>` (`tiedInputWired`), since `wired` ties no other Input.
+scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each
+leaf but the first the o1 of the proof block that computes it and the sin of the next, both registered reads, so a
+state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration names
+it as `scan/state`.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the execution phase's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the

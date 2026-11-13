@@ -31,7 +31,9 @@ at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its sm
 slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
-stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
+stratified or subset sample at the period's δ, its public outputs naming its lanes' `prog<j>` tied (`TIED_KEY`,
+`prog_params`) where several of its units read one slot entry (`every` ≥ 2), as one-stage's registration check
+publishes them; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
 what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the
@@ -44,7 +46,10 @@ sample (a work sampling design's) and its bound on incorrect proof blocks, every
 `subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`,
 `tied-slots-sampled`), and a link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
-at another root or domain, or none, `UNSTATES`). An answer whose profile samples more than its level holds is refused
+at another root or domain, or none, `UNSTATES`). A scan's answer that names only lanes' `prog<j>` tied is accepted in
+any shape (`answer-tied-held`: every lane's, some, in another order, one twice, none, `TIED_HELD`), and one that names
+anything else, a tie the check does not wire, is refused (`answer-tied-unheld`: a name that is no lane's, or no list of
+names, `TIED_UNHELD`). An answer whose profile samples more than its level holds is refused
 in either form (`OVERSAMPLED`): a compute audit's (`audit-oversampled`, tied or not; `tied-oversampled`, the tied audit
 of the aimed scan) and a scan's (`answer-oversampled`), each under a registration that samples within its population.
 So is one with a stratum that samples more than the stratum holds in a level whose total still holds
@@ -842,6 +847,8 @@ PROG = "scan/prog"
 #: value a window circuit registers the scan's state rows as (`stateValue`, the certifier's `blocks.SCAN_STATE`)
 STATE = "scan/state"
 SCAN_STATE = "verity/certifier/scan-state/v1"
+#: `tiedKey`: the key of one-stage's public outputs that holds the tied Inputs its registration check let through
+TIED_KEY = "rests_on_period_check"
 
 
 def output_port(port) -> bool:
@@ -950,6 +957,34 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
+def lane_tied(s: WardenParams, t) -> bool:
+    """`laneTied`: an entry under `TIED_KEY` that names a lane's Programs' rows (`prog_params`)."""
+    return isinstance(t, str) and t in prog_params(s.lanes)
+
+
+def tied_input_wired(s: WardenParams, a: dict) -> bool:
+    """`tiedInputWired`: the answer's public outputs have no `TIED_KEY`, or under it a list whose every entry is a
+    lane's name (`lane_tied`), in any order, a lane's more than once or not at all."""
+    pub = a["public"]
+    if not (isinstance(pub, dict) and TIED_KEY in pub):
+        return True
+    return isinstance(pub[TIED_KEY], list) and all(lane_tied(s, t) for t in pub[TIED_KEY])
+
+
+def tied_unheld(s: WardenParams, a: dict) -> str:
+    """`tiedUnheld`: what an answer `tied_input_wired` refuses holds under `TIED_KEY`, as Lean's refusal words it: the
+    first entry that is no lane's name, or the key's value where it is no list, beside the lanes' names."""
+    pub = a["public"]
+    tied, lanes = pub.get(TIED_KEY) if isinstance(pub, dict) else None, ", ".join(prog_params(s.lanes))
+
+    def text(j) -> str:
+        return json.dumps(j, separators=(",", ":"), sort_keys=True)
+
+    if not isinstance(tied, list):
+        return f"is {text(tied)}, no list of names of the scan's lanes' {lanes}"
+    return f"names {text(next((t for t in tied if not lane_tied(s, t)), None))}, none of the scan's lanes' {lanes}"
+
+
 def _prog_tied(audits: list[dict], reg: dict) -> bool:
     """`progTied`: some audit is tied to the scan's `prog` (`_tied_audits`)."""
     return bool(_tied_audits(audits, reg))
@@ -1043,6 +1078,8 @@ STRATA_SIZES = "their sizes do not sum to the level's"
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusal, after its window's number.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
+#: `tiedInputCheck`'s refusal, after its window's number and before what the answer holds instead (`tied_unheld`).
+TIE_UNHELD = "the scan's answer rests on a tie this check does not hold"
 
 
 def clog2(x: int) -> int:
@@ -1130,6 +1167,9 @@ def check(p: Params, c: Commitment, e) -> tuple:
                      if not _wired(p, c.audits, reg)]
         findings += [Finding(REJECT, f"window {p.first + i}: {UNSTATED}") for i, reg in enumerate(c.windows)
                      if not _state_tied(p, c.audits, reg)]
+        findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}: its public outputs' {TIED_KEY} "
+                                     f"{tied_unheld(p.schedule, x.answer)}")
+                     for i, x in enumerate(windows) if not tied_input_wired(p.schedule, x.answer)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -1179,7 +1219,7 @@ EXPECT = {
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": ACCEPT, "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
-    "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT,
+    "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
@@ -1189,7 +1229,8 @@ EXPECT = {
     "rows-schedule": REJECT, "rows-capped": ACCEPT, "rows-cap-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
-    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-answer-tied-unheld": REJECT,
+    "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
@@ -1487,23 +1528,42 @@ def templates_of(desc: dict) -> list[tuple[str, str, int]]:
             if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
 
 
-#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output, at every lane: the
+#: How `rows-prog-untied` breaks its execution phase's tie of the scan's `prog` to an audit's output, at every lane: the
 #: scan's `scan/prog<j>` entries at another root or domain, the audit's chunks' entries at ports that are no unit's
-#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them),
-#: the chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
+#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them), the
+#: chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
-#: How `rows-prog-unwired` breaks its link-window's wiring at one lane j while its tie holds: the audit's chunk j
+#: How `rows-prog-unwired` breaks its execution phase's wiring at one lane j while its tie holds: the audit's chunk j
 #: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v1` or `SelectEntry_v1`
 #: template's entries port than any of its Program's, at another chunk's (`chunk`), of other than T / every leaves
 #: (`leaves`), the scan's lane j entry named another lane's (`lane`), its Program's slot entries' template one member
 #: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,
 #: `RENAMED_SELECT_ENTRY`)
 UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
-#: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
-#: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
-#: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
-#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
+#: How `rows-state-untied` breaks its execution phase's tie of the scan's state to its wired audit's `SCAN_STATE` while
+#: its `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of
+#: the scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no
+#: string, or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a
+#: second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
+#: What `rows-answer-tied-held` puts under `TIED_KEY` in its execution phase's scan's answer, each a list of lanes'
+#: names: every lane's in the lanes' order, all but the last lane's (a proper subset), the lanes' in reverse, the first
+#: lane's twice after them, and none
+TIED_HELD = ("all", "subset", "order", "twice", "empty")
+#: What `rows-answer-tied-unheld` puts there, each naming a tie the check does not wire or no list of names: after the
+#: lanes' names the name past the last lane's (``prog<lanes>``), another Input's (``state``) or the first lane's
+#: registration entry in place of its parameter (``scan/prog0``); ``state`` before them, or alone; a lane's name
+#: without its lane, alone (``prog``); a lane's name as a string, in a nested list, or beside a number; and null
+TIED_UNHELD = ("next", "state", "entry", "first", "alone", "bare", "string", "nested", "number", "null")
+
+
+def tied_list(kind: str, lanes: int):
+    """What a change of `TIED_HELD` or `TIED_UNHELD` puts under `TIED_KEY`, for a scan of `lanes` lanes."""
+    names = list(prog_params(lanes))
+    return {"all": names, "subset": names[:-1], "order": names[::-1], "twice": [*names, names[0]], "empty": [],
+            "next": [*names, f"prog{lanes}"], "state": [*names, "state"], "entry": [*names, prog_name(0)],
+            "first": ["state", *names], "alone": ["state"], "bare": ["prog"], "string": names[0],
+            "nested": [names], "number": [*names, 0], "null": None}[kind]
 
 
 def _present(e: dict) -> dict:
@@ -1653,6 +1713,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     the toy key, as few link-windows and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
+    rt = random.Random(f"network-period tied {m} {seed}")
     rows = form_of(m) == "rows"
     m = m.removeprefix("rows-")
     ki = 0 if small else r.randrange(len(KEYS))
@@ -1834,8 +1895,16 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
                            r.randint(0, units), strata)
+        if sched.every > 1:
+            # every `every` units read one slot entry of each lane, which one-stage's registration check lets through
+            # only tied, and its verdict then names each lane's
+            answer["public"][TIED_KEY] = list(prog_params(sched.lanes))
         if aimed:
-            if m == "answer-protocol":
+            if m == "answer-tied-held":
+                answer["public"][TIED_KEY] = tied_list(rt.choice(TIED_HELD), sched.lanes)
+            elif m == "answer-tied-unheld":
+                answer["public"][TIED_KEY] = tied_list(rt.choice(TIED_UNHELD), sched.lanes)
+            elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
                 answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 1})])

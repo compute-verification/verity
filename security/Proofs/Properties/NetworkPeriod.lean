@@ -16,8 +16,9 @@ Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
 
-`RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
-(`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
+`RowsProgWired`, `RowsStateTied` and `RowsTiedInputWired` read the check's refusals off its findings: on acceptance
+every finding is none (`firstFinding_none`), each execution phase's `wiredCheck`, `stateCheck` and `tiedInputCheck`
+among them.
 
 `RowsTiedCharged` reads the public the rows form accepts with (`check_rows`): with no finding, every audit's check gave
 its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
@@ -234,7 +235,8 @@ theorem rowsStateTied : RowsStateTied := by
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    have h0 := firstFinding_none hF _
+      (List.mem_append_right _ (List.mem_append_left _ (Array.mem_toList_iff.mpr hmem)))
     unfold stateCheck at h0
     split at h0
     · assumption
@@ -281,6 +283,95 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       stateExecutionPhase rfl
   rw [stateExecutionPhase_skipped] at hs
   cases hs
+
+/-! ## The rows form's scan's answer names no tied Input but its lanes' `prog<j>`
+
+`RowsTiedInputWired`'s honest lemma is `rowsCapPublished_honest`: the period check accepts a rows-form period, one
+with nothing registered. A period with an execution phase needs the network certifier's LMS signatures and one-stage's
+answers, which the period's difftest builds and checks against the mirror; `tiedAnswer_wired` is the check's step at
+the answers an honest scan gives. -/
+
+theorem tiedInputChecks_getElem? {p : Params} {e : Evidence} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {x : ExecutionPhase} (hx : e.windows[i]? = some x) :
+    (tiedInputChecks p e)[i]? = some (tiedInputCheck s (p.first + i) x) := by
+  simp [tiedInputChecks, hform, Array.getElem?_zipIdx, hx]
+
+theorem rowsTiedInputWired : RowsTiedInputWired := by
+  intro p c e pub prof h s sd scan hform i reg x hreg hx
+  refine ⟨?_, rowsProgWired p c e pub prof h s sd scan hform i reg hreg⟩
+  have hmem := Array.mem_of_getElem? (tiedInputChecks_getElem? hform hx)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _
+      (List.mem_append_right _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+    unfold tiedInputCheck at h0
+    split at h0
+    · assumption
+    · cases h0
+
+/-- A scan's answer whose public outputs hold `tied` as their tied Inputs. -/
+def tiedAnswer (tied : Array Lean.Json) : Core.Answer :=
+  { protocol := oneStage, verdict := .accept, reason := none, digest := none,
+    published := some (Lean.Json.mkObj [(tiedKey, Lean.Json.arr tied)]), profile := none }
+
+/-- `slotSchedule` with a second lane. -/
+def twoLanes : Schedule := { slotSchedule with lanes := 2 }
+
+/-- An execution phase whose scan's `prog` is wired to the slot audit and whose answer names that lane's `prog0` has
+the property's conclusion; so does an answer that names none, one with no public outputs, with other keys only (a scan
+no two units of which read one row) or with an empty list; and under two lanes, an answer that names both lanes' in
+either order, one lane's alone, or one twice. -/
+theorem tiedAnswer_wired :
+    (tiedInputWired slotSchedule (tiedAnswer #[.str "prog0"]) = true ∧
+        wired #[slotAudit] slotSchedule #[slotReg] tiedExecutionPhase = true) ∧
+      tiedInputWired slotSchedule { tiedAnswer #[] with published := none } = true ∧
+      tiedInputWired slotSchedule
+        { tiedAnswer #[] with published := some (Lean.Json.mkObj [("bound", Lean.toJson (0 : ℕ))]) } = true ∧
+      tiedInputWired slotSchedule (tiedAnswer #[]) = true ∧
+      tiedInputWired twoLanes (tiedAnswer #[.str "prog0", .str "prog1"]) = true ∧
+      tiedInputWired twoLanes (tiedAnswer #[.str "prog1", .str "prog0"]) = true ∧
+      tiedInputWired twoLanes (tiedAnswer #[.str "prog1"]) = true ∧
+      tiedInputWired twoLanes (tiedAnswer #[.str "prog0", .str "prog0"]) = true := by
+  decide +kernel
+
+/-- An answer that names a tied Input that is no lane's does not: a second one beside the lane's `prog0`, one alone,
+the name without its lane (`prog`), the next lane's where the schedule has one (`prog1`), under two lanes the third's
+(`prog2`), an entry that is no name, and a value that is no list. -/
+theorem tiedAnswer_unwired :
+    tiedInputWired slotSchedule (tiedAnswer #[.str "prog0", .str "state"]) = false ∧
+      tiedInputWired slotSchedule (tiedAnswer #[.str "state"]) = false ∧
+      tiedInputWired slotSchedule (tiedAnswer #[.str "prog"]) = false ∧
+      tiedInputWired slotSchedule (tiedAnswer #[.str "prog1"]) = false ∧
+      tiedInputWired twoLanes (tiedAnswer #[.str "prog0", .str "prog2"]) = false ∧
+      tiedInputWired slotSchedule (tiedAnswer #[.arr #[.str "prog0"]]) = false ∧
+      tiedInputWired slotSchedule
+        { tiedAnswer #[] with published := some (Lean.Json.mkObj [(tiedKey, .str "prog0")]) } = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsTiedInputWired`'s property** (its nontrivial lemma): such a
+check accepts a rows-form period of one execution phase whose scan's `prog` is wired to the slot audit and whose
+answer names a second tied Input, which no check wires. -/
+theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows := by
+  intro h
+  let p : Params :=
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+  let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], .rows #[]⟩
+  have hw : tiedInputWired slotSchedule (tiedAnswer #[.str "prog0", .str "state"]) = true :=
+    (h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase x
+      rfl rfl).1
+  cases tiedAnswer_unwired.1.symm.trans hw
 
 /-! ## The rows form charges a tied audit sampled in part -/
 
