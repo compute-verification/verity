@@ -154,4 +154,5 @@ def test_joined_with_select():
     parts = [x for x in circuit.wires if x.writer == read and x.reader.startswith("AllReduceMultimem_v1")]
     assert [(x.port, x.out, x.at, x.radix, x.base, x.step, x.cut[0]) for x in parts] == [
         ("parts", "o0", 0, (IDS, blocks), 0, (1, IDS), 0)]
-    assert "SIZE=192," in parts[0].reader and circuit.units[parts[0].reader] == IDS * blocks * 2
+    assert "SIZE=192," in parts[0].reader and circuit.cuts[parts[0].reader] == {"parts": 8}
+    assert circuit.units[parts[0].reader] == IDS * blocks
