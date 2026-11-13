@@ -15,11 +15,11 @@ public import PouwWindow.Length
 * `Params`: the verifier's own parameters of the execution phase: the check item, ε and δ, the grid's bits, the declared range
   of tile counts, the execution phase's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
-* `WindowCommitmentRecord`: the execution phase's window commitment record, one-stage's record of it
+* `WindowCommitmentRecord`: the execution phase's execution phase commitment record, one-stage's record of it
   (`registration.record`), canonical JSON, with what PoUW's rule reads; its digest is the record's own,
   `registration.digest`. It is the execution phase's commitment, not the registration log (`Core.Registration`), which
   registers the Site, θ and the registered compiler and declares each day's circuit.
-* `Evidence`: the proof system's answer for a window commitment record, read by `Core.Answer.ofJson`: the protocol, the
+* `Evidence`: the proof system's answer for an execution phase commitment record, read by `Core.Answer.ofJson`: the protocol, the
   record it is for, and what it said (on acceptance, the integrity profile and the verifier's sample as one-stage's
   `draw.py` writes it).
 
@@ -158,7 +158,7 @@ structure ExecutionBlockItem where
   activations : Option Json
   registered : Option Json
 
-/-- The execution phase's window commitment record: the canonical bytes its digest hashes, and the record's fields
+/-- The execution phase's execution phase commitment record: the canonical bytes its digest hashes, and the record's fields
 PoUW's rule reads. -/
 structure WindowCommitmentRecord where
   bytes : ByteArray

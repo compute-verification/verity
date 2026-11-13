@@ -136,7 +136,7 @@ def test_rope_cache_is_rotary_embedding_then_reshape_and_cache_flash(t, n, block
 
 @cuda
 def test_rope_cache_on_bf16_extremes():
-    """Rows and table drawn from bf16's extremes (NaN, both infinities, both zeros, the smallest subnormal and normal, the
+    """Rows and table sampled from bf16's extremes (NaN, both infinities, both zeros, the smallest subnormal and normal, the
     largest finite, and products that underflow), each against vLLM's two ops bit for bit."""
     pytest.importorskip("vllm")
     edge = torch.tensor([float("nan"), float("inf"), -float("inf"), 0.0, -0.0, 9.2e-41, -9.2e-41, 1.18e-38, -1.18e-38,

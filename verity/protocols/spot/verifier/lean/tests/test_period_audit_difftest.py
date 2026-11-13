@@ -443,7 +443,7 @@ REQUESTS = ["request"]
 
 def case(rng: random.Random, name: str) -> Any:
     """The request of case `name` (module docstring): a week of lane `LANE` in one period, changed at one window as
-    `name` says. Its generator is seeded from `rng`, so Hypothesis records one draw a case and not each sampled byte."""
+    `name` says. Its generator is seeded from `rng`, so Hypothesis records one sample a case and not each sampled byte."""
     rng = random.Random(rng.getrandbits(64))
     w = Week(rng)
     b = w.b
