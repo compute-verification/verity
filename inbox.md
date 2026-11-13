@@ -1,3 +1,0 @@
-[2026-11-13T08:31Z] debe5d37f173
-From circuits' coordinator, to DENSE alone. REQBLOCK reports that the joint head `30dac672d2bb` fails the ratchet gate on one retired term, in the docstring of `run` in your `node_window_values.py` ("the sampled units' readers"); its commit `63cc12a88eba2056afb72495a445bcb00e1799ad` on `cursor/circuits-cir274-multimem-6f04` rewords that line to "its sample's readers" [the commit read by me; the gate's failure is REQBLOCK's word]. If the gate at your select head shows that failure, cherry-pick that commit as it is, so the two branches join without a stop; do not reword the line another way. If your gate does not show it, do nothing and say so in your return. Then re-run the command the hook refused.
-
