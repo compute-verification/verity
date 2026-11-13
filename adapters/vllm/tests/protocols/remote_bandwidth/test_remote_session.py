@@ -16,10 +16,12 @@ import json
 import os
 import queue
 import random
+import select
 import socket
 import subprocess
 import sys
 import threading
+import traceback
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -208,6 +210,51 @@ def engine(s: NodeMemory, at: int = 0):
     return step
 
 
+class Prover(threading.Thread):
+    """The prover's side on a thread: ``prove()``, which connects to the test's listener.  `accept` answers that
+    connection, and `outcome` what ``prove`` returned.  Each fails the test with what ``prove`` raised, where a bare
+    ``accept()`` would wait for ever on a prover that ended before it connected.  The thread raises it as well, as a
+    bare thread would."""
+
+    def __init__(self, prove: Callable[[], Any]) -> None:
+        super().__init__(daemon=True)
+        self.prove = prove
+        self.returned: Any = None
+        self.raised: str | None = None
+        # `over` reads the end of its stream once the thread is over, whatever ended it: the event `accept` waits on
+        self.over, self._running = socket.socketpair()
+
+    def run(self) -> None:
+        try:
+            self.returned = self.prove()
+        except BaseException:
+            self.raised = traceback.format_exc()
+            raise
+        finally:
+            self._running.close()
+
+    def accept(self, lsock: socket.socket) -> socket.socket:
+        """Starts the thread and answers its connection to ``lsock``, which is closed either way."""
+        self.start()
+        try:
+            connected = lsock in select.select([lsock, self.over], [], [])[0]
+            if not connected:
+                self.join()
+                pytest.fail("the prover ended before it connected: "
+                            + (f"it returned {self.returned!r}" if self.raised is None else f"it raised\n{self.raised}"))
+            return lsock.accept()[0]
+        finally:
+            lsock.close()
+            self.over.close()
+
+    def outcome(self) -> Any:
+        """What ``prove`` returned, once the thread is over."""
+        self.join()
+        if self.raised is not None:
+            pytest.fail(f"the prover raised\n{self.raised}")
+        return self.returned
+
+
 def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 2,
         backend=TickingBackend, at: int = 0, **kw):
     """One audit run of ``plan``, every receipt of a window sampled at the default ``samples``; the backend keeps the
@@ -216,19 +263,96 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
     s = store()
     backend = backend(clock, s, engine(s, at), randbytes=random.Random(7).randbytes, **kw)
     lsock = wire.listen("127.0.0.1", 0)
-    results = []
-    th = threading.Thread(target=lambda: results.extend(remote.prove(
-        backend, f"127.0.0.1:{lsock.getsockname()[1]}", plan, node=b"test-node", codec=P512, log=lambda m: None)),
-        daemon=True)
-    th.start()
-    sock, _ = lsock.accept()
-    lsock.close()
+    address = f"127.0.0.1:{lsock.getsockname()[1]}"
+    th = Prover(lambda: remote.prove(backend, address, plan, node=b"test-node", codec=P512, log=lambda m: None))
+    sock = th.accept(lsock)
     with verifying(sock, clock, windows=windows, window_ns=window_ns, samples=samples, lifetime=lifetime) as v:
         v.register()
         backend.regions = v.regions
         r = v.session(0, v.allowance(v.ping(4)), None)
         th.join()
-    return r, results[0], s, backend
+    return r, th.outcome()[0], s, backend
+
+
+def test_a_prover_that_ends_before_it_connects_fails_the_test_where_an_accept_would_wait(monkeypatch):
+    """`Prover.accept`: a prover that raises before it connects fails the test with what it raised, and one that
+    returns before it connects with what it returned.  The listener is closed either way, and the thread raised what
+    ``prove`` raised."""
+    hooked: list = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+
+    def lost() -> None:
+        raise FileNotFoundError("no session files")
+
+    lsock = wire.listen("127.0.0.1", 0)
+    with pytest.raises(pytest.fail.Exception, match="^the prover ended before it connected: it raised\n") as failed:
+        Prover(lost).accept(lsock)
+    assert "in lost" in str(failed.value) and str(failed.value).endswith("FileNotFoundError: no session files\n")
+    assert lsock.fileno() == -1
+    assert [(a.exc_type, str(a.exc_value)) for a in hooked] == [(FileNotFoundError, "no session files")]
+
+    lsock = wire.listen("127.0.0.1", 0)
+    with pytest.raises(pytest.fail.Exception, match=r"^the prover ended before it connected: it returned \['nothing'\]$"):
+        Prover(lambda: ["nothing"]).accept(lsock)
+    assert lsock.fileno() == -1 and len(hooked) == 1
+
+
+def test_a_prover_that_connects_is_answered_while_it_is_at_work_and_its_outcome_is_what_it_returned(monkeypatch):
+    """`Prover.accept` answers the prover's connection while the prover is still at work, with the listener closed,
+    and `outcome` what the prover returned, once it is over."""
+    hooked: list = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+    lsock = wire.listen("127.0.0.1", 0)
+    port = lsock.getsockname()[1]
+
+    def reads() -> bytes:
+        with socket.create_connection(("127.0.0.1", port)) as conn:
+            return conn.recv(1)  # held here until the test's side sends
+
+    th = Prover(reads)
+    with th.accept(lsock) as sock:
+        assert lsock.fileno() == -1 and th.is_alive()
+        sock.sendall(b"k")
+        assert th.outcome() == b"k"
+    assert not hooked
+
+
+def test_a_prover_that_raises_after_it_connects_fails_the_test_at_its_outcome(monkeypatch):
+    """`Prover.outcome`: a prover that connects and then raises is answered by `accept` as any other, and fails the
+    test at its outcome with what it raised.  The thread raised it as well."""
+    hooked: list = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+    lsock = wire.listen("127.0.0.1", 0)
+    port = lsock.getsockname()[1]
+
+    def drops() -> None:
+        socket.create_connection(("127.0.0.1", port)).close()
+        raise ValueError("mid-session")
+
+    th = Prover(drops)
+    with th.accept(lsock) as sock:
+        assert sock.recv(1) == b""
+        with pytest.raises(pytest.fail.Exception, match="^the prover raised\n") as failed:
+            th.outcome()
+    assert "in drops" in str(failed.value) and str(failed.value).endswith("ValueError: mid-session\n")
+    assert [(a.exc_type, str(a.exc_value)) for a in hooked] == [(ValueError, "mid-session")]
+
+
+def test_an_audit_run_whose_prover_cannot_load_the_sessions_files_fails_with_that(monkeypatch):
+    """`run`: `remote.prove` loads the session's prover before it connects, so a tree without that file ends the
+    prover's thread there.  The run fails with what the load raised, where its accept would wait for ever."""
+    load = remote.session_module
+
+    def missing(name: str, *directory: Any) -> Any:
+        if name == "prover":
+            raise FileNotFoundError("no prover.py")
+        return load(name, *directory)
+
+    monkeypatch.setattr(remote, "session_module", missing)
+    monkeypatch.setattr(threading, "excepthook", lambda raised: None)
+    with pytest.raises(pytest.fail.Exception, match="^the prover ended before it connected: it raised\n") as failed:
+        run("serve")
+    assert str(failed.value).endswith("FileNotFoundError: no prover.py\n")
 
 
 @pytest.mark.slow
@@ -972,14 +1096,12 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
         except remote.Refused as e:
             raised.append(e)
 
-    th = threading.Thread(target=prover, daemon=True)
-    th.start()
-    sock, _ = lsock.accept()
-    lsock.close()
+    th = Prover(prover)
+    sock = th.accept(lsock)
     with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry) as v:
         with pytest.raises(audit.RegistryError, match="live registration") as refused:
             v.register()
-        th.join()
+        th.outcome()
     (e,) = raised
     assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
@@ -1001,14 +1123,12 @@ def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused
         except remote.Refused as e:
             raised.append(e)
 
-    th = threading.Thread(target=prover, daemon=True)
-    th.start()
-    sock, _ = lsock.accept()
-    lsock.close()
+    th = Prover(prover)
+    sock = th.accept(lsock)
     with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry, lifetime=1) as v:
         with pytest.raises(ValueError, match="at least 2 windows"):
             v.register()
-        th.join()
+        th.outcome()
     (e,) = raised
     assert "at least 2 windows" in e.why and registry.drawn(b"test-node") == 0
 
