@@ -1228,7 +1228,7 @@ dependencies = ["numpy>=1.26",
 
 [tool.verity.tests]
 paths = ["tests"]
-inputs = ["verity/__init__.py", "verity/settings.py",
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/circuits",
           # the H1 units read both.
           "verity/protocols/pouw/verifier/core_check.py", "verity/protocols/pouw/verifier/leaf_lanes.py",
