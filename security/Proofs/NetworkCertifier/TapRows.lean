@@ -44,29 +44,24 @@ import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
 
 /-!
-# The leak bound at the network certifier's rows
+# At the network certifier's rows: the filled trace, and a disagreement as a collision
 
-The network certifier registers its records at the transfer gates (`CertifierRegisters`). On the sampling relation (`R δ`), every
-proof block outside the incorrect set is correct on the trace's committed values, so the trace opens every transfer gate
-there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network
-certifier, unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves
-unopened (`fillTrace`): a correct proof block stays correct (`Prog.correct_mono`, it reads only opened values), and the filled
-trace carries the network certifier's records at every transfer gate (`carries_fillTrace`), the incorrect proof blocks'
-included, since the trace's own value there, where it has one, is the network certifier's. So `accepted_of` gives
-`Accepted` with the incorrect proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
-over `faultySets`). A held gate's input value is never read, any other input in a proof block is opened, and no egress
-gate depends on an input in none (an unread input, `Prog.Unread`), so the inputs move back to the trace's own values
-(`valOver_congr_held`): the network certifier's records are among the sequences `AccSeqsSampled` counts at the trace's
-values (`rLeakCertifier_of_r`).
+The network certifier registers its records at the transfer gates (`CertifierRegisters`). On the sampling relation
+(`R δ`), every proof block outside the incorrect set is correct on the trace's committed values, so the trace opens
+every transfer gate there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees
+with the network certifier, unless the two openings collide (below). Fill in the network certifier's value at every
+gate the trace leaves unopened (`fillTrace`): a correct proof block stays correct (`Prog.correct_mono`, it reads only
+opened values), and the filled trace carries the network certifier's records at every transfer gate
+(`carries_fillTrace`), the incorrect proof blocks' included, since the trace's own value there, where it has one, is
+the network certifier's. `PeriodChecked` takes the leak relation at the network certifier's rows from it
+(`rLeakCertifierChecked_of`).
 
 An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
 opening there doesn't. The compiled extractor checked that opening with its own calls (`Compiled.passes_found`,
-`Compiled.ownLog_E`), so under
-`CommitmentScheme.Binds` its calls and those that check the network certifier's opening collide, and `B_tap` finds the
-collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`). `sampledLeak_certifier` is the bound:
-`Pr[acc ∧ ¬RLeakCertifier] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`.
+`Compiled.ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check the network certifier's opening
+collide, and `B_tap` finds the collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`).
 
-The registered-input and collision steps follow the registration's (proofs' P1b), at the network certifier's openings.
+The collision step follows the registration's (proofs' P1b), at the network certifier's openings.
 -/
 
 @[expose] public section
@@ -115,67 +110,13 @@ theorem carries_fillTrace {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme
     rw [hfit.2.1 t ht g hg] at h
     cases h
 
-/-! ### The sampling relation gives the leak relation at the network certifier's rows -/
+/-! ### A disagreement with the network certifier is a collision -/
 
 section Compiled
 
 open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **At the network certifier's rows**: on the audit's scope at `δ ≥ 0`, the sampling relation at a trace that agrees
-with the network certifier wherever both open a gate gives the leak relation at the network certifier's rows, at any
-inputs `As` that suffice (`AdviceIn`). -/
-theorem rLeakCertifier_of_r (H : Msg → Msg) (D : Compiled Coin A) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) {As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)} {Dj : ℕ}
-    (tops : AuditStatement → List (Opening Bool))
-    (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) {x : Msg}
-    (hx : ScopeAcc D lay k x) {w : Wit} (hR : R H D.commit D.parse D.partition δ x w)
-    (hagree : ∀ s, D.parse x = some s → (∀ q ∈ tops s, D.commit.Opens H s.roots q = true) →
-      ∀ g, (∃ q ∈ tops s, q.pos = g) → ∀ b, w.val H D.commit s g = some b → b = certifierVal (tops s) g) :
-    RLeakCertifier H D.commit D.parse D.partition L K S lay k δ As Dj tops x w := by
-  obtain ⟨s, P, hs, hP, hM⟩ := hR
-  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hsc⟩, s₂, hs₂, hfit⟩ := hx
-  rw [hs] at hs₁ hs₂
-  obtain rfl := Option.some.inj hs₁
-  obtain rfl := Option.some.inj hs₂
-  rw [hP] at hP₁
-  obtain rfl := Option.some.inj hP₁
-  have hF := faulty_mem_faultySets hM (disjoint_allSlots hδ hM)
-  obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
-  refine ⟨s, P, hs, hP, fun op o htap hcov hl hD => ?_⟩
-  have hext : ∀ g b, w.val H D.commit s g = some b → fillTrace (w.val H D.commit s) (certifierVal (tops s)) g = some b :=
-    fillTrace_ext
-  have hcar := carries_fillTrace hfit htap (hagree s hs htap.1)
-  have hacc := accepted_of hsc.1 hsc.2.1 hfit ι
-    (fun v u hu hv => Prog.correct_mono (Prog.refIn_mono hext) (hι v u hu hv)) hcar hcov
-  have hacc' : Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o
-      (traceVal s.prog (w.val H D.commit s),
-        heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s)))) := by
-    intro t ht
-    obtain ⟨h, hr, hst⟩ := hacc t ht
-    refine ⟨h, ?_, hst⟩
-    have hv : ∀ g, ¬ s.prog.Unread g →
-        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t)
-          (traceVal s.prog (fillTrace (w.val H D.commit s) (certifierVal (tops s)))))
-          (heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s)))) g =
-        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) (traceVal s.prog (w.val H D.commit s)))
-          (heldAdv s.prog P (faulty H D.commit s P w) (fillTrace (w.val H D.commit s) (certifierVal (tops s)))) g :=
-      valOver_congr_held s.prog _ fun i hi hfi hri => inputOf_congr_at (lay s) (k s) _ (by
-        have hnf : ¬ FaultyGate s.prog P (faulty H D.commit s P w) i := fun hfg => by
-          rw [heldAdv_of hfg] at hfi
-          cases hfi
-        obtain ⟨b, hb⟩ := val_some_of_input hsc.2.1 hi hri hnf
-        rw [traceVal_of_val hi hb, traceVal_of_val hi (hext i b hb)])
-    rw [hr]
-    simp only [circuitProgram]
-    funext ℓ
-    exact rowOf_congr fun σ g hg => hv g (not_unread_of_out (hfit.1 t ht ℓ σ g hg).1)
-  exact ⟨hl, hD, _, hF, hin s P hP _ _ hF op o
-    ⟨_, Set.mem_singleton _, _, fun g b h => faultyGate_of_heldAdv h, hacc'⟩⟩
-
-/-! ### A disagreement with the network certifier is a collision -/
 
 theorem certifierVal_mem {ops : List (Opening Bool)} {g : ℕ} (h : ∃ o ∈ ops, o.pos = g) :
     ∃ o ∈ ops, o.pos = g ∧ o.val = certifierVal ops g := by
@@ -244,44 +185,6 @@ theorem Pr_certifierColl_le_Btap (H : Msg → Msg) (D : Compiled Coin A)
   · cases hx : D.parse x with
     | none => rw [hx] at hp; exact absurd hp (by simp)
     | some st => rw [hx] at hp; exact certifierLog_valid H D.commit st.roots (tops st) p hp
-
-/-- **The leak bound at the network certifier's rows**, at any compiled sampled verifier `D` where `Compiled.KS` holds
-and the trace's commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, inputs `As` that suffice
-(`AdviceIn`), and the network certifier's openings `tops s` at each statement. On the statements in the audit's scope:
-`Pr[acc ∧ ¬RLeakCertifier] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
-theorem sampledLeak_certifier (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
-    (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
-    (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ)
-    (tops : AuditStatement → List (Opening Bool)) (x : Msg) (hx : ScopeAcc D lay k x) (Ω : Type) [Fintype Ω]
-    [Nonempty Ω] (P : Prover Ω) :
-    PrBad H D.V (RLeakCertifier H D.commit D.parse D.partition L K S lay k δ As Dj tops) D.E x P ≤
-      D.κ δ x + Real.sqrt (D.γ x * PrB H D.V P x) + (Bext H D.V D.E Ω P x).Pr H +
-        (Btap H D.V D.E D.commit D.parse tops Ω P x).Pr H := by
-  have hks' := hks δ hδ x hx.1 Ω P
-  rw [one_mul] at hks'
-  unfold PrBad at hks' ⊢
-  calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x =>
-        (run H P D.V x s.1 s.2.1).out = .acc ∧
-          ¬ (RLeakCertifier H D.commit D.parse D.partition L K S lay k δ As Dj tops).ext x
-            (D.E.eval H P x s.1 s.2.1 s.2.2).1)
-      ≤ Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x =>
-          ((run H P D.V x s.1 s.2.1).out = .acc ∧
-            ¬ (R H D.commit D.parse D.partition δ).ext x (D.E.eval H P x s.1 s.2.1 s.2.2).1) ∨
-            CertifierColl H D tops P x s) := by
-        refine Pr_mono fun s ⟨hac, hR⟩ => ?_
-        rcases hw : (D.E.eval H P x s.1 s.2.1 s.2.2).1 with _ | w
-        · exact Or.inl ⟨hac, by simp [Rel.ext]⟩
-        · rw [hw] at hR
-          by_cases hA : R H D.commit D.parse D.partition δ x w
-          · refine Or.inr ?_
-            by_contra hnc
-            refine hR (rLeakCertifier_of_r H D lay k hδ tops hin hx hA fun st hst hpass g hq b hwb => ?_)
-            by_contra hne
-            exact hnc (certifierColl_of_disagree H D hb tops P x s hst hpass hac hw hq hwb hne)
-          · exact Or.inl ⟨hac, hA⟩
-    _ ≤ _ := Pr_union_le _ _
-    _ ≤ _ := add_le_add hks' (Pr_certifierColl_le_Btap H D tops P x)
 
 end Compiled
 
