@@ -31,23 +31,5 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
 
-[split]
-# references to a directory this move splits that stay right: "old file: old directory" = why
-"demos/lifecycle/README.md: verity/configuration/deploy" = "prose naming the deployment layer, which is the runtime: its parties run by `run`"
-"tests/import_order.toml: verity/configuration/deploy" = "the deployment layer's place, named by its first path: the runtime keeps it, and the listing's own commit after the move adds the files that leave for verity/"
-"tools/verity/check/drive.toml: verity/configuration/deploy" = "the low-risk exclusions list the files that leave for verity/ beside it"
-"verity/configuration/deploy/README.md: verity/configuration/deploy" = "the runtime's README names its own suite, verity/runtime"
-"verity/protocols/pous/device/README.md: verity/configuration/deploy" = "prose naming the party runtime the wipe's parties run on"
-
 [modules]
-# the renames [paths] implies (`layout.py --modules`)
-"verity.configuration.deploy" = "verity.runtime"
-"verity.configuration.deploy.config" = "verity.config"
-"verity.configuration.deploy.manifest" = "verity.protocol"
-"verity.configuration.deploy.party" = "verity.party"
-"verity.configuration.deploy.runtime" = "verity.runtime.runner"
-"verity.configuration.wire" = "verity.channel"
-"verity.configuration.wire.handshake" = "verity.runtime.handshake"
-"verity.configuration.wire.tests.test_wire" = "verity.tests.tests.test_channel"
-"verity.hardware.site" = "verity.device"
-"verity.hardware.site.tests.test_site" = "verity.tests.tests.test_device"
+"verity.hardware.registration" = "verity.protocols.accounting.registration.verifier.registration"
