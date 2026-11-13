@@ -139034,3 +139034,130 @@ theorem keptOf_g : parsed.toOption.map (·.g) = (parsed.map (keptOf tags zk coun
 **6. The cost row** (`benchmarks/verifier_cost/`, N members of one file against one member): not started. It needs a case of N members of one circuit file, which FIRSTACCEPT's driver makes and no tree of mine has. Say whether I take the driver from FIRSTACCEPT's head (which) or FIRSTACCEPT writes the row.
 
 **Tries** [run]: `Sampled/Record/Pass.lean` at `6825733d3bfa` exit 0 (`r20261113-110041-4813`); `Sampled/Record/KS.lean` at `8ffb6e987844` exit 0 (`r20261113-113252-42e6`). `Spot/OneStageZk.lean` at `10948fd9d3a9` exit 0, 44 theorems, only the three axioms (`r20261113-114546-92e2`, vy-nebius-cpu-7). Suites at that head: `r20261113-114947-5f94` on vy-nebius-cpu-9, launched 11:49Z, due about 12:25Z: the first run of the compiled check with the summary on the real prover's files. The queue goes on with the files that import it, one try at a time.
+
+## HELDOF, Fri 13 Nov 11:54Z: `RefsAt` is a LEMMA EXCEPT AT ONE READ, and that read is a finding for the form: WHICH of the verifier's pinned tables a play's blobs hold is held to a circuit file's lookups only at a member a statement names. With the tables' check at one registration in every accepted play, `RefsAt` holds or two of the blobs sent differ under one SHA-512 (`refsAt_of_held`). COMPILED HEAD `2861eed8d0a` (`r20261113-114816-3c1f`, lean exit 0, 20 theorems clean)
+
+In plain words: I wrote the lemma you asked for, from `CaseIsSent` and the `tablesHeld` step, with a collision as the second way out and no premise on SHA-512. Two of the three reads go through whole: the circuit file and the public file are each pinned by a digest the parameters name, and each table's bytes by the verifier's pin. The third does not, and by your word I stopped there. The form runs `tablesHeld` only inside a member's statement, and a statement names only a drawn member. So nothing holds the SET of tables a play's blobs carry at a play that names no statement, and two plays that name different members are held to two different circuit files. The lemma is therefore stated at exactly that step: it takes "every accepted play passed the tables' check at one registration" and gives `RefsAt` or a collision. The form's accept gives that step at each member a statement names, and no more.
+
+**1. Is `RefsAt` a lemma: the two halves.** New file `security/Proofs/Properties/Verity/SampledTwo/RefsOfSent.lean`, in `Verity.SampledTwo` (statements below with their implicit binders and the `_root_.` qualifiers trimmed; `ofArray` is `Core.Blobs.ofArray`, `tablesOf` is `Spot.OneStageZk.tablesOf`). The collision, in the binding's words, over the blobs sent:
+
+```lean
+def BlobsCollide (F F' : Array ByteArray) : Prop :=
+  ∃ b ∈ F, ∃ b' ∈ F', b ≠ b' ∧ Flock.Sha512.hash b = Flock.Sha512.hash b'
+
+def SentCollides (C : CaseOf) : Prop :=
+  ∃ o o', FormAccepts C o ∧ FormAccepts C o' ∧ BlobsCollide o.sent.blobs o'.sent.blobs
+```
+
+- **The files: pinned, compiled.** `Blobs.get` on the blobs sent returns one of them, and its SHA-512 is the digest's bytes (`get_ofArray`). So two plays' blobs give one file under one digest, or collide:
+
+```lean
+theorem get_same (h : (Core.Blobs.ofArray F).get d w = .ok b) (h' : (Core.Blobs.ofArray F').get d w' = .ok b') :
+    b = b' ∨ BlobsCollide F F'
+```
+
+- **Each table's bytes: pinned, compiled.** A table the blobs hold is the first blob under the verifier's pinned SHA-512 (`tablesOf_ofArray`, `tableFile_hash`), and `hexOf` is one to one, so two plays' files of one pinned table are one or collide.
+- **Which tables are held: pinned by no digest of its own.** Under one list of table names on both plays' blobs, the tables are the same or collide, and so are the reference statements:
+
+```lean
+theorem tables_same (hn : (tablesOf (ofArray F)).map (·.1) = (tablesOf (ofArray F')).map (·.1)) :
+    tablesOf (ofArray F) = tablesOf (ofArray F') ∨ BlobsCollide F F'
+
+theorem refStmts_same (h : refStmtsOf p (ofArray F) = some xs) (h' : refStmtsOf p (ofArray F') = some xs')
+    (hn : (tablesOf (ofArray F)).map (·.1) = (tablesOf (ofArray F')).map (·.1)) : xs = xs' ∨ BlobsCollide F F'
+```
+
+- **The `tablesHeld` step pins the names, at one registration.** `tablesHeld q bs` passes exactly where `q`'s circuit file, the blob under `q.circuit`, looks up the tables the blobs hold (`Properties.Spot.HoldsRegisteredTables`, the existing `tablesHeld_ok`). Two plays that passed it at one `q` read one circuit file or collide (`get_same`), so they hold one list of names or collide:
+
+```lean
+theorem names_same (h : HoldsRegisteredTables q (ofArray F)) (h' : HoldsRegisteredTables q (ofArray F')) :
+    (tablesOf (ofArray F)).map (·.1) = (tablesOf (ofArray F')).map (·.1) ∨ BlobsCollide F F'
+```
+
+- **The lemma.**
+
+```lean
+def TablesHeldAt (C : CaseOf) (q : Spot.OneStageZk.Own) : Prop :=
+  ∀ o k, FormAccepts C o → C o = some k → Properties.Spot.HoldsRegisteredTables q k.blobs
+
+theorem refsAt_of_held (hS : CaseIsSent C) (hP : DecodesAt C P) (hT : TablesHeldAt C q)
+    (hA₀ : FormAccepts C o₀) (hk₀ : C o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀)
+    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C
+
+theorem heldOfAt_or_collide (u₀ : Unread) (hS : CaseIsSent C) (hd : DescAt (atStmt C x))
+    (hP : DecodesAt (atStmt C x) P) (hT : TablesHeldAt (atStmt C x) q) (hA₀ : FormAccepts (atStmt C x) o₀)
+    (hk₀ : atStmt C x o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀) (hx₀ : refStmtsOf P k₀.blobs = some xs₀)
+    (hj : SpotFlock.jsonMsg x = some j) (hA : CopyOf A P j { u₀ with xs := xs₀ }) :
+    HeldOfAt A (atStmt C x) ∨ SentCollides (atStmt C x)
+```
+
+  `xs₀` is the reference statements of any one accepted play (the play of record's). `CaseIsSent` passes to the cases at one statement (`caseIsSent_at`). No statement in the file takes a premise on SHA-512 [compiled: the axiom probe].
+
+**2. What the form's accept gives of `TablesHeldAt`, compiled.**
+
+```lean
+theorem accepted_tables (hA : FormAccepts C o) (hk : C o = some k) (hdec : Decoded k p c e) :
+    ∃ held, Spot.OneStageZk.membersHeld p.members e.statements = .ok held ∧
+      ∀ z ∈ (e.statements.zip held).toList, Properties.Spot.HoldsRegisteredTables z.2.own k.blobs
+
+def NamesAt (C : CaseOf) (q : Spot.OneStageZk.Own) : Prop :=
+  ∀ o k p c e held, FormAccepts C o → C o = some k → Decoded k p c e →
+    Spot.OneStageZk.membersHeld p.members e.statements = .ok held → ∃ z ∈ (e.statements.zip held).toList, z.2.own = q
+
+theorem tablesHeldAt_of_names (hN : NamesAt C q) : TablesHeldAt C q
+```
+
+- `accepted_tables` opens the accept down to the step you named: `accepted_ran` gives `membersRun`, which ends in `runMembers`, whose fold steps `stepMember` at each statement and its member, whose `Member.statement` begins with `statementOf`, whose first step is `tablesHeld` (`stepMember_tables`, `runMembers_tables`, `membersRun_tables`).
+- So the whole of `RefsAt`, with the collision way out, rests on `CaseIsSent`, `DecodesAt` and `NamesAt C q`: every accepted play names one fixed registration `q` in a statement.
+
+**3. THE FINDING FOR THE FORM: the read no digest pins.** [read: `OneStageZk.lean`'s `tablesHeld`, `statementOf`, `Member.statement`, `runMembers`, `heldStep`, `membersHeld`; `HeldOfFiles.lean`'s `refRawOf`]
+- **The read.** `tablesOf bs`: which of the verifier's pinned lookup tables the play's blobs hold. `refRawOf` puts it in the `tables` field of EVERY template's reference statement.
+- **Where it is held.** Only by `tablesHeld p bs`, which refuses unless the held tables' names are the lookups of the circuit file under `p.circuit`. The form runs it only as the first step of `statementOf`, so only at a member a statement names. `runMembers`' own docstring: "a member no statement names is never read". `heldStep`'s refusal text: "an undrawn member has no statement".
+- **So two things are open, and neither is a digest's to close:**
+  1. **A play that names no statement** runs `tablesHeld` at no member. Its blobs may hold any of the pinned tables, and each choice gives other reference statements, with every file under its right digest and no collision. Nothing I found proves an accepted play names a statement [read; not proved either way].
+  2. **Two plays that name different members** are held to two circuit files' lookups. They agree only if the two registered circuit files look up the same tables, which is a fact of the instance and of no check.
+- **What would close it, for the form's owner to choose** [derived; none written]:
+  - the form runs `tablesHeld` at each template's member (`memberOf p t`) before the sessions, one `lookupsOf` read a template. Then `TablesHeldAt` at template 0's member is the form's accept, and `RefsAt` or a collision is `refsAt_of_held` with no premise left but `CaseIsSent` and `DecodesAt`. It costs completeness only at an instance whose templates look up different tables, and such an instance already refuses every play that names two of them; or
+  - a lemma that every accepted play names a statement of one fixed member (`NamesAt`). [guess] Once the form calls `descOk`, its "count of at least 1" in each template's cell may give a drawn unit of every template in every accepted play, and so a statement of every template's member. I have not read that chain (the sample to `proved_units` to the statements), and it is in HONEST2's and SESSIONOF2's files, not mine.
+- I add no field to `JoinsAt`, by your word.
+
+**4. The two lines for ASSEMBLY's table.**
+- `DecodesAt (atStmt C x) P`, kind `instance`: every accepted play at the statement `x` decodes the parameters `P`; a case map with a case only at θ's parameters' bytes has it (as rows 3, 4, 10b, 11, 12 are closed).
+- `CopyOf A P j { u₀ with xs := xs₀ }`, kind `instance`: the session of record's held copies `A.h` are the ones `heldOf` builds from `P`, the record `j` read from `x`, and the reference statements `xs₀`; one input and interior that build them give it (`copyOf_of_one`, compiled). It reads no play: `heldOf` reads seven fields, all `P`'s or `j`'s (`heldOf_congr`). One caveat: `xs₀` is taken today from the play of record's blobs (`hx₀`), so it is the instance's only once the instance names its registered files' reference statements.
+- And the row for `RefsAt` itself: kind `play`, a lemma of the form's refusals up to `NamesAt` (item 3). It is not a field.
+
+**5. The compiles.**
+- [run] `RefsOfSent.lean` at the head `2861eed8d0a`: "lean exit 0 in 184 s", "none of its 20 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings: no clash in the 92 built modules it could read; 4,125 had no build to read (`r20261113-114816-3c1f`, vy-nebius-cpu-7). No warning on the file's lines.
+- [run] The same file one commit earlier, at `43b4dd218ea`: "lean exit 0 in 1010 s", 20 theorems clean, 133 modules read (`r20261113-112932-5cde`, vy-nebius-cpu-1). Its eight warnings were the linter's, on fallbacks in `get_ofArray` that never ran; the head drops them and changes nothing else.
+- [run] The try before, at `7ef4fd6577b`, refused one theorem, `get_ofArray`, at one elaboration of `Array.find?_some`, and passed the other 19 (`r20261113-112426-bf4b`, exit 1 in 249 s). The first try, at the first text `b0c0254a5e1`, I cancelled after 8 minutes as superseded (`r20261113-112138-b8b1`).
+- So the compile took two tries and the warnings a third. The tries are not what stopped the `tablesHeld` half: the form's text is (item 3).
+- [run] The boundary tests on the VM at the head: 3 failed, 116 passed, and none names `RefsOfSent`, `HeldOfAtDesc` or `CopyOfOne`. Two are the ones my 10:32Z entry named (`test_spot_never_imports_the_network_certifier_in_lean`, `test_public_boundary`). The third, `test_integration_boundaries::test_the_scan_sees_verity`, fails here because the VM's environment installs `verity_flock` from another checkout than my worktree.
+- [run] On the VM at the head: the root suite's `test_lean_packages`, `test_lean_vocabulary`, `test_repository`, `test_doc_paths` and `test_verifier_cost` pass (73 passed).
+- `HeldOfAtDesc.lean` changed by its module docstring alone (it names `RefsOfSent` where it said "`RefsAt` is no check's verdict"); the try built it as an import. `CopyOfOne.lean` is unchanged since its compile at `96b2def6e27`.
+- `memberRaw` and `HeldOfFiles` are untouched, so SESSIONOF2's restated `ReadsBack.registered` and `raw_partition_readsBack` are not taken yet; I take both when I next touch `memberRaw`.
+
+## STOP RULE
+
+None. No named assumption is added, nothing is in a lock, and no statement takes a premise on SHA-512.
+
+## NEEDS
+
+- Your word on who closes item 3: the form's owner adds the check at each template's member, or someone proves `NamesAt` from the second stage's sample. Either way `refsAt_of_held` is the lemma that reads it. I start neither until you say.
+
+## To post
+
+Whether every accepted play's reference statements are the same now comes down to one read. The circuit and public files are pinned by the parameters' digests and each lookup table's bytes by the verifier's pin, so two plays that differ there show a SHA-512 collision among the blobs sent; that is compiled. Which tables a play's blobs carry is checked only at a member a statement names, so a play that names none is held to nothing. That is a finding for the form, with a one-check fix, and it is not made a premise of the join.
+
+## Not established
+
+- `NamesAt` or `TablesHeldAt` at any case map: that an accepted play names a statement, or that two members' circuit files look up the same tables.
+- `RefsAt` with no premise beyond `CaseIsSent` and `DecodesAt`: it waits on item 3.
+- That `descOk`'s count of at least 1 gives a statement of every template's member: a guess, not read.
+- That any accepted play passes `descOk`, and `DecodesAt` and `CopyOf` at a case map or session of record: as at 10:32Z.
+- The sibling check covered the built modules the try could read, not the whole package.
+- No records run, by your word: the lock at my head is stale.
+
+## Branches
+
+- `cursor/proofs-heldof-4c7b` at `2861eed8d0a` (pushed): `96b2def6e27` → `b0c0254a5e1` (RefsOfSent, first text) → `7ef4fd6577b` (`TablesHeldAt`, `NamesAt`) → `43b4dd218ea` (one step of `get_ofArray` mended, compiled) → `2861eed8d0a` (its unused fallbacks dropped, compiled).
+- `cursor/proofs-heldof-logitsrun-f684` at `828e59d30d` (scratch, no pull request).
