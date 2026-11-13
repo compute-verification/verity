@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`merge_map.py BASE OURS THEIRS [PATH]`: git's merge driver for `fixtures/artifacts.json` (`.gitattributes`: `merge=fixture-map`),
+"""`merge_map.py BASE OURS THEIRS [PATH]`: git's merge driver for `artifacts.json` (`.gitattributes`: `merge=fixture-map`),
 the replica map every fixture PR adds keys to, so two PRs that each register a fixture merge.
 
 The map is merged key by key, `previous` (each path's former ids) one level further: a key either side added, changed or removed
