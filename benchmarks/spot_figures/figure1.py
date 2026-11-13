@@ -88,8 +88,7 @@ import cards as spot_cards
 from verity.protocols.reporting import PERIODS
 from verity.protocols.spot import plancheck
 from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
-                                                           two_stage_design)
-from verity.circuits.partition_v2 import unit_class
+                                                           two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,6 +120,16 @@ OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
 #: form's N: its program is a population program, each instance reading only its own share of each Input node
 #: (`partition.fanout`)
 FANOUT = 1
+
+
+def returned_bits(served: float) -> int:
+    """The bits a replay block returns, which a served window's two-stage registration publishes
+    (`WindowCommitmentRecord.returned`) and under which no served cap prices it (`plancheck.two`'s `returned`).
+    Modelled, and read from no registration: the model's replay block is one request whose only outputs are its tokens'
+    select words, which is what the `served_bits` input `served` counts, so it returns that input."""
+    return ceil(served)
+
+
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
 #: where serving's rate comes from: rho's fleet utilization on the dense peak, or the model's `serving_rate` card, the
@@ -600,15 +609,9 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
     return out
 
 
-def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class")
-    return w
-
-
-def split_cells(cells: Sequence[Cell], merged: int) -> list[Cell]:
-    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
-    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+def split_cells(cells: Sequence[Cell], merged: int | None) -> list[Cell]:
+    """The cells in the strata of a two-stage design whose row's `merged` is this (`optimize.two_stage_strata`)."""
+    return two_stage_strata(cells, merged)
 
 
 def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: float, served: float | None = None,
@@ -620,7 +623,7 @@ def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: floa
     certifies, rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside
     them; a point Lean refuses is an error."""
     d = plancheck.two(split_cells(cells, row["merged"]), row["k"], replay_blocks, row["q"], delta, served, union,
-                      row["theta"], fanout=FANOUT)
+                      row["theta"], fanout=FANOUT, returned=None if served is None else returned_bits(served))
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
@@ -675,10 +678,14 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
-    class's bits and the merged one by the widest class it holds (`all` when it is the only one)."""
+    class's bits and the merged one by the widest class it holds (`all` when it is the only one); where each width is
+    a stratum (`merged` None), by `w` and the width's place among the widths."""
     out = {k: row[k] for k in PLAN if k in row}
     if isinstance(k := out.get("k"), dict):
-        out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
+        if "merged" in row and row["merged"] is None:
+            out["k"] = {f"w{t}": v for t, v in k.items()}
+        else:
+            out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
     return out
 
 
