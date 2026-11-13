@@ -25,7 +25,7 @@ the chosen coin wherever the device's release does. The projection's `CoinsAgree
 
 **What it rests on**, each a named `Prop` taken as a hypothesis:
 * `FirstShown`: the play's log shows, after the first stage's digest in the first draw's family, the bytes the first
-  stage read. It is the meeting of the run's coin check (`Run.coinsHold`) with the cut's `LogIsDevice`.
+  stage read. It is the meeting of the run's coin check (`Run.coinsCode`) with the cut's `LogIsDevice`.
 * `DevFirst`: the coin map's reading of round 0 starts with those bytes (the coin map's to prove).
 * `CoinsOfBytes`: every byte string of at most one coin's bytes is a coin's bytes followed by zeros.
 
@@ -59,7 +59,8 @@ theorem coinsAgree_of_coinsRead {A : Live₂} {Rd : Reading A} {Acc Good : Verit
 
 /-- **What the first stage read**: as `Run.run` runs it, the work table the rule expands, the rule `Select.resolve`
 gives, and `Select.select` on the first stage's bytes, which read `read` of them; and the coins hold on those bytes
-(`Run.coinsHold`, at the boundary record and the window root the verifier holds). -/
+(`Run.coinsCode` names no refusal, under the run's key, copy of main and family, at the boundary record and the
+window root the verifier holds). -/
 def FirstRead (i : Spot.Run.Input) (read : ℕ) : Prop :=
   ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ),
     i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
@@ -67,7 +68,8 @@ def FirstRead (i : Spot.Run.Input) (read : ℕ) : Prop :=
     Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
     Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
       .ok (draw, rest, read) ∧
-    Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read) = true
+    Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
+      (i.source.extract 0 read) = none
 
 /-- **The first stage's draw on a case**: the coin family its coin evidence's segment names, and the boundary
 registration's digest, after which the run's coin check holds its coins. -/
@@ -140,7 +142,8 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
-      ¬(!Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read)) = true ∧
+      (∀ code, Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
+        (i.source.extract 0 read) = some code → False) ∧
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt symbol shown audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
@@ -170,6 +173,11 @@ private theorem interiorAudit_staged {form : Bool} {i : Spot.Run.Input} {s : Arr
     | (cases h; exact Or.inl rfl)
     | (cases h; exact Or.inr ⟨_, rfl⟩)
 
+private theorem none_of_forall {o : Option String} (h : ∀ c, o = some c → False) : o = none := by
+  cases o with
+  | none => rfl
+  | some c => exact (h c rfl).elim
+
 private theorem nat?_toJson (n : ℕ) : Spot.nat? (Lean.toJson n) = some n := by
   simp [Spot.nat?, Spot.int?, Lean.toJson, Lean.JsonNumber.fromNat]
 
@@ -193,7 +201,7 @@ theorem run_read {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run
       ⟨wt, res, draw, rest, read, h1, -, h2, h3, h4, _, _, _, _, _, _, _, -, hia, rfl⟩
   · rw [symbol_refused] at hs
     cases SpotFlock.str_of_jeq (SpotFlock.jeq_symm hs)
-  · exact ⟨read, ⟨wt, res, draw, rest, h1, h2, h3, by simpa using h4⟩,
+  · exact ⟨read, ⟨wt, res, draw, rest, h1, h2, h3, none_of_forall h4⟩,
       getD_answer_read (interiorAudit_staged hia)⟩
 
 /-- **An accepted run's first stage read its bytes with coins that hold**, at either value of the form's switch. -/
