@@ -105,12 +105,12 @@ now, and the diff is reviewed.
 | Part | What it holds |
 | --- | --- |
 | this package (below) | Definitions and Programs, their encoding, queries, evaluation, partitions and accounting views |
-| [`ops`](../definitions/ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
-| [`silicon`](../definitions/silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
-| [`targets`](../definitions/circuits/targets/README.md) | the subcircuits a proof system is asked to prove |
+| [`ops`](./../definitions/ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
+| [`silicon`](./../definitions/silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
+| [`targets`](./../definitions/circuits/targets/README.md) | the subcircuits a proof system is asked to prove |
 | [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) helpers that write gates |
 | [`verity.definitions`](../definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
-| [`verity.definitions.private_circuits`](../definitions/private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
+| [`verity.definitions.private_circuits`](./../definitions/private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
 | [`circuit-check`](../../tools/verity/circuit_check/README.md) | the property checks every circuit passes |
 
 ## Example
@@ -213,5 +213,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits`), and `../definitions/ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits`), and `./../definitions/ops/tests/` is a suite
 of its own.
