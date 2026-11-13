@@ -125675,3 +125675,87 @@ Kept. No file changed in this turn; no lock, guarantee, named assumption or form
 - `MessagesOpen.lean` compiled whole (try `954c`'s result not read here; `f7f31dd6cc`/`ee18b88c06` in no try).
 
 Branch `cursor/proofs-messages-f55d` at `ee18b88c06`, nothing unpushed; no run of mine is out.
+
+## RATING, Fri 06:42Z: review 1 of #9577 is whole: item 1 D (three failing tests; the cross-group class the request names breaks once the adversary plants the operands), item 2 proved, item 3 D as written and C for what the transfer needs, item 4 D for the claim
+
+Agent `bc-5f3b228a-8552-57bb-9f4c-49ea0821911d`, branch `cursor/proofs-rating-09fd` at `d3d8ede4e6fc47417703ced543dd8f27714c2765` (pushed). Mailbox read at 06:39Z: no file for me. Every run below is on vy-nebius-cpu-12 and is done.
+
+**In plain words.** Pull request #9577 rests its H100 guarantee on two named assumptions: a device model (every program on the card is matched by a program of W1, the repository's priced instruction machine, at no more cost) and a conjecture about W1 programs (none outputs a correct audit tile for less than 99.5% of what rev1 credits). I was asked to rate four things. The conjecture is broken on the model, three ways, the largest by 16% of the credit. The zero-price claim is true and proved. The device model as written is false of any real card, so the guarantee says nothing about one; what the proof really needs from it is weaker and stands as a conjecture with a named test. The two assumptions together say more than the old one, not the same. This entry adds the third failing test, the four classes the request names with what I tried on each, and item 3. My 05:43Z, 06:06Z and 06:28Z entries hold the detail of the rest.
+
+### Item 1, the conjecture over W1 (`TTOutTilePearlCH100Rev1S8`): D
+
+The scale's D is "broken at the stated parameters, with a run id reproducing the break". Three tests in `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py` on my branch fail by design.
+
+- [run `r20261113-063303-f8bb`, pytest exit 1 as designed, at `d3d8ede4e6`] "3 failed, 2 passed in 41.72s". The pull request's two tests pass. Each of mine forms a 64 x 64 audit tile at (m, k, n) = (8192, 8192, 8192), passes its checks of the row rules, of all 4,096 ticket words against the reference's, and of the tile's debit against its cap, and then fails on the bound, 10,379.9 units a word against a credit of 10,432.
+
+| test | program | atoms a word (reference 256) | cost a word | share of credit |
+|---|---|---|---|---|
+| `test_raised_adder_groups_stay_within_the_gap` | one atom for each of 20 planted groups, with a constant accumulator | 196 | 8,757.4 | 84.0% |
+| `test_planted_cross_group_skips_stay_within_the_gap` | the reference's chain with 40 atoms not executed, nothing else changed | 216 | 9,397.4 | 90.1% |
+| `test_dead_pairs_stay_within_the_gap` | one atom for each 30 live pairs of a dead group | 253 | 10,347.7 | 99.19% |
+
+The first two are priced on one unit with its whole weight side; the third needs the weight side spread over 256 units.
+
+**The four classes the request names, each with what I tried.**
+
+1. *First-promotion skip: no finding.* [run `-f8bb`] The pull request's test passes: rev1 takes the first add out of the credit, so skipping it gains nothing. [run `r20261113-062405-918d`] I looked for a second free add. A later promotion into a zero total is one, and rev1's debit charges it (`DeviceRev1.lean:80-87`): one of my three control tiles (two planted groups) had such a promotion and the replayed debit counted it. My planted groups have to sum to a nonzero value in pairs for that reason, so the term does its work.
+2. *Cross-group joint skips and the whole-fragment rule: this is the class that breaks.* The request asks whether an adversary could choose operands, or a layout, so that a fragment's words share a skip set while staying in the domain. Yes, by choosing operands; no layout or row permutation is needed. [run `r20261113-063254-9204`: six tiles at 8192 cubed, three seeds, two fills, and one at k = 16,384] On rows with six planted entries a group, at the same positions in every row of A and of B, the second and third atoms of every planted group can be skipped in place for every word of the unit at once, in pairs of groups whose planted products cancel. All 4,096 words equal on every tile, no flag set in the planted groups, debit about a tenth of the cap. [run `r20261113-063231-77f8`] The same through the scheme's own code (`PearlC.encode`, `admissible`, `checked`, SHA-512 lines) on three salts: admitted, 16 of 16 words equal. Pricing a fragment whole is sound as a price. The bound does not follow from it, because nothing stops every word of a fragment from sharing the set. [run on my VM, 8 seconds, 8 x 8 words at k = 1,024] On the census's own six families the words' greedy sets have no atom in common, except in `aligned-spikes-pm1-r444`, where all 24 later atoms are common and all are flagged. My rows are that family with one more fixed pair in each later atom, which stops the atom being an identity and so stops the flag.
+3. *Scalar paths: no finding.* [derived, not run] A product costs 32 units as an FP32 instruction and 64 as INT32, against 1 on a fragment, so one word's atom costs at least 1,024 units by scalar instructions against 32. A scalar path pays only where fewer than one word in 32 of a fragment needs the atom, and a good tile needs all 4,096 of its words. On the planted rows the atoms that remain need every product.
+4. *INT8 fragments: no finding.* [derived, not run] An S8 multiply-accumulate costs what an E4M3 one costs (`W1.lean`, `W1Prices.h100`). One s8 code cannot carry two E4M3 codes: there are 2^16 pairs and 2^8 values, and a dot product tells any two pairs apart. Splitting one E4M3 code into two s8 parts costs four multiply-accumulates a product. And the atom's cut of each product to its grid is not a sum of products of the parts, so an exact integer sum gives the reference word only where nothing is cut.
+5. *A class the request does not list: yes, two.* Dead pairs (06:06Z) and the raised adder (06:28Z). Both, and the skip-only program above, have one cause: the H100's 14-bit adder cuts products below its grid, and the debit charges an atom only if it can be skipped in place, not if its contribution is the same for every salt.
+
+### Item 2, zero prices: holds as written, proved; no grade (—)
+
+Unchanged from 05:43Z. [run `r20261113-050611-97ac`] No path's cost falls as a price rises.
+
+### Item 3, the device model (`w1-complete-h100`): D as written; C for the weaker statement the transfer needs
+
+**Is the uniformity too strong to be true of the card? Yes, and it is not what the transfer needs.** `CostModel.SimulatedBy` (`Assumptions/PearlC.lean:45-48`) asks, for every program of the card, a W1 program with the same transcript at no more cost on every input. It fails at any real card for at least three kinds of program.
+
+- [run `r20261113-052338-1231`] A program that leaves a declared unit blank. W1 commits every unit, so no W1 program has that transcript. My Lean probe proves the assumption false at such a cost model, where the old premise is true.
+- [read] A program that reads the oracle. The docstring says so itself (`Assumptions/PearlC.lean:27-28`).
+- [read, derived] A program whose transcript holds results of an instruction W1 lacks and cannot expand at its price. The card file gives the FP64 tensor multiply-accumulate at 29.5 units (`verity/hardware/cards/h200-sxm-141gb.toml:70`) and the one-bit one at 1/8, measured (line 61). W1's tensor formats are E4M3, BF16, E2M1 and S8 (`W1.lean:126-130`) and its scalar classes FP32 and INT32, so an FP64 product costs it many INT32 instructions at 64 each.
+
+So for the card's true cost model the premise is false and the guarantee says nothing. The transfer (`W1Best.lean:27-41`) uses less: for each program of the card, a W1 program at no more cost whose good tiles earn at least as much credit, at the adversary's own inputs. None of the three programs above refutes that. I rate that weaker statement C, a conjecture with weak evidence, with the falsifier named below.
+
+**An instruction W1 overprices relative to Table 1: the FP32 instruction, and with it INT32 and the cast, if cost is time.**
+
+- [read] The card file puts the tensor core's peak at 1,830 MHz and every other resource at 1,980 MHz (lines 23-24, 41), and prices the FP64 tensor operation at `4096/128 x 1830/1980 = 29.58` for that reason (line 70). Its run of record read the tensor core at 0.923 of 4,096 multiply-accumulates a cycle over wall clock with the SM clock locked at 1,980 MHz (line 24).
+- [derived] The vendor's two peaks, FP8 tensor 1,978.9 TFLOPS (`W1.lean`'s citation of Table 1) and FP32 at 128 lanes an SM on 132 SMs at 1,980 MHz, which is 66.9 TFLOPS, give 29.58 tensor multiply-accumulates to one FP32 instruction. W1 says 32, which is the ratio per SM clock cycle.
+- [derived] The difference matters. At 8192 cubed the credit holds 63 adds a word at 32 each. At 29.58 they cost 152 units less, 1.46% of the credit, and the gap is 0.5%. So if a card program's cost is its time, the honest program, with its first add skipped as rev1 allows, outputs good tiles for about 10,290 units a word, under the bound of 10,380, and the device model and the conjecture cannot both hold at the card. If cost is SM clock cycles, W1 matches the data sheet and the guarantee's cost is not time. The statement does not say which.
+- **The named falsifier**: a timed loop of FP32 adds on an H200 at locked clocks, read over wall clock beside a tensor loop. The card file lists it as open (line 75: "no run read times an FP32 add in a loop on this card").
+- [read] Sparse 2:4. The vendor's table gives each tensor format a second figure, twice the dense one, footnoted "Effective TOPS / TFLOPS using the Sparsity feature". I read it in two copies a web search returned: NVIDIA's developer post "NVIDIA Hopper Architecture In-Depth" (the Chinese edition, Tables 1 and 3) and a reseller's page headed "NVIDIA H100 Tensor Core GPU Architecture V1.02". Both carry the preliminary figures (FP8 2,000 and 4,000, FP32 60), not V1.04's. [derived] An effective figure counts the products by zero, so the price of a product that is computed stays 1 and W1 does not overprice it. [guess] I recall, and did not read, that the instruction set has a sparse form of the tensor instruction. A committed row has no zero codes, since every element carries noise, so I see no route from it to a good tile.
+- [read] FP8 with FP16 accumulation. Table 3 of the same post gives it the same peak as FP8 with FP32 accumulation (2,000 and 4,000 in the preliminary edition). W1 has no such fragment. [derived] It rounds differently from the reference's atom, so it does not give the reference's words; no route to a good tile.
+- [derived] The one-bit instruction at 1/8 of a unit. A product of two 4-bit significands is 16 bit-plane pairs, so 2 units a product against 1, before the exponents. No route to a good tile.
+
+**A memory effect W1 does not charge that lets a program skip tensor-core work: none found.** [read] W1 charges memory nothing: moves are free at every level and the first fetch is priced at zero here. The one memory price it has is an INT32 instruction, 64 units, for a word moved at an address that depends on data. The card file's own figures are above that: shared memory serves 32 bank words an SM clock (line 48), which is 128 units a word, and scattered loads measured 0.40 to 1.63 words an SM clock (line 49). [derived] So I found no memory effect that the card gets for less than W1 charges. What a table computed before the salt can replace is already free in W1, and both of my breaks use exactly that: a constant held before the salt.
+
+### Item 4, the split: D for the claim "the two say no more than the old premise"
+
+Unchanged from 05:43Z. [run `r20261113-052338-1231`] The pair implies the old premise and not the converse. The guarantees are not unsound by it.
+
+### What was not checked
+
+- No interpreter of W1 ran my programs. Their costs are my count at `W1.lean`'s prices (`_raised_cost`, `_dead_pair_cost` in the test file). For the two larger breaks the margin is 9% and 16% of the credit; the uncertain parts of the count are under 3%.
+- The breaks are not instantiated in Lean. The Python scheme, the census's mirror of the atom and its `debit` stand for the record's ticket, flags and dead elements. I did not difftest the census's `debit` against `jointFlags` myself.
+- No GPU ran anything. These are breaks of the conjecture on the bit-exact model.
+- The scheme's own code checked 4 x 4 tiles only; whole tiles went through the census mirror.
+- I did not run the cross-group search on census families at fragment scale, only at 8 x 8 words.
+- Classes 3 and 4 are arguments from prices, not searches.
+- I did not read the H100 whitepaper V1.04 or the H200 data sheet themselves. I read the card file's citations of them and two copies of the preliminary table. The FP32 peak of 66.9 TFLOPS is derived, not read.
+- sm_120 was not run. The lock records and the full Lean check were not run; only the two proof files of the pull request and my probe compiled.
+- A variant that would make a whole planted group a constant (seven planted entries, no atom at all, wrong on about one word in 10^9) is derived and not run.
+
+### To post (review 1, whole)
+
+- [run `r20261113-063303-f8bb`, `r20261113-062405-918d`, `r20261113-063254-9204`, `r20261113-062341-dde6`, `r20261113-063231-77f8`] **Item 1, the conjecture over W1: D.** On rows the scheme admits, with six planted entries in each of 20 promotion groups, a W1 program outputs a good tile's words at (8192, 8192, 8192) for 8,757.4 units a word, 84% of rev1's credit, where the bound is 99.5%. A program that only skips atoms, the cross-group class the request names, does it for 90.1%. A third class does it for 99.19%. Three failing tests are in `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py` on `cursor/proofs-rating-09fd` at `d3d8ede4e6`.
+- [derived] Item 1, cause: the H100's 14-bit adder cuts products below its grid, and the debit charges an atom only if it can be skipped in place. An atom whose sum is fixed before the salt is neither charged nor needed.
+- [derived] Item 1, a note on what the statement should say, not a rewrite: a charge of one unit for each position where both codes are dead would not close it (four planted groups cost 24 units of debit under a cap of 26 and save 384). The debit or the row rules must account for every product the adder cuts to zero whatever the salt.
+- [run, derived] Item 1, the named classes: first-promotion skip, no finding; cross-group joint skips, broken by planted operands with no row permutation; scalar paths and INT8 fragments, no finding, by price.
+- [run `r20261113-050611-97ac`] **Item 2, zero prices: holds as written; proved, so no grade (—).**
+- [run `r20261113-052338-1231`; read the card file] **Item 3, the device model: D as written.** It is false of any card that has a program leaving a unit blank, or an instruction W1 lacks such as the FP64 or one-bit tensor operation, so the guarantee is empty there. The weaker statement the transfer needs (credit of good tiles, at the adversary's inputs) is **C**.
+- [derived] Item 3, the falsifier of the weaker statement: W1 prices an FP32 instruction at 32, the ratio per SM clock cycle; the vendor's peaks, quoted at 1,830 MHz for the tensor core and 1,980 MHz for the rest, give 29.58 in time. At 29.58 the honest program costs less than the conjecture's bound. A timed FP32 loop on an H200 settles it, and the statement should say whether cost is time.
+- [read, derived] Item 3: sparse 2:4 and FP8 with FP16 accumulation are not overpriced by the vendor's table; no memory effect found that the card gets for less than W1 charges.
+- [run `r20261113-052338-1231`] **Item 4, the split: D for the claim "no more than the old premise".** The pair says strictly more; the guarantees stay sound.
+
+**Next.** Review 2: the three statements of pull request #9568 in their form on `main`, at the commit I will name.
