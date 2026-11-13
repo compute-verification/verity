@@ -10,7 +10,7 @@ from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, multiple_bound, overhead
 
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()

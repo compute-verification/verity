@@ -1,4 +1,4 @@
-"""`verity.commitments.coin_tree` is ``verity/protocols/flock/prover/live/src/coin_tree.rs`` byte for byte: docs/coin-tree-v2.md §9's
+"""`verity.commitments.coin_tree` is ``verity/protocols/proofs/flock/prover/live/src/coin_tree.rs`` byte for byte: docs/coin-tree-v2.md §9's
 vectors (the key, the root, ``Hello``'s coins and answer, an opening and each intermediate), its openings check and its
 forgeries do not, and every case of ``coin_open_vectors.json`` (which Rust's ``Checked`` and the Lean check answer) stops or
 hands on the same coins."""
@@ -12,7 +12,7 @@ import pytest
 
 from verity.commitments import coin_tree as CT
 
-VECTORS = Path(__file__).resolve().parents[3] / "verity/protocols/flock/prover/live/src/coin_open_vectors.json"
+VECTORS = Path(__file__).resolve().parents[3] / "verity/protocols/proofs/flock/prover/live/src/coin_open_vectors.json"
 NONCE = bytes(range(CT.NONCE_BYTES))
 SPEC9 = CT.Spec(("session", "t/rep0", "t/rep1"), 2, 3)
 #: the live protocol's `Resp::Coins` tag: a frame is the tag, u32le(W), then W words of 16 bytes

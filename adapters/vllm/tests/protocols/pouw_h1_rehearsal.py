@@ -380,7 +380,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
-    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier import window as Wd
 
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -419,7 +419,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
              main: list[str] | None = None) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
     `gate` (the local gate's), challenge phases forged through it; `main` is the verifier's first-parent history of main."""
-    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.accounting.pouw.verifier import salt as PS
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())
     c = record["commitment"]
@@ -453,7 +453,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("pins_cut", record_path, pn=[rt / "pins-cut.jsonl"])
     logged = [ln for ln in (g / "pins.jsonl").read_text().split("\n") if ln]
     if logged:
-        from verity.protocols.spot.device import challenger as LC
+        from verity.protocols.proofs.spot.device import challenger as LC
         e = json.loads(logged[0])
         logged[0] = LC.pin_line(e["commit"], e["main"], "2000-01-01T00:00:00Z")
     (rt / "pins-rewritten.jsonl").write_text("".join(ln + "\n" for ln in logged))
@@ -625,7 +625,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
 
 def _main_of(a: argparse.Namespace) -> list[str] | None:
     """The verifier's own first-parent history of main at ``--main`` (`remote.main_lines`), or None without one."""
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import remote
     return None if a.main is None else remote.main_lines(a.main)
 
 

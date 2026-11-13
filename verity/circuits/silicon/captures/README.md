@@ -13,7 +13,7 @@ pointer and the store its bytes.
 
 `vectors/` holds `fp8-hopper-wgmma-k{32,1536}.json` (`verity/tc-reference-vector/v0`), model replays of `GemmAccumulator<K>`
 on `HOPPER_E4M3_K32` from a recorded seed and recipe -- not hardware captures. PoUW's FP8 atom vectors
-(`verity/protocols/pouw/verifier/lean/scripts/fp8atom_vectors.py`) and `adapters/vllm/tests/program/test_fp8_moe.py` replay them.
+(`verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_vectors.py`) and `adapters/vllm/tests/program/test_fp8_moe.py` replay them.
 
 Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) are not
 replicated, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `verity/definitions/silicon/discrepancy_log.json`
