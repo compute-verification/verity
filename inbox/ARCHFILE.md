@@ -70,3 +70,25 @@ What this changes in your task:
 
 Daniel also made the structure tonight's top priority at 11:03 PM PST. Nothing else changes for you: your PR is still
 open, unmarked, by Fri 13 Nov 3:00 AM PST, and sooner is better.
+
+## Thu 12 Nov 11:21 PM PST: place 9, `registration` is a part of its own (the export is replaced a third time)
+
+Daniel, 11:15 PM PST, on top's proposal of a part that checks what was registered: "makes sense". The page has it now.
+`git diff 7f752e97b8d origin/cursor/verity-top-4db4 -- inbox/ARCHFILE-page.md` shows the seven changed places whole:
+
+9. Section 4 has a new row "Registration `verity/registration`" above Compose, and Compose's row no longer holds the
+   registration check (its "takes" cell reads "Registration's outcome and each protocol's."). Section 5's first diagram
+   has a `registration/` node inside `verity/` with three arrows (protocols to registration; registration to
+   protocol.py and to commitments). Section 6's tree has a `registration/` line under `runtime/`, and rule 4 gains a
+   sentence on what `registration/` uses. Section 7's row "The registration check" ends at `verity/registration/`.
+
+What it adds to your tasks:
+
+- The file follows the export, as before.
+- `tests/tree.toml`: one more `[[tree]]` entry, `verity/registration/`, with the page's meaning, `owner = "proofs"`
+  and `day = "2026-11-20"`. Say in the PR body that the day is top's until proofs gives its own on TOP-415 (the page
+  says "not dated", and the tree file needs a day for an entry `main` doesn't hold). If a `[[not_yet]]` line today
+  sends the registration check to `verity/protocols/compose/verifier/`, its `to` becomes `verity/registration/`.
+- If the import-rule sentence of rule 4 is checked by a test that reads the file, leave that test alone and say so.
+
+The hour does not move: PR open, unmarked, by Fri 13 Nov 3:00 AM PST.

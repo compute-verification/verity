@@ -79,7 +79,8 @@ The compiler is a circuit the developer registers up front. Given the period's a
 | <b>PoUS</b> and <b>PoUB</b> <code>protocols/accounting/pous</code>, <code>poub</code> | Memory. PoUS: how much of the registered store each device held, with the memory wipe inside it (between two stretches of serving, a server's whole memory is overwritten, so nothing it held before survives). PoUB: how many reads of the store a node made, and so how much of its memory's read rate is left uncertified. | The registered memory and its data sheets, the prover's commitments, the memory challenger's signed records, the challenger's challenges. Through compose, the network certifier's counts of what entered and left the node. | Bits held and bits read for the period, each with its error, to compose's account. | Compute; the weights; another protocol's code. |
 | <b>Certifier</b> <code>protocols/accounting/certifier</code> | Network: what left on a link is what the registered circuit produces from what entered. The auditor's device sits on every registered link out of a host, releases traffic on a fixed schedule and signs a record of what crossed. | The registered links, the network certifier's signed records, the prover's commitments to requests and responses, the challenger's challenges. | To compose's account: the period's exfiltration capacity (how many bits could have left unseen), with its error. Through compose, to memory: what entered and left each node. | Compute, memory, the weights. |
 | <b>Inference-only</b> <code>protocols/policy/inference_only</code> | The policy: the registered circuit divides into inference blocks that each read little fresh input. | The circuit's description. From training, as data: how much such a circuit slows training. | Accept or reject, to compose. | Values, traffic. |
-| <b>Compose</b> <code>protocols/compose</code> | What an auditor runs. Remote and onsite are each a list of protocols on one registration. Accepts only if every protocol accepts and they agree on the commitments. One theorem covers any list: a prover who adapts across all the protocols at once is still held to each one's claim, except with the summed error. It holds the registration check: before any run, the registration is complete and each device's figures are its data sheet's. | Each protocol's outcome, the registered hardware. | One verdict, and the period's account. | How any one protocol works inside. |
+| <b>Registration</b> <code>verity/registration</code> | Checks what was registered, before any challenge: the registration is complete (the hardware, the circuit compiler, and commitments to other information such as the model's weights), each device's figures are its data sheet's, and every registered device is accounted for by a protocol on the run's list. | The registration, the auditor's data sheets, the run's list of protocols. | Accepted or refused. An accepted registration is what every protocol then reads. | How any protocol works inside. |
+| <b>Compose</b> <code>protocols/compose</code> | What an auditor runs. Remote and onsite are each a list of protocols on one registration. Accepts only if every protocol accepts and they agree on the commitments. One theorem covers any list: a prover who adapts across all the protocols at once is still held to each one's claim, except with the summed error. | Registration's outcome and each protocol's. | One verdict, and the period's account. | How any one protocol works inside. |
 | <b>Party, channel, device, protocol, config</b> five files in <code>verity/</code> | The shared types: what a party is, what two parties exchange, the registered hardware, what a protocol declares, the file a run starts from. | Nothing. | Types every protocol uses. | Any one protocol. |
 | <b>Runtime</b> <code>verity/runtime/</code> | Runs a configuration's parties on real machines: sockets, randomness, clock, transcripts. | A configuration. | Running parties and their transcripts. | Any protocol's rules. |
 | <b>Hardware</b> <code>hardware/</code> | One data sheet per GPU, host or server model: what one device can do in a second and what it holds. Each figure names its source and says whether it is a ceiling or a measurement. Data, no code. The auditor brings it. | The vendor's published figures and our own measurements, written in by hand. | Figures a run passes to the registration check. The protocols take a device's capacity from the registration. | Everything. It never holds a figure the audited device reports about itself. |
@@ -121,6 +122,7 @@ flowchart TD
         channel["channel.py"]
         device["device.py"]
         protocols["protocols/"]
+        registration["registration/"]
         commitments["commitments/"]
         circuits["circuits/"]
     end
@@ -141,6 +143,9 @@ flowchart TD
     protocol --> channel
     protocol --> device
     protocols --> protocol
+    protocols --> registration
+    registration --> protocol
+    registration --> commitments
     protocols --> commitments
     protocols --> circuits
     commitments --> circuits
@@ -199,6 +204,8 @@ verity/
                    which part of the hardware it accounts for
   config.py        reads the one public file a run starts from
   runtime/         runs parties over channels: sockets, randomness and clock, transcripts
+  registration/    checks what was registered, before any challenge: the hardware against its data sheets,
+                   the circuit compiler, the commitments to other information, every device accounted for
   protocols/       each protocol with verifier/ (its Lean check), prover/ (with the GPU code it runs) and device/
     proofs/        flock, spot, recursion: what the other protocols call to prove
     accounting/    pouw, pous, poub, certifier: compute, memory and network
@@ -224,7 +231,7 @@ The rules that keep the parts apart. A test enforces each one:
 1. Nothing in <code>verity/</code> uses <code>adapters/</code> or <code>demos/</code>, or names PyTorch, vLLM or a model.
 2. No code uses <code>security/</code> or <code>hardware/</code>. A run reads the data sheets and passes them in.
 3. <code>runtime/</code> uses no protocol, and no protocol or adapter uses <code>runtime/</code>. Only what starts a run does.
-4. <code>party.py</code>, <code>channel.py</code> and <code>device.py</code> use nothing. <code>protocol.py</code> uses only those three. <code>config.py</code> uses only <code>protocol.py</code>.
+4. <code>party.py</code>, <code>channel.py</code> and <code>device.py</code> use nothing. <code>protocol.py</code> uses only those three. <code>config.py</code> uses only <code>protocol.py</code>. <code>registration/</code> uses those files and <code>commitments/</code>, and no protocol; a protocol reads the registration it accepted.
 5. <code>circuits/</code> uses nothing. <code>commitments/</code> uses only <code>circuits/</code>.
 6. An adapter uses a protocol's workload side, which is one call over GPU buffers (for PoUW: "run this matrix multiply"). A protocol never uses an adapter.
 7. Inside <code>protocols/</code>: two layers, accounting (pouw, pous, poub, certifier) and policy (inference\_only), with policy on accounting and compose on top of both. Both layers use the proofs (flock, with spot and recursion on it), and the proofs use neither layer. Each group is a directory of its own: <code>proofs/</code>, <code>accounting/</code> and <code>policy/</code>.
@@ -261,7 +268,7 @@ Days are each owner's own, given today. A day is 6 PM PST unless it says otherwi
 | The check | <code>tools/verity/check/</code> | <code>tools/check/</code> | ci | Wed 18 Nov, after the weekend's moves and after the old queue's code is deleted (Tue 17 Nov) |
 | The numbers each benchmark declares | one shared list | each benchmark's own directory, its owner's | console, with benchmarks | in review Mon 16 Nov |
 | The compute audit's cost model, and the commands that run an audit on a served run | proofs' scripts under <code>benchmarks/</code> | SPOT's <code>prover/</code> and <code>verifier/</code>, started from a demo's configuration. The measured proving costs stay recorded under <code>benchmarks/</code> and are handed in as data | proofs, with benchmarks and vllm | not dated |
-| The registration check | <code>protocols/interface/</code> and <code>verity/hardware/site/</code> | <code>protocols/compose/verifier/</code>, over <code>device.py</code>'s types | proofs | not dated |
+| The registration check | <code>protocols/interface/</code> and <code>verity/hardware/site/</code> | <code>verity/registration/</code>, a part of its own, over <code>device.py</code>'s types | proofs, with soundness for its statement | not dated |
 | The policy's two calculators | inside <code>protocols/inference_only/</code> | two directories under <code>benchmarks/</code>; training renames the slowdown one | network-accounting moves them, training renames | Fri 13 Nov; the rename Mon 16 Nov |
 | The network certifier a served run starts: its serving loop, its keys, its prover | <code>benchmarks/</code>, about 25,000 lines, and the auditor's device runs them from there, which rule 9 forbids | the certifier's <code>device/</code> and <code>prover/</code> | network-accounting | the plan with days Mon 16 Nov |
 
