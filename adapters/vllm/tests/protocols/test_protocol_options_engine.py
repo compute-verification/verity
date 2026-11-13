@@ -37,16 +37,18 @@ def test_the_engine_fills_only_an_adapter_that_reads_it_and_another_entry_keeps_
 
     def from_engine(scheme, settings, llm, epoch):
         asked.append((scheme, dict(settings), llm, epoch))
-        return {"runner": "r"}
+        return {"runner": "r", "rounds": 9}
 
     pouw, _ = _both(monkeypatch, [])
     pouw.from_engine = from_engine
     llm = object()
-    ctx = _serve(POUW, POUS, settings={"pouw": {"rounds": 7}, "pous": {"key": "k"}}, filled={"pouw": ("runner",)})
+    own = {"rounds": 7, "steps": 2}
+    ctx = _serve(POUW, POUS, settings={"pouw": own, "pous": {"key": "k"}}, filled={"pouw": ("runner",)})
     got = PO.from_engine(ctx, llm, epoch=3)
-    assert asked == [("ncp-v1", {"rounds": 7}, llm, 3)]
-    assert got.settings == {"pouw": {"rounds": 7, "runner": "r"}, "pous": {"key": "k"}} and got.filled == {}
-    assert (got.stage, got.enabled) == ("serve", (POUW, POUS)) and ctx.settings["pouw"] == {"rounds": 7}
+    assert asked == [("ncp-v1", own, llm, 3)]
+    # what the adapter returns is taken, over the caller's where both name a key
+    assert got.settings == {"pouw": {"rounds": 9, "steps": 2, "runner": "r"}, "pous": {"key": "k"}} and got.filled == {}
+    assert (got.stage, got.enabled) == ("serve", (POUW, POUS)) and ctx.settings["pouw"] == {"rounds": 7, "steps": 2}
 
 
 @pytest.mark.parametrize("error", [RuntimeError, AttributeError, ValueError])
