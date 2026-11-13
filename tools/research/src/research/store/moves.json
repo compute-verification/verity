@@ -2388,6 +2388,12 @@
         "verity/definitions/commitments/gates/block_key.circuit-check.py": "verity/commitments/gates/block_key.circuit-check.py",
         "verity/definitions/commitments/gates/block_key.py": "verity/commitments/gates/block_key.py"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/evaluate/": "verity/circuits/evaluate/",
+        "verity/definitions/requirement/": "verity/circuits/requirement/"
+      }
     }
   ]
 }
