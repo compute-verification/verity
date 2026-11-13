@@ -80,8 +80,9 @@ def scheme_check(k: int, groups: int, salt: bytes, rows: int, cols: int) -> dict
 
 def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, cols: int) -> dict:
     """The raised adder on the scheme's own code, as `scheme_check`: the planted codes as designed, every other code of the
-    planted groups' later atoms under 8, and the program's words (one atom a planted group, its accumulator the planted
-    sum) against `PearlC.checked`'s."""
+    planted groups' later atoms under 8, and against `PearlC.checked`'s words the words of the program that runs one atom a
+    planted group (its accumulator the planted sum) and of the one that only skips each planted group's second and third
+    atoms."""
     sch = PC.PearlC(forming="v1", device=H100)
     s = Shape(8192, k, 8192)
     ctx = Context(salt, Matmul(0, s, 0), hashlib.sha512(b"root-a" + salt).digest(), hashlib.sha512(b"root-b").digest())
@@ -102,25 +103,31 @@ def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, 
                 planted_ok &= all(val(row[128 * g + l]) == top for l in (1, 2, 3))
                 planted_ok &= all(val(row[128 * g + 32 * t + 1]) == v for t, v in zip((1, 2, 3), plant[g % 2]))
                 largest = max([largest] + [abs(val(row[l])) for l in range(128 * g + 32, 128 * g + 128) if l % 32 != 1])
-    equal = 0
+    equal = equal_skip = 0
     for i in range(rows):
         for j in range(cols):
             a, b = ops.a.codes[i], ops.b.codes[j]
-            total = 0
+            total = total_skip = 0
             for g in range(k // 128):
+                local = 0
+                for t in range(128 * g, 128 * g + 128, 32):
+                    local = H100.atom.step(local, a[t:t + 32], b[t:t + 32])
+                skipped = local
                 if g < groups:
                     local = H100.atom.step(PC.P.f32_bits(T.PLANT_SUM[g % 2]), a[128 * g:128 * g + 32], b[128 * g:128 * g + 32])
-                else:
-                    local = 0
-                    for t in range(128 * g, 128 * g + 128, 32):
-                        local = H100.atom.step(local, a[t:t + 32], b[t:t + 32])
-                total = fp32.add(total, local)
+                    skipped = 0
+                    for t in (128 * g, 128 * g + 96):
+                        skipped = H100.atom.step(skipped, a[t:t + 32], b[t:t + 32])
+                total, total_skip = fp32.add(total, local), fp32.add(total_skip, skipped)
                 total = 0 if total == 0x80000000 else total
+                total_skip = 0 if total_skip == 0x80000000 else total_skip
             equal += total == checked.c[i][j]
+            equal_skip += total_skip == checked.c[i][j]
     return {"class": "raised-adder", "fill": fill, "k": k, "groups": groups, "salt": salt.hex()[:16], "tile": (rows, cols),
             "admitted": bool(admitted), "planted_codes_as_designed": bool(planted_ok),
             "largest_other_code_in_later_atoms": largest, "words": rows * cols, "equal": int(equal),
-            "atoms": k // 32 - 3 * groups, "reference_atoms": k // 32}
+            "atoms": k // 32 - 3 * groups, "equal_skip_only": int(equal_skip), "atoms_skip_only": k // 32 - 2 * groups,
+            "reference_atoms": k // 32}
 
 
 def main() -> None:
@@ -129,7 +136,7 @@ def main() -> None:
     ap.add_argument("--runs", default="1")
     ap.add_argument("--units", type=int, default=256)
     ap.add_argument("--scheme", default="", help="k:groups, comma separated")
-    ap.add_argument("--raised", default="", help="k:n:groups:fill (fill: zero or gauss), comma separated")
+    ap.add_argument("--raised", default="", help="k:n:groups:fill[:program] (fill: zero or gauss; program: one-atom or skip), comma separated")
     ap.add_argument("--raised-scheme", default="", help="k:groups:fill, comma separated")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
@@ -145,10 +152,11 @@ def main() -> None:
             out["cases"].append(case)
             print(json.dumps(case), flush=True)
     for spec_ in filter(None, args.raised.split(",")):
-        k, n, groups, fill = spec_.split(":")
+        k, n, groups, fill, program = (spec_.split(":") + ["one-atom"])[:5]
         for run in map(int, args.runs.split(",")):
             t0 = time.perf_counter()
-            case = T._raised_case(k=int(k), n=int(n), groups=int(groups), units=args.units, run=run, fill=fill)
+            case = T._raised_case(k=int(k), n=int(n), groups=int(groups), units=args.units, run=run, fill=fill,
+                                  program=program)
             case["seconds"] = round(time.perf_counter() - t0, 1)
             out["cases"].append(case)
             print(json.dumps(case), flush=True)

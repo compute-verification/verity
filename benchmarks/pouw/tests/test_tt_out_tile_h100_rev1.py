@@ -381,6 +381,21 @@ def _raised_program(A: np.ndarray, B: np.ndarray, groups: int) -> tuple[np.ndarr
     return total, groups + k // 32 - G * groups
 
 
+def _raised_skip_program(A: np.ndarray, B: np.ndarray, groups: int) -> tuple[np.ndarray, int]:
+    """The ticket words of a program that only skips, and the E4M3 atoms it runs per word: the reference's chain with the
+    second and third atoms of each of the first `groups` groups not executed, for every word. In a pair of planted groups
+    those four atoms add 160², 160², −160² and −160², so with the four skipped in place the total after the pair, and every
+    later total, is the reference's. Skipping any of them within one group alone changes the word, so P1's flags, which
+    range over the subsets of one group, are not set: this is a cross-group joint skip that every word of every fragment
+    shares."""
+    P, k = A.shape
+    skip = frozenset(G * g + t for g in range(groups) for t in (1, 2))
+    total = np.zeros(P, dtype=np.float32)
+    for g0 in range(0, k // 32, G):
+        total = (total + C.group_run(A, B, list(range(g0, g0 + G)), skip)[0].astype(np.float32)).astype(np.float32)
+    return total, k // 32 - len(skip)
+
+
 def _raised_cost(s: Shape, atoms: int, units: int) -> Fraction:
     """An upper bound on the W1 cost, on `W1Device.s8H100Best`, of the raised-adder program on `units` units of shape `s`
     that share one weight, counted as `_dead_pair_cost` counts: `atoms` E4M3 atoms a word and the reference's promotions;
@@ -398,8 +413,10 @@ def _raised_cost(s: Shape, atoms: int, units: int) -> Fraction:
     return Fraction(units * (chain + fused + peel + forming + rows) + job)
 
 
-def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: int = 1, fill: str = "gauss") -> dict:
-    """One 64 x 64 audit tile of the raised-adder family at depth `k`, reported as `_dead_pair_case` reports its own."""
+def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: int = 1, fill: str = "gauss",
+                 program: str = "one-atom") -> dict:
+    """One 64 x 64 audit tile of the raised-adder family at depth `k`, reported as `_dead_pair_case` reports its own, for
+    the program that runs one atom a planted group (`"one-atom"`) or the one that only skips (`"skip"`)."""
     C.set_atom("hopper")
     sch = PC.PearlC(forming="v1", device=H100)
     s = Shape(m, k, n)
@@ -407,7 +424,7 @@ def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: in
     A, B, XA, ok = _raised_tile(k, groups, fill, run=run)
     P = A.shape[0]
     group_words, honest = C.group_sums(A, B, G)
-    words, atoms = _raised_program(A, B, groups)
+    words, atoms = (_raised_program if program == "one-atom" else _raised_skip_program)(A, B, groups)
     flags, _ = C.debit(A, B, G)
     flagged = int(flags.sum())
     later_zero = int((_running(group_words)[:, :-1] == 0).sum())
@@ -417,7 +434,7 @@ def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: in
              + H100.prices.forming_credited * Fraction(64, n) * (dead + unread))
     per_word = Fraction(sch.credit_of(s), s.m * s.n)
     cost, credit = _raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
-    return {"class": "raised-adder", "fill": fill, "shape": (m, k, n), "groups": groups, "units": units, "run": run,
+    return {"class": "raised-adder", "program": program, "fill": fill, "shape": (m, k, n), "groups": groups, "units": units, "run": run,
             "rules": bool(ok), "words": P, "equal": int((words == honest).sum()), "atoms": atoms,
             "reference_atoms": k // 32, "flagged": flagged, "flagged_in_planted_groups": int(flags[:, :G * groups].sum()),
             "later_zero": later_zero, "dead": dead, "designed_dead": 64 * 6 * groups, "unread": unread,
@@ -441,4 +458,24 @@ def test_raised_adder_groups_stay_within_the_gap():
     assert not case["fires"], (
         f"raised adder at {case['shape']}: the program costs {case['cost']:.1f} units a word against a credit of "
         f"{case['credit']:.1f}, under (1 - g0)(1 - rho) of it ({case['bound']:.1f}); the tile's debit is "
+        f"{case['debit']:.0f} of a cap of {case['cap']:.0f}")
+
+
+def test_planted_cross_group_skips_stay_within_the_gap():
+    """The cross-group class on operands an adversary chooses, with a program that only skips. `test_cross_group_joint_skips_
+    stay_within_the_gap` rests on W1 charging a fragment whole, so that a program saves an atom only where every word the
+    fragment covers can skip it, which census tiles do not offer. Planted rows offer it: the second and third atoms of
+    every planted group can be skipped in place for every word of the unit at once, in pairs of groups
+    (`_raised_skip_program`), and no flag is set. The test forms one 64 x 64 audit tile as the test above does, checks the
+    rules, the 4,096 ticket words and the cap, prices the program on one unit, and asserts TT_OUT's bound, which fails by
+    about a tenth of the credit: the whole-fragment rule does not bound this class once the adversary chooses the
+    operands."""
+    case = _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero", program="skip")
+    assert case["rules"], case
+    assert case["equal"] == case["words"], case
+    assert case["flagged_in_planted_groups"] == 0, case
+    assert case["debit"] <= case["cap"], case
+    assert not case["fires"], (
+        f"planted cross-group skips at {case['shape']}: the program costs {case['cost']:.1f} units a word against a "
+        f"credit of {case['credit']:.1f}, under (1 - g0)(1 - rho) of it ({case['bound']:.1f}); the tile's debit is "
         f"{case['debit']:.0f} of a cap of {case['cap']:.0f}")
