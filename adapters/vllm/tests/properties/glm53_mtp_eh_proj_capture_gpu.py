@@ -54,8 +54,9 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_bf16_gemm_capture_gpu as BG
 from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records import mtp_captures
 
-SCHEMA = "verity-vllm/glm53-mtp-eh-proj-capture/v1"
+SCHEMA = mtp_captures.EH_PROJ
 RECORD = "glm53_mtp_eh_proj_capture.json"
 MODEL, PHASE, NAME = "glm53-mtp", "linear", "mtp.eh_proj"
 K, N = 2 * 6144, 6144

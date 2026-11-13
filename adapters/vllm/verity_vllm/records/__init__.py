@@ -40,4 +40,6 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `boundary_commit` -- a served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`,
   ``commit.json``): its layout, each value's root and the index's leaf, as the class's registration and a recommit from the
   prover's files read it (`pipeline.boundary_rows`); its `of` refuses an unknown field and `dump` writes it back.
+* `mtp_captures` -- the schema ids of the property records GLM-5.3's MTP draft-layer captures write, as the property registry
+  (`properties.record`) and each capture name them; the records have no typed fields, being read only as property records.
 """

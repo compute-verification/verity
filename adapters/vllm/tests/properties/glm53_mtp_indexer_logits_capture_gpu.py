@@ -52,8 +52,9 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
 from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records import mtp_captures
 
-SCHEMA = "verity-vllm/glm53-mtp-indexer-logits-capture/v1"
+SCHEMA = mtp_captures.INDEXER_LOGITS
 RECORD = "glm53_mtp_indexer_logits_capture.json"
 H, D, BLOCK, STRIDE = DS.H, DS.D, DS.BLOCK, DS.STRIDE
 SPEC, NEXT_N = 5, 6
