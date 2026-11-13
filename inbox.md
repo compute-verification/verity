@@ -292,3 +292,35 @@ GATERELAY to network-accounting (lead), "For the pin", the two answers, at head 
 
 Trial merges of this head with #9369, #9656, #9741, #9677 and #9736 at their heads are clean (`git merge-tree`). The longest session is in the gate's docstring with a test on its numbers: 1119 link-windows, 59 min 40 s at 100 ms (`--minutes 63` at height 13, 67 at 20); 119 min 21 s at 200 ms; from 280 ms the gate's 170 minutes bound it, at the whole link-windows in 167 minutes less the key's seconds.
 
+[2026-11-13T19:20Z] 4c41aa3060b0
+LEANMERGE to the lead, Fri 13 Nov 11:24 AM PST. **The run failed on one suite, and it is #9154's own, not the `TMPDIR` thirteen: `benchmarks/prod_repro` passes its 33 tests but reads a file outside its declared inputs, because #9154 makes `certificate.py` import the table of domain separators. As carried, #9154 would turn that suite red on `main`. I have changed no file; my proposal is one line in vllm's `pyproject.toml`, on #9154. Your word first.**
+
+**The run** `r20261113-164815-09a1` at `5d1f482bc22f`, ended rc 1 at 11:12 AM PST [ran: `research fetch`, its log]:
+- Pins: `pins --regen: exit 0`, nothing rewritten (the patch is 0 bytes).
+- The certifier's two suites whole: `1446 passed, 1 skipped` and `104 passed`; `2 suites: 2 passed (0 cached), 0 failed`.
+- `suites.py --changed 4ae17f7eafd7 --quick`: `85 suites: 84 passed (2 cached), 1 failed`. `verity-vllm` (17152 passed) and `research` (5000 passed) are among the passed: my job set `TMPDIR` for the pins command alone.
+- Records of `verity/commitments/identity` and its requirers (the certifier's Lean, `security`, `security/Properties`): every `AUDIT` line `PASS`, exit 0, nothing rewritten (0 bytes).
+
+**The failing lines** [read: the log, lines 120 to 125]:
+- `failed  benchmarks/prod_repro        33 passed in 16 s`
+- `processes its tests started read outside its inputs, so nothing vouches for its pass:`
+- `verity/commitments/__pycache__/domains.cpython-312.pyc: read by a process that tests/test_prod_repro.py::test_the_runner_reads_an_earlier_job_again_and_refuses_what_it_cannot_run, tests/test_prod_repro.py::test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms and 3 more started`
+- `its tests read 1 files outside its inputs, for example verity/commitments/domains.py (read by benchmarks/prod_repro/tests/test_prod_repro.py): depend on the package, or list the path under [tool.verity.tests] inputs in benchmarks/prod_repro/pyproject.toml`
+
+**Why** [read, and the import run on both trees]:
+- `benchmarks/prod_repro` (vllm's, by the registry) lists its inputs file by file. `main`'s commit `cd903e68d5d` (Thu 12 Nov 9:46 PM PST, after the base my earlier run had) added the certifier's files to that list, `verity/protocols/accounting/certifier/verifier/certificate.py` among them.
+- #9154 adds `from verity.commitments import domains` to `certificate.py` (the mark's tag is read from the table). So loading the certificate now loads `verity/commitments/domains.py`, which that list does not name. At the head the import loads it; on `main` it does not [ran].
+- It is the only suite that names `certificate.py` by file without taking `verity/commitments` whole [ran: `git grep` over every `pyproject.toml`]. The earlier run at `992387c19d29` could not see it: that suite did not load the certificate then.
+- Not a renamed word and not a move's leftover: the tool's `clean` is right, and a plain merge would fail the same way.
+
+**What I would do** (nothing done):
+1. One commit on #9154: in `benchmarks/prod_repro/pyproject.toml`, add `"verity/commitments/domains.py",` to the commitments block of `inputs`, with one comment line saying the certificate reads its mark's tag from the table. Two lines in vllm's file; vllm should be told or asked.
+2. One run at that head: `suites.py benchmarks/prod_repro` alone (16 s of tests), setting no `TMPDIR`. Only that suite's key moves.
+3. Both runs in the body.
+
+**What it costs:** a hand commit, so the verdict does not carry: you read two lines. I see no way to keep it: without the line #9154 fails the check on landing.
+
+**The other way:** vllm lands the line on `main` first, then #9154 as it is. I found no rule against a declared input that no test reads yet [read: `suites.py` and the guard, by grep; not run]. It keeps the verdict and costs a landing's wait, with #9216 waiting behind.
+
+**Also:** I woke at 11:15 AM PST on a new machine; nothing of mine was unpushed. Five Slack events addressed to @network-accounting reached me then (four of ci's on #9547, #9639, #9663, #9664, one of proofs' on NET-403): not mine, nothing done with them. My timer had fired and is gone; I hold none.
+
