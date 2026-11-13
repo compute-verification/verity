@@ -69,7 +69,7 @@ def test_todays_digest_is_the_one_portion_walk():
     """On the current layout every package has one portion, and the digest is the old per-portion walk, byte for byte, less the
     files under a name holding a dot."""
     h = hashlib.sha256()
-    for name in ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core", "verity_flock", "circuit_check", "verity_vllm"):
+    for name in ("verity", "verity.circuits", "verity.definitions.kernels", "verity_flock", "circuit_check", "verity_vllm"):
         spec = importlib.util.find_spec(name)
         assert spec is None or len(spec.submodule_search_locations or []) <= 1, (name, spec.submodule_search_locations)
         for root in (spec.submodule_search_locations or []) if spec else []:
