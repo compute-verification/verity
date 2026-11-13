@@ -3177,7 +3177,6 @@
     {"file": "benchmarks/pouw/theory/isa_cap_check.py", "count": 10},
     {"file": "benchmarks/pouw/theory/isa_escape.py", "count": 3},
     {"file": "benchmarks/pouw/theory/scalar_route.py", "count": 3},
-    {"file": "benchmarks/ppl/dither_plot.py", "count": 5},
     {"file": "benchmarks/private_circuit/README.md", "count": 1},
     {"file": "benchmarks/private_circuit/pod.sh", "count": 4},
     {"file": "benchmarks/private_circuit/universal.py", "count": 27},
