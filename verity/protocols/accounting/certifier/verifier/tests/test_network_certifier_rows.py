@@ -134,15 +134,15 @@ def test_every_row_opens_the_signed_root_at_its_position_and_nowhere_else(traffi
 
 def test_salts_are_fresh_and_never_shared_and_the_witness_reads_back():
     rows, wiring = [bytes(S * B)] * T, W.Wiring((), bytes(64))
-    a = W.Cells.commit("warden", Direction.EGRESS, 0, rows, wiring, PARAMS, signers.SESSION)
-    b = W.Cells.commit("warden", Direction.EGRESS, 0, rows, wiring, PARAMS, signers.SESSION)
+    a = W.Cells.commit("uplink", Direction.EGRESS, 0, rows, wiring, PARAMS, signers.SESSION)
+    b = W.Cells.commit("uplink", Direction.EGRESS, 0, rows, wiring, PARAMS, signers.SESSION)
     assert len(set(a.salts + b.salts)) == 2 * T and len(set(a.bcs)) == T and a.root != b.root
     assert W.read_witness(a.witness) == (list(a.salts), wiring.salt)
     with pytest.raises(ValueError, match="never reused"):
-        W.Cells.commit("warden", Direction.EGRESS, 0, rows, wiring, PARAMS, signers.SESSION, [a.salts[0]] * T)
+        W.Cells.commit("uplink", Direction.EGRESS, 0, rows, wiring, PARAMS, signers.SESSION, [a.salts[0]] * T)
     for bad in ([bytes(S * B)] * (T - 1), [bytes(B)] * T):
         with pytest.raises(ValueError, match="one a bucket"):
-            W.Cells.commit("warden", Direction.EGRESS, 0, bad, wiring, PARAMS, signers.SESSION)
+            W.Cells.commit("uplink", Direction.EGRESS, 0, bad, wiring, PARAMS, signers.SESSION)
     with pytest.raises(ValueError, match="witness"):
         W.read_witness(a.witness[:-1])
 
