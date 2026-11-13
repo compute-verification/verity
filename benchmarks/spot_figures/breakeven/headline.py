@@ -57,7 +57,9 @@ row's blocks by its source, `steady` or `family`, a Boolean version's row too, t
 `plan` prints its row's GB at the row's own pinned budget, where its total is what the row says, at lambda 1;
 `rows` and `read` print lambda times the GB where a scope's total is 10%, read between the two pinned budgets that
 bracket it; `verity bench exfiltration` reads the headline figure off rows of record with its own line through
-every pinned budget.
+every pinned budget. Each prints beside a figure what its rows' data says a reader must know (`note`, which a row
+also carries): that no table's row priced their proving, and what a row's scale reaches over the unscaled row of
+its case.
 """
 from __future__ import annotations
 
@@ -712,7 +714,7 @@ def plan_split(p: dict, calls: list, strata: list) -> dict:
     priced as the row's source names it (`steady`, `family`), its Boolean version's row too, every other block as the
     planner priced it (`computed` where it scaled the price); a block's Lean verifier seconds, which no row times, are
     its share apart, priced as `verifier` priced them (`modeled` but for a type whose verifier was timed). Each family
-    gives its share by way (`ways`)."""
+    gives its share by way (`ways`) and by source (`sources`)."""
     priced = {x["block"]: str(x.get("priced")) for _v, xs in calls for x in xs}
     priced |= {x["block"]: str(x["priced"]) for x in strata if x.get("priced") and x["block"] not in priced}
     basis = {x["block"]: x.get("basis") for _v, xs in calls for x in xs}
@@ -726,7 +728,7 @@ def plan_split(p: dict, calls: list, strata: list) -> dict:
     sources: dict = {}
     for c in p["cells"] + p["left_out"]:
         f = fam.setdefault(family(c["block"]), {"share": 0.0, "prove_s": 0.0, "taken": 0.0, "cells": 0,
-                                                 "priced": set(), "ways": {}})
+                                                 "priced": set(), "ways": {}, "sources": {}})
         way = priced.get(c["block"], "unknown")
         t = table.get(c["block"])
         own = t if t in TABLE_SOURCES else way
@@ -747,6 +749,7 @@ def plan_split(p: dict, calls: list, strata: list) -> dict:
                 [(v["verifier_priced"], VERIFIER_SOURCE, c["share"] * lean)] if lean > 0 else []):
             f["priced"].add(w)
             f["ways"][w] = f["ways"].get(w, 0.0) + share
+            f["sources"][src] = f["sources"].get(src, 0.0) + share
             ways[w] = ways.get(w, 0.0) + share
             sources[src] = sources.get(src, 0.0) + share
     return {"what": "the row's plan at its beta: each block family's share of a sampled replay block's proving, "
@@ -767,8 +770,60 @@ def assemble(row: dict, p: dict, calls: list, strata: list, pricing: list) -> di
     if abs(planned / row["requests"] - 1) > REQUESTS_RTOL:
         raise ValueError(f"{row['row']}, {row['scope']}: the row's {row['requests']:.6g} requests are not its plan's "
                          f"{planned:.6g} (replay_sample / q)")
-    return row | {"world": WORLD, "b10": row["beta"], "pricing_split": pricing_split(pricing),
-                  "split": plan_split(p, calls, strata)}
+    out = row | {"world": WORLD, "b10": row["beta"], "pricing_split": pricing_split(pricing),
+                 "split": plan_split(p, calls, strata)}
+    return out | ({"note": said} if (said := note([out])) else {})
+
+
+def table_share(split: dict) -> float | None:
+    """The share of a row's plan's proving that a table's rows or steady-state rows price, by its `sources`, else its
+    `basis`; None where its split records neither."""
+    if sources := split.get("sources"):
+        return sum(v for k, v in sources.items() if k.split(", ")[0] in TABLE_SOURCES.values())
+    if basis := split.get("basis"):
+        return sum(v for k, v in basis.items() if k in TABLE_SOURCES)
+    return None
+
+
+def unscaled(case: dict) -> str | None:
+    """The row of `ROWS` with `case` (its cut aside) and no scale: the row a scaled row of that case differs from by
+    its scale alone."""
+    cut = {k: case[k] for k in ("partition",) if k in case}
+    return next((n for n, r in ROWS.items() if not r["scale"] and r["case"] | cut == case), None)
+
+
+def by_scale(scale: dict) -> str:
+    """A row's scale as a factor, where every family takes the same one."""
+    if len({json.dumps(v, sort_keys=True) for v in scale.values()}) > 1:
+        return "by its scale"
+    v = next(iter(scale.values()))
+    return (f"x{v.get('marg', 1.0):g} a block and x{v.get('fixed_x', 1.0):g} fixed" if isinstance(v, dict)
+            else f"x{v:g}")
+
+
+def note(rows: list) -> str:
+    """What a reader of rows' figure must read beside it, from the rows' own data: that no table's row priced any of
+    their plans' proving (`table_share` 0); and for rows that scale some block families' seconds, the unscaled row of
+    their case (`unscaled`) and what the scale reaches, read from the scaled families' sources: the Lean verifier's
+    seconds, which a table's row leaves scaled, and the planner's price, at most the largest share of a plan's
+    proving it prices in those families. Empty for rows that need neither."""
+    out = []
+    shares = [table_share(r.get("split") or {}) for r in rows]
+    if shares and None not in shares and not any(shares):
+        out.append("at the planner's prices, not the table's")
+    if scale := rows[0].get("scale"):
+        base = unscaled(rows[0].get("case") or {})
+        who, x = f"row `{base}`" if base else "its unscaled row", by_scale(scale)
+        scaled = {family(p) for p in scale}
+        fams = [(r.get("split") or {}).get("families") or {} for r in rows]
+        if not all(fams) or any("sources" not in fs[f] for fs in fams for f in scaled & set(fs)):
+            out.append(f"{who} with {len(scaled)} block families' seconds scaled {x}; which of their seconds, not recorded")
+        elif planner := max(sum(fs[f]["sources"].get(PLANNER, 0.0) for f in scaled & set(fs)) for fs in fams):
+            out.append(f"{who} with the Lean verifier's seconds scaled {x}, and the planner's prices of the same block "
+                       f"families, at most {planner * 100:.2g}% of its proving")
+        else:
+            out.append(f"{who} with the Lean verifier's seconds scaled {x} and nothing else")
+    return "; ".join(out)
 
 
 def run(spec: dict, known: dict | None = None, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
@@ -859,7 +914,7 @@ def read(rows_: list) -> dict:
             for k, tb in {"FP4 l1": w, "FP4 l1.05": w / LAMBDA, "300GB l1.05": 300 * 8e9 / LAMBDA}.items():
                 beta, tot = at(rs, tb)
                 rec[k] = {"beta": beta, "total": tot}
-            out[f"{name} | {scope}"] = rec
+            out[f"{name} | {scope}"] = rec | ({"note": said} if (said := note(rs)) else {})
     return out
 
 
@@ -869,7 +924,7 @@ def show(figure: dict) -> str:
         lines.append(f"{r['row'][:44]:44s} | {r['scope']:16s} | {r['e']:.5f} | {r['resid']:.1e} | "
                      f"{r['fixed'] * 100:.3f} | {r['gb10'] * LAMBDA:9.1f} | {r['FP4 l1']['total'] * 100:7.2f} | "
                      f"{r['FP4 l1.05']['total'] * 100:7.2f} | {r['300GB l1.05']['total'] * 100:7.2f} "
-                     f"({r['300GB l1.05']['beta'] * 100:.2f})")
+                     f"({r['300GB l1.05']['beta'] * 100:.2f})" + (f" | {r['note']}" if r.get("note") else ""))
     lines.append(f"GB@10% x{LAMBDA}: lambda = {LAMBDA} times the bound where the scope's total is 10% of its compute, "
                  "the total read between the two pinned budgets that bracket it; no design is run at that budget")
     return "\n".join(lines)
@@ -889,16 +944,18 @@ def show_prices(pr: dict) -> str:
 
 def show_what(row: dict) -> str:
     """What a row's GB is: its bound at its own pinned budget, the share of compute its total is there, and lambda."""
+    said = note([row])
     return (f"{row['bound_bits'] / 8e9:,.1f} GB: the bound at the pinned budget beta = {row['beta'] * 100:.4g}% of "
             f"compute, where the row's total is {row['total'] * 100:.4g}% (not read at 10%), at lambda = 1; "
-            f"x{LAMBDA} is lambda times it")
+            f"x{LAMBDA} is lambda times it" + (f" | {said}" if said else ""))
 
 
 def show_row(row: dict) -> str:
-    """A row's bound at its beta, and the share of its plan's proving by source."""
-    gb = row["bound_bits"] / 8e9
+    """A row's bound at its beta, the share of its plan's proving by source, and its `note`."""
+    gb, said = row["bound_bits"] / 8e9, note([row])
     return (f"{row['row']} | {row['scope']} | beta {row['beta']!r}: {gb:,.1f} GB (x{LAMBDA} {gb * LAMBDA:,.1f}) | "
-            "the plan's proving by source: " + ", ".join(f"{k} {v * 100:.4g}%" for k, v in row["split"]["sources"].items()))
+            "the plan's proving by source: " + ", ".join(f"{k} {v * 100:.4g}%" for k, v in row["split"]["sources"].items())
+            + (f" | {said}" if said else ""))
 
 
 def main(argv=None) -> int:

@@ -363,6 +363,64 @@ def test_each_reader_says_what_its_gb_is():
                                                   "is 10% of its compute")
 
 
+#: what a table-priced row's split records, and a row's whose blocks no table's row priced
+AT_TABLE = {"sources": {"own row": 0.79, H.VERIFIER_SOURCE: 0.2, H.PLANNER: 0.01},
+            "families": {"SparseMlaHeadBlock_v1": {"sources": {"own row": 0.7, H.VERIFIER_SOURCE: 0.1}},
+                         "MoeRouterSigmoidBiasSlots_v2": {"sources": {H.PLANNER: 0.01}}}}
+AT_PLANNER = {"sources": {H.PLANNER: 0.91, H.VERIFIER_SOURCE: 0.09},
+              "families": {"SparseMlaHeadBlock_v1": {"sources": {H.PLANNER: 0.8, H.VERIFIER_SOURCE: 0.08}}}}
+
+
+def figure_row(name: str, split: dict, **more) -> dict:
+    """A printed row of `ROWS[name]`'s case and scale with `split`, at 1,000 GB."""
+    return (row(plan()) | {"row": name, "case": H.ROWS[name]["case"], "scale": H.ROWS[name]["scale"], "split": split,
+                           "bound_bits": 8e12, "total": 0.1} | more)
+
+
+def test_each_reader_prints_a_row_s_note_beside_its_figure():
+    """A row no table's row priced says so beside its figure; a row of another's case with a scale says it is that row
+    with what its scale reaches, from its scaled families' sources: the Lean verifier's seconds alone, or the planner's
+    price's largest share too, or, where its rows don't record its families' sources, that it isn't recorded. Row (ii)
+    says neither, and its lines are as they were. Each reader takes the note from the rows' data, not their names."""
+    plain = figure_row("(ii) honest", AT_TABLE)
+    assert H.note([plain]) == ""
+    assert H.show_what(plain) == ("1,000.0 GB: the bound at the pinned budget beta = 40% of compute, where the row's "
+                                  "total is 10% (not read at 10%), at lambda = 1; x1.05 is lambda times it")
+    assert H.show_row(plain).endswith("own row 79%, Lean verifier 20%, planner's price 1%")
+
+    planner = "at the planner's prices, not the table's"
+    for r in (figure_row("(i) honest", AT_PLANNER), figure_row("(ii) honest", {"basis": {"reprice.CACHE": 1.0}})):
+        assert H.note([r]) == planner and H.show_what(r).endswith(f"x1.05 is lambda times it | {planner}")
+    assert H.show_row(figure_row("(i) honest", AT_PLANNER)).endswith(f"Lean verifier 9% | {planner}")
+    assert H.note([figure_row("(i) honest", {})]) == "" and H.note([plain, figure_row("(i) honest", AT_PLANNER)]) == ""
+
+    warm = figure_row("(iii) honest", AT_TABLE)
+    said = "row `(ii) honest` with the Lean verifier's seconds scaled x0.25 and nothing else"
+    assert H.note([warm]) == said and H.show_row(warm).endswith(f"planner's price 1% | {said}")
+    cut = warm | {"case": warm["case"] | {"partition": H.UNITS}}
+    assert H.note([cut]) == said
+    split = AT_TABLE | {"families": AT_TABLE["families"] | {"SparseMlaSplit_v1": {"sources": {H.PLANNER: 2e-5}}}}
+    assert H.note([warm, warm | {"split": split}]) == (
+        "row `(ii) honest` with the Lean verifier's seconds scaled x0.25, and the planner's prices of the same block "
+        "families, at most 0.002% of its proving")
+    old = {"sources": AT_TABLE["sources"], "families": {"SparseMlaHeadBlock_v1": {"ways": {"steady": 0.8}}}}
+    assert H.note([warm | {"split": old}]) == ("row `(ii) honest` with 19 block families' seconds scaled x0.25; which "
+                                               "of their seconds, not recorded")
+    assert H.note([figure_row("(iii) honest", AT_PLANNER)]).startswith(f"{planner}; row `(ii) honest` with the Lean")
+    assert H.note([warm | {"case": H.ROWS["(i) honest"]["case"]}]).startswith("row `(i) honest` with the Lean")
+    alone = warm | {"case": warm["case"] | {"dense_k": 4}}
+    assert H.note([alone]).startswith("its unscaled row with the Lean verifier's seconds scaled x0.25")
+
+    fig = H.read([r | {"step": H.STEP, "compile": 0.0, "serve": 0.03, "edge": 0.0, "pool": 0.0, "q": 1e-16,
+                       "replay_sample": 1.0, "S": H.SERVED_BITS, "delta_seen": 0.01, "share": H.SHARE,
+                       "gpu_seconds": 1.0, "weights_bits": 3.0e12, "bound_bits": 4e12 / r["beta"]}
+                  for one in (plain, warm) for r in (one, one | {"beta": 1.0})])
+    assert "note" not in fig["(ii) honest | world year"] and fig["(iii) honest | world year"]["note"] == said
+    lines = H.show(fig).splitlines()
+    assert [x.split(" | ")[0].strip() for x in lines[1:3]] == ["(ii) honest", "(iii) honest"]
+    assert lines[1].endswith(")") and lines[2].endswith(f") | {said}")
+
+
 def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_price():
     """At `verity bench prove`'s table, a block whose row is a steady-state one, its own or its family's, costs the
     row's seconds a block: its price without the verifier (the row's scale in it) times one factor, the verifier's
@@ -438,6 +496,24 @@ def test_row_ii_at_the_control_s_table_is_the_plan_s():
     assert isclose(sum(priced.values()), 1.0, rel_tol=1e-12) and isclose(sum(sources.values()), 1.0, rel_tol=1e-12)
     assert (priced["steady"], priced["family"]) == (sources["own row"], sources["family row"])
     assert priced["computed"] < sources[H.PLANNER]
+    families = got["split"]["families"].values()
+    assert all(isclose(sum(f["sources"].values()), f["share"], rel_tol=1e-12, abs_tol=1e-15) for f in families)
+    assert "note" not in got
+
+
+def test_row_iii_at_the_control_s_table_is_row_ii_with_the_verifier_s_seconds_scaled():
+    """Row (iii) at the control's table (about 3 s) carries the note that it is row (ii) with the Lean verifier's
+    seconds scaled and, of the planner's prices, only its warm families' few blocks the table holds no row of. Catches
+    the warm scale reaching a table's row again, or reaching more of the planner's price, which moves (iii) away from
+    (ii) by more than its note says."""
+    P = H.planner()
+    spec = H.spec_of("(iii) honest", "world year", PLAN_BETA,
+                     prices=H.prices(json.loads((CONTROL / "bench_prices.json").read_text())))
+    row, reads = H.evaluate(spec, P)
+    got = H.assemble(row, H.plan(spec, row, reads, {}, P), reads["calls"], reads["strata"], reads["pricing"])
+    assert got["note"] == ("row `(ii) honest` with the Lean verifier's seconds scaled x0.25, and the planner's prices "
+                           "of the same block families, at most 0.0016% of its proving")
+    assert got["bound_bits"] / 8e9 < 2635.9320571029266
 
 
 def test_row_ii_at_the_control_s_table_on_the_units_cut_prices_the_units_at_the_planner_s():
