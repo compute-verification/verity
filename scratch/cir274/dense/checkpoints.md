@@ -24,3 +24,4 @@
 - 19:57Z 694b e5ca c8b6 running
 - 20:12Z e5ca passed (windows 103, commitments 649); 694b c8b6 running
 - 20:29Z passed: 91ed definitions, 5556 circuits+core-evaluate, ec34 circuit-check (running numerical, research, flock); 694b verity-vllm running
+- 20:45Z waiting 694b (verity-vllm), ec34 (numerical, research, flock)
