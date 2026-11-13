@@ -1,1 +1,1 @@
-2026-11-13T01:07Z GEMMCALL: head suites run r20261112-232130-c3ca running since 00:12Z (--changed --quick tier); PR follows it
+2026-11-13T02:00Z GEMMCALL: head suites r20261112-232130-c3ca passed (57 changed suites + repository + circuit_check whole); circuit_check whole was 2203 s vs 397 s at base on another machine, so an ABA run r20261113-015932-d77d compares them in one slot
