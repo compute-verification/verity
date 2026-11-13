@@ -12,9 +12,11 @@ the check's run puts the read's input `x` on column `x` and output `j` on `Layou
 template's columns (`portsAt`) is a read at the run's ports (`portsAt_eq`, `readPorts`). SHA-512's collision resistance
 at the reads' finder is the named assumption at its one coin (`expectedCR_of_draw`).
 
-`gatesRefine_check` is the gate fact under it on its own: at every copy of a unit of a parsed file whose template the
-check accepts, the gates at the template's columns refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`). A statement
-that takes `GatesRefine` as a premise at a checked template has it from this theorem.
+`gatesRefine_check` is the gate fact under it on its own: at every copy of a unit of a parsed templated statement whose
+template the check accepts and whose unit returns the circuit's outputs, with the unit's constant registered as `true`,
+the gates at the template's columns refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`). A statement that takes
+`GatesRefine` as a premise has it from this theorem where its premise is at that file's partition
+(`Flock.Bridge.partsOf` of `.tmpl ct`), at those ports (`portsAt`), at SHA-512 and at the pinned hm96 key.
 -/
 
 @[expose] public section
@@ -62,16 +64,21 @@ theorem portsAt_eq (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n
     rw [Nat.mul_div_cancel_left H (by norm_num : 0 < 16), Nat.mul_mod_right] at h
     rw [colAt_of_val h]
 
-/-- **The read's gates refine its reference at every copy of a unit the read's check accepts.** Let the circuit file
-parse into `ct` (`hparse`, `Flock.HmOut.parseTmpl`), with its unit template passing the read's check (`hcheck`,
-`Flock.ReadNet.check V H`) and its unit returning the circuit's outputs (`ho`). Then in the key program of `n` units of
-`ct`'s circuit, at unit `u` with its constant registered as `true` (`hone`) and at each copy `j` of its stack, the gates
-at the read template's columns (`portsAt`) compute `Hash.EmbeddingRead` for a table of `V` rows of `H` words, at SHA-512
-under the pinned hm96 key, with their root, domain id and verdict committed (`GatesRefine`).
+/-- **The read's gates refine its reference at every copy of a unit the read's check accepts.** Let the templated
+statement parse into `ct` (`hparse`, `Flock.HmOut.parseTmpl`), with its unit template passing the read's check
+(`hcheck`, `Flock.ReadNet.check V H`) and its unit returning the circuit's outputs (`ho`). Then in the key program of
+`n` units of `ct`'s circuit, at unit `u` with its constant registered as `true` (`hone`) and at each copy `j` of its
+stack, the gates at the read template's columns (`portsAt`) refine `Hash.EmbeddingRead` for a table of `V` rows of `H`
+words, at SHA-512 under the pinned hm96 key (`GatesRefine`). That is: at every transcript where `u` is correct and the
+registered constants among `u`'s inputs and outputs hold, in `u`'s local evaluation the row the gates return is the
+reference's on their values and their verdict is set only where the reference accepts the opening; and the verdict's
+gate is committed. The root's and the domain id's gates are the copy's inputs, outside `u`, so `GatesRefine` asks
+nothing of them here.
 
-It names no probability, no transcript's acceptance and no hash's collision resistance: it is `readUnitDrawn_check`'s
-gate premise alone, from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`), stated at
-the template's columns through `portsAt_eq`. -/
+It names no probability, no acceptance and no hash's collision resistance. It is the gate premise
+`Accounting.SecurityProofs.readUnitDrawnCR` takes of each read, which `readUnitDrawn_check` discharges inside its own
+proof, here on its own and from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`),
+stated at the template's columns through `portsAt_eq`. -/
 theorem gatesRefine_check {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} {tu : Flock.TmplUnit}
     (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ht : ct.tmpl = some tu)
