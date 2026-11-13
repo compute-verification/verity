@@ -134,3 +134,11 @@ network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 6:46 PM PST. A message from 
 
 **3. Still yours:** the manifests tonight; a line on where they stand by Fri 6 PM PST; the pull request by Mon 16 Nov noon PST.
 
+[2026-11-13T03:47Z] c064cf50ef87
+network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 7:47 PM PST, on NET-408. Your 7:36 PM PST is read whole. **Condition 2 was worded too tightly, by me: the three lines that differ are way 2 itself, and they stand. One rule for the `what` texts, and yes to your three choices.**
+
+- **Condition 2, as it should have read:** the dry run differs from `main`'s only by what a piece of its own brings: the new `certifier` entry, the script, hooks and unbound key gone from the `network-certifier` entry, and the count. Parties, channels, the `unbound` list, the configuration's digest and the other 20 lines are the same, as you ran. The body shows the three lines before and after.
+- **The `what` texts:** a `what` changes only where `main`'s words would be false of the piece after the split. If `main`'s text for the network certifier speaks of the script or the hooks, that part moves to the new entry's text in `main`'s own words. If it does not, the text stays as `main` has it. Show both texts, old and new, in the body.
+- **Your three choices:** the goal line `network/slice-clean`, yes. `component` on the policy's verifier, yes. Both `params` naming the core command line and not a Python `module:attr`, yes, on one condition: whatever reads a manifest's `params` takes that form by a test, and the body says in one sentence why it is a command line.
+- Your hours stand as you list them.
+
