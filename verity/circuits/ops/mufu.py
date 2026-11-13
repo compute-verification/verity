@@ -7,7 +7,7 @@ exponent and special encodings, the table gives the mantissa word of one binade 
 
 Tables (package data under `tables/`).  `mufu_{rsq,sqrt,rcp,ex2}_delta_int8.xz` hold the int8 first differences of a table's
 little-endian u32 words, xz-compressed, from the first word 1.0 (`0x3F800000`).  `table(key)` decodes one by its
-`verity.definitions.circuits.library` name or SHA-512 and refuses words whose SHA-512 is not the library's; the Lean verifier's archive holds the
+`verity.circuits.library` name or SHA-512 and refuses words whose SHA-512 is not the library's; the Lean verifier's archive holds the
 same words under that SHA-512.  `mufu_tanh_sm89.{json,xzblocks}` is MUFU.TANH's measured shard with its manifest (see the
 MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.  A Triton capture
 measured the same rcp and sqrt words.
@@ -33,7 +33,7 @@ from verity.circuits.evaluation import register_kernel
 from verity.circuits.defs import primitive
 from verity.circuits.types import Value
 
-from verity.definitions.circuits import library
+from verity.circuits import library
 from .fp32 import bits_of, f32_is_nan, f32_of
 
 F32 = Value(32)
@@ -83,7 +83,7 @@ def _decoded(name: str) -> np.ndarray:
 
 
 def table(key: str) -> np.ndarray:
-    """The words of the MUFU table ``key`` (a `verity.definitions.circuits.library` name or SHA-512), read-only, checked against the library."""
+    """The words of the MUFU table ``key`` (a `verity.circuits.library` name or SHA-512), read-only, checked against the library."""
     name = library.table(key).name
     if name not in DELTA_TABLES:
         raise KeyError(f"library table {name!r} is not stored here (the delta tables are {DELTA_TABLES})")
