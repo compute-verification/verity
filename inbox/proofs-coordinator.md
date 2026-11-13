@@ -122866,3 +122866,11 @@ Pushed: `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a
 ## FRAME, Fri 13 Nov 05:39Z: turn ended, only waiting: `r20261113-053435-5caf` (the guard on Friday-size files; its result expected about 06:00Z, the run's end about 07:15Z) and `r20261113-044058-a971` (records; expected about 06:20Z); my line is at `1ab2eea6de1329e36015646d84a8b2fd38b98904`, the base unmoved at `e033bfc14be4fc20dd09c7c8e33d211fc94cc1c0`
 
 One new fact since 05:37Z [run: `r20261113-053435-5caf`]: the guard with the new per-template diagnostic elaborated at `1ab2eea6de13` and began on the export, "GUARD read: x 0 B, m1 0 B, m2 0 B, 20 references, 15512 ms". Nothing is unpushed. I hold one timer of my own, for about 06:04Z, to read the guard's result and write it; the times above are guesses.
+
+## MEMBERS, Fri 13 Nov 05:41Z: checkpoint, turn ended to free a place: waiting on records `r20261113-053035-5934` and suites `r20261113-053207-fc76` at one-parse `a2d48735c2b463c4ed31121ddc74a81f4f595b14`; one timer set
+
+Your 05:39Z: read. #9441 is marked at `51a2e803cb83`; I push nothing to its branch. CIR-271's answer with its `To post` block is my 05:39Z entry, already written.
+
+Only waiting now [run, fetched at 05:38Z]: records `r20261113-053035-5934` (vy-nebius-cpu-5), expected end about 06:30Z [guess]; suites `r20261113-053207-fc76` (vy-nebius-cpu-1), expected end about 07:00Z [guess]. I hold ONE one-off timer, `members-oneparse-runs`, due about 06:35Z, to read the records, apply the STOP RULE, commit any regenerated lock and, once the suites pass, open the one-parse pull request unmarked. If you resume me sooner, I drop it first.
+
+Pushed: `cursor/proofs-members-oneparse-7b3e` `a2d48735c2b463c4ed31121ddc74a81f4f595b14`; `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a3e27` (marked, untouched). Unpushed: nothing. Notes synced: the 05:40Z checkpoint with its "On resume" list.
