@@ -83,7 +83,7 @@ KNOWN = {
     ("verity/circuits/tests/test_codec.py", "verity.definitions.registry.io_shell"),
     ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.dsa_topk_mask"),
     ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.prims"),
-    # proofs': Flock's prover is handed the served circuits, and spot's tests take theirs from `verity`.
+    # proofs': Flock's prover is handed the served circuits, and spot's, Flock's and PoUW's tests take theirs from `verity`.
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.numerics"),
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.numerics.rows"),
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry"),
@@ -94,11 +94,13 @@ KNOWN = {
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.dead_free"),
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.moe"),
     ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.sampling"),
+    ("verity/protocols/flock/prover/tests/test_fmaxf_commit.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_ir_lowering_bench.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_ir_lowering_bench.py", "verity.definitions.registry.prims"),
     ("verity/protocols/flock/prover/tests/test_rolled_lowering.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_tmpl_statement.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_unit_range.py", "verity.definitions.registry"),
+    ("verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py", "verity.definitions.registry"),
     ("verity/protocols/spot/verifier/lean/tests/test_difftest.py", "verity.definitions.registry.catalog"),
     ("verity/protocols/spot/verifier/tests/test_proofs.py", "verity.definitions.registry.catalog"),
     # network-accounting's: the certifier's tests take the sampling Definitions from `verity`.
