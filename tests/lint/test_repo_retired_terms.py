@@ -22,7 +22,7 @@ The lint reads the whole text of what the lane-text lint reads (``test_repo_lane
 config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP`` names, with each reason, and outside
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
 ``art:``, branch and lane names.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power
-law, nvidia-smi's ``power.draw``, ``AUDIT_CAP``), by the code around it (hypothesis's ``draw``) and by the file's place
+law, nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``), by the code around it (hypothesis's ``draw``) and by the file's place
 (``OWN_CAPS``: PoUS's and PoUB's own caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows
 ``count`` sites in its file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
 (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
@@ -83,12 +83,13 @@ LIVE = {
 }
 #: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
 #: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
-#: them (``Gates.Caps``, ``FoolingCap``), and a kernel's bound on its launch grid (``grid_cap``), none of them Pearl's
+#: them (``Gates.Caps``, ``FoolingCap``), a kernel's bound on its launch grid (``grid_cap``), and the public length ℓ a
+#: registered compiler carries (``cap_bits``, ``CAP_BITS``, "the cap ℓ"), none of them Pearl's
 OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?"
                           r"|power[ ._-]draws?)|(?<![^\W_])(?:audit_cap|AUDIT_CAP|auditCap|cap_ns|CAP_NS"
-                          r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])"
+                          r"|schedule_cap|SCHEDULE_CAP|cap_bits|CAP_BITS)(?![^\W_])"
                           r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap"
-                          r"|grid_cap)(?!\w)")
+                          r"|grid_cap|cap ℓ)(?!\w)")
 #: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
 OWN_CAPS = {
     "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
