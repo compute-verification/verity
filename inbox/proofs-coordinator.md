@@ -136879,3 +136879,92 @@ Clock: `date -u` read 11:00Z. Mailbox: read at 10:49Z, nothing since your 09:52Z
 **Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c`, compiled. Nothing unpushed on the branch. Run out: `r20261113-105930-d6c5`, one.
 
 **To post.** Nothing.
+
+## SESSIONOF2, Fri 13 Nov 11:02Z: way out 1 COMPILES at `9a548b2f97` on `cursor/proofs-sessionof-9b17`, with the whole numbers proved and only `Wf` assumed; `ReadsBack.registered` is restated and compiles, but its read-back needs whole numbers too, which `ReadsWf` does not give; the switch to the total parser is ONE token at `CoreProtocol/Protocol.lean:89` and all three premises fall to it
+
+The verifier keeps some of its inputs as JSON values, prints them as text into each session's statement, and the session reads the text back. The value read back is the same value up to how an object stores its keys, and only if every object is a properly built tree and every number is a whole number. For the partition object I proved the whole-number half from a check the verifier already makes, so one assumption is left: the trees are properly built. For the registered reads I proved that the verifier reads the same ports off two values that differ only in how objects store keys. Their whole numbers I could not get from any check, so that lemma assumes them. Both assumptions go away if the verifier parses its parameters with the parser the proofs can follow, and that is a one-word change in one file. I sized it and wrote none of it.
+
+Mailbox read at 10:59Z (64 lines, your 10:54Z the last). Sections follow your order: the premise as it stands (your 10:03Z item 1), the sizing (your 10:54Z item 2), then `ReadsBack.registered`.
+
+**1. Way out 1, as it stands: written, compiled, no verifier change** [run: `ebfe`, `7831`]
+
+In `Sampled/Record/PartReadsBack.lean`, and two lemmas in `PartSame.lean`:
+
+- `good_of_canon : Wf j → Flock.canon j = .ok s → Good j`. This is your "(ii) in Lean": `canon` returning gives every number exponent 0, at every depth. It was short, so it is proved, not a hypothesis.
+- `canon_of_chkPart`: a partition object that passes `HmRow.checkPartition` has a canonical text, because the check hashes it. Then `canon_of_setupH`, `canon_of_setupHidden`, `canon_of_setupTables`: under a tag with `bindings`, a setup that returns at a partition object passed that check.
+- `partition_readsBack_of_wf : Wf o → canon o = .ok s → ∃ P, (some (printT o).toUTF8).mapM (jsonOf "partition") = .ok P ∧ PartSame P (some o)`.
+- `raw_partition_readsBack`: the same at a statement `w` with `w.partition = some (printT o).toUTF8`. At HELDOF's `memberRaw` that equation is `rfl`, so `ReadsBack.partition` there is `raw_partition_readsBack rfl hw hc`. [read: `memberRaw` on the join; that line is not compiled, the file is HELDOF's]
+- `partition_readsBack_of_setup`: the same from `Wf o` and `Stmt.setupTables … (some o) … = .ok (spec, sts)` under `hiddenOutputs` and `bindings`.
+
+What stays a hypothesis: `Claims.Json.Wf` of the audit's one partition object, as ruled. What the user of `partition_readsBack_of_setup` still has to supply: that the accepted session's setup is `Stmt.setupTables` at a tag with `hiddenOutputs` and `bindings` true and at `some m.own.partition`. I did not derive that from `SessionAccepted`. [derived: the lemma's hypotheses]
+
+**2. The switch to the total parser, sized. Nothing written.**
+
+- **The call site** [read, on the join at `75f438d9f7f`]: `verity/protocols/interface/CoreProtocol/Protocol.lean:89`, `match Json.parse s with`, inside `Core.canonicalJson` (lines 86 to 93). Package `core_protocol`, the Lean interface. The two-stage form is `VStar.Recursive.SampledTwo.protocol : Core.BlobProtocol` with `params := paramsOfJson` (`VStarRecursive/SampledTwo.lean:592`, `:599`), and `Protocol.answer` runs `canonicalJson params >>= P.params` (`Protocol.lean:98`). The audit's partition object is a subtree of that one tree: `paramsOfJson` → `OneStageZk.membersParamsOfJson` → `OneStageZk.paramsOfJson` → `OneStage.paramsParsed`, which takes `getD j "partition"` (`Spot/OneStage.lean:268`); each member gets the shared one (`OneStageZk.lean:799`).
+- **The edit** [read]: one token on line 89, `Json.parse s` to `Flock.JsonParse.parse s`, and one import, `Base.JsonParse`. That module is in `core_base`, which `core_protocol` already requires, so no lakefile changes. `tests/test_flock_json.py` already names `verity/protocols/interface/` in `NOT_READ` as "not held to the total parser yet (proofs)"; the interface has four more calls of `Json.parse` (`Example.lean:127`, `:134`, `Protocol/Canonical.lean:101`, `:212`), so the entry stays or those go to `PENDING`. [run: the test's own `_calls`]
+- **What it reaches** [run: `rg`]: `Core.canonicalJson` is called on 50 lines of 26 files under 8 protocols (certifier, inference_only, interface, poub, pous, pouw, recursion, spot), for params, commitments and evidence. The one token changes the parser of all of them. A narrower switch (params only, at `Protocol.lean:98` and `SampledTwo.lean:175`) would leave two readers of one format.
+- **The lemma that gives `Wf`** [read]: `FlockComplete.JsonRT.parse_wf (s) (j) (h : parse s = .ok j) : Wf j` (`Proofs/Flock/Claims/Complete/Json/Parse.lean:172`). Not `parse_canon`, which is the honest direction. And because `canonicalJson` then checks `canon j = s`, my `good_of_canon` gives `Good` of the whole params tree: well-formed and whole numbers. [derived]
+- **What is left to write after it** [guess at size: three lemmas, each unfolding one long reader]: from `Good` of the params tree to the three objects. The readers are `OneStage.paramsParsed` (partition `:268`, ports `:256`), `Spot.Run.templateCircuits` (`Spot/Run.lean:162`) and `OneStageZk.membersOf` with `committedOf` (`OneStageZk.lean:785`, `:236`). They step by `getD` (`wf_of_getObjVal`, `HeaderRoots.lean:135`) and rebuild with `Json.mkObj (without …)` (`wf_mkObj`, `OwnReads.lean:72`). A `Good` twin of those two walkers is needed for the whole numbers.
+- **Which records move** [run: a walk of the three locks]: the `reads` entry of module `CoreProtocol.Protocol`, its digest and the hash of `Core.canonicalJson`, in `security/lean-audit.json` and in `security/Properties/lean-audit.json`. No guarantee's own record names `Core.canonicalJson`: the name appears once in each lock. Not read: whether the hashes of the definitions that call it move with it, and the interface's own lock.
+- **Stricter only?** Not provable either way: core's parser is a `partial def`. What there is: [read] `Base/JsonParse.lean`'s docstring says same value and same refusal string, with two differences, a number cap of `2^64` where core has `USize.size`, and fuel that never runs out and refuses if it did. [read] `Flock/Test/JsonParse.lean` holds the two to each other on fixed cases and 20,000 seeded texts. [derived, from two proved lemmas, not composed in Lean] the switched reader accepts every honest params text: `parse_canon` reads `canon j` of a printable `j` as a value alike it, and `canon_same` makes the canonical check pass on that value. That nothing new is accepted rests on the test.
+- **The Python twin** [read]: `verity_difftest.protocol.canonical_json` (`verity/difftest/python/verity_difftest/protocol.py:31`), held by `verity/difftest/tests/test_protocol_port.py` and `test_example_port.py` (`test_echo_holds_the_wire_format_to_python_s_canonical_json`). It reads with Python's `json` and does not change. REDRAW's pattern (`9436d062bc`, `5f0c242298`) adds a difftest function that answers the value each parser reads, and a test over honest and mutated texts (`commit-parsers`, `test_a_commit_record_reads_alike_under_both_parsers`).
+- **Not measured**: the total parser reads `s.toList`, and `canonicalJson` also reads evidence. [read: its docstring; no timing]
+- **`ReadsWf`'s object, one line**: yes, the same switch. Each template's `registered` is a subtree of the same params tree (`Spot.Run.templateCircuits (getD ip "proofs") …`, `SampledTwo.lean:204`). [read]
+- **`PortsDistinctAt`'s `ports`, one line**: yes, the same call site, reached a second time. The boundary's and the interior's params are parsed again by `paramsAt` (`SampledTwo.lean:175`: `Core.canonicalJson` on `canon` of a subtree), and `ports` are the entries of that tree's `ports` object (`OneStage.lean:256`), distinct where the object is a well-formed tree. [read]
+
+**3. `ReadsBack.registered`, restated** [run: `b48d`, `cdd8`, `7831`]
+
+- The field, before: `w.registered.mapM (jsonOf "registered reads") = .ok m.own.registered`. After: `∃ R, w.registered.mapM (jsonOf "registered reads") = .ok R ∧ PartSame R m.own.registered`. `registered_of_reads` and `ins_of_fields` are refitted, and `MemberChecks.lean` compiles with all its theorems.
+- New file `Sampled/Record/ReadsSame.lean`: `ofJson_same : Same j j' → Registered.ofJson j = Registered.ofJson j'`, with `portsOf_same` under it and `PartSame.ofJson` over it. `portsOf` matches on values that are only alike on the two sides, so its text is restated with each read an argument, private to the file and equal to the verifier's by `rfl` (`ports_view`), as the partition's readers were.
+- `registered_readsBack` (in `PartReadsBack.lean`): `(∀ j, r = some j → Good j) → ∃ R, (r.map fun j => (printT j).toUTF8).mapM (jsonOf "registered reads") = .ok R ∧ PartSame R r`. That is the shape `refRawOf` builds. [read: `HeldOfFiles.lean:52` on the join]
+- **The finding: `ReadsWf` is not enough for it.** `Same` asks numbers to be equal as written, and the printer prints `1.50` as `1.5` [read: `Json/Value.lean`'s docstring], so a well-formed value with a number that is not whole does not read back alike. For the partition, `canon` in the binding check gave the whole numbers. For the registered reads I found no such check in `OneStageZk`: `readsOf` reads them with `ofJson`, `knownOf`, `readOf` and `paramsOf`, and `fitsWhy` only measures their printed length. [read] So the lemma takes `Good`: `Wf` and whole numbers.
+- Three ways to close it. (R1) carry the whole numbers as a premise beside `ReadsWf`. (R2) the switch of section 2, which gives `Good` of the whole params tree and so closes this with no premise. (R3) derive them at an accepted run from `second-values`, which prints the blanked reference reads with `canon`; I read that the check exists (`SecondStage.valuesOk`, `jeq`) and did not check that it reaches the member's reads. [guess]
+
+**Tries** [run; `--on auto --mem-gb 24`; each probe: no theorem past `propext`, `Classical.choice`, `Quot.sound`; peak as the try's `siblings` line prints]
+
+| run | node | file | at | lean | theorems | peak |
+|---|---|---|---|---|---|---|
+| `r20261113-102442-ebfe` | vy-nebius-cpu-14 | `PartReadsBack.lean` | `8c6dc95e53` | 51 s | 13 | 4,801 MB |
+| `r20261113-103914-b48d` | vy-nebius-cpu-1 | `MemberChecks.lean` | `9a548b2f97` | 282 s | 11 | 4,515 MB |
+| `r20261113-104504-7831` | vy-nebius-cpu-14 | `PartReadsBack.lean` | `9a548b2f97` | 119 s | 15 | 4,800 MB |
+| `r20261113-105515-cdd8` | vy-nebius-cpu-14 | `ReadsSame.lean` | `9a548b2f97` | 61 s | 16 | 5,196 MB |
+
+- `b48d`'s dependency build compiled `PartSame.lean` (with `canon_of_chkPart` and five helpers made public) and `ReadsSame.lean`. `PartSame.lean` has had no probe of its own since it changed; `PartReadsBack.lean`'s 15 theorems rest on its new lemma and print the three axioms only. [derived]
+- Each `siblings` line also says how many modules it could not check on that copy (559 to 3,888), so "no clash" is over the modules built there.
+- `pytest tests/test_lean_packages.py` at `9a548b2f97`: 34 passed. [run on the VM]
+- The shapes of `good_of_canon` and `ofJson_same` were first checked with plain `lean` on scratch copies over core Lean only, in no branch.
+
+## STOP RULE
+
+Not met by what is pushed. No listed statement and no named assumption changed: `ReadsBack` and the lemmas here are in no lock; `ReadsSame` appears once, under `roots`. [run: `rg` on the three `lean-audit.json`] No verifier file is touched.
+
+Two things I did not do, for you to rule:
+
+- (R1) would add to what the two-stage guarantee rests on. Before: the registered reads' objects are well-formed trees (`ReadsWf`). After: also every number in them is whole. Not carried anywhere; `registered_readsBack` states it as its own hypothesis.
+- The switch changes a definition both locks record (`Core.canonicalJson`) and the parser of every protocol. Not written.
+
+## NEEDS
+
+- **HELDOF** (owner of the files that build a `ReadsBack` at `memberRaw`): the `registered` field now wants a witness and a `PartSame`. Nothing on the join builds a `ReadsBack` yet [run: `rg`], so nothing breaks. At the reference statement it is `registered_readsBack` with `Good` of the member's registered reads.
+- **ASSEMBLY**: merge `9a548b2f97` from `cursor/proofs-sessionof-9b17` (it contains `b88626efe9` and `8c6dc95e53`; one new file, one new root). And still `b49c6e4061` from `cursor/proofs-sessionof2-7c3a` with ADDRROW2's one import line (my 10:27Z entry).
+- **You**: which of R1, R2, R3 for the registered reads' whole numbers.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- `Wf` of the partition object: the premise, as ruled.
+- Whole numbers in the registered reads: a hypothesis of `registered_readsBack`, from no check.
+- That an accepted session's setup is `setupTables` under `hiddenOutputs` and `bindings` at the member's partition: not derived from `SessionAccepted`.
+- `ReadsBack.partition` and `ReadsBack.registered` at `memberRaw` itself: the lemmas are stated at its bytes, the two lines that use them are in HELDOF's file and not compiled.
+- The switch: nothing written, nothing compiled, no timing, no difftest run; "stricter only" has no proof.
+- No whole build of `security/Proofs` on either branch.
+
+## Heads
+
+- `cursor/proofs-sessionof-9b17` `9a548b2f975df6a06a1eef6df8398df57c31fcc2`, pushed, compiled file by file, nothing uncommitted.
+- `cursor/proofs-sessionof2-7c3a` `b49c6e40619f1a536313df29427a00a048a856f7`, pushed, compiled.
+- `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, untouched.
+- No try out.
