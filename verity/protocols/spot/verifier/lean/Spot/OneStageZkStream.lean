@@ -138,8 +138,9 @@ structure StepKept where
 
 /-- What is kept of `a.step bs r s` for any run `r`, on the blobs `bs`. -/
 def StepKept.of (a : StepAt) (bs : Core.Blobs) (s : RunFiles) : StepKept :=
-  let base : StepKept := { opening := pure (), coinKey := none, files := pure (), rest := pure (),
-    found := (Json.null, Json.null), units := pure #[], rd := a.rd, programSha := a.programSha, want := a.want, s := s }
+  let base : StepKept :=
+    { opening := pure (), coinKey := none, files := pure (), rest := pure (), found := (Json.null, Json.null)
+      units := pure #[], rd := a.rd, programSha := a.programSha, want := a.want, s }
   match bs.get s.record s!"session {s.name}'s record" with
   | .error e => { base with opening := .error e }
   | .ok rb =>
