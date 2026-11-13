@@ -118490,3 +118490,48 @@ Neither finding changes a listed guarantee's statement or a named assumption: bo
 **Can #9486 ride Friday's chain:** it moves a Lake package, so lean's rule for such maps covers it, the same as ours. It is independent of the two compose maps. If top's config move lands first, `world_map.toml` needs the same `verity_config` root set by hand; top's list of files for that hand commit does not name it [read: TOP-398].
 
 Next entry when `r20261113-034657-11a1` ends, by 04:30Z at the latest.
+
+## HISTORY, Fri 13 Nov 03:53Z: your 03:35Z item 2: NONE of (a) to (c) follows from `dev₂` as it is defined today, because the model's device takes its ledger lines as given; `PrintsInOrder` at `dev₂` is written with the three as stated conditions on those lines (`DeviceOrder.lean`, pushed, NOT compiled, in a try). Before that: both my files compile over TWOLEG's `stagesFit` form (`r20261113-031037-f5e0`, rc 0)
+
+**In plain words.** The auditor's device runs one session for each stage of the audit. The proof needs the device to have released the first stage's coins in the first session and the second stage's in the second. CUT's way to get that reads the order of the lines in the device's signed ledger, and it needs three facts about those lines. You asked whether the three are already true of the device as the proofs define it. They are not, and for one reason: the proofs' device does not say what its ledger lines are. It takes them as given, any lines at all, so nothing about them can be proved from the definition. I wrote the proof with the three facts as stated conditions on the lines; it is in a compile run. For them to be proved instead of stated, the definition has to say what lines a session writes. That is soundness's to decide, and I changed no definition.
+
+Clock: `date -u` read 03:52Z. Mailbox read at 03:43Z (your 03:35Z, items 1 to 4; the 03:12Z launch change is withdrawn, nothing of mine changes).
+
+**1. The run that was out** [run]. `r20261113-031037-f5e0` (vy-nebius-2), head `73a07f3775`, over TWOLEG's `b6d988648b` (`stagesFit`, `accepted_fits`): **done, rc 0**, 03:10Z to 03:38Z.
+- "`DeviceRead.lean`: lean exit 0 in 120 s"; "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "`Device.lean`: lean exit 0 in 420 s"; "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- Its build log shows "Built" for `VStarRecursive.SampledTwo`, `Steps`, `Cut`, `CutPrints`, `CutHeld` and `CutRead` at that head. For CUT's item 5: `stagesFit` and `accepted_fits` broke none of the six.
+
+**2. Your item 2: do (a) to (c) follow from `dev₂` as defined? No, none of the three** [read: `Device.lean`, `Sampled/Device.lean`].
+- `dev₂ S₁ S₂ cut o` takes the two setups as arguments. A setup's ledger lines are its field `RunSetup.ledger : List Json`: any list of lines. The definition builds the runs (from the play's log) and passes the lines through.
+- At the deployed history (`devOf`) a setup's lines are `Q.opens θ a ++ Q.closes θ a log b ρ`, and `opens` and `closes` are free functions of the one-stage `Deployment`. Its own docstring says so of the window: "nothing in this structure ties the window it opens to the auditor's".
+- So each of the three can be made false by choosing lines: (a) a setup whose lines open its run on two window roots; (b) a line that opens a third run; (c) an `end` of the second setup's run with a `seq` below a `reserve` of the first's. `Apart` was a condition on the same free lines, for the same reason.
+
+**3. What the definition would need to say** (for soundness; I changed nothing) [derived].
+- The two setups' ledger lines are what two sessions write: each session a `reserve`, then one `open` of its own run on one window root, then an `end`; the two run ids differ; `seq` increases in the order the lines are written; and the first session's `reserve` is written before the second session's `end`.
+- From that: (a) each run has one open; (b) the only opens are the two sessions'; (c) the second's `end` has a higher `seq` than the first's `reserve`. Note (c) asks less than "the first ends before the second is reserved": the first only has to be reserved before the second ends.
+- Two ways to say it in Lean. Heavier: the lines are built by a writer from each session's id, root and `seq`, with a lemma that `ledgerEntry?` reads back each line's kind, session, `seq` and root. Lighter: the three facts become a field of the two-session `Deployment` (as `ledger_le` is a field of the one-stage one), so they are part of what a deployment is and whoever builds one proves them. The lighter one is three lines in my own file, but it is still a change to what the model's device is, so I wait for soundness's word on either.
+- [derived] The three hold under the swap. A device that opens each window as the prover's request names it still writes two sessions in order, so the three facts are true of it, and `PrintsInOrder`'s condition is then false (it would be an `end` of the second run before a `reserve` of the first). None of the three names a window.
+
+**4. Written, not compiled: `SampledTwo/DeviceOrder.lean`** (new, mine; root added to the lakefile) [read; no run yet].
+- `LedgerInOrder S₁ S₂`: the three facts over `S₁.ledger ++ S₂.ledger`, in CUT's `LedgerOpens` and `EndsBefore`. Of CUT's (a) I use only one half: a run is opened on one window root. "A root is opened for one run" is not needed.
+- `printsInOrder_dev₂`: `PrintsInOrder (dev₂ S₁ S₂ cut o) w₁ w₂ o.log`, at one play, from `windowsOf` and, on two windows only, `LedgerInOrder (S₁ o) (S₂ o)`. It holds under any keys of the two setups. On one window it takes nothing.
+- `cutOrder_dev₂`: CUT's `cutBound_order` at the deployed history, from `Wired`, `FirstReads θ`, `OrderShown θ`, `LedgerInOrder` at each play on two windows, and the signer. It is a statement over the form's accept, so by your 03:25Z it says nothing of a run until TWOLEG's honest play passes.
+- One lemma joins my side to CUT's: a window the ledger opens withheld under v2 (`OpensOn`) is one it opens in CUT's sense (`LedgerOpens`).
+- `Apart`, `printsTwo_dev₂`, `cut_dev₂` and `cutRead_dev₂` stay as they compiled.
+
+**5. Runs** (vy-nebius-2, pool `proofs`).
+- `r20261113-035036-7f94`, head `19734e8d9f`: one run, three tries (`DeviceOrder.lean`, `DeviceRead.lean`, `Device.lean`, each with `--siblings`), launched 03:50Z, waiting for a place at this entry. It builds CUT's `CutOrder.lean` on the way, which CUT's 03:24Z says has not compiled; if that file fails, my new one cannot build and I send CUT the exact errors.
+
+**6. Pushed** [run]. `cursor/proofs-history-d2e7` at `19734e8d9f`. Nothing unpushed. Since `73a07f3775` it merges TWOLEG's `b774e651d2` and `4d19a7ad4f` (which holds #9555: the challenger key held by the run) and CUT's `cb9c52965a` and `e242db0feb` (`CutOrder.lean`), all clean.
+- [run: `git diff --stat`] TWOLEG's `4d19a7ad4f` changes Spot's `ChallengerCoins`, `ChallengerDraw`, `Pieces`, `RecordAcross` and `Run`, and the form. My two compiled files read them through the form and `Sampled/Device.lean`, so `7f94` tries both again; I say in the next entry whether `inputOf`'s new fields break either.
+
+STOP RULE: not reached. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched, and no definition of the device changed. `LedgerInOrder` is a hypothesis of two theorems, not a named assumption.
+
+NEEDS:
+1. Coordinator, to soundness: section 3. Which of the two ways, if either, the model's device takes. Until then `PrintsInOrder` at `dev₂` holds only under `LedgerInOrder`, which does not meet your item 1's condition ("proved at the model's device") by itself.
+2. CUT: nothing. If `CutOrder.lean` changes `LedgerOpens`, `EndsBefore` or `PrintsInOrder`, say so and I follow.
+
+To post: nothing.
+
+Not established: that `DeviceOrder.lean` compiles (no run has read it). That `CutOrder.lean` compiles. That `Device.lean` and `DeviceRead.lean` still build over TWOLEG's `4d19a7ad4f`. `LedgerInOrder` at any deployment: it is stated, not proved, and not provable from today's definition. That the form accepts an honest play. The known hole stays open: on the play's own two windows the history holds exactly this play's runs, so an earlier period's genuine signature in the evidence is the forger's.
