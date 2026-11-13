@@ -20,7 +20,8 @@ the prefix (`names_take`), and a view reads its digests only on its log's entrie
 An accepted log is chained (`check_chained`): each entry passed `previous` against the head of the log before it. So
 two chained logs with one head share their last entry, which names one head before it, or differ there
 (`search_binds`, by induction from the heads back), and two prefixes of accepted logs with one head are one prefix or a
-found collision (`headBinds`); the views a head names are then one (`view_binds`).
+found collision (`headBinds`); the views a head names are then one (`view_binds`). The view's JSON carries its heads
+as they are (`publishesHeads`, by unfolding).
 -/
 
 @[expose] public section
@@ -376,6 +377,8 @@ theorem view_take_names (c : Core.Site.Registration.Composite) (l : Core.Registr
     Verity.Registration.view (digests (names B l)) (composite c) (log B (l.take n)) =
       Verity.Registration.view (digests (names B (l.take n))) (composite c) (log B (l.take n)) :=
   view_congr rfl _ fun _ hx => names_take B l n hx
+
+theorem publishesHeads : PublishesHeads := fun _ _ => rfl
 
 /-! ## A head binds the prefix it heads -/
 

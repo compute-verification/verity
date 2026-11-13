@@ -15,6 +15,7 @@ log: site entries, information entries and declarations, folded by one check (`C
 over the denotations of `Properties.Core.Site` for the Site and its entries.
 
 * `Checks`: the code's check accepts a log exactly when the log it denotes is valid, and then with the spec's view.
+* `PublishesHeads`: the view's JSON carries its prefix heads.
 * `HeadBinds`: two prefixes of accepted logs with one head are one prefix, or a search of their entries, from the heads
   back, finds two entries with one digest or an entry whose digest is the genesis (`search`, `Collision`). So a head
   names one prefix, and a tie read at a head (`Verity.Registration.AtHead`) reads what that prefix registers.
@@ -98,6 +99,16 @@ def Checks : Prop :=
       Verity.Registration.Valid (digests (names B l)) (auditor A) (composite c) (log B l)) ∧
     ∀ s, Core.Registration.check A c l = .ok s →
       view B s.view = Verity.Registration.view (digests (names B l)) (composite c) (log B l)
+
+/-- **The published view carries its heads**: the JSON the protocol makes public of a view
+(`Core.Registration.View.toJson`) holds, under `heads`, each prefix head of the view it denotes with the prefix's length,
+as `{"entries", "head"}`, shortest first. By `Checks`, an accepted log's are the spec's (`Verity.Registration.heads`),
+the heads a tie at a head (`Verity.Registration.AtHead`) reads. -/
+def PublishesHeads : Prop :=
+  ∀ (B : String → Verity.Compiler) (v : Core.Registration.View),
+    v.toJson.getObjVal? "heads" =
+      .ok (.arr ((view B v).heads.map fun (n, h) =>
+        Lean.Json.mkObj [("entries", Lean.toJson n), ("head", .str h)]).toArray)
 
 /-- **What a search of two logs finds**: two different entries, or an entry and a composite's genesis. -/
 inductive Collision
