@@ -111538,3 +111538,56 @@ All three files of my piece now compile. The recursive audit's file reads the sh
 **To post.** Nothing.
 
 **Not established.** The records run and the `--siblings` check are not in. Two premises are not discharged and go to soundness with the files: `ReadsBind` (binding at the boundary registration) and `hX` (that the vocabulary's extractor is this majority). The earlier period's challenger signature hole stays open. Pushed head: `e00ab95ce5`; nothing is left unpushed.
+
+
+## RUNCOINS, Fri 01:10Z: try11 compiled every RunsAs file but `Proved.lean`; fixed, the run is now stated with the two-stage form allowed, `parts` at the run's own replay sample; three tries sent
+
+The accept leg is nearly compiling. In try11 (`r20261112-232954-87cb`, which failed) the files that hold the run's steps, the read-prefix lemmas, the statement and the outcome all built. Only the file that ties the first stage's draw to the outer blocks it proves failed, on three syntax and tactic slips. I fixed them [run: the errors; derived: the fixes].
+In the same commit:
+- the accepted run is stated with the two-stage form allowed, now that the base takes the switch as an argument;
+- the held copies' parts clause is restated at the run's own replay sample, as ruled;
+- the coin check is stated at the parameters' key, with "the evidence's key is the parameters' key" as a named hypothesis;
+- my copies of RUNSAS's ten definitions are gone, and RUNSAS's are imported instead.
+
+Branch `cursor/proofs-runcoins-2d88`, pushed head `264cd595d8`; nothing left unpushed. Three tries are on vy-nebius-2, sent at 01:07Z: `r20261113-010741-bf55` (`RunsAs/Top.lean`), `r20261113-010741-ea36` (`RunsAs/Coins.lean`), `r20261113-010741-49c5` (RUNSAS's `RunsAs/RoundTwoOf.lean`, which proves my `RoundTwo` from RUNSAS's lemma).
+
+1. try11's errors [run]
+   - Every error was in `Proved.lean`: `Json.mkObj` was not exposed there; `X` is a reserved token in this import closure, so the binders didn't parse; and the brute force left the branch whose `throw … = .ok _` it didn't name. All are fixed.
+   - Built in try11: `RunsAs.Statement`, `Released`, `Steps` (32 s), `Outcome`, and `SpotFlock.Honest`.
+   - Not reached: `Proved`, `Top`, `Coins`.
+2. HELDOF's NEEDS 1, made. The clause `HeldMatches.parts` is now, word for word:
+   ```
+   parts : ∀ draw rest read strata, Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query
+       h.reg.first.table h.reg.first.closure i.source = .ok (draw, rest, read) →
+     Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata →
+     Spot.SecondStage.parts rest.size strata = some (partsAt h rest.size)
+   ```
+   This is `HeldOf.PartsAt i it h` at `7db84a3bc0` unfolded, at `rest.size` as HELDOF's file has it. `Top.lean` uses it once, at the select's own `rest`, rewritten to the draw's proved units [derived]. `HeldMatches.refs` is unchanged.
+3. The key [derived]
+   - New `EvidenceKeyIs key coins := Spot.Challenger.ChallengerKey.ofJson (Spot.getD coins "key") = .ok key`, a named hypothesis.
+   - `CheckReadsDraw key` now reads: `∀ coins w after read, EvidenceKeyIs key coins → coinsReason coins w after read = none → ∃ label ξ, drawCoins key w label after (drawEvidence coins) = .ok ξ ∧ Starts read ξ`. Here `key` is the parameters' key, a variable, as CUT's `firstDraws` takes it.
+   - `RunCoinsFromDevice key` takes `EvidenceKeyIs key i.coins → EvidenceKeyIs key it.coins`.
+   - `∃ label` stays, as the base's reading. The family is the verifier's only at #9555's head, which my base doesn't hold. STAGECOINS can state against this; REDRAW's change discharges `EvidenceKeyIs`.
+4. The form [read, derived]
+   - I merged the base at `1f049180cd`, which holds `be14a7d248`: `run (i) (form : Bool := SecondStage.FORM)`.
+   - `AcceptedTwo.run` is now `Spot.Run.run i true = .ok j`. `run_path` and the second stage's audit lemma are generic in `form`, and `check_true_of_codes` is unchanged.
+   - The "holds of nothing" docstrings are gone. The statement has instances wherever the run accepts with the form allowed.
+5. One vocabulary [run: merge]
+   - I merged `origin/cursor/proofs-runsas-7e3a` (`4cf375876a`), which adds `Statements.lean`, `Round2.lean` and `RoundTwoOf.lean`. `Statement.lean` imports `Statements` and opens `Round2 (core OwnAgrees NamesDistinct StmtsAre TwoHolds RecordsHeld RegistersNone RoundsHeld ScopeHeld PinHeld)`; my ten copies are deleted.
+   - RUNSAS's `RoundTwoOf.lean` imports my `Statement`. My `RoundTwo` keeps `RegistersNone rec` (RUNSAS's file turns it into `InputsNone`).
+6. TWOLEG's `Steps.lean` [read]: none of my files imports it. I haven't merged TWOLEG's branch.
+7. FRAME's 23:23Z section 6: once FRAME decides `RegistersNone` on the registration, my premise on the run goes; until then it stays [relayed].
+
+STOP RULE
+- Before: no `lean-audit.json` touched; the verifier accepts what it accepted.
+- After: the same. My commit changes only new files under `RunsAs/`; the merges bring the base's and RUNSAS's commits.
+
+NEEDS: none new.
+
+To post: none.
+
+Not established
+- That `Proved`, `Top`, `Coins` or `RoundTwoOf` elaborate. The three tries are in line.
+- That any theorem of the leg is proved: none has passed the axiom probe.
+- `acceptedTwo_of_check` (on TWOLEG's form, which isn't on my base). FRAME's five clauses and `TwoHolds` as lemmas.
+- That a replayed earlier-period signature is excluded; it counts as a forgery.
