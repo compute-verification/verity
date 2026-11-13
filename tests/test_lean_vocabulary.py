@@ -802,7 +802,7 @@ KNOWN: dict[str, str] = {
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/protocols/accounting/certifier/prover/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
-    "verity/hardware/site/__init__.py::Sheet":
+    "verity/device.py::Sheet":
         "duplicate of the data sheet (`Verity.Site.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "verity/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
