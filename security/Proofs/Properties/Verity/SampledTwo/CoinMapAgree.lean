@@ -48,6 +48,10 @@ theorem ind_le_one {p : Prop} [Decidable p] {x : ℝ≥0∞} (hx : x ≤ 1) : (i
   · rw [if_neg hp]
     exact zero_le
 
+/-- An `if` is the same at any two instances that decide its condition. -/
+theorem ite_inst {α : Type} {p : Prop} (d₁ d₂ : Decidable p) (x y : α) : @ite α p d₁ x y = @ite α p d₂ x y := by
+  rw [Subsingleton.elim d₁ d₂]
+
 /-- **An output a play reaches**: the play's output at any tape. -/
 theorem playReaches_tapeOut : ∀ (g : Game β) (s : Strategy g) (t : Tape g s), PlayReaches g s (Tape.out g s t)
   | .ret _, _, _ => rfl
@@ -285,6 +289,9 @@ def LogGood (r : Fin K → FlockDeploy.Coin) : List Verity.Release → List Veri
 def AgFrom (lg : β → List Verity.Release) (r : Fin K → FlockDeploy.Coin) (pre : List Verity.Release) (o : β) : Prop :=
   LogGood L r pre ((lg o).drop pre.length)
 
+/-- **A fresh coin's written bits are an opening's of 4 elements.** -/
+theorem ofFn_freshVal (c : FlockDeploy.Coin) (u : ℕ) : List.ofFn (freshVal c u) = openBits c u 4 := rfl
+
 theorem relGood_of_none {r : Fin K → FlockDeploy.Coin} {pre : List Verity.Release} {rl : Verity.Release}
     (h : slot L K pre rl.frame rl.answers (widthOf rl.frame) = none) : RelGood L r pre rl := fun _ _ hs => by
   rw [h] at hs
@@ -378,7 +385,8 @@ theorem law_freshA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
         ⟨fun j u' hs' => ?_, hA⟩
       have e := hs.symm.trans hs'
       cases e
-      rfl
+      dsimp only [widthOf]
+      exact ofFn_freshVal _ _
     · exact hlaw _ _ _ _ (hf.cons _) _
 
 theorem law_helloA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k}
@@ -609,7 +617,7 @@ theorem coinMapHolds {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype
         unfold prCoin
         rw [avg_prod, avg_swap]
         exact congrArg (· + gapOf V θ F c σ L (A.L.V.k x)) (congrArg avg (funext fun t =>
-          congrArg avg (funext fun r => if_congr Iff.rfl rfl rfl)))
+          congrArg avg (funext fun r => ite_inst _ _ _ _)))
     _ = _ := by rw [prCoin_eq_ofReal_pr]
 
 end Verity.SampledTwo.CoinMap
