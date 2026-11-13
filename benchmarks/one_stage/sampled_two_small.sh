@@ -4,7 +4,8 @@
 # the second stage's family (--interior-trees, FLOCK_CHALLENGER=1), and the form's case of the run (--form-case,
 # sampled_two_case.py), then the form's check on it: `sampled-two-on check` (the switch on) must accept, and
 # `sampled-two check` (the shipped switch) must refuse by the switch alone. Exit 0 when both hold. The case's
-# parameters, commitment and evidence are kept under $OUT/form, with the blobs' SHA-512 and sizes.
+# parameters, commitment and evidence are kept under $OUT/form with its blobs (blobs/, their SHA-512 and sizes in
+# blobs.txt): the directory the form's accept test reads (SAMPLED_TWO_CASE).
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/sampled_two_small.sh
 #   SMALL_ARGS, SMALL_FIRST and SMALL_SECOND pass two_stage_small.py serve, `first` and `second` more.
 set -euo pipefail
@@ -63,7 +64,11 @@ done
 mkdir -p "$O/form"
 cp "$W/second/form/params.json" "$W/second/form/commitment.json" "$W/second/form/evidence.json" "$O/form/"
 mapfile -t BLOBS < "$W/second/form/blobs.txt"
-for b in "${BLOBS[@]}"; do printf '%s  %s  %s\n' "$(sha512sum < "$b" | cut -d' ' -f1)" "$(stat -c %s "$b")" "$b"; done > "$O/form/blobs.txt"
+mkdir -p "$O/form/blobs"; i=0
+for b in "${BLOBS[@]}"; do
+  printf '%s  %s  %s\n' "$(sha512sum < "$b" | cut -d' ' -f1)" "$(stat -c %s "$b")" "$b"
+  cp "$b" "$O/form/blobs/$(printf %03d $i)-$(basename "$b")"; i=$((i + 1))
+done > "$O/form/blobs.txt"
 FILES=("$W/second/form/params.json" "$W/second/form/commitment.json" "$W/second/form/evidence.json" "${BLOBS[@]}")
 on=0; "$FORM_BIN/sampled-two-on" check "${FILES[@]}" > "$O/form/on.json" || on=$?
 off=0; "$FORM_BIN/sampled-two" check "${FILES[@]}" > "$O/form/off.json" || off=$?
