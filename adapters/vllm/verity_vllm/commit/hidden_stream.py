@@ -24,6 +24,7 @@ import hashlib
 import json
 import struct
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,13 +32,12 @@ import numpy as np
 
 from verity_vllm.commit import scheme
 
+__all__ = ["ROW_GUARD_FIELD", "SRC_BITS", "StreamLayout"]
+
 TAG = scheme.FA2H_TAG
 VERSION = scheme.FA2H_VERSION
-KIND_CHUNK = scheme.FA2H_KIND_CHUNK
-KIND_THREAD = 2             # per-thread per-block leaf computed inside the kernel (H1)
 KBLOCK_N = 128
 KBLOCK_M = 64
-CLASSES = ("S", "P", "RP", "ROW", "O", "FIN")
 #: MS (64): the seventh class, appended after FIN only by the guarded-max tap builds (`VERITY_MAT_SRC & 64`, `hidden_source.TAP_ROW3`): one f32
 #: per (slab, row, key block), the `max * scale` that block's exp2 FMAs read.  Without it the layout, digest and bytes are the six classes'.
 SRC_BITS = {"S": 1, "P": 2, "RP": 4, "ROW": 8, "O": 16, "FIN": 32, "MS": 64}
@@ -101,49 +101,50 @@ class StreamLayout:
         o = self.offsets
         if not (0 <= slab < self.HB and 0 <= row < self.M):
             raise ValueError("position outside the layout")
-        if cls in ("S", "P"):
-            assert col is not None and 0 <= col < self.N
-            return o[cls] + (slab * self.M + row) * self.N + col
-        if cls == "RP":
-            assert col is not None and 0 <= col < self.N
-            return o["RP"] + (slab * self.M + row) * (self.N // 2) + col // 2   # word holds cols (c, c+1); bf16 halves
-        if cls == "ROW":
-            assert block is not None and 0 <= block < self.NB
-            f = field if field is not None else 4 + lane
-            return o["ROW"] + ((slab * self.M + row) * self.NB + block) * 8 + f
-        if cls == "O":
-            assert block is not None and d is not None and 0 <= d < self.D
-            return o["O"] + ((slab * self.M + row) * self.NB + block) * self.D + d
-        if cls == "FIN":
-            return o["FIN"] + (slab * self.M + row) * 4 + field
-        if cls == "MS" and self.ms:
-            assert block is not None and 0 <= block < self.NB
-            return o["MS"] + (slab * self.M + row) * self.NB + block
-        raise ValueError(cls)
+        place = _PLACE_IN_ROW.get(cls)
+        if place is None or cls not in o:                # an unknown class, or MS on a layout without it
+            raise ValueError(cls)
+        words, at = place(self, col, block, lane, d, field)
+        return o[cls] + (slab * self.M + row) * words + at
 
     def unrank(self, word: int) -> dict[str, Any]:
         o = self.offsets
         if word >= o["total"] or word < 0:
             raise ValueError("word outside the layout")
         if word < o["P"]:
-            i = word - o["S"]; sr, col = divmod(i, self.N); slab, row = divmod(sr, self.M)
+            i = word - o["S"]
+            sr, col = divmod(i, self.N)
+            slab, row = divmod(sr, self.M)
             return {"cls": "S", "slab": slab, "row": row, "col": col}
         if word < o["RP"]:
-            i = word - o["P"]; sr, col = divmod(i, self.N); slab, row = divmod(sr, self.M)
+            i = word - o["P"]
+            sr, col = divmod(i, self.N)
+            slab, row = divmod(sr, self.M)
             return {"cls": "P", "slab": slab, "row": row, "col": col}
         if word < o["ROW"]:
-            i = word - o["RP"]; sr, cw = divmod(i, self.N // 2); slab, row = divmod(sr, self.M)
+            i = word - o["RP"]
+            sr, cw = divmod(i, self.N // 2)
+            slab, row = divmod(sr, self.M)
             return {"cls": "RP", "slab": slab, "row": row, "col": 2 * cw}
         if word < o["O"]:
-            i = word - o["ROW"]; srb, f = divmod(i, 8); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
+            i = word - o["ROW"]
+            srb, f = divmod(i, 8)
+            sr, block = divmod(srb, self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "ROW", "slab": slab, "row": row, "block": block, "field": f}
         if word < o["FIN"]:
-            i = word - o["O"]; srb, d = divmod(i, self.D); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
+            i = word - o["O"]
+            srb, d = divmod(i, self.D)
+            sr, block = divmod(srb, self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "O", "slab": slab, "row": row, "block": block, "d": d}
         if self.ms and word >= o["MS"]:
-            sr, block = divmod(word - o["MS"], self.NB); slab, row = divmod(sr, self.M)
+            sr, block = divmod(word - o["MS"], self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "MS", "slab": slab, "row": row, "block": block}
-        i = word - o["FIN"]; sr, f = divmod(i, 4); slab, row = divmod(sr, self.M)
+        i = word - o["FIN"]
+        sr, f = divmod(i, 4)
+        slab, row = divmod(sr, self.M)
         return {"cls": "FIN", "slab": slab, "row": row, "field": f}
 
     def digest(self) -> bytes:
@@ -155,9 +156,50 @@ class StreamLayout:
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).digest()
 
 
+# One function a class: (the words one (slab, row) takes in the class, the position's word among them).
+def _col(L: StreamLayout, col: int | None, *_: int | None) -> tuple[int, int]:
+    assert col is not None and 0 <= col < L.N
+    return L.N, col
+
+
+def _col_pair(L: StreamLayout, col: int | None, *_: int | None) -> tuple[int, int]:
+    assert col is not None and 0 <= col < L.N
+    return L.N // 2, col // 2                            # word holds cols (c, c+1); bf16 halves
+
+
+def _row_field(L: StreamLayout, _col: int | None, block: int | None, lane: int | None, _d: int | None,
+               field: int | None) -> tuple[int, int]:
+    assert block is not None and 0 <= block < L.NB
+    if field is None:
+        assert lane is not None
+        field = 4 + lane
+    return L.NB * 8, block * 8 + field
+
+
+def _output(L: StreamLayout, _col: int | None, block: int | None, _lane: int | None, d: int | None,
+            *_: int | None) -> tuple[int, int]:
+    assert block is not None and d is not None and 0 <= d < L.D
+    return L.NB * L.D, block * L.D + d
+
+
+def _final(L: StreamLayout, _col: int | None, _block: int | None, _lane: int | None, _d: int | None,
+           field: int | None) -> tuple[int, int]:
+    assert field is not None
+    return 4, field
+
+
+def _block(L: StreamLayout, _col: int | None, block: int | None, *_: int | None) -> tuple[int, int]:
+    assert block is not None and 0 <= block < L.NB
+    return L.NB, block
+
+
+_PLACE_IN_ROW: dict[str, Callable[..., tuple[int, int]]] = {
+    "S": _col, "P": _col, "RP": _col_pair, "ROW": _row_field, "O": _output, "FIN": _final, "MS": _block}
+
+
 # ------------------------------------------------------------------ leaf framing (shared with the kernel's H1 leaf)
 def pack_words(words: list[int]) -> bytes:
-    return struct.pack("<%dI" % len(words), *[w & 0xFFFFFFFF for w in words])
+    return struct.pack(f"<{len(words)}I", *[w & 0xFFFFFFFF for w in words])
 
 
 def thread_of(row: int, col_or_d: int) -> tuple[int, int, int]:
@@ -195,7 +237,7 @@ class StreamCommitment:
 
     @property
     def retained_bytes(self) -> int:
-        return 32 * sum(len(l) for l in self.levels) if self.levels else 32
+        return 32 * sum(len(level) for level in self.levels) if self.levels else 32
 
     def open(self, stream: np.ndarray, word_index: int) -> ChunkOpening:
         ci, off = divmod(word_index, self.chunk_words)

@@ -16,6 +16,19 @@ module
 public import Flock.Registered
 public import Flock.JsonKeys
 
+/-!
+# A `--registered` file's bound ports, and the check that every port is registered or bound
+
+`KEY`, `Bound` and `ofJson` read the ports a `Registered.FORMAT` file binds to the window's committed values, and
+`ownOf` the file without them; `declaredOf` and `declaredOfBytes` read the ports a window's registered circuit record
+(`INTERFACE`) declares registered; `regParamsOf` gives the template parameters the verifier's own program reads a
+registered input through. `check` holds every port of a statement to a registered port or a bound one, with
+`check_empty` (no bound port: `Registered.checkComplete`), `check_ok` (every port `held`) and `check_declared` (every
+declared port registered). `flock-verify` (`FlockVerify`) reads a `--registered` file through `ofJson` and `ownOf`, its
+`--interface` record through `declaredOfBytes`, and runs `check` on each statement; `Flock.Test.RegBound` holds `check`
+to its refusals.
+-/
+
 @[expose] public section
 
 namespace Flock

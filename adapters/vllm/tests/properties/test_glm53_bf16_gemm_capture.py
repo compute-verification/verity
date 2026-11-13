@@ -8,19 +8,22 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
+import contextlib
 import copy
 import json
 import os
+from typing import Any
 
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import glm53_bf16_gemm_capture_gpu as X
-from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import mla_check as MK
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests import fake_vllm
+from tests.properties import glm53_bf16_gemm_capture_gpu as X
+from verity_vllm.engine.env import SERVED_DEFAULTS
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
 SPLITK = {"kind": "splitk", "SPLIT_K": 2, "TILE_K": 128, "WARPS": 2}
@@ -203,7 +206,7 @@ def _table_scans(cut: int = 700) -> list[dict]:
     cond = BC.ROUTE_CONDITIONS
     config = {k: cond[k] for k in ("torch", "cublas_version", *X.REDUCED, "preferred_blas_library", "env")} | {"ok": True}
     device = {k: cond[k] for k in ("device", "compute_capability", "multiprocessors")}
-    docs = []
+    docs: list[dict[str, Any]] = []
     for model, m in X.MODELS.items():
         for phase in X.TABLED:
             names = ["mlp.gate"] if phase == "router" else [n for n, _, _ in getattr(m, phase)]
@@ -298,8 +301,8 @@ def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -
 
 
 def test_scan_routes_merges_adjacent_regimes_of_one_model() -> None:
-    regimes = [{"m0": 1, "m1": 3, "split": 4}, {"m0": 4, "m1": 9, "split": 4}, {"m0": 10, "m1": 10, "split": None},
-               {"m0": 11, "m1": 12, "split": 4}]
+    regimes: list[dict[str, Any]] = [{"m0": 1, "m1": 3, "split": 4}, {"m0": 4, "m1": 9, "split": 4},
+                                     {"m0": 10, "m1": 10, "split": None}, {"m0": 11, "m1": 12, "split": 4}]
     assert X.scan_routes(regimes) == [[1, 9, 4], [10, 10, None], [11, 12, 4]]
 
 
@@ -354,20 +357,24 @@ def test_scan_regimes_end_where_the_signature_or_the_words_change() -> None:
     kept words; either ends a regime."""
     a = {"kernels": [{"name": "a", "block": [128, 1, 1]}], "reduce": True}
     b = {"kernels": [{"name": "b", "block": [128, 1, 1]}], "reduce": False}
-    w1, w2 = np.full((2, 4), 7, np.uint32), np.full((2, 4), 9, np.uint32)
+    w1: np.ndarray = np.full((2, 4), 7, np.uint32)
+    w2: np.ndarray = np.full((2, 4), 9, np.uint32)
     Ms = [256, 257, 258, 259, 260]
     regimes = X.scan_regimes(Ms, [a, a, a, b, b], [w1, w1, w2, w2, w2])
     assert [(r["m0"], r["m1"], r["reduce"]) for r in regimes] == [(256, 257, True), (258, 258, True), (259, 260, False)]
     rec = {"regimes": regimes}
-    assert X.regime_of(rec, 257)["m0"] == 256 and X.regime_of(rec, 259)["m0"] == 259 and X.regime_of(rec, 1) is None
+    r257, r259 = X.regime_of(rec, 257), X.regime_of(rec, 259)
+    assert r257 is not None and r259 is not None and X.regime_of(rec, 1) is None
+    assert (r257["m0"], r259["m0"]) == (256, 259)
 
 
 def test_the_sweep_takes_one_case_per_model_class_plus_the_envelope() -> None:
     """The box cycles through tens of kernel regimes across 256..1024 (114 on the glm53 gate), but
     their words follow four models (splits 2, 3 and 4, and the serial chain).  The sweep takes each class's first M past the
     covered 256, not both sides of all 113 boundaries, plus the endpoint."""
-    regimes = [{"m0": 256, "m1": 256, "split": 3}, {"m0": 257, "m1": 400, "split": 4}, {"m0": 401, "m1": 500, "split": 3},
-               {"m0": 501, "m1": 980, "split": None}, {"m0": 981, "m1": 1024, "split": 2}]
+    regimes: list[dict[str, Any]] = [
+        {"m0": 256, "m1": 256, "split": 3}, {"m0": 257, "m1": 400, "split": 4}, {"m0": 401, "m1": 500, "split": 3},
+        {"m0": 501, "m1": 980, "split": None}, {"m0": 981, "m1": 1024, "split": 2}]
     assert X.scan_sweep(regimes) == [257, 401, 501, 981, 1024]
     assert X.scan_sweep(regimes[:1]) == [1024]                                  # the covered M 256 adds nothing
     assert [(c["split"], c["m0"], c["regimes"], c["ms"]) for c in X.scan_classes(regimes)] == \
@@ -468,7 +475,8 @@ def test_the_base_cases_and_their_word_counts_are_conserved() -> None:
     """The scan only adds cases: the unswept expected set and each case's compared words stay the base capture's, pinned to
     a GO run (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
     drops, shrinks or re-models a previously-GO case fails here without a GPU."""
-    words, dotprod = {}, {}
+    words: dict[str, int] = {}
+    dotprod: dict[str, int] = {}
     for model, phase, case, M in X.cases(False, set(X.PHASES), list(X.MODELS)):
         m = X.MODELS[model]
         key = X.case_key(model, phase, case, M)
@@ -502,13 +510,7 @@ def test_the_absorb_weights_are_the_served_views() -> None:
 
 
 def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
-    import sys
-    import types
-
-    envs = types.ModuleType("vllm.envs")
-    envs.VLLM_BATCH_INVARIANT = batch_invariant
-    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    fake_vllm.install(monkeypatch)["vllm.envs"].VLLM_BATCH_INVARIANT = batch_invariant
 
 
 def _inherit(monkeypatch) -> dict[str, str]:
@@ -565,15 +567,10 @@ def test_the_configuration_read_back_is_the_served_default_or_the_variant(monkey
 
 
 def test_the_process_groups_are_vllms_own_at_world_size_one(tmp_path, monkeypatch) -> None:
-    import sys
-    import types
-
     seen = []
-    vd = types.ModuleType("vllm.distributed")
-    vd.init_distributed_environment = lambda **kw: seen.append(kw)
-    vd.ensure_model_parallel_initialized = lambda tp, pp: seen.append((tp, pp))
-    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.distributed", vd)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.distributed:init_distributed_environment", lambda **kw: seen.append(kw))
+    fake.set("vllm.distributed:ensure_model_parallel_initialized", lambda tp, pp: seen.append((tp, pp)))
     X.distributed(tmp_path)
     assert seen == [{"world_size": 1, "rank": 0, "distributed_init_method": f"file://{tmp_path / 'dist_store'}", "local_rank": 0,
                      "backend": "gloo"}, (1, 1)]
@@ -627,6 +624,7 @@ def _doc() -> dict:
              {**g, "phase": "linear", "case": "lm_head.shard", "M": 1, **NONE, "words": 6, "reference_coords": 1},
              {**g, "phase": "bmm", "case": "v_absorb", "M": 1, **NONE, "words": 4, "reference_coords": 1},
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
+    doc: dict[str, Any]
     doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
            "switch": {"ok": True, "cublas_version": 120900}, "switch_after": {"ok": True},
            "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True}, "scan": {"enabled": False, "cases": {}, "ok": True},
@@ -716,15 +714,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     and vLLM's config module stubbed: the comparison jobs through the spawned worker pool, the decided fma, the per-case and
     per-model verdicts, `--models`, the sealed record and the exit status, so a slip in the orchestration shows here and not in the
     H200's hour."""
-    import contextlib
-    import sys
-    import types
-
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     inherited = _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
@@ -791,15 +784,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
     """The scan's boundary Ms join the expected cases, each extended launch gets the scan's fitted split for its regime (None
     past the reduce regime), and the scan record is sealed into the document."""
-    import contextlib
-    import sys
-    import types
-
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
@@ -882,7 +870,5 @@ def test_the_scan_targets_cover_every_gemm_case() -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_bf16_gemm_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
