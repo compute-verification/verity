@@ -328,6 +328,14 @@ def _command(tmp_path: Path, capture: Path, out: Path, *argv: str) -> FM.Options
                                        "--workload", str(tmp_path / "workload.json"), "--tp2-match", str(tmp_path / "tp2_match.json"), *argv], {})
 
 
+def _noting(folded: list) -> Any:
+    """A stand-in for the fold's construction that notes in `folded` the Program dirs each rank's is asked for, and gives no flag."""
+    def fold_construction_args(workload, dirs):
+        folded.append(dirs)
+        return []
+    return fold_construction_args
+
+
 def test_coll_dir_names_the_directory_of_the_recorders_rows_when_it_is_not_the_capture(tmp_path, monkeypatch):
     capture, out, given = _stand_ins(tmp_path, monkeypatch)
     rows = tmp_path / "rows"
@@ -346,7 +354,9 @@ def test_derived_rank0_and_derived_rank1_name_the_further_request_programs_of_ea
     capture, out, given = _stand_ins(tmp_path, monkeypatch)
     further = {0: [_program(tmp_path, "d0a"), _program(tmp_path, "d0b")], 1: [_program(tmp_path, "d1a")]}
     builds = {r: str(tmp_path / f"b{r}") for r in (0, 1)}
-    folded, compared, linked = [], {}, []
+    folded: list = []
+    compared: dict[str, list[str]] = {}
+    linked: list = []
 
     def compare_rank(py, rank_dir, build, derived, *rest, **kw):
         compared[str(build)] = list(derived)
@@ -358,7 +368,7 @@ def test_derived_rank0_and_derived_rank1_name_the_further_request_programs_of_ea
         return json.loads(json.dumps(CHECKED))
 
     monkeypatch.setattr(FM, "compare_rank", compare_rank)
-    monkeypatch.setattr(PM, "fold_construction_args", lambda workload, dirs: folded.append(dirs) or [])
+    monkeypatch.setattr(PM, "fold_construction_args", _noting(folded))
     monkeypatch.setattr(RM, "cross_rank_check", cross_rank_check)
     rc, doc, _, _ = _ran(FM.main(_command(tmp_path, capture, out, *(a for r in (0, 1) for d in further[r] for a in (f"--derived-rank{r}", d)))), out, given)
     assert rc == 0 and doc["pass"] is True and doc["problems"] == []
@@ -370,6 +380,6 @@ def test_derived_rank0_and_derived_rank1_name_the_further_request_programs_of_ea
 def test_a_two_rank_command_line_without_them_gives_neither_rank_a_further_program(tmp_path, monkeypatch):
     capture, out, given = _stand_ins(tmp_path, monkeypatch)
     folded: list = []
-    monkeypatch.setattr(PM, "fold_construction_args", lambda workload, dirs: folded.append(dirs) or [])
+    monkeypatch.setattr(PM, "fold_construction_args", _noting(folded))
     rc, doc, _, _ = _ran(FM.main(_command(tmp_path, capture, out)), out, given)
     assert rc == 0 and doc["pass"] is True and folded == [[str(tmp_path / "b0")], [str(tmp_path / "b1")]]
