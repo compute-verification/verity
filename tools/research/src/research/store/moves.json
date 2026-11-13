@@ -2286,6 +2286,12 @@
       "paths": {
         "verity/protocols/remote/verifier/composition/": "verity/protocols/compose/verifier/lean/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/verifier/": "verity/protocols/compose/verifier/remote/",
+        "verity/protocols/onsite/verifier/": "verity/protocols/compose/verifier/onsite/"
+      }
     }
   ]
 }
