@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.HeldOfCheck
 public import Proofs.Flock.SpotFlock.ScopeDesc
+public import Proofs.Flock.SpotFlock.Placement
 
 /-!
 # What the run's population check gives the held copies
@@ -18,17 +19,23 @@ the run refuses a boundary registration whose population is not its `n` units in
   index below `n` is such a slot; and `n` slots name a unit.
 * `filesOk_held₀`, `fillOk_held₀`: `filesOk` and `fillOk` at the copies, from `popOk` and, for `filesOk`, the cells
   naming one count per template.
+* `built_of_templates`: every member's unit net is built where every template's reference statement reads as a
+  member's (`templateOk`, through `templateOk_facts`), so `two` at the copies (`two_held₀`) takes no `Built`.
+* `twoHolds_of`, `twoHolds_of_files`: a held copy `heldOf` builds, or the form's check of them, gives RUNCOINS's
+  `TwoHolds` where the run's population check passes.
+* `xS₀_of_files`: a held copy built from the form's members and blobs has template `t`'s reference statement
+  `refRawOf`'s bytes.
 -/
 
 @[expose] public section
 
 namespace SpotFlock.HeldOf
 
-open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs
+open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs SpotFlock.RunsAs.Round2
 open Lean (Json)
 
 /-- **A layout's classes**: its population, then a class of input slots, which name no unit. -/
-theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.Layout}
+theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.SlotOrder}
     (h : Spot.Slots.layout p query = .ok l) :
     ∃ pop ins, l.classes = #[pop, ins] ∧ ∀ s ∈ ins, ∀ b ∈ s, b.unit = none := by
   unfold Spot.Slots.layout at h
@@ -40,28 +47,28 @@ theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.Layout}
        refine ⟨_, _, rfl, ?_⟩
        simp)
 
-theorem pop_facts {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
+theorem pop_facts {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) :
     ∃ ins : Array (Array Spot.Slots.ProofBlock), (∀ s ∈ ins, ∀ b ∈ s, b.unit = none) ∧
       l.blocks.toList = Spot.Slots.popOf l ++ (ins.toList.map Array.toList).flatten ∧
       (Spot.Slots.popOf l).map (·.unit) = (List.range n).map some := by
   obtain ⟨pop, ins, hc, hins⟩ := layout_shape hl
   refine ⟨ins, hins, ?_, ?_⟩
-  · unfold Spot.Slots.Layout.blocks Spot.Slots.popOf
+  · unfold Spot.Slots.SlotOrder.blocks Spot.Slots.popOf
     rw [hc]
     simp
   · unfold Spot.Slots.popOk at hp
     rw [hl] at hp
     exact of_decide_eq_true hp
 
-theorem length_popOf {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
+theorem length_popOf {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) :
     (Spot.Slots.popOf l).length = n := by
   obtain ⟨-, -, -, hpop⟩ := pop_facts hl hp
   simpa using congrArg List.length hpop
 
 /-- **A slot naming a unit names its own index**, below `n`, under `popOk`. -/
-theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
+theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true)
     {ρ : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b) {v : ℕ} (hv : b.unit = some v) :
     v = ρ ∧ ρ < n := by
@@ -85,7 +92,7 @@ theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slot
     cases hv
 
 /-- **Every index below `n` is a slot naming itself**, under `popOk`. -/
-theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
+theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) {ρ : ℕ} (hρ : ρ < n) :
     ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ := by
   obtain ⟨ins, -, hbl, hpop⟩ := pop_facts hl hp
@@ -98,7 +105,7 @@ theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slo
     exact h1
 
 /-- **`n` slots name a unit**, under `popOk`: `heldOf`'s request count is the population. -/
-theorem requests_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
+theorem requests_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) : requests l = n := by
   obtain ⟨ins, hins, hbl, hpop⟩ := pop_facts hl hp
   have h1 : (Spot.Slots.popOf l).filter (fun b => b.unit.isSome) = Spot.Slots.popOf l := by
@@ -123,7 +130,7 @@ theorem getElem?_ms_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : U
 /-- **The layout fits the members' files** (`filesOk`) at the copies `heldOf` builds, from the population check and
 the cells naming one count per template. -/
 theorem filesOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
-    {l : Spot.Slots.Layout} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
+    {l : Spot.Slots.SlotOrder} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
     (hl : Spot.Slots.layout first.program first.query = .ok l)
     (hp : Spot.Slots.popOk first.program first.query n = true) (hT : ns.size = it.circuits.size) :
     filesOk (held₀ i it u first ns ks (requests l) hz).reg (held₀ i it u first ns ks (requests l) hz).ms l
@@ -154,7 +161,7 @@ theorem filesOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unrea
 
 /-- **The layout fills the members' files** (`fillOk`) at the copies `heldOf` builds, from the population check. -/
 theorem fillOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
-    {l : Spot.Slots.Layout} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
+    {l : Spot.Slots.SlotOrder} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
     (hl : Spot.Slots.layout first.program first.query = .ok l)
     (hp : Spot.Slots.popOk first.program first.query n = true) :
     fillOk (held₀ i it u first ns ks (requests l) hz).ms ns l = true := by
@@ -191,7 +198,7 @@ theorem descOk_withFrame (h : Held) (c₀ : Code) : descOk (withFrame h c₀) = 
 run's population check and what is left per template: each member fits (`memberOk`), the first stage's design is well
 formed on the layout's strata (`designOk`), and one count of at least `1` and one cell per template. -/
 theorem descOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
-    {l : Spot.Slots.Layout} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
+    {l : Spot.Slots.SlotOrder} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
     (hl : Spot.Slots.layout first.program first.query = .ok l)
     (hd : slotDesign first.rule first.program first.query first.table = .ok d)
     (hp : Spot.Slots.popOk first.program first.query n = true) (hT : ns.size = it.circuits.size)
@@ -219,20 +226,116 @@ theorem descOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   · show ks.toList.all (1 ≤ ·) = true
     exact List.all_eq_true.2 fun x hx => decide_eq_true (hk1 x hx)
 
-/-- **The design evaluates at the copies `heldOf` builds** (`two`), from `descOk_held₀`'s premises, each member's unit
-net built, and every template's reference statement reading as a member's (`templateOk`). -/
+/-- **Every member's unit net is built** where every template's reference statement reads as a member's: its circuit
+file's descriptor parses at untyped tags (`templateOk_facts`). -/
+theorem built_of_templates (h : Held) (ht : ∀ t < h.ms.length, templateOk h t = true) :
+    ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit := by
+  intro ci hci
+  obtain ⟨t, htl, rfl⟩ := List.getElem_of_mem hci
+  exact (templateOk_facts h (ht t htl) htl).2.1
+
+/-- **The design evaluates at the copies `heldOf` builds** (`two`), from `descOk_held₀`'s premises and every template's
+reference statement reading as a member's (`templateOk`). -/
 theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
-    {l : Spot.Slots.Layout} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true} (s : AuditStatement)
+    {l : Spot.Slots.SlotOrder} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true} (s : AuditStatement)
     (hl : Spot.Slots.layout first.program first.query = .ok l)
     (hd : slotDesign first.rule first.program first.query first.table = .ok d)
     (hp : Spot.Slots.popOk first.program first.query n = true) (hT : ns.size = it.circuits.size)
     (hm : (held₀ i it u first ns ks (requests l) hz).ms.all memberOk = true) (hdes : designOk d l = true)
     (hk : ks.size = it.circuits.size) (hk1 : ∀ x ∈ ks.toList, 1 ≤ x)
-    (hb : ∀ ci ∈ (held₀ i it u first ns ks (requests l) hz).ms, FlockSoundness.Built ci.1.unit)
     (ht : ∀ t < (held₀ i it u first ns ks (requests l) hz).ms.length,
       templateOk (held₀ i it u first ns ks (requests l) hz) t = true) :
     (two (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) s).isSome := by
   rw [two_eq, ms_withFrame, reg_withFrame, k_withFrame, xS₀_withFrame, ← two_eq _ s]
-  exact two_of_descOk _ s hb (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
+  exact two_of_descOk _ s (built_of_templates _ ht) (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
+
+/-- **The boundary registration `heldOf` hands the first stage reads the params' program and query.** -/
+theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = some first) :
+    first.program = i.params.verifier.program ∧ first.query = i.params.verifier.query := by
+  unfold firstOf at hf
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
+  obtain ⟨n, hn, rule, hrule, law, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
+  exact ⟨rfl, rfl⟩
+
+/-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds, where the run's population check
+passes (`Slots.popOk` at the params' program and query, which `Run.run` refuses without: `population-order`): `heldOf`
+decides the descriptor's checks (`descCore`), and the population gives the layout's fit to the members' files. -/
+theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {n : ℕ}
+    (hh : heldOf i it u = some h)
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) : TwoHolds h := by
+  obtain ⟨first, ns, ks, l, hz, hf, -, hl, rfl, hd⟩ := heldOf_spec hh
+  obtain ⟨hpr, hq⟩ := firstOf_program hf
+  rw [← hpr, ← hq] at hp
+  unfold decided at hd
+  simp only [Bool.and_eq_true] at hd
+  have hcore := hd.2
+  rw [descCore_eq, reg_withFrame, ms_withFrame, k_withFrame, xS₀_withFrame,
+    ← descCore_eq (held₀ i it u first ns ks (requests l) hz)] at hcore
+  have hlen := ms_length_held₀ i it u first ns ks (requests l) hz
+  have e1 : (Spot.Slots.layout (held₀ i it u first ns ks (requests l) hz).reg.first.program
+      (held₀ i it u first ns ks (requests l) hz).reg.first.query).toOption = some l := by
+    show (Spot.Slots.layout first.program first.query).toOption = some l
+    rw [hl]
+    rfl
+  unfold descCore at hcore
+  rw [e1] at hcore
+  rcases hdz : replayDesign (held₀ i it u first ns ks (requests l) hz) with _ | d
+  · rw [hdz] at hcore
+    simp at hcore
+  rw [hdz] at hcore
+  dsimp only at hcore
+  simp only [Bool.and_eq_true, beq_iff_eq] at hcore
+  obtain ⟨⟨⟨⟨⟨hm, hdes⟩, hk⟩, hk1⟩, hT⟩, ht⟩ := hcore
+  have hd' : (slotDesign first.rule first.program first.query first.table).toOption = some d := hdz
+  have hk' : ks.size = it.circuits.size := by
+    rw [← hlen, ← Array.length_toList]
+    exact hk
+  have hT' : ns.size = it.circuits.size := by
+    rw [← hlen]
+    exact hT
+  intro s
+  exact two_held₀ s hl (ok_of_toOption hd') hp hT' hm hdes hk'
+    (fun x hx => of_decide_eq_true (List.all_eq_true.1 hk1 x hx))
+    (fun t htl => List.all_eq_true.1 ht t (List.mem_range.2 htl))
+
+theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {n : ℕ} (u : Unread)
+    (hk : heldOk i it u.xs = true)
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
+    ∃ h, heldOf i it u = some h ∧ TwoHolds h := by
+  obtain ⟨h, hh⟩ := heldOf_of_ok u hk
+  exact ⟨h, hh, twoHolds_of hh hp⟩
+
+/-- **The form's check of the held copies gives `TwoHolds`** where the run's population check passes. -/
+theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
+    {it : Spot.Run.Interior} {n : ℕ} (desc : Msg) (query : Query) (c₀ : Code) (more : ℕ)
+    (hk : heldOkDesc p bs i it = true)
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
+    ∃ u h, unreadOf p bs desc query c₀ more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
+  unfold heldOkDesc at hk
+  cases hx : refStmtsOf p bs with
+  | none => rw [hx] at hk; simp at hk
+  | some xs =>
+    rw [hx] at hk
+    obtain ⟨h, hh, ht⟩ := twoHolds_of_ok ⟨desc, query, xs, c₀, more⟩ hk hp
+    exact ⟨_, h, by simp [unreadOf, hx], hh, ht⟩
+
+/-- **A held copy's reference statements are the form's** (`refRawOf`'s bytes, template by template) where `heldOf`
+builds it from what the form's members and blobs give (`unreadOf`). -/
+theorem xS₀_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
+    {it : Spot.Run.Interior} {desc : Msg} {query : Query} {c₀ : Code} {more : ℕ} {u : Unread} {h : Held} {t : ℕ}
+    (hu : unreadOf p bs desc query c₀ more = some u) (hh : heldOf i it u = some h) (ht : t < p.circuits.size) :
+    ∃ r, refRawOf p bs t = some r ∧ h.xS₀ t = r.encode := by
+  obtain ⟨first, ns, ks, l, hz, -, -, -, rfl, -⟩ := heldOf_spec hh
+  rw [xS₀_withFrame]
+  unfold unreadOf at hu
+  cases hx : refStmtsOf p bs with
+  | none => rw [hx] at hu; cases hu
+  | some xs =>
+    rw [hx] at hu
+    obtain rfl : (⟨desc, query, xs, c₀, more⟩ : Unread) = u := Option.some.inj hu
+    obtain ⟨r, hr, hxt⟩ := refStmtsOf_getElem? hx ht
+    refine ⟨r, hr, ?_⟩
+    show refStmt xs t = r.encode
+    simp [refStmt, List.getD_eq_getElem?_getD, hxt]
 
 end SpotFlock.HeldOf

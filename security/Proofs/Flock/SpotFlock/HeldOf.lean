@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.RunsAs.Statement
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import VStarRecursive.SampledTwo
+public import Proofs.Flock.SpotFlock.ScopeDesc
 
 /-!
 # The held copies, built from what the two-stage form's check holds
@@ -23,17 +24,22 @@ session statement, the code the frame is built from, and the rounds past round 1
 * `xS₀`: template `t`'s reference statement (`refStmt`), each in Flock's masked scope (`zkOk`), decided;
 * `frame`: SPOT's own frame at the wired program, from `Unread.c₀` (`withFrame`), as HONEST2's instance sets it.
 
-`heldOf` is `none` unless the design evaluates (`two`), the templates' names are distinct, and the interior
-registration registers no value: so a held copy it builds discharges RUNCOINS's `TwoHolds` (`twoHolds_of`) and
-`NamesDistinct` (`namesDistinct_of`), and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
+`heldOf` is `none` unless the descriptor's checks pass (`descCore`: each member fits, the design is well formed on the
+layout's strata, the second stage has a cell and a count of at least `1` for each template, and each template's
+reference statement reads as a member's), the templates' names are distinct, and the interior registration registers
+no value. Each check takes a step per template or stratum, none per unit or gate. A held copy it builds discharges
+`NamesDistinct` (`namesDistinct_of`), with the run's population check RUNCOINS's `TwoHolds` (`HeldOfRun.twoHolds_of`),
+and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
 the second two-stage try's design, whose interior registration registers none; the first try's registers `logits`,
 and there `heldOf` is `none`.
 
 `heldMatches_of`: a held copy `heldOf` builds agrees with what the run reads (`HeldMatches`), given two clauses that
 the run's input does not decide and are taken as named hypotheses:
 
-* `PartsAre`: `HeldMatches.parts` as stated, which no held copy meets where the interior program has a stratum
-  (`not_partsAre`: at `q = 0`, `SecondStage.partOf` refuses); its form at the run's replay sample is `PartsAt`;
+* `PartsAt`: `HeldMatches.parts`, the interior program's strata making the held copy's parts at the replay sample the
+  first stage selects on the run's bytes. `PartsAre`, the same at every sample's size, gives it
+  (`partsAt_of_partsAre`), but no held copy meets `PartsAre` where the interior program has a stratum
+  (`not_partsAre`: at `q = 0`, `SecondStage.partOf` refuses);
 * `RefsAre`: `HeldMatches.refs`, each template's reference header as read from its reference statement's public file
   equal to the params' as `Json` values, which no check the run makes decides.
 
@@ -47,7 +53,7 @@ the run's input does not decide and are taken as named hypotheses:
 
 namespace SpotFlock.HeldOf
 
-open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs
+open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs SpotFlock.RunsAs.Round2
 open Lean (Json)
 
 /-! ## What the run does not read -/
@@ -94,7 +100,7 @@ def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array ℕ ×
   | _ => none
 
 /-- **The requests of a boundary layout**: its proof blocks that are a unit's (an input slot is none). -/
-def requests (l : Spot.Slots.Layout) : ℕ := (l.blocks.filter fun b => b.unit.isSome).size
+def requests (l : Spot.Slots.SlotOrder) : ℕ := (l.blocks.filter fun b => b.unit.isSome).size
 
 /-- **Each template's units**: `n_t` a request over `r` requests, for `T` templates. -/
 def unitsOf (r : ℕ) (ns : Array ℕ) (T : ℕ) : List (Array ℕ) :=
@@ -153,15 +159,23 @@ noncomputable def withFrame (h : Held) (c₀ : Code) : Held :=
     frame := frameAt (slotsOf (addressMapWired h (wireMap h) (returned h)))
       (revealCodeWired h (wireMap h) (returned h) (addressMapWired h (wireMap h) (returned h)) c₀) }
 
-/-- A statement `two` may be read at; it reads none. -/
-def anyStatement (h : Held) : AuditStatement :=
-  ⟨h.desc, bitsProgs h.ms, h.query, (replayDesign h).getD ⟨[]⟩, []⟩
+/-- **The descriptor's checks `heldOf` makes**: at the replay layout and the first stage's design, every member fits
+(`memberOk`), the design is well formed on the layout's strata (`designOk`), the second stage has a count of at least
+`1` and a cell for each member, and every template's reference statement reads as a member's (`templateOk`). It is
+`descOk` and `two`'s `templateOk` without the steps per unit (`filesOk`, `fillOk`), which the run's population check
+gives (`HeldOfRun.filesOk_held₀`, `HeldOfRun.fillOk_held₀`), and without `scopeOk`'s pass over every gate, which
+`memberOk` gives (`two_of_descOk`). -/
+def descCore (h : Held) : Bool :=
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  | some l, some d => h.ms.all memberOk && designOk d l && h.k.length == h.ms.length && h.k.all (1 ≤ ·) &&
+      h.reg.ns.size == h.ms.length && (List.range h.ms.length).all (templateOk h)
+  | _, _ => false
 
 /-- **What `heldOf` decides of the copies it builds**: as many reference statements as templates, the templates'
-names distinct, an interior registration that registers no value, and the design evaluates (`two`). -/
+names distinct, an interior registration that registers no value, and the descriptor's checks (`descCore`). -/
 def decided (u : Unread) (it : Spot.Run.Interior) (h : Held) : Bool :=
   u.xs.length == it.circuits.size && decide ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup &&
-    h.interiorNames.values.isEmpty && (two h (anyStatement h)).isSome
+    h.interiorNames.values.isEmpty && descCore h
 
 /-- `h` where `decided` holds of it. -/
 def keep (u : Unread) (it : Spot.Run.Interior) (h : Held) : Option Held := if decided u it h then some h else none
@@ -210,16 +224,6 @@ theorem ms_length_held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unr
 theorem ms_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).ms = h.ms := by
   unfold withFrame Held.ms
   dsimp only
-
-/-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds: `heldOf` decides it, and `two`
-reads no statement. -/
-theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
-    (hh : heldOf i it u = some h) : TwoHolds h := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, hd⟩ := heldOf_spec hh
-  unfold decided at hd
-  simp only [Bool.and_eq_true] at hd
-  intro s
-  exact hd.2
 
 /-- **The templates' names are distinct** (`NamesDistinct`) at a held copy `heldOf` builds. -/
 theorem namesDistinct_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
@@ -282,20 +286,23 @@ theorem registersNone_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unre
 
 /-! ## The held copies agree with what the run reads -/
 
-/-- **`HeldMatches.parts`, as stated**: at every replay sample's size `q`, the interior program's strata make the held
-copy's parts. -/
+/-- **The parts at every replay sample's size `q`**: the interior program's strata make the held copy's parts. -/
 def PartsAre (it : Spot.Run.Interior) (h : Held) : Prop :=
   ∀ strata q, Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata →
     Spot.SecondStage.parts q strata = some (partsAt h q)
 
-/-- **`HeldMatches.parts` at the run's replay sample**: at the replay sample `rest` the first stage selects on the
-run's bytes, the interior program's strata make the held copy's parts. `RunsAs.Top` reads `HeldMatches.parts` only
-there. -/
+/-- **`HeldMatches.parts`, the parts at the run's replay sample**: at the replay sample `rest` the first stage selects
+on the run's bytes, the interior program's strata make the held copy's parts. -/
 def PartsAt (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop :=
   ∀ draw rest read strata, Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query
       h.reg.first.table h.reg.first.closure i.source = .ok (draw, rest, read) →
     Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata →
     Spot.SecondStage.parts rest.size strata = some (partsAt h rest.size)
+
+/-- `PartsAre`, at every replay sample, gives `PartsAt`, at the run's. -/
+theorem partsAt_of_partsAre {i : Spot.Run.Input} {it : Spot.Run.Interior} {h : Held} (hP : PartsAre it h) :
+    PartsAt i it h :=
+  fun _ rest _ strata _ hs => hP strata rest.size hs
 
 /-- **The parts fit the cells**, decided at a replay sample of `q` blocks: the strata make the held copy's parts. One
 comparison per template. -/
@@ -341,10 +348,10 @@ theorem refReads_eq (cs : Array (String × String × Json × Json)) :
     have hj : j < cs.size := by simpa using hj₁
     simp [List.getD_eq_getElem?_getD, hj]
 
-/-- **A held copy `heldOf` builds agrees with what the run reads** (`HeldMatches`), given the clauses `PartsAre` and
+/-- **A held copy `heldOf` builds agrees with what the run reads** (`HeldMatches`), given the clauses `PartsAt` and
 `RefsAre`, which the run's input does not decide. Every other clause holds by `heldOf`'s construction. -/
 theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
-    (hh : heldOf i it u = some h) (hP : PartsAre it h) (hR : RefsAre it h) : HeldMatches i it h := by
+    (hh : heldOf i it u = some h) (hP : PartsAt i it h) (hR : RefsAre it h) : HeldMatches i it h := by
   obtain ⟨first, ns, ks, l, hz, hf, hc, -, rfl, -⟩ := heldOf_spec hh
   have hrr : refRegisteredOf (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) =
       it.circuits.map fun (t, _, _, r) => (t, r) := by
@@ -385,14 +392,14 @@ noncomputable def heldOfForm (p : VStar.Recursive.SampledTwo.Params) (c : Spot.O
   | some it => heldOf (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it u
   | none => none
 
-/-- **At the form's run of record**, a held copy `heldOfForm` builds agrees with what the run reads, given `PartsAre`
+/-- **At the form's run of record**, a held copy `heldOfForm` builds agrees with what the run reads, given `PartsAt`
 and `RefsAre` at its interior. -/
 theorem heldMatches_form {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {ξ ξ₂ : ByteArray}
     {e : VStar.Recursive.SampledTwo.Evidence} {received₂ : String} {vs : Array (String × Json)} {u : Unread}
     {h : Held} (hh : heldOfForm p c ξ ξ₂ e received₂ vs u = some h) :
     ∃ it, (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).interior = some it ∧
       heldOf (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it u = some h ∧
-      (PartsAre it h → RefsAre it h →
+      (PartsAt (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it h → RefsAre it h →
         HeldMatches (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it h) := by
   unfold heldOfForm at hh
   split at hh
