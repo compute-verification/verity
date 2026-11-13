@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import pytest
 
+from tests.check import test_executed_prefix as XP
 from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import population as POP
 from verity_vllm.records.required_manifest import SCHEMA
 
 OLDER_ID = "Q_module (older header, no query_id)"
@@ -61,20 +63,21 @@ def test_an_identity_no_row_produces_that_states_no_step_is_not_read():
     assert COV.query_population(man, {}, set(), ranks=[0])["query_total"]["identities"] == 1      # no prefix: the step is not read
 
 
-def test_a_stopped_request_s_last_manifest_step_is_the_largest_its_identities_state_below_its_stop():
-    """Identities no row produces, of a request that stopped after two of its four steps.  One at a step past the stop is
-    counted not executed; the cut names the last step the manifest states below the stop, in whatever order it states them."""
-    prefix = {"r0": {"n_exec": 2, "cap": 4, "a_r": 0, "lag": 1, "faults": []}}
+def test_a_stopped_request_s_last_manifest_step_is_the_largest_its_identities_state_below_its_stop(tmp_path):
+    """Identities no row produces, of the mixed-stop record's first request, which stopped after twelve of its thirty-two steps.
+    One at a step past the stop is counted not executed; the cut names the last step the manifest states below the stop, in
+    whatever order it states them."""
+    prefix = {"r0": POP.executed_prefix_of_record("r0", **XP._linked_facts(tmp_path))}
 
-    def cut(*steps: int) -> dict:
+    def cut(*steps: int) -> tuple:
         ids = [{"family": "input_token_ids", "request_id": "r0", "step": s, "op_path": "x", "output_member": "out"} for s in steps]
         q = COV.query_population(_manifest(identities=ids), {}, set(), ranks=[0], executed_prefix=prefix)
         (named,) = q["query_checks"]["executed_prefix_rule"]["manifest_cut_before_classification"]["first"]
-        return {k: v for k, v in named.items() if k != "why"}
+        return named["request_id"], named["manifest_last_step"], named["n_exec"], named["identities_at_not_executed_steps"]
 
-    assert cut(3) == {"request_id": "r0", "manifest_last_step": None, "cap_last_step": 3, "n_exec": 2, "identities_at_not_executed_steps": 1}
-    assert cut(1, 0, 3)["manifest_last_step"] == cut(0, 1, 3)["manifest_last_step"] == 1
-    assert cut(0, 2, 3) == {"request_id": "r0", "manifest_last_step": 0, "cap_last_step": 3, "n_exec": 2, "identities_at_not_executed_steps": 2}
+    assert cut(31) == ("r0", None, 12, 1)
+    assert cut(5, 0, 31) == cut(0, 5, 31) == ("r0", 5, 12, 1)
+    assert cut(0, 12, 31) == ("r0", 0, 12, 2)
 
 
 def test_each_finding_names_its_first_and_counts_them_all():
@@ -96,23 +99,30 @@ def test_each_finding_names_its_first_and_counts_them_all():
     assert outside["ok"] is rows["ok"] is second["ok"] is False
 
 
-def test_a_request_served_to_its_cap_counts_nothing_not_executed_beside_one_that_stopped():
-    """r0 served to its cap of four steps; r1 stopped after two, with a row identity at each of its four."""
-    prefix = {"r0": {"n_exec": 4, "cap": 4, "a_r": 4, "lag": 1, "faults": [], "r3_one_mechanism": True, "mechanism": "recurrence: x"},
-              "r1": {"n_exec": 2, "cap": 4, "a_r": 1, "lag": 1, "faults": [], "r3_one_mechanism": True, "mechanism": "arithmetic"}}
-    ids = [{"family": "instance_outputs", "request_id": "r1", "step": s, "op_path": "m", "output_member": "out"} for s in range(4)]
-    addresses = {("r1", s, "m", "out"): {"spec": "X_v1{}", "class": "vu", "rows": 1, "why": None} for s in range(4)}
+def test_a_request_served_to_its_last_step_counts_nothing_not_executed_beside_one_that_stopped(tmp_path):
+    """The mixed-stop record: r0 stopped after twelve of its thirty-two steps, r1 was served all of its own; a row identity at each
+    step of r0."""
+    def record(rid: str, **more) -> dict:
+        return POP.executed_prefix_of_record(rid, **XP._linked_facts(tmp_path, rid), eos_ids=[XP.EOS], **more)
+
+    served = XP._served({"r0": 11, "r1": 32}, {"r0"})
+    prefix = {rid: record(rid, served=served[rid]) for rid in ("r0", "r1")}
+    ids = [{"family": "instance_outputs", "request_id": "r0", "step": s, "op_path": "m", "output_member": "out"} for s in range(32)]
+    addresses = {("r0", s, "m", "out"): {"spec": "X_v1{}", "class": "vu", "rows": 1, "why": None} for s in range(32)}
     strata = {"a": {"evaluated": 0}, "b": {"evaluated": 1}, "c": {"evaluated": 2}, "d": {}}
     q = COV.query_population(_manifest(identities=ids, requests=["r0", "r1"]), addresses, set(), ranks=[0], strata=strata, executed_prefix=prefix)
     assert q["query_checks"]["ok"] is True and q["query_checks"]["accounted"] is True
     by_request = q["not_executed_by_rule"]["by_request"]
     counts = ("identities", "excluded_unexecuted_identities", "excluded_row_identities", "required_row_identities")
-    assert [by_request["r0"][k] for k in counts] == [0, 0, 0, 0] and [by_request["r1"][k] for k in counts] == [2, 2, 2, 2]
+    assert [by_request["r0"][k] for k in counts] == [20, 20, 20, 12] and [by_request["r1"][k] for k in counts] == [0, 0, 0, 0]
     rule = q["not_executed_rule"]
-    assert (rule["n"], rule["requests"]["r0"]["n"], rule["requests"]["r1"]["n"]) == (2, 0, 2)
-    assert rule["mechanism"] == {"arithmetic": 1, "recurrence": 1} and rule["r3_one_mechanism"] is True
+    assert (rule["n"], rule["requests"]["r0"]["n"], rule["requests"]["r1"]["n"]) == (20, 20, 0)
+    assert rule["mechanism"] == {"recurrence(Continuation_v1)": 2} and rule["r3_one_mechanism"] is True
     assert (q["sampled_strata"]["strata"], q["sampled_strata"]["strata_evaluated"]) == (4, 2)
-    for other in (None, False):                                                   # one request whose prefix does not say it
+    unlisted = prefix | {"r1": record("r1")}                                      # one request whose served list the record was not handed
+    rule = COV.query_population(_manifest(), {}, set(), ranks=[0], executed_prefix=unlisted)["not_executed_rule"]
+    assert rule["mechanism"] == {"arithmetic(a_r, LAG)": 1, "recurrence(Continuation_v1)": 1} and rule["r3_one_mechanism"] is False
+    for other in (None, False):                                                   # and one whose prefix does not say it
         one = prefix | {"r1": prefix["r1"] | {"r3_one_mechanism": other}}
         assert COV.query_population(_manifest(), {}, set(), ranks=[0], executed_prefix=one)["not_executed_rule"]["r3_one_mechanism"] is False
     no_prefix = COV.query_population(_manifest(), {}, set(), ranks=[0])

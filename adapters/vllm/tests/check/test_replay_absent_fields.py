@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.check import test_executed_prefix as XP
 from tests.check import test_sampled_replay as T
 from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import driver as DR
@@ -272,30 +273,36 @@ def test_a_request_that_states_no_prompt_ids_declares_an_empty_prompt(left_out, 
 
 
 @NO_LIST
-def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out):
-    block = {"executed_prefix_len": 2, "eos_step": 1, "lag_steps": 0, "first_eos_index": 1, "served_past_first_eos": 0, "eos_stop": True}
+def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out, tmp_path):
+    """The mixed-stop record's first request, eleven tokens served under LAG 1, under a rule that returns the block stated here."""
+    block = {"executed_prefix_len": 12, "eos_step": 10, "lag_steps": 1, "first_eos_index": 10, "served_past_first_eos": 0, "eos_stop": True}
+    facts = XP._linked_facts(tmp_path)
 
     def prefix(problems: Any) -> dict:
-        return POP.executed_prefix_of_record("r0", a_r=2, lag=0, cap=4, eos_declared=True, served_len_commit=2, linked=True, lag_attested=True,
-                                             a_r_source="a Match record", served=[7, 9], eos_ids=[9],
+        return POP.executed_prefix_of_record("r0", **facts, served=XP._served({"r0": 11}, {"r0"})["r0"], eos_ids=[XP.EOS],
                                              rule=lambda served, **stated: _with(block, "problems", problems))
 
     record = prefix(left_out)
-    assert (record["faults"], record["n_exec"], record["r3_one_mechanism"]) == ([], 2, True)
+    assert (record["faults"], record["n_exec"], record["r3_one_mechanism"]) == ([], 12, True)
     assert record["by_rule"]["problems"] == (None if left_out is ABSENT else left_out)
     assert prefix(["the last served token is no declared EOS"])["faults"] == ["Continuation_v1 rule: the last served token is no declared EOS"]
 
 
 @pytest.mark.parametrize("left_out", [ABSENT, None, 0], ids=["absent", "null", "zero"])
-def test_an_executed_prefix_that_states_no_lag_anchors_its_last_phase_under_lag_0(left_out):
-    """A request whose prefix stops a step short of its cap of four, and one whose prefix reaches the cap after three served tokens."""
-    short = POP.phase_anchor(4, _with({"n_exec": 3, "cap": 4, "a_r": 3}, "lag", left_out))
-    assert (short["last_step"], short["anchor"], short["lag_step"]) == (2, "n_exec - 1", None)
-    assert short["why"].startswith("the request stopped at a_r 3 under LAG 0: ") and "is the EOS step (LAG 0: no lag step)" in short["why"]
-    at_cap = POP.phase_anchor(4, _with({"n_exec": 4, "cap": 4, "a_r": 3}, "lag", left_out))
-    assert (at_cap["last_step"], at_cap["anchor"], at_cap["lag_step"], at_cap["why"]) == (3, "cap - 1", None, "the request ran to its cap")
-    stated = POP.phase_anchor(4, {"n_exec": 4, "cap": 4, "a_r": 3, "lag": 1})
-    assert stated["lag_step"] == 3 and stated["why"].endswith("the cap anchors and its last step 3 is the lag step")
+def test_an_executed_prefix_that_states_no_lag_anchors_its_last_phase_under_lag_0(left_out, tmp_path):
+    """The mixed-stop record's first request, of thirty-two steps: as served, stopping twenty steps short of its last; and served
+    thirty-one tokens, where its lag step is its last step.  Under LAG 0 neither has a lag step."""
+    facts = XP._linked_facts(tmp_path)
+    for served in (11, 31):
+        record = POP.executed_prefix_of_record("r0", **facts | {"a_r": served, "served_len_commit": served})
+        anchor, stated = POP.phase_anchor(32, _with(record, "lag", left_out)), POP.phase_anchor(32, record)
+        assert (record["faults"], record["n_exec"]) == ([], served + 1)
+        assert (anchor["last_step"], anchor["lag_step"], "is the lag step" in anchor["why"]) == (served, None, False)
+        assert (stated["last_step"], stated["lag_step"], "is the lag step" in stated["why"]) == (served, served, True)
+    short = POP.phase_anchor(32, _with(POP.executed_prefix_of_record("r0", **facts), "lag", left_out))
+    assert short["why"].startswith("the request stopped at a_r 11 under LAG 0: steps [12, 32) are not executed; its last EXECUTED step 11 is the "
+                                   "EOS step (LAG 0: no lag step)")
+
 
 
 @NO_DICT

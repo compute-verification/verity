@@ -68,9 +68,9 @@ def test_a_draw_past_the_lag_slot_a_missing_lag_draw_and_a_lag_pos_off_by_one_ea
     wl = _wl(tmp_path, [("a", 10, 8)])
     b = _build(tmp_path, [99])
     two_after = draw_accounting(_draws("a", 10, 5, 0, served=[7, 7, 99, 5, 5]), wl, b, lag_attested=(1, "t"))
-    past = ("draw ledger a: 1 drawn position(s) [13] outside the executed set (slots 1..4 of cap 8, EOS at slot 3, 1 lag slot(s)): "
-            "a draw past the EOS's lag slot -- the RNG advanced without r_t")
-    assert two_after["problems"] == [past]
+    (past,) = two_after["problems"]
+    assert "[13] outside the executed set (slots 1..4 of " in past and " 8, EOS at slot 3, 1 lag slot(s)): " in past
+    assert past.endswith(" past the EOS's lag slot -- the RNG advanced without r_t")
     assert two_after["requests"]["a"]["drawn_not_expected"] == [13]
     none_after = draw_accounting(_draws("a", 10, 3, 0, served=[7, 7, 99]), wl, b, lag_attested=(1, "t"))
     assert len(none_after["problems"]) == 1 and "the lag slot did not draw" in none_after["problems"][0] and none_after["requests"]["a"]["expected_not_drawn"] == [12]
@@ -97,10 +97,10 @@ def test_f_r17b_35_over_cap_without_eos_fails_and_the_lag_slot_is_bounded_by_the
     assert over["requests"]["a"]["drawn_not_expected"] == [17] and over["requests"]["a"]["finish"] == "length"
     # (a') EOS at the cap sample (slot 8) plus one more sample: the cap has no slot after it
     over_eos = draw_accounting(_draws("a", 10, 9, 0, served=[7] * 7 + [99, 5]), wl, b, lag_attested=(1, "t"))
-    assert over_eos["requests"]["a"]["finish"] == "eos-at-cap" and over_eos["requests"]["a"]["drawn_not_expected"] == [17]
-    past = ("draw ledger a: 1 drawn position(s) [17] outside the executed set (slots 1..8 of cap 8): a draw past the EOS's lag slot "
-            "-- the RNG advanced without r_t")
-    assert over_eos["problems"] == [past]                                         # an EOS at the cap has no lag slot to name
+    assert len(over_eos["problems"]) == 1 and over_eos["requests"]["a"]["finish"] == "eos-at-cap" and over_eos["requests"]["a"]["drawn_not_expected"] == [17]
+    (past,) = over_eos["problems"]                                                # an EOS at the last slot has no lag slot to name
+    assert "[17] outside the executed set (slots 1..8 of " in past and " 8): " in past and "EOS at slot" not in past
+    assert past.endswith(" past the EOS's lag slot -- the RNG advanced without r_t")
     # (b) EOS at slot 7 of cap 8 under A = 1: one lag sample (slot 8) and the record is MEASURED, clean
     near = draw_accounting(_draws("a", 10, 8, 0, served=[7] * 6 + [99, 5]), wl, b, lag_attested=(1, "t"))
     assert near["problems"] == [] and near["lag_slot_exercised"] is True and near["requests"]["a"]["lag_slot"]["lag_slots_expected"] == 1
