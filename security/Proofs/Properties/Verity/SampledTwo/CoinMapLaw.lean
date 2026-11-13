@@ -204,25 +204,44 @@ theorem avg_le_write1 {P C : Type} [Fintype P] [Nonempty P] [Fintype C] [Nonempt
 
 variable {β : Type}
 
-open Classical in
+/-- A coin node's tape: its value. -/
+abbrev tapeVal {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
+    (t : Tape (@Game.coin β C iF iN k) s) : C :=
+  (show C × ((c : C) → Tape (k c) (s c)) from t).1
+
+/-- A coin node's tape: the tape after the value `c`. -/
+abbrev tapeAt {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
+    (t : Tape (@Game.coin β C iF iN k) s) (c : C) : Tape (k c) (s c) :=
+  (show C × ((c : C) → Tape (k c) (s c)) from t).2 c
+
+/-- A tape of a coin node, averaged over a function of its value and the tape after `w` of it. -/
+theorem avg_tape_map {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
+    (s : Strategy (@Game.coin β C iF iN k)) (w : C → C) (Φ : (c : C) → Tape (k (w c)) (s (w c)) → ℝ≥0∞) :
+    avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (w (tapeVal s t)))) =
+      avg fun c => avg fun τ : Tape (k (w c)) (s (w c)) => Φ c τ := by
+  classical
+  haveI := fun c => Tape.instFintype (k c) (s c)
+  haveI := fun c => Tape.instNonempty (k c) (s c)
+  calc avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (w (tapeVal s t))))
+      = avg fun c => avg fun g : (c : C) → Tape (k c) (s c) => Φ c (g (w c)) :=
+        Tape.avg_prod (C := C) (D := (c : C) → Tape (k c) (s c)) fun t => Φ t.1 (t.2 (w t.1))
+    _ = avg fun c => avg fun τ : Tape (k (w c)) (s (w c)) => Φ c τ :=
+        congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) (w c) (Φ c))
+
 /-- A tape of a coin node, averaged over a function of its value and the tape after it. -/
 theorem avg_tape_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (Φ : (c : C) → Tape (k c) (s c) → ℝ≥0∞) :
-    avg (fun t : C × ((c : C) → Tape (k c) (s c)) => Φ t.1 (t.2 t.1)) =
-      avg fun c => avg fun τ : Tape (k c) (s c) => Φ c τ := by
-  classical
-  rw [Tape.avg_prod]
-  exact congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) c (Φ c))
+    avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (tapeVal s t))) =
+      avg fun c => avg fun τ : Tape (k c) (s c) => Φ c τ :=
+  avg_tape_map s (fun c => c) Φ
 
-open Classical in
 /-- A tape of a coin node, averaged over a function of the tape after a fixed value. -/
 theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (c₀ : C) (Φ : Tape (k c₀) (s c₀) → ℝ≥0∞) :
-    avg (fun t : C × ((c : C) → Tape (k c) (s c)) => Φ (t.2 c₀)) = avg Φ := by
-  classical
-  rw [Tape.avg_prod]
-  simp only [avg_const]
-  exact avg_coord (T := fun c => Tape (k c) (s c)) c₀ Φ
+    avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeAt s t c₀)) = avg Φ := by
+  have h := avg_tape_map s (fun _ => c₀) fun _ => Φ
+  simp only [avg_const] at h
+  exact h
 
 /-- **The law at a node** with the map `P` of uniform coins `R` and the term `G`: every bounded function of the play's
 output is on average at most its average at the mapped tape and uniform coins, plus `G`. -/
@@ -327,12 +346,9 @@ theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [N
   have hA : ∀ c, A c ≤ 1 := fun c =>
     (avg_mono fun τ => hH (Tape.out (k c) (s c) τ)).trans_eq (avg_const 1)
   have e₁ : ∀ r, avg (fun t : Tape (@Game.coin β C iF iN k) s =>
-      H (Tape.out _ s (placeCoin k (W (e r)) (f r) s t))) = avg fun c => B (W (e r) c) r := fun r => by
-    show avg (fun t : C × ((c : C) → Tape (k c) (s c)) =>
-      H (Tape.out (k (W (e r) t.1)) (s (W (e r) t.1)) (f r (W (e r) t.1) (s (W (e r) t.1)) (t.2 (W (e r) t.1))))) = _
-    rw [Tape.avg_prod]
-    exact congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) (W (e r) c)
-      fun τ => H (Tape.out (k (W (e r) c)) (s (W (e r) c)) (f r (W (e r) c) (s (W (e r) c)) τ)))
+      H (Tape.out _ s (placeCoin k (W (e r)) (f r) s t))) = avg fun c => B (W (e r) c) r := fun r =>
+    avg_tape_map s (W (e r)) fun c τ =>
+      H (Tape.out (k (W (e r) c)) (s (W (e r) c)) (f r (W (e r) c) (s (W (e r) c)) τ))
   have hB : ∀ p r r', Rel r r' → (avg fun c => B (W p c) r) = avg fun c => B (W p c) r' := fun p r r' hr =>
     congrArg avg (funext fun c => congrArg avg (funext fun τ => by rw [hf (W p c) r r' τ hr]))
   calc avg (fun t : Tape (@Game.coin β C iF iN k) s => H (Tape.out _ s t))
@@ -426,8 +442,8 @@ theorem freshVal_eq (c : FlockDeploy.Coin) (u : ℕ) (hu : u + 4 ≤ 65536) :
   show (c.at ((128 * u + j.val) / 128)).bit ((128 * u + j.val) % 128) =
     Flock.F128.bit (c ⟨u + ((finProdFinEquiv (m := 4) (n := 128)).symm j).1.val, _⟩)
       ((finProdFinEquiv (m := 4) (n := 128)).symm j).2.val
-  rw [h1, h2, finProdFinEquiv_symm_apply, Fin.coe_divNat, Fin.coe_modNat]
-  simp only [FlockDeploy.Coin.at, dif_pos h3]
+  rw [h1, h2, finProdFinEquiv_symm_apply]
+  simp only [Fin.coe_divNat, Fin.coe_modNat, FlockDeploy.Coin.at, dif_pos h3]
 
 /-- **A fresh coin's write is uniform and independent of the coins off its chunk.** -/
 theorem splits_fresh {K : ℕ} (i : Fin K) (u : ℕ) (hu : u + 4 ≤ 65536) :
@@ -690,8 +706,10 @@ theorem law_round {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → P
         placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
         (fun dr s₅ t₅ => rc r fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
           (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s) ?_
-      (law_write (R := Fin K → FlockDeploy.Coin) s (fun (e : Fin n → Fin 128 → Bool) dr => openW n (bitsOf e) dr)
-        _ _ hv ?_ fun dr => ?_)) ?_
+      (law_write (R := Fin K → FlockDeploy.Coin) s
+        (G := fun dr => gr fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
+          (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) (s dr))
+        (fun (e : Fin n → Fin 128 → Bool) dr => openW n (bitsOf e) dr) _ _ hv ?_ fun dr => ?_)) ?_
     · intro r t
       show placeCoin _ (fun dr => openW n (openBits (r j) u n) dr) _ s t = _
       rw [openBits_eq]
@@ -721,16 +739,16 @@ theorem law_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts :
   | 0, _, _, _, _, s => law_id _ s
   | _ + 1, _, _, _, _, ⟨none, _⟩ => law_id _ _
   | k + 1, fs, ts, pre, f, ⟨some (.fresh l, b), s'⟩ => by
-    refine law_send _ _ s' ?_
+    refine law_send _ _ _ ?_
     exact law_congr (fun r t => rfl) (law_fresh L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s => law_placeK k fs ts pre f s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f l b s')
   | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), s'⟩ => by
-    refine law_send _ _ s' ?_
+    refine law_send _ _ _ ?_
     exact law_congr (fun r t => rfl) (law_hello (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s => law_placeK k fs ts pre f s) fs ts pre f spec ν s')
   | k + 1, fs, ts, pre, f, ⟨some (.opening i sn n, b), s'⟩ => by
-    refine law_send _ _ s' ?_
+    refine law_send _ _ _ ?_
     exact law_congr (fun r t => rfl) (law_open L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s => law_placeK k fs ts pre f s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f i sn n b s')
@@ -757,7 +775,7 @@ theorem law_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
     (G := fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2)
     (fun s => by
       rcases s with ⟨m, s'⟩
-      refine law_send _ m s' ?_
+      refine law_send _ _ _ ?_
       exact law_congr (fun r t => rfl) (law_placeK L _ _ _ _ _ s')) σ
 
 /-- **`LawAt`**: the period's play is at most as likely, at every event, as the frame's play at a uniform tape and
