@@ -18,6 +18,7 @@ def _load(name: str, path: Path) -> tuple[Any, str]:
     key = f"{name}_{digest[:16]}"
     if key not in sys.modules:
         spec = importlib.util.spec_from_file_location(key, path)
+        assert spec is not None and spec.loader is not None
         mod = sys.modules[key] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
     return sys.modules[key], digest

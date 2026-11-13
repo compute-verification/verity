@@ -8,15 +8,19 @@ does not depend on its batch).  Two discriminating checks: the other dequantizat
 differ from steps.py somewhere on the inputs used here."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.engine import int8_checkpoint as I  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-
-from tests.engine import ppl_oracle as O  # noqa: E402
+from tests.engine import ppl_oracle as O
+from verity_vllm.engine import int8_checkpoint as I
+from verity_vllm.engine import int8_exact as E
 
 
 def _bf16(a: np.ndarray) -> torch.Tensor:
