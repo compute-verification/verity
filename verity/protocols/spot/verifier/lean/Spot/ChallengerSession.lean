@@ -304,6 +304,12 @@ private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
 /-- `j == Json.bool true`, by a match the kernel reduces (`BEq Json` is a `partial def`, opaque to the kernel). -/
 private def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
 
+/-- `j == Json.bool b`, by a match. -/
+private def jsonBoolIs (j : Json) (b : Bool) : Bool := match j with | .bool c => c == b | _ => false
+
+/-- `j == Json.arr #[]`, by a match. -/
+private def jsonEmptyList (j : Json) : Bool := match j with | .arr a => a.isEmpty | _ => false
+
 example : jsonTrue (getD (Json.mkObj [("closed", .bool true)]) "closed") = true := by decide
 example : jsonTrue (getD (Json.mkObj [("closed", .bool false)]) "closed") = false := by decide
 example : jsonTrue (getD (Json.mkObj [("files", .null)]) "closed") = false := by decide
@@ -417,7 +423,7 @@ private def escapesSurrogate (text : String) : Bool := Id.run do
   return false
 
 private def isOutcome (w : Json) : Bool :=
-  keys? w == some #["complete", "root", "session"] && (getD w "root" == Json.null || isDigest (getD w "root")) &&
+  keys? w == some #["complete", "root", "session"] && ((getD w "root").isNull || isDigest (getD w "root")) &&
     (match getD w "session" with | .str s => isSessionId s | _ => false) &&
     (match getD w "complete" with | .bool _ => true | _ => false)
 
@@ -432,7 +438,7 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
   | "end" =>
     (match getD b "closed" with | .bool _ => true | _ => false) &&
       (match getD b "files" with | .obj _ => (entries (getD b "files")).all (isDigest ·.2) | _ => false) &&
-      (!v2 || getD b "record_leaf" == Json.null || (nat? (getD b "record_leaf")).isSome)
+      (!v2 || (getD b "record_leaf").isNull || (nat? (getD b "record_leaf")).isSome)
   | "period-open" => nameAt (getD b "period") && nameAt (getD b "lane") && isDigest (getD b "key_sha512")
   | "period-close" =>
     nameAt (getD b "period") && nameAt (getD b "lane") &&
@@ -515,7 +521,7 @@ private def isReserve (b : Json) : Bool :=
     match int? (getD b "minutes"), getD b "started_utc" with
     | some m, .str t =>
       1 ≤ m && m ≤ MAX_MINUTES && (match later t m.toNat with
-        | some x => getD b "expires_utc" == Json.str x
+        | some x => jsonStrIs (getD b "expires_utc") x
         | none => false)
     | _, _ => false
 
@@ -607,7 +613,8 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
         let who := getD b "opened_by"
         let lane := if let .str w := who then some w else none
         let shown := (lane.map pyRepr).getD "no lane"
-        unless lane.any (fun w => w == strOf (getD rb "by") || field? rb "for" == some (Json.str w)) do
+        unless lane.any (fun w => w == strOf (getD rb "by") ||
+            (match field? rb "for" with | some j => jsonStrIs j w | none => false)) do
           throw s!"entry {i}: session {s} was opened by {shown}, not its reserve's prover"
         unless inReserve (getD b "started_utc") (strOf (getD rb "started_utc")) (strOf (getD rb "expires_utc")) do
           throw s!"entry {i}: session {s} was opened outside its reserve's minutes"
@@ -641,7 +648,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
           throw s!"entry {i}: period {name} is named twice, or lane {lane} has a period open"
         let cap := getD e.body "cap"
         let circuit := getD e.body "circuit"
-        if (cap != Json.null || circuit != Json.null) && !(isCap cap && isCircuit circuit) then
+        if (!cap.isNull || !circuit.isNull) && !(isCap cap && isCircuit circuit) then
           throw s!"entry {i}: period {name}'s cap is a positive integer and its circuit a SHA-512 in lowercase"
         periods := periods.push { name, lane, cap, circuit }
         current := current.push (lane, name)
@@ -654,12 +661,12 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
         let outcomes := p.windows.map fun ses =>
           let w := wins.find? (·.opened.session == ses)
           let complete := match w.bind (·.ended) with
-            | some x => getD x.body "complete" == Json.bool true
+            | some x => jsonTrue (getD x.body "complete")
             | none => false
           Json.mkObj [("complete", Json.bool complete), ("root", (w.map (Json.str ·.root)).getD Json.null),
             ("session", Json.str ses)]
-        let complete := !outcomes.isEmpty && outcomes.all (getD · "complete" == Json.bool true)
-        unless jeq (getD e.body "windows") (Json.arr outcomes) && getD e.body "complete" == Json.bool complete do
+        let complete := !outcomes.isEmpty && outcomes.all fun o => jsonTrue (getD o "complete")
+        unless jeq (getD e.body "windows") (Json.arr outcomes) && jsonBoolIs (getD e.body "complete") complete do
           throw s!"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes"
         periods := periods.modify k fun p => { p with closed := true }
         current := current.filter (·.1 != lane)
@@ -736,7 +743,7 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
   unless isDigest (getD b "commitment") && SEALED_FILES.all (fun f => (field? files f).isSome) do throw malformed
   let p := periods.find? (·.windows.contains s)
   if let some p := p then
-    if p.cap == Json.null || p.circuit == Json.null then
+    if p.cap.isNull || p.circuit.isNull then
       throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
   return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
             commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
@@ -775,7 +782,7 @@ def extendsHead (published ledger : Array Json) : Bool :=
 `null` when the verifier has none) passing `checked` under `key`, any two extending one another, and of them the first
 longest. -/
 def ledgerHead (heads : Json) (key : ChallengerKey) : V Json := do
-  if heads == Json.null || heads == Json.arr #[] then throw NO_AUDIT
+  if heads.isNull || jsonEmptyList heads then throw NO_AUDIT
   let .arr hs := heads | throw HEADS_FORM
   for (h, i) in hs.zipIdx do
     match checked h key with
