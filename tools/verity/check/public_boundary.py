@@ -359,13 +359,14 @@ class Tree:
             out += paths.get(p, [])
         return out + names.get(top, []) + [""]
 
-    def _module(self, name: str, f: str) -> list[str]:
-        """The files a Python import of ``name`` from ``f`` loads: its module (or package's `__init__.py`, or a namespace
-        package's directory) and each package's `__init__.py` above it, under the first root holding its top package."""
+    def _module(self, name: str, f: str, more: Iterable[str] = ()) -> list[str]:
+        """What a Python import of ``name`` from ``f`` names: its module (or package's `__init__.py`, or a namespace
+        package's directory), under the first root holding its top package: the file's own roots, then ``more``.  The
+        packages above it are that file's own `package` edges."""
         parts = name.split(".")
         if not parts[0] or parts[0] in sys.stdlib_module_names:
             return []
-        for r in self._roots(f, parts[0]):
+        for r in (*self._roots(f, parts[0]), *more):
             base = f"{r}/" if r else ""
             if f"{base}{parts[0]}.py" not in self.files and f"{base}{parts[0]}" not in self.dirs:
                 continue
