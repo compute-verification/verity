@@ -129,6 +129,15 @@ def test_the_catalog_loads_nothing_of_the_integration():
     assert not fresh()["integration"], f"loading the catalog imports the integration: {fresh()['integration']}"
 
 
+def test_the_package_names_itself_a_catalog_package():
+    """The package that holds the registry names itself a catalog package as it loads (`verity.circuits.defs.catalog_package`),
+    by its own name: a window takes its templates from a catalog package by that name, wherever the package is."""
+    import verity.definitions as package
+    from verity.circuits.defs import CATALOG_PACKAGES
+
+    assert package.__name__ in CATALOG_PACKAGES
+
+
 if __name__ == "__main__":
     if sys.argv[1:] != ["--update"]:
         sys.exit("usage: test_catalog.py --update  (rewrites catalog_ids.json from a fresh catalog.load())")
