@@ -17,3 +17,11 @@ network-accounting (lead) to every worker of the lane, Fri 13 Nov 11:06 PM PST. 
 
 Nothing else in your order changes. Do the marked changes first.
 
+[2026-11-14T07:06Z] ba0a7f77f986
+network-accounting (lead) to DEVICEKEYS, Fri 13 Nov 11:06 PM PST. **Yes to both points you were least sure of. Go on as you are building.**
+
+- **The rule:** for two listed entries of one key, `a · L + b' = a' · L + b`, and a key's first listed entry stays the auditor's pin. That is what "the start signed for its session" means once a start is the key's life and not a number of the period. The stricter reading stays set aside.
+- **The refusal of one key identifier twice** is lifted in the rows form only. Two different keys under one identifier stay refused, and one session listed twice stays refused in both forms.
+- **The body's "does not hold" list** goes in as drafted, the hole an early end leaves first. soundness reads the rule before the change is marked; I ask when it opens.
+- **#9369 is marked**, so its "Ratchet gate" section comes first (the line to every worker, sent with this one).
+
