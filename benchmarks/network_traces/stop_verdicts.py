@@ -172,8 +172,15 @@ only where that rate is `EVERY_BLOCK` for both, and each of the two records says
 class at its whole schedule, with a line that names which: the registration the class's verdicts name not handed;
 a record that names no registration of its stream, or one not handed; a stream's registration that follows
 another record or none; one whose sampling design is no subset of K of its population; another rate registered;
-and a verdict that names no rate or another than the registered one. So a verdict that states `EVERY_BLOCK` under
-a registration that says otherwise is refused by name. A failure is final for what its verdict speaks for, which
+a stop record's population that is not the head's count of the class; and a verdict that names no rate or another
+than the registered one. So a verdict that states `EVERY_BLOCK` under a registration that says otherwise is
+refused by name.
+
+The stop record's population is held to the head's count of the class (`class_charge.count`), with nothing taken
+off: the stop record is of every row of the class and of no other, and every block of a population of another
+size is `EVERY_BLOCK` all the same, so the rate alone doesn't say it. Equal numbers don't make the two one
+population: what holds a block to its row is the response tie's read of that row, and the reader holds nothing of
+it. The response tie's population is not held to the count here. A failure is final for what its verdict speaks for, which
 at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the whole
 registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran to a
 verdict and holds no class to a rate. The certified read is over no sampled population, and the rate of the
@@ -363,11 +370,12 @@ def _one_phase(a: C.Head, b: C.Head, of_a: set[str], of_b: set[str]) -> str | No
 Read = Sequence[tuple[str, Mapping[str, Any]]]
 
 
-def _unrated(read: Read, served: Mapping[str, Mapping[str, Any]]) -> list[str]:
+def _unrated(read: Read, served: Mapping[str, Mapping[str, Any]], count: int) -> list[str]:
     """What keeps a class the rule charges below from being held, by the rate (the module docstring's "The rate"),
-    from its records on its head: empty where the registration they name was handed, and each stop record and
-    response tie among them names its own stream's registration, which was handed, follows that one and registers
-    `EVERY_BLOCK`, and says it ran at that."""
+    from its records on its head and the head's count of the class: empty where the registration they name was
+    handed, and each stop record and response tie among them names its own stream's registration, which was
+    handed, follows that one and registers `EVERY_BLOCK`, a stop record's of a population of ``count``, and says
+    it ran at that."""
     name = read[0][1][CC.REGISTRATION]
     if name not in served:
         return [f"the registration its verdicts name, `{name}`, is not among the serves' registrations read "
@@ -393,6 +401,9 @@ def _unrated(read: Read, served: Mapping[str, Mapping[str, Any]]) -> list[str]:
         else:
             if registered != EVERY_BLOCK:
                 lacks.append(f"{who} is registered at `{registered}`, not `{EVERY_BLOCK}`")
+            elif kind == CC.STOP_RECORD and (n := served[stream][POPULATION]) != count:
+                lacks.append(f"{who} is registered over a population of {n}, and the head counts {count} row(s) of "
+                             f"the class: `{EVERY_BLOCK}` of it is not every row of the class and no other")
             if record.get(RATE) != registered:
                 ran = record.get(RATE)
                 lacks.append(f"{who} " + (f"states `{ran}`" if _named(ran) else f"names no rate (`{RATE}`)")
@@ -597,7 +608,7 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
             "serve": [f"{at}: held to its whole schedule by its serve: its verdict records name {len(named)} serves, "
                       f"not one ({', '.join(named)}), and an execution phase is one serve's"] if len(named) > 1 else [],
             "rate": [f"{at}, class {c.cls}: held to its whole schedule by the rate: {'; '.join(lacks)}"
-                     for c, read in rows if (lacks := _unrated(read, by_digest))],
+                     for c, read in rows if (lacks := _unrated(read, by_digest, c.count))],
             "control": [f"{at}: held to its whole schedule by a control: {'; '.join(wants)}"] if wants else [],
             "head": again,
             "unread": [f"{at}: held to its whole schedule by a record that doesn't read: its serve was not launched "

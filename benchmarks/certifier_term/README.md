@@ -204,6 +204,8 @@ The reader holds what the rule charges below to two more things, which the rule 
   rate. The rate is the registration's and never the verdict's own word, so a verdict that states `1/1` under a
   registration that says otherwise is refused by name. So is a record that names no registration of its stream, a
   registration that was not handed, one that follows another record, and one whose sampling design is no subset.
+  The stop record's `population` is held to the head's count of the class: the stop record is of every row of the
+  class and of no other, which `1/1` of a population of another size doesn't say.
   A failure is final for what its verdict speaks for, one execution phase's class at `1/1`; a rate below `1/1`
   widens the failure to the whole registered population, for when the reader takes one. The rate of the compute
   audit's second stage is not held here.
