@@ -1459,8 +1459,9 @@ def failuresSampled (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json
 
 /-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot
 of its part. Where the design is derived and one is of only its part's sampled proof blocks (`anySampled`), the same
-failures in the same order, that statement held to `sampledCodes` (`failuresSampled`). No theorem is about this
-function yet: `check_ok` and what follows from it are about `check`. -/
+failures in the same order, that statement held to `sampledCodes` (`failuresSampled`). Its theorems say what a pass
+says (`checkAny_ok` and what follows from it) and that it is `check` where no statement is of that shape
+(`checkAny_eq_check`); no guarantee reads it. -/
 def checkAny (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
   match own.parts, stmts with
   | some ps, some ss =>
