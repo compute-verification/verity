@@ -912,6 +912,7 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
 def test_verity_bench_overhead_is_the_door_s_runner(tmp_path, monkeypatch, capsys):
     """`verity bench overhead` runs benchmarks/overhead/run.py, which is `verity-bench overhead`."""
 
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "empty"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path).config))
     monkeypatch.setattr(sys, "argv", ["run.py", "table", "--json", "--local-only"])
