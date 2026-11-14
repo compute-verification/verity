@@ -1438,25 +1438,25 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         if selection:
             try:
                 c.lints, failures = base_lints(c, selection, after)
-                found = violations(failures)
-                if found:
-                    as_named = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
-                    at_base = placed_at(as_named, moved)
-                    names = dict(zip(at_base, as_named))
-                    inherited, new = beyond(found, at_base)
-                    had, found = set(at_base) | (set(found) - set(new)), new
-                    inherited = [names.get(v, v) for v in inherited]
-                    like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
-                    if found and rekeyed:
-                        again = beyond(violations(base_lints(c, selection, like)[1]), at_base)[1]
-                        if len(again) < len(found):
-                            found, c.pooled = again, c.pooled + rekeyed
-                    found, admitted, places = at_new_modules(c, selection, after, found, had)
-                    found, based = own_copies(c, selection, found)
             except GitError as e:
                 if not early:
                     raise
-                found, unrun = [], f"; the base's lints didn't run on it ({e})"
+                failures, unrun = [], f"; the base's lints didn't run on it ({e})"
+            found = violations(failures)
+            if found:
+                as_named = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
+                at_base = placed_at(as_named, moved)
+                names = dict(zip(at_base, as_named))
+                inherited, new = beyond(found, at_base)
+                had, found = set(at_base) | (set(found) - set(new)), new
+                inherited = [names.get(v, v) for v in inherited]
+                like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
+                if found and rekeyed:
+                    again = beyond(violations(base_lints(c, selection, like)[1]), at_base)[1]
+                    if len(again) < len(found):
+                        found, c.pooled = again, c.pooled + rekeyed
+                found, admitted, places = at_new_modules(c, selection, after, found, had)
+                found, based = own_copies(c, selection, found)
     if not (early or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
