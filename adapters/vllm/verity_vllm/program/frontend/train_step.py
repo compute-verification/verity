@@ -18,7 +18,7 @@ At a compute capability (`cc`) the step is traced as that GPU runs it (`export_s
 own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16); an attention call
 the card gives its flash kernel is that kernel's op, which autograd pairs with the kernel's backward, one it gives its
 memory-efficient kernel is that kernel's op, which no rule lowers, and one whose kernel the trace can't name is refused
-(`_CardSdpa`, which takes every attention backend on: a step exported with one switched off is refused); and the two
+(`_CardSdpa`, which takes torch's attention settings at their defaults: a step exported otherwise is refused); and the two
 settings its calls run under that the traced graph doesn't show are the rules': TF32 (cuda.matmul.allow_tf32, `tf32`) and
 deterministic algorithms (`deterministic`), which the flash backward reads.
 
@@ -170,11 +170,27 @@ _FLASH, _FUSED = (torch.float16, torch.bfloat16), (torch.float16, torch.bfloat16
 
 #: the backends `torch.backends.cuda` switches, each read by `<name>_sdp_enabled()` and set by `enable_<name>_sdp`
 _SDP_BACKENDS = ("flash", "mem_efficient", "math", "cudnn")
+#: torch's default priority order of the backends, by `SDPBackend` name (the last is the backend of non-CUDA devices)
+_SDP_ORDER = ("FLASH_ATTENTION", "EFFICIENT_ATTENTION", "MATH", "CUDNN_ATTENTION", "OVERRIDEABLE")
 
 
-def _sdp_off() -> list[str]:
-    """The switches of `torch.backends.cuda` that are off now, by the name that sets each: `_CardSdpa` takes every one on."""
-    return [f"torch.backends.cuda.enable_{n}_sdp" for n in _SDP_BACKENDS if not getattr(torch.backends.cuda, f"{n}_sdp_enabled")()]
+def _sdp_unlike_card() -> list[str]:
+    """torch's attention settings now that differ from those `_CardSdpa` takes, each with its cure: every backend switched on,
+    the backends in torch's default priority order, and no flash attention implementation activated, so that the flash op is
+    the FA2 kernel the rules lower. The order is read from `torch._C`, which has no public getter for it at the pinned torch."""
+    import torch.nn.attention as attention
+    from torch.nn.attention import SDPBackend
+
+    unlike = []
+    if off := [n for n in _SDP_BACKENDS if not getattr(torch.backends.cuda, f"{n}_sdp_enabled")()]:
+        unlike.append(", ".join(f"torch.backends.cuda.enable_{n}_sdp" for n in off) + " off: export it with each on")
+    if (order := tuple(SDPBackend(i).name for i in torch._C._get_sdp_priority_order())) != _SDP_ORDER:
+        unlike.append(f"the backends' priority order {list(order)}, not torch's default {list(_SDP_ORDER)}: export it outside "
+                      "any `sdpa_kernel(..., set_priority=True)`")
+    if (impl := attention.current_flash_attention_impl()) is not None:
+        unlike.append(f"the flash attention implementation {impl!r} activated: call "
+                      "torch.nn.attention.restore_flash_attention_impl() before the export")
+    return unlike
 
 
 def _efficient_takes(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor | None, gqa: bool) -> bool:
@@ -191,7 +207,8 @@ def _efficient_takes(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: to
 class _CardSdpa(TorchFunctionMode):
     """`F.scaled_dot_product_attention` as torch's composite dispatches it on a CUDA device of sm_80 to sm_121 whose order of
     backends is torch's default, flash, memory-efficient, math and cuDNN (torch puts cuDNN first only on some sm_9x and sm_10x
-    cards), every backend enabled (`export_step` refuses a step exported with one off). A call with 3-D q, k and v is the call
+    cards), every backend enabled and no flash attention implementation activated (`export_step` refuses a step exported
+    otherwise). A call with 3-D q, k and v is the call
     on a batch of one, its output that batch's. A call with no mask whose q, k and v are 4-D f16 or bf16 tensors is the flash
     kernel's op, `aten._scaled_dot_product_flash_attention`, at the head dim padded to a multiple of 8 and the scale written out
     (1 / sqrt(D) by default), its output cut back to D; autograd pairs it with
@@ -285,14 +302,15 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | to
     as a GPU runs it (`_gpu_branches`): its CUDA branches, its attention the card's fused kernel where the card takes one, and the
     layout's `tf32` and `deterministic` the cuda.matmul.allow_tf32 its calls and the deterministic algorithms its flash attention
     ran under, each of which must be one setting for the whole step (a step that changes one between calls is refused). A `gpu`
-    step exported with an attention backend switched off is refused: the trace enters `sdpa_kernel(SDPBackend.MATH)`, under which
-    the step's own switches can't be read, and `_CardSdpa` takes every backend on."""
+    step exported with an attention backend switched off, the backends in another priority order or a flash attention
+    implementation activated is refused (`_sdp_unlike_card`): the trace enters `sdpa_kernel(SDPBackend.MATH)`, under which the
+    step's own switches can't be read, and `_CardSdpa` takes torch's defaults."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
-    if gpu and (off := _sdp_off()):
-        raise ValueError(f"export_step: the step is exported with {', '.join(off)} off, and a step traced as a GPU runs it takes "
-                         "every attention backend on, as torch's default leaves them: export it with each on")
+    if gpu and (unlike := _sdp_unlike_card()):
+        raise ValueError("export_step: a step traced as a GPU runs it takes torch's attention settings at their defaults, and "
+                         f"this one is exported with {'; and with '.join(unlike)}")
 
     adamw = AdamW.from_torch(optimizer) if isinstance(optimizer, torch.optim.Optimizer) else optimizer
     wrap = _Loss(model, loss_fn)
