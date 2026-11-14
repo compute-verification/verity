@@ -375,7 +375,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 - The local bounds' caps `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
   `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
   floor `InferenceOnly.Guarantees.CapabilityFloor`: **proved**
-  (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
   structure and bound is surveyed in `security/Definitions/Slowdown/Capability/README.md`.
 - Their premises, `InferenceOnly.Assumptions.CoversEfficientMethods`, `Slowdown.Assumptions.DescriptionHard` (or
   `Slowdown.Assumptions.MinEntropyHard`) and the wiring property `Slowdown.Capability.Consumers.Upstream`, are named assumptions in

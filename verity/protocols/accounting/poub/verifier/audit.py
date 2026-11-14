@@ -675,13 +675,13 @@ class Record:
         if self.samples is None:
             return
         if type(self.samples) is not int or self.samples < 1:
-            raise ValueError("a record's samples, the receipts every draw requested, is a positive integer")
+            raise ValueError("a record's samples, the receipts every sample requested, is a positive integer")
         g = self.groups_per_coin
         for a in range(0, len(self.windows), g):
             ws = self.windows[a:a + g]
             u, sampled = sum(w.receipts for w in ws), sum(w.profile.drawn["receipt"] for w in ws)
             if sampled != min(self.samples, u):
-                what = f"window {ws[0].window}" if g == 1 else f"the draw of windows {ws[0].window}…{ws[-1].window}"
+                what = f"window {ws[0].window}" if g == 1 else f"the sample of windows {ws[0].window}…{ws[-1].window}"
                 raise ValueError(f"{what} drew {sampled} of its {u} receipts, not min({self.samples}, {u}) at the "
                                  "record's samples")
 
@@ -809,7 +809,7 @@ class AuditRun:
         if (type(coins_) is not coins.SessionCoins or coins_.registration != registration.digest
                 or coins_.windows != params.windows or coins_.per_coin != params.groups_per_coin):
             raise ValueError(f"the challenger's coins are not this session's: {params.windows} windows' coins, "
-                             f"{params.groups_per_coin} a draw, for this registration")
+                             f"{params.groups_per_coin} a sample, for this registration")
         self.params, self.registration, self.coins = params, registration, coins_
         self.tiles = _tiles(tiles, registration.bind)
         self.clock, self.not_before_ns = clock, not_before_ns
@@ -1092,7 +1092,7 @@ class AuditRun:
             raise SessionError(f"window {t} is not open to draw")
         group = self.params.draw_of(t)
         if t != group[-1]:
-            raise SessionError(f"window {t} is drawn with its draw's last window, {group[-1]}")
+            raise SessionError(f"window {t} is sampled with its sample's last window, {group[-1]}")
         if any(v.draws is None for v in self.windows[:group[0]]):
             raise SessionError("windows are drawn in order: a window's first pass chains from the window before")
         d = self.deadline(t)
@@ -1374,7 +1374,7 @@ class Registry:
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
             raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "
-                                "second draws no codec seed until the verifier closes the first and counts its sessions")
+                                "second gets no codec seed until the verifier closes the first and counts its sessions")
         if _bind(kw.get("bind", False)):
             raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
                              "(Poub, in Lean) covers receipts of a block alone")
@@ -1391,7 +1391,7 @@ class Registry:
         for a registration that isn't its node's live one, sampled here."""
         x = self._live.get(getattr(registration, "node", None))
         if x is None or x.registration is None or x.registration != registration:
-            raise RegistryError("a session runs over its node's live registration, drawn by this registry")
+            raise RegistryError("a session runs over its node's live registration, issued by this registry")
         k = len(x.sessions)
         if index is not None and index != k:
             raise RegistryError(f"the registration's next session is {k}, not {index}")
@@ -1799,9 +1799,9 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                              "chosen after the seed are advice no term charges")
         epsilon, link_delta = requirement.epsilon, requirement.delta
         if type(epsilon) not in (int, float) or not 0 <= epsilon <= 1:
-            raise ValueError("a link's epsilon is the share of its credit its units' draw leaves unproved, 0 to 1")
+            raise ValueError("a link's epsilon is the share of its credit its units' sample leaves unproved, 0 to 1")
         if type(link_delta) not in (int, float) or not 0 <= link_delta < 1:
-            raise ValueError("a link's delta is the probability its units' draw fails, at least 0 and below 1")
+            raise ValueError("a link's delta is the probability its units' sample fails, at least 0 and below 1")
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
     if type(rebuild) is not Rebuild:

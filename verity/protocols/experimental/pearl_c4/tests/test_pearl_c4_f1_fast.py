@@ -3,19 +3,14 @@ of C (certified modal byte, 4-lookup lower bound on p_t, safe-side charge for un
 (`pearl_c4.change_probabilities`) to float rounding on every row checked, with R1's decisions unchanged."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 from fractions import Fraction
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "prover" / "clear"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "verifier" / "tests"))
 import pearl_c4_vectors as V
 import test_pouw_pearl_c4 as T
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 import clear_work as CW
 from verity.protocols.experimental.pearl_c4.prover import f1_fast as Q

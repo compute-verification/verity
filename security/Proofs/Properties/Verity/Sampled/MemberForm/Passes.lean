@@ -149,9 +149,11 @@ theorem headerHeld_instances {rec hd : Json} (h : _root_.Spot.OneStageZk.headerH
   unfold _root_.Spot.OneStageZk.headerHeld at h
   dsimp only at h
   split at h
-  · rename_i he
-    exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
   · cases h
+  · split at h
+    · rename_i he
+      exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
+    · cases h
 
 /-- A member's slice of the registration names the member's units' count as its population. -/
 theorem slice_population (vm : _root_.Spot.OneStageZk.Member) (rec : Json)
