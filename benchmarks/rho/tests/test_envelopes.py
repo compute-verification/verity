@@ -402,18 +402,39 @@ def test_every_uncertified_term_is_keyed_by_the_route_it_escapes_by():
 def test_pouws_delta_splits_into_coins_and_cryptography():
     """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
     theorem's `δ = p/ε'` (2.7e-8 at `ε' = 10⁻⁴` with the cryptography's two terms assumed at `δ_s` each, so
-    `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`."""
+    `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`. The windows' knowledge errors `Σ_t ks_t`
+    (`DampenerRemotePeriod`) add `⌈period / window_s⌉ window_ks` to the cryptography, remote only."""
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)
     window = float(WINDOW_DELTA)
     assert d.coin == pytest.approx(window / remote.pouw.eps_agg)
-    assert d.crypto == pytest.approx(2 * d.coin)
-    assert d.coin + d.crypto == pytest.approx(3 * window / 1e-4)
+    assert d.by["pouw"][1] == pytest.approx(2 * d.coin)
+    assert d.coin + d.by["pouw"][1] == pytest.approx(3 * window / 1e-4)
+    windows = math.ceil(ctx.period.seconds / 3600)
+    assert (remote.window_s, remote.window_ks, remote.windows(ctx)) == (3600, 2 * window, windows)
+    assert d.by["windows"] == (0.0, pytest.approx(windows * 2 * window))
+    assert d.crypto == pytest.approx(d.by["pouw"][1] + windows * 2 * window)
+    assert "windows" not in envelopes.regime(REG, "onsite").delta(ctx).by
     assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
     assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
         == (0.0, 0.0)
+
+
+def test_detection_refuses_an_escape_tail_above_p_evade_and_names_the_cure():
+    """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`, about `J p_evade^luck`: at the registry's luck 8 it is far
+    below `p_evade`; at luck 1 with 1,000 identities it is above it, and `delta` refuses, naming the luck that cures
+    it, `1 + ln J / ln(1/p_evade)`, which passes."""
+    ctx = context("reference-h200")
+    d = envelopes.regime(REG, "remote-sampled").detection
+    assert 0 < d.tail() < d.p_evade ** 7 and d.delta(ctx) == (d.p_evade, 0.0)
+    assert envelopes.regime(REG, "remote").detection.tail() == 0.0
+    bad = dataclasses.replace(d, luck=1.0, identities=1000.0)
+    cure = 1 + math.log(1000) / math.log(1 / d.p_evade)
+    with pytest.raises(ValueError, match=f"luck to at least {cure:.3g}"):
+        bad.delta(ctx)
+    assert dataclasses.replace(bad, luck=cure).delta(ctx) == (d.p_evade, 0.0)
 
 
 @pytest.mark.parametrize(("scenario", "per"), [("reference-onsite-h200", "hosts"),
