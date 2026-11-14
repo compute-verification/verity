@@ -191,7 +191,7 @@ theorem stmtOf_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sa
 
 theorem shapeOf_rawOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : SampledTwoDesc.Ref}
     (h : SampledTwoDesc.refOf p bs t = .ok R) (hf : SampledTwoDesc.fits R = true) :
-    shapeOf (rawOf R).encode = R.sts.toList.map (·.m) := by
+    shapeOf (rawOf R).encode = R.sts.toList.map (fun st => (st.wideLeaf, st.m)) := by
   unfold shapeOf
   rw [setupOf_rawOf h hf]
 
@@ -209,7 +209,11 @@ theorem templateOk_of {h : Held} {t : ℕ} {p : SampledTwo.Params} {bs : Core.Bl
   unfold templateOk
   rw [hx, readOf_rawOf hR hf, shapeOf_rawOf hR hf]
   simp only [tags_insOfRef hR, stmt_insOfRef hR]
-  exact hT
+  unfold SampledTwoDesc.templateOk at hT
+  -- `shapeOf` now carries each table's wide-leaf tag beside its size, so `templateOk`'s one-table clause reads the
+  -- length of the `(wideLeaf, m)` list; the reference check reads the length of the `m` list. `List.length_map`
+  -- sends both to `R.sts.toList.length`.
+  simpa only [List.length_map] using hT
 
 /-! ## The reference statements -/
 

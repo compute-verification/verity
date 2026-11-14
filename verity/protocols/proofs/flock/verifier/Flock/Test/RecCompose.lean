@@ -117,7 +117,7 @@ def tampered : List Shared :=
 #guard tampered.all fun s => s != sh
 #guard tampered.all fun s => !passes 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 s)))
 #guard why 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 { sh with transcript := some (hex 'f') }))) ==
-  s!"alg-p0: its inner_transcript (the coin server's transcript, --rec-inner-transcript) is {hex 'f'}, not {hex '6'} as the first part's"
+  s!"alg-p0: its inner_transcript (the challenger's live-coin part's transcript, --rec-inner-transcript) is {hex 'f'}, not {hex '6'} as the first part's"
 #guard why 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 { sh with innerProgram := some (hex 'f') }))) ==
   s!"alg-p0: its inner_program (the verifier's program of the inner statement, --rec-inner-program) is {hex 'f'}, not none as the first part's"
 #guard (Shared.ofJson? (sh.toJson.setObjVal! "inner_program" (.num 3))).isNone

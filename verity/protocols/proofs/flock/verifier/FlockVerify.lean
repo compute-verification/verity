@@ -668,7 +668,7 @@ record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
   let [f] := args | IO.eprintln "usage: verity-verify-proof rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
-  let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the coin server's record format"; return 1
+  let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the challenger's live-coin part's record format"; return 1
   let hex := fun (b : List UInt8) =>
     Lean.Json.str ((RecRecord.hexW b).foldl (fun s c => s.push (Char.ofNat c.toNat)) "")
   let arr := fun {α : Type} (f : α → Lean.Json) (l : List α) => Lean.Json.arr (l.map f).toArray

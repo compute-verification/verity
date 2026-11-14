@@ -1,16 +1,13 @@
 # The retired word "firewall" in `benchmarks/` outside the proof system's directories, in the Glossary's words: what
 # `tools/move/rename.py --map tools/move/firewall_words_map.toml` renames. GLOSSARY.md: "firewall"; `flock-firewall`,
-# `Flock.Firewall`, `FC_FIREWALL*`, until renamed -> the ZK server. `zk_server_map.toml` renamed the rest of the tree;
-# this map takes its spellings wherever a name crosses into the proof system:
-# - the names the proof system now spells otherwise: `FC_FIREWALL*` -> `FC_ZK_SERVER*`, `flock-firewall` and
-#   `core-firewall` -> `flock-zk-server` and `core-zk-server`, `--firewall` and `--firewall-state` -> `--zk-server` and
-#   `--zk-server-state`, `FIREWALL-REFUSED` and `FIREWALL-TIMES` -> `ZK-SERVER-REFUSED` and `ZK-SERVER-TIMES`, the
-#   timing key `t.firewall*` -> `t.zk_server*`;
-# - the names these benchmarks define: `H1_FIREWALL`, `H1S_FIREWALL` (with `_TGZ` and `_TGZ_DIR`), `H1S_UNFIREWALLED`
-#   and `SC_FIREWALL_B` -> `H1_ZK_SERVER`, `H1S_ZK_SERVER`, `H1S_NO_ZK_SERVER` and `SC_ZK_SERVER_B`; `recorded.py`'s
-#   flag `--firewall` (`--zk-server`, read as `a.zk_server`); `warden_zk.firewall` (`zk_server`); and the files a run
-#   writes (`build-firewall.log`, `firewall.sha256`, `firewall.txt`, `firewall-rss.txt`, the hidden-ZK cache directory);
-# - the word in prose, comments, log lines and refusals (`firewall` -> `ZK server`, `firewalled` by its phrase).
+# `Flock.Firewall`, `FC_FIREWALL*`, until renamed -> the ZK server. The word and every name the proof system spells
+# (`FC_FIREWALL*`, `flock-firewall`, `--firewall`, `t.firewall*`, `H1_FIREWALL`, `H1S_*FIREWALL*`, `SC_FIREWALL_B`,
+# `a.firewall`, `WZ.firewall`, `build-firewall.log`, ...) are `zk_server_map.toml`'s rows, and `def firewall` is
+# `network_vocabulary_map.toml`'s: one map holds each word (`tools/move/tests/test_maps.py`). This map holds only what
+# those give otherwise:
+# - two phrases of "firewalled", which read "behind the ZK server";
+# - the warden's party in `compile_slice_zk`'s environment, `WZ, "firewall"` -> `WZ, "zk_server"`;
+# - the files a run writes, `firewall.sha256` and `firewall.txt` -> `zk-server.sha256` and `zk-server.txt`.
 # It leaves ([rewrite], [keep]):
 # - the proof system's own directories (`verity/protocols/proofs/`, `security/`, and proofs' under `benchmarks/`), the
 #   rest of the tree, which `zk_server_map.toml` covers, `benchmarks/recursion_e2e/` and `recursion_figures/`, renamed
@@ -23,44 +20,11 @@
 #   `firewall_peak_rss_gb`, the SPOT party `firewall` (`"firewall"`, `GATE_ABSENT=firewall`), and domain tags.
 
 [words]
-# --- phrases of "firewalled", before the word
 "A firewalled prover's environment" = "The environment of a prover behind the ZK server"
-"a firewalled prover's Lean Hello" = "the Lean Hello of a prover behind the ZK server"
 "the first firewalled lane" = "the first lane behind the ZK server"
-"firewalled session" = "ZK server session"
-"firewalled" = "ZK server"
-
-# --- names the proof system spells as `zk_server_map.toml` does
-"FC_FIREWALL" = "FC_ZK_SERVER"
-"FIREWALL-REFUSED" = "ZK-SERVER-REFUSED"
-"FIREWALL-TIMES" = "ZK-SERVER-TIMES"
-"flock-firewall" = "flock-zk-server"
-"core-firewall" = "core-zk-server"
-"--firewall-state" = "--zk-server-state"
-"--firewall" = "--zk-server"
-"t.firewall" = "t.zk_server"
-
-# --- the names these benchmarks define
-"H1S_UNFIREWALLED" = "H1S_NO_ZK_SERVER"
-"H1S_FIREWALL" = "H1S_ZK_SERVER"
-"H1_FIREWALL" = "H1_ZK_SERVER"
-"SC_FIREWALL_B" = "SC_ZK_SERVER_B"
-"a.firewall" = "a.zk_server"
-"def firewall" = "def zk_server"
-"env=firewall" = "env=zk_server"
-"WZ.firewall" = "WZ.zk_server"
 "WZ, \"firewall\"" = "WZ, \"zk_server\""
-
-# --- the files a run writes
-"build-firewall.log" = "build-zk-server.log"
-"firewall-rss.txt" = "zk-server-rss.txt"
 "firewall.sha256" = "zk-server.sha256"
 "firewall.txt" = "zk-server.txt"
-"HZ_CACHE/firewall-" = "HZ_CACHE/zk-server-"
-
-# --- the word
-"firewalls" = "ZK servers"
-"firewall" = "ZK server"
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",

@@ -812,7 +812,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         from . import tmpl as TM
 
         if definition is not None:
-            raise ValueError(f"{low.name}: a unit class (META definition) has no templated statement: the verifier refuses one")
+            raise ValueError(f"{low.name}: a proof-block class (META definition) has no templated statement: the verifier refuses one")
         if template is None:
             template, stats = TM.emit(TM.of_layout(low.layout, low.name))
             order = stats["order"]

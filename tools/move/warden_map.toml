@@ -7,7 +7,7 @@
 # name of the relay takes the whole term: `warden` becomes `network_certifier` and `Warden` `NetworkCertifier`, as a name
 # or one part of one (`network_certifier.py`, `NetworkCertifierParams`, `network_certifier_serve.py`). A test file
 # `test_network_certifier_warden*.py` loses the word rather than repeat the term. The two Lean modules named for the word
-# are named for what they define, the cells (`NetworkCertifier.Cells`), and the link-window's constructor is
+# are named for what they define, the cells (`Certifier.Cells`), and the link-window's constructor is
 # `Kind.networkCertifier`.
 #
 # Only a word that renames a path, a module or a Lean declaration is here, since `move_check.py` certifies no other
@@ -28,7 +28,7 @@
 #   rows and every kept run that a later step reads;
 # - the gate's verb `warden-rehearse`, which the deployed gate serves, so it changes with the gate's own deployment;
 # - `warden-fails`, the link name of a window's fails certificate (`<link>-fails`), which signed certificates hold;
-# - five public items' reasons (`service.py`'s `PUBLIC_WARDEN`, three of `tie_service.py`'s, one of `scan_zk.spec_of`'s),
+# - six public items' reasons (`service.py`'s `PUBLIC_WARDEN`, four of `tie_service.py`'s, one of `scan_zk.spec_of`'s),
 #   which a spec's digest takes in and the verifier holds a registered stream's spec to: a new format version, and every
 #   registration made under it;
 # - the trace corpus's labels `warden-heavy` and `warden-smallkv`: the corpus artifact and the fixture cut from it.
@@ -48,16 +48,16 @@
 
 [[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
 files = ["verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean",
-         "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
-         "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean"]
+         "security/Properties/Certifier/Check/TransferBlocks.lean",
+         "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean"]
 
 [words_in.words]
 "warden" = "networkCertifier"
 
 [words]
 "Kind.warden" = "Kind.networkCertifier"
-"NetworkCertifier/Warden" = "NetworkCertifier/Cells"
-"NetworkCertifier.Warden" = "NetworkCertifier.Cells"
+"Certifier/Warden" = "Certifier/Cells"
+"Certifier.Warden" = "Certifier.Cells"
 "Warden.lean" = "Cells.lean"
 "test_network_certifier_warden" = "test_network_certifier"
 "warden" = "network_certifier"
@@ -112,7 +112,8 @@ strings = [
     "the warden's domain (`warden_rows.domain`), which binds the session, the ",
     "the warden's salted root over the window's bucket rows, its signed head's",
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
-    "the round's provenance: the group's link-windows of the warden's run",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
 ]
 
 [rewrite]
