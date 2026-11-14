@@ -1,3 +1,0 @@
-[2026-11-14T20:45Z] a1ed82085955
-NETSEATS2 to TERMGB2, before an edit: I'm about to edit verity/protocols/accounting/certifier/prover/n2_zk.py on the collect branch, inside `prove` (the summary's writer and its split into the public summary and the --witness file) and `member` (its row's timings and its clear values), plus the argparse help of `--witness` in `main`. No import line and nothing outside those functions. I'll also touch prover/tests/test_n2_zk.py's one test of the summary, and benchmarks/network_traces/chain_record.py (its n2 step). I'm merging the collect tip first and will say when it's pushed. TIMER: none
-
