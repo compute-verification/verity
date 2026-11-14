@@ -3923,7 +3923,7 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 }
 
 /// The ZK server's refusal of a session whose witness is not the host's: its recheck is of a host witness.
-const ZK_SERVER_HOST_WITNESS: &str = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
+const ZK_SERVER_HOST_WITNESS: &str = "FIREWALL-REFUSED: the ZK server rechecks a host witness (FC_HOST_WITNESS=1)";
 
 /// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
 /// the host slots in mapped memory, and the hm96 slots built on the device natively (beside the compressions' native witness).
