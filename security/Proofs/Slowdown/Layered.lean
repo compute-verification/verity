@@ -7,8 +7,8 @@ public import Proofs.Slowdown.Threads
 # Proofs that keyed circuits are threaded
 
 Fix a small subcircuit `R` and a thread `t`. Following keys from any value of `t` in `R` reaches either a value of `t`
-that `R` reads (where the path leaves `R`) or a stop in `R` (`walk`). Each leg of a root in `R` does so too, and two legs
-never reach the same value, so a root of `t` in `R` gives `d ≤ #(t's reads) + #(t's lookups in R)`, by induction down
+that `R` reads (where the path leaves `R`) or a stop in `R` (`walk`). Each fan-in read of a root in `R` does so too, and two fan-in
+reads never reach the same value, so a root of `t` in `R` gives `d ≤ #(t's reads) + #(t's lookups in R)`, by induction down
 the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of fresh inputs, so `R` holds at most `E` of
 them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircuit that reads fewer than `d − E` values of
 `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read (at most `e` each)
@@ -99,11 +99,11 @@ theorem root_reads (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R �
   induction r using WellFoundedLT.induction with
   | _ r ih =>
     intro hrR hroot hrt
-    have hleg : ∀ p ∈ L.legs r, ∃ u, KeyPath L.key (L.roots ∪ L.lookups) p u ∧
+    have hleg : ∀ p ∈ L.fanin r, ∃ u, KeyPath L.key (L.roots ∪ L.lookups) p u ∧
         (u ∈ T.threadReads R t ∪ lookupsIn L R t ∨ (u ∈ R ∧ u ∈ L.roots ∧ u < r)) := by
       intro p hp
-      have hpr : p ∈ c.D.reads r := L.legs_reads r hroot hp
-      have hpt : T.thread p = some t := (L.legs_thread r hroot p hp).trans hrt
+      have hpr : p ∈ c.D.reads r := L.fanin_reads r hroot hp
+      have hpt : T.thread p = some t := (L.fanin_thread r hroot p hp).trans hrt
       by_cases hpR : p ∈ R
       · obtain ⟨u, hpu, hu⟩ := walk L R hR t p hpR hpt
         refine ⟨u, hpu, ?_⟩
@@ -117,21 +117,21 @@ theorem root_reads (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R �
         simp only [Circuit.into, mem_filter, mem_univ, true_and]
         exact ⟨hpR, r, hrR, hpr⟩
     choose! f hf using hleg
-    by_cases hlow : ∃ p ∈ L.legs r, f p ∉ T.threadReads R t ∪ lookupsIn L R t
+    by_cases hlow : ∃ p ∈ L.fanin r, f p ∉ T.threadReads R t ∪ lookupsIn L R t
     · obtain ⟨p, hp, hpA⟩ := hlow
       rcases (hf p hp).2 with h | ⟨huR, hu, hur⟩
       · exact absurd h hpA
-      · exact ih (f p) hur huR hu ((path_thread L (hf p hp).1).trans ((L.legs_thread r hroot p hp).trans hrt))
-    · have hall : ∀ p ∈ L.legs r, f p ∈ T.threadReads R t ∪ lookupsIn L R t := fun p hp => by
+      · exact ih (f p) hur huR hu ((path_thread L (hf p hp).1).trans ((L.fanin_thread r hroot p hp).trans hrt))
+    · have hall : ∀ p ∈ L.fanin r, f p ∈ T.threadReads R t ∪ lookupsIn L R t := fun p hp => by
         by_contra h
         exact hlow ⟨p, hp, h⟩
-      have hinj : Set.InjOn f (L.legs r : Set (Fin c.D.N)) := by
+      have hinj : Set.InjOn f (L.fanin r : Set (Fin c.D.N)) := by
         intro p hp q hq hpq
         by_contra hne
         have hq' := (hf q (mem_coe.1 hq)).1
         rw [← hpq] at hq'
-        exact L.legs_disjoint r hroot p (mem_coe.1 hp) q (mem_coe.1 hq) hne (f p) (hf p (mem_coe.1 hp)).1 hq'
-      calc d ≤ (L.legs r).card := L.legs_card r hroot
+        exact L.fanin_disjoint r hroot p (mem_coe.1 hp) q (mem_coe.1 hq) hne (f p) (hf p (mem_coe.1 hp)).1 hq'
+      calc d ≤ (L.fanin r).card := L.fanin_card r hroot
         _ ≤ (T.threadReads R t ∪ lookupsIn L R t).card :=
             card_le_card_of_injOn f (fun p hp => mem_coe.2 (hall p (mem_coe.1 hp))) hinj
         _ ≤ (T.threadReads R t).card + (lookupsIn L R t).card := card_union_le _ _
