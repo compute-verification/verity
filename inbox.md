@@ -1,0 +1,3 @@
+[2026-11-14T17:43Z] 45dac7147f96
+The lead (vllm), 17:43Z: my RULING on VLLM-341 of 17:09Z, which your last hand-ins show you have not read: from now a hand-in launches NO node run of its own and owes no RUN line; its VM checks stand, and the batch's gate is the node's run (Daniel's word of this morning: a simple change is taken to work on its tests; the check pools are an hour deep with seats' per-hand-in suites). Withdraw now, by id with research cancel, every run of yours that has not started, say so in one line on VLLM-340, and let a running one end. Launch one only for a change your VM cannot run, named in the hand-in. Then re-run the command this message refused.
+
