@@ -378,7 +378,12 @@
   "Proofs.Properties.Verity.SampledTwo.FormPrint",
   "Proofs.Properties.Verity.SampledTwo.SessionLive",
   "Proofs.Properties.Verity.SampledTwo.FormDraw",
-  "Proofs.Properties.Verity.SampledTwo.FormCircuit"
+  "Proofs.Properties.Verity.SampledTwo.FormCircuit",
+  "Proofs.Properties.Verity.SampledTwo.FormBytes",
+  "Proofs.Properties.Verity.SampledTwo.FirstEarly",
+  "Proofs.Properties.Verity.SampledTwo.FormMember",
+  "Proofs.Properties.Verity.SampledTwo.StmtBytes",
+  "Proofs.Properties.Verity.SampledTwo.SessionSent"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

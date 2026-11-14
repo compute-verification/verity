@@ -22,12 +22,13 @@ tables are the pinned tables its circuit file names, which every accepted play's
 list, or two blobs that collide (`names_same`, `tables_same`). A collision is the pair `Messages.blobsAlt` returns
 (`Messages.blobsAlt_of`).
 
-**Not established here**: `MemberAtFixed` and `DrawAtFixed`, hypotheses. The check holds the statements to the
-members' order and gives a member a statement only where the sample draws one of its units, and it holds each
-session's sample to the verifier's own at the stage coins (`SpotFlock.sample_of_stmtOk`). `FormDraw.lean` gives
-`DrawAtFixed` where one pair of stage coins carries the bytes both plays' samples read (`drawAtFixed_of_coins`,
-`stageCoinsOne_of_play`). That the stage coins of two plays with one log before the round are one, and what follows
-of the members named, is not shown.
+**Not established here**: `MemberAtFixed` and `DrawAtFixed`, hypotheses. Each is a theorem where one pair of stage
+coins carries the bytes both plays' samples read (`StageCoinsOne`, `stageCoinsOne_of_play`): `DrawAtFixed` in
+`FormDraw.lean` (`drawAtFixed_of_coins`), the model's check holding each session's sample to the verifier's own at
+the stage coins (`SpotFlock.sample_of_stmtOk`), and `MemberAtFixed` in `FormMember.lean` (`memberAtFixed_of_coins`),
+the model's check holding each statement's public file to its template's part and the form's check holding each
+member's public file to the member's units. `FormBytes.lean` gives the pair of stage coins from the coins the log
+shows (`playCoinsOne_of_shown`).
 -/
 
 @[expose] public section

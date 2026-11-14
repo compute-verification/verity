@@ -236,7 +236,8 @@ where the tree the parameters were read from is printable. -/
 theorem members_print {j : Json} {p : VStar.Recursive.SampledTwo.Params} (hj : Good j)
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∀ m ∈ p.members, Wf m.own.partition ∧ ∀ r, m.own.registered = some r → Good r := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
   do_walk h to p
   all_goals
     cases h

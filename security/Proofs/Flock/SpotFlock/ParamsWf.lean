@@ -302,7 +302,8 @@ theorem paramsOfJson_reads {j : Json} {p : VStar.Recursive.SampledTwo.Params}
       VStar.Recursive.SampledTwo.paramsAt xb = .ok p.boundary ∧
       VStar.Recursive.SampledTwo.paramsAt xi = .ok p.interior ∧
       Spot.Run.templateCircuits (getD (getD (getD j' "interior") "params") "proofs") query = .ok p.circuits := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
   do_walk h to p
   cases h
   exact ⟨_, _, _, _, by assumption, by assumption, by assumption, by assumption⟩

@@ -216,4 +216,6 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.FormStmts", "Proofs.Properties.Verity.SampledTwo.FormLast",
   "Proofs.Properties.Verity.SampledTwo.FormLink", "Proofs.Properties.Verity.SampledTwo.FormPrint",
   "Proofs.Properties.Verity.SampledTwo.SessionLive", "Proofs.Properties.Verity.SampledTwo.FormDraw",
-  "Proofs.Properties.Verity.SampledTwo.FormCircuit"]
+  "Proofs.Properties.Verity.SampledTwo.FormCircuit", "Proofs.Properties.Verity.SampledTwo.FormBytes",
+  "Proofs.Properties.Verity.SampledTwo.FirstEarly", "Proofs.Properties.Verity.SampledTwo.FormMember",
+  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent"]

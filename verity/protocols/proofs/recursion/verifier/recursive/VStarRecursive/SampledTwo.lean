@@ -25,7 +25,12 @@ package's audit builds and reads it.
     `Run.templateCircuits`); the replay block's program object; the Spec's interior values; and the interior audit's
     members (one-stage v2's `proofs.members`, `OneStageZk.membersOf`), each member's circuit one a template names
     (`MEMBER_CIRCUIT`). The interior audit's parameters are the interior's with `proofs` its members
-    (`OneStageZk.membersParamsOfJson`).
+    (`OneStageZk.membersParamsOfJson`);
+  * the two stages are on two windows (`windowsApart`, `ONE_WINDOW`): the interior audit's window root is not the
+    boundary registration's. Of the two windows the run of record lets an interior registration name
+    (`Run.interiorWindowOk`), the form reads only the one the verifier computes, a challenger session of the second
+    stage's own: on one window one session releases both stages' coins, and nothing the form checks holds the
+    first stage's to be released before a coin tree's round is opened.
 * **commitment**: the boundary registration's record (`OneStage.commitmentOf`).
 * **evidence**: exactly `{"coins", "interior", "received", "record", "source", "statements"}`: the first stage's coins'
   evidence, its receipt's place in the log and the bytes it read (hex); the interior audit's evidence in v2's
@@ -36,8 +41,12 @@ package's audit builds and reads it.
   its registration's parameters name. The copy of main's first-parent history they are read under is the first
   stage's evidence's own, as one-stage v2 reads its evidence's, and the second stage's must be the same copy
   (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix. The first stage's coin
-  evidence is never `null`, on one window as on two (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins.
+  evidence is never `null` (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins. The statements are
+  fewer than `2^64` (`stmtsFit`, `STMTS_COUNT`), the most a list's 8-byte length word counts.
 * **check** (`checkBlobsAt`), in order:
+  0. each second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, `STMT_BYTES`): the sum of the
+     lengths a session's statement holds, which v2 holds each under `2^64` (`OneStageZk.fitsWhy`,
+     `OneStageZk.drawFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
   2. the second stage's sessions, as v2's per-member form runs them (`OneStageZk.membersRun`: the statements held as
@@ -190,8 +199,9 @@ def split (j : Json) (what : String) : V Json := do
   if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
   pure (Json.mkObj (without j "form"))
 
-/-- The parameters (module docstring, **params**). -/
-def paramsOfJson (j : Json) : V Params := do
+/-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
+(`paramsOfJson`). -/
+def paramsParsed (j : Json) : V Params := do
   let j ← split j "parameters"
   keysAre j #["boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"] "the parameters"
   let .arr os := getD j "outputs" | throw "outputs is not a list"
@@ -223,12 +233,73 @@ def paramsOfJson (j : Json) : V Params := do
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
-def FIRST_COINS_NULL : String :=
-  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins, on one " ++
-    "window as on two"
+/-- The refusal of an interior audit on the boundary registration's window (`windowsApart`). -/
+def ONE_WINDOW : String :=
+  "the interior audit's window is the boundary registration's: the two-stage form reads a two-stage audit on two " ++
+    "windows, each stage's coins a challenger session's of its own, and nothing it checks on one window holds the " ++
+    "first stage's coins to be released before a coin tree's round is opened"
 
-/-- The evidence (module docstring, **evidence**). -/
-def evidenceOf (b : ByteArray) : V Evidence := do
+/-- **The two stages are on two windows** (`ONE_WINDOW`): the interior audit's window root `interior` is not the
+boundary registration's `boundary`. The run of record lets the interior registration's window be the boundary's or
+the one the verifier computes from the boundary registration's digest and its replay sample
+(`Run.interiorWindowOk`); the form refuses the first, and with it a boundary and an interior that name no window. -/
+def windowsApart (boundary interior : Option String) : V Unit :=
+  if boundary = interior then .error ONE_WINDOW else .ok ()
+
+#guard (windowsApart (some "aa") (some "bb")).toOption.isSome
+#guard (windowsApart (some "aa") none).toOption.isSome
+#guard (windowsApart none (some "bb")).toOption.isSome
+#guard (windowsApart (some "aa") (some "aa")).toOption.isNone
+#guard (windowsApart none none).toOption.isNone
+
+/-- The parameters (module docstring, **params**): `paramsParsed`'s, the boundary registration's window and the
+interior audit's held apart (`windowsApart`). -/
+def paramsOfJson (j : Json) : V Params :=
+  match paramsParsed j with
+  | .error err => .error err
+  | .ok p =>
+    match windowsApart p.boundary.verifier.windowRoot p.audit.base.verifier.windowRoot with
+    | .error err => .error err
+    | .ok () => .ok p
+
+theorem windowsApart_ok {boundary interior : Option String} (h : windowsApart boundary interior = .ok ()) :
+    boundary ≠ interior := by
+  unfold windowsApart at h
+  split at h
+  · cases h
+  · assumption
+
+/-- **Parameters the form reads are `paramsParsed`'s, on two windows.** -/
+theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
+    paramsParsed j = .ok p ∧ p.boundary.verifier.windowRoot ≠ p.audit.base.verifier.windowRoot := by
+  unfold paramsOfJson at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, windowsApart_ok hw⟩
+
+def FIRST_COINS_NULL : String :=
+  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins"
+
+/-- The refusal of evidence whose statements are too many for the word a list's length is written in
+(`stmtsFit`). -/
+def STMTS_COUNT : String :=
+  "the evidence holds 2^64 statements or more, past the 8-byte word a list of statements holds its length in"
+
+/-- **The statements' count fits a word** (`STMTS_COUNT`): `n` statements are fewer than `limit`. -/
+def stmtsFit (limit n : Nat) : V Unit :=
+  if limit ≤ n then .error STMTS_COUNT else .ok ()
+
+#guard (stmtsFit 2 1).toOption.isSome
+#guard (stmtsFit 2 2).toOption.isNone
+#guard (stmtsFit OneStageZk.WORD 0).toOption.isSome
+
+/-- The evidence's parse (module docstring, **evidence**), before its statements are counted (`evidenceOf`). -/
+def evidenceParsed (b : ByteArray) : V Evidence := do
   let j ← split (← Core.canonicalJson b) "evidence"
   keysAre j #["coins", "interior", "received", "record", "source", "statements"] "the evidence"
   if getD j "coins" matches .null then throw FIRST_COINS_NULL
@@ -241,6 +312,35 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let some statements := interior.statements | throw "the interior audit's evidence names no statements"
   pure { received, source, coins := getD j "coins", interior, statements, record := getD j "record",
          stmts }
+
+/-- The evidence (module docstring, **evidence**): `evidenceParsed`'s, its statements fewer than `2^64`
+(`stmtsFit` at `OneStageZk.WORD`). -/
+def evidenceOf (b : ByteArray) : V Evidence :=
+  match evidenceParsed b with
+  | .error err => .error err
+  | .ok e =>
+    match stmtsFit OneStageZk.WORD e.stmts.size with
+    | .error err => .error err
+    | .ok () => .ok e
+
+theorem stmtsFit_ok {limit n : Nat} (h : stmtsFit limit n = .ok ()) : n < limit := by
+  unfold stmtsFit at h
+  split at h
+  · cases h
+  · next hn => exact Nat.lt_of_not_le hn
+
+/-- **Evidence the form reads is `evidenceParsed`'s, of fewer than `2^64` statements.** -/
+theorem evidenceOf_ok {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) :
+    evidenceParsed b = .ok e ∧ e.stmts.size < 2 ^ 64 := by
+  unfold evidenceOf at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, stmtsFit_ok hw⟩
 
 /-- The ports of the registration `record`'s roots. -/
 def portsOf (record : Json) : Array String :=
@@ -566,12 +666,69 @@ def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.C
     | some why => .reject s!"draw: coins: {why}"
     | none => secondChecked { v with law := subsetLaw m } delta c m law e
 
+/-- The refusal of a second-stage session whose statement is `2^64` bytes or more (`stmtsBytesFit`). -/
+def STMT_BYTES (session : String) : String :=
+  s!"session {session}'s statement is 2^64 bytes or more, past the 8-byte word a list of statements holds each " ++
+    "statement's length in"
+
+/-- A bound on the bytes of a session's statement that are no file's or printed value's: its format and statement
+names, its flags and count, each optional field's tag, and the 8-byte length word of each field but a lookup table's. -/
+def STMT_HEAD : Nat := 256
+
+/-- The lookup tables' bytes in a session's statement: each table's name (in UTF-8) and bytes, each after its 8-byte
+length word. -/
+def tablesSize (tables : List (String × ByteArray)) : Nat :=
+  (tables.map fun t => 16 + t.1.utf8ByteSize + t.2.size).sum
+
+/-- **A bound on the bytes of a member's session statement** at its record's sample `draw` and lookup tables of
+`tables` bytes (`tablesSize`): `STMT_HEAD`, the circuit and public files, the tables, the program, and the
+partition object, the registered reads and the sample as `Flock.RecordText.printT` prints them
+(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.drawFitsWhy` hold each under
+`2^64`; this is their sum. -/
+def stmtSize (o : OneStageZk.Own) (circuit pub : ByteArray) (tables : Nat) (draw : Option Json) : Nat :=
+  STMT_HEAD + circuit.size + pub.size + tables + o.program.size + OneStageZk.printedSize o.partition +
+    (o.registered.map OneStageZk.printedSize).getD 0 + (draw.map OneStageZk.printedSize).getD 0
+
+/-- `stmtSize` of the session `s` of the statement `st` on the blobs: its member's (the member of the parameters
+the statement names), at the member's circuit and public files and the session's record's sample. None where the
+statement names no member of the parameters, or the blobs hold no such record, circuit or public file: the sessions'
+run refuses each (`inputAt`). -/
+def stmtSizeAt (p : Params) (bs : Core.Blobs) (tables : Nat) (st : OneStageZk.StatementFiles)
+    (s : OneStageZk.RunFiles) : Option Nat := do
+  let name ← st.member
+  let m ← p.members.find? (·.name == name)
+  let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
+  let circuit ← (bs.get m.own.circuit "circuit").toOption
+  let pub ← (bs.get m.own.pub "public file").toOption
+  pure (stmtSize m.own circuit pub tables (Flock.Witness.recordDraw record))
+
+/-- **A statement's bytes fit a word** (`STMT_BYTES`): the size `n`, where there is one, is under `limit`. -/
+def bytesFit (limit : Nat) (session : String) : Option Nat → V Unit
+  | some n => if limit ≤ n then .error (STMT_BYTES session) else .ok ()
+  | none => .ok ()
+
+#guard (bytesFit 300 "s" (some 299)).toOption.isSome
+#guard (bytesFit 300 "s" (some 300)).toOption.isNone
+#guard (bytesFit 300 "s" none).toOption.isSome
+#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", "", none⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
+#guard stmtSize ⟨.null, .empty, .null, "", "", some (.str "ab")⟩ .empty .empty 0 (some .null) ==
+  STMT_HEAD + 4 + 4 + 4
+#guard tablesSize [("ab", ⟨#[1, 2, 3]⟩), ("", .empty)] == 16 + 2 + 3 + 16
+
+/-- **Every second-stage session's statement fits a word** (check, 0): each statement's sessions, in the statements'
+order, their statements' bytes under `2^64` (`bytesFit` of `stmtSizeAt`, at `OneStageZk.WORD`). A list of
+the sessions' statements holds each after its length in an 8-byte word, as a statement holds each of its fields. -/
+def stmtsBytesFit (p : Params) (e : Evidence) (bs : Core.Blobs) : V Unit :=
+  let tables := tablesSize (OneStageZk.tablesOf bs)
+  (e.statements.toList.flatMap fun st => st.sessions.toList.map fun s => (st, s)).forM fun (st, s) =>
+    bytesFit OneStageZk.WORD s.name (stmtSizeAt p bs tables st s)
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
 `ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger, the
 first session's log holding no coin tree's line, the second session's log opening each coin tree's rounds stream by
 stream. -/
-def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+def prepareRun (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
   stagesFit ξ ξ₂
@@ -583,6 +740,38 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   repStreamsOrdered p e
   let law ← secondLawOf p run
   pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out }, run)
+
+/-- Check steps 0 to 5: the sessions' statements' bytes (`stmtsBytesFit`), then `prepareRun`. -/
+def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    V (Core.Outcome OneStage.Public Core.Integrity × Json) :=
+  match stmtsBytesFit p e bs with
+  | .error err => .error err
+  | .ok () => prepareRun form p c ξ e bs
+
+theorem bytesFit_ok {limit : Nat} {session : String} {n : Nat}
+    (h : bytesFit limit session (some n) = .ok ()) : n < limit := by
+  by_cases hn : limit ≤ n
+  · simp [bytesFit, hn] at h
+  · exact Nat.lt_of_not_le hn
+
+/-- **Where every session's statement fits, each session's statement's size is under `2^64`.** -/
+theorem stmtsBytesFit_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmtsBytesFit p e bs = .ok ())
+    {st : OneStageZk.StatementFiles} {s : OneStageZk.RunFiles} {n : Nat}
+    (hm : (st, s) ∈ e.statements.toList.flatMap fun st => st.sessions.toList.map fun s => (st, s))
+    (hn : stmtSizeAt p bs (tablesSize (OneStageZk.tablesOf bs)) st s = some n) : n < 2 ^ 64 := by
+  have h' := Flock.RecCompose.forM_ok h (st, s) hm
+  dsimp only at h'
+  rw [hn] at h'
+  exact bytesFit_ok h'
+
+/-- **Steps 0 to 5 return only where `prepareRun` returns the same and every session's statement fits.** -/
+theorem prepare_ok {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
+    (h : prepare form p c ξ e bs = .ok r) : prepareRun form p c ξ e bs = .ok r ∧ stmtsBytesFit p e bs = .ok () := by
+  unfold prepare at h
+  split at h
+  · cases h
+  · next hw => exact ⟨h, hw⟩
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/

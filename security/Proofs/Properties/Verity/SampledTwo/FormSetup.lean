@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.FormVerdicts
 public import Proofs.Properties.Verity.SampledTwo.LastSlot
 public import Proofs.Properties.Verity.SampledTwo.SessionLive
+public import Proofs.Properties.Verity.SampledTwo.StmtBytes
 public import Proofs.Properties.Verity.Sampled.Record.PartReadsBack
 public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Flock.Claims.JsonNorm
@@ -52,7 +53,8 @@ What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `R
   printable. Nothing the setup checks holds them to that; the parameters' reader does, and `stmtsPrint_of`
   (`FormPrint.lean`) proves it of every case.
 * `StmtsFit`: the statements' message holds fewer than `2^64` statements of fewer than `2^64` bytes each. The form
-  refuses a field its statement can't hold, which bounds each field and no sum of them. No check gives it here.
+  refuses evidence of `2^64` statements or more and a play one of whose sessions' statements is `2^64` bytes or
+  more, so `stmtsFit_of` proves it of every case.
 -/
 
 @[expose] public section
@@ -290,6 +292,27 @@ def StmtsFit (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
   ∀ o k p e xs, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
     (List.range e.stmts.size).mapM (SessionMsgs.stmtAtCase k) = some xs →
       xs.length < 2 ^ 64 ∧ ∀ x ∈ xs, x.length < 2 ^ 64
+
+/-- **`StmtsFit`, of every case and every plays**: the statements' message holds one statement for each of the
+evidence's (`SessionMsgs.mapM_some`), and the form's evidence parses only with fewer than `2^64` of them
+(`VStar.Recursive.SampledTwo.evidenceOf_ok`, its refusal `STMTS_COUNT`); each statement it holds is a template's
+session statement on the case, which the form's check accepts only under `2^64` bytes (`StmtBytes.stmtAtCase_lt`,
+its refusal `STMT_BYTES`). -/
+theorem stmtsFit_of (C : CaseOf) (Good : Verity.Exchange → Prop) : StmtsFit C Good := by
+  intro o k p e xs hacc _ hk hf hxs
+  obtain ⟨k', hk', pp, c, e', pub, prof, hdec, hck⟩ := hacc
+  obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
+  have hpe : (pp, e') = (p, e) := Option.some.inj ((SessionMsgs.formOf_of_decoded hdec).symm.trans hf)
+  obtain rfl : p = pp := (congrArg Prod.fst hpe).symm
+  obtain rfl : e = e' := (congrArg Prod.snd hpe).symm
+  obtain ⟨hlen, hget⟩ := SessionMsgs.mapM_some _ hxs
+  refine ⟨?_, fun x hx => ?_⟩
+  · rw [hlen, List.length_range]
+    exact (VStar.Recursive.SampledTwo.evidenceOf_ok (SessionMsgs.formOf_evidence hf)).2
+  · obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
+    have h := hget i (hlen ▸ hi) hi
+    rw [List.getElem_range] at h
+    exact StmtBytes.stmtAtCase_lt hf hck h
 
 /-- **`VerdictsAt`, at the table `Flock.Tags.circuit.table`**: on an accepted play, the statement the statements'
 message states for template `t` is the template's session statement on the case (`SessionMsgs.stmtAt_stmtsMsg`),

@@ -23,7 +23,8 @@ open Spot
 
 /-- **The form's evidence names the first stage's coin evidence**: `evidenceOf` refuses it `null`. -/
 theorem evidenceOf_coins {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) : e.coins ≠ Json.null := by
-  unfold evidenceOf at h
+  replace h := (evidenceOf_ok h).1
+  unfold evidenceParsed at h
   simp only [bind, Except.bind] at h
   repeat' split at h
   all_goals try contradiction

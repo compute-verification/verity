@@ -120,15 +120,16 @@ theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     | exact True.intro
     | assumption
 
--- `paramsOfJson` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
+-- `paramsParsed` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
 /-- The two-stage form's interior audit parameters are the per-member form's. -/
 theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit := by
-  refine of_triple (Q := fun p => ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit) ?_ h
+  refine of_triple (Q := fun p => ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit) ?_
+    (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
   clear h
-  mvcgen -trivial [VStar.Recursive.SampledTwo.paramsOfJson, -Spec.throw_Except, throw_spec, form_split_spec,
+  mvcgen -trivial [VStar.Recursive.SampledTwo.paramsParsed, -Spec.throw_Except, throw_spec, form_split_spec,
     form_keys_spec, form_rule_spec, form_mapM_spec, form_paramsAt_spec, form_templates_spec, form_canon_spec,
     form_program_spec, form_members_spec, form_values_spec] invariants
   · ⇓? _ => ⌜True⌝
