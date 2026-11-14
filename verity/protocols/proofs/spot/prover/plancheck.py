@@ -91,7 +91,8 @@ def work_design(g: Grain, target: float, delta: float) -> dict:
 
 def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: float, delta: float,
         served: float | None = None, union: bool = False, theta: float = 0.0, p: int = TWO_P,
-        search: Mapping[str, int] | None = SEARCH, fanout: int | None = None, returned: int | None = None) -> dict:
+        search: Mapping[str, int] | None = SEARCH, fanout: int | None = None, returned: int | None = None, *,
+        whole_groups: bool = False) -> dict:
     """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Point`): its `replay_blocks`
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
@@ -103,8 +104,10 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     rounded up.  Above 1 the replay blocks that read one another's values are one request, which reads in each of
     them, and the point's `S` is `fanout` times `served` rounded up, what a group of `fanout` replay blocks serves.
     `RequestsCover` reads each request as serving exactly `S`, so that point is a window's whose groups each hold
-    `fanout` replay blocks: a group of fewer serves less, and no point of this form reads it.  A registration publishes
-    the most a group holds, not that every group holds it, and nothing here checks that.
+    `fanout` replay blocks, and it is written only for a caller that says they do (`whole_groups`; `ValueError`
+    without it): a group of fewer serves less, which Lean covers only once it reads the request as serving at most
+    `S`.  A registration publishes the most a group holds, not that every group holds it, so the caller's word is the
+    premise, and nothing here checks it.
 
     With `served`, `fanout` is the registered Program's, as its registration verdict publishes it
     (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has no default (`ValueError` without
@@ -119,6 +122,13 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     fanout = 1 if fanout is None else fanout
     if not (isinstance(fanout, int) and fanout >= 1):
         raise ValueError(f"a fan-out is a whole number at least 1, not {fanout}")
+    if union and fanout > 1 and whole_groups is not True:
+        raise ValueError(
+            f"the patterns' form at fan-out {fanout} reads each group of replay blocks as one request serving exactly "
+            f"S, {fanout} replay blocks' bits (`servedBits req r = D.S`, `Properties.Spot.RequestsCover`, "
+            f"security/Properties/Spot/TwoStageCheck.lean): a group of fewer than {fanout} replay blocks serves less, "
+            "and today's Lean doesn't cover it, until that premise reads at most S.  Pass whole_groups=True only "
+            f"where every group of the window holds {fanout} replay blocks")
     if served is not None:
         if not (type(returned) is int and returned >= 0):
             raise ValueError("a served cap is held to the bits a replay block of the registered Program returns: "

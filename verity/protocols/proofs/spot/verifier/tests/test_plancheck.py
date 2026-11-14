@@ -156,11 +156,16 @@ def test_a_patterns_point_reads_the_replay_blocks_of_a_group_as_one_request(cell
     request, so the class's N is 1 and the point's S is F times `served`, what a group of F replay blocks serves: the
     point at F = 1 whose replay blocks return F times as much.  On one group of two replay blocks and on two of them,
     the bits Lean certifies at the θ it finds from the planner's are at least log2 of the patterns' count by
-    enumeration, each group one request, with fewer sets admissible than there are."""
+    enumeration, each group one request, with fewer sets admissible than there are.  Lean reads each request as
+    serving exactly S, which a group of fewer than F replay blocks doesn't: the point is refused unless its caller
+    says every group of the window holds F."""
+    for unsaid in ({}, {"whole_groups": False}):
+        with pytest.raises(ValueError, match="servedBits req r = D.S.*a group of fewer than 2.*whole_groups=True"):
+            P.two(cells, k, 2, .9, .3, 3, True, fanout=2, returned=3, **unsaid)
     points, counts = [], []
     for replay_blocks in (2, 4):
         _, theta = two_stage_rankin(cells, k, replay_blocks, .9, .3, 3, True, fanout=2)
-        d = P.two(cells, k, replay_blocks, .9, .3, 3, True, theta or 1.0, fanout=2, returned=3)
+        d = P.two(cells, k, replay_blocks, .9, .3, 3, True, theta or 1.0, fanout=2, returned=3, whole_groups=True)
         assert d["form"] == "patterns" and d["classes"][0]["N"] == "1" and d["S"] == "6"
         assert d == P.two(cells, k, replay_blocks, .9, .3, 6, True, theta or 1.0, fanout=1, returned=6)
         points.append(d)
@@ -182,7 +187,8 @@ def test_a_served_cap_is_held_to_what_a_replay_block_returns():
     for served, union, returned in ((3, False, 4), (2.5, False, 4), (3, True, 4), (4, True, 3)):
         for fanout in (1, 2):
             with pytest.raises(ValueError, match="served-cover: a replay block of the registered Program returns"):
-                P.two(cells, k, 2, .9, .3, served, union, theta=1.0, fanout=fanout, returned=returned)
+                P.two(cells, k, 2, .9, .3, served, union, theta=1.0, fanout=fanout, returned=returned,
+                      whole_groups=True)
     for bad in (None, 3.0, True, -1):
         with pytest.raises(ValueError, match="WindowCommitmentRecord.returned"):
             P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=1, returned=bad)
