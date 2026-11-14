@@ -10,3 +10,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_host_and_gamma.py", "tests/test_run.py"]
+# gamma.py reads the RTX PRO 6000 node's file and its cards through verity.device (load_node reads every card)
+inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "hardware/cards",
+          "hardware/nodes/rtx-pro-6000-server-x8.toml"]

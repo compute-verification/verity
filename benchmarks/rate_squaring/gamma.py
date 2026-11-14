@@ -9,15 +9,23 @@ warp-squaring a sub-partition: 4 sub-partitions × 188 SMs × 32 lanes a clock. 
 
 from __future__ import annotations
 
+from verity.device import load_card, load_node, number
+
+NODE = load_node("rtx-pro-6000-server-x8")
+GPU_CARD = load_card(NODE["device"]["sku"])
+HOST_CARD = load_card(NODE["host"]["sku"])
+
 MU = 0.28 + 0.10  # μ_chip + μ_sample, the tracker's
 K = 2
 X1 = 175.0
 REF, REF_MHZ = 5.13e10, 2092.0
 MHZ = 2100.0  # the SM clock of this directory's runs (nvidia-smi before and after)
-GPUS = 8
-GPU_MAX = REF * 1.16
+GPUS = int(number(NODE["device"]["count"]))
+GPU_MAX = REF * round(float(number(GPU_CARD["clock"]["sm"])) / REF_MHZ, 2)  # the docstring's ÷ 1.16, to two places
 D = (1.27, 1.81)
-LANES_A_CLOCK = 4 * 188 * 32
+LANES_A_CLOCK = 4 * int(number(GPU_CARD["sm"]["count"])) * 32
+HOST_CORES = int(number(HOST_CARD["cpu"]["sockets"])) * int(number(HOST_CARD["cpu"]["cores"]))
+TURBO_HZ = float(number(HOST_CARD["clock"]["turbo"]) * 10 ** 9)
 
 
 def rate_of_cycles(cycles: float) -> float:
@@ -39,7 +47,8 @@ GPU = {
 }
 # Squarings/s a physical core (ifma.sh: G = 1, both threads of 24 cores), and the IFMA-only port
 # bound (130 IFMA per 8 words on two ports at 3.9 GHz); the node's 2 × Xeon 6776P have 128 cores, its VM shows 96.
-HOST = {"none": 0.0, "IFMA measured, 128 cores": 128 * 2.84e8, "IFMA-only bound, 128 cores": 128 * 8 * 2 * 3.9e9 / 130}
+HOST = {"none": 0.0, f"IFMA measured, {HOST_CORES} cores": HOST_CORES * 2.84e8,
+        f"IFMA-only bound, {HOST_CORES} cores": HOST_CORES * 8 * 2 * TURBO_HZ / 130}
 
 
 def gamma(x: float, k: int) -> tuple[float, ...]:
