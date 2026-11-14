@@ -4,6 +4,7 @@ PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
 import base64
+import calendar
 import dataclasses
 import hashlib
 import itertools
@@ -1224,7 +1225,7 @@ def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_limit_joins_ne
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["conflicts"] == {}
     (said,) = [w["why"] for n, w in q.load_state()["warned"].items() if (n, w["head"]) == ("2", h2)]
     assert said == (f"the warn gate {SIZE_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes at "
-                    f"{members[1].commit[:12]}, over its 49152-byte cap (tests/test_repository.py), and was 30064 bytes at "
+                    f"{members[1].commit[:12]}, over its 49152-byte limit (tests/test_repository.py), and was 30064 bytes at "
                     f"{members[0].commit[:12]} below; trim doc.md to 49152 bytes or fewer (10906 over): move detail to the notes "
                     f"store (cite it by note:<id>) (`python3 {SIZE_GATE} origin/main HEAD` on the branch merged with `origin/next` "
                     "runs it)"), said
@@ -1261,7 +1262,7 @@ def test_a_file_already_over_its_limit_below_warns_only_of_a_pr_whose_merge_grow
     doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / SIZE_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
                                     capture_output=True, text=True).stdout)
     assert doc["below"] == members[2].commit and doc["failures"] == [] and doc["notes"] == [
-        f"doc.md is 60063 bytes, over its 49152-byte cap, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
+        f"doc.md is 60063 bytes, over its 49152-byte limit, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
@@ -2196,6 +2197,35 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
     assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
+def test_the_review_listing_gives_each_rows_minutes_since_its_mark_and_over_keeps_the_older(world, capsys):
+    """A no-reader watch parsed `status` text and read every head's labels by hand for how long each marked PR had waited
+    without a verdict: the listing gives each row its minutes since the mark, and `over` keeps those marked longer ago."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    for n in (1, 2, 3):
+        world.gh.put(n, world.change({f"{n}.txt": "x\n"}))
+    marks = {1: "2026-11-09T10:00:00Z", 2: "2026-11-09T11:30:00Z"}
+    q = world.queue(marked_at=lambda n, h: marks.get(n))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    def now() -> float:
+        return calendar.timegm((2026, 11, 9, 12, 0, 59))
+
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True, now=now) == 0
+    assert [(r["pr"], r["waited_min"]) for r in json.loads(capsys.readouterr().out)] == [(3, None), (1, 120), (2, 30)]
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True, over=60, now=now) == 0
+    assert [r["pr"] for r in json.loads(capsys.readouterr().out)] == [3, 1]
+    assert Q.review(q, world.store, labels, None, None, None, None, over=60, now=now) == 0
+    out = capsys.readouterr().out
+    assert f"#1 {world.gh.prs[1].head[:12]} lane-1 Lean change: no, marked 2026-11-09T10:00:00Z (120 min ago): " in out, out
+    assert "#2 " not in out and out.rstrip().endswith(
+        "3 marked PR(s) not on `main` lack a land verdict; 2 of them marked over 60 min ago or at a time not known"), out
+    assert Q.waited_min(None, 0) is None
+    with pytest.raises(SystemExit):
+        research_main(["queue", "review", "7", "--land", "--by", "r", "--over", "60"])
+    assert "--over is for the review listing only" in capsys.readouterr().err
+
+
 def test_the_review_listing_says_low_risk_of_a_head_the_loops_rule_lands_on_its_mark_and_never_of_a_move_or_held_pr(world, capsys):
     """The verified queue's loop takes a marked head on its mark alone when drive.toml at `main` excludes none of its files
     (`lands_on_mark`), so its row says so instead of waiting on a reviewer: one whose owner's own land verdict doesn't count
@@ -3002,8 +3032,9 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
 
 
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
-#: tests/explore/test_authentication.py reads fixtures/typed-obligation-v0's K=1536 vector (`auth.read_openings()`), so the
-#: suite's collection fails without it; `other` registers one too, in a suite no change below touches
+#: tests/explore/test_authentication.py reads benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0's K=1536 vector
+#: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
+#: below touches
 BIG = b'{"openings": [1, 2, 3]}\n'
 BIG_PATH = "pkg/data/big.json"
 
@@ -3046,7 +3077,7 @@ ROWS_TEST = {"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
 
 def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_those(world, capsys):
     """A suite whose test reads a fetched fixture at import (as `benchmarks/numerical` reads a vector of
-    fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
+    benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
     fetches each collected suite's fetched fixtures into the worktree first, and none of a suite it doesn't collect; a suite
     collected again at `next` has them fetched again there, since the worktree is cleaned in between."""
     from research.queue import MarkOnly, StoreLabels, ready
@@ -4930,9 +4961,9 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
     clock[0] = 0.0
-    tier.max_wait_s = Q.waitcap.WAIT_CAP_S
+    tier.max_wait_s = Q.waitcap.WAIT_LIMIT_S
     _, why = tier._wait(d, "vy-test")
-    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_CAP_S <= clock[0] <= Q.waitcap.WAIT_CAP_S + 900
+    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_LIMIT_S <= clock[0] <= Q.waitcap.WAIT_LIMIT_S + 900
 
 
 def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):

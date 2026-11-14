@@ -1,4 +1,4 @@
-"""The proof system's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
+"""The proof system's challenger on its auditor device, in this process: a `LiveChallenger` its test hands in, its session
 opened under an id with its record signed with an LMS key (`remote.open_session`), and `remote.serve` on one end of a socket
 pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
@@ -33,7 +33,7 @@ from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
 HOST = "vy-challenger-1"
 #: the commit every open here was run from (``pinned``), the host's pins log recording it as main's, and the

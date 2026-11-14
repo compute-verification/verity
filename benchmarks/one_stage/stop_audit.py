@@ -64,6 +64,10 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   ``cross-stream-order`` (its ``case``), name that as their premise.
   ``summary.json`` copies the record's ``accepted`` and ``complete`` and lists every entry's ``premise``. It says the
   response's length is held (``length_held``) only when the record accepted and is complete.
+* **The answer** (`answer_of`, ``answer.json`` beside ``audit.json``, one canonical line) is the stop stream's, in
+  one-stage's form (`audit.answer`): an accept of a record that accepted, whose public ``complete`` is that record's
+  own, so it is false while any entry above is null; else a reject of the stop registration. A reader that wants a
+  complete audit of the stop population reads `audit.answer_complete` of it, never the verdict alone.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
   stage's: nothing here holds the time between the two commands.
 
@@ -78,6 +82,7 @@ import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -96,12 +101,14 @@ from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.windows import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, registration as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 FORMAT = "verity/one-stage/stop-audit/v0"
 TOOL = "benchmarks/one_stage/stop_audit.py"
+#: the stop stream's answer, written beside ``audit.json`` (`answer_of`)
+ANSWER = "answer.json"
 #: the statement's one member, and its output row's circuit port
 MEMBER, OUT = "stop", "o0"
 
@@ -234,7 +241,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
     return {"sessions": [a0.sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))],
             "served": [int(u) for u in sampled.get("units", [])], "proved_units": a0.proved_units(st["header"], live or {}),
             "instances": (live or {}).get("instances", 0),
-            "verdicts": {LEAN: {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"},
+            "verdicts": {LEAN: {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"},
                          M0: m0},
             "statement": {MEMBER: {"session_s": seconds, "lean_verify_s": lv.get("verify_s"),
                                    **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
@@ -330,13 +337,13 @@ def reads(r: Resumed) -> dict[str, Any]:
 
 
 def link(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
-    window's root, which is the run the class was laid out under (`resume` holds the hand-off's and its records' to
-    it); the boundary stream's own log (``first``'s `Stream.log`); the boundary stream's audit record (``outcome``'s,
-    none when no outcome is handed); the stop record; the stop sample's coin evidence and the bytes it read
-    (``handoff``'s ``stop``); the family those are held to, the stop blocks' place's (`two_stage.family_of`), never
-    the one the hand-off names; and the challenger's key and the copy of main's history ``first``'s stream was made
-    with, which Lean reads that evidence under."""
+    """The stop record's read across the class's two streams, as the Lean verifier's pieces ``across`` and
+    ``across_all`` take one read: the window's root, which is the run the class was laid out under (`resume` holds the
+    hand-off's and its records' to it); the boundary stream's own log (``first``'s `Stream.log`); the boundary
+    stream's audit record (``outcome``'s, none when no outcome is handed); the stop record; the stop sample's coin
+    evidence and the bytes it read (``handoff``'s ``stop``); the family those are held to, the stop blocks' place's
+    (`two_stage.family_of`), never the one the hand-off names; and the challenger's key and the copy of main's history
+    ``first``'s stream was made with, which Lean reads that evidence under."""
     s, held = handoff["stop"], first.stream
     return {"window": first.layout.run, "log": [dict(x) for x in first.stream.log],
             "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None, "later": dict(s["record"]),
@@ -351,6 +358,25 @@ def across(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, An
     ``case``, the boundary record's index in the log (``received``) and the two registrations' digests (``earlier``,
     ``later``). ``{"refused": reason}`` where Lean refuses the input or can't run."""
     return V.lean("across", link(handoff, first, outcome))
+
+
+def across_all(boundary: str, links: Sequence[Mapping[str, Any]], last: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Lean's verdicts on a list of reads across streams that rest on one boundary record (`Record.acrossAll`, the
+    Lean verifier's piece ``across_all``): ``boundary`` is that record's digest, each of ``links`` a read as
+    `link` gives the stop record's, and ``last`` the last stream's own audit record (an outcome record's ``audit``;
+    none when there is none to hand). Each read hands its earlier stream's audit record, so ``last`` is the one no
+    read hands: the audit record of the list's last record, the later record no read of the list reads.
+    -> ``links``, each read's `across` with ``reaches``, whether its earlier record is ``boundary`` or the later
+    record of a read of the list that reaches it; ``last``, the last record's digest (null where the list has no such
+    record or several); ``audit``, the verdict on the audit record handed for it, in `across`'s ``audit``'s form,
+    refused where no one record is last; and the list's ``case``: 2 when a read does not reach the boundary record or
+    is case 2, else 3 when one is case 3 or the last stream's audit record is missing or no accept, else 4 when one
+    is case 4 or that audit record is not complete, else 1. So case 1 says every read is in order and every audit
+    record of the list, the last stream's included, accepted and is complete, as the records handed say. A
+    record the list leaves out is not seen. ``{"refused": reason}`` where Lean refuses the input or can't run. No
+    entry of the audit record reads it: the stop record's is one read, `across`'s."""
+    return V.lean("across_all", {"boundary": boundary, "links": [dict(x) for x in links],
+                                 "last": None if last is None else dict(last)})
 
 
 def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -> dict[str, Any]:
@@ -493,6 +519,22 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
             "premises": sorted({v["premise"] for v in verdicts.values() if "premise" in v})}
 
 
+def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
+    """The stop stream's answer of an outcome (`decide`'s), in one-stage's form. Of an audit record that accepted it is
+    `audit.answer` at the stream's δ: its public ``complete`` is the record's own, true only when every entry has a
+    verdict, so an accept whose record left an entry null says so and `audit.answer_complete` refuses it. Else a
+    reject of the stop registration, naming the record's checks that failed and its verdicts that did not accept, or
+    that the stream refused the outcome and wrote no record."""
+    audit = got.get("audit") or {}
+    if got.get("accepted") is True and audit.get("accepted") is True:
+        return A.answer(audit, Fraction(r.stream.delta).limit_denominator(10**12))
+    failed = sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok"))
+    refused = sorted(k for k, v in (audit.get("verdicts") or {}).items() if v.get("accepted") is False)
+    named = "; ".join(f"{what}: {', '.join(names)}" for what, names in (("checks", failed), ("verdicts", refused)) if names)
+    return {"commitment": r.registration.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
+            "reason": named or "the stop stream refused the outcome", "verdict": "reject"}
+
+
 # --- the command ------------------------------------------------------------------------------------------------------
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -569,6 +611,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "error": f"{type(e).__name__}: {e}"})
     if got.get("audit") is not None:
         (out / "audit.json").write_text(json.dumps(got["audit"], indent=1, sort_keys=True, default=str) + "\n")
+    (out / ANSWER).write_bytes(canonical_json(answer_of(r, got)) + b"\n")
     summary = summary_of(r, stop, a.design, got)
     summary["statement"] = {"pin": st["pin"], "ands": st["ands"], "k_log": st["meta"].get("k_log"), **proved["statement"][MEMBER]}
     return done(0 if summary["accepted"] else 1, summary)

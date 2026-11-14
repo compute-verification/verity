@@ -2,8 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.NoiseSha512
-public import Definitions.Pouw.PearlC.DevicePrices
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Checks of W1's cost model and SHA-512's noise
@@ -13,7 +12,9 @@ public import Definitions.Pouw.PearlC.DevicePricesLoop
 - `rowDigest_vec`, `rowSeed_vec`, `seedB_vec`, `lineEA_vec`, `lineFB_vec`: `NoiseSha512` against
   `verity/ml/protocols/pouw/schemes/pearl_c.py` (`row_digest`, `row_seed`, `seed_b`, `sample_line`) on one 15-word row
   of unit 3, row 5, with salt `0, 1, …, 31` and root `(7i + 3) mod 256`, evaluated by the kernel.
-- `toPrices_h100`, `toPrices_sm120`, `toPrices_sm120Loop`: W1's tables give the coarse records the devices use;
+- `toPrices_h100`, `toPrices_h100Tensor`, `toPrices_sm120`, `toPrices_sm120Loop`: W1's tables give the coarse records
+  the devices use;
+  `h100Tensor_sm`: the H100's tensor-clock reading prices its SM pipes at `61/66` of the default's;
   `toFp4Prices_fp4Sm120` (and `toFp4Prices_fp4Sm120At` at any scale path): the FP4 record's, `Fp4Prices.sm120`.
 - `price_e4m3_sm120`, `price_bf16_sm120`, `price_e2m1_sm120`: each sm_120 fragment costs 4,096 units, however few of its
   outputs are used; `price_e4m3_sm120_taint`: under a branch on data, 2,048 more (16 per output word).
@@ -80,6 +81,17 @@ theorem lineFB_vec : (lineList (seedB vSalt vRoot) 1 1 7 16).map (·.val) =
 theorem toPrices_h100 (sha fetch : ℚ) : (W1Prices.h100 sha fetch).toPrices = Prices.h100 := by
   simp only [W1Prices.toPrices, W1Prices.h100, Prices.h100, Costs.adopted]
   norm_num
+
+/-- The tensor-clock reading's SM-pipe prices: FP32 `976/33` (29.58) and a cast and INT32 `1952/33`, the default's
+times `61/66`. -/
+theorem h100Tensor_sm (sha fetch : ℚ) : (W1Prices.h100Tensor sha fetch).fp32 = 976 / 33 ∧
+    (W1Prices.h100Tensor sha fetch).cvt = 1952 / 33 ∧ (W1Prices.h100Tensor sha fetch).int32 = 1952 / 33 := by
+  simp only [W1Prices.h100Tensor, W1Prices.h100, h100TensorMHz, h100SmMHz]
+  norm_num
+
+theorem toPrices_h100Tensor (sha fetch : ℚ) : (W1Prices.h100Tensor sha fetch).toPrices = Prices.h100Tensor := by
+  simp only [W1Prices.toPrices, W1Prices.h100Tensor, W1Prices.h100, Prices.h100Tensor, h100TensorMHz, h100SmMHz]
+  norm_num [Nat.ceil_eq_iff]
 
 theorem toPrices_sm120 (sha fetch : ℚ) : (W1Prices.sm120 sha fetch).toPrices = Prices.sm120 := by
   norm_num [W1Prices.toPrices, W1Prices.sm120, Prices.sm120]

@@ -2,7 +2,7 @@
 # The multi-unit statement forms (`verity_flock.multi_unit`) of ScaledMmFp8Block_v2{K,N,128} on CPUs, measured side by side.
 # Run from the source tree's root in a proofs slot (`research run --pool proofs --cwd source`; the slot's memory is
 # CHECK_SLOT_MEM_GB); results go to $RESEARCH_RUN_DIR/out, scratch to a `mktemp -d` directory the job removes. The builds are
-# hidden_zk's (its job.sh, sourced: flock-circuit, the Lean flock-verify, a venv with numpy), plus flock-live's test binary.
+# hidden_zk's (its job.sh, sourced: flock-circuit, the Lean verity-verify-proof, a venv with numpy), plus flock-live's test binary.
 # Per shape K:N:n in MU_SHAPES (n instances, one x row each):
 #   c       one statement: N * K/128 k-step units and N scale-stage slots per VU, the stage returning the outputs
 #   b       two statements joined by a row: b-writer's units return temp and s, b-reader's units are the scale stage

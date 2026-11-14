@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.Sampled.CountsLayout
 public import Proofs.Properties.Verity.Sampled.MovesReachAt
 public import Proofs.Properties.Verity.Sampled.Place
 public import Proofs.Flock.Recursive.TopFinder
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # SPOT's vocabulary as deployed
@@ -776,8 +777,6 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl
-    theta := fun _ _ => ∅
-    theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
     schedule := fun θ F => blocks (readOf θ F).circuit
     wipe := fun θ F => wipe (readOf θ F).circuit
     wipeRun := fun θ F c _ => ofRun (readOf θ F).circuit (Verity.play [] (signer θ) θ F c)
@@ -822,6 +821,28 @@ theorem target_top (k : Verity.Registration.Composite) (a : Subprotocol) : (base
   intro θ F c σ
   rw [error_top]
   exact le_top
+
+/-! ## The honest bound's rate -/
+
+/-- **The honest bound's `k`**: `2^23`, `Zk.schedule`'s cap on level 0's length (`zkLogLenCap_23`), so the rate
+condition `2^23 ≤ ρ·(e·k)` asks only `ρ ≥ 1/e`. -/
+def k : ℕ := 2 ^ 23
+
+/-- **The honest bound's rate** `ρ = 3/8`, the plan's tables' rate cap: above `1/e`, so `k` meets it (`kρ`), and below
+one. -/
+noncomputable def ρ : ℝ := 3 / 8
+
+theorem one_le_k : 1 ≤ k := Nat.one_le_two_pow
+
+theorem ρ_pos : 0 < ρ := by norm_num [ρ]
+
+theorem ρ_lt_one : ρ < 1 := by norm_num [ρ]
+
+/-- **The rate condition at the honest bound**: `2^23 ≤ ρ·(e·k)` at `k = 2^23` and `ρ = 3/8`, since `e > 8/3`
+(`Real.exp_one_gt_d9`). -/
+theorem kρ : (2 : ℝ) ^ 23 ≤ ρ * (Real.exp 1 * k) := by
+  norm_num [ρ, k]
+  linarith [Real.exp_one_gt_d9]
 
 end Instance.Honest
 

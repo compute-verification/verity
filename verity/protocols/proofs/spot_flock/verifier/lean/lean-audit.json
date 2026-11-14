@@ -1,0 +1,20 @@
+{
+ "format": 1,
+ "roots": ["VStarRecursive"],
+ "exempt": {
+  "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.Sampled.main, audited under VStarRecursive",
+  "SampledTwoMain": "the sampled-two executable's entry point, one line; its command is VStar.Recursive.SampledTwo.protocol.main, audited under VStarRecursive",
+  "SampledTwoOnMain": "a test's executable, sampled-two-on: the two-stage form's check at its switch on, which the form's accept test drives; no party runs it and nothing dispatches to it, and the check it calls is audited under VStarRecursive"
+ },
+ "layers": {
+  "VStarRecursive": {
+   "imports": ["Lean", "Std.Data.HashMap", "Flock", "CoreProtocol", "Lms", "Spot", "VStar", "VStarRecursive"],
+   "except": [],
+   "why": "the recursive audit is code: Lean core, C-Flock's verifier library (V*'s statements, RecSetup, RecCoins), the core protocol interface and the one-stage audit it decides with, no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
+ }
+}

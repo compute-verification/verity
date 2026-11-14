@@ -1,7 +1,9 @@
 module
 
 public import PouwCheck.Credit
+public import PouwCheck.CreditOnce
 public import PouwCheck.Difftest
+public import PouwPearlPlus.Load
 
 /-!
 # The difftest's functions for a served execution phase's credit (`PouwCheck.Credit`)
@@ -32,6 +34,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `steps`, its rounds, and `salt`, its Program salt):
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the `layoutOf` and `shapeOf` of
   the descriptor's Program (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
+* `passes-distinct` (`passes`, the Pearl-C pass manifests credited together, as `credit.passes_distinct` takes them):
+  Pearl+'s `PouwCheck.PearlPlus.passesDistinct`, null, or `{"refused": [code, why]}`.
 -/
 
 @[expose] public section
@@ -115,9 +119,16 @@ def registeredFileOf (j : Json) : Except String Json := do
     pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)])
   PouwCheck.Difftest.refusal id got
 
+def passesDistinctOf (j : Json) : Except String Json := do
+  let .arr passes ← PouwCheck.Difftest.get j "passes" | throw "passes is not a list"
+  pure <| match PouwCheck.PearlPlus.passesDistinct passes.toList with
+    | some (code, why) => Json.mkObj [("refused", toJson [code, why])]
+    | none => Json.null
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", windowDrawnOf), ("outcome", outcomeOf),
-  ("window", windowOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
+  ("window", windowOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
+  ("passes-distinct", passesDistinctOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name

@@ -93,7 +93,7 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
   -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures Flock's Lean verifier (`flock-verify verify --zk`) on the H1 tile unit, step by step:
+`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile unit, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
@@ -122,7 +122,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
-`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
+`Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
 `popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
 unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
 population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
@@ -289,7 +289,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --poo
 ~~~
 
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
-config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
+config's word-level descriptor: `verity-verify-proof qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
 the command.
 

@@ -20,19 +20,19 @@ def _covered(path: str, inputs: list[str]) -> bool:
     return any(p == "." or path == p or path.startswith(p.rstrip("/") + "/") for p in inputs)
 
 
-def test_every_sidecar_its_pins_and_its_module_are_circuit_check_suite_inputs():
+def test_every_sidecar_its_pins_its_unkeyed_file_and_its_module_are_circuit_check_suite_inputs():
     tests = tomllib.loads((ROOT / SUITE / "pyproject.toml").read_text())["tool"]["verity"]["tests"]
     assert tests.get("inputs_only") is True, f"{SUITE}/pyproject.toml: this test reads its inputs as the suite's whole input set"
     inputs = [SUITE, *tests["inputs"]]
     found = SC.discover()
     assert len(found) > 50, found
     need = []
-    for files in found.values():
+    for files in [*found.values(), *SC._beside((SC.UNKEYED,)).values()]:
         for p in files.values():
-            stem = p.name[:-len(f"{SC.SUFFIX}{p.suffix}")]
+            stem = p.name.partition(SC.SUFFIX)[0]
             module = p.with_name(f"{stem}.py") if p.with_name(f"{stem}.py").is_file() else p.parent / stem / "__init__.py"
             need += [SC.rel(p), SC.rel(module)]
     missing = sorted({f for f in need if not _covered(f, inputs)})
     assert not missing, (f"{SUITE}/pyproject.toml's [tool.verity.tests] inputs leave out these files circuit-check reads (a sidecar, "
-                         f"its pins or its module), so its read guard would fail the suite; add them:\n"
+                         f"its pins, its unkeyed file or its module), so its read guard would fail the suite; add them:\n"
                          + "\n".join(f'          "{f}",' for f in missing))

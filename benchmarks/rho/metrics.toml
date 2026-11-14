@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "training/slowdown-onsite-h200"
+title = "The reference onsite H200 deployment: the slowdown's lower bound on hidden training over a year of the world's compute"
+owner = "training"
+unit = "the slowdown's lower bound over a year of the world's compute: the adversary's GPU-hours to the target over the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1"
+better = "higher"
+command = "research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/rho/periods.py --out \"$OUT\"'"
+every = "7d"
+goal = "training/one-slowdown-calculator"

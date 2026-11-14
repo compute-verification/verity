@@ -8,8 +8,8 @@ def weight_field_name(name: str) -> str:
     the record's hints are relative to the model (`model.layers...`); strip ONE leading `model.` from the wrapper's names
     only when a second `model.` follows or the rest is `lm_head`/`model...`.  The tensor-parallel rank wrapper (derive_step
     --tp: the TP stub holds the request wrapper as `inner`, the same convention as tp_links' `module_path` = `inner.model.<path> (<Class>)`)
-    adds one level: `inner.model.model.layers...` -> `model.layers...` (measured: the ONLY operand difference of the first TP2 B1 per-rank
-    compare was this prefix on every weight / cos-sin operand, 37,342 of 111,771; the collective and activation wiring was equal)."""
+    adds one level: `inner.model.model.layers...` -> `model.layers...`; without that strip a per-rank compare's weight and cos-sin
+    operands differ from the record's by this prefix."""
     if name.startswith("inner."):
         name = name[len("inner."):]
     if name.startswith("model.model.") or name.startswith("model.lm_head."):

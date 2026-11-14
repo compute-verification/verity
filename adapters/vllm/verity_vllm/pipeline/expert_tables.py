@@ -164,7 +164,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``; an embedding shard's over ``vocab``,
     the whole vocabulary's rows and the rank's first token."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":
@@ -318,7 +318,7 @@ def main(o: Options) -> int:
     blocks = {}
     for b in o.block:
         proj, _, n = b.partition("=")
-        if not proj or not n.isdigit():
+        if not proj or not n.isdecimal():
             raise UsageError(f"--block {b!r}: PROJ=n")
         blocks[proj] = int(n)
     if not blocks and not o.shard and not o.bnk:

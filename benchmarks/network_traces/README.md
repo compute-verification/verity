@@ -10,7 +10,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a job whose resources are in the script's header.
 - Every other `.sh` here is a job on a node, its command and resources in its header (`capture_loopback.sh`, on a
-  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `flock-verify` and the
+  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `verity-verify-proof` and the
   Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
@@ -36,7 +36,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
-  and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
+  and holds them by the Lean `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
   scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile
   slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
@@ -140,7 +140,7 @@ published beside the answer as `certificates.json`, each certificate with its ow
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
-on the developer's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+on the developer's node, so `trusted-device` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
@@ -359,7 +359,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
-| Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
+| Lean | every proof of both steps is the verifier's own `verity-verify-proof verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
 --warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
@@ -413,11 +413,11 @@ one link, one network certifier on one uplink, certifying a request rate of one 
 or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
 ε. The terms are those of
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`, proved in
-`security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
-failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean`); the
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`, proved in
+`security/Proofs/Certifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
+failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/Certifier/MonitoringPeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
+(`security/Definitions/Certifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).

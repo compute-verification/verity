@@ -50,7 +50,10 @@
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
 #     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
 #     serve dir's private/out each file of $OUT that names or counts a window or holds a load's tokens or span (the
-#     aggregate's, which `served_overhead.py table` reads there), its public form in its place. The advice registration's published copies
+#     aggregate's, which `served_overhead.py table` reads there) or Pearl+'s exclusion tiles' count or its replayed tiles'
+#     ids (its verdict's profile and replay by tile, the reference's and the Lean's), its exact credit where the work is
+#     in the grid form, or its prover's give-up before the coin (the piece's give-up document and the counts in its
+#     log's volunteer and retain lines), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
@@ -156,7 +159,7 @@
 # PoUW's period case, sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
 # holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
-# are copied to the same path on COMPOSE_NODE, an auditor host the prover doesn't control and where no witness goes
+# are copied to the same path on COMPOSE_NODE, an auditor device the prover doesn't control and where no witness goes
 # (default vy-auditor-2; never a prover node such as a deferral's follow-on), outside any run dir (`served_verdicts.sh
 # copy compose`), and there `served_verdicts.sh compose` with D alone holds the copy to its sums, rebases the cases'
 # blobs onto a copy at another path (`served_verdicts.py rebase`), runs at the served node's tree (another only with FOLLOW_ANY_TREE=1), refuses the served node itself and a serve dir
@@ -336,17 +339,20 @@
 # digest no auditor holds), so the log before R is that record and W, and runs `served_verdicts.sh pearl-tie`
 # (PEARLPLUS_TIE_CMD) before its coin: the window's
 # advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW`, the circuit cut at
-# Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W`. V3c then runs
+# Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W --class
+# V3C_CLASS` (PEARLPLUS_CLASS), which refuses passes that aren't the class's fixed load and publishes the work in its
+# grid form (the class's structural credit less the give-up on H1's window grid, the exact credit held). V3c then runs
 # after step 4 and before the record (on a node short of its audit's memory, deferred as under H1_TIE): it audits that
 # commit, held to W (WINDOW-COMMIT), with records_audit's --tie W (V3C-TIE), and the record reads R and that audit's
 # summary from pearlplus/w<k>/tie (`record --window-tie`), where `pearlplus_of_record` holds them to W.
 # Once Pearl+'s piece wrote W, before the record, the served compare holds the serve to the row of record on the CPU
-# (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ and lowers
+# (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ at REV
+# (`--revision`, which the manifests must pin of the row's model when it isn't the row's own) and lowers
 # the same window circuit at V3C's class cut at Pearl+'s linears; BUILD, PRED is the row's Build of record BUILD_OF_RECORD
 # (PROGRAM_DIGEST:MANIFEST_DIGEST); CUT, W registers exactly that circuit's Pearl+ values. Its last line, SERVED-COMPARE:
 # EQUAL or NOT EQUAL, is the one the record names (`record --served-compare`, its served-compare/served_compare.json
 # carried to a follow-on and the compose hand-off), and NOT EQUAL fails the run.
-# A step that can't run says why, and the chain stops there. Flock, Lean's flock-verify and sampled-proofs-verifier and the
+# A step that can't run says why, and the chain stops there. Flock, Lean's verity-verify-proof and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
@@ -425,8 +431,9 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables
   IFS=, read -r slots prompt _ <<< "${V3C_CLASS-4,32,4}"
   SLOTS=${SLOTS:-$slots} PROMPTS=${PROMPTS:-$prompt:$prompt}
-  # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE)
-  export PEARLPLUS_TIE PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
+  # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE); PEARLPLUS_CLASS is the class
+  # Pearl+'s verdict holds the window's passes to (served_pearlplus.sh's `verify --class`)
+  export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
   # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work:K)
   PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
   # the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
@@ -679,7 +686,7 @@ served_compare() {  # under PEARLPLUS_TIE, once Pearl+'s piece wrote W and befor
   mkdir -p "$dir" "$OUT/served-compare" && rm -f "$SERVED_COMPARE" "$dir/circuit_facts.json"
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "${SERVED_COMPARE_TIMEOUT:-30m}" "$PY" benchmarks/one_stage/served_compare.py \
     --serve "$D" --row "$ROW_ID" --class "$V3C" --pearl-tables "${PEARLPLUS_ARM#pouw:}" --pred "$PRED" \
-    --of-record "$BUILD_OF_RECORD" --window-record "$(pearl_dir)/registration.json" --out "$dir") 2> "$dir/compare.err" \
+    --of-record "$BUILD_OF_RECORD" --window-record "$(pearl_dir)/registration.json" --revision "$REV" --out "$dir") 2> "$dir/compare.err" \
     | publish_lines
   rc=${PIPESTATUS[0]}
   [ "$rc" -le 1 ] || say "SERVED-COMPARE: NOT EQUAL (served_compare.py exit $rc: $(tail -1 "$dir/compare.err" | cut -c1-400))"
@@ -817,7 +824,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "$V3C_LAW" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
-    "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
+    "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
@@ -1485,7 +1492,7 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
   if [ "$kind" = deferred ]; then
     for n in "$composer" "${COMPOSE_NODE%%.*}"; do
       [ -z "$n" ] || [ "${host%%.*}" != "$n" ] \
-        || { say "COPY refused: the deferral's list holds the window's witness, and $host is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"; return 3; }
+        || { say "COPY refused: the deferral's list holds the window's witness, and $host is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"; return 3; }
     done
   else
     [ "${host%%.*}" != "$served" ] \
@@ -1771,12 +1778,12 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) || return 7
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) || return 7
   (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
-  # after flock-verify's build, whose package it requires by path: the inference-only verdict's `nci-check --count`,
+  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `nci-check --count`,
   # without which the verdict is the Python count's alone
   (cd verity/protocols/policy/inference_only/verifier/nci/lean && lake build nci-check) || echo "nci-check didn't build"
 }

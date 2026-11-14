@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 /-!
 # The challenger's live-coin part's samples and the decoder at the verifier's public inputs, under the record's custody
 
-`ZkReg.drawOkZKHJ_of_file` and the decoder the `--zk` session's simulator reads, at flock-verify `--zk --public-inputs`
+`ZkReg.drawOkZKHJ_of_file` and the decoder the `--zk` session's simulator reads, at verity-verify-proof `--zk --public-inputs`
 (`own`):
 
 * `setupHidden_mPts_drawnP`, `setupHidden_mPts_of_provedP`: `setupHidden_mPts_drawn` and `setupHidden_mPts_of_proved`

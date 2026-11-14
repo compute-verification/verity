@@ -19,7 +19,7 @@ from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_values as NV
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.window_builder import Grain
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
 from tests.program.predict.test_node_window import LP, glm_request
 from verity.circuits.codec import descriptor_id
@@ -82,16 +82,17 @@ def test_wired_to_allreduce(window):
 
 
 def test_census(window, without):
-    """`EmbeddingShard` is gone from the unlowered families and its port from the free ones; its ``tok`` port is free
-    under the prompt and the token select, which are not lowered."""
+    """`EmbeddingShard` is gone from the unlowered families and its port from the free ones; its ``tok`` port is the
+    request's ingress at the prefill (the prompt) and free under the token select, which is not lowered."""
     circuit, w = window
     census, before = w.census(circuit), without[1].census(without[0])
     assert before["unlowered"]["EmbeddingShard"] == 2 and before["free"]["EmbeddingShard"]["words"] == (LP + 1) * WIDTH
     assert "EmbeddingShard" not in census["unlowered"] and "EmbeddingShard" not in census["free"]
     assert census["units"]["EmbeddingShard"] == BLOCKS * (LP + 1)
     read = _tid(circuit, READ)
-    assert {(f.port, f.kind, f.family) for f in w.free if f.tid == read} == {("tok", "param", "prompt"),
-                                                                            ("tok", "node", "TokenSelect")}
+    assert {(f.port, f.kind, f.family) for f in w.free if f.tid == read} == {("tok", "node", "TokenSelect")}
+    assert [(g.reader, g.port, g.at, g.units, g.step) for g in circuit.ingress] == [(read, "tok", 0, LP * BLOCKS, 0)]
+    assert census["ingress"] == {"ports": 1, "unit_ports": LP * BLOCKS, "words": 2 * LP * BLOCKS}
 
 
 def test_tables_declared(window):
@@ -131,9 +132,9 @@ def test_split_keeps_weight_nonces(window, without):
 
 @pytest.mark.slow
 def test_split_beside_expert_tables():
-    """Over an MoE layer with the sparse families, whose expert blocks' tables are in the window too, the split keeps both
-    kinds of table apart: the plain weights and their nonces are the same with and without the shard's tables, and handed
-    unsplit all but the first would take another nonce."""
+    """Over an MoE layer with the sparse families, whose expert blocks' tables and absorbed weights' entries are in the window
+    too, the split keeps all three apart: the plain weights and their nonces are the same with and without the shard's
+    tables, and handed unsplit all but the first would take another nonce."""
     from verity_vllm.program.predict import node_window_sparse as NS
 
     fn = glm_request(LP, 1, moe=True).program.fn
@@ -142,7 +143,7 @@ def test_split_beside_expert_tables():
     (plain, tables), (plain0, tables0) = NE.split(params), NE.split(before)
     assert plain == plain0 and WW.weight_nonces(plain) == WW.weight_nonces(plain0)
     assert set(tables) - set(tables0) == {NE.shard_param(LABEL, NE.WIDTH, b) for b in range(BLOCKS)}
-    assert all(t.endswith("/table") for t in tables0) and tables0
+    assert all(t.endswith(("/table", "/bnk")) for t in tables0) and {t.rsplit("/", 1)[1] for t in tables0} == {"table", "bnk"}
     moved = WW.weight_nonces(params)
     assert sum(moved[p] != n for p, n in WW.weight_nonces(plain0).items()) == len(plain0) - 1
 

@@ -1,10 +1,3 @@
-/-
-Δ in a typed template statement, pair by pair (`delta_rows`): every slot's constant from the pin (`constPairs`), then
-each row's constant bits (`rowPairs`: its first `cv` the row prefix's midstate, its `hm96` slot's `pad` the padding
-block, bit 1 from the pin and bit 0 from the unit range's forced-zero row), the units' leaf and cut bits, every wire's
-destination bits from its source's, then the typed tail. Δ writes each row's constant bits as `rowPairsOf`, which for
-`sha512/row/v1` rows (`16 · words` bits in at least one chunk) are `rowPairs`'s (`rowPairsAll_v1`).
--/
 module
 
 public import Proofs.Flock.Soundness.ExecFlatCopies
@@ -24,6 +17,14 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Accept
+
+/-!
+Δ in a typed template statement, pair by pair (`delta_rows`): every slot's constant from the pin (`constPairs`), then
+each row's constant bits (`rowPairs`: its first `cv` the row prefix's midstate, its `hm96` slot's `pad` the padding
+block, bit 1 from the pin and bit 0 from the unit range's forced-zero row), the units' leaf and cut bits, every wire's
+destination bits from its source's, then the typed tail. Δ writes each row's constant bits as `rowPairsOf`, which for
+`sha512/row/v1` rows (`16 · words` bits in at least one chunk) are `rowPairs`'s (`rowPairsAll_v1`).
+-/
 
 @[expose] public section
 

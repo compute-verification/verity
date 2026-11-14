@@ -883,7 +883,7 @@ anything. `flock-firewall hello` computes the same `Hello` on its own (`test_lea
 auditor's sample (or `null`) is answered `ok N` and the `Hello`, or `refused WHY`, and `draw LEN NONCE` fixes the nonce.
 `FC_FIREWALL_STATEMENT` names the Lean statement (by default the build's, `+seed-injection` under that feature, and under `--wide-leaf` the statement's wide name, which it may only repeat), and `FC_FIREWALL_HELLO_ARGS` adds arguments:
 `--partition F --program F` for a statement whose setup reads them, and the verifier's own sampling-design inputs as
-`flock-verify verify` takes them, which a stratified, work or closure sample sets up only on (U2, U3): `--stratified K`,
+`verity-verify-proof verify` takes them, which a stratified, work or closure sample sets up only on (U2, U3): `--stratified K`,
 `--work K --work-table F`, `--closure F`.
 
 The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,

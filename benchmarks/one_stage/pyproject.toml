@@ -41,7 +41,7 @@ untraced = [
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
 # from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
 # machine: the test skips on a machine without one, since its build fetches nothing.
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall"]
 # What the suite's test process may reach with the processes it starts, past the runner's default for one:
 # `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.
@@ -51,9 +51,9 @@ worker_gb = 6
 # `verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
 # `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
-# `vstar-recursive sampled` (`verity/protocols/proofs/recursion/verifier/recursive`); its slow test builds the 4,32,4 class's
+# `vstar-recursive sampled` (`verity/protocols/proofs/spot_flock/verifier/lean`); its slow test builds the 4,32,4 class's
 # window circuit (`adapters/vllm/verity_vllm`).
-# `verity/protocols/compose/device/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
+# `verity/protocols/compose/device/live_challenger`: the challenger reserve's tests open a session on its local auditor device (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
@@ -89,7 +89,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
+          "benchmarks/one_stage/interfaces/verity_e2e_demo", "verity/commitments/cuda/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "demos/vllm/serve_load.py", "demos/vllm/serve.sh",
           "demos/vllm/commit.sh", "demos/vllm/published.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",

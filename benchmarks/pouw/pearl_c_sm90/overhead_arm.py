@@ -1,7 +1,8 @@
 """Pearl+ for `verity bench overhead`: the PoUW harness's arm (`benchmarks/pouw/harness/arm.py`, v0.6) over the served
-Pearl-C call on an H100 or H200 (`verity_vllm.protocols.pouw.pearl_c` under `SERVED`, on this directory's kernels, the
+Pearl-C call on an H100 or H200 (`verity.protocols.accounting.pouw.prover.serving.pearl_c` under `SERVED`, on this directory's kernels, the
 serial schedule), and its ε. The door registers both in `verity_bench.overhead.SCHEMES`; the three names it fixes are each
-one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the reference verifier's declaration) and `epsilon`.
+one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the verifier's declaration, whose verdict is the
+Lean's) and `epsilon`.
 
 - **The cubin** is the file `$VERITY_BENCH_CUBIN` names (the art the door sent), listed in the build record's ``binaries``
   so the SASS gate passes it before anything is timed. Without it the arm builds one into the run's directory
@@ -57,7 +58,7 @@ __all__ = ["PearlPlus", "epsilon"]
 HERE = Path(__file__).resolve().parent
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
-#: the served scheme the arm runs: `verity_vllm.protocols.pouw.pearl_c.SCHEMES`' H100 record, this directory's kernels
+#: the served scheme the arm runs: `verity.protocols.accounting.pouw.prover.serving.pearl_c.SCHEMES`' H100 record, this directory's kernels
 SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
@@ -68,8 +69,11 @@ CUBIN_ENV = "VERITY_BENCH_CUBIN"
 #: the cubin of record (``cubin``: its art id, sha256 and size) and, once one is stated, the window of record `epsilon`
 #: reads (``window``)
 PINNED = HERE / "overhead_arm.json"
-#: the reference verifier, from the run's working directory (the source tree's root)
-VERIFY_RUN = "benchmarks/pouw/pearl_c_vllm/verify_run.py"
+#: Pearl+'s verdict steps, the Python twin's (``verify``) and the Lean's (``lean``), from the run's working directory (the
+#: source tree's root)
+SERVED_PASSES = "benchmarks/pouw/pearl_c_vllm/served_passes.py"
+#: the samples each shape's pass is verified at
+DRAWS = 3
 #: the call index of every call the arm makes: the served reference's, whose keys the launch reads
 INDEX = 0
 #: the challenger's epoch for the arm's coins
@@ -81,12 +85,22 @@ DELTA = Fraction(1, 100)
 
 
 def verifier() -> dict:
-    """The build record's ``verifier`` (`arm.check_verifier`): `verify_run.py` on each shape's retained pass, which names
-    the manifest's sha256 on its ACCEPT or REJECT line, under the coins `dump` writes beside it; the no-write control's at
-    the same path under ``negative/``, which it must reject."""
-    return {"name": "verify_run.py: the reference replay of a retained Pearl-C pass", "per": "shape",
+    """The build record's ``verifier`` (`arm.check_verifier`): Pearl+'s verdict on each shape's retained pass alone, the
+    Lean's. First the Python twin (`served_passes.py verify --manifest`) judges the pass under the coins `dump` writes
+    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record there; its
+    line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
+    unaccepted. Then the Lean step (`served_passes.py lean`, PouwCheck.PearlPlus's ``pouw-pearlplus`` built in the tree)
+    judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
+    ``REJECT`` and names the manifest's sha256, and where the Lean refuses or disagrees it names none. The no-write
+    control's at the same path under ``negative/``, which the Lean must reject."""
+    pass_ = ["--passes", "{dir}", "--manifest", "{transcript}"]
+    return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwCheck.PearlPlus) on a retained Pearl-C pass, "
+                    "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", VERIFY_RUN, "{transcript}", "--coins", "{dir}/coins.json", "--commit", "{commit}"]]}
+            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
+                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
+                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{dir}/pearlplus-verify.json",
+                          "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]]}
 
 
 def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
@@ -193,7 +207,7 @@ class PearlPlus:
                 "verifier": verifier()}
 
     def domain(self, shape: Shape) -> str | None:
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         bad = PPD.refusals(SERVED, {0: (shape.n, shape.k)})
         if bad:
@@ -214,7 +228,7 @@ class PearlPlus:
         rows (FP32 words) the call hashes, and B's rows its weight side does."""
         from arm import Work
         from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         s, m = PPD.scheme_of(SERVED), m16(shape.m)
         unit = Unit(m, shape.k, shape.n)
@@ -243,7 +257,7 @@ class PearlPlus:
     def kernel(self) -> Any:
         """The served path's kernel on the built cubin, loaded once."""
         if self._kernel is None:
-            from verity_vllm.protocols.pouw import pearl_c as PPD
+            from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
             if self.cubin is None:
                 raise RuntimeError("prepare before build: the harness builds an arm first")
@@ -302,8 +316,8 @@ class _Held:
         from verity.protocols.accounting.pouw.verifier import verifier as PV
         from verity.protocols.accounting.pouw.verifier.audit import weights_root
         from verity.protocols.accounting.pouw.verifier.coins import Challenger
-        from verity_vllm.protocols.pouw import pearl_c as PPD
-        from verity_vllm.protocols.pouw.pearl_c.served_y import DeviceTrees
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y import DeviceTrees
 
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
@@ -358,8 +372,8 @@ class _YTree:
     no allocation and no torch."""
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
-        from verity_vllm.protocols.pouw import pearl_c as PPD
-        from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 
         run = trees.run
         self.R, self.dev, self.m, self.n, self.index = run.kernel.run, run.kernel.dev, m, n, index
@@ -427,7 +441,7 @@ class _Call:
         _on(K, stream, self.steps)
         if self.hashing:
             import torch
-            from verity_vllm.protocols.pouw import pearl_c as PPD
+            from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
             _on(K, stream, self.y_steps)
             size = self.pipe.size["tree_a"]
@@ -457,7 +471,7 @@ class _Call:
         """The gate: the launch's outputs against the served call's, byte for byte; y's tree against the one the served
         call retains over its y (`served_y.y_tree`)."""
         import torch
-        from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 
         mine = {name: t if name == "y" else t.clone() for name, t in self.views.items()}
         y = self.reference()
@@ -473,7 +487,7 @@ class _Call:
         import torch
         from verity.protocols.accounting.pouw.verifier.protocol import Matmul
         from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         if not self.hashing:
             raise RuntimeError(f"{SCHEME}: only a hashing call has a transcript")

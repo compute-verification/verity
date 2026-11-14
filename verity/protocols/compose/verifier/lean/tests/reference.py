@@ -1,6 +1,6 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case`
+`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case_twin`
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
 names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
@@ -228,7 +228,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
     release (`_coins_of`), the evidence's one session (`oneSession`: the sampled proof blocks are proved in one session), its
     record on the blobs and held to the coin trees that release log shows (`challenger.sessions_tree_reason`). So every
     case the mirror decides is refused: a session on a tree the challenger logged goes on to the population, the public
-    file and `flock-verify`, outside the mirror."""
+    file and `verity-verify-proof`, outside the mirror."""
     try:
         if ONE_STAGE._coins_of(p, c, e) is None:
             return REJECT, "coins: no challenger"
@@ -303,7 +303,7 @@ INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 
 @functools.cache
 def _period_answer(case: str) -> str:
-    return canonical(period_check.case(json.loads(case)))
+    return canonical(period_check.case_twin(json.loads(case)))
 
 
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each

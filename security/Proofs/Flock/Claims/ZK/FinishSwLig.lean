@@ -187,6 +187,8 @@ open CoinLayer
 
 namespace Masked
 
+variable {wideLeaf : Bool}
+
 /-- **Table `j`'s packed table folded by its `k₀` lane challenges has `2^cols` entries**, `cols` level 0's. -/
 theorem tabS_ligTab_size (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) : (FlockComplete.LigLock.tabS coin p0 (ligTab x w τ j) (zkTab x j).sch.k0).size =

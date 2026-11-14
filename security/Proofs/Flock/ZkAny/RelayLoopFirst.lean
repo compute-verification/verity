@@ -145,12 +145,13 @@ theorem roundRun_alg_first {sid : Nat} {st : State} {pl : Placed} {stream : Stri
     simp only [Loop.coinsOf, h1, h2]
   exact ⟨_, hat, key { q with st := st', vals := v } _ _ hto' hop', hod'⟩
 
-/-- **A level 0 of another's `m` and `t_pad` gives a table where it does.** -/
+/-- **A level 0 of another's `m`, statement version and `t_pad` gives a table where it does.** -/
 theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.Firewall.Level0.Level0}
     {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t)
-    (hm : l'.m = l.m) (htp : l'.tPad = l.tPad) : ∃ t', _root_.Flock.Firewall.Finish.tabOfLevel0 st l' = .ok t' := by
+    (hm : l'.m = l.m) (hw : l'.wideLeaf = l.wideLeaf) (htp : l'.tPad = l.tPad) :
+    ∃ t', _root_.Flock.Firewall.Finish.tabOfLevel0 st l' = .ok t' := by
   unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h ⊢
-  rw [hm, htp]
+  rw [hm, hw, htp]
   simp only [bind, Except.bind] at h ⊢
   split at h
   · cases h
@@ -160,7 +161,11 @@ theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.Firewall.Leve
   · cases h
   rename_i h2
   rw [ite_eq_right h2]
-  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  split at h
+  · cases h
+  rename_i hv
+  rw [ite_eq_right hv]
+  rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
   · rw [hs] at h
     cases h
   · rw [hs] at h
@@ -171,12 +176,13 @@ theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.Firewall.Leve
     rw [ite_eq_right h3]
     exact ⟨_, rfl⟩
 
-/-- **A level 0 sampled at the table's `m` gives a table**, where rep stream `k`'s placeholder is there: the
-placeholder's level 0 gives one, at the same `m` and the `t_pad` of its schedule (`Level0.ofDraws_ok`). -/
+/-- **A level 0 sampled at the table's `m` and statement version gives a table**, where rep stream `k`'s placeholder is
+there: the placeholder's level 0 gives one, at the same `m` and version (`Level0.ofDraws_wideLeaf`) and the `t_pad` of
+its schedule (`Level0.ofDraws_ok`). -/
 theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128} {c' : Cfg}
     {t' : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
     (hph : Loop.placeholder spec sts k link = .ok (c', t', dom', xs', hi')) {g : Array F128} {d : ByteArray}
-    {l : _root_.Flock.Firewall.Level0.Level0} (hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d = .ok l) :
+    {l : _root_.Flock.Firewall.Level0.Level0} (hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d = .ok l) :
     ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l = .ok t := by
   have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
     intro α β x f b hb
@@ -190,7 +196,9 @@ theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {li
   obtain ⟨t₀, ht₀, -⟩ := bok hph
   obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
   obtain ⟨hm₀, -, ⟨s₀, hz₀, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl₀
-  exact tab_of_same ht₀ (hm.trans hm₀.symm) (Prod.mk.inj (Except.ok.inj (hz.symm.trans hz₀))).2
+  exact tab_of_same ht₀ (hm.trans hm₀.symm)
+    ((_root_.Flock.Firewall.Level0.ofDraws_wideLeaf hl).trans (_root_.Flock.Firewall.Level0.ofDraws_wideLeaf hl₀).symm)
+    (Prod.mk.inj (Except.ok.inj (hz.symm.trans hz₀))).2
 
 open Loop LeanRelease in
 /-- **The round's coins taken, and the round's own rep one round on from its stream's first round where the next round

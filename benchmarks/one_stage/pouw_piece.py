@@ -10,9 +10,10 @@
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
 window's registration, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
 system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
-(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name}`` (the challenger key
-it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its copy of main's
-first-parent history, ``--main``, one commit a line; the period, ``--name``), its commitment the auditor's ledger
+(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
+challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its
+copy of main's first-parent history, ``--main``, one commit a line; the period, ``--name``; the sessions the ledger's
+close of the period lists, `close_sessions`), its commitment the auditor's ledger
 (``--ledger``, its lines), its evidence ``{pins, windows}`` (the host's pins log, ``--pins``, its lines; each window's
 evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s form). Windows carrying their
 statements' proof files instead (`credit.PERIOD_KEYS`, the sampled calls' ``statements`` and the live ``statements``) are
@@ -23,9 +24,10 @@ The directory, private as `composite.py` reads it (0700, its files 0600: the evi
 ``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params, commitment, evidence,
 blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and ``answer.json``: the line ``EXE
 check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-check`` or
-``pouw-period``), or without ``--exe`` the Python reference's (`core_check.case`, `period_check.case`, which the
-difftests hold to the Lean). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when
-it is undecided, as the check does.
+``pouw-period``). ``period`` is answered by the Lean alone: without ``--exe`` its piece is MISSING (below), never the
+Python reference's (`period_check.case_twin`, which the difftests hold to the Lean); ``v1`` without ``--exe`` is
+`core_check.case`'s, which is the Lean's too (`pouw-check serve`, its Python `case_twin` beside it). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
+undecided, as the check does.
 
 ``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
 ``out/serve``), and names its piece MISSING, with why, wherever the run doesn't hold them (`v1_missing`,
@@ -59,10 +61,11 @@ from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity_vllm.protocols.pouw.h1 import answers as A
+from verity.protocols.accounting.pouw.prover.serving.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
-CASE = {V1: CC.case, PERIOD: PC.case}
+NO_EXE = (f"no {PERIOD} executable (--exe, the pouw-period of PouwCheck/Period.lean's package): the period's case is "
+          "answered by the Lean alone, so with none nothing decides it")
 EXIT = {"accept": 0, "reject": 1, "undecided": 2}
 CASE_FILES = ("params.json", "commitment.bin", "evidence.json", "case.json", "answer.json")
 
@@ -85,10 +88,13 @@ def challenger_key(doc: dict) -> dict:
 
 
 def answer(protocol: str, out: Path, exe: str | None) -> dict:
-    """The protocol's answer on the case in `out`: the Lean's when `exe` is given, else the Python reference's."""
+    """The protocol's answer on the case in `out`, the Lean's: `exe`'s when it is given, else (`v1` only)
+    `core_check.case`'s, `pouw-check serve` with its Python twin beside it."""
     if exe is None:
+        if protocol != V1:
+            raise RuntimeError(NO_EXE)
         case = json.loads((out / "case.json").read_text())
-        return CASE[protocol]({k: case[k] for k in ("params", "commitment", "evidence")})
+        return CC.case({k: case[k] for k in ("params", "commitment", "evidence")})
     p = subprocess.run([exe, "check", *(str(out / f) for f in ("params.json", "commitment.bin", "evidence.json"))],
                        capture_output=True, text=True, check=False)
     said = p.stdout.strip().splitlines()
@@ -222,10 +228,11 @@ def proved(key: Any, ledger: list[str], pins: list[str], main: list[str], name: 
 
 def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Path, statements: Path | None,
                   live: Path | None) -> tuple[dict, list[str], list[str], list[dict]]:
-    """Period ``verity/pouw/period/v1``'s params, ledger, pins log and windows (`credit.PERIOD_KEYS`, statements) from a
-    served run's kept records (module docstring), or Missing naming the first record or leg it lacks: the closed
-    period ``period.json`` names holding window `k` alone, its record, the session, ledger and pins PoUW's served piece
-    fetched (`pouw`), the declared Program, and the sampled calls' `statements` and the `live` evidence."""
+    """Period ``verity/pouw/period/v1``'s params (with the close's sessions), ledger, pins log and windows
+    (`credit.PERIOD_KEYS`, statements) from a served run's kept records (module docstring), or Missing naming the
+    first record or leg it lacks: the closed period ``period.json`` names holding window `k` alone, its record, the
+    session, ledger and pins PoUW's served piece fetched (`pouw`), the declared Program, and the sampled calls'
+    `statements` and the `live` evidence."""
     h1 = _window(serve_dir, k).get("pouw_h1")
     if not h1:
         raise Missing(f"window {k} served no PoUW (its line has no pouw_h1: served without --protocols)")
@@ -256,9 +263,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
             raise Missing(f"no {p.relative_to(pouw)} in {pouw}: PoUW's served piece (served_verdicts.py pouw) fetches "
                           "the gate's ledger, pins log and the window's session and its sample's after the period's close")
     ledger = lines(pouw / "ledger.jsonl")
-    close = next((json.loads(x)["body"] for x in ledger if json.loads(x).get("kind") == "period-close"
-                  and json.loads(x)["body"].get("period") == name), None)
-    listed = [w.get("session") for w in (close or {}).get("windows") or ()]
+    listed = close_sessions(ledger, name)
     if listed != [sid, dsid]:
         raise Missing(f"period {name}'s close in the ledger lists the sessions {listed}, and this piece is built for a "
                       f"period of one served window, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
@@ -272,19 +277,33 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     if live is None:
         raise Missing(f"no live evidence for window {k}'s rounds (--live-evidence: h1_prove/live.sh on the run's "
                       "--h1-prover dump)")
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
     key = PHC.pinned_key(tree / "key.json", key_sha512)
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
                              json.loads(live.read_text()), draw_directory=draw)
-    return {"key": key.to_json(), "main": lines(main), "name": name}, ledger, lines(pouw / "pins.jsonl"), [ev]
+    return ({"key": key.to_json(), "main": lines(main), "name": name, "sessions": listed},
+            ledger, lines(pouw / "pins.jsonl"), [ev])
+
+
+def close_sessions(ledger: list[str], name: str) -> list[Any]:
+    """The sessions the auditor's ledger `ledger` lists in period `name`'s close, in its order, read past any line that
+    isn't an entry object (the check refuses that ledger); the empty list when it closes no period `name`. A line that
+    isn't JSON raises: the ledger is the auditor's own, so a broken one is a failed run, not a period to ask about."""
+    for x in ledger:
+        e = json.loads(x)
+        body = e.get("body") if isinstance(e, dict) else None
+        if isinstance(body, dict) and e.get("kind") == "period-close" and body.get("period") == name:
+            return [w.get("session") if isinstance(w, dict) else None for w in body.get("windows") or ()]
+    return []
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("protocol", choices=["v1", "period"])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--exe", help="the protocol's Lean executable (pouw-check, pouw-period); else the Python reference")
+    ap.add_argument("--exe", help="the protocol's Lean executable (pouw-check, pouw-period); without it period's piece "
+                                  "is missing, and v1's is the Python reference's")
     ap.add_argument("--serve-run", type=Path)
     ap.add_argument("--window", type=int)
     for f in ("params", "registration", "answer", "key", "ledger", "pins", "main", "windows"):
@@ -322,9 +341,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not all(getattr(a, f) is not None for f in given):
         ap.error(f"{a.protocol} takes --serve-run and --window, or {', '.join('--' + f for f in given)}")
     if protocol == PERIOD:
-        params = {"key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main), "name": a.name}
-        return period_piece(a.out, params, lines(a.ledger), lines(a.pins), json.loads(a.windows.read_text()), a.exe,
-                            run)
+        ledger = lines(a.ledger)
+        params = {"key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main), "name": a.name,
+                  "sessions": close_sessions(ledger, a.name)}
+        return period_piece(a.out, params, ledger, lines(a.pins), json.loads(a.windows.read_text()), a.exe, run)
     params = json.loads(a.params.read_text())
     commitment = canonical(json.loads(a.registration.read_text()))
     evidence = canonical(json.loads(a.answer.read_text()))
@@ -342,7 +362,11 @@ def period_piece(out: Path, params: dict, ledger: list[str], pins: list[str], wi
     """The period's piece in `out`: `windows` as given (`credit.PROVED_KEYS`), or carrying their statements
     (`credit.PERIOD_KEYS`) and put in that form by `proved`, whose reference verdict ``REFERENCE`` prints; its verifier
     runs `run` when given (`answers.Answers` on ``--lean-answers``, its counts a ``LEAN-ANSWERS`` line), else
-    `proofs.verify`."""
+    `proofs.verify`. With no `exe` the piece is MISSING (`NO_EXE`), before any of that runs."""
+    if exe is None:
+        missing(out, PERIOD, NO_EXE)
+        print(f"MISSING {PERIOD}: {NO_EXE}", flush=True)
+        return EXIT["undecided"]
     if isinstance(windows, list) and windows and all(isinstance(w, dict) and "statements" in w for w in windows):
         windows, (_credit, why) = proved(params["key"], ledger, pins, params["main"], params["name"], windows,
                                          **({} if run is None else {"run": run}))

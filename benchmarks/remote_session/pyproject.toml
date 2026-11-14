@@ -59,7 +59,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/proofs/spot",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
           "verity/protocols/accounting/certifier", "verity/protocols/accounting/certifier/prover",
-          # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
+          # test_challengers.py: challengers.Gate against the auditor device's gate, its sessions served by serve.py
           "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",

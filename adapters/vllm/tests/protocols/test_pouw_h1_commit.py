@@ -6,7 +6,7 @@ step and K and each round's input-ids table ``ids@<s>`` as its step's input ids,
 binds the record. A window whose served A is all zero codes, or one A row off the rows the Commit acquired, or whose
 step table holds its calls' rows shifted by a call, or whose Commit ids aren't its prompts, each with an honest Commit,
 credits nothing (`UNTIED`); core's credit refuses each at ``arow`` (here and `test_credit_gate`). The window here is a
-two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
+two-linear stand-in under the auditor device's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
 (`MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
 from __future__ import annotations
 
@@ -49,11 +49,11 @@ from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"

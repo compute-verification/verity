@@ -12,7 +12,7 @@ run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and up
 `PearlCDeviceRun.end`, the transcript tree and its reads back) and a whole-step replay's slot upload and records (``wr``:
 `whole_replay`, ``wrd``: `whole_replayed`).  Each phase is also an NVTX range, and the timed reps sit between
 cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaProfilerApi``.  A protocol arm serving
-Pearl-C takes its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
+Pearl-C takes its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
 ``PEARLC_CHALLENGER_PEER`` are set (`_live`), else from a challenger in this process; ``coins.json`` says which, and how
 the session closed (`pearl_c.window.coins_of`).
 
@@ -78,7 +78,7 @@ def _timed(fn, key: str):
 
 def _patch_pearl() -> None:
     """`PEARL_PHASES` on the class that defines each, before any run exists."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
     for name, key in PEARL_PHASES:
         owner = next((c for c in PPD.PearlCDeviceRun.__mro__ if name in c.__dict__), None)
         if owner is not None:
@@ -124,14 +124,14 @@ def _patch_engine(llm) -> None:
 
 
 def _live(arm):
-    """`arm` with its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
+    """`arm` with its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
     ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option
     (`bench_arm.live_coins`, which the option refuses when the reserve joined an H1 period). Returns the arm and the
     reserve answer, None when the arm's coins stay in-process."""
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, live_coins
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
     env = PearlCArm()
     if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols):
         return arm, None
@@ -198,7 +198,7 @@ def run(a) -> int:
                           **summarize_host(_STEPS, point.batch)}, default=str))
     engine.close()
     if option is not None:
-        from verity_vllm.protocols.pouw.pearl_c.window import coins_of
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import coins_of
 
         coins = coins_of(option, reserved)
         (out / "coins.json").write_text(json.dumps(coins, indent=1))

@@ -46,23 +46,20 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import sys
 import tempfile
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+# rec_profile is recursion_e2e's reader, a directory that is no package: its command, the README's and the suite's
+# pyproject put it on the path; verity, the harness kit (`record`) and verity_config are the workspace's
+import rec_profile as RP
+from rec_profile import SESSION_STEPS
+from verity_bench import kit, settings
+
+from verity.protocol import MONITORING_PERIODS
+
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))
-sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
-# the harness kit (`record`) and verity_config under it, for a run of this file outside the workspace's environment
-sys.path += [str(HERE.parent / "harness"), str(HERE.parents[1] / "tools" / "config")]
-
-import rec_profile as RP  # noqa: E402
-from rec_profile import SESSION_STEPS  # noqa: E402
-from verity_bench import kit, settings  # noqa: E402
-
-from verity.protocol import MONITORING_PERIODS  # noqa: E402
 
 #: the metrics `benchmarks/recursion_figures/metrics.toml` holds this benchmark to, by id: each the figure of `FIGURES` it
 #: names, recorded over each fleet's week, month and year, the world's year last, the one each id names (`record`)

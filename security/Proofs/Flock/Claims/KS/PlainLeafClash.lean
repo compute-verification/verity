@@ -37,7 +37,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
 reps' deployed ones**, at every level `ℓ ≥ 1`: `accepts_opensLDK` at `leafPlain`, `accepts_opens₀LDUK` past level 0,
 each rep's caps its proof's recursive caps and its level-`ℓ` openings its `plainLevelColsOf` entries;
 `accepts_opensLDLfK` at `leafPlain`. -/
@@ -84,7 +84,7 @@ theorem accepts_opensLDUK (keep : Bool → Bool)
                   (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ :=
   accepts_opensLDLfK keep leafPlain h
 
-/-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
+/-- **At verity-verify-proof's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
 ones**, at every level `ℓ ≥ 1`: `accepts_opensLDUK` at `keep := id`. -/
 theorem accepts_opensLDU {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
