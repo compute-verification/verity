@@ -6,7 +6,7 @@ record's fields and the fill's times integers of either sign, a start mark empty
 exactly the canonical JSON of what it decodes to. Past decoding every reference is the Python's own function on the
 decoded objects.
 
-Sessions are run by `streamed_wipe.WipeMemoryChallenger` itself against `streamed_wipe.Prover`, on an injected clock,
+Sessions are run by `streamed_wipe.WipeMemoryChallenger` itself against `wipe_store.Prover`, on an injected clock,
 with a mark source that returns the start certificate a test gives or with none, and signed by a test signer's key at a
 leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key (`mc_cases.deployed_signer`). No real key is
 read."""
@@ -23,6 +23,7 @@ from hypothesis import strategies as st
 import mc_cases as M
 import verity_difftest as D
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 
 #: Every scheme the port verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).
@@ -118,7 +119,7 @@ def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], 
     clock = M.Clock(start)
     c = sw.WipeMemoryChallenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins, mark_source=None if certificate is None else lambda m: certificate)
-    prover = sw.Prover(params)
+    prover = WS.Prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         prover.receive(first, data)
         clock.now += fill_ns

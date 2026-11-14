@@ -3581,7 +3581,7 @@
     {"file": "verity/protocols/accounting/pous/verifier/tests/test_pous_wipe_period.py", "count": 8},
     {"file": "verity/protocols/accounting/pous/verifier/tests/test_pous_wipe_store.py", "count": 16},
     {"file": "verity/protocols/accounting/pous/verifier/wipe_monitoring.py", "count": 4},
-    {"file": "verity/protocols/accounting/pous/verifier/wipe_period.py", "count": 16},
+    {"file": "verity/protocols/accounting/pous/verifier/wipe_period.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/verifier/README.md", "count": 12},
     {"file": "verity/protocols/accounting/pouw/verifier/audit.py", "count": 1},
     {"file": "verity/protocols/accounting/pouw/verifier/coins.py", "count": 2},
@@ -4526,7 +4526,7 @@
     {"file": "verity/protocols/proofs/spot/prover/audit/class_size.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.py", "count": 117},
     {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.sh", "count": 24},
-    {"file": "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py", "count": 28},
+    {"file": "benchmarks/network_traces/tests/test_kept_scan.py", "count": 28},
     {"file": "verity/protocols/proofs/spot/prover/tests/test_prove_path.py", "count": 80},
     {"file": "verity/protocols/proofs/spot/prover/cost/window_cost.py", "count": 11},
     {"file": "verity/protocols/proofs/spot/prover/cost/cpu_budget.py", "count": 7},
@@ -4543,8 +4543,6 @@
     {"file": "security/Proofs/Properties/Nci/DefinitionDigest.lean", "count": 4},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/job.sh", "count": 23},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py", "count": 23},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py", "count": 25},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py", "count": 5},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py", "count": 135},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/docket.py", "count": 23},
     {"file": "tools/check/README.md", "count": 3},
@@ -4664,6 +4662,9 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py", "count": 9},
     {"file": "adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py", "count": 6},
-    {"file": "adapters/vllm/verity_vllm/definitions/tests/test_stop_check.py", "count": 1}
+    {"file": "adapters/vllm/verity_vllm/definitions/tests/test_stop_check.py", "count": 1},
+    {"file": "verity/protocols/accounting/pous/prover/wipe_run.py", "count": 12},
+    {"file": "benchmarks/pouw/served_zk/replay_core.py", "count": 25},
+    {"file": "benchmarks/pouw/served_zk/replay_window.py", "count": 5}
   ]
 }
