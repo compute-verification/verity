@@ -33,7 +33,7 @@
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
-                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
+                                                   assertion about them are verifiably on the remote; otherwise names the failing parts (preserved.py);
                                                    exit 4 (WITHDRAWN) when the only blobs missing were withdrawn on purpose (`withdraw`): delete
                                                    their local copies, never put them again; N targets (default 8) checked at once, each printed
                                                    as it finishes
@@ -483,9 +483,9 @@ PRESERVED_EXITS = ("exit 0: PRESERVED. 1: NOT PRESERVED (something is missing or
 
 
 def cmd_preserved(argv: list[str]) -> int:
-    """The durability gate (F7, `preserved.py`), three legs: the attempt manifest, every artifact it names (outputs + telemetry),
+    """The durability gate (F7, `preserved.py`), three parts: the attempt manifest, every artifact it names (outputs + telemetry),
     and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
-    for every target; else 1, the list of what is not, and which legs fail.  Exit 4 (WITHDRAWN) when the only blobs missing were
+    for every target; else 1, the list of what is not, and which parts fail.  Exit 4 (WITHDRAWN) when the only blobs missing were
     withdrawn on purpose (`research data withdraw`): neither preserved nor lost, their local copies are to be deleted, never kept
     or put again.  Exit 2 on a usage error (no targets).  Targets are checked
     `--jobs` at a time and each one's lines are printed as it finishes (completion order); `--json` waits and keeps the given order."""
