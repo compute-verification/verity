@@ -260,13 +260,16 @@ def collect(sources: list[Path], work: Path) -> dict[str, dict]:
 def where(runs: dict[str, dict], peer: str | None = None) -> dict:
     """Where the honest run's certifier ran: on the gate's host (the auditor's machine, through its tunnel to the
     endpoint), on the host that ran the rehearsal reaching another node's endpoint through `forward` (``peer``), or off
-    the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's."""
+    the gate on the host that ran the rehearsal, which against a loopback endpoint is the endpoint's. A gate run's
+    fetched request names no peer (the gate gives the peer's name to the run's own lane alone, in the witness), so
+    of a gate run's endpoint only the port is said."""
     upstream = (_read(runs[HONEST]["dir"] / "deployment.json") or {}).get("upstream")
     if runs[HONEST]["gate"] is not None:
         req = _read(Path(runs[HONEST]["dir"]).parents[1] / "request.json") or {}
         gates = {s: x["gate"] for s, x in runs.items() if x.get("gate")}
         off = sorted(set(runs) - set(gates))
-        at = f"{req['peer']}:{req['port']}" if req.get("peer") and req.get("port") else None
+        at = (f"{req['peer']}:{req['port']}" if req.get("peer") else f"the peer's port {req['port']}") \
+            if req.get("port") else None
         return {"upstream": f"{at} (its 127.0.0.1, tunnelled to {upstream})" if at and upstream else at or upstream,
                 "where": f"gate: the certifier on {GATE_HOST}, the auditor's host, through its gate (vy-challenger-gate "
                          f"certifier-rehearse), tunnelled to {at or 'the endpoint'}; gate runs "

@@ -81,7 +81,7 @@ if [ -n "$EP_PID" ]; then
     || log "demo-chain: research keep $KEEP failed"
 fi
 "$PY" - "$G" "$RC" <<'EOF'
-import hashlib, json, sys, time
+import hashlib, json, sys
 from pathlib import Path
 root, rc = Path(sys.argv[1]), int(sys.argv[2])
 out = root / "out"
@@ -89,9 +89,8 @@ s = json.loads((out / "summary.json").read_text()) if (out / "summary.json").is_
 runs = {k: {"verdict": r.get("verdict"), "network": r.get("network_verdict"), "audit": r.get("audit_accepted"),
             "salt": r.get("salt_accepted"), "salt_again": r.get("salt_again")} for k, r in (s.get("runs") or {}).items()}
 files = {str(f.relative_to(out)): hashlib.sha512(f.read_bytes()).hexdigest() for f in sorted(out.rglob("*")) if f.is_file()}
-now = time.time()
-json.dump({"run": root.name, "rc": rc, "ended": now, "pinned": None, "runs": runs, "files": files,
-           "ended_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))}, open(root / "end.json", "w"), indent=1)
+json.dump({"run": root.name, "rc": rc, "ended": "ended" if rc == 0 else "exited", "pinned": None, "runs": runs,
+           "files": files}, open(root / "end.json", "w"), indent=1)
 print(json.dumps({"rehearsal": root.name, "rc": rc, "runs": {k: v["verdict"] for k, v in runs.items()}}))
 EOF
 [ -f "$G/out/honest/plan.json" ] || { log "demo-chain: the rehearsal kept no honest run (rehearse.log)"; exit 3; }

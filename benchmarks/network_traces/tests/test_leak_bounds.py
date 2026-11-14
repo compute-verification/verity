@@ -67,7 +67,8 @@ def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
-    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
+    (run / "request.json").write_text(json.dumps({"run": "c1", "requests": 100}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"accepted": True, "windows": 75}}))
     doc = cr.leak(run, {"draw": {"honest": 64}})
     at = {"T": 32, "tau": Fraction(1, 10), "egress_cells": 65}
     per_s = Fraction(100, 75) / Fraction(32, 10)

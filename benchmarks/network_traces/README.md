@@ -87,8 +87,9 @@ its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` 
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
 record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
-one of those execution phases is certified. The record is all the script writes: what the wipe's reader does with one is
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
+gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
+is certified. The record is all the script writes: what the wipe's reader does with one is
 its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
 
 ## The served session
@@ -460,8 +461,12 @@ docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
-`leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and execution phases) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each
+`leak_bounds` on the run's parameters (`deployment.json`), its traffic (the requests `request.json` asked for and
+`end.json`'s execution phases) and the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block
+unsampled. The end carries no count of the traffic: the gate takes an end as accepted only when its check counted the
+request's own number of requests and it ruled every line of the run, all of which are then in `out/`. So `leak`,
+which reads the end's `accepted` alone, refuses a run whose end isn't accepted, and a relay session, whose request
+asks for no number because its clients are the peer's. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per execution phase, whether its certificates, N2
 and the scan accepted.

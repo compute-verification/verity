@@ -147,8 +147,8 @@ client does, and writes no `traffic.json`, `client.log` or `client.json`.
 - *Where a client connects, and what tells it the relay is ready.* `serve` writes `endpoints.json` (the listener) and
   then `deployment.json` once it listens: the schedule, the session, the key, the run id, `windows` and `origin_unix`,
   bucket 0's start, `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
-  peer's client port, which the gate's `status` names with the deployment) and speaks cells through the shim
-  above. One that connects before the origin waits in the queue.
+  peer's client port, which the gate's `status` names with the deployment; the listener itself the gate gives no one)
+  and speaks cells (`warden.cells`, `warden.Shim`). One that connects before the origin waits in the queue.
 - *The end.* The relay ticks windows · T buckets from the origin and stops; nothing ends it earlier. A connection
   still open then is cut (the relay's `run`): one in the queue gets no cell and is in no record; one admitted at
   bucket s and cut before s + D has its ingress cells in the record and no egress cell but padding, which the audit
@@ -237,6 +237,9 @@ CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS
 #: in a key directory, beside the key and its leaf state: the key's device state (`certificate.DeviceState`)
 DEVICE = "device.json"
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
+#: a check's words for how a connection that neither ended nor was refused failed: the network certifier's own two
+#: outcomes, and `error` for any other, a client's exception among them, whose words are its connection's own line
+FAILED = ("cut", "fail", "error")
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
 #: the network certifier (1000 connections at 300 a second, 1 KiB cells) grew its heap by about 35 KB a connection
 RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
@@ -841,6 +844,11 @@ def _quantiles(xs: list[float]) -> dict:
     return {"n": len(xs), "p50": pick(0.5), "p99": pick(0.99), "max": pick(1.0)}
 
 
+#: what `deployment_record` says of the auditor's device alone: the gate's `out/` copy of the record is the rest
+#: (`auditor.DEPLOYMENT_PUBLIC`), and the copies a run holds besides add only these
+DEVICE_KEYS = ("origin_raw",)
+
+
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
                       slack: float, run_id: bytes | None = None, start: dict | None = None,
                       origin_raw: float | None = None) -> dict:
@@ -1212,6 +1220,13 @@ def check_start(dep: dict, key: LmsKey, session: bytes, params: WardenParams) ->
             [] if why is None else [f"the session's start isn't certified ({why})"])
 
 
+def failed_words(outcomes: object) -> list[str]:
+    """`FAILED`'s words for the outcomes of the connections that failed, each once: one that is none of the first
+    two is `error`, so the list has no word of a client's or an endpoint's."""
+    return sorted({o if isinstance(o, str) and o in FAILED else FAILED[-1]
+                   for o in (outcomes if not isinstance(outcomes, (str, bytes)) else [outcomes])})
+
+
 def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
@@ -1290,7 +1305,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     summary = {
         "requests": len(rows), "ended": sum(r["outcome"] == "end" for r in rows),
         "refused": sum(r["outcome"] == "refused" for r in rows),
-        "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
+        "failed": failed_words(r["outcome"] for r in rows if r["outcome"] not in ("end", "refused")),
         "start": start, "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
         "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
