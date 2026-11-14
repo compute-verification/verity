@@ -15,7 +15,7 @@ include, and what lets their tests run on a CPU: host builds of that hashing and
 ## Who reads it
 
 - `../pearl_c_sm120/pearl_c_sm120.cu` and `../pearl_c_sm90/pearl_c_sm90.cu` include `hash_h3.cuh`; `../pearl_c4/`,
-  `../masked_gemm/` and `../filler/` include `sha512.cuh`. A change to either header changes those kernels' builds, so
+  `../../../verity/protocols/accounting/pouw/prover/kernels/masked_gemm/` and `../filler/` include `sha512.cuh`. A change to either header changes those kernels' builds, so
   they change only with their kernels' gates.
 - The tests in `../tests/` build `hash_host.cpp` and `fake_cuda.c` with the host's compiler, and the Pearl-C runners'
   dry runs load the stand-in in libcuda's place (`PEARLC_LIBCUDA`). `../pearl_c_sm120/fake_tma.c` extends it.
