@@ -511,11 +511,11 @@ def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
         "",
         "## Where the bandwidth audit's time goes, by span (`verity-bench breakdown`)",
         "",
-        "Each cell is ms an output token, a difference and not a ratio: the mean over the point's paired reps ± its "
-        f"95% half-width (Student t). `{AUDIT_SPANS}` − `{PLAIN_SPANS}` is split into rows that sum to it: the "
-        "top-up's contention from the arms with the top-up off, every other row a part of the spans arms with the "
-        f"top-up off. `{AUDIT}` − `{PLAIN}` (spans off) is the audit's cost; the spans' marks add their own time to "
-        "the spans arms. Each spans arm's step by part: `verity-bench breakdown`.",
+        ("Each cell is ms an output token, a difference and not a ratio: the mean over the point's paired reps ± its "
+         f"95% half-width (Student t). `{AUDIT_SPANS}` − `{PLAIN_SPANS}` is split into rows that sum to it: the "
+         "top-up's contention from the arms with the top-up off, every other row a part of the spans arms with the "
+         f"top-up off. `{AUDIT}` − `{PLAIN}` (spans off) is the audit's cost; the spans' marks add their own time to "
+         "the spans arms. Each spans arm's step by part: `verity-bench breakdown`."),
     ]
     for protocol in dict.fromkeys(point["protocol"] for point in points):
         group = [point for point in points if point["protocol"] == protocol]
@@ -550,18 +550,18 @@ def render(table: Mapping[str, Any]) -> str:
         "",
         "## PoUW: run of record (live rows)",
         "",
-        "Each row is one in-process vLLM run on one GPU: Llama-3.1-8B int8 (the verity-int8 pin), every engine on "
-        "vLLM's defaults (torch.compile, CUDA graphs), prefix caching off, decode at batch B with max_num_batched_tokens "
-        "T. A decode step is (t(N2) − t(N1)) / (N2 − N1) "
-        "over two greedy generate calls of N1 = 32 and N2 = 160 output tokens per request, so prefill and per-call "
-        "overhead cancel; it returns one token for each of the B requests. The ratio is the PoUW arm's median decode "
-        "step over its control's (the int8-exact engine without PoUW, same run, same GPU), per step, not per token: "
-        "it is not comparable with the per-token ratios over stock FP8 below. A row stands only when its run's gates "
-        "all passed: the device gate on poisoned (0xA5) buffers, the arm's tokens equal to the int8-exact engine's at "
-        "the gate and at every timed rep, and a passing live window at the run's end on off-node coins.",
+        ("Each row is one in-process vLLM run on one GPU: Llama-3.1-8B int8 (the verity-int8 pin), every engine on "
+         "vLLM's defaults (torch.compile, CUDA graphs), prefix caching off, decode at batch B with max_num_batched_tokens "
+         "T. A decode step is (t(N2) − t(N1)) / (N2 − N1) "
+         "over two greedy generate calls of N1 = 32 and N2 = 160 output tokens per request, so prefill and per-call "
+         "overhead cancel; it returns one token for each of the B requests. The ratio is the PoUW arm's median decode "
+         "step over its control's (the int8-exact engine without PoUW, same run, same GPU), per step, not per token: "
+         "it is not comparable with the per-token ratios over stock FP8 below. A row stands only when its run's gates "
+         "all passed: the device gate on poisoned (0xA5) buffers, the arm's tokens equal to the int8-exact engine's at "
+         "the gate and at every timed rep, and a passing live window at the run's end on off-node coins."),
         "",
-        "| device | machine | B | T | PoUW decode step, ms | control | control's step, ms | PoUW / control, per decode "
-        "step | reps | coins | run | run record | caveat |",
+        ("| device | machine | B | T | PoUW decode step, ms | control | control's step, ms | PoUW / control, per decode "
+         "step | reps | coins | run | run record | caveat |"),
         "|---|---|---:|---:|---:|---|---:|---:|---:|---|---|---|---|",
     ]
     for row in table["live"]:
@@ -575,16 +575,16 @@ def render(table: Mapping[str, Any]) -> str:
         "",
         "## Served rows, one GPU each (`vllm_bench_point`)",
         "",
-        "The device is the GPU the run's engines saw (the result's `identity.gpu`); a ratio's arm and stock ran on it in "
-        "the same run. "
-        f"Ratios are a protocol's arm over `{table['served_stock']}` (stock FP8 as vLLM serves it), paired by rep: mean "
-        "± 95% half-width (Student t), or the mean alone at one rep; lower is better. A row is its protocol's run of "
-        "record (its runs, or an art's, labelled `run_of_record`) or, without one, the newest passing run of its spec and point in "
-        "the evidence store; a result labelled `superseded_by` is skipped. The caveat is the newest `label` and `note` "
-        "on the result and its run.",
+        ("The device is the GPU the run's engines saw (the result's `identity.gpu`); a ratio's arm and stock ran on it in "
+         "the same run. "
+         f"Ratios are a protocol's arm over `{table['served_stock']}` (stock FP8 as vLLM serves it), paired by rep: mean "
+         "± 95% half-width (Student t), or the mean alone at one rep; lower is better. A row is its protocol's run of "
+         "record (its runs, or an art's, labelled `run_of_record`) or, without one, the newest passing run of its spec and point in "
+         "the evidence store; a result labelled `superseded_by` is skipped. The caveat is the newest `label` and `note` "
+         "on the result and its run."),
         "",
-        "| protocol | device | spec | point | / served stock, per output token | / served stock, per decode token "
-        "| / eager stock, per output token | reps | run | art | caveat |",
+        ("| protocol | device | spec | point | / served stock, per output token | / served stock, per decode token "
+         "| / eager stock, per output token | reps | run | art | caveat |"),
         "|---|---|---|---|---:|---:|---:|---:|---|---|---|",
     ]
     for row in rows:

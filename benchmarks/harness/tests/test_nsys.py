@@ -113,8 +113,8 @@ def test_kernel_time_counts_overlapping_streams_whole_and_the_union_is_beside_it
     table = nsys.kernel_table(arm_export(tmp_path / "arm.sqlite"), "run:arm")
     assert (table["kernel_ms"], table["union_ms"], table["streams"]) == (15.0, 12.0, 3)
     assert table["notes"] == [
-        "Kernel time is not busy time: kernels on overlapping streams each count their whole duration (15.000 ms summed "
-        "over 3 stream(s); the union of their intervals, device by device, is 12.000 ms).",
+        ("Kernel time is not busy time: kernels on overlapping streams each count their whole duration (15.000 ms summed "
+         "over 3 stream(s); the union of their intervals, device by device, is 12.000 ms)."),
         "Kernel time is not a cost: the timed repetitions give the cost, and a profiled repetition is never one of them."]
     assert all("\n" not in note for note in table["notes"])
 
