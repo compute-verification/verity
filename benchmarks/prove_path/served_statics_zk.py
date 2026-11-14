@@ -46,9 +46,9 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
+sys.path[:0] = [str(HERE), str(REPO)]
 
-import zk_drivers  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402

@@ -145,14 +145,14 @@ def exact_delta(delta: float | str | Fraction) -> Fraction:
     return Fraction(delta)
 
 
-def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
+def answer(out: Path, docket: Mapping[str, Any] | None) -> dict[str, Any]:
     """SPOT's answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ, and its public ``coins`` whose coins the sample is on
     (`whose_coins`) and its public ``case_v2`` whether the audit wrote the case for the compiled check (`case_said`). An
     accepted audit record that says neither, or beside a case for the compiled check that names another challenger key
     (`case_key`), is undecided (module docstring)."""
-    commitment = R.digest(registration) if registration is not None else None
+    commitment = R.digest(docket) if docket is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
     except (OSError, ValueError) as e:

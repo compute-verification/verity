@@ -551,7 +551,7 @@ def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
 
 
 def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapping[str, Any] | None, window_root: str,
-               family: str | None, boundary: str, registration: str, read: bytes, verify: Callable[..., bool]) -> str | None:
+               family: str | None, boundary: str, docket: str, read: bytes, verify: Callable[..., bool]) -> str | None:
     """Why a stop class's sample doesn't hold the order its stop record rests on, or None when it does. The order is
     read from the challenger's signed log as its session published it at the close (``evidence``, the stop sample's
     `a5_coins.evidence`: the session's files, the auditor's ledger and the host's pins), under the challenger key
@@ -560,7 +560,7 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
     in the order released, the root the challenger had received when it released it. It holds:
 
     * every coin of the stop sample's family ``family`` (the stop stream's own, `stop_first`'s hand-off's) is one the
-      log shows released after the stop docket ``registration`` (its digest, hex), and the sample read all of
+      log shows released after the stop docket ``docket`` (its digest, hex), and the sample read all of
       those and no other (`coins.coins_reason` on the bytes ``read``): no coin that sampled a stop block was released
       before the challenger received what fixes `b.stop` and the rows the blocks read;
     * the log shows a coin released after the class's boundary docket ``boundary``, and the last of those comes
@@ -576,7 +576,7 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
         return "the stop sample read no coins of a challenger's family"
     if key is None:
         return "the verifier holds no challenger key to read the stop sample's coins under"
-    after, before = bytes.fromhex(registration), bytes.fromhex(boundary)
+    after, before = bytes.fromhex(docket), bytes.fromhex(boundary)
     why = CC.coins_reason(key, list(main), evidence, window_root, family, after, read, verify)
     if why is not None:
         return f"the stop sample's coins: {why}"
