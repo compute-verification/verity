@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import arms as A
 import pytest
+import score
 import scoring as S
 
 share = S.share
@@ -423,8 +424,8 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
         for noise in ("bits01", "pm1"):
             applies, why = read(noise, K_TILE + [mma])
             assert applies == "unproven" and all(any("not all one of" in w for w in ws) for ws in why.values())
-    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == ["FP or conversion ops in the filler's "
-                                                                            "kernel: {'I2F.S32': 1}"]
+    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == [("FP or conversion ops in the filler's "
+                                                                             "kernel: {'I2F.S32': 1}")]
     assert read("pm1", E2M1_TILE + ["FFMA R9, R28, 0.5, RZ"])[1]["theorem-e"][0].startswith("FP or conversion")
     assert S.kernel_facts(sass((DFILL, K_TILE + ["HFMA2.MMA R3, -RZ, RZ, 0, 0"])))["fp_free"]  # a constant load
     for tile in (K_TILE, E2M1_TILE):  # FILL v1's accumulate into the chain's register: chained, whatever it declares
@@ -551,14 +552,14 @@ def test_program_facts_read_the_filler_wherever_it_is_called_from():
     assert pf["violations"] == [] and pf["filler"]["fp_free"] and pf["filler"]["path_helpers"] == [f"fscore: {rem}"]
     pf = S.program_facts({"fscore": nvd(serving(before=[f"CALL.REL.NOINC `({rem})"]), (WARP, False, WARP_BODY),
                                         (rem, False, ["STG.E desc[UR4][R4.64], R6", "RET.REL.NODEC R2 `(x)"]))})
-    assert pf["violations"] == [f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
-                                "write a receipt)"]
+    assert pf["violations"] == [(f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
+                                 "write a receipt)")]
     # what dfill_k itself calls is the filler's: its FP ops fail fp_free
     pf = S.program_facts({"fscore": nvd(serving(), (WARP, False, [f"CALL.REL.NOINC `({rem})", *WARP_BODY]),
                                         (rem, False, ["I2F.U64.RP R6, R4", "RET.REL.NODEC R2 `(x)"]))})
     assert not pf["filler"]["fp_free"] and pf["filler"]["helpers"] == [f"fscore: {rem}"]
-    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == ["FP or conversion ops in the filler's code: "
-                                                                      "{'I2F.U64.RP': 1}"]
+    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == [("FP or conversion ops in the filler's code: "
+                                                                       "{'I2F.U64.RP': 1}")]
     # FILL v1's chain in the clone reads chained; a split filler's kernel reads as v3 reads it
     chain = [x.replace("COL, RZ", "COL, R28") for x in WARP_BODY]
     assert S.filler_entry_v4("bits01", S.program_facts({"f": nvd(serving(), (WARP, False, chain))}))["applies"] == \
@@ -1009,3 +1010,22 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     assert "SCORE_TP" not in sc and len(sc["missing"]) == len(S.TP_SUITE) - 1
     assert sc["by_tp"][2]["coverage"] == pytest.approx(e["coverage"])
     assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.capacity(2000.0) * 42.0e-3))
+
+
+def test_show_tp_prints_each_gate_from_its_own_dict(tmp_path, capsys):
+    """`score.show_tp` prints a line a gate: its verdict, then the detail it reads from that gate's dict of the TP
+    report, here of an out dir whose rank 1 is short of a pf_gate kind and of reps and has a bad receipt."""
+    out = tmp_path / "run" / "out"
+    (out / "set0").mkdir(parents=True)
+    (out / "set0" / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64\n")
+    (out / "set0" / "rank0.jsonl").write_text(tp_log(0) + "\n")
+    (out / "set0" / "rank1.jsonl").write_text(tp_log(1, rec_bad=1, kinds=("fixed", "up"), reps=5) + "\n")
+    score.show_tp(score.tp_report([out], None, None, None))
+    said = dict(ln.removeprefix("  gate ").split(": ", 1) for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("  gate "))
+    assert said == {
+        "slowdown": "FAIL  worst 1.025 at (2, 32, 2048)",
+        "pf_gate": "FAIL  2 ranks: run/set0 rank 1: kinds ok ['fixed', 'up']",
+        "receipts": "FAIL  32 checked, bad: ['(2, 32, 2048) repeat 0 rank 1', '(2, 32, 2048) repeat 1 rank 1']",
+        "nccl": "pass  ", "filler_paths": "pass  no program facts: the filler reads its floor", "dram": "pass  ",
+        "clocks": "FAIL  ", "honest": "pass  whole kernel ≤ 0.127 of peak"}

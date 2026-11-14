@@ -47,6 +47,11 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
 
+The run's exit is its record's verdict. 0 means the compiled Lean composite of record accepted, and only a composite
+computed off the served node, on an auditor host, is of record. 2 means pending: no composite of record yet. That is
+what a window run on the served node ends with, since its own composite is a development check; it is not a crash. 1
+means a rejection, a refused composite, or a failed step.
+
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
 directory holds what is the demo's own: its placement and its commands.
 
@@ -84,7 +89,9 @@ doesn't control.
   varied traffic.
 - `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
   workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.
-  `run.sh` hands a run's script its node's paths as its environment, so no script names a node.
+  `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
+  address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
+  `run.sh` fills from the environment the demo is launched in, and without it the window run starts nothing and says so.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands

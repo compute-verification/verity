@@ -4,8 +4,8 @@ values `_stage_unit_at_base` does (`stage_unit`'s code before the stager, less i
 nothing) on `test_pouw_rows`' statements and a Boolean unit; a stager's rounds share its pin and are each the statement of
 their own rows; a lowering output that is not the reference's is refused, naming the first such instance, on both of the
 check's paths (bit-sliced for a Boolean Definition, the reference for the rest); and the stager's circuit renders the unit's
-netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; under
-FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows,
+circuit description once, the slot nets not again, and is the circuit composed with every circuit description rendered afresh;
+under FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows,
 refused while any switch `class_statement` reads at import is set."""
 from __future__ import annotations
 
@@ -243,10 +243,10 @@ def test_a_lowering_output_that_is_not_the_references_is_refused_naming_the_firs
 
 @pytest.mark.slow
 def test_the_stagers_circuit_renders_the_units_netlist_once_and_is_the_uncached_renders(monkeypatch):
-    """Composing a stager's circuit renders the unit's netlist once (its CIRCUIT section, which ``unit_sha256`` hashes with the
-    LEAVES line) and the slot nets `cache_slot_circuits` holds not at all; `Lowering.sha256` renders on its first read only;
-    and the circuit is, byte for byte, the one composed with every netlist rendered afresh and ``unit_sha256`` the digest of
-    `Lowering.text`, as `circuit.compose` did before it rendered once."""
+    """Composing a stager's circuit renders the unit's circuit description once (its CIRCUIT section, which ``unit_sha256`` hashes
+    with the LEAVES line) and the slot nets `cache_slot_circuits` holds not at all; `Lowering.sha256` renders on its first read
+    only; and the circuit is, byte for byte, the one composed with every circuit description rendered afresh and ``unit_sha256``
+    the digest of `Lowering.text`, as `circuit.compose` did before it rendered once."""
     args, _rows, _kw = _toy(0)
     CS.cache_slot_circuits()
     netlist, renders = IL.netlist, []
@@ -294,9 +294,9 @@ WRITTEN = {"toy": _toy_as, "bound": _bound_toy, "non-ascii": lambda: _toy_as("un
 @pytest.mark.slow
 @pytest.mark.parametrize("which", list(WRITTEN))
 def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypatch):
-    """A stager given ``circuit`` writes it as it composes it (`circuit.compose_to`), the unit's netlist never rendered whole
-    (here in pieces of 7 rows), into the bytes, by SHA-512, of the text a stager without one holds written whole, as
-    `UnitStager` wrote ``circuit`` before (UTF-8): flat (unbound, bound, a non-ASCII name, the anchors' public inputs, a PoUW
+    """A stager given ``circuit`` writes it as it composes it (`circuit.compose_to`), the unit's circuit description never
+    rendered whole (here in pieces of 7 rows), into the bytes, by SHA-512, of the text a stager without one holds written whole,
+    as `UnitStager` wrote ``circuit`` before (UTF-8): flat (unbound, bound, a non-ASCII name, the anchors' public inputs, a PoUW
     tile, a unit with read slots, whose tail stages follow the unit), templated from the flat unit and structural. Its pin,
     class, META and text are that stager's, no partial file is left beside it, and a round's files and values are the same."""
     args, rows, kw, round_kw = WRITTEN[which]()
@@ -351,7 +351,8 @@ def test_a_packed_public_port_stages_on_the_rows_own_words(tmp_path):
 
 def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):
     """`unit_lowering` keeps no circuit (a GLM-5.3 norm unit's is 51 GiB, which nothing reads after the layout), and its compact
-    circuit (`_UnitCircuit`) lays out a plain `gf2.Circuit`'s netlist; `Lowering.domain` then reads the layout's assertions."""
+    circuit (`_UnitCircuit`) lays out a plain `gf2.Circuit`'s circuit description; `Lowering.domain` then reads the layout's
+    assertions."""
     from verity_flock import gf2
 
     rows = [(r, ps) for r, _s, _b, ps in TOY_ROWS]

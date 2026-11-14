@@ -90,6 +90,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer. Among the readers
   run alone is `verify` on each member's session, a process of its own: it must print the audit's verdict line for that
   member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
+- `cold_sessions.sh` (`cold_sessions.py`): one cold session a member of a kept audit window behind the ZK server, on one
+  card (`prove --zk --gpu`, a lease a session, after a check that no other run's lease or compute process is on the card)
+  and on the CPU prover in turn, each on a proof server of its own and the member's own sample from the audit, then Lean's
+  verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
+  clock's witness, proving and wait, and the ZK server's rest of it), its host and card peak memory, or its refusal's
+  text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
+  `a5.py --gpus` hands an audit's proof server the same devices.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -281,9 +288,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
-- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It names PoUS's and the wipe's composite cases as
-  their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's and onsite's Lean verdicts on the run's cases
-  (soundness's composite reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`.
+- `served_composite.sh`: `served_verdicts.sh`'s composite: in the compose follow-on, on an auditor host off the served
+  node, the step before the final record, whose verdict is its product's compiled Lean answer there when the
+  composite names the record's window (`served_verdicts.py record --composite`); in a deferral's follow-on, on a
+  prover node, and on the served node, a development check that leaves the record pending (`COMPOSE_DEVELOPMENT`). It
+  names PoUS's and the wipe's composite cases as their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's
+  and onsite's Lean verdicts on the run's cases (soundness's composite reader). Only the verdict lines reach the run's
+  `verdicts.txt`.
 - `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
   year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
@@ -315,8 +326,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
   (`served_shares.pearlplus_shares`), and why it credits nothing.
 - `served_compare.py`: the served compare, `served_verdicts.sh`'s step under `PEARLPLUS_TIE` once Pearl+'s piece wrote W
-  and before the record, on the CPU. It holds the serve to the row of record: serve.json's φ is the row's declared φ and
-  lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
+  and before the record, on the CPU. It holds the serve to the row of record: serve.json's φ is the row's declared φ,
+  taken at the run's `REV` (`--revision`; another revision the manifests pin of the row's model, its PHI line and last
+  line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
 

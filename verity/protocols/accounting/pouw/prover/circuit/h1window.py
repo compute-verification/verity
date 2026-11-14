@@ -78,7 +78,8 @@ from __future__ import annotations
 import bisect
 import functools
 import weakref
-from typing import Any, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.boolean import gemm as BG
@@ -395,7 +396,7 @@ def window_ports(program: Program) -> dict[str, str]:
 
 
 #: each Program's `_inputs` and parameters by name, so a unit's reads cost its parameters, not the execution phase's nodes
-_SCANS: "weakref.WeakKeyDictionary[Program, tuple[dict[int, str], dict[str, Any]]]" = weakref.WeakKeyDictionary()
+_SCANS: weakref.WeakKeyDictionary[Program, tuple[dict[int, str], dict[str, Any]]] = weakref.WeakKeyDictionary()
 
 
 def _scan(program: Program) -> tuple[dict[int, str], dict[str, Any]]:
@@ -731,7 +732,7 @@ def leaf_template(program: Program, k: int, kind: str, ch: int | None = None) ->
 
 
 #: each execution phase Program's leaf Programs by (K, kind, chunk), so a credit period derives each once
-_LEAVES: "weakref.WeakKeyDictionary[Program, dict[tuple, tuple[Program, dict[str, Any]]]]" = weakref.WeakKeyDictionary()
+_LEAVES: weakref.WeakKeyDictionary[Program, dict[tuple, tuple[Program, dict[str, Any]]]] = weakref.WeakKeyDictionary()
 
 
 def leaf_program(program: Program, k: int, kind: str, ch: int | None = None) -> tuple[Program, dict[str, Any]]:
@@ -870,3 +871,12 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")
     return {"format": G.READS, "ports": {**out, **known_ports}}
+
+
+__all__ = ["FULL", "OK_PORT", "OUTPUTS", "PUBLIC", "PUBLIC_J10R", "PUBS", "PUB_PORT", "READ_IN_FULL", "RECEIPTS",
+           "RECEIPT_PORT", "SHARED", "SHARED_J10R", "STATEMENT_OUT_ROWS", "TABLES", "TILE_PARAMS", "TILE_PARAMS_J10R",
+           "PouwH1WindowCombine", "PouwH1WindowLane", "call_blocks", "call_of", "call_units", "h1_tile", "is_j10r",
+           "j10r_inputs", "leaf_known_ports", "leaf_known_rows", "leaf_program", "leaf_reads", "leaf_reads_file",
+           "leaf_template", "leaf_unit", "place", "program", "query", "roles", "row_key", "slot", "statement_rows",
+           "step_of", "table", "table_reads", "table_reads_file", "template", "tile_unit", "unit_reads", "window",
+           "window_ports"]

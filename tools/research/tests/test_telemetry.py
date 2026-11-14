@@ -1228,7 +1228,7 @@ def _vllm_world(tmp_path, **kw):
     beside it another run's process and a system daemon."""
     rd = str(tmp_path / RID)
     py = ["python3", "-c", "..."]
-    procs = {B + 2: (1, B + 2, B + 2, f"/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
+    procs = {B + 2: (1, B + 2, B + 2, "/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
              B + 50: (B + 2, B + 50, B + 50, QUEUE, rd, ["python3", "-m", "research", "run", "--runs-dir", "x", "--id", RID]),
              B + 51: (B + 50, B + 51, B + 51, QUEUE, rd, ["python3", "-m", "research.telemetry", "sample"]),
              B + 100: (B + 50, B + 100, B + 100, QUEUE, rd, ["bash", "/usr/local/bin/gpu-lease", "8", "--wait", "--", "vllm"]),
@@ -1475,3 +1475,26 @@ def test_a_cancel_after_the_runner_closed_control_cancel_ends_the_run_itself(tmp
     assert sc["why"] == "the runner had recorded the workload's exit before the cancel" and sc["empty"] is True
     assert sc["status_json"] == "not written: its runner is live and writes status.json"
     assert "scope_end" not in json.loads((Path(rd) / "status.json").read_text())
+
+
+def test_a_cancel_request_that_does_not_parse_is_none_and_says_so_but_no_request_is_quiet(tmp_path, capsys):
+    from research.telemetry import scope
+
+    assert scope.cancel_request(tmp_path) is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / scope.CONTROL_CANCEL).parent.mkdir()
+    (tmp_path / scope.CONTROL_CANCEL).write_text('{"grace_s": "soon"}')
+    assert scope.cancel_request(tmp_path) is None
+    assert "is no cancel request (ValueError" in capsys.readouterr().err
+
+
+# ---- the real-kernel fixtures (fixtures/run_fixtures.sh), which a person runs in a pod of its own --------------------------------------------
+
+FIXTURES = Path(events.__file__).resolve().parent / "fixtures"
+
+
+def test_the_kernel_fixtures_parse_and_each_workload_answers_help():
+    subprocess.run(["bash", "-n", str(FIXTURES / "run_fixtures.sh")], check=True)
+    for name in ("hog.py", "forkshare.py", "writer.py", "spans.py"):
+        r = subprocess.run([sys.executable, str(FIXTURES / name), "--help"], capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.startswith("usage: "), (name, r.stderr)

@@ -18,7 +18,7 @@
 //! - every run's `out_lo` at its last compression (a prover-committed public: the run's output value; a chunk's last run's is
 //!   the chunk chaining value, or the row digest for a one-chunk row);
 //! - every unit's returned-output words, and for a cut template every unit's cut input and cut output words (public, from
-//!   the verifier's own instance file, whose cut words the netlist's pinned tail relates).
+//!   the verifier's own instance file, whose cut words the circuit description's pinned tail relates).
 //!
 //! v3 adds, for tensor-core templates (attention): rows whose last chunk is short (a chunk's flags follow its own block
 //! count); a public input port, read by the units as cut words and hashed by the verifier into its committed digest instead
@@ -27,9 +27,9 @@
 //! words (`check_cut_words`) and committed under the output root.
 //!
 //! So a chunk's runs chain across blocks through their output values, and one circuit serves every block. What the layout
-//! means (which leaves each unit slot reads, which output leaves it returns, the row key) is checked against the netlist's
-//! pinned leaf maps before anything (`check_leaf_maps`, IR6); the header's copy is never trusted. The verifier folds
-//! each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
+//! means (which leaves each unit slot reads, which output leaves it returns, the row key) is checked against the circuit
+//! description's pinned leaf maps before anything (`check_leaf_maps`, IR6); the header's copy is never trusted. The verifier
+//! folds each row's chunk values into its digest natively (BLAKE3's keyed parent tree) and checks the digests, and the output
 //! words, against the frame-v3 roots it recomputes. An empty run slot (padding) hashes `nb` zero blocks from the key at
 //! counter 0, flags KEYED_HASH | CHUNK_START (first) | CHUNK_END (last).
 
@@ -392,10 +392,10 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
     Ok(())
 }
 
-/// Red-team-flock-2 IR6: the file's meaning against the netlist's pinned leaf maps (its LEAVES line), not the header's word.
-/// The ports are 16-bit words with the pinned leaf counts; the output mapping is the pinned one and the returned-output
-/// columns are consecutive 16-bit ports (no returned-output group when the tail computes the outputs); every real unit
-/// slot's wiring reads exactly the runs and byte offsets its unit's pinned input leaves occupy in its own instance's hashed
+/// Red-team-flock-2 IR6: the file's meaning against the circuit description's pinned leaf maps (its LEAVES line), not the
+/// header's word. The ports are 16-bit words with the pinned leaf counts; the output mapping is the pinned one and the
+/// returned-output columns are consecutive 16-bit ports (no returned-output group when the tail computes the outputs); every real
+/// unit slot's wiring reads exactly the runs and byte offsets its unit's pinned input leaves occupy in its own instance's hashed
 /// rows (so the block assignment is the leaf maps'), and a zero leaf (-1, a word the IR pads with) an empty run slot, whose
 /// message the verifier-fixed chaining value binds to zero; the row key is the x-row key.
 pub fn check_leaf_maps(inst: &FrameInstances, net: &IrUnitNet) -> Result<(), String> {
@@ -458,8 +458,8 @@ pub fn check_leaf_maps(inst: &FrameInstances, net: &IrUnitNet) -> Result<(), Str
     Ok(())
 }
 
-/// The public ports: exactly the ports every one of whose leaves the netlist's CUT line lists as a public cut word; per
-/// instance those words (16-bit) hash, as the port's `blake3-keyed/row/v2` row under the x-row key, to the committed digest.
+/// The public ports: exactly the ports every one of whose leaves the circuit description's CUT line lists as a public cut word;
+/// per instance those words (16-bit) hash, as the port's `blake3-keyed/row/v2` row under the x-row key, to the committed digest.
 pub fn check_public_ports(inst: &FrameInstances, cm: &CutMap) -> Result<(), String> {
     let starts: Vec<usize> = inst.in_ports.iter().scan(0, |a, p| { let s = *a; *a += p.1; Some(s) }).collect();
     let by_leaf: BTreeMap<usize, usize> = cm.public.iter().map(|&(k, leaf)| (leaf, k)).collect();
@@ -487,9 +487,9 @@ pub fn check_public_ports(inst: &FrameInstances, cm: &CutMap) -> Result<(), Stri
     Ok(())
 }
 
-/// Per instance, the netlist's pinned tail evaluated on the cut words the units compute and the public words: every other cut
-/// word in the file must be what it gives (the units' cut ports are region claims on these words), a word read by a 16-bit
-/// port must fit it, and, when the tail computes the outputs, its output slots must be the file's output words.
+/// Per instance, the circuit description's pinned tail evaluated on the cut words the units compute and the public words: every
+/// other cut word in the file must be what it gives (the units' cut ports are region claims on these words), a word read by a
+/// 16-bit port must fit it, and, when the tail computes the outputs, its output slots must be the file's output words.
 pub fn check_cut_words(inst: &FrameInstances, cm: &CutMap, t: &Tables) -> Result<(), String> {
     if cm.words == 0 {
         return Ok(());
@@ -645,7 +645,7 @@ fn delta(net: &IrUnitNet, lay: &Layout) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
 pub struct FrameStmt {
     pub lay: Layout,
     pub net: IrUnitNet,
-    /// the netlist's pinned cut structure (no cut words for a template without a cut)
+    /// the circuit description's pinned cut structure (no cut words for a template without a cut)
     pub cm: CutMap,
     pub blocks_real: usize,
     pub nbl: usize,

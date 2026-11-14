@@ -259,7 +259,7 @@ def test_an_unread_machine_and_a_pool_that_answered_late_are_listed_and_the_rest
 
 
 def test_a_pool_under_a_disk_floor_is_shut_and_the_check_pool_is_read_as_slot_py_words_it():
-    floor = "/workspace has 812 inodes free, under 1000000"
+    floor = "/workspace has 812 inodes free, under 500000"
     docs = {A: machine(research=pool(slot("r0", held=True), waiters=(waiter(30, "r1"),))),
             B: machine(floor=floor, research=pool(slot("r0", "16-31")), check=pool(slot("t", "32-63", trains=True, mem=400)))}
     doc = stranded.analyse(docs, T0, CPUS)
@@ -447,7 +447,7 @@ def test_a_lane_pool_rings_infra_once_a_pool_while_one_of_its_jobs_has_been_stra
 
 
 def test_a_pool_shut_by_an_inode_floor_rings_infra_at_once_on_an_idle_machine_and_after_30_minutes_on_a_busy_one(tmp_path):
-    floor = "/workspace has 812 inodes free, under 1000000"
+    floor = "/workspace has 812 inodes free, under 500000"
     elsewhere = machine(research=pool(slot("r0", held=True), waiters=(waiter(3, "r1"),)))
     idle = quiet(**{A: elsewhere, B: machine(floor=floor, research=pool(slot("r0", "16-31")), proofs=pool(slot("p0", "32-47")))})
     assert watch(tmp_path / "a", [(T0, idle)]) == [("open", f"stranded|shut|{B}", ["infra"])], "one incident a machine, not a pool"

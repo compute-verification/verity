@@ -340,7 +340,7 @@ def ts_best(hon: tuple, cheat: tuple, routes: list) -> tuple[float, float]:
     return ts_time(*hon), float(np.max([a * mm + b * ops for a, b in TS_FACETS], axis=0).min())
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_FOLD,
           x: float = X_BITSLICED) -> tuple[float, float]:
     """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served
@@ -404,7 +404,7 @@ class Prices:
     tail_checked: float
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
     """`name`'s prices on `data`'s device at `vector` (its current vector by default). ♭ is the design's own (decision
     90: a variant's too, its verified filler included), `machine-model eps --credit floor --operands floor`'s credited

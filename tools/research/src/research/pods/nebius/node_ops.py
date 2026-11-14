@@ -26,7 +26,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUT = Path(os.environ.get("OPS_DIR", "/workspace/pouw/infra"))
@@ -43,7 +43,7 @@ _last_alert: dict[str, float] = {}
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def iso(t: datetime | None = None) -> str:
@@ -198,8 +198,9 @@ class Quiet:
         self.t = time.monotonic()
         self.hz = os.sysconf("SC_CLK_TCK")
         try:                                   # groups an earlier instance stopped: kept stopped while the window lasts, else continued
-            earlier = [int(p) for p in json.loads(self.STATE.read_text())]
-        except (OSError, ValueError):
+            earlier = [int(p) for p in json.loads(self.STATE.read_text())] if self.STATE.exists() else []
+        except (OSError, ValueError) as e:
+            print(f"node_ops: {self.STATE} unread, so no group an earlier instance stopped is kept ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             earlier = []
         open_window = self.window() is not None
         for pgid in earlier:
@@ -302,7 +303,8 @@ class Quiet:
             if (g["rate"] >= 1.0 or g["comms"] & BUILD or SAMPLER.search(text)) and not any(map(in_timing_slice, g["pids"])):
                 try:
                     os.killpg(pgid, signal.SIGSTOP)
-                except (ProcessLookupError, PermissionError):
+                except (ProcessLookupError, PermissionError) as e:
+                    print(f"node_ops: process group {pgid} not stopped ({type(e).__name__})", file=sys.stderr, flush=True)
                     continue
                 cmd = next((c for c in g["cmds"] if c), "?")
                 self.paused[pgid] = {"t0": time.monotonic(), "cmd": cmd}
@@ -321,7 +323,8 @@ def busy_last_hour() -> str:
         for line in f.read_text().splitlines():
             try:
                 r = json.loads(line)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f"node_ops: a line of {f.name} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
                 continue
             if r["t"] < cutoff:
                 continue
@@ -342,7 +345,8 @@ def last_sample() -> dict | None:
     for line in reversed(lines):
         try:
             return json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"node_ops: a line is not JSON, so the one before it is read ({e})", file=sys.stderr, flush=True)
             continue
     return None
 
@@ -362,10 +366,11 @@ def runs(window_s: float = 7200) -> tuple[list[dict], list[dict]]:
     cutoff = time.time() - window_s
     for d in sorted(RUNS.glob("r2026*")):
         try:
-            if d.stat().st_mtime < cutoff:
+            if d.stat().st_mtime < cutoff or not (d / "status.json").exists():
                 continue
             st = json.loads((d / "status.json").read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"node_ops: run {d.name} skipped, its status unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         # the runner's transition, the last naming a pid: `tele set-timeout` appends a `running` one without
         trs = [t for t in st.get("transitions") or [] if isinstance(t, dict)]
@@ -378,8 +383,9 @@ def runs(window_s: float = 7200) -> tuple[list[dict], list[dict]]:
                 alert("dead-run", d.name, f"run {d.name} is marked running but its process {tr.get('pid')} is gone: {cmd}")
         else:
             try:
-                cls = json.loads((d / "failure.json").read_text()).get("class")
-            except (OSError, ValueError):
+                cls = json.loads((d / "failure.json").read_text()).get("class") if (d / "failure.json").exists() else None
+            except (OSError, ValueError) as e:
+                print(f"node_ops: run {d.name}'s failure.json unread, so it has no class ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 cls = None
             if cls and cls != "SUCCESS":
                 failed.append({"run": d.name, "class": cls, "cmd": cmd})
@@ -401,11 +407,13 @@ def stop_at() -> datetime | None:
     """When lease.sh stops the VM: the lease's expiry, never later than 5 min before root's deadline (both `EPOCH ...`)."""
     ends = []
     for f, margin in ((LEASE_FILE, 0), (DEADLINE_FILE, 300)):
+        if not f.exists():
+            continue
         try:
             ends.append(int(f.read_text().split()[0]) - margin)
-        except (OSError, ValueError, IndexError):
-            pass
-    return datetime.fromtimestamp(min(ends), timezone.utc) if ends else None
+        except (OSError, ValueError, IndexError) as e:
+            print(f"node_ops: {f} unread, so it sets no stop time ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+    return datetime.fromtimestamp(min(ends), UTC) if ends else None
 
 
 def fill_alerts() -> None:
@@ -426,7 +434,7 @@ def page() -> str:
     left = (stop - t).total_seconds() / 3600 if stop else float("nan")
     lease = subprocess.run(["gpu-lease", "status"], capture_output=True, text=True).stdout.strip().splitlines()
     s = last_sample() or {}
-    age = (t - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() if s else 1e9
+    age = (t - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() if s else 1e9
     if age > 180:
         alert("stale", "sampler", f"gpu_util_sampler's last sample is {age / 60:.0f} min old")
     fill = (FILL / "status.txt").read_text().strip().splitlines() if (FILL / "status.txt").exists() else ["(no fill runner)"]
@@ -438,9 +446,9 @@ def page() -> str:
     L = [f"# vy-nebius-2 at {iso(t)}", "",
          (f"Stops itself at {stop:%Y-%m-%dT%H:%MZ} (lease and deadline): {left:.1f} h, {8 * left:.0f} GPU-h left. " if stop else
           "Stop time unknown: the lease and deadline files are unreadable. ") +
-         f"Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
+         "Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
     alerts = [json.loads(l) for l in (OUT / "alerts.jsonl").read_text().splitlines()[-20:]] if (OUT / "alerts.jsonl").exists() else []
-    recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() < 7200]
+    recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() < 7200]
     paused = [f"- pgid {k} for {int((time.monotonic() - v['t0']) / 60)} min: `{v['cmd'][:120]}`" for k, v in (QUIET.paused.items() if QUIET else [])]
     hourly = (OUT / "hourly.txt").read_text().strip().splitlines()[-8:] if (OUT / "hourly.txt").exists() else []
     L += [f"**Utilisation:** {busy_last_hour()}.", "", "By hour (the infra lane's hourly record):", ""] + \
