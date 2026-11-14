@@ -544,7 +544,7 @@ def main() -> None:
             while fewest(limit)[0] >= groups:
                 limit += 1
             plans[f"{name}{'_merge' if merge else ''}"] = {
-                "groups": groups, "units": N_LIMBS + groups, "seam_limb": start, "cap_for_one_fewer": limit,
+                "groups": groups, "units": N_LIMBS + groups, "seam_limb": start, "limit_for_one_fewer": limit,
                 "column_bits": [_iv_bits(iv) for iv in cols]}
     best = rows["seam_square"]["fixed_units"]
     result = {
