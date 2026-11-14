@@ -14,7 +14,7 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.commitments.gates import frame_v3 as F3
 from verity.commitments.gates.hm96 import reference as hm96_reference
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SCHEMA
-from verity.protocols.accounting.pouw.prover.circuit import cap, pc8, pearl_plus_tile as T
+from verity.protocols.accounting.pouw.prover.circuit import inert_bound, pc8, pearl_plus_tile as T
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as CU
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
@@ -57,7 +57,7 @@ class Tile:
         self.root = bytes(rng.randrange(256) for _ in range(64))
         scheme = C.PearlC(k_min=k, tile=(tm, tn), forming="v1", device=d, hashing="h3")
         self.scheme = scheme
-        self.rho, self.rhor = cap._rho(dev, None), cap.row_rho(scheme, k)
+        self.rho, self.rhor = inert_bound._rho(dev, None), inert_bound.row_rho(scheme, k)
         ctx = C.Context(self.salt, C.Matmul(self.midx, C.Shape(tm, k, tn), 0), bytes(64), self.root)
         ops = scheme.encode(ctx, scheme.noise(ctx), [C.f32_row(x) for x in self.a], [C.f32_row(x) for x in self.b],
                             C.Tile(tuple(self.rows), tuple(self.cols)))
@@ -69,8 +69,8 @@ class Tile:
         self.fa = [pc8.basis_fa(shape, seed_b)[t * 32:t * 32 + 32] for t in range(k)]
         self.fb = [pc8.basis_fb(shape, seed_b)[t * 32:t * 32 + 32] for t in range(k)]
         self.g = [pc8.gram_g(shape, seed_b)[p * 32:p * 32 + 32] for p in range(32)]
-        _d, ng = cap._promoted(dev, k)
-        self.cert = [[[list(cap.certificates(ops.a.codes[i], ops.b.codes[j], dev))[2 * z:2 * z + 2] for z in range(ng - 1)]
+        _d, ng = inert_bound._promoted(dev, k)
+        self.cert = [[[list(inert_bound.certificates(ops.a.codes[i], ops.b.codes[j], dev))[2 * z:2 * z + 2] for z in range(ng - 1)]
                       for j in range(tn)] for i in range(tm)]
         self.y = [[0] * n for _ in range(tm)]
         for i in range(tm):
