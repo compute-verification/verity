@@ -69,6 +69,7 @@ def capture(a) -> int:
     import torch
     from verity.protocols.accounting.pouw.verifier.audit import weights_root
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 
     out, dev = Path(a.out), torch.device("cuda")
     shapes = ([tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes
@@ -77,11 +78,11 @@ def capture(a) -> int:
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(KERNEL), a.cubin)
     salt_key = PPD.new_salt_key(a.scheme)
-    roots = PPD.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
     coins = BA._Coins(EPOCH)
     opening = coins.open("salt", weights_root(roots))
     (out / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
+    run = PPDR.PearlCDeviceRun(PPD.scheme_of(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
                               salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights

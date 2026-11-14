@@ -103,8 +103,8 @@ the vector fails its check or doesn't reproduce a published number.
 Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
 two exceptions: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
 `rows.csv` ("Adopt a probe's census"), and `lean-headline` with neither `--check` nor `--numbers` writes the Lean
-files of the families' headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and
-`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Accounting/HeadlineDc/`; `--json F` writes the
+files of the families' headline instances, `security/Definitions/Pouw/Headline/Sm120.lean` and
+`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Pouw/HeadlineDc/`; `--json F` writes the
 data-centre families' readings to `F`.
 
 ## Layout

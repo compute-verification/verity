@@ -18,6 +18,7 @@ from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import device as PD
 from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity.protocols.accounting.pouw.prover.serving.operands import Operands, ncp_tiles, quantize, stack_y
+from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
 from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     TILE_SCHEMA,
@@ -73,10 +74,9 @@ def host(t: Any) -> np.ndarray:
 
 
 def like(y: np.ndarray, x: Any) -> Any:
-    if hasattr(x, "detach"):
-        import torch
-        return torch.from_numpy(y).to(device=x.device, dtype=x.dtype)
-    return y.astype(np.asarray(x).dtype)
+    if isinstance(x, np.ndarray) or not hasattr(x, "detach"):
+        return y.astype(np.asarray(x).dtype)
+    return tensors().put(y, x, as_like=True)
 
 
 # --- the run -----------------------------------------------------------------------------------------------------------------

@@ -24,7 +24,7 @@ from tests.program.predict.test_predict import TINY, _phi
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity_vllm.commit import memory_map as MM
 from verity_torch import prune as P
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa

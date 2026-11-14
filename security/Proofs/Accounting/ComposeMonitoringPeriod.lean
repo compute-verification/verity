@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.ComposeMonitoringPeriod
-public import Proofs.Accounting.TS.Rounds
+public import Proofs.Pouw.TS.Rounds
 public import Proofs.Accounting.Compose.CircuitWork
 public import Proofs.Accounting.ComposeMonitoringPeriod.Covers
 public import Proofs.Accounting.Lemmas.TS.Receipt
