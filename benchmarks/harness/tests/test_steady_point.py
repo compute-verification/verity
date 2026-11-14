@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import signal
 import sys
@@ -117,7 +116,7 @@ def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
                                            "commit", "-qm", "specs")):
             if step:
                 subprocess.run(["git", *step], cwd=root, check=True,
-                               env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+                               env={**settings.environ(), "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
 
     monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
     root = tmp_path / "tree"

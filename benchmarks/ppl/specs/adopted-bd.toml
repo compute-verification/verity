@@ -1,4 +1,4 @@
-description = "both operands dithered wherever the strip would cost: linears with weights dithered on [-126, 127] (fresh bits a call, no U, no ±63 cap) and Q K^T as in adopted-qkd; P's w64 peel, psink, kc, SmoothQuant and the rotations as in adopted"
+description = "both operands dithered wherever the strip would cost: linears with weights dithered on [-126, 127] (fresh bits a call, no U, no ±63 limit) and Q K^T as in adopted-qkd; P's w64 peel, psink, kc, SmoothQuant and the rotations as in adopted"
 
 [[linear]]
 step = "smooth"
