@@ -79,18 +79,19 @@ def recorded_runs() -> list[tuple[int, str, str]]:
 def agent_events(agent: str) -> list[dict]:
     """EVENT_LOG's lines for `agent`, oldest first: those of the file it last rotated to, then its own. A line counts
     when it parses as a JSON object whose `conversation_id` is `agent`; one that doesn't hold the id as text is skipped
-    unparsed, since this runs on a shell command and the log holds up to twice EVENT_LOG_MAX_BYTES."""
+    unparsed, since this runs on a shell command and the log holds up to twice EVENT_LOG_MAX_BYTES, and one that holds it
+    but is not JSON is skipped and said on stderr. A missing file is no lines; any other OSError rises to the caller."""
     events = []
     for path in (EVENT_LOG + ".1", EVENT_LOG):
-        try:
-            with open(path, errors="replace") as f:
-                lines = [line for line in f if agent in line]
-        except FileNotFoundError:
+        if not os.path.isfile(path):
             continue
+        with open(path, errors="replace") as f:
+            lines = [line for line in f if agent in line]
         for line in lines:
             try:
                 e = json.loads(line)
-            except ValueError:
+            except ValueError as err:
+                print(f"agent-guard: a line of {path} is not JSON, skipped: {err}", file=sys.stderr)
                 continue
             if isinstance(e, dict) and e.get("conversation_id") == agent:
                 events.append(e)

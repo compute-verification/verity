@@ -1033,6 +1033,21 @@ def test_the_launch_model_is_the_first_turns_in_the_file_the_log_rotated_to_and_
     assert f"this turn runs on `{LAUNCH}`, and you were launched on `late-model`" in told and "go by your brief" in told
 
 
+def test_a_log_the_rule_cannot_write_refuses_nothing_and_says_so(tmp_path, event_log):
+    """A guard that can't record that a turn was told can't keep the telling to once, so it refuses nothing, and says so:
+    with the launch turn on record in the file the log rotated to and the log itself unwritable, a turn on another model
+    passes, each command saying on stderr why."""
+    Path(f"{event_log}.1").write_text(logged(1_000_000_000, AGENT, generation_id=TURNS[0], model=LAUNCH))
+    event_log.mkdir()
+    event = {"hook_event_name": "beforeShellExecution", "command": "ls", "conversation_id": AGENT,
+             "generation_id": TURNS[1], "model": OTHER}
+    for _ in range(2):
+        run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_MIN_AVAIL": "0"})
+        assert json.loads(run.stdout) == ALLOW
+        assert "the model rule refuses nothing, since it can't record a turn as told in" in run.stderr
+
+
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
     """The hook reads the whole conversation id, so a message queued under an id prefix was never delivered."""
     inbox, repo = tmp_path / "inbox", tmp_path / "not-a-checkout"

@@ -1391,8 +1391,8 @@ def model_reason(event: dict, command: str) -> str | None:
     later command of a settled turn passes. Never refused: an agent whose turns all name one model, one with no launch
     model on record, and a payload that names no model, no turn or no cloud agent. The lock on EVENT_LOG makes the check
     and the line one step, so of two commands a turn starts at once exactly one is refused; a log that can't be opened,
-    locked or written refuses nothing, since a turn the rule can't record as told it can't keep to once. Every other
-    refusal comes first (`main`): a command refused for another reason leaves the turn unsettled."""
+    locked or written refuses nothing, and says so on stderr, since a turn the rule can't record as told it can't keep to
+    once. Every other refusal comes first (`main`): a command refused for another reason leaves the turn unsettled."""
     agent, turn, model = (event.get(k) for k in ("conversation_id", "generation_id", "model"))
     if not all(isinstance(v, str) and v for v in (agent, turn, model)) or not CLOUD_AGENT.fullmatch(agent):
         return None
@@ -1410,7 +1410,9 @@ def model_reason(event: dict, command: str) -> str | None:
             log.write(json.dumps({"t": int(time.time()), "hook": "shell_hook.py",
                                   "event": MODEL_PASS if passed else MODEL_REFUSAL, "conversation_id": agent,
                                   "generation_id": turn, "model": model, "launch_model": launch}) + "\n")
-    except OSError:
+    except OSError as e:
+        print(f"shell_hook: the model rule refuses nothing, since it can't record a turn as told in {EVENT_LOG}: {e}",
+              file=sys.stderr)
         return None
     if passed:
         return None
@@ -1525,7 +1527,9 @@ def main() -> int:
     else:
         try:
             told = model_reason(event, command)
-        except Exception:                               # a bug in the model rule must not stop every command
+        except (OSError, LookupError, TypeError, ValueError,
+                AttributeError) as e:                   # a bug in the model rule must not stop every command
+            print(f"shell_hook: model rule failed: {type(e).__name__}: {e}", file=sys.stderr)
             told = None
         if told:
             print(json.dumps({"permission": "deny", "user_message": told, "agent_message": told}))
