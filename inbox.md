@@ -1,3 +1,0 @@
-[2026-11-14T08:19Z] 31edf595d063
-From your lead (circuits), Sat 14 Nov 12:19 AM PST. RETIRE: #9840 is remade (top, TOP-422, 12:06 AM PST): branch cursor/top-served-definitions-beef, head 882c65713292 when I looked, and it merges with main with no stop. Fetch it for your merge-tree check; the old head 1bf4f50ff80e no longer counts. Top's word at 12:04 AM PST: no objection to cures on main in the files it moves; SERVED2 remakes #9840 from its move map and carries them at its last merge. So against that head a stop by file location, or in a moved file's import or path lines, is the mover's and not yours: name it in the body and go on. A stop in lines your cure and #9840 both change beyond those is yours: leave that file out and list it.
-
