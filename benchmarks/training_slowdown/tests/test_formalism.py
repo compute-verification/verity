@@ -699,7 +699,10 @@ def test_no_published_string_names_the_code():
     c, k = 1e11, policy.CONSOLE[1]
     static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
               work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS, calculator.he_past(), work.HE_HEAD, work.OTHER_PROGRAM, F.STAND_IN,
-              F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL, work.P_BATCH]
+              F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL, work.P_BATCH, work.P_REPEATS, work.COUNTED,
+              F.COUNTED_PRODUCTS] + [f(n) for n in ({"positions": 1, "tokens": 9, "measured": 9},
+                                                     {"positions": 1, "tokens": 9, "measured": 3})
+                                     for f in (F.rests_on_products, F.cell_products, F.traced_label, work.batch_premise)]
     strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
     other = {"shapes": 2, "unmatched": 1, "ran": 3, "largest": [[4, 512, 8]]}
     records = [one_part(), one_part(delta=500.0, decoder=5e10), replace(one_part(), products={"k": k})] + [

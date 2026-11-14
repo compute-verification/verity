@@ -15,6 +15,11 @@
 #                      it; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the
 #                      tree has it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its
 #                      registered store (BW_STORE's setup.json, default /workspace/research/pous-store/mem69-v2)
+#   onsite_pous_pins REPO REVISION   served_verdicts.sh's preflight, where POUS_CMD is this tree's piece: whether PoUS's
+#                           piece would answer the checkpoint the run serves. It asks the piece itself (served_piece.py's
+#                           `_pin` over its `PINS`), under the python and the path served_piece.sh runs it with, so the
+#                           answer is whatever manifests the piece reads. 0 pinned; 3 not, the piece's own refusal on
+#                           stdout; anything else, the piece doesn't load here (why on stderr). It takes no card.
 #   onsite_cases            served_composite.sh's, before it composes: PoUS's and the wipe's cases as their pieces wrote
 #                           them under SERVE_DIR/private (PoUS's in pous/wK, K its pous.json's window; the wipe's in
 #                           wipe), each beside its Lean's answer (pous-run-protocol's, wipe-protocol's). It takes no
@@ -52,6 +57,20 @@ onsite_piece_commands() {
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
   fi
   return 0
+}
+
+onsite_pous_pins() {
+  PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/tools/research/src PYTHONDONTWRITEBYTECODE=1 \
+    "$PY" - "$TREE/benchmarks/pous" "$1" "$2" <<'EOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+import served_piece as piece
+try:
+    piece._pin(sys.argv[2], sys.argv[3], piece.PINS)
+except piece.Refusal as e:
+    print(e)
+    sys.exit(3)
+EOF
 }
 
 onsite_cases() {
