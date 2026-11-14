@@ -12,8 +12,6 @@ untraced = ["tests/test_pous_wipe_store.py", "tests/test_pous_wipe_stream.py"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/circuits",
           "verity/protocols/accounting/pous/prover",
-          # the setup in proofs' Spec (`prover/setup_proof.py`) is a SPOT `Spec`
-          "verity/protocols/proofs/spot/verifier",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/accounting/pous/device/__init__.py",
           "verity/protocols/accounting/pous/device/challenger_party.py",

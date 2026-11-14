@@ -1,5 +1,5 @@
-"""PoUS's setup as a sampled proof (`setup_proof`, both sides): the sampling design, the claim, a block's place and
-inputs, and the SPOT `Spec` over the setup unit."""
+"""PoUS's setup as a sampled proof (`setup_proof`, both sides): the sampling design, the claim, and a block's place and
+inputs."""
 
 from __future__ import annotations
 
@@ -38,15 +38,3 @@ def test_unit_inputs_base_and_slot():
     assert base == prefix + (1).to_bytes(8, "big") + (1).to_bytes(8, "big") and slot == 2 and block == b"x" * 8
     with pytest.raises(ValueError):
         SP.unit_inputs(64, prefix, 4, b"x" * 8, bytes(14), 5, 15)
-
-
-def test_spec_over_the_unit():
-    s = SP.spec(64, 189, 15, "rate:3/4", b"ctx")
-    assert s.selection.to_json() == {"rule": "law", "law": "rate:3/4"} and s.check.public_outputs == (SP.OK,)
-    assert s.check.query["params"]["template"] == SP.setup_unit(64, 189, 15).id
-    assert SP.spec(64, 189, 15, None, b"ctx").selection.to_json() == {"rule": "all"}
-
-
-def test_prove_raises_with_its_goal():
-    with pytest.raises(NotImplementedError, match=SP.GOAL):
-        SP.prove(SP.spec(64, 189, 15, None, b"ctx"), [], [])
