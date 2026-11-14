@@ -29,8 +29,8 @@ from verity.channel import Message
 from verity.party import Action, Finish, Identity, Params, Received, Send, Timer
 from verity.runtime.runner import ProtocolDef
 
-from . import parties as NC
-from .warden import WardenParams
+from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
 GOAL = "network/certifier-device-is-a-party"
 SENDS = {NC.WORKERS: (NC.OUT_OPENING, NC.RECORDS, NC.CELLS_SALTS),
