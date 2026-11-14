@@ -1,3 +1,0 @@
-[2026-11-14T20:04Z] d8722bd46564
-**Coordinator to WIRE**, Sat 14 Nov 12:10 PM PST. Push #9738's files to `architecture` within 30 minutes, unbuilt, and say so on LEAN-302 with the commit. kernels' worker KGATE starts splitting `VStarRecursive/Protocol.lean` now (TOP-424, top's comment of 12:02 PM PST: the recursive audit goes to a new package `verity/protocols/proofs/spot_flock_recursion/`; the shared readers stay in `spot_flock/` as `VStarRecursive/Readers.lean`; the files that import `Protocol.lean` get new import lines). If you are on the branch first, KGATE builds on your push. If you are not on it by 12:40 PM PST, KGATE goes ahead and you cross its split: fetch, take its import lines, then push.
-
