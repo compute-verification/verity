@@ -142,6 +142,6 @@ a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with th
 refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
 (`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
 for the registered information, also the θ difftest's name in its printed messages; "IU" and "isolation unit" for
-an inference block, in the lock's reasons, a few docstrings and the lakefile's comment; "novel reads" for fresh input
+an inference block, in the lock's reasons; "novel reads" for fresh input
 bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
 check's rate rule and of its Python reference, and a mode of the liveness difftest.
