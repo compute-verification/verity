@@ -47676,17 +47676,18 @@
    }
   },
   "PouwPearlPlus.Check": {
-   "digest": "5acc276402e247998d0468d860ead53ceb48141686ec46a71c289e074fd39739",
+   "digest": "fce4be3389149c3831ba7b3ee279acd42d4ef0e9a9ffc7a737020dfe323992a5",
    "definitions": {
-    "PouwCheck.PearlPlus.Input": "ff4cf9cbd33d2c3de090f7073e1b3daedbaa3448ee0d77504f109c7a40d3fe2e",
+    "PouwCheck.PearlPlus.Input": "1ddd8fd646f6b4417010782f115143c317f16b730c06e45d96d7e2e24623495e",
     "PouwCheck.PearlPlus.Input.coins": "067d591381d374afc7ed7804e3af2ff51e6473d72504f73fd64ce1e59c46506b",
     "PouwCheck.PearlPlus.Input.draws": "2d0a4c7aaae5daf34743fc20d0ab417b3e526c15805b6f7e4b85abf1c8ed4615",
-    "PouwCheck.PearlPlus.Input.dropped": "680923a886a6f695f080d9c2c8a52726d43c533b5d7099c5f7a7e56f19e4f7cf",
+    "PouwCheck.PearlPlus.Input.dropped": "98518a32de17e36b60cc5a347db1b5a649e26ac44d01d43862f955bc91bb6d78",
     "PouwCheck.PearlPlus.Input.held": "001ff2ce7efa52a80c7a733cf4b9c335f8bf4fabcd41bd7fcdc349fa6500c7a2",
+    "PouwCheck.PearlPlus.Input.load": "88f114d53e68fd9da768e74b94975063e70695ca8b11adc722443bbbe8155fff",
     "PouwCheck.PearlPlus.Input.manifests": "41f291a6486549e548e7bb3773b99c93fae154574e3c26a55c01aa62cfa33fce",
-    "PouwCheck.PearlPlus.Input.ofRecord": "767c82fb25ee6dc774a292f5ee88d348f3b12f216c439fdaa43139e27f33cfb7",
+    "PouwCheck.PearlPlus.Input.ofRecord": "a2f7525e1cc093a75d9eb4871462b1d34c3f184634c69f9b4ba1ff94941968c1",
     "PouwCheck.PearlPlus.Input.overCap": "5ccd68b958cd0c42bfdf05904ba0144595ed7255dbc2b99aecd4b9ddfca399eb",
-    "PouwCheck.PearlPlus.Input.rounds": "202c64d40a80f4b16d3789ad1ec5c8875f1ed11a25d6c4b15a0b2d0c9fea8d5a",
+    "PouwCheck.PearlPlus.Input.rounds": "706cb1431521827fe69973c84a02288faffb6e74f3e8911a0efbc415181600dc",
     "PouwCheck.PearlPlus.Input.source": "97a0900382a2f8b70017a2078d61aaaa1f4621664a76d59e476cba350ec03614",
     "PouwCheck.PearlPlus.Input.testInstance": "21652e8be9df13aae9d97cb8e9ff0eb8d85b94ad25bbbb47364dd1eb97a8d000",
     "PouwCheck.PearlPlus.Input.tie": "6c733f2e8f3ee6ca8de9abd2ac1b0c46877851b929821079f10f521edee8f4c3",
@@ -47719,7 +47720,7 @@
     "PouwCheck.PearlPlus.instBEqOverCap": "4a619ba4bfc845a6dc1ac71b34e03637a6141809633054bb5a4ce9a3ed971024",
     "PouwCheck.PearlPlus.instBEqOverCap.beq": "ca02ec6c1b0073300ae140354e2311f05a891214865ddab89fff4f55563d8179",
     "PouwCheck.PearlPlus.overCapDraws": "ce3cb499931d0452f7b36e7f7171b81a6c22668f2af6f078ef3edafb6662d353",
-    "PouwCheck.PearlPlus.plan": "94d4b6c7010d2e4198da09c4af870ded34969844a5e4ba37c7f985304e516416",
+    "PouwCheck.PearlPlus.plan": "03c3ce12295183f8963486939ceafdfd5cd332e96f545a6e5afe0cbb3402e9e3",
     "PouwCheck.PearlPlus.replay": "8b4e986fa5b82c4fbd0cd2f30020cf79ab0247ba404c5dc61a72dd7271ab8b85",
     "PouwCheck.PearlPlus.testCredit": "9b2de1bcdfc918762f9ea8b38be15d7795d5401057ca27016d35237d0ccf1292"
    }
@@ -47766,16 +47767,23 @@
    }
   },
   "PouwPearlPlus.Load": {
-   "digest": "e37138b3b777791035b8ba1f6988bdd9327b30db4b11c8a5f7b3ad200d75f16b",
+   "digest": "ca2745e66149e4de418a2fbd14f9a5575a5ad90d9c31ef2e792107759724b72e",
    "definitions": {
     "PouwCheck.PearlPlus.CALL_RANGE": "d77f141e4790b27fa43033132c55ab7bb8a67aa5f21e0c6f940d245c9d4f5e93",
+    "PouwCheck.PearlPlus.LoadClass": "ce3eb00373e9ff9e1d02afc1bafce3cfa46284ebf72006b5b4a54677add4626b",
+    "PouwCheck.PearlPlus.LoadClass.outputs": "871bf5806be0780b0752f992f11e80bd8b7eaed271bd73869ab9e7b7e7595537",
+    "PouwCheck.PearlPlus.LoadClass.prompt": "db00629caa47948cafbd44db94f1d7766e8e131e7e9a8b160eb3815a65e7e80f",
+    "PouwCheck.PearlPlus.LoadClass.slots": "f534eeae5917823f23a4d10db72c1335f591c8183f69f4c23b2ce584e1ed9ec9",
     "PouwCheck.PearlPlus.MANIFEST_RECORDED": "2bfce0c6808ba8cd5f003b882cb126a06278f542a626db0ac003dbcef25cacad",
     "PouwCheck.PearlPlus.MANIFEST_SCHEMA": "7e9f2b37beaef7a06b968c83a1623246342ab3554d3b4430f42bbfa4dced6971",
     "PouwCheck.PearlPlus.Refusal": "979d535860a31580172fe9ee817b5e4cc5e81ea889e35a1be9142636fd94407f",
     "PouwCheck.PearlPlus.Refusal.reason": "d05e3c060ae0c9c03ec496428fc5cdfdfe88105eb40ae66c27eb0a67a00a2030",
     "PouwCheck.PearlPlus.Refusal.refused": "ba9a881d9e269375e7fa60afd903898cc2445ecfd237020fe5caeb03609ac47a",
     "PouwCheck.PearlPlus.Refusal.tie": "821ddcbffd59a174eeace8ba3281a36893c975d9944e1107d92eb8fce5e955ba",
-    "PouwCheck.PearlPlus.Tied": "d4ebcce935ae8b8fcb0515e262ff4b8de879bbf7fbe7ff005005ecf4f4be2c7c",
+    "PouwCheck.PearlPlus.Tied": "300b4ae39c092800914d6f38cac52b8aaf2a1485649705e1f5d9cc13bc8edf71",
+    "PouwCheck.PearlPlus.Tied.record": "d20e22fec5c6ad42960d4f2a7a56f7de6e48d06d30829685d6691fc42d46a110",
+    "PouwCheck.PearlPlus.Tied.tables": "6ea23004165361e501d16c0f85b87f3a92ee93d8cc2d8a373db265bc9ad52283",
+    "PouwCheck.PearlPlus.Tied.weights": "81209467666c2408dbc9ae2defd51aff66e58297b1658b4f4d3c28c2206fefb7",
     "PouwCheck.PearlPlus.hex": "0bfc9b58f97504df1c6af059b1634dd9e24bbe7dd564c5aad3a86aeeed0755fa",
     "PouwCheck.PearlPlus.hexOf": "3bac10228ee591be671d8c50a8b591b60ef61a0ee6b57ceeaa936b42f4f4ed12",
     "PouwCheck.PearlPlus.key": "8a0f40525a6b3e267d052b5f61a92e5388b646b732fa6e8fd4bda92897d64364",
@@ -47807,7 +47815,7 @@
    }
   },
   "PouwPearlPlus.Protocol": {
-   "digest": "cb1e4cc522efa6a526cc3a3c32c374ac2bfa5b48a75062f445ecbb835b22fbba",
+   "digest": "bb4f7c2e3c31df94418c2f9cb0a6ccec0ebee2e33ced6c5e0988784ed337fd2d",
    "definitions": {
     "PouwCheck.PearlPlus.Protocol.Commitment": "6262e453055f79f1089169a714d3211302907610edcd3374c241fe638a34c695",
     "PouwCheck.PearlPlus.Protocol.Commitment.bytes": "cebea5da186a1d73d6d90277d17fdb235a70ef141d43302251bd89afb838267e",
@@ -47835,7 +47843,7 @@
     "PouwCheck.PearlPlus.Protocol.commitmentTag": "dc4d4695000847189d5d80f95fbdbacc77da22f2dd06a050c061dd92a2215452",
     "PouwCheck.PearlPlus.Protocol.evidenceKeys": "d0cf3986bde58e0a439f0d0f70faa9c4a9981edca2cfef8c0f8ae41cc16b45b2",
     "PouwCheck.PearlPlus.Protocol.evidenceOf": "d0c7323a93bf8e1d585a5f879c902f3b41228d56a480c7a6a887b8400994ff37",
-    "PouwCheck.PearlPlus.Protocol.inputOf": "eaf3977e9e2c847b6fb09304445c7ad0b3aab09b5346fdc682d9c3bed7f4d480",
+    "PouwCheck.PearlPlus.Protocol.inputOf": "e4866c2353d46a10fcb5aee8e0e28b2af6fd1caf19b7b7f9fdea4ba8ebd9047e",
     "PouwCheck.PearlPlus.Protocol.keys?": "1672c79a4eae220be435fa222a989595e0c22b24b85d3517d344f18e12a43f67",
     "PouwCheck.PearlPlus.Protocol.opener": "e055c8a28505bea29c8cc6892dea1c174aed231879c8fed3e4b0573dc490272d",
     "PouwCheck.PearlPlus.Protocol.paramsKeys": "e26777a97cfadd7c46c21b2a79c96169e47866a8d0a970ea0e69f2971e6e7e04",
@@ -47995,9 +48003,10 @@
    }
   },
   "PouwPearlPlus.Tie": {
-   "digest": "0e0ee6da83827be9a909e855c52aa5eae77ce39dff22e9a4a52d4dd77661930e",
+   "digest": "4ffc07b333ac9735d73d5c06d489fe0c4bcf2625719343ac4eab037a2950d590",
    "definitions": {
     "PouwCheck.PearlPlus.REGISTERED_WORD_BITS": "338072aaf2d5d118def710390eb4ba1fad1cc96d8f3ca7ff874b8339e5159773",
+    "PouwCheck.PearlPlus.ROW_ALIGN": "c1193174e9edf7c8dc19448c1330dd4c2c6a3955d183b699e2551e8cbc248e52",
     "PouwCheck.PearlPlus.TIE_CALLS": "e93bd547d438d6b678bca0f4f44c1fb80728cbf2c5ef55681b5982c2371fa413",
     "PouwCheck.PearlPlus.TIE_PREFIXES": "8c5b76f851a1985611fd242b5037a203dc368346a77ff9a7bf574b8b6484cb2a",
     "PouwCheck.PearlPlus.TieEntry": "2c9e373e5a452a648cc6d3d352ed3771003be8317868b558db237035c6c834eb",
@@ -48013,11 +48022,15 @@
     "PouwCheck.PearlPlus.Want.nat": "4eb745e28a2d246d3dada9e331a0064824d5258383c2537211a988a1bb2f189d",
     "PouwCheck.PearlPlus.Want.rec": "35574b9ac342c1d4b1e33c9df97a389c14958b57dd9bf0917aebe5e7a33c4661",
     "PouwCheck.PearlPlus.Want.str": "6edb1e31e3cb0bcf3e8dde885ccd8ee3a6e15066efcc1f70a6be484e1f6c902b",
+    "PouwCheck.PearlPlus.heldToLoad": "2445a05de3b6df82547bc9854a1a6b804ce6e930a0006e949bec5bf85bf78833",
     "PouwCheck.PearlPlus.instBEqWant": "11029d1e933695ac85908a3729e09fecb8ea598c92e346ca36c7e280587dc32a",
     "PouwCheck.PearlPlus.instBEqWant.beq": "d86bcaf1e76ea33d7757599962c4cd84f6b99e10d6acd33d6bd95065ff326877",
+    "PouwCheck.PearlPlus.loadRows": "6c1437600746e90378d968d4c1c4d1240ff60e13eee1d8599b88bafccd833c8d",
+    "PouwCheck.PearlPlus.offLoad": "edba2ee78bfa25decdfb07c44f2779824dc58cbf85a023279fe1d351064c4f0e",
+    "PouwCheck.PearlPlus.tieAt": "2542ab077e504e656f823f23bbe56b719b15803a61197d37d1242e6822135574",
     "PouwCheck.PearlPlus.tieEntries": "6aaacb19318e29dc4b526613d976a015fc05bc54c56d140537b238e48140b1a5",
     "PouwCheck.PearlPlus.tieEntries.go": "3d4b51e57dbcf210a409419a906623212bac700bc116ab24860960c83b3de031",
-    "PouwCheck.PearlPlus.tieOf": "5fb3fda71aedeeedb750b0114f3fd3a05c9dd148c10fcf67ad9b04325d21aaff",
+    "PouwCheck.PearlPlus.tieOf": "cd450919d93d381fc62cf07f657c20710bf45dffaa3bf4e398406e70a35b1a91",
     "PouwCheck.PearlPlus.tieOwner": "da3ad0b70c134797b6e4860e2e36d694b3e633f1ef7c5e05384de2ac4edb875e",
     "PouwCheck.PearlPlus.tieWeights": "24c61e7ee1cbfe6dbb0362c5a19ecbcc462a90a74b2f07b1fc93ec54fdcaf02b",
     "PouwCheck.PearlPlus.wVersion": "a95d9ccee2226368160e5163e7f8663c2b3d89f44552d433ca6c6935410fecba",
