@@ -57,7 +57,7 @@ that their roots split (`Receipts.split`). -/
 def ReceiptsBindingOfFork : Prop :=
   ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Remote.Draw.Run n m s κ X)
     (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
     (R.binding D prf rest).toReal ≤
       ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))

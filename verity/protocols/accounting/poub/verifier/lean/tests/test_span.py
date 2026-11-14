@@ -44,7 +44,8 @@ def statics(reg: audit.Registration, d: audit.PositionSample):
 
 
 def span_public(v: Any) -> dict:
-    """`spanPublicFn`: the case's session through `audit.AuditRun`, then window t's samples, each one's rows and the supplied values."""
+    """`spanPublicFn`: the case's session through `audit.AuditRun`, then window t's samples, each one's rows and the
+    supplied values."""
     with M.decoding():
         reg = M.registration_of(M._get(v, "registration"))
         kw, committed, appends, not_before = M.session_of(v)

@@ -291,10 +291,10 @@ theorem source_executionPhase {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Co
 theorem executionPhasesOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₁ d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
     (h1 : caseOf s = .ok (p, c, e)) (h3 : firstSamples key p c e = some d₁) (h5 : interiorOf e = .ok c₂)
-    (h6 : secondSamples p e = some d₂) : windowsOf s.params = some (d₁.window, d₂.window) := by
+    (h6 : secondSamples p e = some d₂) : executionPhasesOf s.params = some (d₁.window, d₂.window) := by
   obtain ⟨bp, hb, hw₁, -⟩ := firstSamples_executionPhase h3
   have hw₂ := source_executionPhase (secondSamples_eq h5 h6)
-  unfold windowsOf
+  unfold executionPhasesOf
   rw [paramsAt_of_caseOf h1]
   simp [Except.toOption, hb, hw₁, hw₂]
 
@@ -399,7 +399,7 @@ theorem binds_of_prints (dev : Exchange → History) (θ : ByteArray)
   have hm₁ : (d₁, firstCoins e) ∈ records o.sent := by rw [records_eq h1 h2, h3]; simp
   have hm₂ : (d₂, e.interior.base.coins) ∈ records o.sent := by rw [records_eq h1 h2, h6]; simp
   have hK : keyOf θ = some key := by rw [← hθ]; exact h2
-  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
+  have hw : executionPhasesOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
   have hPT := hP o hθ d₁.window d₂.window hw
   have hH := hI o.sent hθ ha p c e h1
   unfold PrintsTwo at hPT

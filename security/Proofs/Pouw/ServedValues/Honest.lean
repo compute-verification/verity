@@ -16,7 +16,7 @@ size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: Flock's `and a b` of two dist
 
 * `right_values_honest`: the honest period meets every premise of `RightValues`, `j10r_meets`' without
   `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
-  executionPhases' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
+  execution phases' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
 * `right_values_nontrivial`: the conclusion fails when the verifier accepts everything. With every window credited
   (`hacc`), every block live and the play accepted, a prover that skips every block whole has no right block, while
   the right values must cover `(1 − ε(n))₊·N_p·n > 0` AND gates once `Λ·ln(1/δ_s) < n`. So the conclusion's event
@@ -155,7 +155,7 @@ end Witnesses
 def skipStages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
   .stage (fun _ _ => .whole) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
-/-- The skipping period of `n` executionPhases: every tile live, each window's stages `skipStages`. -/
+/-- The skipping period of `n` execution phases: every tile live, each window's stages `skipStages`. -/
 def skipMonitoringPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (skipStages N) fun _ => skipMonitoringPeriod Ω N n

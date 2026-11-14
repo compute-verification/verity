@@ -4127,6 +4127,16 @@
         "security/Properties/Pouw/PeriodJ10R.lean": "security/Properties/Pouw/MonitoringPeriodJ10R.lean",
         "security/Properties/Pouw/PeriodJ10RStrata.lean": "security/Properties/Pouw/MonitoringPeriodJ10RStrata.lean"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/window_law.py": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean"
+      }
     }
   ]
 }

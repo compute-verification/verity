@@ -18,7 +18,7 @@ with no premise. The certificate's fit (`Fits`) and the 105-round bound (`Pous.G
   event's probability over them is at most `δ + ε_max`, the ring model's bound, with no premise on SHA-512.
 * `PeriodHeldSha512`, `PeriodHeldSha512At`: the coins are the challenger's hm96 coins and its 64-byte secret source, and
   its streams are the deployed derivation's (`challengerStreams`: `derive(source, COIN_DOMAIN, {session, blocks, k})`,
-  then `stream(key, ("u", j), DRAW_BYTES)` for each round `j`, `MemoryChallenger.drawIndices`'s). Under
+  then `stream(key, ("u", j), DRAW_BYTES)` for each round `j`, `MemoryChallenger.sampleIndices`'s). Under
   `Hash.Assumptions.Sha512Prf` (`prf/sha-512`) at the two tests the event gives, the key derivation (one input) and the
   streams' 105 · 64 blocks, the bound is `δ + ε_max + ε_prf(t, 1) + ε_prf(t, 6720)`.
 
@@ -42,7 +42,7 @@ set_option exponentiation.threshold 20000
 /-- SHA-512 of a message, as a digest: the verifier's FIPS 180-4 SHA-512 (`Flock.Sha512.hash`) on its bytes. -/
 def sha512Digest (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
-/-- The memory challenger's coin context at `N` blocks for the session `sid` (`drawIndices`'s). -/
+/-- The memory challenger's coin context at `N` blocks for the session `sid` (`sampleIndices`'s). -/
 def coinContext (N : ℕ) (sid : ByteArray) : List (String × FlockSoundness.Randomness.Part) :=
   [("session", .bytes sid), ("blocks", .int N), ("k", .int K)]
 
@@ -67,7 +67,7 @@ def streamsOf (key : ByteArray) : Streams := fun j b =>
   ((FlockSoundness.Randomness.stream key [.str "u", .int j.val] DRAW_BYTES).data.getD b.val 0).toFin
 
 /-- The memory challenger's streams from its source `src` at `N` blocks for the session `sid`: the key
-`derive(src, COIN_DOMAIN, coinContext N sid)`, and its streams (`drawIndices`). -/
+`derive(src, COIN_DOMAIN, coinContext N sid)`, and its streams (`sampleIndices`). -/
 def challengerStreams (N : ℕ) (sid : ByteArray) (src : Bytes 64) : Streams :=
   streamsOf (FlockSoundness.Randomness.derive (bytesOf src) COIN_DOMAIN (coinContext N sid))
 
