@@ -29,6 +29,7 @@ untraced = [
     "tests/test_agent_watch_relay.py",
     "tests/test_control_door.py",
     "tests/test_deploy.py",
+    "tests/test_deploy_register.py",
     "tests/test_drive_sh.py",
     "tests/test_gh_read_token.py",
     "tests/test_keeper.py",

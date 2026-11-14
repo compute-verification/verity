@@ -4,7 +4,8 @@ pods/nebius/deploy.toml lists every file that infra's loops, timers and services
 comes from, who owns it (a Slack handle), and the patterns (`managed`) under which nothing else should live.
 
   research deploy drift [--on N ...] [--ref origin/main] [--json] [--no-fetch]
-  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch] [--login USER]
+  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
+  research deploy roll PATH --by WHO [--on N ...] [--ref REF] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
   research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch] [--login USER]
 
 `drift` reads each node over ssh, as `research run --on` reaches it (a node whose `staged` says why its machine doesn't exist
@@ -57,11 +58,43 @@ must succeed first (node 2's: no timed window runs or waits), else nothing resta
 timer, and a unit a setup script writes (`by`), is never restarted: whatever still runs the old file is printed (its service,
 else the path), to restart when it's safe, and `drift` says `restart` until then. Without `--apply`, `install` and `attic`
 change nothing and say what they would. Exit 3 is a refusal, before anything changed.
+
+A file that lists machines by address is made from the register of machines, never copied: the tree holds no address. Its entry
+has `register = true`, and its `src` is a template that names machines: `{{NAME}}` is a machine's name and `{{NAME:FIELD}}` a
+field of its register file (`host`, its address), where NAME is one machine or a pattern (`vy-nebius-cpu-*`). A line that names
+a pattern is written once for each machine of the pattern, in the order of their names with numbers by value, so one register
+gives one text; a line names one machine or pattern, and a line that names none is copied. The register is the launcher's, the
+directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`, pulled first unless
+--no-fetch), and each machine in it is one of three: live, released (`released_host` and no `host`: a pattern passes it by, so
+its line goes at the next install, and a template that names it is refused), or broken (a file that doesn't parse or doesn't
+validate). A stopped machine (`unreachable_since`) is live: its address is still its own, and its line stays. Nothing is written
+from a register that can't be read: `install` refuses, naming the path, when the register is off or isn't a directory, holds no
+machine, holds a broken file a pattern matches, lacks a machine or a field the template names, or gives a value that isn't one
+plain word. `drift` compares the installed file with the text the register gives now: `ok` when they are the same, `stale` when
+an install wrote the file and the register or the template has changed since, `unknown` when no install wrote it or the
+register can't be read (the detail names the path).
+An install never takes a machine out of a list unasked. The machines a file names are the register's names (live, released or
+broken) that its lines hold as whole words, comments apart; `install` refuses when the text it would write lacks one the
+installed file names, or has fewer lines, and says which machines would go and what the register says of each. `--allow-shrink`
+installs it all the same. Without `--apply` it prints how many machines the file names now and after.
+An entry's `accept` is a public key on the node (`/home/research/.ssh/vy-cluster.pub`): before the list is written, the
+`authorized_keys` beside the key takes it from the address of every machine the list names. Only the `from=` of the key's own
+line grows (a line is added when the file has none; one with no `from=` already takes the key from anywhere); no address is ever
+taken out, with `--allow-shrink` or without, and every other line stays as it was.
+`roll` puts one such PATH on every node that lists it (every node but the admin-only ones, or those `--on` names), one node at a
+time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that no list ever names
+an address its machine isn't taken from; then each node's file is installed and read back, and the roll stops at the first node
+whose file doesn't read `ok`. A node that can't be reached is passed by and named last, with the install that brings it up to
+date (exit 1); a staged node the register doesn't hold is passed by. So a machine joins the others in three steps: register it,
+copy the key to it, and `roll`.
 """
 from __future__ import annotations
 
 import argparse
 import base64
+import fnmatch
+import hashlib
+import inspect
 import json
 import os
 import re
@@ -105,11 +138,22 @@ def tree_files(top):
         yield from (os.path.join(d, n) for n in names if not n.endswith(".pyc"))
 '''
 
+def named(text, words):
+    """How many lines of `text` say something (not blank, no `#` comment) and which of `words` those lines hold as whole words:
+    the machines a list names, however its lines are written. It runs here on the text the register gives and, as source, on the
+    node over the installed file (PROBE), so the two are counted one way."""
+    import re
+    body = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    held = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._-]*", "\n".join(body)))
+    return len(body), sorted(w for w in words if w in held)
+
+
 # Runs on the node (stdlib): each path's git blob, mtime, the oldest start of a process whose argv names it and every such
 # process's start and service (its cgroup's last component, `systemd:NAME` or `user-systemd:NAME`, else null), the files the
 # managed patterns and trees hold, the record's last line per path, the trust store's files that name a distrusted root, and
-# the null device's mode and device numbers (or why it can't be read).
-PROBE = WALK + r'''
+# the null device's mode and device numbers (or why it can't be read). For a path of `words`, its lines and which of those
+# words it names (`named`): names leave the node, never the file's text.
+PROBE = WALK + inspect.getsource(named) + r'''
 import glob, hashlib, json, sys
 req = json.loads(sys.argv[1])
 def blob(p):
@@ -130,6 +174,9 @@ for p in req["paths"]:
     try:
         st = os.stat(p)
         files[p] = {"blob": blob(p), "mtime": st.st_mtime}
+        if p in req.get("words", {}):
+            with open(p, errors="replace") as f:
+                files[p]["rows"], files[p]["names"] = named(f.read(), req["words"][p])
     except FileNotFoundError:
         files[p] = None
     except OSError as e:
@@ -326,6 +373,80 @@ req = json.load(sys.stdin)
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 append(req["record"], [{"at": stamp, **ln} for ln in req["lines"]])
 '''
+
+# Runs on the node (as root under --apply; else as the login, and it only reads): the authorized_keys file req["authorized"]
+# takes the key at req["key"] from every address of req["sources"]. Only the from= of the key's own line grows: a line is added
+# when none holds the key, and a line with no from= takes it from anywhere already. No source is ever taken out, and every
+# other line is written back as it was, the old file linked under .deploy-prev/. It prints counts, never an address. Exit 3
+# is a refusal, before anything changed.
+ACCEPT = APPEND + r'''
+import re, stat
+req = json.load(sys.stdin)
+key, ak, want = req["key"], req["authorized"], req["sources"]
+stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+def refuse(why):
+    print(why, file=sys.stderr)
+    sys.exit(3)
+if not want:
+    refuse(f"no machine to take the key at {key} from")
+try:
+    with open(key) as f:
+        kind, body, *comment = f.read().split()
+except (OSError, ValueError) as e:
+    refuse(f"no public key at {key} ({type(e).__name__}): copy the key and its public half to this machine first")
+try:
+    with open(ak) as f:
+        lines = f.read().splitlines()
+    st = os.stat(ak)
+except FileNotFoundError:
+    lines, st = [], None
+except OSError as e:
+    if req["apply"]:
+        refuse(f"{ak} can't be read ({type(e).__name__})")
+    print(json.dumps({"unread": f"{type(e).__name__}: --apply reads it as root"}))
+    sys.exit(0)
+FROM = re.compile(r'(?:^|,)from="([^"]*)"')
+def parts(line):
+    """(its options, the key and what follows it) for a line that holds the key, else None."""
+    at = line.find(f"{kind} {body}")
+    end = at + len(kind) + 1 + len(body)
+    if at < 0 or line.lstrip().startswith("#") or (at and not line[at - 1].isspace()) or not (line[end:end + 1] or " ").isspace():
+        return None
+    return line[:at].strip(), line[at:]
+mine = [(i, *p) for i, p in ((i, parts(ln)) for i, ln in enumerate(lines)) if p]
+lists = [FROM.search(o) for _, o, _ in mine]
+have = {s for m in lists if m for s in m.group(1).split(",")}
+add = [] if any(m is None for m in lists) else [s for s in want if s not in have]
+if not mine:
+    how = "new"
+    lines.append(f'from="{",".join(want)}" {kind} {body} {" ".join(comment) or os.path.basename(key)}')
+elif add:
+    how = "extended"
+    (i, o, rest), m = mine[0], lists[0]
+    lines[i] = f'{o[:m.start(1)]}{",".join(filter(None, [m.group(1), *add]))}{o[m.end(1):]} {rest}'
+else:
+    how = "kept"
+if how != "kept" and req["apply"]:
+    d = os.path.dirname(ak)
+    own = st or os.stat(d)
+    tmp = os.path.join(d, f".{os.path.basename(ak)}.deploy-tmp")
+    with open(tmp, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    os.chmod(tmp, stat.S_IMODE(st.st_mode) if st else 0o600)
+    os.chown(tmp, own.st_uid, own.st_gid)
+    if st is not None:
+        prev = os.path.join(d, ".deploy-prev")
+        os.makedirs(prev, exist_ok=True)
+        os.chown(prev, own.st_uid, own.st_gid)
+        try:
+            os.link(ak, os.path.join(prev, f"{os.path.basename(ak)}.{stamp}"))
+        except FileExistsError:
+            pass
+    os.replace(tmp, ak)
+    append(req["record"], [{"at": stamp, "path": ak, "accept": key, "added": len(add), "commit": req["commit"], "ref": req["ref"],
+                            "by": req["by"]}])
+print(json.dumps({"line": how, "added": len(add), "sources": len(have | set(add))}))
+'''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
 SUFFIX = re.compile(r"\.(service|timer|socket|path|target|mount|slice|scope)$")
 
@@ -349,6 +470,8 @@ class Entry:
     required: bool = False             # (a tree) what runs from it can't run without any of its files
     no_restart: str | None = None      # why a process that started before an install is left to end: never `restart`
     whole: bool = False                # (a tree) installed as one new directory its link is renamed onto, never file by file
+    register: bool = False             # (a file) `src` is a template the register of machines fills at each install
+    accept: str | None = None          # (a register-made file) the public key, on the node, its machines are taken with
 
 
 @dataclass
@@ -382,13 +505,19 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                                       or not e["no_restart"].strip()):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `no_restart` says why, for a file install copies (src) that names "
                                  "no service to restart (run)")
+            if "register" in e and (kind != "file" or not e.get("src") or not isinstance(e["register"], bool)):
+                raise ValueError(f"deploy.toml: {e['path']!r}: `register` is true or false, for a file whose `src` is the "
+                                 "template the register of machines fills")
+            if "accept" in e and (not e.get("register") or not isinstance(e["accept"], str) or not e["accept"].startswith("/")):
+                raise ValueError(f"deploy.toml: {e['path']!r}: `accept` is the path, on the node, of the public key a "
+                                 "register-made list's machines are taken with (`register = true`)")
             for n in e["nodes"]:
                 if n not in nodes:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 nodes[n].entries.append(Entry(e["path"], e.get("src"), e.get("by"), list(e.get("run", [])), kind == "tree", mode,
                                               e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart"),
-                                              e.get("whole", False)))
+                                              e.get("whole", False), e.get("register", False), e.get("accept")))
     for node in nodes.values():
         seen = set()
         for e in node.entries:
@@ -435,6 +564,133 @@ def expected(node: Node, commit: str, repo: Path = REPO) -> dict[str, tuple[str,
 
 def absent(node: Node, want: dict) -> list[Entry]:
     return [e for e in node.entries if e.src and not e.tree and e.path not in want]
+
+
+PLACE = re.compile(r"\{\{([^{}\s:]+)(?::([A-Za-z_][A-Za-z0-9_]*))?\}\}")      # {{NAME}}, {{NAME:FIELD}}; NAME may be a pattern
+WILD = re.compile(r"[*?\[]")
+# what a file takes from the register: a name or an address, never a space, a quote, an option or a second line
+WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
+
+
+class NoRegister(Refused):
+    """The register of machines can't give the file, so nothing is written: the message names the path that is wrong."""
+
+
+@dataclass
+class Register:
+    """The register of machines as one read finds it: each `NAME.toml` of `where` is live, released or broken."""
+    where: Path
+    live: dict[str, dict] = field(default_factory=dict)        # name -> its file's table
+    gone: set[str] = field(default_factory=set)                # released: `released_host` and no `host`
+    broken: set[str] = field(default_factory=set)              # a file that doesn't parse or is no machine's
+
+    def names(self) -> list[str]:
+        return sorted({*self.live, *self.gone, *self.broken}, key=natural)
+
+    def says(self, name: str) -> str:
+        return ("released in the register" if name in self.gone else "its register file is broken" if name in self.broken else
+                "live in the register" if name in self.live else "not in the register")
+
+
+@dataclass
+class Made:
+    """A register-made file as the register gives it now."""
+    data: bytes
+    blob: str
+    names: list[str]                   # the machines that fill it
+    sources: list[str]                 # their addresses: where the key the list is used with comes from
+
+
+def natural(name: str) -> list:
+    """Sorts names with their numbers by value: cpu-2 before cpu-10."""
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", name)]
+
+
+def register(environ: dict | None = None) -> Register:
+    """The register a register-made file is filled from: the directory `research pods` finds a machine in. NoRegister when it
+    is off, is no directory or holds no machine: a list is never written from a register that can't be read."""
+    from research import remote
+    from research.pods import registry
+
+    env = os.environ if environ is None else environ
+    d = registry.registry_dir(remote.machines_path(), env)
+    if d is None:
+        raise NoRegister(f"the register of machines is off (${registry.REGISTRY_ENV}={env.get(registry.REGISTRY_ENV)!r}), so "
+                         "a file made from it can't be: unset it or point it at a machines.d directory")
+    if not d.is_dir():
+        raise NoRegister(f"the register of machines isn't there: {d} is no directory (`research notes sync` clones the notes)")
+    reg = Register(d)
+    for p in sorted(d.glob("*.toml")):
+        if p.name.startswith("_"):
+            continue
+        try:
+            doc = tomllib.loads(p.read_text())
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            reg.broken.add(p.stem)
+            continue
+        if doc.get("released_host") and not doc.get("host"):
+            reg.gone.add(p.stem)
+        elif registry.validate(p.stem, doc):
+            reg.broken.add(p.stem)
+        else:
+            reg.live[p.stem] = doc
+    if not reg.live:
+        raise NoRegister(f"the register of machines holds no machine: {d} has no NAME.toml of a live one")
+    return reg
+
+
+def fill(template: str, reg: Register, src: str) -> tuple[str, list[str]]:
+    """The text `template` (the file `src`) gives from the register, and the machines it names (the docstring's rules).
+    NoRegister, naming the path, for each case in which the text would lack a machine or hold a wrong word."""
+    out, filled = [], set()
+
+    def file(n: str) -> Path:
+        return reg.where / f"{n}.toml"
+
+    for no, line in enumerate(template.splitlines(keepends=True), 1):
+        asks = PLACE.findall(line)
+        if not asks:
+            out.append(line)
+            continue
+        at = f"{src}:{no}"
+        if len({w for w, _ in asks}) > 1:
+            raise NoRegister(f"{at} names more than one machine or pattern ({', '.join(sorted({w for w, _ in asks}))}): one a line")
+        who = asks[0][0]
+        if WILD.search(who):
+            if bad := sorted((n for n in reg.broken if fnmatch.fnmatchcase(n, who)), key=natural):
+                raise NoRegister(f"{file(bad[0])} is broken and matches {who} ({at}), so whether its machine belongs in the "
+                                 "file can't be told: repair it (`research pods registry` says what is wrong) or remove it")
+            names = sorted((n for n in reg.live if fnmatch.fnmatchcase(n, who)), key=natural)
+            if not names:
+                raise NoRegister(f"{reg.where} holds no live machine matching {who} ({at}): the file would be without them")
+        elif who in reg.live:
+            names = [who]
+        else:
+            raise NoRegister(f"{at} names {who}, " + (
+                f"which the register marks released ({file(who)}): take its line out of {src}" if who in reg.gone else
+                f"whose register file is broken ({file(who)}): `research pods registry` says what is wrong" if who in reg.broken
+                else f"which the register doesn't hold (no {file(who)}): `research pods register` writes it"))
+        for n in names:
+            def value(m: re.Match, n: str = n) -> str:
+                if m.group(2) is None:
+                    return n
+                v = reg.live[n].get(m.group(2))
+                if v is None:
+                    raise NoRegister(f"{file(n)} has no `{m.group(2)}`, which {at} asks of it: add it there")
+                if isinstance(v, bool) or not isinstance(v, (str, int)) or not WORD.fullmatch(str(v)):
+                    raise NoRegister(f"{file(n)}: its `{m.group(2)}` isn't one plain word ({WORD.pattern}), so {at} can't take it")
+                return str(v)
+            out.append(PLACE.sub(value, line))
+            filled.add(n)
+    return "".join(out), sorted(filled, key=natural)
+
+
+def made(e: Entry, sha: str, reg: Register, repo: Path = REPO) -> Made:
+    """The register-made entry `e` as the register gives it now, from its template (the blob `sha`)."""
+    template = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True, check=True).stdout.decode()
+    data, names = fill(template, reg, e.src)
+    sources = [h for n in names if isinstance(h := reg.live[n].get("host"), str) and WORD.fullmatch(h)]
+    return Made(data.encode(), hashlib.sha1(b"blob %d\0" % len(data.encode()) + data.encode()).hexdigest(), names, sources)
 
 
 def versions(srcs: list[str], *revs: str, since: str | None = None, limit: int | None = None,
@@ -496,9 +752,27 @@ def released(node: str) -> bool:
         return False
 
 
-def probe(node: Node, paths: list[str], run: Runner) -> dict:
+def stale_register() -> str | None:
+    """Pull the notes clone the register of machines is read from, as `research notes sync` pulls it: why the register may be
+    behind, or None. A register read from $RESEARCH_MACHINES_D is whatever keeps that directory, and is left alone."""
+    from research import notes_sync
+    from research.pods import registry
+
+    root = registry.notes_root()
+    if registry.REGISTRY_ENV in os.environ or not (root / ".git").exists():
+        return None
+    try:
+        r = notes_sync.pull(root)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"the notes clone {root} wasn't pulled ({type(e).__name__}), so the register of machines may be behind"
+    return None if r.returncode == 0 else (f"the notes clone {root} wasn't pulled, so the register of machines may be behind: "
+                                           f"{(r.stderr or '').strip()[-300:]}")
+
+
+def probe(node: Node, paths: list[str], run: Runner, words: dict[str, list[str]] | None = None) -> dict:
+    """What the node holds at `paths` (PROBE); for each path of `words`, also which of its words the file names."""
     req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record,
-           "certs": CERTS, "distrusted": DISTRUSTED_ROOTS, "null": NULL}
+           "certs": CERTS, "distrusted": DISTRUSTED_ROOTS, "null": NULL, **({"words": words} if words else {})}
     r = run(node.name, ["python3", "-c", PROBE, json.dumps(req)], None)
     if r.returncode != 0:
         err = r.stderr.decode(errors="replace").strip()
@@ -538,6 +812,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
     srcs = sorted({v[0] for v in want.values()})
     old = versions(srcs, commit, limit=HISTORY, repo=repo) if srcs else {}
     recent: dict | None = None
+    reg: Register | None = None
     entries = []
 
     def of(e: Entry) -> dict:
@@ -558,12 +833,27 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 {"detail": "in the tree, not installed"})})
             continue
         rec = seen["record"].get(path) or {}
-        if got is None:
+        unmade = None
+        if e.register:
+            try:
+                reg = reg or register()
+                sha = made(e, sha, reg, repo).blob      # what the register gives now, not the template
+            except NoRegister as err:
+                unmade = str(err)
+        if unmade:
+            state, detail = "unknown", f"the register can't give it: {unmade}"
+        elif got is None:
             state, detail = "missing", "install it"
         elif "error" in got:
             state, detail = "unknown", got["error"]
         elif got["blob"] == sha:
             state, detail = "ok", ""
+        elif e.register and rec.get("blob") == got["blob"] and rec.get("commit"):
+            state, detail = "stale", (f"installed {rec.get('at')} by {rec.get('by')} from {rec.get('ref')} @ {rec['commit'][:12]}; "
+                                      "the register or its template has changed since: install it")
+        elif e.register:
+            state, detail = "unknown", ("not the text the register gives, and no install wrote it: written by hand or edited "
+                                        "in place; an install says which machines it would add and drop")
         elif (rp, got["blob"]) in old:
             c, d = old[(rp, got["blob"])]
             state, detail = "stale", f"{ref}'s version of {c[:12]} ({d}); {ref} has changed it since: install it"
@@ -717,11 +1007,54 @@ def restart(node: Node, plan: dict[str, list[str]], run: Runner, apply: bool) ->
     return out
 
 
-def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: bool = False, repo: Path = REPO) -> dict:
+def listed(node: Node, e: Entry, now: dict | None, new: Made, reg: Register, allow_shrink: bool) -> dict:
+    """What an install of the register-made `e` does to the machines its file names on the node (`now`: the probe's reading of
+    the installed file, None when there is none): {"now", "after", "added", "dropped", "says"}, counts and names. Refused,
+    naming what would go, when the new text lacks a machine the installed file names or has fewer lines, unless
+    `allow_shrink`; and when the installed file can't be read, since what would go can't be told."""
+    rows, after = named(new.data.decode(), reg.names())
+    if now is None:
+        return {"now": None, "after": len(after), "added": after, "dropped": [], "says": {}}
+    if "names" not in now:
+        if not allow_shrink:
+            raise Refused(f"{e.path} on {node.name} can't be read ({now.get('error', 'the probe gave no names')}), so the "
+                          "machines an install would take out of it can't be told. Nothing changed; `--allow-shrink` installs "
+                          "it all the same")
+        return {"now": None, "after": len(after), "added": after, "dropped": [], "says": {}}
+    dropped = sorted(set(now["names"]) - set(after), key=natural)
+    out = {"now": len(now["names"]), "after": len(after), "added": sorted(set(after) - set(now["names"]), key=natural),
+           "dropped": dropped, "says": {n: reg.says(n) for n in dropped}}
+    if (dropped or rows < now["rows"]) and not allow_shrink:
+        gone = [f"{n} ({reg.says(n)})" for n in dropped] or [f"{now['rows'] - rows} line(s) that name no machine of the register"]
+        raise Refused(f"{e.path} on {node.name} names {out['now']} machines in {now['rows']} lines, and the register gives "
+                      f"{out['after']} in {rows}: an install would take out {', '.join(gone)}. Nothing changed; "
+                      "`--allow-shrink` installs it all the same")
+    return out
+
+
+def accept(node: Node, e: Entry, sources: list[str], commit: str, ref: str, by: str, run: Runner, apply: bool) -> dict:
+    """The node takes the key at `e.accept` from every address of `sources` (ACCEPT): {"line": new, extended or kept, "added",
+    "sources"}, counts only; without `apply` what it would add, or {"unread": why} when the login can't read the file."""
+    req = {"key": e.accept, "authorized": os.path.join(os.path.dirname(e.accept), "authorized_keys"), "sources": sources,
+           "apply": apply, "record": node.record, "commit": commit, "ref": ref, "by": by}
+    r = run(node.name, [*(["sudo", "-n"] if apply else []), "python3", "-c", ACCEPT], json.dumps(req).encode())
+    err = r.stderr.decode(errors="replace").strip()[-400:]
+    if r.returncode == 3:
+        raise Refused(f"{node.name}: {err}")
+    if r.returncode != 0:
+        raise (Unreachable if r.returncode == 255 and "ssh: connect to host" in err else RuntimeError)(
+            f"{node.name}: taking the key at {e.accept} failed (exit {r.returncode}): {err}")
+    return json.loads(r.stdout)
+
+
+def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: bool = False, repo: Path = REPO,
+            allow_shrink: bool = False, part: str = "all") -> dict:
     """Install `node`'s entries (or those whose path or repo path is in `only`) from `ref` and restart what they name (the
     docstring's rule); without `apply`, only say what would change. {"commit", "files": [{path, src, changed, run}], "restarts":
     [{unit, why, state}]}: a file's `run` is what still runs its old version, and a path a whole tree's directory holds that
-    `ref` lacks is among the files, its `changed` "dropped" ("would drop" without `apply`)."""
+    `ref` lacks is among the files, its `changed` "dropped" ("would drop" without `apply`). A register-made file's entry has
+    `machines` too (`listed`'s) and, when its entry names a key, `accept` (`accept`'s); `part` "accept" stops once each such
+    key is taken, before any file is written, and "list" writes the files and leaves the keys (`roll`'s two passes)."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     if not origin_branches(commit, repo, most=1):
         raise Refused(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
@@ -742,9 +1075,12 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
     else:
         skipped += [{"path": p, "src": v[0], "changed": "held", "run": [], "hold": v[3].hold} for p, v in sorted(want.items()) if v[3].hold]
         want = {p: v for p, v in want.items() if not v[3].hold}
-    files = [{"path": p, "blob": sha, "mode": e.mode, "git_mode": mode, **({"tree": e.path.rstrip("/")} if e.whole else {}),
-              "data": base64.b64encode(subprocess.run(["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True,
-                                                      check=True).stdout).decode()}
+    reg = register() if any(v[3].register for v in want.values()) else None
+    gen = {p: made(e, sha, reg, repo) for p, (_, sha, _, e) in sorted(want.items()) if e.register}
+    files = [{"path": p, "blob": gen[p].blob if p in gen else sha, "mode": e.mode, "git_mode": mode,
+              **({"tree": e.path.rstrip("/")} if e.whole else {}),
+              "data": base64.b64encode(gen[p].data if p in gen else subprocess.run(
+                  ["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True, check=True).stdout).decode()}
              for p, (_, sha, mode, e) in sorted(want.items())]
     trees = {e.path.rstrip("/"): e for _, _, _, e in want.values() if e.whole}
 
@@ -753,13 +1089,21 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         return [{"path": p, "src": f"{e.src.rstrip('/')}/{os.path.relpath(p, t)}", "changed": how, "run": []}
                 for p in sorted(paths) for t, e in trees.items() if p.startswith(t + "/")]
 
+    seen = probe(node, sorted(gen) if apply else [f["path"] for f in files], run,
+                 {p: reg.names() for p in gen}) if gen or not apply else {"files": {}}
+    lists = {p: listed(node, want[p][3], seen["files"].get(p), g, reg, allow_shrink) for p, g in gen.items()}
+    made_of = {p: {"machines": lists[p], **({"accept": accept(node, want[p][3], g.sources, commit, ref, by, run, apply)}
+                                            if want[p][3].accept and part != "list" else {})} for p, g in gen.items()}
+    if part == "accept":
+        return {"commit": commit, "restarts": [], "files": [
+            {"path": p, "src": want[p][0], "run": [], "changed": None, **made_of[p]} for p in sorted(gen)]}
     if not apply:
-        seen = probe(node, [f["path"] for f in files], run)
         same = {f["path"] for f in files if (seen["files"].get(f["path"]) or {}).get("blob") == f["blob"] and f["mode"] is None}
         would = {p: want[p][3] for p in want if p not in same}
         plan = restarts(node, would, {p: [u for _, u in seen["running"].get(p, [])] for p in would})
         return {"commit": commit, "restarts": restart(node, plan, run, apply=False),
-                "files": [{"path": f["path"], "src": want[f["path"]][0], "run": [], "changed": False if f["path"] in same else None}
+                "files": [{"path": f["path"], "src": want[f["path"]][0], "run": [], "changed": False if f["path"] in same else None,
+                           **made_of.get(f["path"], {})}
                           for f in files] + lost([p for p in seen["found"] if p not in want], "would drop") + skipped}
     req = {"files": files, "commit": commit, "ref": ref, "by": by, "record": node.record}
     r = run(node.name, ["sudo", "-n", "python3", "-c", INSTALL], json.dumps(req).encode())
@@ -797,8 +1141,93 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         return sorted({u if u in named else p for u in still.get(p, [])})
 
     return {"commit": commit, "restarts": done,
-            "files": [{"path": f["path"], "src": want[f["path"]][0], "changed": c, "run": stale(f["path"]) if c else []}
+            "files": [{"path": f["path"], "src": want[f["path"]][0], "changed": c, "run": stale(f["path"]) if c else [],
+                       **made_of.get(f["path"], {})}
                       for f, c in zip(files, changed)] + lost(dropped, "dropped") + skipped}
+
+
+def told(f: dict) -> list[str]:
+    """What an install's line for a register-made file adds: the machines it names now and after, and the key it takes."""
+    out = []
+    if m := f.get("machines"):
+        now = "isn't installed" if m["now"] is None else f"names {m['now']} machines now"
+        drops = ", ".join(f"{n} ({why})" for n, why in m["says"].items())
+        out.append(f"{now}, {m['after']} after" + (f"; adds {', '.join(m['added'])}" if m["added"] and m["now"] is not None else "")
+                   + (f"; drops {drops}" if drops else ""))
+    if a := f.get("accept"):
+        out.append(f"its key can't be read here ({a['unread']})" if "unread" in a else
+                   f"its key is taken from {a['added']} more address(es), {a['sources']} in all" if a["added"] else
+                   f"its key is taken from each of them already ({a['sources']} address(es))")
+    return out
+
+
+def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, apply: bool = False, repo: Path = REPO,
+         allow_shrink: bool = False, only: list[str] | None = None, say: Callable[[str], None] = print) -> int:
+    """Put the register-made `path` on every node that lists it (the admin-only ones only when `only` names them), one node at
+    a time (the docstring's `roll`). 0 when every node holds the register's text, 1 when one was passed by; Refused before
+    anything changed when a node's install would refuse; RuntimeError at the first node whose file doesn't read ok."""
+    if missing := [n for n in only or [] if n not in nodes]:
+        raise Refused(f"no node {missing[0]!r} in deploy.toml")
+    picked = [nodes[n] for n in sorted(only or (n for n, nd in nodes.items() if not nd.admin), key=natural)
+              if any(e.path == path and e.register and not e.hold for e in nodes[n].entries)]
+    if not picked:
+        raise Refused(f"no node {'of those named ' if only else ''}lists {path} as a file made from the register "
+                      "(`register = true` in deploy.toml)")
+    reg, away, refused, todo = register(), {}, {}, []
+    for node in picked:
+        if node.staged and node.name not in reg.live:
+            away[node.name] = f"staged ({node.staged}) and not in the register"
+            continue
+        try:
+            f = install(node, ref, by, [path], run, False, repo, allow_shrink)["files"][0]
+        except Unreachable:
+            away[node.name] = "unreachable"
+            continue
+        except NoRegister:
+            raise
+        except Refused as e:
+            refused[node.name] = str(e)
+            continue
+        todo.append(node)
+        say(f"{node.name}  {'unchanged' if f['changed'] is False else 'would install'}  {'; '.join(told(f))}")
+    later = f"`research deploy install NODE {path} --by {by} --apply`"
+    for name, why in away.items():
+        say(f"{name}  passed by: {why}")
+    if refused:
+        raise Refused("; ".join(refused.values()) + f". Nothing changed on any node ({len(refused)} of {len(picked)} refuse)")
+    if not apply:
+        return 1 if away else 0
+    done: list[str] = []
+
+    def stop(node: Node, why: str) -> RuntimeError:
+        rest = [n.name for n in todo if n.name not in done and n is not node]
+        return RuntimeError(f"{node.name}: {why}. The roll stopped there: done {', '.join(done) or 'none'}; not done "
+                            f"{', '.join([node.name, *rest])}")
+
+    for node in todo:
+        try:
+            install(node, ref, by, [path], run, True, repo, allow_shrink, part="accept")
+        except Unreachable:
+            away[node.name] = "unreachable"
+        except (Refused, RuntimeError) as e:
+            raise stop(node, f"its key was not taken ({e})") from None
+    for node in [n for n in todo if n.name not in away]:
+        try:
+            f = install(node, ref, by, [path], run, True, repo, allow_shrink, part="list")["files"][0]
+            read = next(e for e in drift(node, ref, run, repo)["entries"] if e["path"] == path)
+        except Unreachable:
+            away[node.name] = "unreachable"
+            say(f"{node.name}  passed by: unreachable")
+            continue
+        except (Refused, RuntimeError) as e:
+            raise stop(node, str(e)) from None
+        if read["state"] != "ok":
+            raise stop(node, f"{path} reads {read['state']} after its install ({read['detail']})")
+        done.append(node.name)
+        say(f"{node.name}  {'installed' if f['changed'] else 'unchanged'}, reads ok  {'; '.join(told(f))}".rstrip())
+    if away:
+        say(f"not done: {', '.join(away)}: {later} on each once it is there")
+    return 1 if away else 0
 
 
 def attic(node: Node, ref: str, by: str, paths: list[str], backups: bool, run: Runner, apply: bool = False,
@@ -842,6 +1271,16 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     i.add_argument("--ref", default="origin/main")
     i.add_argument("--by", required=True, help="who installs (a lane, an agent's URL): goes into the node's record")
     i.add_argument("--apply", action="store_true", help="install and restart (else only say what would change)")
+    o = sub.add_parser("roll", help="put one file made from the register on every node that lists it, one node at a time")
+    o.add_argument("path", help="the installed path (/etc/vy/peers)")
+    o.add_argument("--on", dest="only", nargs="+", action="extend", metavar="NODE",
+                   help="default: every node that lists the path but the admin-only ones")
+    o.add_argument("--ref", default="origin/main")
+    o.add_argument("--by", required=True, help="who installs: goes into each node's record")
+    o.add_argument("--apply", action="store_true", help="install (else only say what would change on each node)")
+    for p in (i, o):
+        p.add_argument("--allow-shrink", action="store_true",
+                       help="install a file made from the register though it names fewer machines than the one it replaces")
     a = sub.add_parser("attic", help="move a node's strays into its attic, beside the record")
     a.add_argument("node")
     a.add_argument("paths", nargs="*", help="strays `drift` lists")
@@ -849,14 +1288,15 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     a.add_argument("--ref", default="origin/main")
     a.add_argument("--by", required=True, help="who moves them: goes into the node's record")
     a.add_argument("--apply", action="store_true", help="move them (else only say what would move)")
-    for p in (i, a):
+    for p in (i, a, o):
         p.add_argument("--login", metavar="USER", help="the ssh user (default: the node's registry entry's); vy-admin on a node "
                                                        "whose lock-out took root from research")
-    for p in (d, i, a):
-        p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first")
+    for p in (d, i, a, o):
+        p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first, nor pull the notes clone "
+                                                               "the register of machines is read from")
     # argparse leaves a positional that follows an option unmatched, and subparsers rule out parse_intermixed_args
     ns, rest = ap.parse_known_args(argv)
-    if rest and (ns.cmd == "drift" or any(r.startswith("-") for r in rest)):
+    if rest and (ns.cmd in ("drift", "roll") or any(r.startswith("-") for r in rest)):
         ap.error(f"unrecognized arguments: {' '.join(rest)}")
     if rest:
         ns.paths += rest
@@ -868,6 +1308,8 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         if r.returncode:
             print(f"research deploy: git fetch in {repo} failed, so REF may be stale: {r.stderr.strip()[-300:]}", file=sys.stderr)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
+    if not ns.no_fetch and any(e.register for nd in nodes.values() for e in nd.entries) and (why := stale_register()):
+        print(f"research deploy: {why}", file=sys.stderr)
     run = run or ssh_runner(login=getattr(ns, "login", None))
     if ns.cmd == "drift":
         reps, rc = {}, 0
@@ -887,6 +1329,18 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             print(json.dumps(reps, indent=1))
         else:
             print("\n\n".join(f"{n}: {r['error']}" if "error" in r else render(n, ns.ref, r) for n, r in reps.items()))
+        return rc
+    if ns.cmd == "roll":
+        try:
+            rc = roll(nodes, ns.path, ns.ref, ns.by, run, ns.apply, repo, ns.allow_shrink, ns.only)
+        except Refused as e:
+            print(f"research deploy: {e}", file=sys.stderr)
+            return 3
+        except (RuntimeError, ValueError) as e:
+            print(f"research deploy: {e}", file=sys.stderr)
+            return 1
+        if not ns.apply:
+            print("nothing changed: --apply has each node take the key, then installs each node's file, one at a time")
         return rc
     if ns.node not in nodes:
         print(f"research deploy: no node {ns.node!r} in {manifest}", file=sys.stderr)
@@ -908,7 +1362,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             print("nothing moved: --apply moves them")
         return 0
     try:
-        done = install(nodes[ns.node], ns.ref, ns.by, ns.paths, run, ns.apply, repo)
+        done = install(nodes[ns.node], ns.ref, ns.by, ns.paths, run, ns.apply, repo, ns.allow_shrink)
     except Refused as e:
         print(f"research deploy: {e}", file=sys.stderr)
         return 3
@@ -919,6 +1373,8 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)",
                 "held": "held", "dropped": f"dropped ({ns.ref} lacks it)", "would drop": f"would drop ({ns.ref} lacks it)"}[f["changed"]]
         print(f"{mark:13} {f['path']}  <- {f['src']}" + (f"  ({f['hold']})" if f.get("hold") else ""))
+        for ln in told(f):
+            print(f"{'':13} {ln}")
     hint = {"not running": "; it stays stopped", "not quiet": f"; the node isn't quiet (`{nodes[ns.node].quiet}`): restart it once it is"}
     for d in done["restarts"]:
         failed = d["state"].startswith("failed")
