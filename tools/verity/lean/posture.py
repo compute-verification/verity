@@ -10,14 +10,17 @@ it rests on is marked against the trust list (`trust-list.json`):
 - `gap`: off the list, and in the guarantee's `trust_gap` entry, the gap Daniel drives to zero;
 - `pending`: off the list, and in `trust-list.json`'s `pending` for this guarantee, waiting on a ruling;
 - `OFF`: off the list and in neither, which `tests/test_trust_list.py` fails on;
-- `finder`: a finder its proof reads that the Lean check's list of finders still by choice holds (the lock's `FINDERS`,
-  {finder: {"owner", "issue", "due"}}; the finders a record reads are its `premises`' `FINDERS`). Until the entry leaves
-  that list, the guarantee doesn't rest on SHA-512's collision resistance alone: its collision step is open, and the
-  finder is shown among its open premises, with the entry's owner, issue and due.
+- `chooses`: for a guarantee resting on a collision premise (an entry of the list marked `collision`), a definition under
+  it that still chooses its witness (`Classical.choose`, `Exists.choose`, `Classical.choice`, `Classical.epsilon`), as
+  the lock's list of choosing definitions holds it (`CHOOSING`: {definition: {"owner", "issue", "due"}}; the ones a
+  record reads under its collision premises are its `premises`' `CHOOSING`). Until the definition leaves that list, the
+  guarantee doesn't rest on SHA-512's collision resistance alone: the collision is the chosen witness's, not one a
+  finder computes, so the definition is shown among its open premises, with the entry's owner, issue and due.
 
-The trust list is `trust-list.json`'s `list`: {premise: {"reason": one line, "only": [deployed guarantee, ...]}}, `only`
-present where the list holds a premise for those guarantees alone. Lean's kernel is on it too, and is no premise. Every
-tracked lock is read, the auditor's fixtures aside (`check.FIXTURES`).
+The trust list is `trust-list.json`'s `list`: {premise: {"reason": one line, "only": [deployed guarantee, ...],
+"collision": true}}, `only` present where the list holds a premise for those guarantees alone, `collision` on SHA-512's
+collision resistance. Lean's kernel is on it too, and is no premise. Every tracked lock is read, the auditor's fixtures
+aside (`check.FIXTURES`).
 """
 from __future__ import annotations
 
@@ -31,7 +34,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 TRUST_LIST = HERE / "trust-list.json"
 FIXTURES = "tools/verity/lean/tests/fixtures/"
-FINDERS = "finders"
+# The lock section of definitions still by choice, and each record's `premises` key for those it reads under its
+# collision premises: the Lean check writes both, and until it does no lock has them and no line shows one.
+CHOOSING = "choosing"
 
 
 def _check():
@@ -70,14 +75,15 @@ def ticket(entry: dict | None) -> dict:
 
 def postures(locks: dict[str, dict], trust: dict, check) -> list[dict]:
     """One record per deployed guarantee: its `name`, `lock`, its `assumptions` and `open` premises ({premise: its mark},
-    an open one with its `owner`, `issue` and `due`, a listed finder it reads among them) and what its `witnesses` take
-    beyond them, each sorted by name."""
+    an open one with its `owner`, `issue` and `due`, a choosing definition under its collision premises among them) and
+    what its `witnesses` take beyond them, each sorted by name."""
+    collision = {p for p, e in (trust.get("list") or {}).items() if isinstance(e, dict) and e.get("collision")}
     out = []
     for path, lock in locks.items():
-        named, opened, finders = lock.get("assumptions") or {}, lock.get("open") or {}, lock.get(FINDERS) or {}
+        named, opened, choosing = lock.get("assumptions") or {}, lock.get("open") or {}, lock.get(CHOOSING) or {}
         for g in check.name_list(lock.get("deployed")):
             rests = check.premise_closure(lock, g)
-            reads = check.premise_closure(lock, g, (FINDERS,)) & set(finders)
+            reads = check.premise_closure(lock, g, (CHOOSING,)) & set(choosing) if rests & collision else set()
             w = (lock.get("witnesses") or {}).get(g) or {}
             theorems = [*check.name_list(w.get("honest")), *check.name_list([w.get("nontrivial")])]
             out.append({
@@ -85,7 +91,7 @@ def postures(locks: dict[str, dict], trust: dict, check) -> list[dict]:
                 "assumptions": {p: mark(lock, trust, p, g) for p in sorted(rests) if p in named},
                 "open": dict(sorted({**{p: {"mark": mark(lock, trust, p, g), **ticket(opened.get(p))}
                                         for p in rests if p not in named},
-                                     **{f: {"mark": "finder", **ticket(finders[f])} for f in reads}}.items())),
+                                     **{d: {"mark": "chooses", **ticket(choosing[d])} for d in reads}}.items())),
                 "witnesses": sorted(set().union(*(check.premise_closure(lock, t) for t in theorems)) - rests),
             })
     return out

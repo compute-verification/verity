@@ -41,8 +41,8 @@ def test_the_trust_list_entries_are_one_line_and_scoped_to_deployed_guarantees()
     deployed = {g for lock in posture.locks(ROOT).values() for g in lock.get("deployed") or []}
     assert set(trust) == {"list", "pending"}
     for p, e in trust["list"].items():
-        assert set(e) <= {"reason", "only"} and isinstance(e["reason"], str) and e["reason"].strip(), p
-        assert "\n" not in e["reason"], p
+        assert set(e) <= {"reason", "only", "collision"} and isinstance(e["reason"], str) and e["reason"].strip(), p
+        assert "\n" not in e["reason"] and e.get("collision", True) is True, p
         assert set(e.get("only", [])) <= deployed, f"{p}'s `only` names {sorted(set(e['only']) - deployed)}, no deployed guarantee"
     for g, ps in trust["pending"].items():
         assert g in deployed and all(isinstance(w, str) and w.strip() and "\n" not in w for w in ps.values()), g

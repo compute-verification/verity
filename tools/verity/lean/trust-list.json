@@ -1,9 +1,9 @@
 {
  "list": {
-  "Claims.ExpectedCR": {"reason": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512)"},
-  "Claims.StrictBirthday": {"reason": "SHA-512 collision resistance: the strict birthday bound at one finder (cr/sha-512)"},
-  "FlockSoundness.Assumptions.SHA512CRExpected": {"reason": "SHA-512 collision resistance, in expected time (ecr/sha-512)"},
-  "FlockSoundness.Assumptions.SHA512CRStrict": {"reason": "SHA-512 collision resistance, in strict time (cr/sha-512)"},
+  "Claims.ExpectedCR": {"reason": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512)", "collision": true},
+  "Claims.StrictBirthday": {"reason": "SHA-512 collision resistance: the strict birthday bound at one finder (cr/sha-512)", "collision": true},
+  "FlockSoundness.Assumptions.SHA512CRExpected": {"reason": "SHA-512 collision resistance, in expected time (ecr/sha-512)", "collision": true},
+  "FlockSoundness.Assumptions.SHA512CRStrict": {"reason": "SHA-512 collision resistance, in strict time (cr/sha-512)", "collision": true},
   "FlockSoundness.Assumptions.UniformRandomBytes": {"reason": "the honest verifier server's uniform randomness: the bytes it reads from its operating system are uniform"},
   "FlockSoundness.Assumptions.UniformRandomBytesTest": {"reason": "the honest verifier server's uniform randomness, at one test"},
   "Verity.Assumptions.ChallengerLogsCoins": {"reason": "the honest verifier server: its challenger logs every coin it releases, each its own flip"},
