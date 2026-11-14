@@ -48,7 +48,7 @@ fi
 
 # (2) tap8 tree = pin + v7 patch + v8 (idempotent)
 if [ ! -d "$FA2/trees/tap8" ]; then cp -r /workspace/cp/vllm-flash-attn "$FA2/trees/tap8" || fail "copy tree"; fi
-( cd "$FA2/trees/tap8" && python3 "$SRC/apply_v8.py" csrc/flash_attn/src "$SRC" ) | tail -3 || fail "apply_v8"
+( cd "$FA2/trees/tap8" && PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa2-tap-apply --src csrc/flash_attn/src --src-dir "$SRC" ) | tail -3 || fail "apply_v8"
 grep -q "Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>" "$FA2/trees/tap8/csrc/flash_attn/src/flash_fwd_kernel.h" || fail "tap8 tree not v8"
 [ "${TREE_ONLY:-0}" = "1" ] && { echo "FA2-TAP-TREE-OK $FA2/trees/tap8"; exit 0; }
 

@@ -284,7 +284,7 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind, rest=0.0) -> lis
     zys = None
     if any(a.endswith("-zy") or a.startswith("wgzy:") for a in arms):
         zys = [torch.empty((E.zy_units(m, n, m), E.ZY_BYTES), dtype=torch.uint8, device="cuda") for _ in range(copies)]
-    graphs, per_replay = {}, {}
+    graphs, replay_secs = {}, {}
     # a call's rest: `rest` times its clocks at 0.7 of the s8 rate
     cycles = int(rest * m * n * k / (0.7 * PER_CLK * clock.sms))
     after = (lambda: clock.rest(cycles)) if cycles else (lambda: None)
@@ -303,14 +303,14 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind, rest=0.0) -> lis
             g.replay()
         e1.record()
         torch.cuda.synchronize()
-        graphs[arm], per_replay[arm] = g, e0.elapsed_time(e1) / 3e3
+        graphs[arm], replay_secs[arm] = g, e0.elapsed_time(e1) / 3e3
     items = []
     macs_call = m * n * k
     for r in range(rounds):
         order = arms[r % len(arms):] + arms[:r % len(arms)]
         for arm in order:
             g = graphs[arm]
-            reps = max(1, math.ceil(secs / per_replay[arm]))
+            reps = max(1, math.ceil(secs / replay_secs[arm]))
             torch.cuda.synchronize()
             t0 = time.time()
             clock.mark(0)
