@@ -4123,7 +4123,7 @@ def public_ports(j):
 
 
 def _roots(ports: list[str], x: int) -> list[dict]:
-    """A registration's roots at `ports`, every fifth with no domain or leaves."""
+    """A docket's roots at `ports`, every fifth with no domain or leaves."""
     return [{"domain": f"d{i}", "leaves": i + x % 3, "port": p, "root": f"r{i}"} if (x + i) % 5 else
             {"port": p, "root": f"r{i}"} for i, p in enumerate(ports)]
 

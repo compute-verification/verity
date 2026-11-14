@@ -114,7 +114,7 @@ def survey(graph: torch.fx.GraphModule, example_inputs: Sequence[Any], *, mode: 
     none of them."""
     from verity_torch.frontend.derive import _derive_flat
     from verity_torch.frontend.derive_graph import graph_export
-    from verity_vllm.program.frontend.rules import vocabulary_for
+    from verity_torch.frontend.rules.vocab import vocabulary_for
 
     ep, source = graph_export(graph, input_names, theta, name)
     holder: list = []
