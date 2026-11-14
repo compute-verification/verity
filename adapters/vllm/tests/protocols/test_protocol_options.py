@@ -461,11 +461,11 @@ def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypat
     p, model = TargetProfile(protocols=ALL[1:]), Model()
     versions: dict[str, Any] = {}
     assert PO.commit_guard(p) is p
-    comp = PO.at_commit(p, model, versions)
-    assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
-    verdict = {"commit_pass": True, "run_roots": ["ab" * 32]}
-    PO.into_verdict(comp, verdict, tmp_path, p, program_digest="cd" * 32, manifest={"manifest_digest": "ef" * 32})
-    assert comp.closed and "apply" not in vars(model.layers[0].quant_method) and log[-1] == "pous released"
+    with PO.at_commit(p, model, versions) as comp:
+        assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
+        verdict = {"commit_pass": True, "run_roots": ["ab" * 32]}
+        PO.into_verdict(comp, verdict, tmp_path, p, program_digest="cd" * 32, manifest={"manifest_digest": "ef" * 32})
+        assert comp.closed and "apply" not in vars(model.layers[0].quant_method) and log[-1] == "pous released"
     rec = json.loads((tmp_path / "protocols.json").read_text())
     assert verdict == {"commit_pass": True, "run_roots": ["ab" * 32], "protocols": {"protocols": list(ALL[1:]), "record": rec["digest"]}}
     assert rec["profile_digest"] == p.digest()
