@@ -97,7 +97,7 @@ from verity.circuits.boolean.gf128 import mul_forms
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 from verity.protocols.certifier.verifier import cache_step as CST, compile_slice as CS
 from verity.protocols.certifier.prover import cache_step_v3 as V3S
 from verity.protocols.certifier.verifier import replay_chain as RC, replay_step as RS
