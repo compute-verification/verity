@@ -91,28 +91,44 @@ def work_design(g: Grain, target: float, delta: float) -> dict:
 
 def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: float, delta: float,
         served: float | None = None, union: bool = False, theta: float = 0.0, p: int = TWO_P,
-        search: Mapping[str, int] | None = SEARCH, fanout: int | None = None, returned: int | None = None) -> dict:
+        search: Mapping[str, int] | None = SEARCH, fanout: int | None = None, returned: int | None = None, *,
+        whole_groups: bool = False) -> dict:
     """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Point`): its `replay_blocks`
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
-    rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
-    and serving `served` bits rounded up: the point of a grain whose replay blocks are closed, the only one priced in
-    this form, so it refuses a `fanout` above 1 (`ValueError`); with `served` alone, the capped sets' form, the requests
-    reading in each replay block serve at most `fanout` (the class's `N`, the replay grain's fan-out) times that many
-    bits together.  With `served`, `fanout` is the registered Program's, as its registration verdict publishes it
+    rate at most `q`.  With `served` alone, the capped sets' form, the requests reading in each replay block serve at
+    most `fanout` (the class's `N`, the replay grain's fan-out) times `served` bits, rounded up, together.
+
+    Under `union`, the patterns' form, one request reads in each replay block (the class's `N` is 1), reading all of
+    it.  At a `fanout` of 1, every replay block closed, it is the replay block's own request and serves `served` bits
+    rounded up.  Above 1 the replay blocks that read one another's values are one request, which reads in each of
+    them, and the point's `S` is `fanout` times `served` rounded up, what a group of `fanout` replay blocks serves.
+    `RequestsCover` reads each request as serving exactly `S`, so that point is a window's whose groups each hold
+    `fanout` replay blocks, and it is written only for a caller that says they do (`whole_groups`; `ValueError`
+    without it): a group of fewer serves less, which Lean covers only once it reads the request as serving at most
+    `S`.  A registration publishes the most a group holds, not that every group holds it, so the caller's word is the
+    premise, and nothing here checks it.
+
+    With `served`, `fanout` is the registered Program's, as its registration verdict publishes it
     (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has no default (`ValueError` without
     it); the sets' form reads none.  So is `returned`, the bits one replay block of the registered Program returns, as
     its registration publishes them (`WindowCommitmentRecord.returned`, `second_stage.returned_bits`): they are what
-    its request is served, so a cap below them is refused, and so is the patterns' form at any other S, since it reads
-    each request as serving exactly S (`ValueError`, ``served-cover``: `Properties.Spot.ServedCover`, `RequestsCover`).
-    Lean searches θ from `theta` unless `search` is None."""
+    its request is served, so a cap below them is refused, and so is the patterns' form at any other `served`, since
+    it reads each replay block as returning exactly `served` bits rounded up (`ValueError`, ``served-cover``:
+    `Properties.Spot.ServedCover`, `RequestsCover`).  Lean searches θ from `theta` unless `search` is None."""
     if served is not None and fanout is None:
         raise ValueError("a served cap is charged at the registered Program's fan-out: pass the one its registration "
                          "verdict publishes (Verdict.fanout, WindowCommitmentRecord.fanout)")
     fanout = 1 if fanout is None else fanout
-    if not (isinstance(fanout, int) and fanout >= 1) or (union and fanout > 1):
-        raise ValueError(f"a fan-out is a whole number at least 1, and the patterns' form is priced only where no "
-                         f"replay block reads a value another computed, so it needs fan-out 1, not {fanout}")
+    if not (isinstance(fanout, int) and fanout >= 1):
+        raise ValueError(f"a fan-out is a whole number at least 1, not {fanout}")
+    if union and fanout > 1 and whole_groups is not True:
+        raise ValueError(
+            f"the patterns' form at fan-out {fanout} reads each group of replay blocks as one request serving exactly "
+            f"S, {fanout} replay blocks' bits (`servedBits req r = D.S`, `Properties.Spot.RequestsCover`, "
+            f"security/Properties/Spot/TwoStageCheck.lean): a group of fewer than {fanout} replay blocks serves less, "
+            "and today's Lean doesn't cover it, until that premise reads at most S.  Pass whole_groups=True only "
+            f"where every group of the window holds {fanout} replay blocks")
     if served is not None:
         if not (type(returned) is int and returned >= 0):
             raise ValueError("a served cap is held to the bits a replay block of the registered Program returns: "
@@ -121,7 +137,7 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
         cap = math.ceil(served)
         if returned > cap or (union and returned != cap):
             raise ValueError(f"served-cover: a replay block of the registered Program returns {returned} bits, and "
-                             f"the {'patterns' if union else 'capped'} form at S = {cap} charges its request "
+                             f"the {'patterns' if union else 'capped'} form at S = {cap} reads it as returning "
                              f"{'exactly' if union else 'at most'} S: price it at S = {returned}, or register a replay "
                              "block that returns no more than the cap")
     cells = list(cells)
@@ -135,11 +151,11 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
         parts.append([[str(math.ceil(n)), str(b)] for b, n in sorted(widths.items())])
     one = {"count": str(math.ceil(replay_blocks)),
            "cells": [{"k": str(math.floor(k[t])), "parts": ps} for t, ps in zip(strata, parts)],
-           "reads": parts if union else [], "N": "0" if served is None else str(fanout)}
+           "reads": parts if union else [], "N": "0" if served is None else "1" if union else str(fanout)}
     form = "sets" if served is None else "patterns" if union else "capped"
+    s = 0 if served is None else math.ceil(served) * (fanout if union else 1)
     out = {"kind": "two", "form": form, "q": _q(min(exact(q), Fraction(q))), "theta": _q(Fraction(f"{theta:.6g}")),
-           "delta": _q(exact(delta)), "S": "0" if served is None else str(math.ceil(served)), "p": str(p),
-           "classes": [one]}
+           "delta": _q(exact(delta)), "S": str(s), "p": str(p), "classes": [one]}
     return out | ({"search": {x: str(v) for x, v in search.items()}} if search is not None else {})
 
 
