@@ -34,6 +34,11 @@ import math
 import sys
 from pathlib import Path
 
+if __name__ == "__main__" and not __package__:
+    # run by path (`metrics.toml`'s command): the relative imports below need the package, from its parent directory
+    sys.path[0] = str(Path(__file__).resolve().parents[1])
+    __package__ = "training_slowdown"
+
 import numpy as np
 
 from . import calculator, config, policy, starts, traced, work
@@ -237,7 +242,30 @@ def main(argv=None) -> int:
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "library.json").write_text(json.dumps(
             {"schema": SCHEMA, "rows": [r | {"periods": periods(r)} for r in rows], "parts": PARTS}, indent=1) + "\n")
+        if not a.entry and a.starts == starts.REGISTRY:
+            write_metric(a.out, rows)
     return 0
+
+
+#: the metric's id (`benchmarks/training_slowdown/metrics.toml`) and its unit
+METRIC = "training/library-least-slowdown"
+UNIT = ("the least slowdown of any library entry's traced step at the entry's own policy (calculator.slowdown), at "
+        "least 1, over the entries that have one: an entry has none, and is left out, where its E keeps less than its "
+        "trained weights or where the entry point gives its step none, its row saying why (the capture refused the "
+        "step, the step breaks a premise the rows' rates take, the trace isn't classified at the policy's k, or the k "
+        "is past the last one (H) states a β at)")
+
+
+def write_metric(out: Path, rows: list[dict]) -> None:
+    """The least slowdown over the rows that have one, written into the run's result under `METRIC`: partial where a
+    row has none, since the least is then over part of the library. Written only for a run of every entry at the
+    registered starts."""
+    from verity_bench import kit
+
+    priced = [r for r in rows if r["slowdown"] is not None]
+    least = min((r["slowdown"] for r in priced), default=None)
+    kit.writer(out).measurement(METRIC, least, UNIT, mark="measured" if len(priced) == len(rows) else "partial",
+                                why=None if priced else "no entry has a slowdown")
 
 
 if __name__ == "__main__":

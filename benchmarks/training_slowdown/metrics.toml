@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "training/library-least-slowdown"
+title = "The library of training algorithms: the least slowdown of any entry's traced step at its own policy"
+owner = "training"
+unit = "the least slowdown of any library entry's traced step at the entry's own policy (calculator.slowdown), at least 1, over the entries that have one: an entry has none, and is left out, where its E keeps less than its trained weights or where the entry point gives its step none, its row saying why (the capture refused the step, the step breaks a premise the rows' rates take, the trace isn't classified at the policy's k, or the k is past the last one (H) states a β at)"
+better = "higher"
+command = "research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/training_slowdown/training_slowdown/library.py --out \"$OUT\"'"
+every = "7d"
+goal = "training/search-frontier-in-library"

@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.RecVStar
+
+/-!
 **A V\* session's registered reads, capped.** Under the verifier's inner shape, `verify`'s setup refuses a V\* session whose
 `--registered` file names more than `MAX_PORTS` ports or a port whose tree is deeper than `MAX_DEPTH` levels (`regs`,
 before any read is opened), and a table of more than `MAX_INSTANCES` instances (`table`, beside `RecSetup.oneFull`). Each
@@ -25,9 +29,6 @@ refuses one of more than `MAX_INNER_ROWS` instances or with a shared-row table o
 (`innerRows`): over its at most `1024` ports (`checkInRange`'s regions) the inner setup's evaluations are then at most
 `12 + 1024 · 20 · 2^17 < 2^32`, and the inner verifier's, with its tables' and a decision's, below `2^32` too.
 -/
-module
-
-public import Flock.RecVStar
 
 @[expose] public section
 
