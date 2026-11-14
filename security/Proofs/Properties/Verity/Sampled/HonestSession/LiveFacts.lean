@@ -2,6 +2,8 @@ module
 
 public import Proofs.Properties.Verity.Sampled
 public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Flock.Bridge.V5.Accepted
+public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
@@ -9,6 +11,8 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # From a setup to a session's fields
@@ -61,6 +65,39 @@ theorem y₀_of_setup (n : ℕ) {I : Exec.Inputs} {D : Flock.Desc} {kd : ℕ} {d
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
 
+open FlockSoundness.Refine in
+set_option maxHeartbeats 4000000 in
+private theorem parse_empty {c : Flock.Circuit} {pi : Flock.HmIn.Ports} (h : Flock.HmIn.parse c = .ok pi)
+    (he : pi.ports.isEmpty = true) : pi = {} := by
+  unfold Flock.HmIn.parse at h
+  dsimp only at h
+  cases hj : c.metaJ.getObjVal? "public_inputs" with
+  | error e =>
+    rw [hj] at h
+    try dsimp only at h
+    try simp only [throw_bind'] at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rfl
+  | ok pj =>
+    rw [hj] at h
+    try dsimp only at h
+    try simp only [throw_bind'] at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      have hps := ‹¬ (Array.isEmpty (α := Lean.Json) _) = true›
+      have hm := Hidden.mapM_size ‹Array.mapM _ _ = Except.ok _›
+      try dsimp only at he
+      exfalso
+      rw [Array.isEmpty_iff_size_eq_zero] at he
+      apply hps
+      rw [Array.isEmpty_iff_size_eq_zero]
+      omega
+
 open Composed (inputsJ) in
 /-- A setup without the verifier's own public words supplies `Live`'s public-file fields. -/
 theorem pub_of_setup {I : Exec.Inputs} {D : Flock.Desc} {pubO : Flock.Public} {n : ℕ}
@@ -83,7 +120,7 @@ theorem pub_of_setup {I : Exec.Inputs} {D : Flock.Desc} {pubO : Flock.Public} {n
   have hc := HiddenExec.setupHidden_c_of_parse (Flock.Desc.parse_flat hD) hst
   obtain ⟨pi, s⟩ := Hidden.setupHidden_specP hst
   obtain ⟨pop, hlp, hown, -⟩ := s.pub
-  have hpi : pi = {} := Hidden.parse_empty s.ports (Hidden.checkOwn_none hown)
+  have hpi : pi = {} := parse_empty s.ports (Hidden.checkOwn_none hown)
   have hpp := s.ports
   rw [hc, hpi] at hpp hlp
   have hn : pop.n = n := (Flock.Bridge.loadPublic_inOut hlp hpubO).1.symm.trans hnO
