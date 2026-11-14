@@ -363,15 +363,15 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: challenger_session.Side | None = None) -> Period:
+        party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
     signature schemes it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and
-    `pous_test_signer.SCHEMES`); `party` as for `audit`. A setup the verifier refuses raises `ValueError`, since no run
-    of it exists."""
+    `pous_test_signer.SCHEMES`); `party` and `session` as for `audit`. A setup the verifier refuses raises `ValueError`,
+    since no run of it exists."""
     return audit(node, setup_store(store, coins, point, workers=workers), coins, signer=signer, log=log, trusted=trusted,
-                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party)
+                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party, session=session)
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:

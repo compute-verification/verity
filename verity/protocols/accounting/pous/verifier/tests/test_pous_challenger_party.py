@@ -91,6 +91,26 @@ def test_the_split_session_is_the_periods() -> None:
     assert refused["verdict"] == "reject" and refused["reason"].endswith("answers are not their blocks of C"), refused
 
 
+def test_a_challenger_of_its_own_takes_the_provers_session_from_the_caller() -> None:
+    """With `party`, `period.run` hands the caller's `session` the side, the request and the prover's answers, and judges
+    the session it returns. With no `session` it refuses, naming what to pass."""
+    point = period.point_for(len(STORE), period.W, period.C0)
+    signer, side, seen = ts.TestSigner(b"challenger host", 2), object(), []
+
+    def session(party, request, respond) -> dict:
+        seen.append((party, dict(request)))
+        sid, record, _ = _split(point, bytes.fromhex(request["binding"]), respond, signer)
+        return {"session_id": sid.hex(), "public_key": signer.public_key.hex(), "session": record.to_json()}
+
+    kw = {"point": point, "schemes": ts.SCHEMES, "protocol": TEST_ID, "party": side}
+    p = period.run("n0", STORE, COINS, session=session, **kw)
+    assert p.verdict == "accept", p.answer
+    published = run.Setup.from_json(json.loads(bytes.fromhex(p.case["commitment"])))
+    assert seen == [(side, CS.request_of("n0", point, published.root))]
+    with pytest.raises(ValueError, match=r"challenger_prover\.session"):
+        period.run("n0", STORE, COINS, **kw)
+
+
 def test_the_warmups_come_first_and_are_neither_timed_nor_judged() -> None:
     """The prover sees `WARMUPS` frames on `WARMUP_INDEX`, then the session's indices. The session is the one served with
     no warm-up, round for round under the same clock, so no warm-up read it; a prover whose warm-up answers are zeros is
