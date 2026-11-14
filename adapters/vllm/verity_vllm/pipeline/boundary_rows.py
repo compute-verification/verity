@@ -288,7 +288,7 @@ def class_signature(prompt: int, outputs: int) -> tuple[tuple[tuple[str, Array],
     template's port that reads one of them to the class's value of that name, and the template output it returns to
     the name `ends` gives `b.egress`."""
     if not (class_size(prompt) and class_size(outputs)):
-        raise ValueError(f"a class's Definition is at a class's (P, O), each a power of two at least {MIN_CAP}, not "
+        raise ValueError(f"a class's Definition is at a class's (P, O), each a class's size (`class_size`), not "
                          f"({prompt!r}, {outputs!r})")
     return tuple((v, row_type(v, prompt)) for v in PARAMS), row_type(EGRESS, outputs)
 
