@@ -141,7 +141,7 @@ noncomputable abbrev dataE : TableData :=
 
 /-- **What the ZK server hands `Flock.ZkServer.Link` for table `j`** at the tape `t`: the table's `m`, its packed table
 at the witness's traces with the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts at the
-sizes level 0 of the table's `--zk` schedule takes (`Level0.drawSize`): each extra lane's first `2^cols` words, each of
+sizes level 0 of the table's `--zk` schedule takes (`Level0.sampleSize`): each extra lane's first `2^cols` words, each of
 the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the `2^d` tree positions, and `0` or empty
 past them, as `Level0.toIn` reads a level 0 sampled at those sizes. -/
 noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :

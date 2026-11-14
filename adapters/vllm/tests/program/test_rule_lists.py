@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from verity_vllm.program.frontend import rules as R
 from verity_vllm.program.frontend.rules import padding, profile
-from verity_vllm.program.frontend.rules.base import ANY
+from verity_torch.frontend.rules.base import ANY
 
 
 def _namespaces(rule) -> set[str]:

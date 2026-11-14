@@ -1,4 +1,4 @@
-"""Registered values: a program's table committed once under hiding leaves (`one_stage.registered`), the registration's
+"""Registered values: a program's table committed once under hiding leaves (`one_stage.registered`), the docket's
 R7, the verifier's read map from its own program, the read check, and the audit record's link to the registered roots."""
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     partition as P,
     registered as G,
     docket as R,
+    caller as C,
     verifier as V,
 )
 
@@ -43,10 +44,10 @@ LAW = {"law": "subset", "k": 2}
 #: the sample the audit record's tests hand it: units 1 and 4 of six
 SAMPLE = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
-#: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
+#: a 16-bit docket's root: three 64-word rows, salts 01.., 02.., 03..
 ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
            "5f4a2e5773666a0fc342aa1911db7806cdbcb3d144a6fd8ffd0d9c6b0426d557")
-#: a 32-bit registration's root: one row of eps and the softmax scale at D = 64, salt 09..
+#: a 32-bit docket's root: one row of eps and the softmax scale at D = 64, salt 09..
 ROOT_32 = ("c0263747d89040d789185af524ea46e535071948299eb60851799b78fd3a9168"
            "c5e79be456e606dd9eaa5516e6d5b6013536c24f1fe17ba13dd09a37150a62b0")
 
@@ -131,7 +132,7 @@ def test_a_16_bit_value_binds_only_the_five_keys():
 
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
     """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and Flock's `values` row): its
-    domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
+    domain names `word_bits`, so a 32-bit docket is never a 16-bit one's, and the entry carries it."""
     prog = P.program_digest(_program(w=32))
     assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
     assert G.domain(prog, "W", 2, 5, 32).domain_id != G.domain(prog, "W", 2, 5).domain_id
@@ -269,7 +270,7 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
 def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
     """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
     ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
-    registration's root and domain id, and at no other token's."""
+    docket's root and domain id, and at no other token's."""
     from verity.commitments.gates import embedding as E
 
     V, H = 5, 3
@@ -304,8 +305,8 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
 
 def test_bind_ports_binds_each_port_the_file_leaves_out_at_the_registrations_root():
     """`bind_ports` (`Flock.RegBound`): a v1 file's ports the statement has and the file names no registered port for are
-    bound at the registration's root and domain of their rows, its registered ports left as they are; a file with no
-    other port, or of v0, is returned as it is (Lean holds it to name every port); a port the registration holds no root
+    bound at the docket's root and domain of their rows, its registered ports left as they are; a file with no
+    other port, or of v0, is returned as it is (Lean holds it to name every port); a port the docket holds no root
     for is refused."""
     w = {"value": "W", "root": "aa" * 64, "leaves": 2, "domain": "bb" * 64, "reads": [0, 1]}
     roots = {p: {"root": f"{i}" * 128, "domain": f"{i + 4}" * 128, "leaves": 2} for i, p in enumerate(("w", "x", "out"))}
@@ -480,7 +481,7 @@ def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_ref
 
 
 def test_the_verifiers_reads_file():
-    """Everything in the file but the root is the verifier's own, from its program: a registration that named another leaf
+    """Everything in the file but the root is the verifier's own, from its program: a docket that named another leaf
     count or domain would change nothing here."""
     prog = _program()
     reg = _registered(prog)
@@ -515,7 +516,7 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     for change, code in cases:
         assert code in R.check({**rec, **change}, prog, Q, **kw, registered={"W": 2}).codes, code
     assert "R7-registered" in R.check(rec, prog, Q, **kw, registered={"W": 3}).codes
-    # a count equal to the verifier's is still refused as a bool: True would give the registration a second digest
+    # a count equal to the verifier's is still refused as a bool: True would give the docket a second digest
     one = _program(pos=(0, 0), rows=1)
     rec1, ports1 = _record(one, G.Registered.commit(P.program_digest(one), "W", TABLE[:1]))
     kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
@@ -540,8 +541,8 @@ def test_an_r7_root_of_127_hex_digits_and_a_newline_is_refused():
 
 
 def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
-    """The verifier's program says the table's leaves are 32 bits: a 32-bit registration of it passes R7, and one that
-    names another width, or none (16), is refused, as is a 32-bit registration of a 16-bit table."""
+    """The verifier's program says the table's leaves are 32 bits: a 32-bit docket of it passes R7, and one that
+    names another width, or none (16), is refused, as is a 32-bit docket of a 16-bit table."""
     prog = _program(w=32)
     reg = G.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     rec, ports = _record(prog, reg)
@@ -699,7 +700,7 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
 def test_a_session_bound_domain_binds_the_session_alone():
     """A value whose root the window's open root contains (PoUW's round-0 input-ids table) binds the window's session in
     the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
-    domain binds at most one of a window, a registration and a session."""
+    domain binds at most one of a window, a docket and a session."""
     prog = P.program_digest(_program())
     rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
     doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
@@ -724,7 +725,7 @@ def _prefixed(prefix: str) -> Program:
 
 
 def test_the_window_prefixed_form_still_verifies():
-    """A registration whose names carry their window's prefix is still accepted, with or without the window's
+    """A docket whose names carry their window's prefix is still accepted, with or without the window's
     root: each window's values are other names, so nothing in the log holds them. (It holds nothing across windows
     either, the weights included, which is what the window's root in the domain gives back.)"""
     for windowed in (False, True):
@@ -767,19 +768,19 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name():
     kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
     salt, other = "5a" * 64, "5b" * 64
     named = lambda s: {**rec, "window": {**rec["window"], R.SEED_SALT: s}}  # noqa: E731
-    assert R.check(named(salt), prog, Q, **kw, seed_salt=salt).ok
-    assert R.check(rec, prog, Q, **kw).ok
+    assert C.both(named(salt), prog, Q, **kw, seed_salt=salt).ok
+    assert C.both(rec, prog, Q, **kw).ok
     for s in (other, salt.upper(), None, 5):
-        assert R.check(named(s), prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",), s
-    assert R.check(rec, prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",)
-    chosen = R.check(named(salt), prog, Q, **kw)
+        assert C.both(named(s), prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",), s
+    assert C.both(rec, prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",)
+    chosen = C.both(named(salt), prog, Q, **kw)
     assert chosen.codes == ("R6-seed-salt",)
     assert chosen.detail == {"R6-seed-salt": {"registered": salt, "verifier": None}}
     for bad in (salt.upper(), salt[:-2], salt + "\n", "", 5, bytes.fromhex(salt)):
         with pytest.raises(ValueError, match="seed salt is lowercase hex"):
-            R.check(named(salt), prog, Q, **kw, seed_salt=bad)
+            C.both(named(salt), prog, Q, **kw, seed_salt=bad)
     with pytest.raises(ValueError, match="window's open root"):
-        R.check(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
+        C.both(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
 
 
 def test_advice_no_registered_compiler_reads_is_refused_by_name():
@@ -798,25 +799,25 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name():
     named = lambda d, bits: {**rec, "window": {**rec["window"], "compiler": {"name": "c", "digest": d},  # noqa: E731
                                                  "advice": {"root": "ad" * 64, "bits": bits}}}
     for bits in (0, 31, 32):
-        assert R.check(named(digest, bits), prog, Q, **kw, compiler=item).ok, bits
-        assert R.check(named(digest, bits), prog, Q, **kw).ok, bits
-    assert R.check(rec, prog, Q, **kw).ok and R.check(rec, prog, Q, **kw, compiler=None).ok
+        assert C.both(named(digest, bits), prog, Q, **kw, compiler=item).ok, bits
+        assert C.both(named(digest, bits), prog, Q, **kw).ok, bits
+    assert C.both(rec, prog, Q, **kw).ok and C.both(rec, prog, Q, **kw, compiler=None).ok
     for bits in (33, -1, 1.0, True, "8", None):
-        assert R.check(named(digest, bits), prog, Q, **kw, compiler=item).codes == ("R6-advice-length",), bits
-    assert R.check(named(other, 8), prog, Q, **kw, compiler=item).codes == ("R6-compiler",)
-    assert R.check(rec, prog, Q, **kw, compiler=item).codes == ("R6-compiler", "R6-advice-length")
-    unregistered = R.check(named(digest, 8), prog, Q, **kw, compiler=None)
+        assert C.both(named(digest, bits), prog, Q, **kw, compiler=item).codes == ("R6-advice-length",), bits
+    assert C.both(named(other, 8), prog, Q, **kw, compiler=item).codes == ("R6-compiler",)
+    assert C.both(rec, prog, Q, **kw, compiler=item).codes == ("R6-compiler", "R6-advice-length")
+    unregistered = C.both(named(digest, 8), prog, Q, **kw, compiler=None)
     assert unregistered.codes == ("R6-compiler",)
     assert unregistered.detail["R6-compiler"]["verifier"] is None
     advice_only = {**rec, "window": {**rec["window"], "advice": {"root": "ad" * 64, "bits": 0}}}
-    assert R.check(advice_only, prog, Q, **kw, compiler=None).codes == ("R6-compiler",)
+    assert C.both(advice_only, prog, Q, **kw, compiler=None).codes == ("R6-compiler",)
     for bad in ({**item, "kind": "theta"}, {**item, "cap": -1}, {**item, "digest": 5},
                 {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
         with pytest.raises(ValueError, match="registered compiler is the registration log's item"):
-            R.check(rec, prog, Q, **kw, compiler=bad)
+            C.both(rec, prog, Q, **kw, compiler=bad)
     for bad in (digest.upper(), digest[:-2]):
         with pytest.raises(ValueError, match="lowercase hex of 64 bytes"):
-            R.check(rec, prog, Q, **kw, compiler={**item, "digest": bad})
+            C.both(rec, prog, Q, **kw, compiler={**item, "digest": bad})
 
 
 def test_a_record_without_registered_values_keeps_v1s_bytes():
@@ -927,6 +928,12 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
     for bad in ((b"\0" * 3, 32), (b"\0" * 4, 3), (b"\0" * 4, 64)):
         with pytest.raises(ValueError):
             G.bytes_leaves(*bad)
+    assert G.half_leaves(bytes.fromhex("0001"), 16) == [1] == G.leaves_of(bytes.fromhex("0001"), 16)
+    assert G.half_leaves(bytes.fromhex("1234"), 8) == [0x34, 0x12]
+    assert G.leaves_of(bytes.fromhex("00000001"), 16) == [1, 0]
+    for bad in ((b"\0" * 4, 16), (b"\0" * 2, 32), (b"\0" * 2, 3)):
+        with pytest.raises(ValueError):
+            G.half_leaves(*bad)
     salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
     assert salts[1][:32].hex() == SUPPLIED_SALT_1
     head = b"verity/one-stage/supplied-salt/v1\0" + b"ab" * 64 + b"\0pouw.roots\0" + (1).to_bytes(4, "little")
@@ -1040,7 +1047,7 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
     registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
     without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`. For
-    an accepted registration `registration.resolved` gives the same bytes without a second pass over the table."""
+    an accepted docket `registration.resolved` gives the same bytes without a second pass over the table."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     check = {**check, "leaf_layer": leaf}
@@ -1081,9 +1088,9 @@ def test_a_history_source_is_the_root_the_verifier_computes():
 
 
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
-    """`run` hands the Lean's run (`Run.run`) the history tables of each registration it parses, the boundary's and,
-    under a two-stage design, the interior's, as the parameters `check` hands the Lean's registration, so a reader's
-    `{"history": ...}` source resolves in the run as it does at registration."""
+    """`run` hands the Lean's run (`Run.run`) the history tables of each docket it parses, the boundary's and,
+    under a two-stage design, the interior's, as the parameters `check` hands the Lean's docket, so a reader's
+    `{"history": ...}` source resolves in the run as it does at docket."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     other = {**hist, "registered": {"k_hist": "11" * 64}}
@@ -1227,23 +1234,23 @@ def test_a_tile_replayed_across_streams_in_one_window_is_refused():
     other form is refused before the record is read."""
     base = _seeded_case()
     rec, check, roots = _mixed_case(base)
-    assert R.check(rec, **check).ok
+    assert C.both(rec, **check).ok
     for k, theirs in (("stream", "5b" * 64), ("prover", "b1" * 32)):
         other = {**BINDING, k: theirs}
-        assert R.check(rec, **{**check, "binding": other}).codes == (f"R6-{k}", "R7-supplied"), k
+        assert C.both(rec, **{**check, "binding": other}).codes == ("R7-supplied", f"R6-{k}"), k
         relabeled = {**rec, "window": {**rec["window"], k: theirs}}
-        assert R.check(relabeled, **{**check, "binding": other}).codes == ("R7-supplied",), k
+        assert C.both(relabeled, **{**check, "binding": other}).codes == ("R7-supplied",), k
         own, own_check, own_roots = _mixed_case(base, window={**BOUND, k: theirs}, binding=other)
-        assert R.check(own, **own_check).ok
+        assert C.both(own, **own_check).ok
         assert own_roots.root != roots.root and own_roots.rows != roots.rows
-    assert R.check(rec, **{**check, "binding": None}).codes == ("R7-supplied",)
+    assert C.both(rec, **{**check, "binding": None}).codes == ("R7-supplied",)
     unbound = {**rec, "window": SERVED}
-    assert R.check(unbound, **check).codes == ("R6-stream", "R6-prover", "R7-supplied")
+    assert C.both(unbound, **check).codes == ("R7-supplied", "R6-stream", "R6-prover")
     for bad in ({"stream": "5a" * 64}, {**BINDING, "run": "r"}, {**BINDING, "stream": "5A" * 64},
                 {**BINDING, "stream": "5a" * 63}, {**BINDING, "prover": ""}, {**BINDING, "prover": "b0b"},
                 {**BINDING, "prover": 1}, ["stream", "prover"]):
         with pytest.raises(ValueError):
-            R.check(rec, **{**check, "binding": bad})
+            C.both(rec, **{**check, "binding": bad})
 
 
 def test_r7_holds_a_pinned_value_to_its_pin():
@@ -1301,7 +1308,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
 
 
-#: The entry and root a verifier built from a registration it read under the deployment's key: a link's certified rows,
+#: The entry and root a verifier built from a docket it read under the deployment's key: a link's certified rows,
 #: a value that is none of the program's parameters
 CERTIFIED = {"link-0/in/7": {"root": "cd" * 64, "leaves": 3, "words": 64, "domain": "ef" * 64}}
 
@@ -1466,6 +1473,37 @@ def test_r7_holds_a_windows_history_to_the_previous_records_port():
         R.check(rec, prog, Q, **kw, outputs=hist, pinned={"W": "cd" * 64})
 
 
+def test_r7_carries_no_start_past_a_record_the_verdict_log_refused():
+    """With the verifier's verdict log (`verdicts`), an output value reading a port of an earlier record carries where
+    the log names that record accepted or doesn't name it, and is `R7-output-refused` where it names it refused, in the
+    history form and the explicit one alike, after SPOT's R7 codes (the caller's check, `caller.check`); a reused
+    registered value is not held to it, and a log in another form is refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    dom = "da" * 64
+    port = {"port": "W", "root": "cd" * 64, "leaves": len(TABLE), "domain": dom}
+    last = R.record(prog, Q, LAW, SCHEME, [*first["roots"], port], {**SERVED, "row": 6},
+                    registered=[{**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(last),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [last]}
+    d = R.digest(last)
+    for out in ({"W": {"port": "W"}}, {"W": {"record": d, "port": "W"}}):
+        for verdicts in (None, {}, {d: True}, {"ee" * 64: False}):
+            assert C.both(rec, prog, Q, **kw, outputs=out, verdicts=verdicts).ok, (out, verdicts)
+        got = C.both(rec, prog, Q, **kw, outputs=out, verdicts={d: False})
+        assert got.codes == ("R7-output-refused",) and got.detail["R7-output-refused"]["records"] == [d], out
+        assert C.both({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=out,
+                       verdicts={d: False}).codes == ("R7-held", "R7-output-refused"), out
+    assert R.refused({d: False}, d) and not R.refused({d: True}, d) and not R.refused({}, d)
+    assert C.both(rec, prog, Q, **kw, outputs={"W": {"record": d, "value": "a/16@0"}}, verdicts={d: False}).ok
+    for bad in ([], {d: 0}, {d.upper(): False}, {d[:-2]: False}, {5: False}):
+        with pytest.raises(ValueError):
+            C.both(rec, prog, Q, **kw, outputs={"W": {"port": "W"}}, verdicts=bad)
+
+
 def test_r7_reuses_an_earlier_records_registered_value():
     """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
@@ -1569,7 +1607,7 @@ def _entry(rec, value: str) -> dict:
 
 
 def test_a_window_opens_the_pool_the_previous_window_of_record_left():
-    """Pool chain: a registration's first window opens the empty pool by the public rule, with no reset of its own,
+    """Pool chain: a docket's first window opens the empty pool by the public rule, with no reset of its own,
     `pin` filled from `genesis` under a fixed domain, and each next window the pool the previous window of record left,
     `pin` the previous record's `pout` entry, its domain and root (the window's open root binds `pout`'s domain, so no
     other window's pool opens under it), whatever the verifier made of that window. A wrong `pin` is refused by name
@@ -1577,15 +1615,15 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
     prog = _pooled()
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [])
-    assert R.check(first, prog, Q, **kw).ok
+    assert C.both(first, prog, Q, **kw).ok
     fixed = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[0]], word_bits=32).entry()
     assert _entry(first, "pin")["domain"] == fixed["domain"]
     carried = {**_entry(first, "pout"), "value": "pin"}
     second, kw2 = _pool_window(prog, w, 1, [first], carried)
     assert R.pool_chains(kw2["pool"], [first], prog)
-    assert R.check(second, prog, Q, **kw2).ok
+    assert C.both(second, prog, Q, **kw2).ok
     third, kw3 = _pool_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"})
-    assert R.check(third, prog, Q, **kw3).ok
+    assert C.both(third, prog, Q, **kw3).ok
     other = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[2]], word_bits=32, window=POOL_WINDOWS[1])
     for pin, codes in (({**carried, "root": other.root.hex()}, ("R7-held", "R7-pool-chain")),
                        (other.entry(), ("R7-domain", "R7-held", "R7-pool-chain")),
@@ -1593,14 +1631,14 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
                        ({**_entry(second, "pout"), "value": "pin"}, ("R7-domain", "R7-held", "R7-pool-chain")),
                        ({**carried, "domain": _entry(second, "pout")["domain"]}, ("R7-domain", "R7-pool-chain"))):
         wrong, _ = _pool_window(prog, w, 1, [first], pin)
-        assert R.check(wrong, prog, Q, **kw2).codes == codes, pin
+        assert C.both(wrong, prog, Q, **kw2).codes == codes, pin
     empty, _ = _pool_window(prog, w, 1, [first])
-    assert R.check(empty, prog, Q, **kw2).codes == ("R7-domain", "R7-held", "R7-pool-chain")
+    assert C.both(empty, prog, Q, **kw2).codes == ("R7-domain", "R7-held", "R7-pool-chain")
 
 
 def test_the_public_rule_restarts_the_pool_with_no_advice():
     """The public rule opens the empty pool, `pin` filled from `genesis`, where there is no pool to carry, at a
-    registration's first window and past a registration boundary (a previous record of another program), and after the
+    docket's first window and past a docket boundary (a previous record of another program), and after the
     verifier refused the window the public lag back, as its own verdict log names it (`verdicts`, `pool_refused`), with
     no reset of serving's: the records name none, so the rule costs no advice. Where it restarts, the previous window's
     pool is refused by name (`R7-pool-chain`). Where the verdict log names that window's run accepted, or holds no
@@ -1613,22 +1651,22 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
     for log in ([], [elsewhere]):
         opened, kw2 = _pool_window(prog, w, 1, log)
         assert not R.pool_chains(kw2["pool"], log, prog)
-        assert R.check(opened, prog, Q, **kw2).ok
+        assert C.both(opened, prog, Q, **kw2).ok
     refused = {R.digest(first): False}
     after, kw3 = _pool_window(prog, w, 1, [first], verdicts=refused)
     assert R.pool_refused(kw3["pool"], [first]) and not R.pool_chains(kw3["pool"], [first], prog)
-    assert R.check(after, prog, Q, **kw3).ok
+    assert C.both(after, prog, Q, **kw3).ok
     carry = {**_entry(first, "pout"), "value": "pin"}
     carried, _ = _pool_window(prog, w, 1, [first], carry, verdicts=refused)
-    assert R.check(carried, prog, Q, **kw3).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
+    assert C.both(carried, prog, Q, **kw3).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
     for verdicts, lag in (({R.digest(first): True}, 1), ({GENESIS: False}, 1), (refused, 2)):
         on, kw4 = _pool_window(prog, w, 1, [first], carry, verdicts=verdicts, lag=lag)
         assert R.pool_chains(kw4["pool"], [first], prog), (verdicts, lag)
-        assert R.check(on, prog, Q, **kw4).ok, (verdicts, lag)
+        assert C.both(on, prog, Q, **kw4).ok, (verdicts, lag)
     second, _ = _pool_window(prog, w, 1, [first], carry)
     late, kw5 = _pool_window(prog, w, 2, [first, second], verdicts=refused, lag=2)
     assert not R.pool_chains(kw5["pool"], [first, second], prog)
-    assert R.check(late, prog, Q, **kw5).ok
+    assert C.both(late, prog, Q, **kw5).ok
     pool = kw["pool"]
     missing = ({k: v for k, v in pool.items() if k != b} for b in ("lag", "reset", "verdicts", "week"))
     for bad, change in (*((m, {}) for m in missing), ({**pool, "pin": "pout"}, {}), ({**pool, "pin": "V"}, {}),
@@ -1640,7 +1678,7 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
                         (pool, {"supplied": {"pin": [[{"bytes": GENESIS}]]}}),
                         (pool, {"pinned": {"pout": "ab" * 64}}), (pool, {"schemas": {"pin": G.SCHEMA_SEG}})):
         with pytest.raises(ValueError):
-            R.check(first, prog, Q, **{**kw, "pool": bad, **change})
+            C.both(first, prog, Q, **{**kw, "pool": bad, **change})
 
 
 def test_serving_resets_its_pool_at_most_once_a_week():
@@ -1655,19 +1693,19 @@ def test_serving_resets_its_pool_at_most_once_a_week():
     first, _ = _pool_window(prog, w, 0, [])
     restart, kw = _pool_window(prog, w, 1, [first], reset=True)
     assert not R.pool_chains(kw["pool"], [first], prog) and restart["window"][R.POOL_SPENT] is True
-    assert R.check(restart, prog, Q, **kw).ok
+    assert C.both(restart, prog, Q, **kw).ok
     stale, _ = _pool_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, reset=True)
-    assert R.check(stale, prog, Q, **kw).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
+    assert C.both(stale, prog, Q, **kw).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
     log = [first, restart]
     again, kw2 = _pool_window(prog, w, 2, log, reset=True)
-    assert R.check(again, prog, Q, **kw2).codes == ("R6-pool-reset-week",)
+    assert C.both(again, prog, Q, **kw2).codes == ("R6-pool-reset-week",)
     after, kw3 = _pool_window(prog, w, 2, log, reset=True, verdicts={R.digest(restart): False})
-    assert R.check(after, prog, Q, **kw3).codes == ("R6-pool-reset-week",)
+    assert C.both(after, prog, Q, **kw3).codes == ("R6-pool-reset-week",)
     kept, kw4 = _pool_window(prog, w, 2, log, {**_entry(restart, "pout"), "value": "pin"})
     assert R.pool_chains(kw4["pool"], log, prog) and kept["window"][R.POOL_SPENT] is True
-    assert R.check(kept, prog, Q, **kw4).ok
+    assert C.both(kept, prog, Q, **kw4).ok
     next_week, kw5 = _pool_window(prog, w, 2, log, reset=True, week=1)
-    assert R.check(next_week, prog, Q, **kw5).ok
+    assert C.both(next_week, prog, Q, **kw5).ok
 
 
 #: the window fields a verifier with no pool holds a record to name none of
@@ -1686,19 +1724,19 @@ def test_a_window_names_its_pools_reset():
     _, kw3 = _pool_window(prog, w, 1, [first], reset=True)
     for named in (True, None, 1, "true"):
         rec, _ = _pool_window(prog, w, 0, [], pool_reset=named)
-        assert R.check(rec, prog, Q, **kw).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **kw).codes == ("R6-pool-reset",), named
         rec, _ = _pool_window(prog, w, 1, [first], carried, pool_reset=named)
-        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-reset",), named
     for named in (False, None, 0, "false"):
         rec, _ = _pool_window(prog, w, 1, [first], reset=True, pool_reset=named)
-        assert R.check(rec, prog, Q, **kw3).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **kw3).codes == ("R6-pool-reset",), named
     fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
     unnamed, _ = _pool_window(prog, w, 1, [first], fresh, **UNPOOLED)
-    assert R.check(unnamed, prog, Q, **plain).ok
+    assert C.both(unnamed, prog, Q, **plain).ok
     for named in (False, True):
         rec, _ = _pool_window(prog, w, 1, [first], fresh, **{**UNPOOLED, R.POOL_RESET: named})
-        assert R.check(rec, prog, Q, **plain).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **plain).codes == ("R6-pool-reset",), named
 
 
 def test_a_window_names_its_week_and_whether_its_weeks_reset_is_spent():
@@ -1710,28 +1748,28 @@ def test_a_window_names_its_week_and_whether_its_weeks_reset_is_spent():
     prog = _pooled()
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [], reset=True)
-    assert first["window"][R.POOL_SPENT] is True and R.check(first, prog, Q, **kw).ok
+    assert first["window"][R.POOL_SPENT] is True and C.both(first, prog, Q, **kw).ok
     carry = {**_entry(first, "pout"), "value": "pin"}
     second, kw2 = _pool_window(prog, w, 1, [first], carry)
-    assert second["window"][R.POOL_SPENT] is True and R.check(second, prog, Q, **kw2).ok
+    assert second["window"][R.POOL_SPENT] is True and C.both(second, prog, Q, **kw2).ok
     carry2 = {**_entry(second, "pout"), "value": "pin"}
     third, kw3 = _pool_window(prog, w, 2, [first, second], carry2, week=1)
-    assert third["window"][R.POOL_SPENT] is False and R.check(third, prog, Q, **kw3).ok
+    assert third["window"][R.POOL_SPENT] is False and C.both(third, prog, Q, **kw3).ok
     for named in (False, None, 1, "true"):
         rec, _ = _pool_window(prog, w, 1, [first], carry, pool_spent=named)
-        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-spent",), named
+        assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-spent",), named
     for named in (True, None, 0, "false"):
         rec, _ = _pool_window(prog, w, 2, [first, second], carry2, week=1, pool_spent=named)
-        assert R.check(rec, prog, Q, **kw3).codes == ("R6-pool-spent",), named
+        assert C.both(rec, prog, Q, **kw3).codes == ("R6-pool-spent",), named
     for named in (1, None, False, "0"):
         rec, _ = _pool_window(prog, w, 1, [first], carry, pool_week=named)
-        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-week",), named
+        assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-week",), named
     fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
     for field, code in ((R.POOL_WEEK, "R6-pool-week"), (R.POOL_SPENT, "R6-pool-spent")):
         for named in (0, False, True):
             rec, _ = _pool_window(prog, w, 1, [first], fresh, **{**UNPOOLED, field: named})
-            assert R.check(rec, prog, Q, **plain).codes == (code,), (field, named)
+            assert C.both(rec, prog, Q, **plain).codes == (code,), (field, named)
 
 
 def test_a_hit_on_a_page_an_older_window_wrote_reads_it_through_the_carried_copies():
@@ -1854,11 +1892,11 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     prog = _continued()
     w = _registered(prog)
     first, kw = _cut_window(prog, w, 0, [])
-    assert R.check(first, prog, Q, **kw).ok
+    assert C.both(first, prog, Q, **kw).ok
     second, kw2 = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"})
-    assert R.check(second, prog, Q, **kw2).ok
+    assert C.both(second, prog, Q, **kw2).ok
     third, kw3 = _cut_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"})
-    assert R.check(third, prog, Q, **kw3).ok
+    assert C.both(third, prog, Q, **kw3).ok
     (ing0, req0), (ing1, req1), (ing2, req2) = (_cut_rows(i) for i in range(3))
     assert ing0[:3] == [[1, 7, 5], [1, 8, 2], [1, 9, 3]] and [r[:2] for r in req0[:3]] == [[3, 1], [1, 0], [0, 1]]
     assert ing1[:3] == [[1, 7, 8], [1, 9, 3], [1, 10, 1]] and [r[:2] for r in req1[:3]] == [[2, 0], [1, 1], [0, 1]]
@@ -1868,9 +1906,9 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     assert served[0] == [1, 7, 9]
     for ing in (_entry(first, "ing"), G.Registered.commit(P.program_digest(prog), "ing", served).entry()):
         wrong, kw_wrong = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, ing)
-        assert R.check(wrong, prog, Q, **kw_wrong).codes == ("R7-held",)
+        assert C.both(wrong, prog, Q, **kw_wrong).codes == ("R7-held",)
     empty, kw_empty = _cut_window(prog, w, 1, [first])
-    assert R.check(empty, prog, Q, **kw_empty).codes == ("R7-domain", "R7-held", "R7-pool-chain")
+    assert C.both(empty, prog, Q, **kw_empty).codes == ("R7-domain", "R7-held", "R7-pool-chain")
 
 
 def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
@@ -1887,11 +1925,11 @@ def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
     assert _cut_rows(2)[0][:2] == [[1, 9, 4], [1, 10, 1]]
     for how in ({"verdicts": {R.digest(second): False}}, {"reset": True}):
         restart, kw = _cut_window(prog, w, 2, [first, second], **how)
-        assert R.check(restart, prog, Q, **kw).ok, how
+        assert C.both(restart, prog, Q, **kw).ok, how
         carried, kw2 = _cut_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"}, **how)
-        assert R.check(carried, prog, Q, **kw2).codes == ("R7-domain", "R7-supplied", "R7-pool-chain"), how
+        assert C.both(carried, prog, Q, **kw2).codes == ("R7-domain", "R7-supplied", "R7-pool-chain"), how
         stale, kw3 = _cut_window(prog, w, 2, [first, second], ing=_entry(second, "ing"), **how)
-        assert R.check(stale, prog, Q, **kw3).codes == ("R7-held",), how
+        assert C.both(stale, prog, Q, **kw3).codes == ("R7-held",), how
 
 
 #: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
@@ -1978,7 +2016,7 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
             assert codes({}, w)[0] == "R7-output", (name, w)
 
 
-#: an AROW row table's port (`verity.commitments.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+#: an AROW row table's port (`verity.commitments.periods.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 

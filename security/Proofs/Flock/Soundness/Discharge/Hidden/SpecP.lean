@@ -111,7 +111,7 @@ theorem SpecP.spec {pi : HmIn.Ports} (h : SpecP tags cf pf coins tables draw non
     leaf := h.leaf
     parse := h.parse
     merkle := h.merkle
-    pub := ⟨pop, loadPublic_noPorts he hl, hnone, fun d hd => (drawn_noPorts he).symm ▸ hsome d hd⟩
+    pub := ⟨pop, loadPublic_noPorts he hl, hnone, fun d hd => (sampled_noPorts he).symm ▸ hsome d hd⟩
     checkPublic := h.checkPublic
     n := h.n
     blocksReal := h.blocksReal

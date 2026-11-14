@@ -10,17 +10,15 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
+| `uv run tools/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
 | `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
 | `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
 | `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's device. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
 | `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
-Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
-`p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
-`served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
-configured.
+Read from outside `benchmarks/`: `band_gpu/harness.py`, imported by a test; and `served_piece.sh`,
+`streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
@@ -74,8 +72,11 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v4 (`verity/protocols/accounting/pous/verifier/README.md`, "P2"), in `p2_v1/`, with
-  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
+- `p2-v3-gpu`: P2 v4 (`verity/protocols/accounting/pous/verifier/README.md`, "P2") under the registered scheme's framing
+  (`p2-16448/v4`), in `p2_v1/`, with
+  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`). Its
+  reference, wire and vectors are the verifier's (`verity/protocols/accounting/pous/verifier/p2_v1/`), and its GPU library and
+  the store are P2's prover (`verity/protocols/accounting/pous/prover/p2/`: the package `p2_store`, with `p2_gpu/` beside it):
   - `reference.py`: the scheme on the CPU in its own setup framing (the counter-mode SHA-512 keys and the maps, both
     `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.protocols.accounting.pous.verifier.verifier`'s; v4's leaves and the
     mode-0 audit derivation on `verity.commitments.randomness`), pinned by `vectors.json` (`VECTORS_SHA512`);
@@ -84,7 +85,7 @@ Implementations:
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
   - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
     reference's decode and keys, no kernel flag; a failed gate stops the run;
-  - audits at k = 105 (`p2_v1/memory_challenger.py`: v4 leaves, `verity/pous/p2-audit-challenge/v4`), against a limit fixed before load (spec
+  - audits at k = 105 (`timed_audit.py --strict`, judged by `pous-timed-audit`), against a limit fixed before load (spec
     v4 caps the allowance at 354 µs), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
     re-encoded on demand from its decoded row `Dec(C_i)`, which is `W_i` in the encoded head);
   - encode GB/s over the first `--p2-encode-blocks` blocks (the rest of `C` is random canonical blocks), and one block's two
@@ -120,7 +121,7 @@ PYTHONPATH=. python benchmarks/pous/bench.py --impl reference \
 git -C <the implementation's checkout> archive -o "$RESEARCH_RUN_DIR/inputs/impl.tar" 4e49163193c3750dad580f3a28f5428fbb722a8a
 bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a   # an L40S
 bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]  # an RTX 4090
-bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]     # an RTX 4090: band and P2 v1, then the table
+bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]     # an RTX 4090: band and P2, then the table
 bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2             # an RTX PRO 6000: both arms' kernel gates
 bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6                                     # an RTX PRO 6000: the band at in-degree 6
 ~~~
@@ -141,8 +142,8 @@ else the CUDA device's UUID). `pod.sh` refuses a GPU run on a node with several 
 `device` records the id queried (`nvidia_smi_id`), the `index`, `uuid` and `pci.bus_id` that answered, and the CUDA device's
 own index and UUID. Each `clocks-*.txt` starts with the same id and answer.
 
-`AUDITS=0` (`bench.py --audits 0`, band-gpu and p2-v1-gpu only) is for an untimed, preemptible placement. The gates, encode,
-the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's SeqRoot root) run as in a timed run. No limit,
+`AUDITS=0` (`bench.py --audits 0`, band-gpu, p2-v3-gpu and p2-v3-mc-gpu only) is for an untimed, preemptible placement. The gates, encode,
+the synthetic loop (decode overhead and bandwidth) and the step floor (P2's SeqRoot root) run as in a timed run. No limit,
 audit or control runs, so there is no certificate gate and no storage profile. `bench-result.json` and `result.json`'s
 fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no audit or latency number is cited from it.
 
@@ -166,7 +167,7 @@ key that isn't on the node, and kills nothing. Its verdict trusts the one challe
 SHA-512 of the wipe party's public key, by default the one the run's configuration pins for the memory challenger's wipe,
 `VERITY_PINS`): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
 card. Its record says `trusted-device` holds only under a committed configuration (`VERITY_CONFIGURATION`, in
-`demos/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
+`tests/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
 bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 

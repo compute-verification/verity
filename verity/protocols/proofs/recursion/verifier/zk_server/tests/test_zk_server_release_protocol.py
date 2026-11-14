@@ -278,7 +278,7 @@ def test_a_reference_without_the_release_time_is_caught(server, contract, monkey
 
 
 @pytest.mark.slow
-def test_the_release_agrees_on_drawn_cases(server, contract):
+def test_the_release_agrees_on_sampled_cases(server, contract):
     tally: Counter = Counter()
     stats = D.run(port(reference(contract, tally)), examples=600, seed=SEED, server=server)
     print(f"core-zk-server serve, seed {SEED}: {stats}, {dict(sorted(tally.items()))}")

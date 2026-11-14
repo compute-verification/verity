@@ -40,7 +40,7 @@ every product, is a reference, not an answer.
 
 ## Parties
 
-PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on the deployment layer
+PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)`, on the deployment layer
 `verity.runtime`). Each execution phase runs the same rounds between them:
 
 - **The prover** is the developer's: its GPU serving and the PoUW prover (`verity/protocols/accounting/pouw/prover/`,
@@ -149,7 +149,7 @@ execution phase:
    commits the circuit files, and a close; it counts only closed and complete.
 
 How it is run: the difftests run the Lean against the Python on generated cases
-(`uv run tools/verity/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
+(`uv run tools/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
 (`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
@@ -167,7 +167,9 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's FP4 with scale groups, NVFP4 only.
+  replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel is
+  `verity/protocols/experimental/pearl_c4/`'s, and its scheme and circuit (`prover/circuit/pc4.py`) stay here while PoUW's
+  own circuits build on `pc4`.
 - **NCP** (`ncp-v1`, `verity/protocols/accounting/pouw/prover/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
@@ -262,8 +264,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 ## Where things are
 
 - `protocol`: the `PoUWScheme` interface.
-- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `PROTOCOL`), each machine's work
-  a capability it is given.
+- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `protocol(ask)`), each
+  machine's work a capability it is given.
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/protocols/accounting/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,

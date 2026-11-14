@@ -30,7 +30,7 @@ another stream's (`hne`), the rep's frame fresh (`FreshAt`): the frame the sessi
 on the session's entry, table and level 0 as they stay, holding the history's words for the stream's one round where
 the next round is the next stream's first (`roundRun_last_first`, `count_first`), the frame `roundPlace` readied
 being the rep's run from its start (`repRun_start` at rep 0, `roundPlace_prior` at rep 1) and the table the one the
-rep's level 0 gives (`tab_of_placeholder`, `cap_of_drawn`); the rep's salts are not read, the algebraic phase having a
+rep's level 0 gives (`tab_of_placeholder`, `cap_of_sampled`); the rep's salts are not read, the algebraic phase having a
 round past the first's coins. -/
 theorem repJ_next_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
@@ -139,7 +139,7 @@ theorem repJ_next_first (T : ZKMal.CoinLayer.TableData)
   obtain ⟨t, htab⟩ : ∃ t, _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t := by
     have h := tab_of_placeholder (g := gb) (d := db) (l := l0) hph' (by rw [hdiv, hstmb]; exact hdb)
     rwa [hdiv, hstmb] at h
-  have hcap : _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root := cap_of_drawn hdb htab
+  have hcap : _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root := cap_of_sampled hdb htab
   -- the frame's schedule on no coins, the algebraic phase `withAlg` scheduled
   obtain ⟨xs, hxsd⟩ : ∃ xs, xs = _root_.Flock.ZkServer.Drive.extras stm
       (_root_.Flock.ZkServer.Drive.linkPoints stm (wordsAt M.x (h1.map fun y => ZKMal.CoinLayer.rd y.2) 0)) :=

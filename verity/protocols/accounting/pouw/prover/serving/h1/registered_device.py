@@ -56,7 +56,7 @@ ZY_DEVICE_SOURCES, ZY_HOST_SOURCES = (*_ZY, "zy_commit.cu"), (*_ZY, "zy_commit_h
 ZY_FLAGS = (f"-I{ROW_COMMIT.resolve().parent}",)
 #: a record's segments `zy_commit.cuh` takes: rows of 1 to `ZY_SEGS` whole 1024-byte segments
 ZY_SEGS = 8
-#: the hm96 key both tables' leaves are under (`row_table_kernels._hm`'s)
+#: the hm96 key both tables' leaves are under (`row_table_kernels.hm_tables`'s)
 HM_KEY = hm96.SHA512.default_key
 #: bytes of rows a chunk copies to the device
 CHUNK_BYTES = 1 << 28
@@ -279,7 +279,7 @@ def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | No
     salts = None if row_salts is None else _salts(row_salts, n)
     t.rows, t.salts = rows.ctypes.data, 0 if salts is None else salts.ctypes.data
     bcs, levels = np.empty(16 * n, np.uint64), np.empty(8 * (2 * t.W - 1), np.uint64)
-    rc = host_lib().rr_commit_host(ctypes.byref(t), RTD._hm(), RTD._prefixes(), bcs, levels)
+    rc = host_lib().rr_commit_host(ctypes.byref(t), RTD.hm_tables(), RTD.leaf_prefixes(), bcs, levels)
     if rc:
         raise ValueError(f"rr_commit_host refused the value's layout ({rc})")
     return _out(bcs, levels, t.W)

@@ -1,4 +1,4 @@
-"""v2_case.py: sampled proofs v2's case of a served window from its kept files, in a5's form: one member's statement,
+"""v2_case.py: SPOT v2's case of a served window from its kept files, in a5's form: one member's statement,
 and no case for a window of several. The rebuild reads what a served run's ``m0/compose.log``
 (``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as `composite.py` reads
 it, or, with no case or a blob with no file, only ``missing.json``, which `composite.py` leaves out. `case` runs on a
@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_a5_case_v2 import RP  # noqa: F401 -- the fixture: this suite's `replay` under the name a5's `case_v2` imports
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "tests"))
+from test_window_audit_case_v2 import RP  # noqa: F401 -- the fixture: this suite's `replay` under the name the window audit's `case_v2` imports
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C
@@ -66,7 +68,7 @@ def _members_window(w: Path, RP, members: list[dict], drawn: list[int], pins: di
 
 
 def test_a_window_of_several_members_has_no_v2_case_and_leaves_only_missing(tmp_path, RP):
-    """v2 reads one member's statement and refuses a windowed registration, so a window whose summary lists several
+    """v2 reads one member's statement and refuses a windowed docket, so a window whose summary lists several
     members gets no case, whichever of them were sampled: only ``missing.json`` saying so, which `composite.py` leaves
     out."""
     w, out = tmp_path / "window", tmp_path / "v2"

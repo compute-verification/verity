@@ -3,13 +3,13 @@ module
 public import Proofs.Flock.SpotFlock.HeldOf
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Properties.Verity.SampledTwo.JpWalk
 
 /-!
 # A registration check with no code names its registration's names
 
-`Registration.check rec v` collects R1–R8's failure codes for the record `rec` at the verifier `v`. Where it collects
+`Docket.check rec v` collects R1–R8's failure codes for the record `rec` at the verifier `v`. Where it collects
 none and `v` lists each port once, `rec` names `v`'s names (`recordOk_of_check`): its roots' ports are `v`'s ports and
 its registered values `v`'s registered values, each once. R3-ports holds the roots' distinct ports to `v`'s ports by
 count and membership, and R7-values the registered values to the verifier's own entries the same way; a record with no
@@ -24,7 +24,7 @@ The two checks with no code are walked down the one path that adds none (`JpWalk
 namespace SpotFlock.RecordNames
 
 open Lean (Json)
-open Spot.Registration
+open Spot.Docket
 open SpotFlock.HeldOf (namesOf)
 
 /-! ## Counting names -/
@@ -174,10 +174,10 @@ theorem registered_null {rec : Json} (hk : Spot.keys? rec = some KEYS) : Spot.ge
     simp only [Spot.keys?, Option.some.injEq] at hk
     rw [SpotFlock.RunsAs.getD_obj, getElem?_none_of_not_key m "registered" (fun hm => ?_)]
     · rfl
-    · have h2 := (FlockSoundness.Audit.DrawExec.mem_qsort _ (· < ·) _).2 hm
+    · have h2 := (FlockSoundness.Audit.SampleExec.mem_qsort _ (· < ·) _).2 hm
       rw [show (m.toArray.map Prod.fst).qsort (· < ·) = KEYS from hk] at h2
       unfold KEYS Spot.sortStrings at h2
-      rw [FlockSoundness.Audit.DrawExec.mem_qsort] at h2
+      rw [FlockSoundness.Audit.SampleExec.mem_qsort] at h2
       simp at h2
   | _ => simp [Spot.keys?] at hk
 

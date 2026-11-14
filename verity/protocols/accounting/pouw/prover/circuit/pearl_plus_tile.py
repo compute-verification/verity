@@ -32,14 +32,14 @@ The core, from the registry's call Definitions (`verity.definitions.registry.pea
 The unit then opens the digest's hm96 leaf, under the private salt ``hsalt``, at ``tpos`` in the transcript tree of root
 ``troot`` and domain id ``tdomain`` along the private ``path`` (`audit.transcript_domain`: digests, so x is the digest).
 
-**No public input port.**  `flock-verify` refuses any statement with public input ports (`Flock/ProvedScope.lean`
+**No public input port.**  `verity-verify-proof` refuses any statement with public input ports (`Flock/ProvedScope.lean`
 `statementRules`), so the unit has none: every input is a registered read of the verifier's own ``--registered`` file at the
 position the Program fixes (`Flock/Registered.lean`), as H1's tile unit is (`benchmarks/pouw/h1_prove`, the route the
-one-tile measurement takes, ``flock-verify --zk --registered`` a statement).  `statement_rows` groups them:
+one-tile measurement takes, ``verity-verify-proof --zk --registered`` a statement).  `statement_rows` groups them:
 
   - **the formed rows** ``a``, ``b`` and ``y``, each a registered read opening the serve's own root at the position the
     Program fixes (`statement_rows`: one row a port).  Their roots are registered values reused from the serve's record
-    (R7, `Spot/Registration.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
+    (R7, `Spot/Docket.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
     is Pearl+'s own Lean protocol's, outside this measurement.
   - **``pub``, a supplied row of known content** (`PUBLIC`): the salt, B's root, the unit, the rows' indices, the column
     tile, the public noise (E_B's lines, F_A, F_B and G, which anyone derives from seed_B = s512("seed-B", salt ‖ root):

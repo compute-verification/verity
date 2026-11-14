@@ -21,7 +21,7 @@ VE_FIELD=1024
 VE_ORDER=(wt reader paged topup)
 declare -A VE_BUILDS=(
   [wt]="-DWT_FIELD=$VE_FIELD -DWT_MASK=1 -DWT_FOLD6=1 -DWT_RECEIPT=1 benchmarks/codec_tensor/wt.cu"
-  [reader]="benchmarks/codec_tensor/reader.cu"
+  [reader]="verity/protocols/accounting/poub/prover/codec_tensor/reader.cu"
   [paged]="-DKV_FIELD=$VE_FIELD -DKV_MASK=1 -DKV_FOLD6=1 -DKV_QHEADS=32 benchmarks/vllm_encoded/paged.cu"
   [topup]="benchmarks/kv_filler/topup.cu"
 )

@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Sample
 public import Proofs.Properties.Verity.Sampled.MemberForm.Read
 public import Proofs.Properties.Verity.Sampled.Members.Draw
 public import Proofs.Properties.Verity.Sampled.Window.Steps
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 
 /-!
 # The units the per-member form's sessions proved, member by member
@@ -25,7 +25,7 @@ that accepted every session, which session is which member's and what its record
   at the evidence's units, a window's member has a proof block in the sample exactly when the sample holds one of
   its units, and the sample file of its part is the subset print of the slots its units' proof blocks are at.
 * **The session of a member the sample holds** (`member_session`): the member at place `i` of the window with a
-  proof block in the sample has the statement at place `drawnBefore W.ms S i`, its one session's verdict at the
+  proof block in the sample has the statement at place `sampledBefore W.ms S i`, its one session's verdict at the
   member's own statement, and that session's record's sample is the sample file of the member's part; and the
   statements are as many as the members the sample holds.
 -/
@@ -107,7 +107,7 @@ theorem run_units {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.On
     rw [hx1] at hsv
     exact ⟨a, x.2, keys, record, spec, tabs, rest, proofs,
       files_statement (statementAt_files hfiles ((membersHeld_zip hheld).2 z hz).2.1 ha), hs, hsv⟩
-  · rw [← provedHeld_ok hprov, FlockSoundness.Audit.DrawExec.mem_qsort, hmem x]
+  · rw [← provedHeld_ok hprov, FlockSoundness.Audit.SampleExec.mem_qsort, hmem x]
     exact ⟨fun h => h.elim (fun h0 => absurd h0 (Array.not_mem_empty x)) id, Or.inr⟩
 
 /-! ## The sessions' units over the members -/
@@ -235,14 +235,14 @@ theorem part_sampled {F : Array ByteArray} {vm : _root_.Spot.OneStageZk.Member} 
 
 /-- **The sample file of a member's part is the subset print of its slots**: where the member's proof block `u`
 is in the sample exactly when `u` is among the slots `us`, ascending below the member's count, the sample file
-the member's session is served at its part of the sample (`printedPart`) is `UnitDraw.toJson` of `us` under
+the member's session is served at its part of the sample (`printedPart`) is `UnitSample.toJson` of `us` under
 `subset` of their number, over the member's count. -/
 theorem printedPart_of_mem {nJ : ℕ} (m : Member nJ) (S : Finset (Fin nJ)) {us : Array ℕ}
     (ha : unitsAscending m.n us = true) (hmem : ∀ u : Fin m.n, m.emb u ∈ S ↔ u.val ∈ us) :
-    printedPart (m.part S) = Flock.Draw.UnitDraw.toJson ⟨.subset us.size, m.n, us, #[]⟩ := by
+    printedPart (m.part S) = Flock.Draw.UnitSample.toJson ⟨.subset us.size, m.n, us, #[]⟩ := by
   have hp : m.part S = Finset.univ.filter fun u : Fin m.n => u.val ∈ us :=
     Finset.ext fun u => (m.mem_part S u).trans ((hmem u).trans (by simp))
-  rw [hp, printedPart, printedDraw, card_filter_ascending ha, drawOf_filter ha]
+  rw [hp, printedPart, printedSample, card_filter_ascending ha, sampleOf_filter ha]
 
 /-! ## The session of a member the sample holds -/
 
@@ -250,7 +250,7 @@ theorem printedPart_of_mem {nJ : ℕ} (m : Member nJ) (S : Finset (Fin nJ)) {us 
 members `vms`, in the order of their first units, where `membersRun` returns a run that accepted every session and
 the sample `S` holds the proof blocks at the evidence's `proved_units`: the statements are as many as the window's
 members with a proof block in `S`; and the member `m` at place `i` with a proof block in `S` is a verifier's
-member `vm` whose statement is the one at place `drawnBefore W.ms S i`, whose one session has its verdict at
+member `vm` whose statement is the one at place `sampledBefore W.ms S i`, whose one session has its verdict at
 `vm`'s own statement, with a record whose sample is the sample file of `m`'s part of `S`. -/
 theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
     {ms : Array _root_.Spot.OneStageZk.Member} {vms : List _root_.Spot.OneStageZk.Member}
@@ -261,10 +261,10 @@ theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
     {r : _root_.Spot.OneStageZk.Run} (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r)
     (hr : r.all = true) {S : Finset (Fin W.nJ)} (hS : ∀ v, v ∈ S ↔ v.val ∈ e.base.provedUnits) :
     ∃ roots held, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
-      _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧ drawnBefore W.ms S W.ms.length = sts.size ∧
+      _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧ sampledBefore W.ms S W.ms.length = sts.size ∧
       ∀ i m, W.ms[i]? = some m → (m.part S).Nonempty →
         ∃ vm st a s keys record spec tabs rest proofs units, MemberOn F vm m ∧
-          (sts.zip held).toList[drawnBefore W.ms S i]? = some (st, vm) ∧
+          (sts.zip held).toList[sampledBefore W.ms S i]? = some (st, vm) ∧
           vm.statement (vm.slice c.record roots) bs = .ok a ∧ st.sessions = #[s] ∧
           SessionVerdict (stepAt a) bs keys s record spec tabs rest proofs units ∧
           Flock.Witness.recordDraw record = some (printedPart (m.part S)) := by
@@ -282,8 +282,8 @@ theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
       exact Bool.eq_iff_iff.2
         ⟨fun hs => @decide_eq_true _ (Classical.propDecidable _) ((part_sampled hon hu hS).2 hs),
           fun hd => (part_sampled hon hu hS).1 (@of_decide_eq_true _ (Classical.propDecidable _) hd)⟩
-  have hcount : ∀ i, drawnBefore W.ms S i = (vms.take i).countP (·.sampled e.base.provedUnits) := fun i => by
-    unfold drawnBefore
+  have hcount : ∀ i, sampledBefore W.ms S i = (vms.take i).countP (·.sampled e.base.provedUnits) := fun i => by
+    unfold sampledBefore
     exact (forall₂_countP hall' hsame i).symm
   refine ⟨roots, held, hroots, hheld, ?_, fun i m hi hne => ?_⟩
   · rw [hcount, ← hall.length_eq, ← filter_length (·.sampled e.base.provedUnits) vms, ← hkept,
@@ -291,11 +291,11 @@ theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
     exact (membersHeld_zip hheld).1.symm
   · obtain ⟨vm, hvi, hon, lo, hi', hu⟩ := forall₂_at hall' i m hi
     have hsamp : vm.sampled e.base.provedUnits = true := (part_sampled hon hu hS).1 hne
-    have hj : held.toList[drawnBefore W.ms S i]? = some vm := by
+    have hj : held.toList[sampledBefore W.ms S i]? = some vm := by
       rw [hkept, hcount]
       exact filter_at _ vms i vm hvi hsamp
     obtain ⟨st, hz⟩ := zip_at hlen hj
-    have hzj : (sts.zip held).toList[drawnBefore W.ms S i]? = some (st, vm) := by
+    have hzj : (sts.zip held).toList[sampledBefore W.ms S i]? = some (st, vm) := by
       rw [Array.toList_zip]
       exact hz
     obtain ⟨us, hUj, a, s, keys, record, spec, tabs, rest, proofs, hsa, hss, hsv⟩ :=
@@ -306,7 +306,7 @@ theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
     have hasc' : unitsAscending m.n sl = true := by
       rw [hon.units]
       exact hasc
-    have hpp : printedPart (m.part S) = Flock.Draw.UnitDraw.toJson ⟨.subset sl.size, m.n, sl, #[]⟩ := by
+    have hpp : printedPart (m.part S) = Flock.Draw.UnitSample.toJson ⟨.subset sl.size, m.n, sl, #[]⟩ := by
       refine printedPart_of_mem m S hasc' fun u => ?_
       have hul : u.val < vm.count := Nat.lt_of_lt_of_eq u.isLt hon.units
       have hmu := hover.mem_units hj hUj (x := vm.first + u.val) (Nat.le_add_right _ _)

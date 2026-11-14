@@ -1,8 +1,8 @@
 """SPOT[Flock]'s own deployment on the deployment layer (`parties.SPOT_PROTOCOL`), every party on stand-in capabilities: an
-honest run samples each block's sample on the challenger's coins once its registration is in, the proof server proves it from
+honest run samples each block's sample on the challenger's coins once its docket is in, the proof server proves it from
 the inference server's replay inputs and that sample, and the verifier audits each block in order on its proof and accepts,
 with no ZK server, no pin and no composite; the inference server only sends, and the proof server hears only the
-inference server and the verifier and answers only the verifier; an accepting audit of another registration rejects; an
+inference server and the verifier and answers only the verifier; an accepting audit of another docket rejects; an
 audit that is `Unavailable` is its block's error, a sample that is ends the verifier refused ``draw``, and a proof server or
 inference server that can't do its step leaves the verifier refused ``closed``; parameters out of range are refused by
 every party; the verifier replays from its own transcript; and the placement holds each party to its principal's machine
@@ -138,7 +138,7 @@ def lines_of(r) -> list[dict]:
     return r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
 
 
-def test_an_honest_run_draws_proves_and_audits_each_block_in_order_and_accepts():
+def test_an_honest_run_samples_proves_and_audits_each_block_in_order_and_accepts():
     m = Machine()
     r = go(m, blocks=2)
     assert r.status == "completed", r.outcomes
@@ -195,7 +195,7 @@ def test_an_audit_that_raises_anything_else_fails_the_run_by_name():
     assert r.status == "failed" and r.outcomes[P.VERIFIER]["refused"] == "party-died"
 
 
-def test_an_unavailable_draw_ends_the_verifier_refused_draw_with_nothing_proved():
+def test_an_unavailable_sample_ends_the_verifier_refused_sample_with_nothing_proved():
     m = Machine(fails="draw")
     r = go(m)
     assert r.outcomes[P.VERIFIER] == {"outcome": {"verdicts": []}, "refused": "draw"}
@@ -239,7 +239,7 @@ def test_the_verifier_replays_from_its_own_transcript(tmp_path):
     assert again.outcomes[P.VERIFIER] == r.outcomes[P.VERIFIER]
 
 
-def test_the_placement_holds_each_party_to_its_principals_machine_and_the_draws_off_the_developers():
+def test_the_placement_holds_each_party_to_its_principals_machine_and_the_samples_off_the_developers():
     every = sorted({n for r in P.SPOT_MANIFEST.parties for n in r.needs})
     machines = [{"name": "inference-1", "owner": "developer", "provides": every},
                 {"name": "prover-1", "owner": "developer", "provides": every},
@@ -258,7 +258,7 @@ def test_the_placement_holds_each_party_to_its_principals_machine_and_the_draws_
     assert e.value.name == "coins-hop"
 
 
-def test_two_stages_draw_each_blocks_second_stage_only_once_its_interior_is_in_and_audit_both():
+def test_two_stages_sample_each_blocks_second_stage_only_once_its_interior_is_in_and_audit_both():
     m = Machine()
     r = go(m, blocks=2, protocol=P.SPOT_TWO_ID)
     assert r.status == "completed", r.outcomes
@@ -280,7 +280,7 @@ def test_two_stages_draw_each_blocks_second_stage_only_once_its_interior_is_in_a
     assert r.outcomes[P.PROOF_SERVER] == {"outcome": {"proved": 2}, "refused": None}
 
 
-def test_two_stages_add_the_interior_and_the_second_draw_to_spots_channels():
+def test_two_stages_add_the_interior_and_the_second_sample_to_spots_channels():
     spot = {(c.sender, c.receiver, c.messages) for c in P.SPOT_MANIFEST.channels}
     two = {(c.sender, c.receiver, c.messages) for c in P.SPOT_TWO_MANIFEST.channels}
     assert two - spot == {(P.VERIFIER, P.PROOF_SERVER, ("Draw", "Second")),
@@ -303,7 +303,7 @@ def test_in_two_stages_an_accepting_audit_of_another_record_rejects(machine, rea
     assert (line["verdict"], line["reason"]) == ("reject", reason)
 
 
-def test_in_two_stages_an_unavailable_second_draw_ends_the_verifier_refused_second_with_nothing_proved():
+def test_in_two_stages_an_unavailable_second_sample_ends_the_verifier_refused_second_with_nothing_proved():
     m = Machine(fails="second")
     r = go(m, protocol=P.SPOT_TWO_ID)
     assert r.outcomes[P.VERIFIER] == {"outcome": {"verdicts": []}, "refused": "second"}
@@ -346,7 +346,7 @@ def test_in_two_stages_the_verifier_refuses_an_interior_or_a_proof_out_of_its_ph
     assert _refused(_said(v, P.PROOF_SERVER, "Interior", 0, interior(0))) == "out-of-phase"
 
 
-def test_in_two_stages_the_proof_server_refuses_a_second_draw_before_its_interior_or_twice():
+def test_in_two_stages_the_proof_server_refuses_a_second_sample_before_its_interior_or_twice():
     s = _started(P.TwoStageProofServer())
     assert _refused(_said(s, P.VERIFIER, "Second", 0, second(0), address=ADDRESS)) == "out-of-phase"
     s = _started(P.TwoStageProofServer())

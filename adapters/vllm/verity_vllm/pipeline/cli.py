@@ -61,7 +61,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
-    "mla-capture": ("verity_vllm.program.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
     "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
@@ -71,7 +70,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
-    "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "records": ("verity_vllm.pipeline.circuit_db",
                 ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                  "switch), and a checkpoint's staging (staged)")),

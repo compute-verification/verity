@@ -261,13 +261,13 @@ impl CoinTree {
     /// Sample the session key, then every coin and salt, from `rand` (the OS in a verifier, a seeded tape in a test harness) and
     /// commit under the prover's nonce.
     pub fn draw(spec: Spec, nonce: &[u8; NONCE_BYTES], rand: &mut dyn FnMut(&mut [u8])) -> Self {
-        Self::draw_with(spec, nonce, rand, &|_, _, _| {})
+        Self::sample_with(spec, nonce, rand, &|_, _, _| {})
     }
 
     /// [`Self::draw`] with `edit(stream, round, block)` applied to every block before the commitment: a verifier that commits
     /// to coins of its choosing (a test harness's malicious verifier). The key comes first (bit 2047 cleared), then v1's
     /// order: per stream and round, the block, then the salt.
-    pub fn draw_with(spec: Spec, nonce: &[u8; NONCE_BYTES], rand: &mut dyn FnMut(&mut [u8]), edit: &dyn Fn(&str, usize, &mut [F128])) -> Self {
+    pub fn sample_with(spec: Spec, nonce: &[u8; NONCE_BYTES], rand: &mut dyn FnMut(&mut [u8]), edit: &dyn Fn(&str, usize, &mut [F128])) -> Self {
         let mut key = [0u8; KEY_BYTES];
         rand(&mut key);
         key[KEY_BYTES - 1] &= 0x7f;

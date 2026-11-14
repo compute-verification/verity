@@ -12,6 +12,11 @@ attention, each held to the host bit for bit before it is timed), not a served v
 quantization are left out, so a step here is a lower bound on a served step. `comm/` is the same question for a
 Llama-3.1-70B tensor-parallel decode step, one process a rank, with the filler inside its collectives.
 
+The kernels are in PoUW's prover, `../../../verity/protocols/accounting/pouw/prover/kernels/filler/`: `dcap.cu`,
+`pfill.cuh` with its host build `pfill_host.cpp`, `lfill.cuh`, `flin.cuh`, and their Python twins `pfill_ref.py` and
+`dfill_ref.py`. This directory's jobs and drivers (`dscore.cu`, `fscore.cu`, `pscore.cu`, `comm/tpcomm.cu`) build them
+from there.
+
 ## Jobs
 
 Each job is the command of a `research run` from a pushed commit, with the source tree as its working directory, on a
@@ -78,21 +83,22 @@ python3 benchmarks/pouw/filler/comm/report.py OUT [--json]                      
 
 ## What the directory offers
 
-`dfill_ref.py` and `pfill_ref.py` are the filler tiles' receipts in Python, held to the kernels' own host reference
-(`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take their folds, key
-rules and lane starts from the receipts reference (`verity/protocols/accounting/pouw/verifier/receipts/`). One test outside the directory,
+`dfill_ref.py` and `pfill_ref.py`, beside the kernels, are the filler tiles' receipts in Python, held to the kernels'
+own host reference (`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take
+their folds, key rules and lane starts from the receipts reference
+(`verity/protocols/accounting/pouw/verifier/receipts/`). One test outside the directory,
 `../tests/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
-and holds them to that reference; nothing else outside the directory loads its Python or includes its kernels.
-`arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`, `pfill_proved.py` and
-`comm/report.py` list in `__all__` the names other files read; the other files in an arm's `sources` list none, since a
-byte changed in one is a new variant of every arm that lists it.
-`scoring.py`, `share.py`, the two references and the readers above start no process and touch no GPU, and import
-nothing beyond the standard library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the
-three arm runners build with `nvcc` and take a lease.
+and holds them to that reference; nothing else outside the directory loads its Python, and nothing else includes the
+kernels. `arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`,
+`pfill_proved.py` and `comm/report.py` list in `__all__` the names other files read; the other files in an arm's
+`sources` list none, since a byte changed in one is a new variant of every arm that lists it. `scoring.py`, `share.py`,
+the two references and the readers above start no process and touch no GPU, and import nothing beyond the standard
+library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the three arm runners build with
+`nvcc` and take a lease.
 
-The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
-A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
-directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
+The tests are one suite, `uv run tools/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
+A test imports the directory's modules, the kernels' twins and the harness's `ledger` by name: the suite's
+`pyproject.toml` puts the three directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
 `comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
 `../tests/test_budget.py` and `test_eps_budget.py` test `benchmarks/pouw`'s own modules, and
 `test_lean_headline_dc.py` tests `verity_machine_model.lean_headline_dc`.

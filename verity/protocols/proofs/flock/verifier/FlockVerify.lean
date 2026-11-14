@@ -2,6 +2,7 @@ module
 
 public import Flock
 public import Flock.CircuitType
+public import Flock.KnownTrees
 public import Flock.Layout
 public import Flock.JsonParse
 
@@ -142,7 +143,7 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
     Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins tables
 
 /-- `buildStmt` for a session of `count` tables (`Stmt.setupTables`): the session and each table's statement. `work` is the
-verifier's own `K` and work table, which a work sample's law is held to, `stratified` its own `K` for a stratified sample,
+verifier's own `K` and work table, which a work sample's sampling design is held to, `stratified` its own `K` for a stratified sample,
 `closure` its closure map, and `publicInputs` its own recomputation of the public input words. `registered` is the
 verifier's own registered reads, which every table's statement is held to (`Registered.check`), and `identifier` its own
 identifier (`checkIdentifier`). -/
@@ -452,7 +453,7 @@ def recSharedInput (args : List String) : IO (Except String RecCompose.Shared) :
                  registration := ← file (argOf args "--rec-inner-registration")
                  innerStatement := statement
                  innerTables := tables.map (·.map fun t => (t.1, RecCompose.digest t.2))
-                 innerDraw := ← file (argOf args "--rec-inner-draw")
+                 innerSample := ← file (argOf args "--rec-inner-draw")
                  links := RecCompose.linksOf links
                  innerProgram := ← file (argOf args "--rec-inner-program") }
   catch e => return .error s!"rec shared inputs: {e}"
@@ -876,7 +877,7 @@ it read (`rec_inner_sha512`), and with `--rec-inner-session DIR` and `--rec-inne
 session's record and of the transcript (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`,
 `recSessionDigests`), which `rec-compose` holds every part of a recursive statement to (`RecCompose.Accepts`, through
 `rec_shared`).
-A session whose sample is by a sampling design no soundness claim samples by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
+A session whose sample is by a sampling design no soundness claim samples by is refused at setup (`ProvedScope.sampleDesign`: a bernoulli or
 work sample, whatever flags it holds, a subset sample without `--zk` or `--plain-tables` at public outputs, or a stratified
 sample under `--plain-tables`), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`), and one whose registered
@@ -887,8 +888,8 @@ covers, or whose inner statement's public file holds more than 131072 instances 
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, `Flock.ProvedScope`) is refused, and
 so is a session without a sample, under `--rec-inner` a session whose sample is not every unit of its population, a
-session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
-over an inner session whose record (`--rec-inner-session`) holds no sample (`RecSetup.innerDrawn`), and a session at a
+session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullSample`), and a session
+over an inner session whose record (`--rec-inner-session`) holds no sample (`RecSetup.innerSampled`), and a session at a
 holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
 a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
@@ -1075,8 +1076,8 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     | some k => match k.toNat? with
       | some k => pure (some k)
       | none => IO.eprintln "verify: --stratified K: K is a natural number"; return 2
-  -- a sampled statement that sets up is still refused when no soundness claim samples by its sample's law
-  -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
+  -- a sampled statement that sets up is still refused when no soundness claim samples by its sample's sampling design
+  -- (`ProvedScope.sampleDesign`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
   -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
   -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`); and hashed
@@ -1121,8 +1122,8 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
         r.2.forM (RecLinkPart.check · registered recCoins recLinks)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
-        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.sampleDesign zk tags plainTables draw else .ok ()).map fun () =>
+        (spec, sts, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let handed := program.map read.digest  -- `some none`: bytes that are no descriptor
   let header := (publicHeader pubB).bind headerDigest
@@ -1131,7 +1132,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- the population's statement is set up once, when a session first needs it; a sampled session at its own sample, never at
   -- another session's (samples have no faithful cache key: `canon` refuses a non-integer number that `recordDraw` keeps)
-  let mut population : Option (Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := none
+  let mut population : Option (Except String (SessionSpec × Array Stmt × Lean.Json × Lean.Json)) := none
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -1140,7 +1141,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       catch e => pure (Except.error s!"session files: {e}")
     -- a sampled session is verified against the sampled proof blocks' statement (Σ covers the sample); several tables split the sample
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
-    let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
+    let mut st : Except String (SessionSpec × Array Stmt × Lean.Json × Lean.Json) := .error "setup: none"
     match draw, population with
     | none, some s => st := s
     | _, _ =>
@@ -1163,8 +1164,8 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     let checked : Except String (String × Array Setup) := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
-      let (spec, tabs, _) ← st
-      if zk then Zk.verify spec tabs record proofs
+      let (spec, sts, _) ← st; let tabs := sts.map Setup.ofCircuit  -- `Zk.verifyOnePass_eq`: it is `Zk.verify spec tabs`
+      if zk then Zk.verifyOnePass spec sts record proofs
       else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
       else verify spec tabs record proofs
       pure (record, tabs)
@@ -1181,9 +1182,9 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     let refusals : String × Array Setup → Except String Unit := fun (record, tabs) => do
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
-      if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
-      RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
-      RecSetup.innerDrawn recCoins
+      if draw.isNone then ProvedScope.sampleDesign zk tags plainTables draw
+      RecSetup.fullSample recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
+      RecSetup.innerSampled recCoins
       RecSetup.denseOnly recInner
       RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
@@ -1270,7 +1271,7 @@ refusals, in `verify`'s order, on plain sessions whose proof files are upstream'
 `None` tag, `verifyFiles (plainBytes true)`; `Tags.upstreamPlain`), which `verify` refuses. For each session it prints one
 line, `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}`, with `verify`'s findings and no `accepted`:
 `check` is the first check's failure (`""` when every check passes; a refusal before any check runs counts, such as a
-legacy statement's or a sample law's at setup), `refusal` the first refusal once every check has passed (`UPSTREAM_PLAIN`
+legacy statement's or a sampling design's at setup), `refusal` the first refusal once every check has passed (`UPSTREAM_PLAIN`
 when no other refuses, so no session passes), `upstream` the session's verdict in `F` (a JSON object from each session
 directory, as given to `--session`, to upstream's verdict, `true` for accepted; `null` where `F` has none), and `agree`
 whether the checks pass exactly when upstream accepted. Exit 0 iff every session agrees. Not with `--zk`: a `--zk`
@@ -1288,11 +1289,12 @@ def agreeCmd (args : List String) : IO UInt32 := do
   verifyCmd args (some verdicts)
 
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
-(`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample, as one
+(`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample,
+then what its setup holds of the public file's header and rows with no session (`PortRoots.headerOf`), as one
 line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit carries its template
 (`ProvedScope.circuitOf`), and the check reads its form off the template (`KsScope.unitWhy`); what passing establishes is
-`KsScope.checkOf_ok`'s. It accepts no session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held
-to. -/
+`KsScope.checkOf_ok`'s and `PortRoots.headerWhy_none`'s. It accepts no session: its form check is the one the Python
+mirror (`one_stage.proofs.ks_form_why`) is held to, and the header's has no mirror. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: verity-verify-proof ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -1305,7 +1307,7 @@ def ksFormCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
   let ksParsed := if tags.hiddenOutputs then ProvedScope.circuitOf tags circuitB tables else HmOut.parse tags circuitB tables
-  match KsScope.checkOf ksParsed tags pubB count none with
+  match KsScope.checkOf ksParsed tags pubB count none >>= fun _ => PortRoots.headerOf ksParsed tags pubB with
   | .ok () => IO.println "KS-FORM ok"; return 0
   | .error why => IO.println s!"KS-FORM {why}"; return 1
 
@@ -1567,8 +1569,8 @@ def typedRowsCmd (args : List String) : IO UInt32 := do
     return 0
 
 /-- `--program P --partition Q --stratified K`: the stratified sampling design the verifier derives from its own program and partition
-object (`HmRow.stratifiedLaw`), and the population; none without `--stratified`. -/
-def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
+object (`HmRow.stratifiedSamplingDesign`), and the population; none without `--stratified`. -/
+def stratifiedInput (args : List String) : IO (Except String (Option (Draw.SamplingDesign × Nat))) := do
   let some k := argOf args "--stratified" | return .ok none
   let some k := k.toNat? | return .error "--stratified K: K is a natural number"
   let program ← match ← programInput args with
@@ -1579,11 +1581,11 @@ def stratifiedInput (args : List String) : IO (Except String (Option (Draw.Law �
     | .ok (some o) => pure o
     | .ok none => return .error "--stratified needs --partition"
     | .error e => return .error e
-  return (HmRow.stratifiedLaw obj program k).map some
+  return (HmRow.stratifiedSamplingDesign obj program k).map some
 
 /-- `--program P --partition Q --work K --work-table F`: the work sampling design the verifier derives from its own program, partition
-object and work table of works and floors (`HmRow.workLaw`), and the population; none without `--work`. -/
-def workInput (args : List String) : IO (Except String (Option (Draw.Law × Nat))) := do
+object and work table of works and floors (`HmRow.workSamplingDesign`), and the population; none without `--work`. -/
+def workInput (args : List String) : IO (Except String (Option (Draw.SamplingDesign × Nat))) := do
   let some k := argOf args "--work" | return .ok none
   let some k := k.toNat? | return .error "--work K: K is a natural number"
   let program ← match ← programInput args with
@@ -1598,42 +1600,42 @@ def workInput (args : List String) : IO (Except String (Option (Draw.Law × Nat)
     | .ok (some t) => pure t
     | .ok none => return .error "--work needs --work-table (the verifier's own work per template)"
     | .error e => return .error e
-  return (HmRow.workLaw obj program k table).map some
+  return (HmRow.workSamplingDesign obj program k table).map some
 
 /-- The verifier's own sampling design from `--stratified K` or `--work K` (at most one), and the population; none without either. -/
-def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) :=
+def ownSamplingDesign (args : List String) : IO (Except String (Option (Draw.SamplingDesign × Nat))) :=
   match argOf args "--stratified", argOf args "--work" with
   | some _, some _ => pure (.error "at most one of --stratified, --work")
   | none, some _ => workInput args
   | _, none => stratifiedInput args
 
-/-- `--registration F`: the window's registration record (one-stage `registration`, the one its receipt names), whose `law`
-and `population` were fixed before any coin: `(law object, population)`; none without the flag. -/
-def registeredLaw (args : List String) : IO (Except String (Option (Lean.Json × Nat))) := do
+/-- `--registration F`: the window's registration record (one-stage `registration`, the one its receipt names), whose `samplingDesign`
+and `population` were fixed before any coin: `(samplingDesign object, population)`; none without the flag. -/
+def registeredSamplingDesign (args : List String) : IO (Except String (Option (Lean.Json × Nat))) := do
   let some f := argOf args "--registration" | return .ok none
   let t ← try pure (← IO.FS.readFile f) catch e => return .error s!"registration: {e}"
   let .ok j := Flock.JsonParse.parse t | return .error "registration: not JSON"
-  let .ok law := j.getObjVal? "law" | return .error "registration: no law"
+  let .ok samplingDesign := j.getObjVal? "law" | return .error "registration: no law"
   let .ok pop := j.getObjValAs? Nat "population" | return .error "registration: no population"
-  return .ok (some (law, pop))
+  return .ok (some (samplingDesign, pop))
 
-/-- The sampling design and population sampled are the registration's (`registeredLaw`), else why not. -/
-def heldToRegistration (law : Draw.Law) (pop : Nat) : Lean.Json × Nat → Option String
+/-- The sampling design and population sampled are the registration's (`registeredSamplingDesign`), else why not. -/
+def heldToRegistration (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Lean.Json × Nat → Option String
   | (reg, n) =>
-    if law.toJson.compress != reg.compress then
-      some s!"the law {law.toJson.compress} is not the registered law {reg.compress}"
+    if samplingDesign.toJson.compress != reg.compress then
+      some s!"the law {samplingDesign.toJson.compress} is not the registered samplingDesign {reg.compress}"
     else if pop != n then some s!"the population {pop} is not the registered {n}"
     else none
 
 /-- The sample of a sampling design that samples every unit (a subset of the whole population, a Bernoulli sample at p = 1, or every
-stratum at its size), which reads no coins: its units are the same on any bytes. None for any other law. -/
-def drawEvery? (law : Draw.Law) (pop : Nat) : Option Draw.UnitDraw :=
-  let every := match law with
+stratum at its size), which reads no coins: its units are the same on any bytes. None for any other sampling design. -/
+def sampleEvery? (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Option Draw.UnitSample :=
+  let every := match samplingDesign with
     | .subset k => k == pop
     | .bernoulli a b => a == b
     | .stratified _ strata => strata.all fun s => s.k == s.size
     | .work _ strata => strata.all fun s => s.k == s.toStratum.size
-  if every then Id.run (Draw.drawWith (fun _ need => pure (ByteArray.mk (Array.replicate need 0))) law pop) else none
+  if every then Id.run (Draw.drawWith (fun _ need => pure (ByteArray.mk (Array.replicate need 0))) samplingDesign pop) else none
 
 /-- What `draw` says, refusing before any coin, to a sample that would read coins and is given none: the verifier has no
 coins of its own. -/
@@ -1644,7 +1646,7 @@ def NO_OWN_COINS : String :=
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
 [--closure F] [--registration F] [--tables J] [--stream HEX | --stream-file F]`: the unit sample (`Flock.Draw`) on the given bytes, the
 challenger's coins (a stratified or work sample's streams are its consecutive segments). The verifier flips no coins of its
-own: without `--stream` or `--stream-file` only a sample of every unit, which reads no coins (`drawEvery?`), is sampled, and
+own: without `--stream` or `--stream-file` only a sample of every unit, which reads no coins (`sampleEvery?`), is sampled, and
 any other is refused (`NO_OWN_COINS`).
 The strata are the verifier's own, derived from its program and partition object, and a work sampling design's works and floors are its
 own work table's; with `--closure F`, a work sample is widened by the verifier's closure map. With `--registration F` the
@@ -1652,8 +1654,8 @@ sample is refused, before any coin is read, unless its sampling design and popul
 one sample for a session of `J` tables (`verify --session-tables J`), refused before any coin unless they can split it
 (`Draw.tablesWhy`: a subset sampling design, or a stratified one, whose `Σ_s k_s` is a positive multiple of `J`). Prints `DRAW {…}`, the
 object the verifier sends in the clear. -/
-def drawCmd (args : List String) : IO UInt32 := do
-  let (law, pop) ← match ← ownLaw args with
+def sampleCmd (args : List String) : IO UInt32 := do
+  let (samplingDesign, pop) ← match ← ownSamplingDesign args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2
     | .ok (some lp) => pure lp
     | .ok none =>
@@ -1661,19 +1663,19 @@ def drawCmd (args : List String) : IO UInt32 := do
         | IO.eprintln "draw: --population N, or --program P --partition Q (--stratified K | --work K --work-table F)"; return 2
       match argOf args "--k", argOf args "--p" with
       | some k, none => match k.toNat? with
-        | some k => if k ≤ pop then pure (Draw.Law.subset k, pop) else IO.eprintln "draw: k > population"; return 2
+        | some k => if k ≤ pop then pure (Draw.SamplingDesign.subset k, pop) else IO.eprintln "draw: k > population"; return 2
         | none => IO.eprintln "draw: --k K"; return 2
       | none, some p => match p.splitOn "/" with
         | [a, b] => match a.toNat?, b.toNat? with
           | some a, some b =>
-            if 0 < b && a ≤ b then pure (Draw.Law.bernoulli a b, pop) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
+            if 0 < b && a ≤ b then pure (Draw.SamplingDesign.bernoulli a b, pop) else IO.eprintln "draw: p ∉ [0, 1]"; return 2
           | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
         | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
       | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
-  match ← registeredLaw args with
+  match ← registeredSamplingDesign args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2
     | .ok none => pure ()
-    | .ok (some r) => match heldToRegistration law pop r with
+    | .ok (some r) => match heldToRegistration samplingDesign pop r with
       | some why => IO.eprintln s!"draw: {why}"; return 2
       | none => pure ()
   match (argOf args "--tables").map String.toNat? with
@@ -1683,7 +1685,7 @@ def drawCmd (args : List String) : IO UInt32 := do
       if j == 0 || j > Tags.MAX_TABLES then
         IO.eprintln s!"draw: --tables J: 1 ≤ J ≤ {Tags.MAX_TABLES}"
         return 2
-      if let some why := Draw.tablesWhy law j then
+      if let some why := Draw.tablesWhy samplingDesign j then
         IO.eprintln s!"draw: {why}"
         return 2
   let stream ← match argOf args "--stream", argOf args "--stream-file" with
@@ -1692,14 +1694,14 @@ def drawCmd (args : List String) : IO UInt32 := do
     | none, some f => pure (some (← IO.FS.readBinFile f))
     | some _, some _ => IO.eprintln "draw: at most one of --stream, --stream-file"; return 2
   let d ← match stream with
-    | none => match drawEvery? law pop with
+    | none => match sampleEvery? samplingDesign pop with
       | some d => pure d
       | none => IO.eprintln NO_OWN_COINS; return 2
     | some src =>
-      match Draw.drawOn law pop src with
+      match Draw.sampleOn samplingDesign pop src with
       | some d => pure d
       | none => IO.eprintln "draw: the stream ran out"; return 1
-  let d ← match ← closureInput args, d.law with
+  let d ← match ← closureInput args, d.samplingDesign with
     | .error e, _ => IO.eprintln s!"draw: {e}"; return 2
     | .ok none, _ => pure d
     | .ok (some cm), .work .. => pure { d with closure := Draw.closureOf cm d.units }
@@ -1709,17 +1711,17 @@ def drawCmd (args : List String) : IO UInt32 := do
 
 /-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)] [--closure F] [--registration F]`: U1–U3
 (`Flock.Draw`) on each case `{"record", "statement", "instances"}` (a sample or null each), one `DRAWCHECK {"ok", "why"}` line per case.
-With a sampling design's flags, the statement's sample is also held to the verifier's own sampling design and population (`draw.check_draw`'s `law`
+With a sampling design's flags, the statement's sample is also held to the verifier's own sampling design and population (`draw.check_draw`'s `samplingDesign`
 and `population`), and with `--registration F` to the registered ones. -/
-def drawTest (path : String) (args : List String) : IO UInt32 := do
+def sampleTest (path : String) (args : List String) : IO UInt32 := do
   let .ok (.arr cases) := Flock.JsonParse.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
-  let own ← match ← ownLaw args with
+  let own ← match ← ownSamplingDesign args with
     | .ok o => pure o
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
-  let reg ← match ← registeredLaw args with
+  let reg ← match ← registeredSamplingDesign args with
     | .ok r => pure r
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   for c in cases do
@@ -1730,15 +1732,15 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
     let n := (c.getObjValAs? Nat "instances").toOption.getD 0
     let r : V Unit := do
       Draw.check (side "record") (side "statement") n
-      if let (some (law, pop), some s) := (own, side "statement") then
-        let d ← Draw.UnitDraw.ofJson s
+      if let (some (samplingDesign, pop), some s) := (own, side "statement") then
+        let d ← Draw.UnitSample.ofJson s
         if d.population != pop then throw s!"U2: the draw's population {d.population} is not the verifier's {pop}"
-        if d.law != law then throw "U2: the draw's law is not the verifier's own (its program and query)"
+        if d.samplingDesign != samplingDesign then throw "U2: the draw's law is not the verifier's own (its program and query)"
       if let (some r, some s) := (reg, side "statement") then
-        let d ← Draw.UnitDraw.ofJson s
-        if let some why := heldToRegistration d.law d.population r then throw s!"U2: {why}"
+        let d ← Draw.UnitSample.ofJson s
+        if let some why := heldToRegistration d.samplingDesign d.population r then throw s!"U2: {why}"
       if let (some cm, some s) := (closure, side "statement") then
-        let d ← Draw.UnitDraw.ofJson s
+        let d ← Draw.UnitSample.ofJson s
         if d.closure != Draw.closureOf cm d.units then throw "U3: the draw's closure is not the verifier's own (its closure map)"
     let (ok, why) := match r with
       | .ok () => (true, "")
@@ -1999,8 +2001,9 @@ def main (args : List String) : IO UInt32 := do
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths
-  | "draw" :: rest => drawCmd rest
-  | "draw-test" :: path :: rest => drawTest path rest
+  | "known-trees" :: rest => KnownTrees.cmd (argOf rest "--registered") (argOf rest "--public") (argOf rest "--out")
+  | "draw" :: rest => sampleCmd rest
+  | "draw-test" :: path :: rest => sampleTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | "verify-members" :: rest => verifyMembersCmd rest

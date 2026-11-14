@@ -89,7 +89,7 @@ The compiler is a circuit the developer registers up front. Given the period's a
 | **Party, channel, device, protocol, config** five files in `verity/` | The shared types: what a party is, what two parties exchange, the registered hardware, what a protocol declares, the file a run starts from. | Nothing. | Types every protocol uses. | Any one protocol. |
 | **Runtime** `verity/runtime/` | Runs a configuration's parties on real machines: sockets, randomness, clock, transcripts. | A configuration. | Running parties and their transcripts. | Any protocol's rules. |
 | **Hardware** `hardware/` | One data sheet per GPU, host or server model: what one device can do in a second and what it holds. Each figure names its source and says whether it is a ceiling or a measurement. Data, no code. The auditor brings it. | The vendor's published figures and our own measurements, written in by hand. | Figures a run passes to the registration check. The protocols take a device's capacity from the registration. | Everything. It never holds a figure the audited device reports about itself. |
-| **Demos** `demos/` | One configuration each: its protocols, its adapter, which party on which machine. The remote demo and the onsite demo. | All of the above. | A run anyone can repeat with one command. | Nothing uses a demo. |
+| **Demos** `demos/` | One file each, a configuration: its protocols, its adapter, which party on which machine. The remote demo, and the onsite demo at three sizes: network, compute (the default) and full. A demo holds no code and is never tuned. | All of the above. | A run anyone can repeat with one command. | Nothing uses a demo. |
 | **Security** `security/` | Lean, in three parts: what each protocol guarantees, written to be read; what ties each guarantee to the verifier's own Lean code; and the proofs. A statement never reads a proof. | The verifiers' Lean. | Guarantees, each with its named assumptions and its open premises; one composition theorem for any list of protocols; and the error budget, each failure chance summed over a week, a month and a year (above 1 it prints "no bound at this period"). | Nothing in the system uses it. |
 | **The Lean check and the guarantee record** `tools/`, and one record file beside each Lean package | Has Lean's kernel check every proof again. Refuses a missing proof, an added axiom or a way around the kernel. Records each guarantee's statement and every premise it rests on. | Every Lean file: each protocol's `verifier/`, and `security/`. | Pass or fail, to the check. For each guarantee the deployed system rests on, the open premises still under it, to the dashboard. | What a proof is about. It decides no verdict. |
 | **Benchmarks** `benchmarks/` | Each benchmark is one command that records named numbers, each marked measured or modeled. Each benchmark's directory declares its numbers: name, owner, unit, command, and how often it should run. | The system, as a user. | Numbers, in the evidence store. | It never decides a verdict, and nothing uses a benchmark. |
@@ -113,7 +113,7 @@ An arrow reads "uses". Nothing points upward.
 ```mermaid
 flowchart TD
     bench["benchmarks/<br/>measure and record"]
-    demos["demos/<br/>one configuration per demo"]
+    demos["demos/<br/>one file per demo"]
     hw["hardware/<br/>data sheets, read by a run"]
     subgraph adapters["adapters/"]
         vllm["vllm/"]
@@ -216,13 +216,18 @@ verity/
                    information, every device accounted for. The others: compute, memory and network
     policy/        inference_only, on accounting/
     compose/       remote and onsite, on policy/ and accounting/
-    experimental/  a protocol being tried, which no demo lists
+    experimental/  a protocol being tried, which no demo lists: dither, pearl_c4
   circuits/        the circuit language; ops/ holds the circuits a protocol names
   commitments/     hiding commitments, the one hash, signatures, and their GPU code
 adapters/
   torch/
   vllm/            on torch/, with the circuits of the kernels it serves
-demos/             one directory per demo, holding its configuration
+demos/             one file per demo, the configuration `verity run` reads. A demo holds no code
+  README.md        one table: the file, what it shows, its command, how far it runs and is proved
+  remote.toml      SPOT, PoUW and the inference-only policy
+  onsite_network.toml    the network certifier, SPOT and the memory wipe
+  onsite_compute.toml    the default: those three, PoUW and the inference-only policy
+  onsite_full.toml       those five, PoUS and PoUB
 security/          Lean: what each protocol guarantees, and the proofs
 benchmarks/        every measurement, each one command, each on the dashboard
 tools/             the verity command, the check, the test harnesses
@@ -264,9 +269,8 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Loose files inside five protocols | beside `verifier/`, `prover/`, `device/` | inside one of the three, or out of `verity/` |
 | `fixtures/` | the root | each file beside its reader |
 | GPU code | 61 directories, 49 of them under `benchmarks/`. A served run loads PoUW's kernel from there, which rule 9 forbids | each protocol's `prover/`, `verity/commitments/`, the adapter |
-| The check | `tools/verity/check/` | `tools/check/` |
 | The numbers each benchmark declares | one shared list | each benchmark's own directory, its owner's |
-| The compute audit's cost model, and the commands that run an audit on a served run | proofs' scripts under `benchmarks/` | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
+| The compute audit's cost model, and the commands that run an audit on a served run | in SPOT (`prover/audit/`, `prover/cost/`, `verifier/one_stage/`, `device/`), but the audit commands still load scripts under `benchmarks/` (the proof leg, the network certifier's pieces, the one-stage replay, the tampered stagings, the bundle's format), and the demo's orchestration script runs them | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
 | Registration | Its Lean is in `protocols/interface/`. The log's Python is in `verity/protocols/accounting/registration/verifier/` already. Three test files of SPOT's read it today and move with it | `verity/protocols/accounting/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
 | The policy's two calculators | inside `protocols/inference_only/` | two directories under `benchmarks/`; training renames the slowdown one |
 | The network certifier a served run starts: its serving loop, its keys, its prover | `benchmarks/`, about 25,000 lines, and the auditor's device runs them from there, which rule 9 forbids | the certifier's `device/` and `prover/` |
@@ -279,14 +283,16 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Every protocol has parties | Only SPOT, PoUS and the remote memory-read audit do |
 | A PyTorch adapter under the vLLM adapter, with one translator from PyTorch to circuits | One adapter, and a second translator inside the training benchmark |
 | The messages between workload and prover as one stated list | Function calls and files; 15 files with no settled name or place |
-| PoUW's serving code and GPU kernels in one package under `protocols/accounting/pouw/`, reached by one call | In the adapter (18,800 lines) and under `benchmarks/` |
+| PoUW's serving code and GPU kernels in one package under `protocols/accounting/pouw/`, reached by one call | The serving code is in `protocols/accounting/pouw/prover/serving/` (17,200 lines), reached by `run_matmul` and `observe_matmul`. The adapter keeps the option with its H1 hooks, the serve loops (`serve_h1`, `serve_pearl`, `serve_tie`), Pearl's row GEMM (`gemm_rows`), H1's commit at acquire, the ncp-v2 replay check and the GPU row-table commit (3,500 lines); the last two and `serve_pearl` still import modules below `serving`. Kernel checks are under `benchmarks/` |
 | Benchmarks and demos reach the adapter through its public interface only | 114 modules are reached past it |
-| The two demos start from a configuration, run by the runtime | The remote demo is a shell script under `benchmarks/`; the onsite demo is not built |
+| Each demo is one file under `demos/` that `verity run` starts: `remote.toml`, `onsite_network.toml`, `onsite_compute.toml` (the default) and `onsite_full.toml` | `demos/` holds three directories with scripts (`vllm/`, `onsite_served/`, `lifecycle/`, the last not a demo); `verity run` accepts two sets of protocols, remote's three and onsite's seven, so the two smaller onsite files do not run yet |
+| Dither and the FP4 variant (Pearl-C4) are protocols being tried, under `protocols/experimental/` | Dither's kernels and circuit are there, and Pearl-C4's kernel; Pearl-C4's scheme, circuit and vectors are in PoUW's package, whose own circuits load its circuit |
+| The team's platform is in its own repository, `platform` | `infra/`, the run recorder, the agents' guard and the move tool are in this one |
 | Python never returns accept or reject | Several protocols still decide in Python. SPOT's two-stage outcome is joined in Python; its Lean check is written and refuses every audit until its proof exists |
 | Each accounting protocol takes the registered hardware and says which part it accounts for | None does |
 | The security model has the auditor's devices as parties, each with a key the auditor pins and its whole signing history | Only the challenger is a party, so no onsite memory or network claim can be proved yet |
 | A device's figures have one source: the registration reads them from the auditor's data sheet | Written in two places that disagree (the H200's tensor rate at two clocks) |
-| "Registration" names one thing: SPOT's own record of a window takes another name | SPOT's code calls the record it fixes before any challenge a registration record: the circuit's digest, its pieces, the sampling rule and the committed roots. That is SPOT's input, not the registration |
+| "Registration" names one thing: SPOT's own record of a window takes another name | SPOT's prose, its Lean (`Spot.Docket`), its module (`one_stage/docket.py`) and the names it alone defines call it the docket. Its Python still calls the docket `registration` where the name is one other lanes' functions share (`rows.registration`, `warden_rows.registration`, the certifier service's), and its CLI flags, file names, formats and keys still say registration |
 | The circuit checker is handed the served circuits and names none | It names them |
 | The compiler cuts a period's circuit into pieces wired to each other | For the demo's model the pieces are wired only where the eight GPUs combine results, so the audit's second round runs over a stand-in |
 | Every kernel the production settings serve has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
@@ -349,7 +355,8 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Memory challenger**: an auditor-trusted device beside a network certifier, on a machine the developer doesn't control (never a process on the developer's node), that runs PoUS's timed rounds and signs each (`verity.protocols.accounting.pous.device.memory_challenger`'s `MemoryChallenger`). Its per-round on-time bits stay in its signed record; PoUS publishes the verdict.
 - **Challenger**: the auditor-controlled device every coin comes from (section 1, "The system in one picture"); onsite, a server's coins never leave its network certifier's machine in the clear, and it never sees the witness. In Flock it is the patched checkout's Rust `Server`; Fiat–Shamir's challenger keeps its own sense. Private messages (the devices' signed records and salts, the witness, a server's coins) travel only on private links, a named placement premise (`WitnessPathPrivate`, proposed): the certifier sits on the server's own uplink and the memory challenger is reached in-region.
 - **Verifier**: the auditor's Lean verifier, run offline, and the outcome it writes; Flock's is `verity/protocols/proofs/flock/verifier/`, cross-checked by upstream Flock's Rust verifier. As a party in a protocol's statements (the one-stage audit's sample, a game's `Verifier`), "the verifier" is the auditor's side as a whole.
-- **Selection rule**: which proof blocks of a registration are proved (`Spec.selection`): all of them, a one-stage sampling design stated as a rate such as `stratified-rate:NUM/DEN`, or a timed run's sequential sample, selected by the challenger's coins; a policy is a condition on the registered circuit, not a sample.
+- **Docket**: SPOT's record of what a window is committed to before any coin, its circuit's digest, its pieces, the sampling rule and the committed roots (`Spot.Docket`, `verity/protocols/proofs/spot/verifier/one_stage/docket.py`); it is SPOT's input, and "registration" names only the accounting protocol.
+- **Selection rule**: which proof blocks of a docket are proved (`Spec.selection`): all of them, a one-stage sampling design stated as a rate such as `stratified-rate:NUM/DEN`, or a timed run's sequential sample, selected by the challenger's coins; a policy is a condition on the registered circuit, not a sample.
 - **Device model**: the one device the compute, bandwidth and capacity audits are about (`Verity.Device`, in core): at most S_chip bits of on-chip state and M bits of device memory; per tick, at most BW bits from device memory to the chip, a channel's capacity over each side channel (PCIe from NVMe and the network), and each op class's own rate (tensor-core multiply-adds F, CUDA-core ops, oracle queries). A tick is its unit of time, and a period of T ticks is a `Verity.Window`.
 - **Monitoring period**: the stretch of time a result is about, made of many execution phases on every machine it covers. Results are presented for monitoring periods of one week, one month and one year, and over all compute, the adversary resource model (below), though a demo checks one machine; a deployment's or a datacenter's figure goes beside it (`AGENTS.md`, "Design rules"). A bound over a monitoring period has two readings. *Per phase*, every verification phase's bound holds at once, at their δs summed. *Pooled*, the period's total holds at one δ, because each verification phase flips its own live coins. A pooled total's sampling term doesn't grow with the period, since every sample charges one detection budget, so its share of the period's compute falls; a term that accrues per tick, such as a link's capacity, grows with it. The pooled reading is the result, and a per-phase δ that looks weak is not. SPOT's text calls it "the period" for short.
 - **Period**: a span of time, which "window" no longer names. From the longest: a monitoring period; a *certification period*, m consecutive execution phases on one link under one signed root, network certification's verdict unit (`NetworkCheck.Period`); an execution phase (for the certifier, T ticks, about 3.2 s); and a *tick*, one step of a device's clock, for the certifier one transfer block's span.

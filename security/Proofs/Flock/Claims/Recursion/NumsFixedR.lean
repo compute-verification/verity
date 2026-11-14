@@ -55,7 +55,7 @@ statement (`setupTables_okH'`).
 The numbers read a table's `m`, `mPts`, `k_log` and region count and the spec's `points` and `mPts`. `setupHidden_key`
 reads those off the circuit (`HmOut.parseCommit`, the same file) and the statement's `n`: without a sample, the loaded file's
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
-shape (`staged_pop`); with one, the sample's proved units (`Layout.drawn_spec`), the same sample. They read the
+shape (`staged_pop`); with one, the sample's proved units (`Layout.sampled_spec`), the same sample. They read the
 statement's version too (`Stmt.wideLeaf`, which schedule its tables' proofs follow), and that is its tags', the same
 at both setups (`Hidden.setupHidden_tagsP`).
 -/
@@ -218,8 +218,8 @@ theorem hidden_same {tags : Tags} {cf pf pf' : ByteArray} {coins : Coins} {table
       have e₁ := hd0 d rfl
       have e₂ := hd0' d rfl
       unfold HmIn.drawn at e₁ e₂
-      obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec e₁
-      obtain ⟨D', hD', -, hnD', -⟩ := FlockSoundness.Discharge.Layout.drawn_spec e₂
+      obtain ⟨D, hD, -, hnD, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec e₁
+      obtain ⟨D', hD', -, hnD', -⟩ := FlockSoundness.Discharge.Layout.sampled_spec e₂
       obtain rfl : D' = D := Except.ok.inj (hD'.symm.trans hD)
       rw [hnD, hnD']
   refine ⟨ec, ?_, ?_, ?_, ?_⟩

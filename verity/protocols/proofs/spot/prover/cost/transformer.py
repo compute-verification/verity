@@ -33,7 +33,7 @@ CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and th
 most `TARGET_SHARE` of the block's ANDs incorrect. `recertify` recomputes its certificate from the sizes alone through
 core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorrect proof blocks over a monitoring period of many
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
-window under the `work:1` law.
+window under the `work:1` sampling design.
 
     uv run python verity/protocols/proofs/spot/prover/cost/transformer.py --out DIR [--model small|large] [--share S] [--delta D]
 """
@@ -41,15 +41,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from math import ceil, log
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
-
-from inputs import CARDS, I, cap, observations
+from verity.protocols.proofs.spot.prover.cost.inputs import CARDS, I, cap, observations
 
 from verity import protocol
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
@@ -425,7 +422,7 @@ def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: 
 
 
 def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, ands: bool = False) -> float:
-    """Incorrect proof blocks (or their ANDs) over `blocks` blocks, each sampled by the plan's law on its own live coins and all
+    """Incorrect proof blocks (or their ANDs) over `blocks` blocks, each sampled by the plan's sampling design on its own live coins and all
     accepted, except with probability `delta`: a set of x_{b,s} incorrect proof blocks escapes with at most
     prod exp(-k_s x_{b,s} / n_s), never once x_{b,s} > n_s - k_s, so the total is the knapsack `density_bound` over
     `blocks` copies of each stratum, which the period's length doesn't move (each stratum's rate k_s / n_s is a
@@ -464,7 +461,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
       members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
       ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no sample misses), so
       outside delta every window has fewer than its K0 units incorrect;
-    * `record`, the block as one window: every subcircuit under the `work:1` law whose work table's floors are the plan's
+    * `record`, the block as one window: every subcircuit under the `work:1` sampling design whose work table's floors are the plan's
       k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
       the least statement size; `IntegrityPeriod` covers only a uniform subset, not this sampling design.
 

@@ -30,11 +30,18 @@ so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `enc
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
 a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
-`point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
-of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
-parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
-node.
+`leg(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's
+store up once at `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory
+challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
+at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the
+verifier run on the node.
+`answer_signed` is the run on the memory challenger's signed setup (`verity/pous/p2/v4/signed-run`,
+`PousCheck.SignedRun`): `run.check_signed_at` in place of `tie` and `run.check_at`, its case (`case_signed`) the
+session, the setup record the session's key signed (`memory_challenger.sign_setup_record`: the published outputs the
+memory challenger's device was given) and the prover's openings (`openings_of`, from its table), a few megabytes at a
+served store where `case` carries the table and `C*`. It certifies nothing, and its profile says why (`SIGNED_GAPS`);
+setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's hypotheses.
+
 `trusted-device`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
 still sampled on the node.
@@ -52,12 +59,11 @@ import subprocess
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.runtime.stream import Side
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
 
@@ -67,10 +73,20 @@ from . import protocol as pous_protocol
 from . import run as R
 from . import setup
 from .schemes import p2 as P2
-from .verifier import DIGEST_BYTES
+from .verifier import DIGEST_BYTES, MerkleTree, row_leaf
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
+SIGNED_PROTOCOL = "verity/pous/p2/v4/signed-run"
+"""`PousCheck.SignedRun.ID`: the run on the memory challenger's signed setup (`answer_signed`)."""
+SIGNED_GAPS = ("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where "
+               "the run's check reads the store",
+               "setup's check is not yet a proof, and it ran on the developer's node")
+"""`PousCheck.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
+SETUP_ACCEPTED = ("the store at the published root is the encoding of the registered weights under the published "
+                  "commitment and salt (SetupAccepted)")
+"""`PousCheck.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
+hypotheses."""
 SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
@@ -166,6 +182,50 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
         raise R.Refused(f"setup: {e}") from None
     if R.Setup(q.blocks, commitment, vk.root, salt) != published:
         raise R.Refused("the run's commitment is not what its setup published")
+
+
+def case_signed(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup,
+                session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord,
+                openings: Sequence[R.Opening]) -> dict[str, Any]:
+    """The signed run protocol's case (`PousCheck.SignedRun`): `case`'s params and commitment, and its evidence the
+    session, the memory challenger's signed setup record and one opening per round, in place of the table and the
+    setup's own inputs."""
+    params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
+    evidence = {"paths": [o.to_json() for o in openings], "session": session.to_json(), "setup": signed_setup.to_json()}
+    return {"commitment": canonical_json_bytes(published.to_json()).hex(),
+            "evidence": canonical_json_bytes(evidence).hex(), "params": params}
+
+
+def openings_of(point: R.Point, salt: bytes, digests: bytes, rounds: Sequence[mc.Round]) -> list[R.Opening]:
+    """The prover's openings for `check_signed`, from its table of `C*` (`digests`, one row digest a block): for each
+    round, its index's row and that row's leaf's path in the tree of the table's leaves under `salt`."""
+    q = point.params
+    rows = [digests[DIGEST_BYTES * i:DIGEST_BYTES * (i + 1)] for i in range(q.blocks)]
+    tree = MerkleTree([row_leaf(q, salt, i, r) for i, r in enumerate(rows)])
+    return [R.Opening(rows[r.index], tree.path(r.index)) for r in rounds]
+
+
+def profile_signed(point: R.Point) -> dict[str, Any]:
+    """`PousCheck.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`, and its certificate's
+    hypotheses, when it has a certificate, followed by `SETUP_ACCEPTED`."""
+    cert, why = gaps(point)
+    cert = None if cert is None else replace(cert, hypotheses=(*cert.hypotheses, SETUP_ACCEPTED))
+    return profile(point) | {"certificate": None if cert is None else cert.to_json(), "gaps": why + list(SIGNED_GAPS)}
+
+
+def answer_signed(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
+                  session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord, openings: Sequence[R.Opening],
+                  session_id: bytes, protocol: str = SIGNED_PROTOCOL) -> dict[str, Any]:
+    """The signed run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `run.check_signed_at`, then nothing
+    certified (`eps` 0, `s_bits` 0) and `profile_signed`."""
+    digest = hashlib.sha512(canonical_json_bytes(published.to_json())).hexdigest()
+    try:
+        R.check_signed_at(point, schemes, trusted, published, session, signed_setup, openings, session_id)
+    except R.Refused as e:
+        return {"commitment": digest, "profile": None, "protocol": protocol, "public": None, "reason": str(e),
+                "verdict": "reject"}
+    return {"commitment": digest, "profile": profile_signed(point), "protocol": protocol,
+            "public": {"certified": False, "eps": "0", "s_bits": 0}, "reason": None, "verdict": "accept"}
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
@@ -327,13 +387,13 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: Side | None = None) -> Period:
-    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
-    under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
-    the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
-    (`challenger_party`): its side runs where `party` (a `stream.Side`) starts it, with its own coins, key and session
-    log, and the prover answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by
-    default the key the side reports."""
+          party: challenger_session.Side | None = None) -> Period:
+    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's
+    session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
+    tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of
+    its own (`challenger_party`): its side runs where `party` (a `challenger_session.Side`) starts it, with its own
+    coins, key and session log, and the prover answers it over a socket; `signer`, `log` and `clock` are unused, and the
+    verifier's list is by default the key the side reports."""
     point, published = held.point, held.published
     q = point.params
     if party is None:
@@ -358,7 +418,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: Side | None = None) -> Period:
+        party: challenger_session.Side | None = None) -> Period:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
@@ -548,7 +608,7 @@ PIN_FIELDS = ("key-sha512", "party", "protocol", "scheme")
 def deployment(doc: Mapping[str, Any]) -> dict[str, Any]:
     """`period.json`'s `deployment`, what `trusted-device`'s premise reads (`memory_challenger.trusted_device`):
     `configuration`, the hash of the configuration the run is under (`verity config hash`), and `pins`, that
-    configuration's `[[pin]]` entries, with `committed`, the hashes `demos/configurations.toml` commits. With none, the
+    configuration's `[[pin]]` entries, with `committed`, the hashes `tests/configurations.toml` commits. With none, the
     premise reads rehearsal; an unknown key or a malformed pin raises."""
     got = doc.get("deployment") or {}
     if unknown := set(got) - set(DEPLOYMENT):
@@ -567,25 +627,24 @@ SETUP_WORKERS = 32
 CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)."""
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
-    set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
-    first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to
-    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
-    audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
-    `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
-    instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
-    (`challenger_session.side_of`; on this node by default, a process whose key and session log are beside the periods)
-    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
-    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
-    `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
-    whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
-    `period.json`'s `deployment`), go in `pous.json` and in an accepted
-    answer's profile (`placement`)."""
+def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side]) -> dict[str, Any]:
+    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`). By default the
+    node's store is set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records
+    at its first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up
+    to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh
+    coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With `{"pous": {"point": "small"}}`
+    in `period.json`, each period sets the period's own records up at the small point instead, certifying nothing. The
+    memory challenger is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
+    which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
+    and session log are beside the periods) and the prover is here. With `pous-run-protocol` and `pous-setup` among the
+    period's tools, the Lean verifier answers and must agree with the Python; it writes `out/pous.case.json` (onsite's
+    PoUS case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each
+    party, and whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
+    `period.json`'s `deployment`), go in `pous.json` and in an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    party = challenger_session.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
+    party = side_of(doc, node, "pous", challenger_session.command(Path(period_dir).parent / "pous-challenger"))
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()
     if small or not (kept / "store.json").exists():
@@ -627,7 +686,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["DEPLOYMENT", "LEDGER_SCHEMAS", "PIN_FIELDS", "PROTOCOL", "SETUP_WORKERS", "EncodedStore", "Period", "Prover", "Run", "SetupInputs",
-           "answer", "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "deployment", "encode", "gaps",
-           "honest", "leg", "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs",
+__all__ = ["DEPLOYMENT", "LEDGER_SCHEMAS", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL", "EncodedStore", "Period",
+           "Prover", "Run", "SetupInputs", "answer", "answer_signed", "audit", "case", "case_signed", "certificate",
+           "certify", "challenger", "cite", "cited", "deployment", "encode", "gaps", "honest", "leg", "openings_of", "point_for",
+           "point_of", "profile", "profile_signed", "records", "run", "serve", "setup_case", "setup_inputs",
            "setup_store", "tie"]

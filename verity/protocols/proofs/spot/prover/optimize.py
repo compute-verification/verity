@@ -23,7 +23,7 @@ receipts, the bits a work block pins), so a plan's cost is the whole serve-time 
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
 one-stage design (`two_stage_design` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
 replay block of its `ReplayGrain` it lies in from the values the prover keeps, which commits nothing: a commitment is a
-hash, so unless serving retained intermediates a replay block starts at the external inputs and the registration's
+hash, so unless serving retained intermediates a replay block starts at the external inputs and the docket's
 constants.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
@@ -1302,7 +1302,7 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
 
 def registration_count(q: float, registration: float) -> int:
     """The replay blocks the first stage samples of a verification phase of `registration` of them at the rate q:
-    exactly ⌈q·registration⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
+    exactly ⌈q·docket⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
     if not 0 <= q <= 1 or not registration >= 1:
         raise ValueError(f"a count needs 0 <= q <= 1 and a verification phase of at least one replay block: "
                          f"{q}, {registration}")

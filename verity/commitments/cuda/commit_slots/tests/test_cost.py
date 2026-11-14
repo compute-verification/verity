@@ -10,8 +10,10 @@ import shutil
 import numpy as np
 import pytest
 
-import slots as S
-import slots_gpu as G
+from conftest import BUILD
+
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.commit_slots import slots_gpu as G
 
 pytestmark = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 
@@ -24,7 +26,7 @@ def test_an_add_of_one_row_units_costs_nine_compressions_a_row_slot(temp_bytes: 
     units, slots = 64, 4
     group = S.Group((2 * units,), tuple((S.Row((S.Part(0, 2 * i, 2),)),) for i in range(units)))
     layout = S.CommitShape("coords-64", (group,))
-    plan = G.Plan(CTX, layout, "host", temp_bytes=temp_bytes)
+    plan = G.Plan(CTX, layout, "host", temp_bytes=temp_bytes, build=BUILD)
     out = S.random_outputs(layout, slots, np.random.default_rng(5))
     sc = G.StepCommitter(plan, 0, slots, KEY)
     plan.engine.counts(reset=True)

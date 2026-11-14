@@ -70,7 +70,7 @@ structure Unread where
 /-! ## The fields -/
 
 /-- **A registration's names**: its verifier's ports and registered values, in its order. -/
-def namesOf (v : Spot.Registration.Verifier) : Names :=
+def namesOf (v : Spot.Docket.Verifier) : Names :=
   ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩
 
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands it to `Select.select`: the verifier's
@@ -80,10 +80,10 @@ def firstOf (i : Spot.Run.Input) : Option Reg := do
   let v := i.params.verifier
   let n ← Spot.nat? (Spot.getD i.record "population")
   let rule ← i.rule.over n (Spot.Select.strataSizes v.program v.query)
-  let law ← (rule.lawOver n).toOption
+  let samplingDesign ← (rule.samplingDesignOver n).toOption
   let workTable ← (i.rule.tableOver v.program v.query v.workTable).toOption
   let resolved ← (Spot.Select.resolve i.rule v.program v.query).toOption
-  pure ⟨{ v with law := law, workTable := workTable }, resolved, i.closure⟩
+  pure ⟨{ v with samplingDesign := samplingDesign, workTable := workTable }, resolved, i.closure⟩
 
 /-- **The second stage's cells and counts**, as `Run.run` computes them: each template's proof blocks in a replay
 block (`Select.replayCells` of the replay block's program under the interior query) and the two-stage rule's count in
@@ -387,7 +387,7 @@ theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
     exact refReads_eq it.circuits
   unfold firstOf at hf
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
-  obtain ⟨n, hn, rule, hrule, law, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
+  obtain ⟨n, hn, rule, hrule, samplingDesign, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
   unfold cellsOf at hc
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hc
   obtain ⟨ns', hns, hc⟩ := hc
@@ -397,7 +397,7 @@ theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
       Prod.mk.injEq] at hc
     obtain ⟨ids, hids, ks', hks, rfl, rfl⟩ := hc
     exact
-      { first := ⟨n, rule, law, workTable, resolved, hn, hrule, ok_of_toOption hlaw, ok_of_toOption hwt,
+      { first := ⟨n, rule, samplingDesign, workTable, resolved, hn, hrule, ok_of_toOption hlaw, ok_of_toOption hwt,
           ok_of_toOption hres, rfl⟩
         ns := ok_of_toOption hns
         ks := ⟨grain, replay, k, hk, ids, ok_of_toOption hids, ok_of_toOption hks⟩

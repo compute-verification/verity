@@ -61,9 +61,9 @@ theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, htsn, -⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok htsn
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok htsn
+  obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
   have hL := linesOf_of hlog hls
   obtain ⟨hstruct, -⟩ := membersRun_ok hM.run hM.all
   obtain ⟨held, ts, lines₁, hheld, -, htr, hord, hL₁, hth⟩ := membersStructure_ok hstruct
