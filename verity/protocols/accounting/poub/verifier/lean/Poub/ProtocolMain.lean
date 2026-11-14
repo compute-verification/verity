@@ -1,8 +1,8 @@
 module
 
-public import RemoteAudit.Protocol
+public import Poub.Protocol
 
-/-! `remote-audit-protocol`: the core protocol command line (`Core.Protocol.main`) of `RemoteAudit.Protocol.protocol`,
+/-! `poub-protocol`: the core protocol command line (`Core.Protocol.main`) of `Poub.Protocol.protocol`,
 `verity/remote-bandwidth/v0`, a PoUB session over a registered store. `id` prints the protocol id; `check PARAMS
 COMMITMENT EVIDENCE` reads three files and prints the outcome's canonical JSON line; `serve` reads one case a line on
 standard input, `{"commitment": hex, "evidence": hex, "params": JSON}`, and prints one outcome line for each. An
@@ -11,4 +11,4 @@ verifier, and `period.py` runs it on a period's case when the period names it am
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 := RemoteAudit.Protocol.protocol.main args
+def main (args : List String) : IO UInt32 := Poub.Protocol.protocol.main args

@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Basic
+public import Poub.Basic
 
 /-!
 # A pass's plan: `receipts.Plan`
@@ -15,7 +15,7 @@ other plan, as `Plan(runs, blocks)` raises; runs arrive as integers, so a negati
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit
+namespace Poub
 
 def PLAN_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/plan/v0"
 
@@ -99,4 +99,4 @@ def Plan.changed (pl : Plan) (added removed : Array (Int × Int)) (blocks : Nat)
     | none => out := out.push (a, b)
   return Plan.make? (out.map fun (a, b) => ((a : Int), ((b - a : Nat) : Int))) blocks
 
-end RemoteAudit
+end Poub

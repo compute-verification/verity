@@ -13,8 +13,8 @@ import all Lean.Data.Json.Basic
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
 
-Each of `Properties.RemoteAudit.Subprotocol`'s three properties, and the memory line
-`Properties.RemoteAudit.Line.LineHeld`, is its form over the verifier at the deployed one (`acceptIsVerified_iff`,
+Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
+`Properties.Poub.Line.LineHeld`, is its form over the verifier at the deployed one (`acceptIsVerified_iff`,
 `publishedEps_iff`, `lineHeldAtSubprotocol_iff`, `lineHeld_iff`), and each form has its witnesses:
 
 * **AcceptIsVerified** (`AcceptIsVerifiedFor`). Honest: the deployed period's parameters and log decode to its session
@@ -38,7 +38,7 @@ Each of `Properties.RemoteAudit.Subprotocol`'s three properties, and the memory 
   claim holds of a trace with the store in memory and fails of the same trace with memory emptied at tick 10
   (`lineHeldAtSubprotocol_bites`).
 * **QBytesAtSubprotocol** (`QBytesAtSubprotocolBy`, `qBytesAtSubprotocolBy_iff`), which takes the samples' three of those
-  premises. Honest: at the same honest node and schedule they hold, and at `RemoteAudit.Protocol.DELTA` the
+  premises. Honest: at the same honest node and schedule they hold, and at `Poub.Protocol.DELTA` the
   distinguishers' advantage and the hiding terms are 0 (`qBytesAtSubprotocolBy_honest`). Nontrivial: at a verifier that
   accepts everything and records no receipts, the toy node meets every premise while a `q_bytes` of one byte exceeds
   the record's none (`qBytesAtSubprotocolBy_nontrivial`); and the figure counts the trace's wrong receipts: on one record
@@ -58,16 +58,16 @@ group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 
 
 @[expose] public section
 
-deriving instance DecidableEq for RemoteAudit.Line.Group
+deriving instance DecidableEq for Poub.Line.Group
 
-namespace Properties.RemoteAudit.Subprotocol
+namespace Properties.Poub.Subprotocol
 
 open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
+  Accounting.Remote.Draw.Assumptions Properties.Poub.Line
 
-theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor RemoteAudit.Protocol.check := Iff.rfl
+theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor Poub.Protocol.check := Iff.rfl
 
-theorem publishedEps_iff : PublishedEps ↔ PublishedEpsFor RemoteAudit.Protocol.check := Iff.rfl
+theorem publishedEps_iff : PublishedEps ↔ PublishedEpsFor Poub.Protocol.check := Iff.rfl
 
 theorem lineHeldAtSubprotocol_iff : LineHeldAtSubprotocol ↔ LineHeldAtSubprotocolBy Plays Verified Record.summary :=
   Iff.rfl
@@ -234,7 +234,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
 
 /-- **The premises of `QBytesAtSubprotocol` hold at the honest node.** At the honest node and schedule of
 `lineHeldAtSubprotocol_honest`, the samples' three premises hold (`Live` at every commitment, `Refused` and `Counted`),
-and at `RemoteAudit.Protocol.DELTA`, the δ the subprotocol's bound is at, each sample's distinguisher has no advantage
+and at `Poub.Protocol.DELTA`, the δ the subprotocol's bound is at, each sample's distinguisher has no advantage
 on its coin function and each hiding term is 0. -/
 theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
     (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
@@ -247,9 +247,9 @@ theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
       (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
     (∀ t, Pous.StreamedWipe.prfAdvantage (prf t)
       (((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play
-        (Committed.junk com t)).distinguisher prf (RemoteAudit.Protocol.DELTA : ℝ) t) = 0) ∧
+        (Committed.junk com t)).distinguisher prf (Poub.Protocol.DELTA : ℝ) t) = 0) ∧
     ∀ t, (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).hide com prf
-      (RemoteAudit.Protocol.DELTA : ℝ) t = 0 := by
+      (Poub.Protocol.DELTA : ℝ) t = 0 := by
   obtain ⟨-, -, -, -, -, hL, hR, hC, -, -⟩ := lineHeldAtSubprotocol_honest node κ X Cm prf recs com R passes tick hS
   obtain ⟨-, -, hsize, -⟩ := hS
   refine ⟨hL, hR, hC, fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (fun _ _ => ?_) prf _ t,
@@ -292,7 +292,7 @@ theorem lineHeld_honest (node : Node) {Ω : Type} (passes : ℕ) (tick : Ω → 
     Accounting.Remote.Held.Quiet (ofRecord (honestTrace node passes tick) node rec) (quietIngress Ω).counted ω ∧
       ReadAt (ofRecord (honestTrace node passes tick) node rec) ω node (rec ω) := by
   refine ⟨fun _ _ _ _ _ => rfl, fun l hline => ?_⟩
-  obtain ⟨sm, gs, ws, -, -, -, hln⟩ := Properties.RemoteAudit.Line.SecurityProofs.lineOf_ok hline
+  obtain ⟨sm, gs, ws, -, -, -, hln⟩ := Properties.Poub.Line.SecurityProofs.lineOf_ok hline
   have hw : (0 : ℝ) ≤ l.wrong := by exact_mod_cast (lineChecked _ _ _ _ _ _ _ _ _ _ hln).2.2.2.2.2.2.2.2
   have hr : ∀ P, (ofRecord (honestTrace node passes tick) node rec).reads ω P = P * node.blocks := fun P => by
     rw [ofRecord_honest]
@@ -321,7 +321,7 @@ theorem verified_of_not_readBy {Ω : Type} {T : Trace Ω} {ω : Ω} {node : Node
     rw [hr] at hs
     refine ⟨rs, s, hr, ?_⟩
     have hs' : s.summary = some sm := hs
-    unfold RemoteAudit.Session.State.summary at hs'
+    unfold Poub.Session.State.summary at hs'
     split at hs'
     · cases hs'
     · rename_i hc
@@ -332,16 +332,16 @@ theorem lineHeldAtSubprotocolBy_record (acc : Node → Record → ByteArray → 
     LineHeldAtSubprotocolBy acc Verified Record.summary := by
   intro node κ X Cm _ prf rest recs correct com T R δs δnet a b e r F O I hP hCv hSk hCov hIc hLive hRef hCnt
   exact le_trans (Pouw.pr_mono fun ω h => ⟨verified_of_not_readBy h.2, h.2⟩)
-    (Properties.RemoteAudit.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv
+    (Properties.Poub.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv
       hSk hCov hIc hLive hRef hCnt)
 
 /-! ## A verifier that accepts everything -/
 
 namespace Toy
 
-def codec : RemoteAudit.Codec.Codec := ⟨RemoteAudit.Codec.P512, 2, false⟩
+def codec : Poub.Codec.Codec := ⟨Poub.Codec.P512, 2, false⟩
 
-def reg : RemoteAudit.Registration where
+def reg : Poub.Registration where
   node := .empty
   blocks := 1
   payloadRoot := .empty
@@ -351,7 +351,7 @@ def reg : RemoteAudit.Registration where
   rows := 0
   key := ⟨codec, #[], 0, none, .empty⟩
 
-def win : RemoteAudit.Session.WindowSummary where
+def win : Poub.Session.WindowSummary where
   lengths := #[1]
   steps := #[]
   post := #[]
@@ -363,7 +363,7 @@ def win : RemoteAudit.Session.WindowSummary where
   openedNs := 0
   drawn := 1
 
-def sm : RemoteAudit.Session.Summary where
+def sm : Poub.Session.Summary where
   windows := #[win, win, win, win]
   blocks := 1
   appended := 0
@@ -372,13 +372,13 @@ def sm : RemoteAudit.Session.Summary where
   pace := none
   appends := none
 
-def seen : Array _root_.RemoteAudit.Line.Seen :=
+def seen : Array _root_.Poub.Line.Seen :=
   #[⟨0, 5, 1, 0, 1, 0⟩, ⟨10, 15, 1, 0, 1, 0⟩, ⟨20, 25, 1, 0, 1, 0⟩, ⟨30, 35, 1, 0, 1, 0⟩]
 
-def gs : Array _root_.RemoteAudit.Line.Group :=
+def gs : Array _root_.Poub.Line.Group :=
   #[⟨0, 5, 1, 1, 0, 1, 0⟩, ⟨10, 15, 1, 1, 0, 1, 0⟩, ⟨20, 25, 1, 1, 0, 1, 0⟩, ⟨30, 35, 1, 1, 0, 1, 0⟩]
 
-def rates : _root_.RemoteAudit.Line.Rates := ⟨0, 1, 0, 0, 0, 0, 0⟩
+def rates : _root_.Poub.Line.Rates := ⟨0, 1, 0, 0, 0, 0, 0⟩
 
 def node : Node where
   params := { deadlineNs := 1, windows := 0, samples := 4, minPasses := 1, windowNs := 1, lifetime := 1 }
@@ -398,7 +398,7 @@ def rec : Record where
   events := #[]
   seen := seen
 
-abbrev sum : Node → Record → Option RemoteAudit.Session.Summary := fun _ _ => some sm
+abbrev sum : Node → Record → Option Poub.Session.Summary := fun _ _ => some sm
 
 /-- One block, held in node memory until tick 10 and not after, one pass over `[0, 10)` and the passes after it
 empty. -/
@@ -440,7 +440,7 @@ def receipts : Receipts node.samples 0 Unit :=
 
 end Toy
 
-open _root_.RemoteAudit.Line in
+open _root_.Poub.Line in
 theorem toy_ofs : ofSummaryAt 4 Toy.sm 4 Toy.seen = .ok (Toy.gs, #[(4, 4)]) := by
   have h : (ofSummaryAt 4 Toy.sm 4 Toy.seen).toOption = some (Toy.gs, #[(4, 4)]) := by decide +kernel
   revert h
@@ -448,11 +448,11 @@ theorem toy_ofs : ofSummaryAt 4 Toy.sm 4 Toy.seen = .ok (Toy.gs, #[(4, 4)]) := b
   | error _ => intro h; cases h
   | ok x => intro h; cases h; rfl
 
-theorem toy_pool : ∃ b, RemoteAudit.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ) = .ok b ∧ b.wrong = 0 := by
-  have h : (RemoteAudit.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ)).toOption.map (·.wrong) = some 0 := by
+theorem toy_pool : ∃ b, Poub.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ) = .ok b ∧ b.wrong = 0 := by
+  have h : (Poub.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ)).toOption.map (·.wrong) = some 0 := by
     decide +kernel
   revert h
-  cases RemoteAudit.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ) with
+  cases Poub.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ) with
   | error _ => intro h; cases h
   | ok b => intro h; exact ⟨b, rfl, Option.some.inj h⟩
 
@@ -482,18 +482,18 @@ theorem forIn_fill_nonpos (v cap : ℕ → ℚ) (l : List ℕ) (st : ℚ × ℚ)
   cases l <;> simp [greedy, h]
 
 /-- Whether the code computes a line, reading no wrong receipt. -/
-def probe (r : Except String _root_.RemoteAudit.Line.Line) : Bool :=
+def probe (r : Except String _root_.Poub.Line.Line) : Bool :=
   match r with
   | .ok l => l.wrong == 0
   | .error _ => false
 
-theorem probe_extract {r : Except String _root_.RemoteAudit.Line.Line} (h : probe r = true) :
+theorem probe_extract {r : Except String _root_.Poub.Line.Line} (h : probe r = true) :
     ∃ l, r = .ok l ∧ l.wrong = 0 := by
   cases r with
   | error _ => cases h
   | ok l => exact ⟨l, rfl, by simpa [probe] using h⟩
 
-open _root_.RemoteAudit.Line in
+open _root_.Poub.Line in
 theorem toy_probe : probe (lineOfRecordAt 4 Toy.sm 4 Toy.seen 2 1 0 1 (Toy.node.delta : ℚ) Toy.rates) = true := by
   obtain ⟨b, hp, hb⟩ := toy_pool
   have h0 : ((0 : ℚ), (0 : ℚ)).1 ≤ 0 := le_refl _
@@ -503,7 +503,7 @@ theorem toy_probe : probe (lineOfRecordAt 4 Toy.sm 4 Toy.seen 2 1 0 1 (Toy.node.
 
 theorem toy_line : ∃ l, lineBy Toy.sum Toy.node Toy.rec = .ok l ∧ l.wrong = 0 := by
   have e : lineBy Toy.sum Toy.node Toy.rec =
-      _root_.RemoteAudit.Line.lineOfRecordAt 4 Toy.sm 4 Toy.seen 2 1 0 1 (Toy.node.delta : ℚ) Toy.rates := rfl
+      _root_.Poub.Line.lineOfRecordAt 4 Toy.sm 4 Toy.seen 2 1 0 1 (Toy.node.delta : ℚ) Toy.rates := rfl
   rw [e]
   exact probe_extract toy_probe
 
@@ -630,7 +630,7 @@ summary recorded for every record, the toy node (no draw, one block, held in nod
 passes reading it once) meets every premise at `δs = δnet = 0`, while its line credits `4 · 1` blocks read at every
 outcome where the certifiers count nothing else entering, which is every outcome: the event has probability 1 and the
 bound is `δ = 1/2`. -/
-theorem lineHeld_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
+theorem lineHeld_nontrivial : ∃ sm : Poub.Session.Summary,
     ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some sm) := by
   refine ⟨Toy.sm, fun h => ?_⟩
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
@@ -646,7 +646,7 @@ theorem lineHeld_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
 of every record and one summary recorded for every record, the toy node meets every premise at `δs = δnet = 0`, while
 its line credits `4 · 1` blocks read where its passes read one: the event has probability 1 and the bound is
 `δ = 1/2`. -/
-theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
+theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : Poub.Session.Summary,
     ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some sm) := by
   refine ⟨Toy.sm, fun h => ?_⟩
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
@@ -662,7 +662,7 @@ theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
 /-- **The line credits only what the passes read**: on one node, record and summary, the line's bits-read claim holds
 of a trace whose four passes each read the store in node memory, and fails of the same trace with node memory emptied
 at tick 10. -/
-theorem lineHeldAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : RemoteAudit.Session.Summary) (T : Trace Unit),
+theorem lineHeldAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : Poub.Session.Summary) (T : Trace Unit),
     (∃ l, lineBy (fun _ _ => some sm) node r = .ok l) ∧ ReadBy (fun _ _ => some sm) T () node r ∧
     ¬ ReadBy (fun _ _ => some sm) { T with mem := fun _ t => if t < 10 then Finset.univ else ∅ } () node r := by
   obtain ⟨l, hl, hw⟩ := toy_line
@@ -703,7 +703,7 @@ theorem qBytesAtSubprotocolBy_nontrivial :
     (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
-  · norm_num [binding_empty, RemoteAudit.Protocol.DELTA]
+  · norm_num [binding_empty, Poub.Protocol.DELTA]
   · refine fun ω => ⟨⟨⟨⟨0, 1⟩, 0⟩, trivial⟩, fun hq => ?_⟩
     have h1 := hq ⟨⟨0, 1⟩, 1⟩ trivial
     simp [QBytesBy, receiptsBy] at h1
@@ -713,18 +713,18 @@ theorem toy_receipts : (receiptsBy (fun _ _ => some Toy.sm) Toy.node Toy.rec).to
 /-- **The figure counts the trace's wrong receipts**: on the toy node and its record of four receipts, at a `q_bytes`
 of all four blocks, `QBytesBy` holds of a trace whose one pass gets its one receipt right and fails of the same trace
 with that receipt wrong. -/
-theorem qBytesAtSubprotocolBy_bites : ∃ (node : Node) (r : Record) (sm : RemoteAudit.Session.Summary) (T : Trace Unit)
-    (pub : RemoteAudit.Protocol.Public),
+theorem qBytesAtSubprotocolBy_bites : ∃ (node : Node) (r : Record) (sm : Poub.Session.Summary) (T : Trace Unit)
+    (pub : Poub.Protocol.Public),
     QBytesBy (fun _ _ => some sm) T () node r pub ∧
       ¬ QBytesBy (fun _ _ => some sm) { T with correct := fun _ _ => ∅ } () node r pub := by
   have h0 : (Toy.trace (Ω := Unit)).incorrect () = 0 := by simp [Trace.incorrect, Toy.trace]; decide
   have h1 : ({ Toy.trace (Ω := Unit) with correct := fun _ _ => ∅ } : Trace Unit).incorrect () = 1 := by
     simp [Trace.incorrect, Toy.trace]; decide
-  refine ⟨Toy.node, Toy.rec, Toy.sm, Toy.trace, ⟨⟨0, 1⟩, RemoteAudit.Codec.BLOCK_BYTES * 4⟩, ?_, ?_⟩
+  refine ⟨Toy.node, Toy.rec, Toy.sm, Toy.trace, ⟨⟨0, 1⟩, Poub.Codec.BLOCK_BYTES * 4⟩, ?_, ?_⟩
   · simp only [QBytesBy, toy_receipts, h0]
     omega
   · simp only [QBytesBy, toy_receipts, h1]
-    unfold RemoteAudit.Codec.BLOCK_BYTES
+    unfold Poub.Codec.BLOCK_BYTES
     omega
 
 /-! ## `AcceptIsVerified` at a check that accepts everything, and at the deployed check -/
@@ -734,13 +734,13 @@ theorem acceptIsVerified_nontrivial : ¬ AcceptIsVerifiedFor (fun _ _ _ => .acce
   intro h
   obtain ⟨_, _, _, _, _, _, _, _, _, hs, -⟩ :=
     h ⟨.null, .null⟩ Toy.reg ⟨.null, .null, #[]⟩ ⟨⟨0, 1⟩, 0⟩ .null rfl
-  have hb : (match RemoteAudit.Protocol.sessionOf ⟨.null, .null⟩ ⟨.null, .null, #[]⟩ with
+  have hb : (match Poub.Protocol.sessionOf ⟨.null, .null⟩ ⟨.null, .null, #[]⟩ with
       | .ok _ => true
       | .error _ => false) = false := by decide +kernel
   rw [hs] at hb
   simp at hb
 
-theorem honest_decodes : (match RemoteAudit.Protocol.sessionOf honestParams honestEvidence with
+theorem honest_decodes : (match Poub.Protocol.sessionOf honestParams honestEvidence with
     | .ok (params, g, _, appendCoins, notBeforeNs, events) =>
       params.windows == 2 && g == 1 && appendCoins.size == 0 && notBeforeNs == 0 && events.size == 0
     | .error _ => false) = true := by decide +kernel
@@ -748,15 +748,15 @@ theorem honest_decodes : (match RemoteAudit.Protocol.sessionOf honestParams hone
 /-- **The deployed check at the honest period's log**: the deployed period's parameters and its log before the first
 event decode to a session of two windows at one window a draw, with no append coin, clock floor 0 and no event, which
 the check leaves undecided: no window has verified yet. -/
-theorem acceptIsVerified_honest (reg : RemoteAudit.Registration) :
-    (∃ (params : RemoteAudit.Session.Params) (coins : Array ByteArray),
-      RemoteAudit.Protocol.sessionOf honestParams honestEvidence = .ok (params, 1, coins, #[], 0, #[]) ∧
+theorem acceptIsVerified_honest (reg : Poub.Registration) :
+    (∃ (params : Poub.Session.Params) (coins : Array ByteArray),
+      Poub.Protocol.sessionOf honestParams honestEvidence = .ok (params, 1, coins, #[], 0, #[]) ∧
         params.windows = 2) ∧
-    RemoteAudit.Protocol.check honestParams reg honestEvidence =
+    Poub.Protocol.check honestParams reg honestEvidence =
       .undecided "the session has a window not yet verified" := by
   have hd := honest_decodes
   revert hd
-  cases hs : RemoteAudit.Protocol.sessionOf honestParams honestEvidence with
+  cases hs : Poub.Protocol.sessionOf honestParams honestEvidence with
   | error _ => intro hd; cases hd
   | ok x =>
     obtain ⟨params, g, coins, ac, nb, events⟩ := x
@@ -766,25 +766,25 @@ theorem acceptIsVerified_honest (reg : RemoteAudit.Registration) :
     obtain rfl := Array.eq_empty_of_size_eq_zero hac
     obtain rfl := Array.eq_empty_of_size_eq_zero hev
     refine ⟨⟨params, coins, rfl, hw⟩, ?_⟩
-    simp [RemoteAudit.Protocol.check, RemoteAudit.Protocol.replay, hs, bind, Except.bind, RemoteAudit.Shared.run,
-      pure, Except.pure, RemoteAudit.Session.State.outcome, RemoteAudit.Session.State.init, hw]
+    simp [Poub.Protocol.check, Poub.Protocol.replay, hs, bind, Except.bind, Poub.Shared.run,
+      pure, Except.pure, Poub.Session.State.outcome, Poub.Session.State.init, hw]
 
 /-- **The deployed check accepts whatever `Shared.run g` accepts**: where the parameters and the log decode to a
 session that `Shared.run g` runs to an accepted state with a record `sm`, the check accepts, publishing `certify`'s
 outputs of `sm` at the session's parameters and g. -/
-theorem acceptIsVerified_complete {p : RemoteAudit.Protocol.Params} {reg : RemoteAudit.Registration}
-    {e : RemoteAudit.Protocol.Evidence} {params : RemoteAudit.Session.Params} {g : ℕ}
-    {coins appendCoins : Array ByteArray} {notBeforeNs : ℕ} {events : Array RemoteAudit.Session.Event}
-    {rs : Array RemoteAudit.Session.Result} {s : RemoteAudit.Session.State} {sm : RemoteAudit.Session.Summary}
-    (hs : RemoteAudit.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events))
-    (hr : RemoteAudit.Shared.run g (RemoteAudit.Session.State.init params reg coins appendCoins notBeforeNs) events =
+theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registration}
+    {e : Poub.Protocol.Evidence} {params : Poub.Session.Params} {g : ℕ}
+    {coins appendCoins : Array ByteArray} {notBeforeNs : ℕ} {events : Array Poub.Session.Event}
+    {rs : Array Poub.Session.Result} {s : Poub.Session.State} {sm : Poub.Session.Summary}
+    (hs : Poub.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events))
+    (hr : Poub.Shared.run g (Poub.Session.State.init params reg coins appendCoins notBeforeNs) events =
       .ok (rs, s))
     (ho : s.outcome = some "accepted") (hsm : s.summary = some sm) :
-    RemoteAudit.Protocol.check p reg e =
-      .accept (RemoteAudit.Protocol.certify params g sm).1 (RemoteAudit.Protocol.certify params g sm).2 := by
-  have hrep : RemoteAudit.Protocol.replay p reg e = .ok (s, params, g) := by
-    simp only [RemoteAudit.Protocol.replay, hs, hr, bind, Except.bind, pure, Except.pure]
-  unfold RemoteAudit.Protocol.check
+    Poub.Protocol.check p reg e =
+      .accept (Poub.Protocol.certify params g sm).1 (Poub.Protocol.certify params g sm).2 := by
+  have hrep : Poub.Protocol.replay p reg e = .ok (s, params, g) := by
+    simp only [Poub.Protocol.replay, hs, hr, bind, Except.bind, pure, Except.pure]
+  unfold Poub.Protocol.check
   rw [hrep]
   simp only [ho, hsm]
 
@@ -800,16 +800,16 @@ byte read at eps 0, accepts the deployed period's log, and 0 is below the draw t
 theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨⟨0, 1⟩, 1⟩ Lean.Json.null) := by
   intro h
   obtain ⟨params, g, _, _, _, _, -, hd⟩ := h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null rfl
-  have hpos : (0 : ℚ) < RemoteAudit.Protocol.DELTA := by
-    unfold RemoteAudit.Protocol.DELTA
+  have hpos : (0 : ℚ) < Poub.Protocol.DELTA := by
+    unfold Poub.Protocol.DELTA
     positivity
   rcases hd with ⟨-, hq⟩ | hn
   · exact absurd hq (by decide)
   · obtain ⟨node, hp, hg, hδ⟩ : ∃ node : Node, node.params = params ∧ node.groupsPerCoin = g ∧
-        (node.delta : ℚ) = RemoteAudit.Protocol.DELTA :=
-      ⟨{ Toy.node with params := params, groupsPerCoin := g, delta := ⟨RemoteAudit.Protocol.DELTA, hpos.le⟩ },
+        (node.delta : ℚ) = Poub.Protocol.DELTA :=
+      ⟨{ Toy.node with params := params, groupsPerCoin := g, delta := ⟨Poub.Protocol.DELTA, hpos.le⟩ },
         rfl, rfl, rfl⟩
     have h0 := lt_of_lt_of_eq (drawTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
 
-end Properties.RemoteAudit.Subprotocol
+end Properties.Poub.Subprotocol

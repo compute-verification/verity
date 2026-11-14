@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
 from verity.protocols.accounting.poub.prover import audit_prover

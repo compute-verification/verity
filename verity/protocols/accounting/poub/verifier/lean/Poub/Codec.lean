@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Basic
+public import Poub.Basic
 
 /-!
 # The store's codec, decoding: `codec.py`
@@ -27,7 +27,7 @@ the digest `d_j` it was decoded under. Arguments `codec.py` raises on (a block o
 
 @[expose] public section
 
-namespace RemoteAudit.Codec
+namespace Poub.Codec
 
 def BLOCK_BYTES : Nat := 4096
 def SEED_BYTES : Nat := 32
@@ -153,4 +153,4 @@ def decode (block : ByteArray) (j : Nat) (k : Key) (bound : Option (ByteArray ×
   | some (d, _) => return if digest payload == d then some payload else none
   | none => return some payload
 
-end RemoteAudit.Codec
+end Poub.Codec

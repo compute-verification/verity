@@ -88,7 +88,7 @@ The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's,
   bound at the deployed receipts.
 * `Accounting.Guarantees.Remote.AuditRO` (`Definitions.Accounting.Guarantees.RemotePass`): the bandwidth audit in the
   random-oracle model. It is the bandwidth audit's row in `security/README.md`.
-* `Properties.RemoteAudit.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
+* `Properties.Poub.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
   link-charged. It is PoUB's row in `security/README.md`.
 
 The area's other guarantees are `Accounting.Guarantees.X`, stated in the module named under

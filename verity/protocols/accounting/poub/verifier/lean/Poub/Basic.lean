@@ -12,7 +12,7 @@ index.
 
 @[expose] public section
 
-namespace RemoteAudit
+namespace Poub
 
 def sha512 (b : ByteArray) : ByteArray := Flock.Sha512.hash b
 
@@ -47,4 +47,4 @@ def bisectRight (ends : Array Nat) (x : Nat) : Nat := Id.run do
       if x < ends[mid]! then hi := mid else lo := mid + 1
   return lo
 
-end RemoteAudit
+end Poub

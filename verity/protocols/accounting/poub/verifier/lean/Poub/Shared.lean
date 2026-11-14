@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Session
+public import Poub.Session
 
 /-!
 # One openings coin over several windows: `audit.Params.groups_per_coin`
@@ -15,7 +15,7 @@ accepts it, and `Session.verify` refuses it, as it refuses any window with a ver
 
 `step g` and `run g` are `Session.step` and `Session.run` with that close, and at g = 1 they are `Session.step` and
 `Session.run` (`step_one`, `run_one`): the properties of the code stated on `Session.run` are about the
-one-coin-a-window session, and `Properties.RemoteAudit.Shared` states the draw's for every g. The difftest's `session`
+one-coin-a-window session, and `Properties.Poub.Shared` states the draw's for every g. The difftest's `session`
 and the registry run `run g` and `step g` (`Flight`, `Registry.step`), the verifier's process takes a draw's openings
 coin with its last window's close only (`Verifier.withCoin`), and the line of record reads a record sampled g > 1 a coin
 by its draws (`Line.ofSummaryAt`), at two windows in flight only (`Line.SHARED`).
@@ -23,7 +23,7 @@ by its draws (`Line.ofSummaryAt`), at two windows in flight only (`Line.SHARED`)
 
 @[expose] public section
 
-namespace RemoteAudit.Shared
+namespace Poub.Shared
 
 open Session
 
@@ -74,4 +74,4 @@ theorem step_one (s : State) (e : Event) : step 1 s e = Session.step s e := rfl
 
 theorem run_one (s : State) (events : Array Event) : run 1 s events = Session.run s events := rfl
 
-end RemoteAudit.Shared
+end Poub.Shared

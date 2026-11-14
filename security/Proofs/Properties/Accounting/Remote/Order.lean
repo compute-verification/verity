@@ -19,9 +19,9 @@ from the first coins. Runs are taken over lists (`runL`), split by `runL_append`
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## Runs over lists -/
 
@@ -330,4 +330,4 @@ theorem liveUnder (params : Params) (reg : Registration) (appendCoins : Array By
   rw [o₂ u, o₁ u, hrB, haB, hrA, haA]
   exact Iff.rfl
 
-end Properties.RemoteAudit
+end Properties.Poub

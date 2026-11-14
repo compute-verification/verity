@@ -127,7 +127,7 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 FLOCK_VERIFIER = "flock_verifier"
 REQUIRES_FLOCK_VERIFIER = {
     "core_zk_server", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
-    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "remote_audit", "security_proofs",
+    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "poub", "security_proofs",
     "security_properties",
 }
 #: The base packages below Flock's verifier, each with every package it may require: nothing above it.

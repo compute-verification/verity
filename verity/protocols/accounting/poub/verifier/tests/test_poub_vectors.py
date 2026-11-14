@@ -1,4 +1,4 @@
-"""The code reproduces every pinned vector (`vectors.json`, written by `remote_bandwidth_vectors.py`), the codec is
+"""The code reproduces every pinned vector (`vectors.json`, written by `poub_vectors.py`), the codec is
 kv/v0's (masked at p1024, k = 2 and 3, and at p512), and sketch-sha512 is the tensor-core codec's reference's."""
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ import itertools
 import json
 
 import pytest
-import remote_bandwidth_vectors as rv
-from remote_bandwidth_fakes import Clock
+import poub_vectors as rv
+from poub_fakes import Clock
 
 from verity.commitments.randomness import derive, frame
 from verity.protocols.accounting.poub.prover import audit_prover

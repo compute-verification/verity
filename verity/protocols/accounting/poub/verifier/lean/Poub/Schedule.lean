@@ -11,7 +11,7 @@ session's appends to the schedule's (`Schedule.appendRuns`), refuses a schedule 
 committed before the session's first coin (`audit.Params.schedule_cap`), and returns the schedule's size in bits
 (`Schedule.bits`). So a credited pass reads the layout the verifier's own code computes from the schedule: the prover
 steers it only through the schedule, whose bits are at most the cap whatever the coins, and a plan that follows
-anything else (a coin, an encoding) is refused. `Properties.RemoteAudit.ScheduleChecked` states it.
+anything else (a coin, an encoding) is refused. `Properties.Poub.ScheduleChecked` states it.
 
 * A block of an append is `none`, never resident (withdrawn, or its encode never landed), or `(w, f)`: written at step
   `w`, resident from step `w + 1` through step `f` (`f > w`), or to the session's end if `f` is `none`
@@ -29,7 +29,7 @@ would not: its schedule's length can follow the coins. Code: Lean core only.
 
 @[expose] public section
 
-namespace RemoteAudit.Schedule
+namespace Poub.Schedule
 
 /-- Steps are below 2^64. -/
 def STEP_LIMIT : Nat := 2 ^ 64
@@ -169,4 +169,4 @@ def check (sc : Schedule) (blocks cap : Nat) (passes : Array (Nat × Array (Nat 
   if let some why := passesDiffer sc blocks passes then throw why
   pure (bits sc)
 
-end RemoteAudit.Schedule
+end Poub.Schedule

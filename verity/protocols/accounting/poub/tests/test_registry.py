@@ -24,7 +24,7 @@ from verity.protocols.accounting.poub.prover.node_store.registry import (
     ArrayBacking,
     KindReceipt,
     NodeMemory,
-    RemoteBandwidthReceipt,
+    PoubReceipt,
     aligned,
     canonical,
     chain,
@@ -531,9 +531,9 @@ def test_a_pass_lays_its_segments_out_as_subtrees_of_the_drivers_tree():
 
 
 def test_under_the_drivers_receipt_the_pass_is_the_drivers_byte_for_byte():
-    """4 KiB blocks under `RemoteBandwidthReceipt`, bound to a z per block: 77 positions, so a short last leaf and three
+    """4 KiB blocks under `PoubReceipt`, bound to a z per block: 77 positions, so a short last leaf and three
     pads, and the root `rb.tree` gives over `rb.Receipter`'s receipts."""
-    s, rec = NodeMemory(salt_key=bytes(32)), RemoteBandwidthReceipt()
+    s, rec = NodeMemory(salt_key=bytes(32)), PoubReceipt()
     backings = {}
     for name, n in [("w", 40), ("w2", 37)]:
         backings[name] = ArrayBacking(np.random.default_rng(n).integers(0, 256, n * rb.BLOCK_BYTES, np.uint8))

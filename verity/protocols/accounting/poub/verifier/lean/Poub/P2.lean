@@ -1,7 +1,7 @@
 module
 
 public import PousCheck.Merkle
-public import RemoteAudit.Window
+public import Poub.Window
 
 /-!
 # A P2 store's registration, receipts and openings: `p2.py`
@@ -30,7 +30,7 @@ blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.P2
+namespace Poub.P2
 
 def REGISTRATION_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/p2-registration/v0"
 /-- PoUS's registered point (`codec.P2_POINT`) and its keys' expander. -/
@@ -159,4 +159,4 @@ def checkOpening (reg : Registration) (seed : ByteArray) (plan : Plan) (root : B
     Option Failure :=
   checkOpeningWith (unitSigns seed reg.rows) reg seed plan root i p o
 
-end RemoteAudit.P2
+end Poub.P2
