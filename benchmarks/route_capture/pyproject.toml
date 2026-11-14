@@ -13,7 +13,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and the capture map; the row is a stored workload, which `config.row_file` checks against its directory's SHA256SUMS and
 # fetches by its art id
 inputs = [
-    "fixtures/artifacts.json",
+    "artifacts.json",
     "tools/config/verity_config",
     "verity/__init__.py",
     "verity/errors.py",
