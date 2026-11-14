@@ -1,15 +1,16 @@
-/-
+module
+
+public import Flock.HmRow
+public import Mathlib.Data.List.Basic
+import all Init.Data.String.Defs
+
+/-!
 `sha512/row/v2`'s bytes for a bit row (`verity.commitments.rowleaf.sha512_row_v2_digest`'s message before SHA-512's
 padding): the block `P(ℓ)` (`Flock.HmRow.rowPrefixV2`), then the bits least significant first, zero-filled to a byte
 (`Flock.HmRow.packBits`). The encoding is injective on rows shorter than `2^64` bits (`enc_inj`): `P(ℓ)` is 128 bytes and
 carries `ℓ` as a u64, and `ℓ` fixes how many bits the bytes after it hold. The soundness package's v2 `HmRows` takes its
 `enc_inj` from here.
 -/
-module
-
-public import Flock.HmRow
-public import Mathlib.Data.List.Basic
-import all Init.Data.String.Defs
 
 @[expose] public section
 

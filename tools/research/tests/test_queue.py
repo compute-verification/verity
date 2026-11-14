@@ -1225,7 +1225,7 @@ def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_limit_joins_ne
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["conflicts"] == {}
     (said,) = [w["why"] for n, w in q.load_state()["warned"].items() if (n, w["head"]) == ("2", h2)]
     assert said == (f"the warn gate {SIZE_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes at "
-                    f"{members[1].commit[:12]}, over its 49152-byte cap (tests/test_repository.py), and was 30064 bytes at "
+                    f"{members[1].commit[:12]}, over its 49152-byte limit (tests/test_repository.py), and was 30064 bytes at "
                     f"{members[0].commit[:12]} below; trim doc.md to 49152 bytes or fewer (10906 over): move detail to the notes "
                     f"store (cite it by note:<id>) (`python3 {SIZE_GATE} origin/main HEAD` on the branch merged with `origin/next` "
                     "runs it)"), said
@@ -1262,7 +1262,7 @@ def test_a_file_already_over_its_limit_below_warns_only_of_a_pr_whose_merge_grow
     doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / SIZE_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
                                     capture_output=True, text=True).stdout)
     assert doc["below"] == members[2].commit and doc["failures"] == [] and doc["notes"] == [
-        f"doc.md is 60063 bytes, over its 49152-byte cap, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
+        f"doc.md is 60063 bytes, over its 49152-byte limit, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
@@ -3032,8 +3032,9 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
 
 
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
-#: tests/explore/test_authentication.py reads fixtures/typed-obligation-v0's K=1536 vector (`auth.read_openings()`), so the
-#: suite's collection fails without it; `other` registers one too, in a suite no change below touches
+#: tests/explore/test_authentication.py reads benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0's K=1536 vector
+#: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
+#: below touches
 BIG = b'{"openings": [1, 2, 3]}\n'
 BIG_PATH = "pkg/data/big.json"
 
@@ -3076,7 +3077,7 @@ ROWS_TEST = {"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
 
 def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_those(world, capsys):
     """A suite whose test reads a fetched fixture at import (as `benchmarks/numerical` reads a vector of
-    fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
+    benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0) fails to collect in a worktree that never fetched it.  The preflight
     fetches each collected suite's fetched fixtures into the worktree first, and none of a suite it doesn't collect; a suite
     collected again at `next` has them fetched again there, since the worktree is cleaned in between."""
     from research.queue import MarkOnly, StoreLabels, ready

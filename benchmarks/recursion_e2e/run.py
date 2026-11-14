@@ -2,7 +2,7 @@
 
     plan   [POINT]                 the steps, each statement's lease, and the job's launch command
     run    [POINT] [--e2e] [--dry-run] [--here]
-                                   one recorded run of job.sh: a firewalled run (85's CPU prover) or --cpu a plain run on
+                                   one recorded run of job.sh: a run behind the ZK server (85's CPU prover) or --cpu a plain run on
                                    a CPU node pinned to --cores, a GPU run a GPU node's queue (--here: job.sh in this
                                    shell, e.g. inside a run); --e2e: one pass, every step once, no warm run
     result --dir OUT [--out FILE] [--md FILE]
@@ -14,7 +14,7 @@
                                    the results and their table as one art's tree in DIR; prints the `research data put`
                                    command that stores it in the evidence store
 
-POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes ZK server --oprove-runs 1 --lease-min M --neg challenge,query
+POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes M,.. --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
        --cpu (GPU=0: the CPU prover, no lease) --on MACHINE --cores 0-31 --mem-gb G --cpus 32 --max-min M
        --release (85's RELEASE=1: the release side, one pass)  --env KEY=VALUE ...
@@ -44,10 +44,10 @@ E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
-# Each V* statement's firewalled release at K = 4096, N = 2, end to end (s), on the CPU prover, one at a time. No one
+# Each V* statement's release through the ZK server at K = 4096, N = 2, end to end (s), on the CPU prover, one at a time. No one
 # ratio to the dev run fits, so each statement has its own. A release's time is the Lean session loop's.
 # A lease or a run holds MARGIN times its statements' releases.
-FW_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 847,
+RELEASE_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 847,
         "cap": 63, "cap-L1": 86, "cap-L2": 74, "cap-L3": 51}
 MARGIN = 1.5
 #: the release schedule's lead before its first part (85's RELEASE_WINDOWS_S lead), minutes
@@ -61,25 +61,29 @@ FORGE_AFTER = ("coef", "dirs", "message")
 #: rec_vstage.FORGERIES, each with the V* statements it stages under forged-<kind>/ and oprove proves one release each, named
 #: as LEVELS names them (`statements`): the levels it forges (L3 is the last at K = 4096; sum's openings either side of the
 #: reps' seam), and with the algebra every part, those it leaves as the honest one too (forged-message's alg-p1). Each is
-#: sized as its honest statement's firewalled release, which bounds the forged one
+#: sized as its honest statement's release through the ZK server, which bounds the forged one
 FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
           "filler": "alg"}
 
-# Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
+# Where a run goes. 85's CPU prover needs no GPU, so a run behind the ZK server (and --cpu) goes straight to a CPU node that takes
 # plain runs, pinned to CORES; the SLOT_ONLY nodes take runs only through slots.
+# `--on auto` (AUTO) is research run's queue itself, which places the run on a node of its choosing: it takes the queue's
+# options but no --queue, and a CPU run there may land on a CPU node.
+AUTO = "auto"
 CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
 SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
 
 STAGES = {
-    "build": "the CUDA prover (60-circuit.sh), flock-verify (lake build), the inner statement staged with plain and hm96 leaves",
+    "build": "the CUDA prover (60-circuit.sh), the Lean verifier (lake build), the inner statement staged with plain and hm96 leaves",
     "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; the non-recursive M0 and --zk on loopback beside it",
     "icheck": "upstream's replay of the inner run and V*'s hashing reference (rec_vstar)",
     "vstage": "V*'s fold points, InnerFold.lean, and each statement staged (RecOpen per level, InnerRepCheck parts)",
     "vcap": "RecCap over each level's committed tops",
-    "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode (firewall: the Lean session loop)",
+    "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode "
+              f"({RP.ZK_SERVER_MODE}: the ZK server's Lean session loop)",
     "oreplay": "upstream's replay --zk of each V* release",
-    "lean": "flock-verify verify --zk on each V* release with V*'s own inputs, the inner run, the inner statement",
+    "lean": "the Lean verifier's verify --zk on each V* release with V*'s own inputs, the inner run, the inner statement",
     "forge-after": "coef, dirs and message forged on the honest L0 and alg-p0 releases' statements after proving "
                    "(forge_after.py), each refused by Lean beside its accepted honest control",
     "negative": "the lean step again over each copy of the inner run with one coin of rep 0 flipped, which Lean must refuse",
@@ -89,23 +93,28 @@ STAGES = {
 def statements(levels: str = "") -> list[str]:
     """V*'s statements 85 proves under ``LEVELS`` (its ``want``: a name, or the name less its ``-p<N>`` part)."""
     want = {x for x in levels.split(",") if x}
-    return [s for s in FW_S if not want or s in want or re.sub(r"-p\d+$", "", s) in want]
+    return [s for s in RELEASE_S if not want or s in want or re.sub(r"-p\d+$", "", s) in want]
 
 
 def stmt_lease_min(stmt: str, sessions: int = 1) -> int:
-    """A lease (minutes) that holds ``sessions`` firewalled releases of ``stmt`` with MARGIN."""
-    return math.ceil(MARGIN * sessions * FW_S[stmt] / 60)
+    """A lease (minutes) that holds ``sessions`` releases of ``stmt`` through the ZK server with MARGIN."""
+    return math.ceil(MARGIN * sessions * RELEASE_S[stmt] / 60)
 
 
-def lease_min(sessions: int, firewall: bool = True, levels: str = "") -> int:
+def lease_min(sessions: int, zk_server: bool = True, levels: str = "") -> int:
     """The job's one lease (85's GPU_MAX_MIN covers every prove of an invocation): its largest statement's; 85's default
     10 without the ZK server."""
-    return max((stmt_lease_min(s, sessions) for s in statements(levels)), default=10) if firewall else 10
+    return max((stmt_lease_min(s, sessions) for s in statements(levels)), default=10) if zk_server else 10
 
 
 def levels(a) -> str:
     """LEVELS as --env passes it to 85 (the last one wins)."""
     return next((e.split("=", 1)[1] for e in reversed(a.env) if e.startswith("LEVELS=")), "")
+
+
+def zk_server(a) -> bool:
+    """Whether oprove runs through the ZK server: its mode among --modes."""
+    return RP.ZK_SERVER_MODE in a.modes.split(",")
 
 
 def rec_links(a) -> bool:
@@ -115,32 +124,33 @@ def rec_links(a) -> bool:
 
 
 def max_min(a) -> int:
-    """The job's limit: its statements' firewalled releases (with MARGIN) plus each other step's minutes per repeat. With
+    """The job's limit: its statements' releases through the ZK server (with MARGIN) plus each other step's minutes per repeat. With
     REC_LINKS=1 the link part's releases and its forgery's are each budgeted as the largest measured statement's, until
     its own is measured."""
     sessions = a.oprove_warm + a.oprove_runs
-    fw = "firewall" in a.modes.split(",")
+    zk = zk_server(a)
     forged = [s for k in forge(a) for s in statements(FORGED[k])]
-    links = (sessions + 1) * max(FW_S.values()) if rec_links(a) else 0
-    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[s] for s in forged) + links) / 60 \
-        if fw else 15
+    links = (sessions + 1) * max(RELEASE_S.values()) if rec_links(a) else 0
+    oprove = MARGIN * (sessions * sum(RELEASE_S[s] for s in statements(levels(a))) + sum(RELEASE_S[s] for s in forged)
+                       + links) / 60 if zk else 15
     # under the release side each part waits for the end of its window, about twice its prove, after a lead
     if a.release:
         oprove = 2 * oprove + RELEASE_LEAD_MIN
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the ZK server, OPROVE_GPU=0), and its proofs: a minute a statement
-    cpu = 25 if fw and a.oprove_gpu != "1" else 0
+    cpu = 25 if zk and a.oprove_gpu != "1" else 0
     return math.ceil(SETUP_MIN + (oprove + cpu if "oprove" in steps(a.steps) else 0) + rest)
 
 
 def cpu_run(a) -> bool:
-    """A run with no GPU prove: --cpu, or a firewalled one on 85's CPU prover (the default)."""
-    return a.cpu or ("firewall" in a.modes.split(",") and a.oprove_gpu != "1")
+    """A run with no GPU prove: --cpu, or one behind the ZK server on 85's CPU prover (the default)."""
+    return a.cpu or (zk_server(a) and a.oprove_gpu != "1")
 
 
 def on(a) -> str:
-    """The machine: --on, else a plain CPU node for a CPU run and the GPU node's queue for a GPU one."""
+    """The machine: --on (AUTO: research run's queue places it), else a plain CPU node for a CPU run and the GPU node's
+    queue for a GPU one."""
     m = a.on or (CPU_NODE if cpu_run(a) else NODE)
     if m in PLAIN_CPU_NODES and not cpu_run(a):
         raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
@@ -152,7 +162,7 @@ def on(a) -> str:
 def mem_gb(a) -> int:
     """The job's --mem-gb, which a queued node makes its MemoryMax: under the ZK server the Lean session loop and the
     prover together peak near 100 GB on L0, else 64."""
-    return a.mem_gb or (128 if "firewall" in a.modes.split(",") and "oprove" in steps(a.steps) else 64)
+    return a.mem_gb or (128 if zk_server(a) and "oprove" in steps(a.steps) else 64)
 
 
 def steps(arg: str) -> list[str]:
@@ -199,9 +209,10 @@ def job_env(a: argparse.Namespace) -> list[str]:
     bad = [e for e in a.env if not re.fullmatch(r"[A-Z_][A-Z0-9_]*=.*", e)]
     if bad:
         raise SystemExit(f"--env: {', '.join(bad)} is not KEY=VALUE")
-    lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, "firewall" in a.modes.split(","), levels(a))
-    # a CPU node has no GPU, and /workspace/jobs isn't the research user's there
-    node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if direct(a) else ["GPU=0"] if a.cpu else []
+    lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, zk_server(a), levels(a))
+    # a CPU node has no GPU, and /workspace/jobs isn't the research user's there; a CPU run books no GPU anywhere
+    cpu_node = direct(a) or (on(a) == AUTO and cpu_run(a))
+    node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if cpu_node else ["GPU=0"] if cpu_run(a) else []
     env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
            f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
            f"FORGE={','.join(forge(a))}", *([f"FORGE_AFTER={','.join(forge_after(a))}"] if "forge-after" in steps(a.steps) else []),
@@ -220,7 +231,7 @@ def job_command(a: argparse.Namespace, root: Path) -> list[str]:
     if direct(a):
         return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
                 "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]
-    return ["research", "run", "--queue", "--on", m, *([] if a.cpu else ["--gpu-host"]),
+    return ["research", "run", *([] if m == AUTO else ["--queue"]), "--on", m, *([] if cpu_run(a) else ["--gpu-host"]),
             *(["--preemptible"] if a.preemptible else []), "--project", "verity",
             "--campaign", "recursion-e2e", "--source", str(root), "--cwd", "source", "--mem-gb", str(mem_gb(a)),
             "--cpus", str(a.cpus), "--max-min", str(limit),
@@ -242,7 +253,7 @@ def cmd_plan(a) -> int:
           f"with {a.oprove_warm} warm + {a.oprove_runs} timed releases per statement, each prove's lease {env['GPU_MAX_MIN']} min")
     for s in steps(a.steps):
         print(f"  {s:<8} {STAGES[s]}")
-    if "oprove" in steps(a.steps) and "firewall" in a.modes.split(","):
+    if "oprove" in steps(a.steps) and zk_server(a):
         n = a.oprove_warm + a.oprove_runs
         print("  leases (min): " + ", ".join(f"{s} {stmt_lease_min(s, n)}" for s in statements(levels(a))))
     print(" ".join(job_command(a, root())))
@@ -340,9 +351,9 @@ def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
         p.add_argument("--steps", default=",".join(s for s in STEPS if s != "forge-after"),
                        help="default every step but forge-after, which --forge adds")
         p.add_argument("--repeat", type=int, default=3, help="each CPU step's invocations (REPEAT_<STEP>=n via --env)")
-        p.add_argument("--modes", default="firewall", help="oprove's prover sides (ZK server, host, dev); the last one's "
-                       "releases are the ones oreplay, lean and negative verify (default ZK server: outer proofs go through "
-                       "the ZK server, one at a time)")
+        p.add_argument("--modes", default=RP.ZK_SERVER_MODE, help=f"oprove's prover sides, as 85's MODES names them "
+                       f"({RP.ZK_SERVER_MODE}, the ZK server; host; dev); the last one's releases are the ones oreplay, lean "
+                       f"and negative verify (default {RP.ZK_SERVER_MODE}: outer proofs go through the ZK server, one at a time)")
         p.add_argument("--oprove-warm", type=int, default=0)
         p.add_argument("--oprove-runs", type=int, default=1, help="timed releases per V* statement (default 1)")
         p.add_argument("--lease-min", type=int, default=0, help="each prove's GPU lease, minutes (85's GPU_MAX_MIN; default "
@@ -354,14 +365,14 @@ def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
         p.add_argument("--cpu", action="store_true", help="GPU=0: the CPU prover end to end, no lease (a small K and N)")
         p.add_argument("--oprove-gpu", choices=["auto", "0", "1"], default="auto",
                        help="V*'s prover: 0 the CPU prover (auto under the ZK server: node 1's lease pool stops a lease whose "
-                            "GPU idles about 10 min, as a firewalled release's does), 1 the GPU one under a lease")
+                            "GPU idles about 10 min, as it does during a release through the ZK server), 1 the GPU one under a lease")
         p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
-                       help=f"default {CPU_NODE} for a CPU run (firewalled on the CPU prover, or --cpu), a plain run there; "
-                            f"else {NODE}'s queue")
+                       help=f"default {CPU_NODE} for a CPU run (behind the ZK server on the CPU prover, or --cpu), a plain run there; "
+                            f"else {NODE}'s queue; {AUTO}: research run's queue places it")
         p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
         p.add_argument("--preemptible", action="store_true",
                        help="queue the run preemptible (a guest on a node that admits guests only so)")
-        p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with a firewalled oprove, else 64)")
+        p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with an oprove behind the ZK server, else 64)")
         p.add_argument("--cpus", type=int, default=32)
         p.add_argument("--max-min", type=int, default=0, help="the run's limit (default from the lease model: max_min)")
         p.add_argument("--e2e", action="store_true", help="one pass: build, inner, vstage, vcap, oprove, lean, negative once each, "

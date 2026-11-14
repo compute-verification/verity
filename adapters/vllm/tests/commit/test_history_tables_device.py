@@ -5,6 +5,11 @@ exactly one segment; 576, a DSA latent row; 4096, the most). The twin needs a C+
 nvcc, and skip elsewhere."""
 from __future__ import annotations
 
+import ctypes
+import re
+from types import SimpleNamespace
+from typing import Any
+
 import numpy as np
 import pytest
 from verity.commitments import history as HT
@@ -68,10 +73,10 @@ def test_it_takes_salts_given_as_history_table_does():
                        ([a.salts[0]] * 3, "never reused"), (a.salts, "never reused")]:
         with pytest.raises(ValueError, match=why):
             a.append(rows, salts)
-    drawn = _built(rows)
+    sampled = _built(rows)
     with pytest.raises(ValueError, match="never reused"):
-        drawn.append(rows[:1], drawn.salts[:1])
-    assert len(a.rows) == len(drawn.rows) == 3
+        sampled.append(rows[:1], sampled.salts[:1])
+    assert len(a.rows) == len(sampled.rows) == 3
 
 
 def test_it_refuses_what_history_table_refuses():
@@ -131,3 +136,22 @@ def test_the_device_table_takes_salts_given():
     twin = _built(rows)
     t = _built(rows, twin.salts, device=0)
     assert (t.salts, t.bcs, t.root) == (twin.salts, twin.bcs, twin.root)
+
+
+def _declared(name: str) -> list[Any]:
+    """The ctypes of ``name``'s parameters as `row_table.cu` declares them: `Hist`'s pointer for a ``const Hist*``, a void pointer
+    for any other pointer, and the integer of the declared width."""
+    (parameters,) = re.findall(rf'extern "C" int {name}\(([^)]*)\)', (HD.D.CUDA_DIR / "row_table.cu").read_text())
+    kinds = [" ".join(p.split()).rsplit(" ", 1)[0] for p in parameters.split(",")]
+    integers = {"uint64_t": ctypes.c_uint64, "uint32_t": ctypes.c_uint32}
+    return [HD._hp if k == "const Hist*" else ctypes.c_void_p if k.endswith("*") else integers[k] for k in kinds]
+
+
+@pytest.mark.parametrize("name", ["rt_hist_init", "rt_hist_append", "rt_hist_paths"])
+def test_the_device_kernels_are_called_as_their_source_declares_them(name):
+    """`_device` gives each ``rt_hist_*`` kernel the arguments `row_table.cu` declares for it and an ``int`` to return. A stand-in
+    holds what it assigns, so no build is needed and the test runs without CUDA."""
+    lib: Any = SimpleNamespace(rt_hist_init=SimpleNamespace(), rt_hist_append=SimpleNamespace(), rt_hist_paths=SimpleNamespace())
+    assert HD._device(lib) is lib
+    kernel = getattr(lib, name)
+    assert list(kernel.argtypes) == _declared(name) and kernel.restype is ctypes.c_int

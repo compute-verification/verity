@@ -73,7 +73,7 @@ def test_table_refuses_another_schema(tmp_path: Path) -> None:
         RUN.main(["table", str(tmp_path / "x.json")])
 
 
-def test_a_firewalled_run_is_a_plain_run_on_a_cpu_node(capsys) -> None:
+def test_a_run_behind_the_zk_server_is_a_plain_run_on_a_cpu_node(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--steps", "vcap", "--repeat", "1"]) == 0
     cmd = capsys.readouterr().out.split()
     head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
@@ -88,6 +88,30 @@ def test_a_firewalled_run_is_a_plain_run_on_a_cpu_node(capsys) -> None:
         RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-1"])
     with pytest.raises(SystemExit, match="has no GPU"):
         RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-2", "--oprove-gpu", "1"])
+
+
+def test_a_cpu_run_on_auto_or_a_named_cpu_node_is_a_command_research_run_takes(capsys) -> None:
+    """`--on auto` is research run's queue itself, which refuses --queue: a CPU run there is the queue's options without
+    --queue or --gpu-host, its job on a CPU node's GPU=0 and work tree, since the queue may place it on one. A named CPU
+    node is a plain run there; a GPU run on auto keeps its GPU host."""
+    assert RUN.main(["run", "--dry-run", "--on", "auto", "--steps", "vcap", "--repeat", "1"]) == 0
+    cmd = capsys.readouterr().out.split()
+    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert head[:4] == ["research", "run", "--on", "auto"] and "--queue" not in head and "--gpu-host" not in head
+    assert head[head.index("--max-min") + 1] == str(RUN.SETUP_MIN + 1) and "--cpus" in head and "--timeout" not in head
+    assert job[:2] == ["bash", "benchmarks/recursion_e2e/job.sh"] and "GPU=0" in job and f"FLOCK_WORK={RUN.CPU_WORK}" in job
+    assert RUN.main(["run", "--dry-run", "--on", "auto", "--cpu", "--K", "64", "--N", "16", "--modes", "dev"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[:4] == ["research", "run", "--on", "auto"] and "--queue" not in cmd and "--gpu-host" not in cmd
+    assert "GPU=0" in cmd
+    assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-3"]) == 0
+    cmd = capsys.readouterr().out.split()
+    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-3"] and "--queue" not in head and "--gpu-host" not in head
+    assert job[:3] == ["taskset", "-c", "0-31"] and "GPU=0" in job
+    assert RUN.main(["run", "--dry-run", "--on", "auto", "--oprove-gpu", "1"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert cmd[:5] == ["research", "run", "--on", "auto", "--gpu-host"] and "--queue" not in cmd and "GPU=0" not in cmd
 
 
 def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
@@ -144,11 +168,11 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
         cmd = capsys.readouterr().out.split()
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
-    assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.FW_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
+    assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.RELEASE_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
     # the message forgery proves alg-p1, which it leaves honest, beside alg-p0
-    alg = RUN.FW_S["alg-p0"] + RUN.FW_S["alg-p1"]
+    alg = RUN.RELEASE_S["alg-p0"] + RUN.RELEASE_S["alg-p1"]
     assert limit("--forge", "message") - limit() == pytest.approx(RUN.MARGIN * alg / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
-    assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.FW_S["L0"] + RUN.FW_S["L3"] + alg) / 60, abs=1)
+    assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.RELEASE_S["L0"] + RUN.RELEASE_S["L3"] + alg) / 60, abs=1)
     assert all(RUN.statements(name) for v in RUN.FORGED.values() for name in v.split(","))   # each names a measured statement
     with pytest.raises(SystemExit, match="--forge: nope"):
         RUN.main(["run", "--dry-run", "--forge", "coef,nope"])
@@ -167,7 +191,7 @@ def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statem
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
     assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")
-    big = max(RUN.FW_S.values())
+    big = max(RUN.RELEASE_S.values())
     assert limit("--env", "REC_LINKS=1") - limit() == pytest.approx(RUN.MARGIN * 2 * big / 60, abs=1)
     assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
         RUN.MARGIN * 3 * big / 60, abs=1)

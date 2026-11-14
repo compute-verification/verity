@@ -13,7 +13,8 @@ run recorded.
   names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
   found (`provenance`). Floats in verdicts and statements, which neither side reads, are written as strings. The
   registered roots the record's `registered` check reads are the verdicts' own, for the registration's own values
-  (`audit.session_registered(verdicts, registration)`), on both sides.
+  (`audit.session_registered(verdicts, registration)`), less the reads of its own ports at their own roots
+  (`audit.less_own_reads`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier's Lean (`one_stage.verifier.lean`) and the current Python.
@@ -594,7 +595,7 @@ def python(c: Case) -> dict:
         return out("reject", f"draw: {', '.join(dv.codes)}")
     a = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                            e["verdicts"], delta, e["sessions"], e["served"], e["session_roots"],
-                           audit.session_registered(e["verdicts"], rec))
+                           audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec))
     failed = [k for k in CHECKS if k in a["checks"] and not a["checks"][k]["ok"]]
     if failed:
         return out("reject", f"the audit's checks failed: {', '.join(failed)}")
@@ -609,7 +610,7 @@ def python(c: Case) -> dict:
         return out("undecided", f"the verifier of record {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
-    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], audit.COMPLETE: a["complete"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return out("accept", None, public, {**profile, "delta": str(profile["delta"])})
 

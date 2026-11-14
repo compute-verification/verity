@@ -439,7 +439,7 @@ def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
             _grouped(got)
     else:
         with _carrying(carry), _lending(lend):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
+            got, tail = driver._started(driver.launch_after_landing(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
                                                                **kw, train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
@@ -478,7 +478,7 @@ def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | 
         ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
     ons = [elsewhere(on, avoid) for on in ons]
     with _carrying(carry), _lending(lend):
-        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
+        got = [driver._started(driver.launch_after_landing(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
                for k, on in enumerate(ons, 1)]
     if any(r is None for r, _ in got):

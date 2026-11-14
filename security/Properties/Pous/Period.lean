@@ -30,7 +30,7 @@ record, a function of all the run's coins.
 is any program, with no bound on the strategy's state or its time. Its type reads the memory challenger's coins only as
 the challenger releases them (each index as the previous answer returns; the coin commitment after the last answer, so
 no round sees it), which is the challenger being `Faithful` and `Secret` (the per-party names), covered today by
-`trusted-host`. The ring game's server is read from `τ` by one fixed extractor (`extract`): it packs `τ`'s state into
+`trusted-device`. The ring game's server is read from `τ` by one fixed extractor (`extract`): it packs `τ`'s state into
 `S₀` bits and cuts each round's program to `(D, Q, L)`, so it is a `Server` by construction, whatever `τ` does. Two
 named premises about the period's strategy take the place of the earlier per-run premise, which handed the proof a
 server the prover picked:

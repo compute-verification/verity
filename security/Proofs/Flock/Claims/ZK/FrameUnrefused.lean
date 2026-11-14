@@ -74,7 +74,7 @@ theorem slots_lt {x : Msg} (hx : Masked.Live x) {j r : ℕ} (hj : j < (Masked.st
   have hst : (Masked.stsOf x)[(2 * j + r) / 2]! = (Masked.stsOf x)[j] := by
     rw [show (2 * j + r) / 2 = j by omega]
     exact getElem!_pos _ j hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   have hend : FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) +
