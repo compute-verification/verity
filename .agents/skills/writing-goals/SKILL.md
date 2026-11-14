@@ -153,11 +153,11 @@ Rules:
 - **Say what, never who.** No handle and no lead as the subject; the owner is a field. Another lead's part is that
   lead's goal, linked. The exception is when who holds something is itself the content: which lead owns a directory,
   or an outcome that is one team's own number ("ci's changes refused for a merge conflict").
-  With no goal to link for another lead's part, ask that lead for one and name the lead until it exists.
+  With no goal to link, ask that lead for one and name the lead until it exists.
 - **No status diary:** no "where it stands", "so far" or "plan", no dated steps, nothing about what is in review or
   waiting to merge, no run counts, restarts, machines or GPU counts, no corrections, no history of the goal, no who
   approved what. The page shows when it was last written.
-- **Today's sentence stays true:** rewrite it when a count or fact changes; never append a correction.
+- **Today's sentence stays true:** rewrite it when it changes; never append a correction.
 - **No description of a dependency.** What the goal waits on is a link, and the dependency's state lives on it.
 - **Anything you refer to is a goal he can click, or it is cut.** Link another goal with `[its title](#goal-id)` and
   an ask with `[text](ask:<card id>)`; both render as chips. Never a bare id, and never a goal by number.
@@ -189,8 +189,8 @@ Goals as Daniel approved them. An outcome whose problem today needs saying:
 The network certifier certifies every execution phase of a GLM-5.3 serving run.
 
 On the last served try it did not sign the first execution phase, because it stalled while the operating system moved
-its memory pages. It signed every later phase, and the try as a whole was still refused, since a run with one phase
-unsigned is not accepted. The certifier's node is now set not to move those pages.
+its memory pages. It signed every later phase, and the try as a whole was still refused, since one phase
+was unsigned. The certifier's node is now set not to move those pages.
 
 ### Risks
 
