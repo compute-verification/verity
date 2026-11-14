@@ -1,6 +1,6 @@
 # Pearl-C4, an experimental PoUW variant: its sm_120 kernel and the kernel's host references (prover/kernels/), its
 # vectorised F1' (prover/f1_fast.py), and their tests, which run here as a suite
-# (`uv run tools/verity/check/suites.py verity/protocols/experimental/pearl_c4`).
+# (`uv run tools/check/suites.py verity/protocols/experimental/pearl_c4`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
