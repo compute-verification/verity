@@ -490,7 +490,7 @@ def main(argv=None) -> int:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.network_certifier}
+           "strategies": a.strategies, "paced_ms": a.paced_ms, "network_certifier": a.network_certifier}
     run = a.out / "rehearsal" if a.network_certifier else a.out / "rehearsal" / "honest"
     if a.network_certifier and (run / "warden.json").exists():
         doc |= {"rate": a.rate, "window": a.window} | network_certifier_summary(run)
