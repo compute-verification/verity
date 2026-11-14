@@ -301,17 +301,24 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
-    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
-    lower bound's padded size ratio, which an unregistered share of 1% caps near 100, rises from 98.7 to 99.8, with the best
-    attack's at 249 and 250; at line rate both fall to remote's (2.99, at the card table's clock). The cadence feeds the
-    serving this package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
-    reg = REG.override({"fleet.world-h200.eps_unreg": 0.01})
-    ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
+    bound a lock states limits a block of either size, so the lower bound's padded size ratio is remote's at both
+    (2.99, at the card table's clock), with the best attack's at 249 and 250. With the draft bounds admitted
+    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% caps near 100, and at line
+    rate both fall to remote's. The cadence feeds the serving this package credits only if outputs outnumber prompts
+    more than 20:1, so it isn't the default."""
+    def padded(reg, digits):
+        return [(round(r.families[0].combined.padded, digits), round(r.families[0].best_attack.padded))
+                for r in (evaluate_named(reg, n) for n in ("reference-onsite-h200", "onsite-w63"))]
+
+    locked = REG.override({"fleet.world-h200.eps_unreg": 0.01})
+    ref, w63 = evaluate_named(locked, "reference-onsite-h200"), evaluate_named(locked, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
     assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.803e10, rel=1e-3)]
     assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02819, rel=1e-3)
-    padded = [(round(r.families[0].combined.padded, 1), round(r.families[0].best_attack.padded)) for r in (ref, w63)]
-    assert padded == [(98.7, 249), (99.8, 250)]
+    assert padded(locked, 2) == [(2.99, 249), (2.99, 250)]
+    reg = locked.override({"bounds.lock_only": False})
+    assert padded(reg, 1) == [(98.7, 249), (99.8, 250)]
     line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
                          "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]

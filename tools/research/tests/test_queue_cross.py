@@ -190,7 +190,8 @@ def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_t
     """restack.py runs each head's own code, which needs none of the queue's GitHub and Slack credentials nor the store's keys a
     node's run reads marks with: it sees none of them, and `gh` finds no stored login.  It merges with `main`'s drivers, the
     environment `cross_drivers` gave `cross_one`."""
-    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "RESEARCH_STORE_CONFIG"):
+    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "R2_BUCKET", "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_ACCESS_KEY_ID",
+              "CLOUDFLARE_API_TOKEN", "STORE_INDEXER_DATABASE_URL"):
         monkeypatch.setenv(k, "dummy-" + k.lower())
     seen: dict[str, str] = {}
     monkeypatch.setattr(Q, "run_group", lambda argv, cwd, left, env=None: seen.update(env or {}) or (1, "refused"))
@@ -200,6 +201,21 @@ def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_t
     assert not [k for k, v in seen.items() if v.startswith("dummy-")]
     assert seen["GH_CONFIG_DIR"].startswith(seen["TMPDIR"]) and not Path(seen["GH_CONFIG_DIR"]).exists()
     assert seen["GIT_CONFIG_PARAMETERS"] == drivers["GIT_CONFIG_PARAMETERS"]
+
+
+def test_a_store_with_no_remote_is_refused_before_any_pr_is_listed_and_the_refusal_names_the_read_only_key(world, monkeypatch):
+    """A machine's run has no store secrets: its store has no remote, so no mark or land verdict can be read.  The run is refused
+    before it lists or fetches a PR, naming the read-only key a machine's run takes."""
+    monkeypatch.setattr(world.gh, "open_prs", lambda: pytest.fail("listed the PRs"))
+    monkeypatch.setattr(Q, "GitHub", lambda slug: world.gh)
+    monkeypatch.setattr(Q, "PublicGitHub", lambda slug: world.gh)
+    _git(world.tmp, "clone", "-q", str(world.origin), str(node := world.tmp / "node"))
+    monkeypatch.chdir(node)
+    (cfg := world.tmp / "no-remote.toml").write_text("")
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    with pytest.raises(SystemExit) as refused:
+        Q.main(["cross", "--remote", str(world.origin), "--repo", Q.REPO, "--store", str(world.tmp / "node-store")])
+    assert f"--store-read -- research queue cross --repo {Q.REPO}`" in str(refused.value)
 
 
 def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):

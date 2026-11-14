@@ -1,5 +1,7 @@
 # /etc/systemd/system/vy-store-evict-research.service on every node (`research deploy` and cluster_up.sh install it): research's
 # store eviction, which with src.conf also deletes the unused, recoverable `research run` source trees of /workspace/research/src.
+# It runs main's copy of `research`, which only `research deploy install` places (deploy.toml's whole tree at VY_RESEARCH_TOOL),
+# never a snapshot a `research run` shipped: without the copy a pass refuses.
 [Unit]
 Description=store eviction: drop local copies of research runs the remote store holds
 
@@ -9,4 +11,5 @@ User=research
 Nice=19
 IOSchedulingClass=idle
 Environment=VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs
+Environment=VY_RESEARCH_TOOL=/usr/local/lib/vy-monitoring/clean-up
 ExecStart=/usr/local/bin/vy-store-evict

@@ -1,0 +1,56 @@
+# Dither, an experimental PoUW variant, out of PoUW: what `tools/move/layout.py --map tools/move/pouw_dither_map.toml`
+# moves and rewrites.
+#
+# Dither's circuit and its sidecar become `verity/protocols/experimental/dither/prover/`, its specification
+# `verity/protocols/experimental/dither/PROTOCOL.md`, and its circuit's test `verity/protocols/experimental/dither/tests/`.
+# No served PoUW file imports them. What stays, each needing a code change first: its served producer
+# (`benchmarks/pouw/served_h1/`, which loads `benchmarks/hash/dither/` by file and imports the adapter) and its kernels
+# (`benchmarks/hash/dither/h1u.cu`, `h1sha.cuh`). Never rewritten besides the group map's: the layout of record
+# (`tests/tree.toml`) and every kernel source, whose bytes change only with its owner's build check. No file is split
+# or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/accounting/pouw/prover/circuit/dither.py" = "verity/protocols/experimental/dither/prover/dither.py"
+"verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.py" = "verity/protocols/experimental/dither/prover/dither.circuit-check.py"
+"verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.json" = "verity/protocols/experimental/dither/prover/dither.circuit-check.json"
+"verity/protocols/accounting/pouw/verifier/dither/" = "verity/protocols/experimental/dither/"
+"verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py" = "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["verity/protocols/accounting/pouw/verifier/dither/"]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+           "**/*.lean", "tests/tree.toml", "**/*.cu",
+           "**/*.cuh", "**/*.cpp", "**/*.h",
+           "**/*.c"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/flock/prover/tests/fixtures/inner_claims.json", "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json", "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.protocols.accounting.pouw.prover.circuit.dither" = "verity.protocols.experimental.dither.prover.dither"
+"verity.protocols.accounting.pouw.verifier.dither" = "verity.protocols.experimental.dither"
+"verity.protocols.accounting.pouw.verifier.tests.test_circuit_dither" = "verity.protocols.experimental.dither.tests.test_circuit_dither"

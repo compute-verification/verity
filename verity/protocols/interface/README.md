@@ -186,6 +186,6 @@ clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that
 spans, and for each execution block the boundaries that cut its span again, into its `samplingSpans`; `valid` holds
 when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
 `{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
-that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.periods` mirrors it in
+that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.protocol` mirrors it in
 Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest
 harness, which builds it by name.

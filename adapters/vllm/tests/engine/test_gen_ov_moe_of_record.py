@@ -13,7 +13,7 @@ from verity.circuits.program import Program
 
 from tests.engine.test_gen_ov_moe import OV, TOPK, C, E, H, I, _eval
 from verity_vllm.observe.fold.resolver import Compute, Unsupported
-from verity_vllm.program.quarantine.ov_moe import moe as Q
+from verity.definitions.registry import moe as Q
 
 REPO = Path(__file__).resolve().parents[2]
 W1_RUNS = REPO / "out" / "gen" / "lanes" / "moe" / "runs"

@@ -1,0 +1,60 @@
+# The registration log's Python, out of `verity/hardware/` into registration's own directory: what
+# `tools/move/layout.py --map tools/move/registration_map.toml` moves and rewrites.
+#
+# `verity/hardware/registration.py`, the Python of `Core.Registration`, becomes
+# `verity/protocols/accounting/registration/verifier/registration.py`. Registration is the accounting protocol that runs
+# once, before any challenge, and the log's check is its trusted code, a Python verifier until the Lean replaces it, so
+# it goes under the protocol's `verifier/`. The one row moves the file, makes the `__init__.py` of the two packages
+# above it and rewrites each path and module name that names it.
+#
+# What stays: the layout of record (`tests/tree.toml`, whose not-yet line for the file stays as written until its owner
+# deletes it), every Lean file's bytes and every kernel source's ([rewrite] exclude). No root moves ([roots] old ==
+# new). No file is split or deleted. The format is `layout_map.toml`'s.
+#
+# What no map writes, and so follows the move by hand: the import listing's row for the new directory
+# (`tests/import_order.toml`'s `order`), the suites' inputs that name the directory and the packages above it, and the
+# registration log's line in `verity/hardware`'s own test.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/hardware/registration.py" = "verity/protocols/accounting/registration/verifier/registration.py"
+
+[retired]
+# the path this map empties
+paths = ["verity/hardware/registration.py"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit of that file
+# takes it: a rewritten Lean file recompiles every module that imports it), every kernel source, and the layout of
+# record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+# Rewritten though a pattern above matches: the fixtures' READMEs, the Lake manifests, the adapter's Definitions
+# manifest, and the pins and vectors that record their sources' paths, which their tests read at those paths.
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+# the verifier pod's install directory, a checkout of the tree
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[modules]
+# the rename [paths] and [roots] imply (`layout.py --modules`)
+"verity.hardware.registration" = "verity.protocols.accounting.registration.verifier.registration"

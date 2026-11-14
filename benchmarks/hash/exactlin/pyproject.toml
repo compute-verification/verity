@@ -1,0 +1,8 @@
+# The int8-exact linear's benches. Not a package: its benches run on GPU hosts, per their headers, on the integration's
+# kernels (verity_vllm.engine.int8_fused). The suite here is the check that exactlin.py's three helpers are int8_fused's.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test_helpers reads int8_fused's source, which it holds exactlin.py's helpers to.
+inputs = ["adapters/vllm/verity_vllm/engine/int8_fused.py"]

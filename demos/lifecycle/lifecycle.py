@@ -45,7 +45,7 @@ from typing import Any
 import numpy as np
 
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
-from verity.protocols import reporting
+from verity.protocol import MONITORING_PERIODS
 from verity.protocols.accounting.pous.verifier import wipe_period
 from verity.protocols.accounting.pouw.verifier import period_check
 from verity.protocols.accounting.pouw.verifier import window as pouw_window_rules
@@ -1034,7 +1034,7 @@ DECLARATION_SECONDS = 60
 """A stated parameter: an execution phase's length in a deployment, which scales a monitoring period's declarations and
 the layout's capacity in each."""
 TICKS_PER_SECOND = 10 ** 9
-PERIODS = dict(reporting.PERIODS)
+PERIODS = dict(MONITORING_PERIODS)
 
 
 def pooled(lines: Sequence[Mapping[str, Any]]) -> tuple[Fraction, int, int]:

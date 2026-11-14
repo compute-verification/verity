@@ -3,7 +3,7 @@ by GPU 1's kernel pipeline, one epoch per install over every linear weight, one 
 
 The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, or ``pearl_c_sm90`` for the
 ``h100`` record (an H100 or H200, sm_90a), whose ``run.py`` has the `Pipeline` (its kernels in order, each a named step of a
-phase, over buffers the caller may own) and whose ``fixture.py`` has the keys (`keys_of`, `unit_block`).  The cubin is
+phase, over buffers the caller may own); a unit's keys are the scheme's (`pearl_c.keys_of`, `pearl_c.unit_block`).  The cubin is
 build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on
 torch's current stream, in the device's primary context:
 
@@ -360,7 +360,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.roots_buf = _zeros(self.nb * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * flag_rows, self.device).view(flag_rows, 2)
         self.tree_hash = hash_format(scheme).tree_hash
-        self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
+        self.keys, self.uploads = _Keys(salt, self.tree_hash), _Uploads(self.device)
         self.copy = kernel.dev.copy_async if self.device.type == "cuda" else memmove
         self.eager_only = True              # no call has run under graphs, whose replays write rows and keys unseen
         self.fused_screen = self.device.type == "cuda"
@@ -453,7 +453,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         keys = _zeros(128, weight.device)
         mm = Matmul(0, Shape(ROW_ALIGN, k, n), w)
         seed_b = C.seed_b(self.salt, self.roots[w], self.scheme.hashing)
-        kk = K.fixture.keys_of(self.scheme, self.epoch, mm, seed_b)
+        kk = C.keys_of(self.scheme, self.epoch, mm, seed_b)
         _put(keys, kk["line_b"].ljust(64, b"\0") + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
         seg = _zeros(size["segdig_b"], weight.device)

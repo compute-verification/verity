@@ -502,9 +502,9 @@ def _dense_patterns(cfg: dict[str, Any], C: dict[str, Any], patterns: list) -> l
     if effective_sliding_window(cfg):
         out = with_dense2_patterns(out, C)                            # the inert-window FA2 scope decides from the LAUNCH (window >= max_seqlen_k)
     if "unfused-norm-chains" in kinds:
-        out = with_gemma2_patterns(out)                               # unfused GemmaRMSNorm(+1) / GeGLU / embed-scale scalar chains -> quarantine.dense
+        out = with_gemma2_patterns(out)                               # unfused GemmaRMSNorm(+1) / GeGLU / embed-scale scalar chains -> registry.dense
     if "softcap" in kinds and C.get("attn_logit_softcapping"):
-        out = with_softcap_patterns(out)                              # FA2 softcap launches -> quarantine.dense.AttentionSoftcap_v1{..., CAP}
+        out = with_softcap_patterns(out)                              # FA2 softcap launches -> registry.dense.AttentionSoftcap_v1{..., CAP}
     if "ln" in kinds:
         out = with_ln_patterns(out, C)
     return out

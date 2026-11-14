@@ -6,9 +6,9 @@ addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# figures.py reads the census's reference fleets, the monitoring periods (core's reporting grid, `reporting.PERIODS`) and
+# figures.py reads the census's reference fleets, the monitoring periods (core's reporting grid, `verity.protocol.MONITORING_PERIODS`, which imports the wire) and
 # the session's steps (rec_profile.SESSION_STEPS).
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/recursion_e2e/rec_profile.py",
-          "verity/protocols/reporting.py",
+          "verity/protocol.py", "verity/channel.py",
           "verity/__init__.py", "verity/errors.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/__init__.py"]

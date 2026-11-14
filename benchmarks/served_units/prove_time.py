@@ -3,7 +3,7 @@
 (least squares over its N), its seconds a block amortized at each N (T(N) / N), and with ``--card`` (a GPU's run) the
 block's proof overhead: seconds a block times the card's peak MACs a second over the block's MACs, marginal (``per_block``)
 and amortized. A block's MACs are its stage.json's ``macs`` (a fused expert block's N K), else its static K (a coordinate's);
-the card's peak is its s8 rate (`verity.hardware.cards`; e4m3 runs at that rate on the cards here, their ``weight.e4m3`` 1).
+the card's peak is its s8 rate (`verity.device.load_card`; e4m3 runs at that rate on the cards here, their ``weight.e4m3`` 1).
 A type with neither (a census type) gets its seconds a block and no overhead.
 
     python prove_time.py OUT_DIR [--card SKU]     prints the summary as JSON
@@ -28,8 +28,8 @@ def _session_set():
 
 def peak_macs(card: str) -> float:
     sys.path.insert(0, str(ROOT))
-    from verity.hardware import cards
-    c = cards.load(card)
+    from verity.device import load_card
+    c = load_card(card)
     return c["rate"]["tensor"]["value"] * c["sm"]["count"]["value"] * c["clock"]["sm"]["value"] * 1e6
 
 
@@ -91,6 +91,6 @@ def main(out: Path, card: str | None) -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=Path)
-    ap.add_argument("--card", default=None, help="the GPU's card (verity.hardware.cards SKU) for the proof overhead")
+    ap.add_argument("--card", default=None, help="the GPU's card (a SKU of verity.device.load_card) for the proof overhead")
     a = ap.parse_args()
     print(json.dumps(main(a.out, a.card), indent=1, default=str))

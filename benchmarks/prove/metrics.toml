@@ -1,0 +1,42 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "benchmarks/prover-gpus-per-serving-gpu"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPUs for each serving GPU"
+owner = "benchmarks"
+unit = "prover GPUs a serving GPU"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/prover-gpu-seconds-per-token"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPU-seconds for each served token"
+owner = "benchmarks"
+unit = "prover GPU-seconds a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/lean-verifier-seconds-per-token"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: the Lean verifier's seconds for each served token"
+owner = "benchmarks"
+unit = "Lean verifier seconds a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+
+[[metric]]
+id = "benchmarks/proof-bytes-per-token"
+title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: proof bytes for each served token"
+owner = "benchmarks"
+unit = "proof bytes a served token"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"

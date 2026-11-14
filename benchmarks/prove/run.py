@@ -21,7 +21,7 @@ import sys
 
 from verity_bench.cli import main
 
-#: the metrics `benchmarks/metrics.toml` holds this benchmark to, by id: each the total of SPOT's table at the
+#: the metrics `benchmarks/prove/metrics.toml` holds this benchmark to, by id: each the total of SPOT's table at the
 #: workload's sampling plan of record that its value names (`prove_records.FIGURES`)
 METRICS = {"benchmarks/prover-gpus-per-serving-gpu": "gpus_per_serving_gpu",
            "benchmarks/prover-gpu-seconds-per-token": "gpu_seconds_per_token",

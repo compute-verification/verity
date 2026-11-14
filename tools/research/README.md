@@ -220,12 +220,17 @@ each with its repository file and owner (a Slack handle), and goes there only th
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
 (`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
-`research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
+`research deploy drift` (`ops deploy`) reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
-and every file in a managed directory that no entry lists (`stray`); the hourly preflight probe posts its findings
-whenever they change (`ops deploy`). A new loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
-`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
---by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
+one incident per node and kind. A `whole` tree's copy (the clean-up units' `research`) may be behind main
+between installs, so what it differs from main by is not the node's: its stale files, the files main has added since and
+those main has dropped (`dropped`, never a stray) are one incident of their own once a week of readings has found that copy
+behind, and only a file of it that a branch or no commit has (`ahead`, `unknown`) is the node's at once. A new loop or
+script goes into the repository and the manifest before it runs; a backup of a replaced file is `.deploy-prev/`, which
+`install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ... --by WHO --apply`
+(`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it; it refuses
+a path inside a `whole` tree, where the tree's next install drops what main lacks.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`
@@ -375,8 +380,8 @@ tests. Only `research` imports the package.
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
-shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
+names the fetch that restores them. `research data evict --src-dir DIR` (every node's unit) also deletes each
+shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 1 h; any doubt
 keeps them all (`store/evict.py`). Its other passes: `store/leftovers.py`.
 
 ### research data

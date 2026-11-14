@@ -88,9 +88,9 @@ open RecDeploy.HonestHalf
 where the reference prover `refP`'s run is accepted and satisfies V\*, no recorded calls collide and the reps' tops
 differ (`TopsAt`), `PartAccepts` holds at every part `s < nS x`.
 
-The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and Flock's CPU
-prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest`, with
-`vstar-trace --sat`. -/
+The premises are about Lean's `refP`; the session `HonestFixture` takes them of used Python's builder and Flock's CPU
+prover. `HonestFixture`'s docstring says which difftests tie the two (`test_vstar_trace_difftest`,
+`test_irdep_difftest`) and which of the premises a test in the tree checks on that session. -/
 theorem honest_half_tops (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)

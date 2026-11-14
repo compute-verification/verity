@@ -96,6 +96,17 @@ def _isolated_git(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
 
 
+@pytest.fixture(autouse=True)
+def _no_asker_left(monkeypatch):
+    """No test leaves an asker behind: a launch `--on auto` sends to a pool would start one, a detached process that outlives
+    the test and asks the real machines (research.asker.start). The launches it would have started, as it was given them."""
+    from research import asker
+
+    started: list[dict] = []
+    monkeypatch.setattr(asker, "start", lambda root, m: started.append(m) or 4242)
+    return started
+
+
 @pytest.fixture
 def reap(tmp_path):
     """However the test ends, SIGTERM the process group of every process whose argv names its tmp_path: the detached processes

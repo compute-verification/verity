@@ -1,10 +1,14 @@
 # /etc/systemd/system/vy-retention-gc.service on the nodes deploy.toml names (`research deploy` installs it): research's retention
 # policy, applied. Over 80% of /workspace's blocks or inodes it deletes expired paths, oldest and lowest priority first, until under
-# 75%, at most 200 paths a pass (`research retention gc --apply`, its defaults), with the newest research tool snapshot. A node
+# 75%, at most 200 paths a pass (`research retention gc --apply`, its defaults), with main's copy of `research`, which only
+# `research deploy install` places (deploy.toml's whole tree at VY_RESEARCH_TOOL, a link to one commit's directory), never a
+# snapshot a `research run` shipped. The link is resolved once, so a pass runs that one commit's code to its end whatever is
+# installed meanwhile, and its first line names the directory; without the copy a pass refuses. A node
 # holds no store key, so a path's preserved artifact is checked against the remote replica the node's store recorded as verified
 # (RESEARCH_STORE: without it gc reads an empty store, keeps every preserved path and exits 1). Without the unit a node sits at 80%
 # with terabytes collectable while the fill runner holds every queued run. Never inside a timed window on node 2, like the
-# store eviction (store_evict_timed.conf): deleting a few TB competes with a timed measurement for the disk.
+# store eviction (store_evict_timed.conf): deleting a few TB competes with a timed measurement for the disk. A pass takes the
+# unpreserved runs (`--unpreserved-runs`) only where VY_GC_UNPRESERVED_RUNS is 1 (retention_gc_unpreserved.conf).
 [Unit]
 Description=retention gc: delete expired research paths while /workspace is over 80%
 
@@ -14,5 +18,6 @@ User=research
 Nice=19
 IOSchedulingClass=idle
 Environment=RESEARCH_STORE=/workspace/research/store
+Environment=VY_RESEARCH_TOOL=/usr/local/lib/vy-monitoring/clean-up
 ExecCondition=/bin/sh -c '! grep -qs "timed True" /workspace/pouw/fill/status.txt'
-ExecStart=/bin/sh -c 'T=$(ls -td /workspace/research/tool/*/ | head -1); cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --apply'
+ExecStart=/bin/sh -c 'T=$(readlink -e -- "$VY_RESEARCH_TOOL" 2> /dev/null); if [ -z "$T" ] || [ ! -d "$T/research" ]; then echo "vy-retention-gc: no research package at VY_RESEARCH_TOOL ($VY_RESEARCH_TOOL), where research deploy install places the copy of main; nothing was deleted" >&2; exit 1; fi; echo "vy-retention-gc: research from $T" >&2; F=; [ "$VY_GC_UNPRESERVED_RUNS" = 1 ] && F=--unpreserved-runs; cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --apply $F'

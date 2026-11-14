@@ -72,7 +72,13 @@ a conflict is seen and resolved, while a silent loss lands.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
-`claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
+`claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`),
+written sorted where `check.py --update` writes it sorted (`SORTED_NAMES`: each `trust_gap` entry's premises). A move is
+a change, and the side that made it applies: a map's keys outside `SORTED` stand in ours' order with theirs' new ones
+after them, and a list of names in ours' order with each of theirs' new items after the item theirs has before it, unless
+ours holds the members it shares with the base in the base's order and theirs doesn't (`reordered`): then the roles swap,
+theirs' order with ours' new members placed so (`keys`, `ordered`). Where both sides moved, ours' order stands, named
+nowhere, as an order states nothing; with no base, or an empty one, neither side moved. For a `.lean` file (`--lean`, `lean-imports` in
 `.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
 `headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
 that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. When one side's file is on
@@ -145,10 +151,14 @@ CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
-#: the sections `check.py --update` writes in sorted order (`shape[inline]`: `shape.inline`, by guarantee); the others keep
-#: ours' order, with theirs' new entries after it
+#: the sections `check.py --update` writes in sorted order (`shape[inline]`: `shape.inline`, by guarantee), and the sections
+#: whose entries are lists of names it writes sorted (`SORTED_NAMES`: each `trust_gap` entry's premises, `trust_gap_kept`);
+#: the others keep ours' order, with theirs' new entries after it, unless ours kept the base's order and theirs moved
+#: entries (`reordered`): then theirs' order, with ours' new entries after it.  `--update` writes `shape.inline`'s inner maps
+#: in their statement's order and `trust`, `claims`, `trees`, `upstream` and `deployed` as the lock has them
 SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap", "unwitnessed",
           "shape[inline]"}
+SORTED_NAMES = {"trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
 #: (`trust_gap`'s premises, so a side's discharge and the other's new premise both apply)
@@ -188,7 +198,18 @@ def one(path: str, o, a, b, why: list[str]):
     return b
 
 
-def keys(section: str, a: dict, b: dict) -> list:
+def reordered(o, s) -> bool:
+    """Whether ``s`` (a map's keys or a list of names) holds the members it shares with the base ``o`` in another order than
+    the base's: a move is a change, and the side that made it applies (`keys`, `ordered`)."""
+    shared = set(o) & set(s)
+    return [i for i in s if i in shared] != [i for i in o if i in shared]
+
+
+def keys(section: str, a: dict, b: dict, o=()) -> list:
+    """A merged map's keys: sorted in a `SORTED` section, else ours' with theirs' new ones after them, or theirs' with ours'
+    new ones after them where theirs alone moved keys the base ``o`` has (`reordered`)."""
+    if section not in SORTED and reordered(o, b) and not reordered(o, a):
+        a, b = b, a
     ks = list(a) + [k for k in b if k not in a]
     return sorted(ks) if section in SORTED else ks
 
@@ -205,16 +226,18 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
     """Maps merged entry by entry (`one`); ``depth`` > 1 merges entries that are maps entry by entry too (one level more
     under a `DEEPER` path), and lists of names merge as lists."""
     out = {}
-    for k in keys(path, a, b):
+    for k in keys(path, a, b, o):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
             sub = f"{path}[{k}]"
             v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER))
             v = MISSING if path in DEEPER and not v else v
         elif depth > 1 and names(x, y, z):
-            v = items([] if x is MISSING else x, y, z)
+            v = ordered([] if x is MISSING else x, y, z)
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
+        if path in SORTED_NAMES and isinstance(v, list) and all(isinstance(i, str) for i in v):
+            v = sorted(v)
         if v is not MISSING:
             out[k] = v
     return out
@@ -235,7 +258,7 @@ def judged(section: str, o: dict, a: dict, b: dict, candidate: list[str], record
     keys, always: a stale value on the incoming side would re-key the entry silently, while one kept from ours that the
     merged tree doesn't state fails its Lean check as a witness failure.  An entry one side removed is the changed one."""
     out = {}
-    for k in keys(section, a, b):
+    for k in keys(section, a, b, o):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if MISSING not in (y, z) and y != z and x not in (y, z):
             rec = records.get(k)
@@ -449,23 +472,30 @@ def items(o: list, a: list, b: list) -> list:
     return out
 
 
+def ordered(o: list, a: list, b: list) -> list:
+    """A lock's list of names merged as `items` merges it, but where ours holds the members it shares with the base ``o`` in
+    the base's order and theirs doesn't (`reordered`): then theirs with what ours added, each after the item ours has before
+    it, less what either side removed.  The text drivers merge by `items` alone."""
+    return items(o, b, a) if reordered(o, b) and not reordered(o, a) else items(o, a, b)
+
+
 def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     """The layer rules entry by entry; a rule both sides changed merges field by field: `imports` and `except` as lists of
     items, and `why` as a list of its `; ` clauses, so two branches that each widen a layer for a guarantee merge.  A merged
     rule widens a layer only by what one side's own audit passed with; the merged tree's audit judges the result."""
     out = {}
-    for k in keys("layers", a, b):
+    for k in keys("layers", a, b, o):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if y == z or x == y or x == z or not all(isinstance(r, dict) for r in (x, y, z)):
             v = one(f"layers[{k}]", x, y, z, why)
         else:
             v = {}
-            for f in keys("", y, z):
+            for f in keys("", y, z, x):
                 p, q, r = x.get(f, MISSING), y.get(f, MISSING), z.get(f, MISSING)
                 if f in ("imports", "except") and all(isinstance(s, list) for s in (p, q, r)):
-                    v[f] = items(p, q, r)
+                    v[f] = ordered(p, q, r)
                 elif f == "why" and all(isinstance(s, str) for s in (p, q, r)):
-                    v[f] = "; ".join(items(p.split("; "), q.split("; "), r.split("; ")))
+                    v[f] = "; ".join(ordered(p.split("; "), q.split("; "), r.split("; ")))
                 elif (w := one(f"layers[{k}].{f}", p, q, r, why)) is not MISSING:
                     v[f] = w
         if v is not MISSING:
@@ -523,7 +553,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     records = guarantees({} if o is MISSING else o, a, b, [], []) if (
         isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict))) else {}
     out = {}
-    for k in keys("", ours, theirs):
+    for k in keys("", ours, theirs, base):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
             records = tuple(s.get("guarantees") if isinstance(s.get("guarantees"), dict) else {} for s in (base, ours, theirs))
@@ -538,7 +568,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
         elif names(o, a, b):
-            v = items([] if o is MISSING else o, a, b)
+            v = ordered([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
         else:

@@ -2163,8 +2163,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
            gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
-           auto: dict[str, Any] | None = None) -> dict[str, Any]:
+           auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `mem_limit` (--mem-limit-gb): the memory limit the launch states, `{"gb", "by"}`, which the runner's memory mark is made
+    against (research.memmark); it limits nothing.
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
@@ -2226,6 +2228,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
+        if mem_limit and tool_pkg is not None and not (tool_pkg / "memmark.py").exists():
+            raise Refused(f"--mem-limit-gb: the research package in {source} predates the memory mark (no research/memmark.py); the "
+                          f"run's record would not say what was stated.  Commit a tree that has it, or drop --mem-limit-gb")
         if preflight_tool and not knows_preflight(tool_pkg):
             raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
                           f"a tree that has it, or drop --preflight")
@@ -2297,6 +2302,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
+                   **({"mem_limit": mem_limit} if mem_limit else {}),
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),

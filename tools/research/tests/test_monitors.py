@@ -612,6 +612,114 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
+CLEAN_UP = "/usr/local/lib/vy-monitoring/clean-up"
+PLAIN = [{"path": "/a", "state": "stale", "restart": None}, {"path": "/t/b", "state": "stale", "tree": "/t", "restart": None}]
+COPY = [{"path": f"{CLEAN_UP}/research/{f}", "state": "stale", "tree": CLEAN_UP, "whole": True, "restart": None} for f in ("x.py", "y.py", "z.py")]
+
+
+def drift_of(entries: list[dict], strays: tuple[str, ...] = ()) -> Run:
+    return Run((has("drift"), (1, json.dumps({"vy-nebius-cpu-9": {"commit": "c", "strays": list(strays), "entries": entries}}), "")))
+
+
+def test_the_stale_files_of_a_whole_tree_are_a_finding_of_their_own_and_the_nodes_stale_incident_is_as_it_was_without_them():
+    """A copy of main's code (a whole tree) may be behind main, so its stale files are not the node's: beside an ordinary stale
+    file they are a second finding, one per node and tree, an incident only after a week, and the node's own is unchanged."""
+    alone = {f.key: f for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(PLAIN)))}
+    both = {f.key: f for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(PLAIN + COPY)))}
+    assert set(alone) == {"vy-nebius-cpu-9:stale"} and set(both) == {"vy-nebius-cpu-9:stale", f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"}
+    assert both["vy-nebius-cpu-9:stale"] == alone["vy-nebius-cpu-9:stale"] and alone["vy-nebius-cpu-9:stale"].for_s is None
+    assert alone["vy-nebius-cpu-9:stale"].text == "*Deploy drift on vy-nebius-cpu-9: 2 stale*: `/a`, `/t/b`."
+    copy = both[f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"]
+    assert copy.for_s == 7 * 86400 and copy.severity is None and not copy.owners
+    assert copy.text == (f"*vy-nebius-cpu-9: the copy of main's code at `{CLEAN_UP}` is behind main* by 3 files: 3 stale "
+                         "(an incident once every reading for a week has found it behind). Install main's: `research deploy "
+                         f"install vy-nebius-cpu-9 --by WHO --apply {CLEAN_UP}`.")
+    assert copy.cleared == f"*Cleared:* vy-nebius-cpu-9's copy at `{CLEAN_UP}` was installed again."
+    two = [*COPY[:1], {"path": "/opt/other/a.py", "state": "stale", "tree": "/opt/other", "whole": True, "restart": None}]
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(two)))}
+    assert set(got) == {f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}", "vy-nebius-cpu-9:copy-behind:/opt/other"}       # one per tree
+    assert "is behind main* by 1 file: 1 stale (an incident" in got["vy-nebius-cpu-9:copy-behind:/opt/other"]
+
+
+def test_a_node_whose_only_stale_files_are_a_whole_trees_has_no_stale_incident_and_the_trees_other_states_count_as_any_trees(tmp_path):
+    """With nothing stale but the copy, the node has no `stale` finding, and no incident for the six days of hourly readings
+    after the first; the seventh day's opens one. A whole tree's other entries are as any tree's: where no copy is installed
+    a missing file of it is skipped, and a process on a replaced file is the node's `restart`. A file of the copy that a
+    branch has or no commit has is what a copy of main's code never holds: the node's `ahead` or `unknown`, open at the
+    first reading."""
+    assert {f.key for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(COPY)))} == {f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"}
+    copy = {"tree": CLEAN_UP, "whole": True, "copy": "aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "restart": None}
+    rest = [{"path": f"{CLEAN_UP}/research/gone.py", "state": "missing", "tree": CLEAN_UP, "whole": True, "restart": None},
+            {**copy, "path": f"{CLEAN_UP}/research/new.py", "state": "ahead"},
+            {**copy, "path": f"{CLEAN_UP}/research/left.py", "state": "unknown"},
+            {**copy, "path": f"{CLEAN_UP}/research/x.py", "state": "ok", "restart": "a process started before"}]
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(rest, strays=("/usr/local/bin/vy-old.bak-1",))))}
+    assert set(got) == {"vy-nebius-cpu-9:ahead", "vy-nebius-cpu-9:restart", "vy-nebius-cpu-9:stray", "vy-nebius-cpu-9:unknown"}
+    assert got["vy-nebius-cpu-9:ahead"] == f"*Deploy drift on vy-nebius-cpu-9: 1 ahead*: `{CLEAN_UP}/research/new.py`."
+    assert got["vy-nebius-cpu-9:unknown"] == f"*Deploy drift on vy-nebius-cpu-9: 1 unknown*: `{CLEAN_UP}/research/left.py`."
+
+    drift = next(m for m in M.MONITORS if m.id == "drift")
+    out = M.step(M.new_state(), [drift], lambda memo: M.Ctx(now=T0, run=drift_of(COPY + rest), memo=memo), T0, M.AlertDir(tmp_path),
+                 by="test")
+    assert sorted(e["key"] for e in out if e["event"] == "open") == [
+        "drift|vy-nebius-cpu-9:ahead", "drift|vy-nebius-cpu-9:restart", "drift|vy-nebius-cpu-9:unknown"]     # the copy's waits its week
+    state, hour, opened = M.new_state(), 3600, []
+    for i in range(7 * 24 + 1):
+        t = T0 + i * hour
+        out = M.step(state, [drift], lambda memo, t=t: M.Ctx(now=t, run=drift_of(COPY), memo=memo), t, M.AlertDir(tmp_path), by="test")
+        opened += [(i, e["key"]) for e in out if e["event"] == "open"]
+    assert opened == [(7 * 24, f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}")]
+    out = M.step(state, [drift], lambda memo: M.Ctx(now=t + hour, run=drift_of(PLAIN), memo=memo), t + hour, M.AlertDir(tmp_path), by="test")
+    assert sorted((e["event"], e["key"]) for e in out) == [("clear", f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}"),
+                                                          ("open", "drift|vy-nebius-cpu-9:stale")]       # an ordinary one opens at once
+
+
+def test_an_install_starts_the_copys_week_again_though_no_reading_found_the_copy_current(tmp_path):
+    """Main changes the copy's source in most hours, so the first reading after an install may find the new copy behind
+    already. The finding is of the directory the link names, which each install makes anew: its week starts at the install."""
+    drift = next(m for m in M.MONITORS if m.id == "drift")
+    state, hour, opened = M.new_state(), 3600, []
+    names = ("aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "bbbbbbbbbbbb.20261006T204000Z.y2y2y2y2")
+    for i in range(10 * 24 + 1):
+        t = T0 + i * hour
+        copy = [{**e, "copy": names[i >= 3 * 24]} for e in COPY]        # installed on the third day, behind again within the hour
+        out = M.step(state, [drift], lambda memo, t=t, copy=copy: M.Ctx(now=t, run=drift_of(copy), memo=memo), t, M.AlertDir(tmp_path),
+                     by="test")
+        opened += [(i, e["key"]) for e in out if e["event"] == "open"]
+    assert opened == [(10 * 24, f"drift|vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{names[1]}")]
+
+
+INSTALLED = {"tree": CLEAN_UP, "whole": True, "copy": "aaaaaaaaaaaa.20261003T204000Z.x1x1x1x1", "restart": None}
+
+
+def test_a_file_main_dropped_since_the_install_counts_in_the_copys_finding_and_is_no_drift_of_the_nodes():
+    """Between installs the copy holds what main has dropped since. Drift calls such a file `dropped`, an entry of the whole
+    tree: it is the copy being behind main, counted in the copy's one finding, and no finding of the node (as a stray was)."""
+    gone = [{**INSTALLED, "path": f"{CLEAN_UP}/research/{f}", "state": "dropped"} for f in ("drive.py", "old.py")]
+    key = f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{INSTALLED['copy']}"
+    got = {f.key: f for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(gone[:1])))}
+    assert set(got) == {key} and got[key].for_s == 7 * 86400
+    assert got[key].text == (f"*vy-nebius-cpu-9: the copy of main's code at `{CLEAN_UP}` is behind main* by 1 file: 1 main has "
+                             "dropped (an incident once every reading for a week has found it behind). Install main's: `research "
+                             f"deploy install vy-nebius-cpu-9 --by WHO --apply {CLEAN_UP}`.")
+    both = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of([{**e, **INSTALLED} for e in COPY] + gone)))}
+    assert set(both) == {key} and "is behind main* by 5 files: 3 stale, 2 main has dropped (an incident" in both[key]
+
+
+def test_a_file_main_added_since_the_install_counts_in_the_copys_finding_once_a_copy_is_installed():
+    """A copy that lacks a module main has added is behind main though none of its own files differs. Where no copy is
+    installed (no link, so no `copy`), and in a plain tree, a missing file of a tree is skipped as it always was."""
+    new = [{**INSTALLED, "path": f"{CLEAN_UP}/research/{f}", "state": "missing"} for f in ("a.py", "b.py")]
+    key = f"vy-nebius-cpu-9:copy-behind:{CLEAN_UP}@{INSTALLED['copy']}"
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(new)))}
+    assert set(got) == {key} and "is behind main* by 2 files: 2 of main's missing (an incident" in got[key]
+    every = [{**e, **INSTALLED} for e in COPY] + new + [{**INSTALLED, "path": f"{CLEAN_UP}/research/drive.py", "state": "dropped"}]
+    got = {f.key: f.text for f in M.deploy_drift(M.Ctx(now=T0, run=drift_of(every)))}
+    assert set(got) == {key} and "is behind main* by 6 files: 3 stale, 2 of main's missing, 1 main has dropped (an incident" in got[key]
+    for skipped in ([{k: v for k, v in e.items() if k != "copy"} for e in new], [{k: v for k, v in e.items() if k != "whole"} for e in new]):
+        assert M.deploy_drift(M.Ctx(now=T0, run=drift_of(skipped))) == []
+
+
 def test_drift_pages_on_a_node_whose_null_device_is_broken_with_the_command_that_repairs_it():
     fault = {"what": "/dev/null has mode 644, not 666: a redirect to it fails for every user but root", "fix": "sudo chmod 666 /dev/null"}
     rep = {"vy-nebius-cpu-1": {"commit": "c", "strays": [], "entries": [{"path": "/a", "state": "stale", "restart": None}],

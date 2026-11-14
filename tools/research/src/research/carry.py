@@ -61,8 +61,6 @@ _MOVED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
 MOVED_RE = re.compile(r"^moved ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one commit (`moved_tree`): a layout map on the whole tree, `uv lock` with it
 MOVED_TIMEOUT_S = 1800.0
-#: what `moved_tree`'s run of a tree's own code never gets: GitHub and Slack credentials, any of which can push
-MOVED_UNSET = ("GH_TOKEN", "GITHUB_TOKEN", "GH_CONFIG_DIR", "SLACK_BOT_TOKEN")
 
 
 @dataclass(frozen=True)
@@ -147,10 +145,10 @@ def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float
     runs it on a branch (`_MOVED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
     ``timeout`` seconds pass (`queue.run_group`), with its scratch worktree in a temporary directory, which goes once it has
     run, and with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock
-    (`queue.WORKTREES_LOCK`).  The tree's own code runs there but needs no credentials (`MOVED_UNSET`), so the run gets none,
-    and `gh` a config that isn't there."""
+    (`queue.WORKTREES_LOCK`).  The tree's own code runs there but needs neither the queue's credentials nor the store's keys,
+    which drive and the loop hold (`queue.tree_env`), so the run gets none, and `gh` a config that isn't there."""
     with tempfile.TemporaryDirectory(prefix="research-carry-", ignore_cleanup_errors=True) as d:
-        env = {k: v for k, v in Q._script_env().items() if k not in MOVED_UNSET}
+        env = Q.tree_env(Q._script_env())
         rc, out = Q.run_group([sys.executable, "-c", _MOVED, str(restack), commit, move], repo, timeout,
                               env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
         left = any(Path(d).iterdir())

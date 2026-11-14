@@ -194,7 +194,7 @@ def test_per_column_scale_refused():
 
 def test_python_scalar_is_not_this_rule():
     """`x * 48.0` is `aten.mul.Tensor(x, 48.0)` with a Python constant: NOT this rule (`not both graph values`).  Since the
-    `bf16_mul_scalar` kind joined `b1-eager-v3` (`Bf16MulScalar_v1{N,C}`: ATen's bf16 x scalar kernel, difftested in quarantine/dense),
+    `bf16_mul_scalar` kind joined `b1-eager-v3` (`Bf16MulScalar_v1{N,C}`: ATen's bf16 x scalar kernel, difftested on the pod),
     `Bf16ScalarChain[aten]_v1` binds it — a different, registered kind with the constant in its identity."""
     rep = _derive(XTimesPython(), torch.randn(2, 8).to(BF))
     assert RULE not in rep.provenance.get("rules_applied", ()), rep.provenance.get("rules_applied")
@@ -205,9 +205,6 @@ def test_python_scalar_is_not_this_rule():
 
 def test_kind_is_registered_in_the_pinned_vocabulary():
     from verity_vllm.program.frontend.rules.vocab import PROFILES
-    from verity.definitions.registry import b1
-    from verity_vllm.program.quarantine.dense import bf16_mul_scalar_tensor as q
     fn = PROFILES["b1-eager-v3"].kinds["scale_tensor"](N=2304)
     assert fn.id == "Bf16MulScalarTensor_v1{N=2304}", fn.id
-    assert q.Bf16MulScalarTensor is b1.Bf16MulScalarTensor, "quarantine must re-export the registered Definition"
     assert "scale_tensor" not in PROFILES["b1-eager"].kinds, "the accepted b1-eager vocabulary is unchanged"
