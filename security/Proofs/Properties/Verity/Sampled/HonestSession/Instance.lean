@@ -62,6 +62,22 @@ noncomputable def base : Vocab Verity.Idle.device Unit :=
     families := families
     signer := deployedSigner
     cost := cost
+    wipeRun := fun θ' F c _ =>
+      Instance.Honest.ofRun (readOf PinnedTables.empty θ' F).circuit (Verity.play (families θ') (deployedSigner θ') θ' F c)
+    extract := fun _ _ _ _ _ => 0
+    finder := fun _ _ _ _ _ => Verity.Idle.finder
+    finder_calls := fun _ _ _ _ _ _ => Nat.zero_le _
+    finders := fun _ _ _ _ => []
+    premises := fun _ _ _ _ _ => True
+    forger := fun _ _ _ _ _ => Verity.Idle.forger
+    forger_calls := fun _ _ _ _ _ _ => Nat.zero_le _
+    signs_le := Instance.Honest.deployment.signs_le families
+    forger_signed := fun _ _ _ _ _ _ => Nat.zero_le _
+    computed := fun _ _ _ _ _ => ∅
+    macs := fun _ _ _ _ _ => 0
+    world := fun _ _ _ _ _ => Verity.Idle.world
+    world_window := fun _ _ _ _ _ => rfl
+    world_capacity := fun _ _ _ _ _ => rfl
     honest := fun θ' F c =>
       Verity.requestThen (families θ') (deployedSigner θ') θ' F c .empty
         ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
@@ -113,7 +129,7 @@ noncomputable def inst : Instance Verity.Idle.device Unit where
     show publicDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then publicFile else θ₀).data.toList)
     rw [if_pos rfl]
     exact (Params.digests JsonCanon.jsonFacts).2
-  registered θ' := (Array.append_empty _).symm
+  registered _ := Array.append_empty.symm
 
 theorem namedFile_first (a b : ByteArray) :
     Verity.namedFile (some (Verity.sha512 a.data.toList)) #[a, b] = a := by
