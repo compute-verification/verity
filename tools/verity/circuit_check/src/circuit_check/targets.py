@@ -691,7 +691,7 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "F32Max_v2": ("AttnBlockFirst_v3",),
     "F32MulFtzConst_v1": ("AttnBlockFirst_v3",),
     "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
-    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4", "ScaledMmFp8BlockSharedScale_v2"),
     "FmaSubRowF32FtzConstElement_v1": ("AttnBlockFirst_v3",),
     "FmaSubRowF32FtzConstScalar_v1": ("AttnBlockFirst_v3",),
     "GuardNegInfZero_v2": ("AttnBlockFirst_v3",),
@@ -706,6 +706,7 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
     "RMSNormSumInOrderCuda_v2": ("RMSNormFusedCudaVector8_v4",),
     "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "ScaledMmFp8BlockCoordinateGivenScale_v2": ("ScaledMmFp8BlockSharedScale_v2",),
     "Xor2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
 }
 

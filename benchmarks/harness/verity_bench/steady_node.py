@@ -214,7 +214,7 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
                           f"({', '.join(STAGED)})")
         shutil.copytree(given, stage)
     else:
-        rc = run([sys.executable, steady_spec.STAGER, row.type, str(row.n), str(stage)], out / "stage.log")
+        rc = run([sys.executable, steady_spec.STAGER, row.type, str(row.n), str(stage), "--unbound"], out / "stage.log")
         if rc or not all((stage / name).is_file() for name in STAGED):
             raise Refused(f"staging {row.type!r} at {row.n} units failed (exit {rc}): out/stage.log")
     pin = _digest(stage / "circuit.txt", "sha512")
@@ -429,7 +429,7 @@ def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, wh
         if host is None:
             raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
                              "measurement is written under")
-        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement("statements_per_s", rate, "1/s")
+        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement("statements_per_s", rate, "1/s", mark="measured")
 
 
 def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,

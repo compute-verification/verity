@@ -337,12 +337,6 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/hardware/record.py",
-]
-trusted = true
-
-[[place]]
-paths = [
     "verity/hardware/registration.py",
 ]
 trusted = true
@@ -376,10 +370,12 @@ paths = [
     "verity/protocols/accounting/certifier/verifier",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/protocols/proofs/spot/verifier",
+    "verity/runtime",
 ]
 reaches = [
     "verity/channel.py",
@@ -388,7 +384,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -431,7 +426,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
@@ -458,7 +452,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/accounting/poub/verifier",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
@@ -556,7 +549,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -610,6 +602,13 @@ loads = [
 paths = [
     "verity/protocols/policy/inference_only/verifier",
 ]
+loads = [
+    "verity/runtime",
+]
+reaches = [
+    "verity/channel.py",
+    "verity/runtime",
+]
 
 [[place]]
 paths = [
@@ -640,7 +639,6 @@ loads = [
     "verity/claims",
     "verity/commitments",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
 ]
@@ -651,7 +649,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
 ]
