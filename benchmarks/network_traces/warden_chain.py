@@ -128,7 +128,9 @@ def verdict(check: dict) -> dict:
     (`auditor.warden_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
     words (`warden_serve.FAILED`, the gate's `FAILED`). A check that didn't accept gives none of `ACCEPTED_COUNTS`:
     how many execution phases the signer refused is the traffic's. The problems, their number and their words, are
-    made from the witness, as the summary's other keys are, so none is written."""
+    made from the witness, as the summary's other keys are, so none is written. This is the check's word alone: the
+    gate's end also says not accepted of a check that counted another number of requests than its request's, or
+    beside a line the gate doesn't rule, and this reads no end."""
     summary, accepted = check.get("summary") or {}, check["accepted"] is True
     out = {"accepted": accepted,
            **{k: summary[k] for k in COUNTS if k in summary and (accepted or k not in ACCEPTED_COUNTS)}}

@@ -263,6 +263,9 @@ REFUSED_CHECK = CHECK | {"accepted": False, "problems": ["egress window 1's cell
                              "cell_rows": CHECK["summary"]["cell_rows"] | {"registered": 3}}}
 #: the names of a run's lines' files in `out/`
 LINE_FILES = {"certificates.jsonl", "cells-certificates.jsonl", "rows-certificates.jsonl", "cells-registrations.jsonl"}
+#: the verdict of an end that is not accepted, of `CHECK`'s schedule: none of the counts a refused execution phase
+#: lowers (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`)
+NOT_ACCEPTED = {"accepted": False, "failed": [], "windows": 2, "cell_rows": {"of": 4}}
 
 
 def rehearsal(source: str, seen: list | None = None):
@@ -501,10 +504,10 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
     a key the list names neither as published nor as left out, at any depth, a published value out of its key's
     form (another constant, a value the run's deployment doesn't give, hex of another length or case, a number
     that is no count), or a line that isn't the writer's own form, which the gate couldn't cut to the same bytes,
-    is not published, nor is any line of the run: the rehearsal's end is nonzero and says
-    `unruled`, and the line and what to change are the sentence in its `witness/`, of which the end and `out/`
-    hold no word. So is a line that says its execution phase was refused, which a check that accepted can't
-    hold. The deployment is published as before."""
+    is not published, nor is any line of the run: the rehearsal's end is nonzero, says
+    `unruled` and is not accepted, and the line and what to change are the sentence in its `witness/`, of which
+    the end and `out/` hold no word. So is a line that says its execution phase was refused, which a check that
+    accepted can't hold. The deployment is published as before."""
     with pytest.raises(A.Unruled, match=why):
         A.row_registration(line, GIVEN)
     for torn, said in ((_line()[:-1], "the line isn't JSON"), (json.dumps([_line()]), "the line isn't one JSON object")):
@@ -528,7 +531,7 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
     # fields) is out of the certificate's form first: the line's certificate is read before its registration
     assert why in said or ("CERTIFICATE_LINE" in said and FORM in why)
     assert said.endswith("; out/ holds none of the run's lines")
-    assert "unruled" not in end and end["verdict"]["accepted"] is True
+    assert "unruled" not in end and end["verdict"] == NOT_ACCEPTED
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert b"line 2" not in public and b"none of the run" not in public and b"ROW_LINE" not in public
     assert b"a word the peer chose" not in public and b"another" not in public and b"refused" not in public
@@ -559,8 +562,8 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
 def test_a_certificates_line_out_of_form_publishes_none_of_the_runs_lines(host, name, line, why):
     """A certificate goes to `out/` only by `CERTIFICATE_LINE`'s keys, each in its form, from a record's line of
     `certified.jsonl` and from a row registration's alike. A line with another key or a value out of form, or one
-    that says its execution phase was refused, ends the rehearsal nonzero as `unruled`; none of the run's lines'
-    files is written, and neither the end nor `out/` holds a word of the line."""
+    that says its execution phase was refused, ends the rehearsal nonzero as `unruled` and not accepted; none of
+    the run's lines' files is written, and neither the end nor `out/` holds a word of the line."""
     with pytest.raises(A.Unruled, match=why):
         (A.certified_certificate if name == "certified.jsonl" else A.row_certificate)(line, GIVEN)
     assert A.certified_certificate({"salt_c": SALT_C, "certificate": CERTIFICATE}, GIVEN) == {"certificate": CERTIFICATE}
@@ -569,6 +572,7 @@ def test_a_certificates_line_out_of_form_publishes_none_of_the_runs_lines(host, 
     d = host.certifier / run
     said = ended_why(host, end)
     assert end["rc"] == 2 and end["ended"] == "unruled" and f"{name} line 2: " in said and why in said
+    assert end["verdict"] == NOT_ACCEPTED
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert b"a word the peer chose" not in public and b"another" not in public and b"line 2" not in public
     assert b"refused" not in public
@@ -585,13 +589,13 @@ def test_a_run_that_is_not_accepted_publishes_no_line_and_no_count_a_refused_exe
     The same run without the refused execution phase, under a check that accepts, publishes all four files and
     the counts. The verdict decides and not the lines: the certified lines alone under a check that does not accept
     publish nothing either. A refused line under a check that accepts is a witness no run writes, and ends the run
-    `unruled`."""
+    `unruled` and not accepted, with the same verdict as the first run's."""
     refused = WARDEN_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)) + REFUSED_PHASE
     assert refused.count(repr(REFUSED_CHECK)) == 1
     run, end = run_warden(host, refused, token="a001")
     d = host.certifier / run
     assert (end["rc"], end["ended"]) == (0, "ended") and ended_why(host, end) == "the rehearsal ended"
-    assert end["verdict"] == {"accepted": False, "failed": [], "windows": 2, "cell_rows": {"of": 4}}
+    assert end["verdict"] == NOT_ACCEPTED
     assert set(end["files"]) == {"deployment.json"} == {p.name for p in (d / "out").iterdir()}
     for name, line in REFUSED_LINES.items():
         assert json.loads((d / A.WITNESS / name).read_text().splitlines()[-1]) == line
@@ -610,10 +614,49 @@ def test_a_run_that_is_not_accepted_publishes_no_line_and_no_count_a_refused_exe
     assert end["verdict"]["accepted"] is False and set(end["files"]) == {"deployment.json"}
 
     run, end = run_warden(host, WARDEN_FILES + REFUSED_PHASE, token="a004")
-    assert (end["rc"], end["ended"], end["verdict"]["accepted"]) == (2, "unruled", True)
+    assert (end["rc"], end["ended"], end["verdict"]) == (2, "unruled", NOT_ACCEPTED)
     assert set(end["files"]) == {"deployment.json"}
     assert ended_why(host, end) == f"certified.jsonl line 2: {A.REFUSED_LINE}; out/ holds none of the run's lines"
     assert b"refused" not in (host.certifier / run / "end.json").read_bytes()
+
+
+def test_an_end_is_accepted_only_when_all_its_lines_are_out(host, tmp_path):
+    """A program that reads an end's `accepted` alone takes an accepted end as one that published its lines. So an
+    end is accepted only when the check accepted, counted the request's requests, and every line of the run is
+    ruled and in `out/`. Where the check accepted and a line was refused, or is neither a certificate nor a
+    refusal, or is out of its form, the gate cannot rule: the end says `unruled`, exits 2 and is not accepted, with
+    none of the counts a refused execution phase lowers and no line's file, for a rehearsal and for a relay
+    session, whose request asks for no number. The same witness with every line ruled is accepted, with all four
+    files and the counts."""
+    unruled = {
+        "a refused line": WARDEN_FILES + REFUSED_PHASE,
+        "neither a certificate nor a refusal": WARDEN_FILES + (
+            f'with (out / "certified.jsonl").open("a") as f:\n'
+            f'    f.write({json.dumps({"salt_c": SALT_C}) + chr(10)!r})\n'),
+        "a certificate out of form": WARDEN_FILES + (
+            f'with (out / "certified.jsonl").open("a") as f:\n'
+            f'    f.write({json.dumps({"certificate": CERTIFICATE | {"link": "another"}}) + chr(10)!r})\n'),
+        "a registration out of form": WARDEN_FILES + (
+            f'with (out / "cells.jsonl").open("a") as f:\n    f.write({_of(root="ab" * 65) + chr(10)!r})\n'),
+    }
+    for i, (case, source) in enumerate(unruled.items()):
+        run, end = run_warden(host, source, token=f"b00{i}")
+        d = host.certifier / run
+        witness = d / A.WITNESS
+        assert json.loads((witness / "check.json").read_text())["accepted"] is True, case
+        assert (end["rc"], end["ended"], end["verdict"]) == (2, "unruled", NOT_ACCEPTED), case
+        assert set(end["files"]) == {"deployment.json"} == {p.name for p in (d / "out").iterdir()}, case
+        for requests in (100, None):
+            out = tmp_path / f"{i}-{requests}"
+            out.mkdir()
+            got = A.warden_outcome(out, witness, requests)
+            assert got["verdict"] == NOT_ACCEPTED and set(got) == {"verdict", "unruled"}, case
+            assert not {p.name for p in out.iterdir()} & LINE_FILES, case
+
+    run, end = run_warden(host, token="b00a")
+    assert (end["rc"], end["ended"], end["verdict"]["accepted"]) == (0, "ended", True)
+    assert LINE_FILES <= set(end["files"]) and set(A.ACCEPTED_COUNTS) <= set(end["verdict"])
+    assert set(A.ACCEPTED_CELL_ROWS) <= set(end["verdict"]["cell_rows"])
 
 
 def test_no_line_is_published_beside_a_deployment_that_doesnt_fix_its_forms(host):
@@ -632,6 +675,7 @@ def test_no_line_is_published_beside_a_deployment_that_doesnt_fix_its_forms(host
     assert A.deployment_forms(host.root / "none.json") == {}
     run, end = run_warden(host, WARDEN_FILES.replace(f"{DEPLOYMENT!r} | ", "", 1))
     assert end["rc"] == 2 and end["ended"] == "unruled" and set(end["files"]) == {"deployment.json"}
+    assert end["verdict"] == NOT_ACCEPTED
     assert "certified.jsonl line 1: the line's certificate's link is held to what the run's deployment.json gives" in \
         ended_why(host, end)
 

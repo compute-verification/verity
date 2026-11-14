@@ -261,13 +261,15 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   own structure). Each list holds every published value to its
   key's form: a constant, the value the run's deployment gives, hex of a fixed length or a count
   (`deployment_forms`, `in_form`). A line with a key its list doesn't rule, or a value out of its form, fails
-  the rehearsal's end, and none of the lines' files is published. A run the check did not accept publishes none
+  the rehearsal's end, which says it is not accepted (`unruled`), and none of the lines' files is published. So an
+  accepted end is one whose lines are all in `out/`. A run the check did not accept publishes none
   of them either, and its end none of the counts a refused execution phase lowers (`ACCEPTED_COUNTS`): which
   execution phases the signer refused is the traffic's, so no line, no missing certificate and no count says it,
   and under an accepted check a line that says so is not ruled. Of the connection rows' registrations and a load's,
   `out/` and the end hold the certificates and nothing else: no root, domain or layout. Of the word that an
   execution phase has no head, `out/` holds its certificate likewise.
-  `end.json` adds `device` and the check's verdict (`warden_outcome`: whether it accepted, and the counts
+  `end.json` adds `device` and the check's verdict (`warden_outcome`: whether it accepted, which the end says only
+  of a check that also counted the request's requests and left no line unruled, and the counts
   `WARDEN_COUNTS` names, each the schedule's or, of an accepted run, of the certificates). How many problems the check
   found, and its counts of the traffic (the requests and how each ended, the cells, their bits and their lateness),
   stay in the witness's `check.json`. An accepted end's requests are the request's own number: the gate takes a check
@@ -3026,7 +3028,10 @@ def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dic
     `witness`. Under an accepted check every execution phase is certified, so a line it doesn't rule
     (`CERTIFICATE_LINE`, `ROW_LINE`: a key it doesn't name, a value out of its key's form under the run's
     deployment, `deployment_forms`, or a line that says its execution phase was refused) publishes none of the
-    files either, and the outcome says which line and what to change (``unruled``).
+    files either, and the outcome says which line and what to change (``unruled``). Such an outcome is not
+    accepted, as a miscounted one is not: the check accepted beside a line that was refused or is neither a
+    certificate nor a refusal, so this cannot rule, and its verdict holds none of `ACCEPTED_COUNTS`. An accepted
+    outcome is therefore one whose lines are all in `out`.
 
     Of `witness` itself the outcome says nothing: a file's name says what the run got to, and its size follows
     what the peer sent."""
@@ -3048,13 +3053,6 @@ def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dic
         if accepted and requests is not None and not (type(counted) is int and counted == requests):
             accepted, miscounted = False, (f"check.json accepts and counts {counted!r} requests where the request "
                                            f"asked for {requests}")
-        counts = WARDEN_COUNTS if accepted else tuple(k for k in WARDEN_COUNTS if k not in ACCEPTED_COUNTS)
-        verdict = {"accepted": accepted, **{k: summary[k] for k in counts if k in summary}}
-        if isinstance(verdict.get("cell_rows"), dict):
-            verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS
-                                    if k in verdict["cell_rows"] and (accepted or k not in ACCEPTED_CELL_ROWS)}
-        if "failed" in verdict:
-            verdict["failed"] = failed_words(verdict["failed"])
     if accepted:
         given, lines = deployment_forms(witness / "deployment.json"), {}
 
@@ -3082,6 +3080,15 @@ def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dic
         if unruled is None:
             for public, text in lines.items():
                 (out / public).write_text("".join(text))
+        accepted = unruled is None
+    if isinstance(check, dict):
+        counts = WARDEN_COUNTS if accepted else tuple(k for k in WARDEN_COUNTS if k not in ACCEPTED_COUNTS)
+        verdict = {"accepted": accepted, **{k: summary[k] for k in counts if k in summary}}
+        if isinstance(verdict.get("cell_rows"), dict):
+            verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS
+                                    if k in verdict["cell_rows"] and (accepted or k not in ACCEPTED_CELL_ROWS)}
+        if "failed" in verdict:
+            verdict["failed"] = failed_words(verdict["failed"])
     try:
         load = load_relay_public(json.loads((witness / LOAD_RELAY).read_text()))
     except (OSError, ValueError):
@@ -3140,7 +3147,8 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     and the end, its lines only when its check accepted; such a run's line of its certificates or its cells'
     registrations that its list doesn't rule (`CERTIFICATE_LINE`, `ROW_LINE`) ends it nonzero, the end saying
     `unruled` and the witness's `ENDED_WHY` the line and the fix, and so does an accepted check that counted another
-    number of requests than the request's (`miscounted`). A store's write opens no tunnel: it runs `weights_command`
+    number of requests than the request's (`miscounted`); the end of either says it is not accepted. A store's write
+    opens no tunnel: it runs `weights_command`
     (`command(req, out, store)`) and its end carries the store's record."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
@@ -3223,7 +3231,8 @@ def certifier_run(host: Host, run: str, *, pinned: str,
 #: the exit beside it in `rc`), it was stopped at the request's minutes (`stopped`), a tunnel to the peer didn't come
 #: up or closed first (`tunnel`), a line of a certificates' or registrations' file or a store's record isn't ruled
 #: (`unruled`: `CERTIFICATE_LINE`, `ROW_LINE`, `STORE_PUBLIC`), or its check accepted and counted another number of
-#: requests than the request asked for (`miscounted`). The sentence a word stands for names the peer, the port
+#: requests than the request asked for (`miscounted`). A network certifier run's end in either of those two words is
+#: not accepted. The sentence a word stands for names the peer, the port
 #: and, for an unruled line, the line and the fix: it is the run's `witness/` file `ENDED_WHY`, and no word of it
 #: is in the end
 ENDED = ("ended", "exited", "stopped", "tunnel", "unruled", "miscounted")
