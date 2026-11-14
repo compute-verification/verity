@@ -42,7 +42,7 @@ So `GatesLocated` holds wherever two smaller statements do, each a named `Prop` 
 `OperandsResolve` (operands resolve in every activation the walk visits; `OperandsResolve.operandsResolve_of` proves it
 from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates is an earlier gate;
 `Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`), and `Resolve.bodiesOk` proves `Resolve.BodiesOk`.
-`descAgrees_of_gaps` gives `DescAgrees` from those two and `NovelExact`.
+`descAgrees_of_gaps` gives `DescAgrees` from those two and `FreshExact`.
 -/
 
 @[expose] public section
@@ -1037,8 +1037,8 @@ theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLoc
   obtain ⟨⟨w, hw⟩, hinp⟩ := gate_reads_of P hb hx
   exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hE bytes P hdec hov hlo hin hwk han g hg p ops sc hx⟩
 
-/-- **`DescAgrees`, from three statements**: `GatesLocated` through `gatesLocated_of`, and `NovelExact`. -/
-theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : NovelExact) :
+/-- **`DescAgrees`, from three statements**: `GatesLocated` through `gatesLocated_of`, and `FreshExact`. -/
+theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : FreshExact) :
     Properties.DescAgrees :=
   descAgrees_of (gatesLocated_of hO hE) hN
 

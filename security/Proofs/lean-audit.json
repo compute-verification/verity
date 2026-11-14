@@ -30,7 +30,7 @@
   "Proofs.Properties.Nci",
   "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk",
-  "Proofs.Properties.Nci.Novel",
+  "Proofs.Properties.Nci.Fresh",
   "Proofs.Properties.Nci.BaselineSteps",
   "Proofs.Properties.Nci.Baseline",
   "Proofs.Properties.Nci.BodiesOk",

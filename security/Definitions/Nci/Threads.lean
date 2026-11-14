@@ -55,7 +55,7 @@ structure Threading (C : RegisteredCircuit) where
 /-- **A small subcircuit** (the draft's `F < F*`, `S < S*`, here as `≤`): at most `c` computed gates, reading at most
 `k` fresh input bits. -/
 def Small (C : RegisteredCircuit) (c : ℕ) (k : ℝ) (R : Finset (Fin C.D.N)) : Prop :=
-  R ⊆ C.D.computed ∧ C.D.size R ≤ c ∧ (novelReads C R : ℝ) ≤ k
+  R ⊆ C.D.computed ∧ C.D.size R ≤ c ∧ (freshInput C R : ℝ) ≤ k
 
 namespace Threading
 
