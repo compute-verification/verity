@@ -1093,7 +1093,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     serve, kw = started.value.args
     assert kw["pass_fds"] == (args.listen_fd,)
 
-    public, got = ws.cs.signer(tmp_path / "key", 4).public_key(), []
+    public, got = ws.ck.signer(tmp_path / "key", 4).public_key(), []
 
     class Publisher:
         """`PublisherProcess` with no process: the key's public half, and nothing published."""
@@ -1134,7 +1134,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     monkeypatch.setattr(ws, "Warden", Relay)
     monkeypatch.setattr(ws, "prepare_process", lambda params: {})
     monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
-    monkeypatch.setattr(ws.ar, "_quiet_runtime", lambda: None)
+    monkeypatch.setattr(ws, "_quiet_runtime", lambda: None)
     for name in ("PYTHONMALLOC", ws.C_ALLOCATOR):
         monkeypatch.delenv(name, raising=False)
     early = socket.create_connection(held.getsockname())
