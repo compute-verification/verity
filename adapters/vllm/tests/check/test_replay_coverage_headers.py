@@ -1,8 +1,12 @@
 """`verity_vllm.check.replay.coverage.query_population` on a manifest whose header carries a dataflow guard and a cross-check: an older header's,
 which a manifest of record may still carry and no writer in this tree writes.  Their state travels onto the record
 (`query_total.guard`, `query_total.cross_check`) and into the scope line.  Beside them, on manifests written here: what each
-finding names and counts, and what the record says of each request under an executed prefix."""
+finding names and counts, what the record says of each request under an executed prefix, and that a module a mechanism names
+is one the tree has."""
 from __future__ import annotations
+
+import importlib.util
+import re
 
 import pytest
 
@@ -12,6 +16,8 @@ from verity_vllm.check.replay import population as POP
 from verity_vllm.records.required_manifest import SCHEMA
 
 OLDER_ID = "Q_module (older header, no query_id)"
+#: a module as a mechanism's text names it: a dotted lower-case name in parentheses or backticks
+MODULE_NAMED = re.compile(r"[(`]((?:[a-z_][a-z0-9_]*\.)+[a-z_][a-z0-9_]*)[)`]")
 GUARD = {"engine": "traversal", "armed": True, "available": True, "fully_wired": True, "audited": 7}
 CROSS = {"agree": True, "primary_engine": "traversal", "other_engine": "inventory", "identities": {"traversal": 3, "inventory": 2}, "seconds": 1.5}
 
@@ -144,3 +150,23 @@ def test_a_request_served_to_its_last_step_counts_nothing_not_executed_beside_on
         assert COV.query_population(_manifest(), {}, set(), ranks=[0], executed_prefix=one)["not_executed_rule"]["r3_one_mechanism"] is False
     no_prefix = COV.query_population(_manifest(), {}, set(), ranks=[0])
     assert no_prefix["not_executed_rule"]["r3_one_mechanism"] is False and no_prefix["sampled_strata"]["strata_evaluated"] is None
+
+
+def _stands(name: str) -> bool:
+    for full in (name, f"verity_vllm.{name}"):
+        try:
+            if importlib.util.find_spec(full) is not None:
+                return True
+        except ModuleNotFoundError:
+            continue
+    return False
+
+
+def test_a_module_a_mechanism_names_is_one_the_tree_has():
+    """A mechanism is free text on the record (`population.uncovered_by_name`).  Where it names a module, as itself or by its
+    place under `verity_vllm`, a reader of the record finds the module there."""
+    named = {(family, m) for family, text in COV.QUERY_FAMILY_MECHANISM.items() for m in MODULE_NAMED.findall(text)}
+    assert {m for _family, m in named} >= {"query.norm_scales", "query.router_softmax", "query.vocab_range", "query.scale_products",
+                                           "check.replay.checks"}
+    assert {family for family, m in named if "exactness" in m} == {"norm_scales", "router_softmax", "vocab_range"}
+    assert sorted(fm for fm in named if not _stands(fm[1])) == []

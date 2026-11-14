@@ -36,6 +36,8 @@ from verity_vllm.protocols.pouw.pearl_c.host import (
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
 
+__all__ = ["GRAPH_ROWS"]
+
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
 GRAPH_ROWS = 256

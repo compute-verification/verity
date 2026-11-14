@@ -138,12 +138,14 @@ To retire an entry, fix what it allows and delete it: its rule's stale-entry che
 `test_ratchet.py` holds every lint to having one that takes no fixture, to a `NAME` that is a string literal, and to
 importing only the standard library and this directory.
 
-**What other code reads from these tests.** A test in another directory of `tests/` imports three modules, each naming what
-it offers in `__all__`: `tests.fake_vllm` (`install`, `FakeVllm`, `Module`, `Unset`: vLLM stood in for a test, built from
+**What other code reads from these tests.** A test in another directory of `tests/` imports four modules. Three name what
+they offer in `__all__`: `tests.fake_vllm` (`install`, `FakeVllm`, `Module`, `Unset`: vLLM stood in for a test, built from
 `vllm_surface.py`), `tests.regression.store_io` (`fetch`, `reachable`, `StoreUnavailable`: a fixture read from the evidence
 store, which `verity/circuits/evaluate`'s difftest loads by path too) and `tests.regression.checks.attempt_provenance`
-(`DEFAULT_QUERY`). Two files run as commands: `python -m tests.regression.rebaseline run`, from
-`verity_vllm/ops/epoch_row.sh`, and `tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
+(`DEFAULT_QUERY`). The fourth is this directory's `_imports`, for `core` and `core_less_definitions` (which modules of
+`verity` are core), which `conftest.py`'s guard and the four boundary tests of `tests/program/` read. Two files run as
+commands: `python -m tests.regression.rebaseline run`, from `verity_vllm/ops/epoch_row.sh`, and
+`tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
 The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
 (`tools/verity/check/post_train.py`). Read by path: from each lint the gate reads `NAME`, its `test_no_new*` tests and its
 list, and for P9 `_imports.LAYER` and `test_p09_layering.PACKAGE_OF`; the public export rewrites each lint's list,

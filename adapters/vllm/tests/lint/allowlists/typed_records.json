@@ -72,7 +72,6 @@
     {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "schema-literal", "symbol": "lint", "detail": "verity-gen/quarantine-lint/v1"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession._session", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession.end", "detail": "verity-vllm/remote-session/v0"},
-    {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/settings.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/settings/v1"},
     {"file": "verity/definitions/boolean.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/boolean-purity/v1"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/gemm-correspondence/v1"},

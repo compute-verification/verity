@@ -297,6 +297,27 @@ def test_the_profile_is_the_same_document_through_the_hook(memory, tmp_path, der
     assert res["verdict"] == "PASS" and all("_profile" not in e for e in res["requests"])
 
 
+def test_a_profile_whose_memory_read_fails_says_so_in_place_of_the_two_figures(memory, tmp_path, derived_is_a_fold, profile_out, monkeypatch):
+    """The profile's peak memory is the resource usage of the process and of its children.  Where that read raises, the profile
+    carries the error in place of the two figures and is written all the same, and the document is the one of a run that read it."""
+    import resource
+
+    def refused(who):
+        raise OSError(f"no resource usage of {who}")
+    d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
+    derived = [e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"), e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
+    read = bd.decompose(d, derived)
+    assert "max_rss_error" not in json.loads(profile_out.read_text())
+    with monkeypatch.context() as m:
+        m.setattr(resource, "getrusage", refused)
+        res = bd.decompose(d, derived)
+    prof = json.loads(profile_out.read_text())
+    assert prof["max_rss_error"] == f"OSError('no resource usage of {resource.RUSAGE_SELF}')"
+    assert "max_rss_mib_parent" not in prof and "max_rss_mib_children" not in prof
+    assert (prof["verdict"], prof["seconds"], _how_the_requests_ran(prof)) == ("PASS", res["seconds"], "inline")
+    assert _same_but_time(res, read)
+
+
 def test_the_profiles_wrappers_on_the_view_hand_on_what_they_are_given_and_count_each_read_once(profile_out, monkeypatch):
     """The three reads of an operand the profile wraps on `RootView`: each wrapper passes the view, the run or progression and
     `unfold` to the read it wraps and returns its answer; a progression read a run at a time counts its runs; a second
