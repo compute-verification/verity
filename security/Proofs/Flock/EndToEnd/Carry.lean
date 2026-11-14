@@ -24,8 +24,8 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Proof of the integrity audit over a monitoring period of blocks, with carried state
 
-* `SamplingBlock.accepted_drawnWrong_le_at`: one session's bound at the value layer of any values `Xv`
-  (`zk_session_soundHJ_custody_drawn_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
+* `SamplingBlock.accepted_sampledWrong_le_at`: one session's bound at the value layer of any values `Xv`
+  (`zk_session_soundHJ_custody_sampled_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
 * `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `δ_link`'s at every commit string no carried
   leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
   (`CarriedBlocks.carriedE`).
@@ -80,7 +80,7 @@ variable (w : SamplingBlock)
 
 open Classical in
 /-- **One session's drawn-unit bound at the value layer of any values `Xv`**, at the strategy `τ` that plays it. -/
-theorem accepted_drawnWrong_le_at
+theorem accepted_sampledWrong_le_at
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
     (τ : Strategy w.game) (hcr : w.CR τ) :
@@ -90,7 +90,7 @@ theorem accepted_drawnWrong_le_at
             (Xv (reg (w.sim τ)) (cont (w.sim τ))))) w.game τ ≤
       w.ks + errBoundZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb Xv w.k w.Rw w.ρ
         (reg (w.sim τ)) (cont (w.sim τ)) := by
-  have h := zk_session_soundHJ_custody_drawn_at w.I w.ht (Flock.Desc.parse_flat w.hD) w.hU w.hpub w.hpt w.hscope
+  have h := zk_session_soundHJ_custody_sampled_at w.I w.ht (Flock.Desc.parse_flat w.hD) w.hU w.hpub w.hpt w.hscope
     w.kd w.hdiv w.dj w.y₀ w.wr w.dg w.N w.Lb w.src w.hTags w.hCust w.hk w.hRw w.hρ w.hr Xv τ (qF := w.qF)
     (qS := w.qS) hcr.1
   refine h.trans (add_le_add ?_ le_rfl)
@@ -384,9 +384,9 @@ theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
 /-- **One session's stage**: accepted with a sampled proof block wrong, each carried leaf read at its value, with probability
 at most `ε_ks + δ_link` plus the carried term. -/
 theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
-    prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).drawnWrong) (S.W t).game τ ≤
+    prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).sampledWrong) (S.W t).game τ ≤
       ((S.W t).ks + (S.W t).link) + ENNReal.ofReal (S.carriedE s t τ) := by
-  refine ((S.W t).accepted_drawnWrong_le_at (S.Xcar s t) τ hcr).trans ?_
+  refine ((S.W t).accepted_sampledWrong_le_at (S.Xcar s t) τ hcr).trans ?_
   rw [add_assoc]
   exact add_le_add le_rfl (S.errBound_le s t τ hcr.2)
 
@@ -546,7 +546,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
   have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   -- some session of `I` accepted with a sampled proof block wrong, each carried leaf read at its value
   have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t)
-    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (fun t τ => (S.W t).CR τ)
+    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (fun t τ => (S.W t).CR τ)
     (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (S.carriedOn s I) (S.carriedOn_nonneg s I)
     (fun t τ hτ => by
       by_cases ht : t ∈ I
@@ -556,7 +556,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) S.T 0 s hs
   -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
   have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t)
-    (fun r => r.idx ∈ I → ¬ r.drawnWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
+    (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
     (fun t τ => (S.W t).CR τ) xq hx
     (fun t τ _ => by
       by_cases ht : t ∈ I
@@ -567,7 +567,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
           rw [h0, pow_zero]
           exact prob_le_one _ _ _
         refine (prob_mono (q := fun o => ¬ ∃ u ∈ o.2.1, u ∈ S.wrongSet s t τ) (fun o ho => ho ht) _ _).trans ?_
-        exact ((S.W t).drawMiss_le (hA3 t ht) _ τ).trans
+        exact ((S.W t).sampleMiss_le (hA3 t ht) _ τ).trans
           (pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht hn)) _)
       · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht),
           (prob_le_one _ _ _).trans_eq (pow_zero xq).symm⟩) S.T 0 s M hs
@@ -578,17 +578,17 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     exact Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
         M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (S.run s)
-      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
+      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum)) (S.run s) := by
         refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.drawnWrong
+        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.sampledWrong
         · obtain ⟨r, hr, hrI, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hrI, hl.1 r hr hrI, hdr⟩
         · exact Or.inr ⟨fun r hr hrI hdr => hd ⟨r, hr, hrI, hdr⟩,
             (Flock.SecurityProofs.sum_filter_wrong I l) ▸ hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
+    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (S.run s) +
+          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum) (S.run s) :=
         value_or_le _ _ _
     _ ≤ (∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I) + xq ^ M :=
@@ -652,31 +652,31 @@ theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
     fun t ht m => pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht)) m
   have hgood := monitoringPeriodGood_mono _ S.T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < S.T ∧ (S.W j).CR τ)) hs
   -- some session accepted with a sampled proof block wrong, each carried leaf read at its value
-  have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.drawnWrong)
+  have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.sampledWrong)
     (fun t τ => t < S.T ∧ (S.W t).CR τ) (fun t => (S.W t).ks + (S.W t).link) (S.carriedOn s (Finset.range S.T))
     (S.carriedOn_nonneg s _) (fun t τ hτ => by
       simp only [CarriedBlocks.carriedOn, Finset.mem_range.2 hτ.1, ↓reduceIte]
       exact S.stage_le s t τ hτ.2) S.T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
-  have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.drawnWrong)
+  have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.sampledWrong)
     WindowRec.wrong (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
     (fun t τ hτ => ⟨(S.wrongSet s t τ).card, fun _ => rfl,
-      ((S.W t).drawMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
+      ((S.W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
   have hxM : xq ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
   have hε : ∑ t ∈ Finset.range S.T, (fun t => (S.W t).ks + (S.W t).link) (0 + t) =
       ∑ b ∈ Finset.range S.B, S.err b := by
     simp only [zero_add]
     exact sum_range_start S.toServerBlocks (fun t => (S.W t).ks + (S.W t).link) S.B
   calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ)) (S.run s)
-      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, ¬ r.drawnWrong) ∧ M ≤ (l.map WindowRec.wrong).sum)) (S.run s) := by
+      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.wrong).sum)) (S.run s) := by
         refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.drawnWrong
+        by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
         · exact Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, Nat.ceil_le.2 hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.drawnWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, ¬ r.drawnWrong) ∧ M ≤ (l.map WindowRec.wrong).sum) (S.run s) :=
+    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (S.run s) +
+          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.wrong).sum) (S.run s) :=
         value_or_le _ _ _
     _ ≤ (∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry) + ENNReal.ofReal δ := by
         refine add_le_add ?_ (hB.trans hxM)

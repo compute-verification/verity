@@ -197,7 +197,7 @@ theorem twoLTwo_scope {Coin : Type} (x : Msg) : (twoLTwo Coin).Scope x :=
 /-- `twoLTwo` meets the two-stage contract at every hash. -/
 theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
     (twoLTwo Coin).Sessions H where
-  replayDraws := by
+  replaySamples := by
     intro x s Pt d hs hP hd _ T hT
     obtain rfl : s = twoStmt := (Option.some.inj hs).symm
     obtain rfl : Pt = twoPart := (Option.some.inj hP).symm
@@ -218,7 +218,7 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
       refine (Pr_congr fun r => iff_false_intro (hn r)).trans_le ?_
       rw [Pr_false]
       exact two_Pa_nonneg T
-  secondDraws := by
+  secondSamples := by
     intro x s Pt d hs hP hd _ r X
     obtain rfl : s = twoStmt := (Option.some.inj hs).symm
     obtain rfl : Pt = twoPart := (Option.some.inj hP).symm

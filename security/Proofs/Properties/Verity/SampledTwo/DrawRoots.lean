@@ -9,12 +9,12 @@ public import Proofs.Properties.Verity.SampledTwo.CoinStages
 /-!
 # Each stage's sample is its family after one root, from `OtherRoots`
 
-`CoinMap.StageDraws` asks, of each accepted play and its stage's sample, two things: the sample names the stage's family,
+`CoinMap.StageSamples` asks, of each accepted play and its stage's sample, two things: the sample names the stage's family,
 and the play's log shows that family after the sample's digest alone (`CoinMap.OneRoot`). The second is CUT's
 (`CutRoots.lean`), on a play whose log the check read and found the device's (`ReadIsDevice`), whose sent message is
-the case's (`caseOf o.sent`) and that meets `OtherRoots`: `oneRoot_draws` for the first stage, whose sample is the cut's
-first sample (`firstDraw_of`, the boundary parameters' family), and `oneRoot_second` for the second. So `StageDraws`
-takes the family alone (`stageDraws_first`, `stageDraws_second`).
+the case's (`caseOf o.sent`) and that meets `OtherRoots`: `oneRoot_samples` for the first stage, whose sample is the cut's
+first sample (`firstSample_of`, the boundary parameters' family), and `oneRoot_second` for the second. So `StageSamples`
+takes the family alone (`stageSamples_first`, `stageSamples_second`).
 -/
 
 @[expose] public section
@@ -23,7 +23,7 @@ namespace Verity.SampledTwo
 
 /-- **The second stage's sample, read back**: the family the interior audit's parameters name for its challenger and the
 interior registration's digest. -/
-theorem secondDraw_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
+theorem secondSample_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} (hd : Decoded k p c e) {label : String} {after : ByteArray}
     (h : secondDraw k = some (label, after)) :
     ∃ key c₂, p.audit.base.challenger = some (key, label) ∧ interiorOf e = .ok c₂ ∧ after = c₂.digest := by
@@ -54,13 +54,13 @@ theorem secondDraw_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c :
         rw [hs]
         exact hc
 
-/-- **The first stage's sample is its family after one root**: `StageDraws` from the family alone, on plays whose log the
+/-- **The first stage's sample is its family after one root**: `StageSamples` from the family alone, on plays whose log the
 check read and found the device's, whose sent message is the case's and that meet `OtherRoots`. -/
-theorem stageDraws_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}
+theorem stageSamples_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}
     (hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e))
     (hA : ∀ o, Acc o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent)
     (hfam : ∀ o, Acc o → ∀ label after, (C o).bind firstDraw = some (label, after) → label = ℓ) :
-    CoinMap.StageDraws Acc (fun o => (C o).bind firstDraw) ℓ := by
+    CoinMap.StageSamples Acc (fun o => (C o).bind firstDraw) ℓ := by
   intro o ho label after hd
   have hℓ := hfam o ho label after hd
   obtain ⟨⟨k, hk, p, c, e, -, -, hdec, -⟩, hg, hx⟩ := hA o ho
@@ -68,22 +68,22 @@ theorem stageDraws_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : St
     beta_reduce at hd
     rw [hk] at hd
     exact hd
-  obtain ⟨p', c', e', _, d₁, _, _, _, h1, -, h3, -, -, -, ho₁, -⟩ := oneRoot_draws hg hx
+  obtain ⟨p', c', e', _, d₁, _, _, _, h1, -, h3, -, -, -, ho₁, -⟩ := oneRoot_samples hg hx
   have hpce := Except.ok.inj (h1.symm.trans (hcase o k p c e hk hdec))
   simp only [Prod.mk.injEq] at hpce
   obtain ⟨rfl, rfl, rfl⟩ := hpce
-  have hpair := Option.some.inj (hd'.symm.trans (firstDraw_of hdec h3))
+  have hpair := Option.some.inj (hd'.symm.trans (firstSample_of hdec h3))
   simp only [Prod.mk.injEq] at hpair
   obtain ⟨rfl, rfl⟩ := hpair
   subst hℓ
   exact ⟨rfl, ho₁⟩
 
-/-- **The second stage's sample is its family after one root**: `StageDraws` from the family alone, on the same plays. -/
-theorem stageDraws_second {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}
+/-- **The second stage's sample is its family after one root**: `StageSamples` from the family alone, on the same plays. -/
+theorem stageSamples_second {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}
     (hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e))
     (hA : ∀ o, Acc o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent)
     (hfam : ∀ o, Acc o → ∀ label after, (C o).bind secondDraw = some (label, after) → label = ℓ) :
-    CoinMap.StageDraws Acc (fun o => (C o).bind secondDraw) ℓ := by
+    CoinMap.StageSamples Acc (fun o => (C o).bind secondDraw) ℓ := by
   intro o ho label after hd
   have hℓ := hfam o ho label after hd
   obtain ⟨⟨k, hk, p, c, e, -, -, hdec, -⟩, hg, hx⟩ := hA o ho
@@ -91,7 +91,7 @@ theorem stageDraws_second {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : S
     beta_reduce at hd
     rw [hk] at hd
     exact hd
-  obtain ⟨key, c₂, hch, h5, rfl⟩ := secondDraw_parts hdec hd'
+  obtain ⟨key, c₂, hch, h5, rfl⟩ := secondSample_parts hdec hd'
   subst hℓ
   exact ⟨rfl, oneRoot_second hg hx (hcase o k p c e hk hdec) h5 hch⟩
 

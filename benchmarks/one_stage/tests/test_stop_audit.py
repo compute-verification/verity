@@ -1,6 +1,7 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from the hand-off alone, the verifier's own ``--registered`` file,
-the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
+the audit record's entries and what each refuses, the one word a summary gives for a refusal (`reason`) and
+what the negative control changes, and Lean's verdicts on the read across the class's two streams
 (`Record.across`) held to the Python's on eighteen written cases, and on a list of reads with the last stream's own
 audit record (`Record.acrossAll`), on the stop stream alone and on a chain of three records. No input is random. No
 proof runs here: a session's verdicts are stand-ins of the form `a0.lean_verify` reports, and ``stop_audit_small.sh``
@@ -19,7 +20,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS
 
@@ -42,9 +43,10 @@ def _resume(handoff: dict, stop: BS.Stop = T.STOP, design: str = DESIGN, **held:
                      **{"key": T.FC.pinned_key(), "main": T.FC.MAIN, **held})
 
 
-def _handoff(tmp_path: Path, monkeypatch, seed: str) -> dict:
-    """A stop class's hand-off as `two_stage.py first --stop` writes it, on one session of a test's challenger."""
-    pubs = [json.loads(json.dumps(T._stop_class().public()))]
+def _handoff(tmp_path: Path, monkeypatch, seed: str, pub: dict | None = None) -> dict:
+    """A stop class's hand-off as `two_stage.py first --stop` writes it, on one session of a test's challenger.
+    ``pub``: the class's commitment as it is registered, where it is not `test_two_stage_driver._stop_class`'s own."""
+    pubs = [pub or json.loads(json.dumps(T._stop_class().public()))]
     monkeypatch.setattr(T.AC, "start", T._start(T.OneSession(seed)))
     (got,) = T.TS._first_all(T._args(tmp_path), pubs, T.PAIR, T.RULE, None, T.STOP)
     assert got["stop"]["order"] == {"held": True, "reason": None}
@@ -578,3 +580,124 @@ def test_the_rehearsals_wrong_class_commits_stop_words_that_are_not_the_rules():
     assert forged["roots"][BR.STOP] == wrong["values"][BR.STOP]["root"] != honest["roots"][BR.STOP]
     assert (honest["rows"][SA.OUT][:, 0] ^ forged["rows"][SA.OUT][:, 0]).tolist() == [1] * T.N
     assert len(honest["paths"][SA.OUT]) == len(honest["salts"][SA.OUT]) == T.N
+
+
+#: Lean's verdict of record as `a0.lean_verify` reports it of a proof its inner check's batched constraint refused
+UNSATISFIED = {"accepted": False, "of_record": True, "digest": "dd" * 64, "why": f"{SA.UNSATISFIED} (⟨c, Y⟩ ≠ t + β τ)"}
+#: Lean's verdicts of record that are no refusal of the stop relation, each as `a0.lean_verify` reports it
+OTHERS = {
+    "an accept": {**UNSATISFIED, "accepted": True, "why": None},
+    "a refusal at setup": {**UNSATISFIED, "why": "setup: the registered file reads a port under another root"},
+    "a file of the session that was not there": {**UNSATISFIED, "why": f"{SA.a0.NO_SESSION_FILES} no such file"},
+    "another of the inner check's refusals": {**UNSATISFIED, "why": "zk inner: τ does not open its commitment"},
+    "a refusal at setup that quotes the constraint": {**UNSATISFIED, "why": f"setup: {SA.UNSATISFIED}"},
+    "no verdict line of Lean's": {**UNSATISFIED, "digest": None, "why": "no verdict (rc 1): "},
+    "no reason": {**UNSATISFIED, "why": None},
+    "an entry that is not of record": {**UNSATISFIED, "of_record": False},
+}
+
+
+def test_the_reason_is_a_function_of_leans_verdict_of_record_alone():
+    """`reason` is the stop word's only for Lean's own verdict of record that refused the proof at its inner check's
+    batched constraint. Every other verdict of Lean's gets none: an accept, a refusal at setup, for a file of the
+    session that was not there, at another check, a stand-in for a run that printed no verdict, and an entry that is
+    not of record. It reads Lean's entry and no other: the same word whatever the other entries hold, and none from
+    a record without the entry or with that verdict under another entry's name."""
+    assert SA.STOP_WORD == "stop_word" and SA.reason({SA.LEAN: UNSATISFIED}) == SA.STOP_WORD
+    for name, verdict in OTHERS.items():
+        assert SA.reason({SA.LEAN: verdict}) is None, name
+    refused = {"accepted": False, "of_record": False, "why": "did not accept"}
+    assert SA.reason({SA.LEAN: UNSATISFIED, SA.M0: refused, SA.BOUNDARY_AUDIT: refused, SA.ORDER: refused}) == SA.STOP_WORD
+    assert SA.reason({SA.LEAN: OTHERS["an accept"], SA.M0: UNSATISFIED, SA.BOUNDARY_AUDIT: refused}) is None
+    assert SA.reason({}) is None and SA.reason({SA.M0: UNSATISFIED}) is None
+
+
+def test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relation(tmp_path, monkeypatch):
+    """One hand-off, audited on a stream built again each time. The summary's ``reason`` is what `reason` gives of the
+    audit record's entry of record: the stop word where Lean's verdict refused the proof at the batched constraint,
+    and still that where the boundary stream's outcome did not accept either. No reason: an accepted record; a record
+    Lean's verdict refused at setup, or for a file of the session that was not there; and a record only another entry
+    refused, the boundary stream's outcome or the ``--registered`` file's name. A command that stopped before a
+    verdict writes a summary whose reason is null."""
+    hand = _handoff(tmp_path, monkeypatch, "reason")
+    told = {k: UNSATISFIED[k] for k in ("accepted", "why")}
+    got, summary = _audit(hand, **told)
+    entry = got["audit"]["verdicts"][SA.LEAN]
+    assert (entry["of_record"], entry["digest"], entry["why"]) == (True, UNSATISFIED["digest"], UNSATISFIED["why"])
+    assert summary["reason"] == SA.reason({SA.LEAN: entry}) == SA.STOP_WORD
+    assert summary["accepted"] is False and summary["failed"] == ["registered", "roots"]
+    _, summary = _audit(hand, SMALL.unaccepted(hand), **told)
+    assert summary["reason"] == SA.STOP_WORD and summary["verdicts"][SA.BOUNDARY_AUDIT] is False
+
+    _, summary = _audit(hand)
+    assert summary["accepted"] is True and summary["reason"] is None
+    for name in ("a refusal at setup", "a file of the session that was not there"):
+        _, summary = _audit(hand, accepted=False, why=OTHERS[name]["why"])
+        assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is False and summary["reason"] is None, name
+    for outcome, lean in ((SMALL.unaccepted(hand), {}), (None, {"registered_sha512": "00" * 64})):
+        _, summary = _audit(hand, outcome, **lean)
+        assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is True and summary["reason"] is None
+
+    unsampled = tmp_path / "unsampled.json"
+    unsampled.write_text(json.dumps({**hand, "stop": {"error": "refused"}}))
+    out = tmp_path / "stopped"
+    monkeypatch.setattr(T.TS, "template_fn", lambda _id: T.PAIR)
+    assert SA.main(["--handoff", str(unsampled), "--boundary", str(tmp_path), "--stop", json.dumps(T.STOP.to_json()),
+                    "--design", DESIGN, "--bin", "none", "--lean", "none", "--out", str(out)]) == 1
+    stopped = json.loads((out / "summary.json").read_text())
+    assert stopped["accepted"] is False and stopped["reason"] is None and "error" in stopped and "verdicts" not in stopped
+
+
+def test_the_control_is_the_accepted_class_with_its_stop_word_changed_and_nothing_else(tmp_path, monkeypatch):
+    """The negative control changes the stop word alone, from the accepted class. Its prover (`opened` with spans to
+    forge) opens the two parameters' rows, salts, paths and roots as the class's own, and the stop row with bit 0 of
+    its first word flipped at the forged spans, every other bit and its salts the class's. The commitment a first
+    stage registers for it (`stop_audit_small.wrong_length`) gives the accepted class's boundary record, and a stop
+    record that differs from the accepted class's in `b.stop`'s root alone, the forged tree's. So `opens`, which the
+    command holds before any session, finds every port under the root its record registers for the class and for the
+    control, the stop row's alone off where one's prover meets the other's record, and names a parameter whose tree a
+    prover changed."""
+    c = T._stop_class()
+    honest, forged = SA.opened(c), SA.opened(c, range(T.N))
+    for p in BS.STOP_READS:
+        assert (honest["rows"][p] == forged["rows"][p]).all() and honest["salts"][p] == forged["salts"][p], p
+        assert honest["paths"][p] == forged["paths"][p], p
+    assert {v for v in honest["roots"] if honest["roots"][v] != forged["roots"][v]} == {BR.STOP}
+    changed = honest["rows"][SA.OUT] ^ forged["rows"][SA.OUT]
+    assert changed[:, 0].tolist() == [1] * T.N and not changed[:, 1:].any()
+    assert honest["salts"][SA.OUT] == forged["salts"][SA.OUT]
+    one = honest["rows"][SA.OUT] ^ SA.opened(c, [1])["rows"][SA.OUT]
+    assert one[:, 0].tolist() == [0, 1] + [0] * (T.N - 2) and not one[:, 1:].any()
+
+    pub = json.loads(json.dumps(c.public()))
+    for name in ("class", "control"):
+        (tmp_path / name).mkdir()
+    mine = _handoff(tmp_path / "class", monkeypatch, "class", pub)
+    its = _handoff(tmp_path / "control", monkeypatch, "control", SMALL.wrong_length(c))
+    assert mine["record"] == its["record"] and mine["registration"] == its["registration"]
+    stop, other = mine["stop"]["record"], its["stop"]["record"]
+    assert {k for k in stop if stop[k] != other[k]} == {"roots"}
+    assert stop["previous"] == other["previous"] == mine["registration"]
+    (x,), (y,) = stop["roots"], other["roots"]
+    assert {k for k in x if x[k] != y[k]} == {"root"} and x["port"] == y["port"] == BR.STOP
+    assert (x["root"], y["root"]) == (honest["roots"][BR.STOP], forged["roots"][BR.STOP])
+
+    held, wrong = SA.reads(_resume(mine)), SA.reads(_resume(its))
+    assert SA.opens(honest["roots"], held) == [] == SA.opens(forged["roots"], wrong)
+    assert SA.opens(forged["roots"], held) == [SA.OUT] == SA.opens(honest["roots"], wrong)
+    for p, v in BS.STOP_READS.items():
+        assert SA.opens({**forged["roots"], v: "00" * 64}, wrong) == [p]
+
+
+def test_the_rehearsal_expects_the_stop_word_of_its_control_and_of_no_other_run():
+    """`stop_audit_small.expect` on five summaries: ``length``, the control's, holds only with the reason
+    ``stop_word``, and ``no_other_reason`` only where each of the four other runs' summaries states a null reason."""
+    runs = {name: {"reason": None} for name in SMALL.RUNS}
+    runs["length"] = {"accepted": False, "verdicts": {SA.LEAN: False, SA.ORDER: True}, "length_held": False,
+                      "reason": SA.STOP_WORD}
+    got = SMALL.expect(runs)
+    assert got["length"] is True and got["no_other_reason"] is True
+    assert SMALL.expect({**runs, "length": {**runs["length"], "reason": None}})["length"] is False
+    for name in set(SMALL.RUNS) - {"length"}:
+        assert SMALL.expect({**runs, name: {"reason": SA.STOP_WORD}})["no_other_reason"] is False, name
+        assert SMALL.expect({**runs, name: {}})["no_other_reason"] is False, name

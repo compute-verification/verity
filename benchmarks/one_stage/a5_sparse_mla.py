@@ -48,7 +48,7 @@ from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
 
 RULE = "stratified-rate:1/64"
 FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"

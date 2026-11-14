@@ -159,6 +159,8 @@ OWN_CAPS = {
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
     "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
     "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
+    "benchmarks/recursion_figures/": "Flock's Merkle caps, the V* parts the recursion's figures name",
     "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
     **dict.fromkeys(REQUEST_CAPS, "a request's length cap, its `max_tokens`"),
@@ -704,8 +706,8 @@ def test_vendor_kernel_and_isa_names_are_other_senses_and_pearl_s_cap_in_their_s
             ["CAP", "capOK", "cap check"]),
     }
     for sense, (theirs, pearls, pearl) in cases.items():
-        assert said(theirs, "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [], sense
-        assert said(f"{theirs}\n{pearls}\n", "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [(2, o) for o in pearl], sense
+        assert said(theirs, "benchmarks/pouw/harness/native/lt.cu") == [], sense
+        assert said(f"{theirs}\n{pearls}\n", "benchmarks/pouw/harness/native/lt.cu") == [(2, o) for o in pearl], sense
 
 
 def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spellings_there_are_not() -> None:

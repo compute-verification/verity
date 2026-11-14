@@ -29,7 +29,7 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
 open Claims.Bridge.Live
 open Lean (Json)
 
@@ -224,7 +224,7 @@ theorem plain_accPr_le_rdAll {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha51
               Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                 u ≠ C p := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_draw hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_sample hno
   have h1 := plain_one hs hin hset
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0

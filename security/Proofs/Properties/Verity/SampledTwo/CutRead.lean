@@ -13,14 +13,14 @@ sessions, `LogRead`, and every log it read is the device's), at the same terms (
 That an accepted play is one whose logs the cut reads does not follow from the form's acceptance alone:
 
 * **The first stage's coins under the parameters' key** (`FirstReads`, a premise here). The run of record's coin check
-  (`Spot.Run.coinsCode`) reads the first stage's coin evidence with `drawCoins` under the parameters' key, the boundary
-  registration's window and family, after its digest, as the cut does (`keyOf`, `firstDraws`), and takes `null`
+  (`Spot.Run.coinsCode`) reads the first stage's coin evidence with `sampleCoins` under the parameters' key, the boundary
+  registration's window and family, after its digest, as the cut does (`keyOf`, `firstSamples`), and takes `null`
   evidence where the first stage read no byte. `CutFirst` derives `FirstReads` from the form's acceptance on every
   play whose first stage's coin evidence is not `null` (`FirstCoinsShown`); of a two-stage audit whose first stage
   reads no coin, the cut says nothing.
-* **The first session's log read as coin trees.** The form reads the first session's log only through `drawCoins`,
-  which reads no coin tree. The device's run prints its log as coin trees (`PrintsOn`), and the log `drawCoins` read
-  is that run's or the record carries a break (`Drawn.drawn_log`); so the first read exists, or a break
+* **The first session's log read as coin trees.** The form reads the first session's log only through `sampleCoins`,
+  which reads no coin tree. The device's run prints its log as coin trees (`PrintsOn`), and the log `sampleCoins` read
+  is that run's or the record carries a break (`Drawn.sampled_log`); so the first read exists, or a break
   (`first_reads`).
 
 The interior session's read exists on every accepted play (`second_reads`): the form's per-member check read its coin
@@ -54,11 +54,11 @@ def ReadIsDevice (o : Exchange) : Prop := LogRead o ∧ LogIsDevice o
 
 /-- **The first stage's coins are read under the parameters' key**, on every accepted play after the parameters `θ`:
 they name a challenger key at the deployed LMS parameters (`keyOf`), the case names the first session's window and
-family (`firstDraws`), and `drawCoins` under that key reads the first stage's coin evidence. -/
+family (`firstSamples`), and `sampleCoins` under that key reads the first stage's coin evidence. -/
 def FirstReads (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) →
-    ∃ key d ξ, keyOf θ = some key ∧ firstDraws key p c e = some d ∧
-      drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ
+    ∃ key d ξ, keyOf θ = some key ∧ firstSamples key p c e = some d ∧
+      sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ
 
 theorem logsOf_ne_nil (w₁ w₂ : String) (r₁ r₂ : List Release) : logsOf w₁ w₂ r₁ r₂ ≠ [] := by
   unfold logsOf
@@ -84,15 +84,15 @@ theorem mapM_isSome_of {α β : Type} (f : α → Option β) :
 /-! ## The first session's read -/
 
 /-- **The first session's read exists where the runs on its window print a log**, or its record carries a break: the
-lines `drawCoins` read are a run's of the device (`Drawn.drawn_log`), which read as coin trees (`PrintsOn`) and as its
+lines `sampleCoins` read are a run's of the device (`Drawn.sampled_log`), which read as coin trees (`PrintsOn`) and as its
 coin commitment's pairs. -/
 theorem first_reads {dev : History} {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
-    (hd : firstDraws key p c e = some d) {ξ : ByteArray}
-    (hξ : drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) {log : List Release}
+    (hd : firstSamples key p c e = some d) {ξ : ByteArray}
+    (hξ : sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) {log : List Release}
     (hP : PrintsOn dev d.window log) :
     (∃ out, firstRead key p c e ξ = some out) ∨ Break dev d.key d.label (firstCoins e) := by
-  rcases Drawn.drawn_log (dev := dev) hξ with ⟨s, hs, ho, -, hcr, ls, hls, hlog⟩ | b
+  rcases Drawn.sampled_log (dev := dev) hξ with ⟨s, hs, ho, -, hcr, ls, hls, hlog⟩ | b
   · obtain ⟨-, ⟨ts, hts⟩, -⟩ := hP d.key.pub s hs ho
     obtain ⟨cm, roots, -, hroots⟩ := hcr
     have hl : firstLines e = .ok s.log := firstLines_eq hls hlog
@@ -161,7 +161,7 @@ blobs: its lines read as coin trees (`Binding.trees_of`, `Sampled.coinTreesOf_fo
 pairs (`Sampled.releasedRootsOf_pairsOk`). -/
 theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment} {d : Draws}
-    (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondDraws p e = some d) {ξ : ByteArray}
+    (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondSamples p e = some d) {ξ : ByteArray}
     (hξ : Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ) {ts : Array LoggedTree}
     (hts : Spot.OneStageZk.treesOf p.audit.base e.interior.base = .ok ts)
     (hrec : ∀ rf ∈ e.statements.toList.flatMap (·.sessions.toList), (Verity.Sampled.recordOn bs rf).isSome) :
@@ -205,8 +205,8 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
       | exact hcom
       | simpa [bind, Except.bind] using hcom
   obtain ⟨d₂, hd₂⟩ := oneStageZk_source h7
-  have h6 : secondDraws p e = some d₂ := by
-    unfold secondDraws
+  have h6 : secondSamples p e = some d₂ := by
+    unfold secondSamples
     rw [h5]
     first
       | exact hd₂
@@ -215,7 +215,7 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
     have h := hK
     rw [← hθ] at h
     exact h
-  obtain ⟨-, -, -, hk₁⟩ := firstDraws_window h3
+  obtain ⟨-, -, -, hk₁⟩ := firstSamples_window h3
   have hm₁ : (d₁, firstCoins e) ∈ records o.sent := by rw [records_eq h1 h2, h3]; simp
   have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact windowsOf_eq h1 h3 h5 h6
   have hPT := hP o hθ d₁.window d₂.window hw

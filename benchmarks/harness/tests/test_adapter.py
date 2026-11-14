@@ -1,7 +1,6 @@
-"""In the benchmarks this suite answers for (`DIRS`), only `verity_bench.adapter` imports the vLLM adapter past its public
-interface: every other file imports a `verity_vllm` module that ``tests/test_vllm_public_api.py`` lists in ``PUBLIC``, and from
-it only the names its ``__all__`` lists. A name the interface lacks is imported once in `verity_bench.adapter`, and its users
-take it from there.
+"""In the benchmarks this suite answers for (`DIRS`), every file imports the vLLM adapter through its public interface only: a
+`verity_vllm` module that ``tests/test_vllm_public_api.py`` lists in ``PUBLIC``, and from it only the names its ``__all__``
+lists. A name the interface lacks is added to it (its module's ``__all__`` and annotations, and the module in ``PUBLIC``).
 
 An import is an import statement at any depth (a function's lazy import included), a string handed to
 ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, a ``"module:attr"`` string, or a module started with
@@ -21,7 +20,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 DIRS = ("benchmarks/harness", "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
         "benchmarks/recursion_figures")
-ADAPTER = "benchmarks/harness/verity_bench/adapter.py"
 PUBLIC_API = "tests/test_vllm_public_api.py"
 #: files whose `verity_vllm` strings are data, not imports, each with why
 NOT_SCANNED = {"benchmarks/harness/tests/test_adapter.py": "this file: its scan's examples"}
@@ -121,20 +119,12 @@ def is_public(s: Site) -> bool:
     return s.module in public() and (s.name is None or s.name in exported(s.module))
 
 
-def test_only_the_adapter_module_reaches_past_the_public_interface():
+def test_no_file_reaches_past_the_public_interface():
     bad = [f"{s.file}:{s.line}: imports {s.module}{'' if s.name is None else '.' + s.name}, which is not the vLLM adapter's "
-           f"public interface (PUBLIC in {PUBLIC_API}, and each module's __all__): import it in {ADAPTER} once, with its "
-           "proposed public name in that module's table, and take it from verity_bench.adapter here"
-           for s in sites() if s.file != ADAPTER and not is_public(s)]
+           f"public interface (PUBLIC in {PUBLIC_API}, and each module's __all__): import a name it offers, or add the name "
+           f"to it (its module's __all__ and annotations, and the module in PUBLIC)"
+           for s in sites() if not is_public(s)]
     assert not bad, "\n".join(bad)
-
-
-def test_the_adapter_module_imports_only_what_has_no_public_home():
-    reached = [s for s in sites() if s.file == ADAPTER]
-    assert reached, f"{ADAPTER} imports nothing of {PACKAGE}: delete it and this test, now the interface offers every name"
-    stale = [f"{s.module}{'' if s.name is None else '.' + s.name}" for s in reached if is_public(s)]
-    assert not stale, (f"{ADAPTER} imports names the public interface now offers: import them from there in their users, and "
-                       f"delete their lines and table rows in {ADAPTER}: {stale}")
 
 
 def test_the_scan_sees_each_form():
@@ -149,5 +139,5 @@ def test_the_scan_sees_each_form():
                    ("verity_vllm.llm", "LLM"), ("verity_vllm.pipeline.cli", None)}
     assert {(s.module, s.line) for s in sites_in("x.sh", "set -e\npython -m verity_vllm.pipeline.cli run\n")} == {
         ("verity_vllm.pipeline.cli", 2)}
-    assert ADAPTER in files() and all((ROOT / d).is_dir() for d in DIRS) and all((ROOT / f).is_file() for f in NOT_SCANNED)
-    assert is_public(Site("x.py", 1, "verity_vllm", "LLM")) and not is_public(Site("x.py", 1, "verity_vllm.engine.env", None))
+    assert all((ROOT / d).is_dir() for d in DIRS) and all((ROOT / f).is_file() for f in NOT_SCANNED)
+    assert is_public(Site("x.py", 1, "verity_vllm", "LLM")) and not is_public(Site("x.py", 1, "verity_vllm.engine.build", None))

@@ -18,7 +18,7 @@ from verity.protocols.accounting.pouw.verifier.window import k_prime
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
 from verity.protocols.proofs.spot.verifier.consumers import location_bits
 from verity.protocols.proofs.spot.prover.optimize import Objective, certify
-from verity.commitments.windows.interface import K_MAX
+from verity.commitments.periods.interface import K_MAX
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 

@@ -65,8 +65,8 @@ def _subset_on(k, n, src):
     return sorted(swapped.get(i, i) for i in range(k))
 
 
-def _draw_on(law, n, src):
-    """The Lean verifier's `Flock.Draw.drawOn`: subset and bernoulli on the one stream; stratified and work on consecutive
+def _sample_on(law, n, src):
+    """The Lean verifier's `Flock.Draw.sampleOn`: subset and bernoulli on the one stream; stratified and work on consecutive
     segments, stratum s's the next 2 k_s width(n_s) + 64 bytes (`verity/protocols/proofs/flock/prover/tests/stratified_agree.py`)."""
     if law["law"] == "subset":
         return _subset_on(law["k"], n, src)
@@ -114,9 +114,9 @@ def test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes():
         OwnRandomness(_stream(b"\x00" * 3)).uniform(10)
 
 
-def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
+def test_sample_first_is_the_lean_verifiers_sample_on_the_same_bytes():
     """`draw_first` reads the verifier's bytes as `Flock.Draw.drawWith` does: on a stream that doesn't run out, its proof blocks
-    are `drawOn`'s on the same bytes, for every sampling design (a bernoulli sampling design at its NUM/DEN as written, unreduced), and
+    are `sampleOn`'s on the same bytes, for every sampling design (a bernoulli sampling design at its NUM/DEN as written, unreduced), and
     `one_stage.draw.check_draw` accepts the sample against the sampling design and the population."""
     rng = random.Random(8)
     laws = [{"law": "subset", "k": 1}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
@@ -126,11 +126,11 @@ def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
         law = laws[case % len(laws)]
         src = rng.randbytes(4096)
         d = draw_first(OwnRandomness(_stream(src)), law, 10)
-        assert d["units"] == _draw_on(law, 10, src), (case, law)
+        assert d["units"] == _sample_on(law, 10, src), (case, law)
         assert d == {**law, "population": 10, "units": d["units"]} and D.check_draw(d, {"population": 10}, law).ok
     big = {"law": "subset", "k": 300}
     src = rng.randbytes(8192)
-    assert draw_first(OwnRandomness(_stream(src)), big, 1_000_000)["units"] == _draw_on(big, 1_000_000, src)
+    assert draw_first(OwnRandomness(_stream(src)), big, 1_000_000)["units"] == _sample_on(big, 1_000_000, src)
     with pytest.raises(ValueError, match="draws at least one unit"):
         draw_first(OwnRandomness(_stream(src)), {"law": "subset", "k": 0}, 10)
 
@@ -145,7 +145,7 @@ def test_a_stream_that_runs_out_is_extended_as_lean_does():
         draw_first(OwnRandomness(_stream(b"\xff" * need)), {"law": "subset", "k": 3}, 10)
 
 
-def test_a_work_draw_carries_its_closure():
+def test_a_work_sample_carries_its_closure():
     """PoUW's shape: a work sampling design over tiles with the verifier's closure map (a tile and what its credit reads).  The sample
     carries `closure_of` (Lean `closureOf`: what sampled proof blocks' closures hold beyond the sampled proof blocks, ascending, omitted
     when empty), and `one_stage.draw.proved` is sampled and closure."""
@@ -162,13 +162,13 @@ def test_a_work_draw_carries_its_closure():
             draw_first(_seeded(0), other, 10, closure)
 
 
-def test_draw_first_refuses_what_lean_refuses():
+def test_sample_first_refuses_what_lean_refuses():
     for law, n in (({"law": "subset", "k": 4}, 3), (_stratified(), 9), ({**_stratified(), "k": 5}, 10),
                    ({"law": "bernoulli", "p": "1/0"}, 10), ({"law": "uniform", "k": 1}, 10)):
         with pytest.raises(ValueError):
             draw_first(_seeded(0), law, n)
 
 
-def test_the_draws_come_from_the_lean_verifiers_coins():
+def test_the_samples_come_from_the_lean_verifiers_coins():
     d = draw_first(OwnRandomness(V.coins), _work(), 10)
     assert D.check_draw(d, {"population": 10}, _work()).ok

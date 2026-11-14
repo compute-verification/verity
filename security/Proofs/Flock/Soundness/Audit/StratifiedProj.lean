@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The stratified sampling design, one stratum at a time
 
-`Law.stratified σ k hk` samples an independent uniform `k s`-subset inside each stratum `s` of `σ`; its coin `ω` holds
+`SamplingDesign.stratified σ k hk` samples an independent uniform `k s`-subset inside each stratum `s` of `σ`; its coin `ω` holds
 them, stratum `s`'s at `ω s`. With `n_s = |stratum σ s|` and `m_s = |B.filter (σ · = s)|`:
 
 * `stratified_proj_escape`: **the per-stratum projection**. Stratum `s`'s coordinate of the coin, `(ω s).1`, misses a
@@ -28,7 +28,7 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n m : ℕ}
 
@@ -87,6 +87,6 @@ theorem stratified_escape_eq_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
   unfold stratumRisk
   exact choose_div_eq_exp (hc s)
 
-end Law
+end SamplingDesign
 
 end FlockSoundness.Audit
