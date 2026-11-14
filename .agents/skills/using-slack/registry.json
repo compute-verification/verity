@@ -191,6 +191,7 @@
         "adapters/vllm/verity_vllm/acquire/",
         "adapters/vllm/verity_vllm/commit/",
         "adapters/vllm/verity_vllm/properties/",
+        "adapters/vllm/verity_vllm/definitions/",
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
