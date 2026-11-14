@@ -157,8 +157,8 @@ def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_
 
 def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
     """The run's registration reads the configuration's hash from ``run.json``: no ``run.json``, or one under another
-    hash, is refused; under this configuration's own hash it raises with its goal, since no log item names a
-    configuration yet."""
+    hash, is refused; under this configuration's own hash it raises through the registration log's writer of the
+    configuration item, which isn't written yet."""
     cfg = R.load(CONFIG, REG)
     with pytest.raises(Refused) as no_run:
         T.registration(cfg, tmp_path)
@@ -167,8 +167,20 @@ def test_the_registration_names_the_runs_own_configuration_and_is_not_written_ye
     with pytest.raises(Refused):
         T.registration(cfg, tmp_path)
     (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
+    with pytest.raises(NotImplementedError, match="proofs/architecture-on-branch"):
+        T.registration(cfg, tmp_path)
+
+
+def test_the_registration_writes_the_logs_configuration_item_of_the_runs_hash(tmp_path, monkeypatch):
+    """The item is the registration log's, written by its writer from the configuration's hash; past it, the run's log
+    that holds it is ours and isn't written yet."""
+    cfg, asked = R.load(CONFIG, REG), []
+    monkeypatch.setattr(T.RL, "configuration", lambda digest: asked.append(digest) or {"kind": "configuration",
+                                                                                         "digest": digest})
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
     with pytest.raises(NotImplementedError, match=T.REGISTRATION_GOAL):
         T.registration(cfg, tmp_path)
+    assert asked == [K.digest(cfg)]
 
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():

@@ -48,8 +48,8 @@ path = "../Properties"
 
 [[lean_lib]]
 name = "Proofs"
-roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Pous", "Proofs.Pouw", "Proofs.Certifier",
-  "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
+roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowdown", "Proofs.Pous", "Proofs.Pouw",
+  "Proofs.Certifier", "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
   "Proofs.Flock.SpotFlock.AddressFacts.Row", "Proofs.Flock.SpotFlock.AddressFacts.RowRead",
   "Proofs.Flock.SpotFlock.AddressFacts.RowKind", "Proofs.Flock.SpotFlock.AddressFacts.RowGive",
   "Proofs.Flock.SpotFlock.AddressFacts.RowLeaf", "Proofs.Flock.SpotFlock.AddressFacts.RowInstance",
