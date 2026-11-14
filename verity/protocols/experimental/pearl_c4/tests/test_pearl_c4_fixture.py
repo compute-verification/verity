@@ -1,4 +1,4 @@
-"""Pearl-C4's device-check fixture (`pearl_c4/fixture.py`) by its command line, as `build.sh` runs it: a format's
+"""Pearl-C4's device-check fixture (`prover/kernels/fixture.py`) by its command line, as `build.sh` runs it: a format's
 directory holds the files its manifest names, at their sizes and digests, and each buffer but its three inputs (A's
 rows, B's rows and the salt) is held to what the verifier and the scalar reference
 (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`) make of those inputs.  The roots and domain ids are
@@ -25,7 +25,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier import audit as AU
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
-FIXTURE = Path(__file__).resolve().parents[1] / "pearl_c4" / "fixture.py"
+FIXTURE = Path(__file__).resolve().parents[1] / "prover" / "kernels" / "fixture.py"
 M, N, K = 128, 128, 1024
 WEIGHT = 1
 ROWS, COLS = (0, 77, 127), (1, 64)

@@ -2505,7 +2505,6 @@
     {"file": "benchmarks/pouw/hidden_zk/fast_stage.py", "count": 6},
     {"file": "benchmarks/pouw/hidden_zk/job.sh", "count": 13},
     {"file": "benchmarks/pouw/hidden_zk/send_check.sh", "count": 17},
-    {"file": "benchmarks/pouw/pearl_c4/f1_fast.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c4/real.py", "count": 8},
     {"file": "benchmarks/pouw/pearl_c4/real_table.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c4/replay.py", "count": 27},
@@ -2535,7 +2534,6 @@
     {"file": "benchmarks/pouw/tests/test_h1_prove_live.py", "count": 15},
     {"file": "benchmarks/pouw/tests/test_hidden_zk_summarize.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_ledger.py", "count": 49},
-    {"file": "benchmarks/pouw/tests/test_pearl_c4_f1_fast.py", "count": 6},
     {"file": "benchmarks/pouw/tests/test_pearl_c4_real.py", "count": 6},
     {"file": "benchmarks/pouw/tests/test_pearl_c4_replay.py", "count": 6},
     {"file": "benchmarks/pouw/tests/test_pearl_c_sm90.py", "count": 5},
@@ -4676,6 +4674,8 @@
     {"file": "verity/protocols/accounting/poub/prover/word_codec/kv.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py", "count": 4},
     {"file": "verity/protocols/accounting/pous/device/wipe_challenger.py", "count": 2},
-    {"file": "verity/protocols/accounting/poub/prover/session_prover.py", "count": 3}
+    {"file": "verity/protocols/accounting/poub/prover/session_prover.py", "count": 3},
+    {"file": "verity/protocols/experimental/pearl_c4/prover/f1_fast.py", "count": 3},
+    {"file": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py", "count": 6}
   ]
 }

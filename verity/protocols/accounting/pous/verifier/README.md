@@ -166,7 +166,8 @@ meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `mem
 `wipe_parties` declares the same memory challenger and prover as parties of the deployment layer (`verity.runtime`),
 the challenger's party in `verity/protocols/accounting/pous/device/wipe_challenger.py` and the prover's in
 `verity/protocols/accounting/pous/prover/wipe_prover.py`; the challenger times the reads its machine gives it: on the
-same coins, clock readings, key and reads it signs the bytes `wipe_party.serve` signs.
+same coins, clock readings, key and reads it signs the bytes `wipe_party.serve` signs. It refuses (`clock`) a clock
+source that reads a real clock other than the raw one its header names, the runtime's own included.
 On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
