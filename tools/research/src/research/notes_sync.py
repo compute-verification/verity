@@ -92,6 +92,8 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
+from . import settings
+
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
 SOURCE_ENV, EXPIRES_ENV = "RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"
@@ -199,13 +201,12 @@ _MINTED_AGAIN: list[bool] = []                      # [True] once `_authed` retr
 
 def has_identity() -> bool:
     """Whether this machine has a Cursor agent's identity socket, which buys the broker's notes token: a cloud VM, not a laptop."""
-    from .settings import cursor_agent_socket
-    return os.path.exists(cursor_agent_socket())
+    return os.path.exists(settings.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock"))
 
 
 def _held() -> tuple[str | None, bool, float]:
     """(the token in the environment, whether `notes_token` put it there from the broker, when that one expires)."""
-    tok, source, expires = (os.environ.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
+    tok, source, expires = (settings.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
     return tok or None, source == "broker", float(expires or 0) if source == "broker" else 0.0
 
 
@@ -513,7 +514,7 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def created_at(text: str) -> tuple[str, dt.datetime] | None:
@@ -527,7 +528,7 @@ def created_at(text: str) -> tuple[str, dt.datetime] | None:
     except ValueError as e:
         print(f"notes sync: {m[0][:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
-    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.UTC)
 
 
 def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, str]:
@@ -546,7 +547,7 @@ def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, s
         found = []
         if old is None and (m := STAMP_RE.match(p.name)):
             try:
-                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc), "%Y%m%dT%H%MZ"))
+                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC), "%Y%m%dT%H%MZ"))
             except ValueError as e:
                 print(f"notes sync: {path}'s stamp {m[1]} is not a time, so it is not checked ({e})", file=sys.stderr, flush=True)
         c, prev = created_at(text), created_at(old) if old is not None else None
@@ -577,7 +578,7 @@ def header_issues(path: str, text: str, now: dt.datetime) -> tuple[list[str], li
         warn.append(f"lane: {m[1]} but the note is in lanes/{parts[1]}/" + (" (a handoff's lane is its recipient)" if MAIL_RE.search(parts[-1]) else ""))
     if c and (s := STAMP_RE.match(parts[-1])):
         try:
-            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc)
+            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC)
         except ValueError:
             off = dt.timedelta(0)
         if abs(off) > CREATED_STAMP_SLACK:
@@ -689,16 +690,16 @@ def outgoing_citations(root: Path, base: str | None) -> dict[str, list[str]]:
 
 
 def cite_check_on() -> bool:
-    return os.environ.get(CITE_ENV, "").strip().lower() not in ("0", "off", "no", "false")
+    return settings.get(CITE_ENV, "").strip().lower() not in ("0", "off", "no", "false")
 
 
 def missing_citations(cited: list[str], remote=None, workers: int = 8, wait_s: float = CITE_WAIT_S) -> tuple[set[str], str | None]:
     """(the ids among `cited` the store's remote does not have, why the answer is partial or None), `workers` lookups at a time
     for at most `wait_s` (daemon threads: a remote that hangs never holds up the exit).  (set(), None) with no usable remote: none
     configured, or its credentials absent here."""
-    from .store.labels_sync import remote_labels_for  # noqa: PLC0415
-    from .store.local import attempt_key  # noqa: PLC0415
-    from .store.remote import ConfigError, load_remote  # noqa: PLC0415
+    from .store.labels_sync import remote_labels_for
+    from .store.local import attempt_key
+    from .store.remote import ConfigError, load_remote
 
     if remote is None:
         try:
@@ -812,7 +813,7 @@ def _who() -> str:
     lane or the user, and when it took the lock."""
     from .remote import sender
 
-    who = sender() or os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "an unnamed caller"
+    who = sender() or settings.get("RESEARCH_LANE") or settings.get("USER") or "an unnamed caller"
     return f"pid {os.getpid()} on {socket.gethostname()}, {who}, since {_utcnow():%H:%M:%SZ}"
 
 
@@ -1208,7 +1209,7 @@ def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
     """After a notes write command: `sync` the lane directories it wrote, when `RESEARCH_NOTES_SYNC=1`.  (report lines, FUTURE_RC
     when a note was left out for its stamp or its front matter, else 0; other failures stay advisory, the next sync retries them);
     (None, 0) when off."""
-    if os.environ.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
+    if settings.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
         return None, 0
     rep = sync(root, paths=[f"lanes/{x}" for x in lanes if x], message=f"notes: {', '.join(x for x in lanes if x)}")
     return "\n".join([render_sync(rep), *refused_lines(rep)]), FUTURE_RC if rep.get("future") or rep.get("header") else 0

@@ -139,10 +139,11 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
+from . import settings
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
 from .store import evict as EV
@@ -221,7 +222,7 @@ class RecordError(ValueError):
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_utc(s: Any) -> datetime:
@@ -231,11 +232,11 @@ def parse_utc(s: Any) -> datetime:
     t = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
     if t.tzinfo is None or t.utcoffset() != timedelta(0):
         raise ValueError(f"{s!r} is not in UTC (write it as YYYY-MM-DDTHH:MM:SSZ)")
-    return t.astimezone(timezone.utc)
+    return t.astimezone(UTC)
 
 
 def fmt_utc(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime(TS)
+    return t.astimezone(UTC).strftime(TS)
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
@@ -248,7 +249,7 @@ def parse_expires(s: str, now: datetime) -> str | None:
         return fmt_utc(now + timedelta(**{"days" if m[2] == "d" else "hours": int(m[1])}))
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc))
+            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC))
         return fmt_utc(parse_utc(s))
     except ValueError:
         raise RecordError(f"--expires {s!r}: give never, now, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None
@@ -1839,7 +1840,7 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--approved-by", required=True, metavar="@OWNER", help="the owner who said yes; every record covering a PATH or "
                         "beneath it must name this handle")
         ap.add_argument("--ref", required=True, metavar="REF", help="where the owner said yes (a Slack permalink or thread ts)")
-        ap.add_argument("--by", default=os.environ.get("RESEARCH_AGENT_URL"), metavar="URL",
+        ap.add_argument("--by", default=settings.get("RESEARCH_AGENT_URL"), metavar="URL",
                         help="who deletes (default $RESEARCH_AGENT_URL); --apply needs it")
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
