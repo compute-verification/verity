@@ -40,26 +40,18 @@ means = "one table: the file, what it shows, its command, how far it runs and is
 [[tree]]
 path = "demos/remote.toml"
 means = "the remote demo: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "demos/onsite_network.toml"
 means = "onsite, network only: the network certifier, SPOT and the memory wipe"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "demos/onsite_compute.toml"
 means = "onsite, the default: those three, PoUW and the inference-only policy"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "demos/onsite_full.toml"
 means = "onsite, whole: those five, PoUS and PoUB"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "security/"
@@ -331,30 +323,6 @@ note = "two Lake packages move with Sunday's chain; its served part waits for th
 path = "verity/claims/"
 to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
 owner = "soundness"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "demos/vllm/"
-to = "demos/remote.toml; its scripts to the vLLM adapter and `verity run`"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "demos/onsite_served/"
-to = "demos/onsite_full.toml; its scripts to the vLLM adapter and `verity run`"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "demos/lifecycle/"
-to = "the small workload beside `verity run`'s tests: not a demo"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "demos/configurations.toml"
-to = "tests/, beside its reader tests/test_configurations.py"
-owner = "top"
 day = "2026-11-15"
 
 [[not_yet]]
