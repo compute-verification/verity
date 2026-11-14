@@ -18,10 +18,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
-from verity.protocols.accounting.certifier.verifier import arith_encode
+from verity.protocols.accounting.certifier.verifier import arith_encode, charge_chain
 from verity.protocols.accounting.certifier.prover import window_charge as WC
 
 LEAN = Path(__file__).resolve().parents[2] / "device" / "program" / "lean"
@@ -134,3 +135,19 @@ def test_the_generator_covers_what_it_says(monkeypatch):
                  "two uniform steps"):
         assert coded[case] > 20, (case, coded)
     assert max(scalings) == 17 and scalings[17] > 100, scalings
+
+
+def test_a_slices_lengths_fit_a_length_slot_up_to_the_leans_mt_cap():
+    """`charge_chain.check_length_slots` takes a slice's statics exactly where its longest output length, L, fits a
+    length slot: L ≤ `MT_CAP`, the largest max_tokens the program's `WindowCharge` charges a length term at, which the
+    vectors above reach at and past (a max_tokens at `MT_CAP`, charged, and past it, refused). Checked at 0, 1 and each
+    power of two up to 2^40 with its neighbours."""
+    lean = re.search(r"^def MT_CAP : Nat := 2 \^ (\d+) - 1$", (LEAN / "NetworkCertifier" / "WindowCharge.lean").read_text(),
+                     re.M)
+    assert lean and WC.MT_CAP == (1 << int(lean[1])) - 1 == (1 << charge_chain.LENGTH_BITS) - 1
+    for L in sorted({0, 1} | {v for k in range(41) for v in (2 ** k - 1, 2 ** k, 2 ** k + 1)}):
+        try:
+            taken = charge_chain.check_length_slots({"L": L}) == {"L": L}
+        except ValueError:
+            taken = False
+        assert taken == (L <= WC.MT_CAP), L
