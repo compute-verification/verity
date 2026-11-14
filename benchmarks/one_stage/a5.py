@@ -918,6 +918,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if drawn is not None:
         union_draw, drawn_law, receipt = (dict(x) for x in drawn)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+        trees = stage_trees(a, members)
+        if getattr(a, "stage", None) is not None and not trees:
+            a.stage["coins"].release(0)
     elif not streamed(a):
         p = a0.challenger_draw(a.lean, ["--population", str(n_all), "--k", str(law["k"])],
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
@@ -967,7 +970,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    relay = MT.Relay(a.coins, MT.listener()) if trees else None
+    relay = MT.Relay(tree_coins(a), MT.listener()) if trees else None
     summary["coin_trees"] = "window" if trees else "own"
     server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
@@ -1027,7 +1030,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 if len(dirs) != 1:
                     raise ValueError(f"the session left {len(dirs)} records, not one")
                 directory = dirs[0]
-            return {**s, "closing": {"ok": True, "after": MT.closing_round(a.coins, directory)}}
+            return {**s, "closing": {"ok": True, "after": MT.closing_round(tree_coins(a), directory)}}
         except (ProofServerError, TimeoutError, AC.Ch.CoinError, OSError, ValueError) as e:
             return {**s, "closing": {"ok": False, "why": str(e)[-600:]}}
 
@@ -1113,9 +1116,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                                                          indent=1, sort_keys=True))
         if relay is not None:
             relayed = relay.close()
-            a.coins.release(rank)
+            tree_coins(a).release(rank if streamed(a) else 0)
     if relay is not None:
-        held = window_trees_held(a.coins.evidence(), done, relayed)
+        held = window_trees_held(tree_coins(a).evidence(), done, relayed)
         for got in done:
             got["challenger"] = {**held, "closing": got["closing"]}
     for got in done:
@@ -1147,7 +1150,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a)))
+                   per_member=members_proof(members, done, not plain(a), one=drawn is not None and trees),
+                   **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1528,7 +1532,7 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
     return sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
 
 
-def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> dict | str | None:
+def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
     the sample, its circuit file its template's (the one its first member composed: a later member has no file of its
@@ -1536,10 +1540,11 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> di
     session, and the tables every member's circuit looks up, sampled or not, one path a table: v2 holds each member's
     statement to its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. A
     template's tables are staged beside the circuit file its first member composed. None for a window of one member,
-    whose form is the one statement's (`v2_proof`); or why the audit has no per-member case."""
+    whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger
+    session, `stage_trees`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
-    if len(members) < 2:
+    if len(members) < 2 and not one:
         return None
     if not per_member(members, zk):
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1594,6 +1599,29 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
     verifier's own: its case is the one statement's, which reads no closing round."""
     return (streamed(a) and len(members) >= 2 and not plain(a) and a0.own_challenger(zk=True)
             and len(a.coins.ranks()) == 1)
+
+
+def stage_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
+    """`window_trees` for a caller's sample: the sessions take their coin trees from the caller's
+    stage's own challenger session (``a.stage``, `two_stage`'s ``--interior-trees``), held for them since before its
+    sample ended, a window of one member's too: that caller's case is the per-member form's at any number of members
+    (`members_proof`'s ``one``). Without ``a.stage`` the sessions keep a challenger of their own."""
+    return getattr(a, "stage", None) is not None and bool(members) and not plain(a) and a0.own_challenger(zk=True)
+
+
+def tree_coins(a: argparse.Namespace) -> Any:
+    """The challenger session the sessions' coin trees are on: the stream's (``a.coins``), else the caller's stage's."""
+    return a.coins if streamed(a) else a.stage["coins"]
+
+
+def stage_case(a: argparse.Namespace, member_trees: bool) -> dict:
+    """`write_case`'s coins for a caller's sampled sample on its stage's own challenger session (``a.stage``: its
+    session, the sample's segment, family and window root): {} without one."""
+    s = getattr(a, "stage", None)
+    if s is None:
+        return {}
+    return {"coins": AC.evidence(s["coins"].evidence(), s["segment"]), "window_root": s["window_root"],
+            "family": s["family"], "member_trees": member_trees, "challenger_key": s["coins"].held()["key"]}
 
 
 def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[str]) -> dict:

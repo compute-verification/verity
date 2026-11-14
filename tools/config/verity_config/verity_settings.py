@@ -426,6 +426,9 @@ REGISTRY = EnvSettings(
     # ---- verity.protocols.compose.verifier.lean's suite
     Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
             "suite's opt-in served test reads: which tests run, never what a verdict says"),
+    Setting("VERITY_SAMPLED_TWO_CASE", stripped, "", WHERE, "a directory holding one honest two-stage play's case "
+            "(sampled_two_small.sh's $OUT/form), which the composition suite's opt-in accept test reads: which tests run, "
+            "never what a verdict says"),
     schema=RECORD_SCHEMA)
 
 

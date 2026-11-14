@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -614,6 +614,7 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     try:
         R._seed_salt(j.get("seed_salt"), window)
+        R._registered_compiler(j.get("compiler", R.UNREAD))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
@@ -674,7 +675,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   compiler=p.get("compiler", R.UNREAD))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -4810,6 +4812,80 @@ def _shared_at(c: dict, i: int, ports, reads=()) -> dict:
             "verdicts": {**changed["verdicts"], "lean": {**lean, **({"registered": reported} if reported else {})}}}
 
 
+def _sampled_at(c: dict, i: int) -> dict:
+    """`c` with its `i`-th statement of only its part's sampled proof blocks: its header's slots the second stage's
+    units among the part's, in the second sample's order, its instances, range and classes theirs, each port it shares
+    rows at a table of the rows its registered reads give those slots, and at each port it reads registered a root of
+    that table's own, which round 2 doesn't hold to the interior record; its sample every unit of it, and its session
+    checked as it states it."""
+    s = c["statements"][i]
+    h = s["header"]
+    lo, m = h["units"]["indices"][0], h["instances"]
+    slots = [u for u in c["drawn"] if lo <= u < lo + m]
+    k, ports = len(slots), (s["registered"] or {}).get("ports", {})
+    header = {**h, "instances": k, "range": [0, k],
+              "units": {**h["units"], "indices": slots, "blocks": [[u] for u in slots],
+                        "classes": h["units"]["classes"][:k]},
+              "frame_v3": {**h["frame_v3"], "roots": {p: _sha(f"sampled/{p}".encode()) if p in ports else r
+                                                      for p, r in h["frame_v3"]["roots"].items()}}}
+    if "shared_rows" in h:
+        header["shared_rows"] = {
+            p: len({ports[p]["reads"][u - ports[p]["reads_from"]] for u in slots}) if p in ports else n
+            for p, n in h["shared_rows"].items()}
+    return _second_with(c, i, header=header, draw={"law": "subset", "population": k, "k": k, "units": list(range(k))})
+
+
+def _sampleable(c: dict, i: int, shared) -> bool:
+    """Whether `c` holds what `_shared_at` reads of its `i`-th statement, reading its own `out` registered, and what
+    `_sampled_at` then reads, its header sharing rows at `shared`: each field of the type `_second_case` gives it, the
+    interior rooting the statement's `out`, and each port of `shared` it already reads registered read at every slot
+    of the second stage's units in its part."""
+    ss, it, vs, second = c.get("statements"), c.get("interior"), c.get("verdicts"), c.get("drawn")
+    if not (isinstance(ss, list) and 0 <= i < len(ss) and isinstance(ss[i], dict) and isinstance(it, dict)
+            and isinstance(it.get("roots"), list) and isinstance(vs, dict) and isinstance(vs.get("lean"), dict)
+            and isinstance(vs["lean"].get("registered", {}), dict) and isinstance(c.get("refs"), dict)
+            and isinstance(c.get("ref_reads"), dict) and isinstance(second, list)):
+        return False
+    s, roots = ss[i], it["roots"]
+    t, h, r = s.get("template"), s.get("header"), s.get("registered")
+    if not (isinstance(t, str) and isinstance(c["refs"].get(t), dict) and isinstance(h, dict)
+            and all(isinstance(x, dict) and isinstance(x.get("port"), str) for x in roots)
+            and "registered" in s and (not r or isinstance(r, dict) and isinstance(r.get("ports", {}), dict))):
+        return False
+    named = any("/" in x["port"] for x in roots)
+    out = next((x for x in roots if x["port"] == (f"{t}/out" if named else "out")), None)
+    units, fv, m = h.get("units"), h.get("frame_v3"), h.get("instances")
+    if not (out is not None and {"root", "domain", "leaves"} <= out.keys() and _int(m) and isinstance(units, dict)
+            and isinstance(units.get("indices"), list) and units["indices"] and _int(units["indices"][0])
+            and isinstance(units.get("classes"), list) and isinstance(fv, dict) and isinstance(fv.get("roots"), dict)
+            and all(isinstance(u, int) for u in second)):
+        return False
+    lo, ports = units["indices"][0], (r or {}).get("ports", {})
+    slots = [u for u in second if lo <= u < lo + m]
+    for p in shared:
+        if p == "out" or p not in ports:
+            continue
+        e = ports[p]
+        if not (isinstance(e, dict) and isinstance(e.get("reads"), list) and _int(e.get("reads_from"))):
+            return False
+        rs, f = e["reads"], e["reads_from"]
+        if not all(-len(rs) <= u - f < len(rs) and not isinstance(rs[u - f], (list, dict)) for u in slots):
+            return False
+    return True
+
+
+def _sampled(c: dict, x: int) -> dict:
+    """`c` with one of its statements, its `x`-th, of only its part's sampled proof blocks (`_sampled_at`), reading its
+    own `out` registered too (`_shared_at`), its header sharing rows at both ports or at none; `c` where it has no such
+    statement (`_sampleable`)."""
+    ss = c.get("statements")
+    i = x % len(ss) if isinstance(ss, list) and ss else 0
+    shared = ("out", "x") if x // 8 % 2 else ()
+    if not _sampleable(c, i, shared):
+        return c
+    return _sampled_at(_shared_at(c, i, shared, reads=("out",)), i)
+
+
 def _shared_rows(c: dict, x: int) -> dict:
     """`c` with its first statement's header sharing rows (``shared_rows``) at its `frame_v3` ports, at the ports it
     reads registered, or at none, its template's reference sharing them too or not."""
@@ -5285,8 +5361,11 @@ def _read_opening(c: dict, x: int) -> dict:
 #: the interior registering a value of a name the boundary record has (`_shadowing`), the names of what the replay
 #: block returns or the interior registering one's value (`_returned`), what the verifier holds of the interior
 #: registration's values (`_verifier_held`), a read's opened row registered (`_read_opening`), the interior record's
-#: replay sample or run (`_reordered`), or the rows a header shares (`_shared_rows`).
+#: replay sample or run (`_reordered`), the rows a header shares (`_shared_rows`), or a statement of only its part's
+#: sampled proof blocks (`_sampled`).
 SECOND_CHANGES = [
+    _sampled,
+    _sampled,
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
     lambda c, x: _as_stated({**c, "statements": _shifted(c["statements"], 1 + x % 3)}),
     _relinked,
@@ -6768,6 +6847,45 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
     assert codes(rec["window"], {**params, "window_root": None}) == "reject"
 
 
+def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
+    """Lean and Python agreeing on the registered compiler (`compiler`, the registration log's item, with the public
+    length ℓ of the advice it reads): a window naming it by its digest with advice of at most ℓ bits is accepted, one
+    naming another compiler or none is refused by name (`R6-compiler`), and advice over ℓ, in another form or none too
+    (`R6-advice-length`). Where the log registers none (`compiler` null), a window naming a compiler or advice is refused
+    (`R6-compiler`); a verifier that reads no log's compiler holds the window to nothing. A compiler in another form
+    refuses the verifier's inputs."""
+    s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
+    design = {"k": 1, "law": "subset"}
+    digest, other = "c1" * 64, "c2" * 64
+    item = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
+
+    def named(d, bits):
+        return {**WINDOW, "compiler": {"digest": d, "name": "c"}, "advice": {"bits": bits, "root": "ad" * 64}}
+
+    rec = _record_of(s, values, design, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
+    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": design, "leaf_layer": LEAF, "log": [],
+              "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+              "registered": values, "scheme": SCHEME, "window_root": WROOT, "work_table": None}
+    unread = {k: v for k, v in params.items() if k != "compiler"}
+    none = {**params, "compiler": None}
+
+    def codes(window, p=params):
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    cases = [(named(digest, b), params, []) for b in (0, 32)]
+    cases += [(named(digest, b), params, ["R6-advice-length"]) for b in (33, -1, "8", None, True)]
+    cases += [(named(other, 8), params, ["R6-compiler"]), (WINDOW, params, ["R6-compiler", "R6-advice-length"]),
+              (named(digest, 8), none, ["R6-compiler"]),
+              ({**WINDOW, "advice": {"bits": 0, "root": "ad" * 64}}, none, ["R6-compiler"]), (WINDOW, none, []),
+              (named(other, 99), unread, []), (WINDOW, unread, [])]
+    for window, p, want in cases:
+        assert codes(window, p) == want, (window, p.get("compiler"))
+    for bad in ({**item, "kind": "theta"}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
+                {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
+        assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
+
+
 def test_a_window_opens_the_pool_its_chain_left(pieces):
     """Lean and Python agreeing on the pool chain: a window opens the pool the previous window of record left, of the
     same program, `pin` the previous record's `pout` entry, its domain and root, whatever the verifier made of that
@@ -7544,6 +7662,64 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
             **both["statements"][0]["registered"]["ports"], "x": {**mine, "reads": mine["reads"][::-1]}}}),
          ["second-read"]),
         ({**both, "refs": own["refs"]}, ["second-header"]),
+    ]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_takes_a_statement_of_only_its_sampled_blocks(pieces):
+    """A statement of only its part's sampled proof blocks, Lean's the Python's whole, over the two-template interior
+    after a replay sample of two, PAIR reading its own `x` and `out` and TRIPLE its linked `x` at the boundary and its
+    own `out`, each header sharing rows at both ports. PAIR's statement of its two sampled slots passes, its session's
+    sample both of them, as do both parts' so stated, and one beside a statement of every slot: its header's roots at
+    the ports it reads registered are its own tables', which round 2 doesn't hold to the interior record, and its
+    reads are each slot's own rows, the reference's but for the run's fields. Refused: a slot more or one fewer than
+    the sample's, or the slots out of the second sample's order (`second-population`, the statement then held as one
+    of every slot); a sample of some of its units, or the part's own sample (`second-sample`); a `range`, a class count or a
+    shared table's row count other than the slots' (`second-header`); a port left unread, at a root that isn't the
+    interior record's (`second-roots`, with `second-values` and `second-refs` where the reference reads it and the
+    header shares rows at it); and a sampled slot read at another slot's row (`second-read`)."""
+    pair, triple = SECOND_MIXED.templates
+    sample, second = [0, 2], [1, 4, 6, 9]
+    own = _second_case(SECOND_MIXED, True, sample, second, links={triple}, own={pair}, allow=True)
+    whole = _shared_at(_shared_at(own, 0, ("out", "x"), reads=("out",)), 1, ("out", "x"), reads=("out",))
+    one, both = _sampled_at(whole, 0), _sampled_at(_sampled_at(whole, 0), 1)
+    s0 = one["statements"][0]
+    h, reads = s0["header"], s0["registered"]["ports"]
+    assert h["units"]["indices"] == [1, 4] and h["shared_rows"] == {"out": 2, "x": 2} and h["range"] == [0, 2]
+    assert both["statements"][1]["header"]["units"]["indices"] == [6, 9]
+    assert h["frame_v3"]["roots"] != whole["statements"][0]["header"]["frame_v3"]["roots"]
+    unread = {**s0["registered"], "ports": {"x": reads["x"]}}
+
+    def units(**change) -> dict:
+        return {**h, "units": {**h["units"], **change}}
+    cases = [
+        (whole, []),
+        (one, []),
+        (both, []),
+        ({**one, "allow": False}, ["two-stage-form"]),
+        (_second_with(one, 0, header={**units(indices=[1, 4, 5]), "instances": 3}),
+         ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, header={**units(indices=[1]), "instances": 1}),
+         ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, header=units(indices=[4, 1])), ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, header=units(indices=[1, 5])), ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, draw={"law": "subset", "population": 2, "k": 1, "units": [0]}), ["second-sample"]),
+        (_second_with(one, 0, draw=whole["statements"][0]["draw"]), ["second-sample"]),
+        (_second_with(one, 0, header={**h, "range": [0, 6]}), ["second-header"]),
+        (_second_with(one, 0, header=units(classes=whole["statements"][0]["header"]["units"]["classes"])),
+         ["second-header"]),
+        (_second_with(one, 0, header={**h, "shared_rows": {"out": 2, "x": 3}}), ["second-header"]),
+        (_second_with(one, 0, header={**h, "shared_rows": whole["statements"][0]["header"]["shared_rows"]}),
+         ["second-header"]),
+        (_second_with(one, 0, registered=unread), ["second-header", "second-roots", "second-refs", "second-values",
+                                                   "second-reported"]),
+        (_second_with(one, 0, registered={**s0["registered"], "ports": {
+            **reads, "x": {**reads["x"], "reads": reads["x"]["reads"][::-1]}}}), ["second-read"]),
+        (_second_with(one, 0, registered={**s0["registered"], "ports": {
+            **reads, "out": {**reads["out"], "reads": [r + 1 for r in reads["out"]["reads"]]}}}), ["second-read"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))

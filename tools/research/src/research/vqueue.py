@@ -62,7 +62,7 @@ counts at once, as the lowest's would, once its base's word on each of its own f
 for a failure whose inputs meet its own members and none below it, `main`'s (`Failed.main_tests`, `_said`); until then it waits, since its base may yet fail the same.  The lowest fail
 on the chain is the one read, and nothing is built on a candidate that failed.  A fail is read as soon as a gating task has
 failed, while others still run (not `Verdict.ended`), unless each of its failures is inherited.  Bisecting keeps no state of
-its own: a suspect's `cap` (half the suspects of the newest failed or infra-split outcome it was in) bounds the batches it
+its own: a suspect's limit (half the suspects of the newest failed or infra-split outcome it was in) bounds the batches it
 goes into until it reaches `main` or is ejected.
 
 A candidate in flight lands as built: a member whose owner withdrew its mark, pushed a new head or closed it stays in it,
@@ -74,7 +74,7 @@ every one above it, and the same tick builds each again without what the red sus
 Lean changes (`Ready.lean`) and changes with none go in batches of their own, so no Lean failure drops a PR with no Lean
 change.  A Lean batch opens whenever none is staged, whether or not PRs with no Lean change wait (`_next`): the Lean PRs first
 in rank, up to `lean`, so none at 0; or, while a pinned Lean PR (`Snapshot.pinned`) that a batch may take waits, the pinned
-ones alone, up to `batch` and under no `lean` cap.  A pin orders a Lean batch or cuts it, and at `lean` 0 it is the only way
+ones alone, up to `batch` and under no `lean` limit.  A pin orders a Lean batch or cuts it, and at `lean` 0 it is the only way
 into one.  Staged, the batch takes no build from the PRs with no Lean change: the tick that stages it builds theirs beside it.
 It keeps those changing a Lean input out for its whole records run, though, so they go first: no Lean batch is staged,
 pinned or not, while one of them that a batch may take waits, whatever its rank.  So only a batch staged before such a PR
@@ -95,7 +95,7 @@ from .store.tool import glob_re
 
 PENDING, PASS, FAIL, INFRA, LIST_FAILED = "pending", "pass", "fail", "infra", "list-failed"
 STATES = (PENDING, PASS, FAIL, INFRA, LIST_FAILED)
-#: an outcome's state when infra that persisted split a multi-member candidate (`decide`): its suspects' caps bound the
+#: an outcome's state when infra that persisted split a multi-member candidate (`decide`): its suspects' limits bound the
 #: batches they go into as a fail's do (`_batch`), and it is infra, no red against any member: nobody is ejected
 INFRA_SPLIT = "infra-split"
 
@@ -225,9 +225,9 @@ class Snapshot:
     left: tuple[tuple[int, str, str], ...] = ()  # each other open PR into `main`, as (number, head, why the queue doesn't
                                    # take it now): what a candidate's drop for a member that left `ready` says
     wide: frozenset[int] = frozenset()  # the PRs whose Lean change is wide: one of them that `lean` counts (`Ready.lean`)
-                                   # fills that cap alone, and a batch on a candidate holding one takes none `lean` counts
+                                   # fills that limit alone, and a batch on a candidate holding one takes none `lean` counts
     pinned: frozenset[int] = frozenset()  # the PRs the pins file names: while a Lean PR of them that a batch may take waits,
-                                   # a Lean batch holds pinned Lean PRs only, under no `lean` cap (`_next`)
+                                   # a Lean batch holds pinned Lean PRs only, under no `lean` limit (`_next`)
     pulled: frozenset[int] = frozenset()  # the PRs of `left` taken from the queue by others than their owners, at their
                                    # heads or at the heads candidates in flight hold them at (a mark withdrawn by another,
                                    # as a red's eject is, a reviewer's hold, the freeze, or a PR holding the head of one):
@@ -624,15 +624,15 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
     if r.lean:
         waiting = [x for x in t.pool if x.lean_input and not x.lean and _takes(x, newest)]
         if t.lean and any(m in s.pinned for m in t.lean) and r.number not in s.pinned:
-            return "Lean cap", "pinned Lean PRs go first: a Lean batch holds them alone while one waits"
+            return "Lean limit", "pinned Lean PRs go first: a Lean batch holds them alone while one waits"
         if t.lean and (_wide(r, s.wide) or any(_wide(ready[m], s.wide) for m in t.lean)):
-            return "Lean cap", "a wide Lean change fills a Lean batch alone"
+            return "Lean limit", "a wide Lean change fills a Lean batch alone"
         if t.lean:
-            return "Lean cap", f"behind the Lean PRs ranked before it: a Lean batch holds at most {s.lean} (--lean)"
+            return "Lean limit", f"behind the Lean PRs ranked before it: a Lean batch holds at most {s.lean} (--lean)"
         if t.why:
             return "Lean waits", t.why
         if s.lean == 0 and r.number not in s.pinned:
-            return "Lean cap", "--lean is 0: only a pinned Lean PR opens a Lean batch"
+            return "Lean limit", "--lean is 0: only a pinned Lean PR opens a Lean batch"
         if s.records and waiting:
             return "Lean waits", (f"no Lean batch is staged while #{waiting[0].number}, which changes a Lean input, waits: it "
                                   "goes first")
@@ -649,12 +649,12 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
         return "move", "a batch holds no move beside a PR changing `tools/move/`'s scripts"
     if r.move and any(ready[m].move for m in t.plain):
         return "move", "a batch holds one move PR, last"
-    cap = max(1, len(o.suspects) // 2) if o is not None and o.state == FAIL and r.number in o.suspects else None
-    if cap is not None and cap <= len(t.plain):
-        return "suspect cap", f"a suspect of a failed candidate goes in a batch of at most {cap}"
+    allowed = max(1, len(o.suspects) // 2) if o is not None and o.state == FAIL and r.number in o.suspects else None
+    if allowed is not None and allowed <= len(t.plain):
+        return "suspect limit", f"a suspect of a failed candidate goes in a batch of at most {allowed}"
     if t.plain:
         return "batch full", (f"behind the PRs ranked before it: a batch holds at most {len(t.plain)} "
-                              + ("(--batch)" if len(t.plain) >= s.batch else "(a suspect's cap)"))
+                              + ("(--batch)" if len(t.plain) >= s.batch else "(a suspect's limit)"))
     if t.lean and not s.records:
         return "Lean's turn", "with no records run, a Lean batch takes the tick's build and a place on main's chain"
     return "other", "no batch took it"
@@ -1056,7 +1056,7 @@ def _tree_why(c: Candidate) -> str:
 
 
 def _wide(r: Ready, wide: frozenset[int]) -> bool:
-    """Whether ``r`` is a wide member: ``wide`` names it and the `lean` cap counts it (`Ready.lean`)."""
+    """Whether ``r`` is a wide member: ``wide`` names it and the `lean` limit counts it (`Ready.lean`)."""
     return r.lean and r.number in wide
 
 
@@ -1065,7 +1065,7 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
     """The Lean batch to open on ``chain``'s top from ``pool`` (in rank order), and why it is none while its PRs wait for a top
     it may go on ('' otherwise; ``built``: the chain's members as built).  It holds Lean PRs only, whether or not a PR with
     no Lean change waits: while a pinned one (`Snapshot.pinned`) that a batch may take (`_takes`) waits, the pinned ones alone,
-    up to `batch` and under no `lean` cap; else the first in rank, up to `lean`, so at 0 none but a pinned one set aside.  A
+    up to `batch` and under no `lean` limit; else the first in rank, up to `lean`, so at 0 none but a pinned one set aside.  A
     lone one set aside opens a batch only in its turn, behind every PR of ``pool`` a batch may take and every one set aside
     longer, whatever their change (`_batch`; at `lean` 0, no Lean PR but a pinned one).  With a records run, none opens,
     pinned or not, while ``pool`` holds a PR with no Lean change that changes a Lean input (`Ready.lean_input`) and that a
@@ -1125,8 +1125,8 @@ def _takes(r: Ready, newest: dict[int, Outcome]) -> bool:
 
 
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int]) -> tuple[int, ...]:
-    """The next batch from ``pool`` (in rank order): each PR whose cap allows it, while the batch is under its limit, with at
-    most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that cap.  A suspect's cap is
+    """The next batch from ``pool`` (in rank order): each PR whose own limit allows it, while the batch is under its limit, with at
+    most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that limit.  A suspect's limit is
     half the suspects of the newest outcome holding it at its head (a fail or an infra split, `INFRA_SPLIT`), at least 1; a
     PR set aside (`infra`) comes after every other, alone, the longest set aside first."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
@@ -1141,11 +1141,11 @@ def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wid
             continue
         if o is not None and o.state == INFRA and batch:
             break
-        cap = (max(1, len(o.suspects) // 2) if o is not None and o.state in (FAIL, INFRA_SPLIT) and r.number in o.suspects else
+        allowed = (max(1, len(o.suspects) // 2) if o is not None and o.state in (FAIL, INFRA_SPLIT) and r.number in o.suspects else
                1 if o is not None and o.state == INFRA else size)
-        if len(batch) < cap:
+        if len(batch) < allowed:
             batch.append(r.number)
-            limit, leans = min(limit, cap), lean if w else leans + r.lean
+            limit, leans = min(limit, allowed), lean if w else leans + r.lean
     return tuple(batch)
 
 

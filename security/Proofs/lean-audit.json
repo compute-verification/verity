@@ -113,14 +113,12 @@
   "Proofs.Properties.Verity.Sampled.Record.Facts",
   "Proofs.Properties.Verity.Sampled.Record.Session",
   "Proofs.Properties.Verity.Sampled.Record.Accepts",
-  "Proofs.Properties.Verity.Sampled.Record.Pass",
-  "Proofs.Properties.Verity.Sampled.Record.Law",
   "Proofs.Properties.Verity.Sampled.Record.Runs",
   "Proofs.Properties.Verity.Sampled.Record.Opens",
   "Proofs.Properties.Verity.Sampled.Record.Scope",
   "Proofs.Properties.Verity.Sampled.Record.Inner",
-  "Proofs.Properties.Verity.Sampled.Record.KS",
   "Proofs.Properties.Verity.Sampled.Record.Reg",
+  "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Sampled.OpensAt",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Members",
@@ -140,6 +138,10 @@
   "Proofs.Properties.Verity.Sampled.Window.Instance",
   "Proofs.Properties.Verity.WindowFiles",
   "Proofs.Properties.Challenger.Window",
+  "Proofs.Properties.Challenger.Lines",
+  "Proofs.Properties.Spot.MonitoringPeriod",
+  "Proofs.Properties.Spot.MonitoringPeriodLedger",
+  "Proofs.Properties.Spot.MonitoringPeriodSigned",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Verity.Sampled.Messages",
@@ -258,7 +260,8 @@
   "Fwd.step": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.summarize": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
-  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
+  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.evalFields": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
  },
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {
@@ -304,6 +307,12 @@
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "68161b2e468dd0509c8ee6c345e27b5930837246b884fc4999cb26da93f04881"
+  },
+  "Proofs.Flock.SpotFlock.InstanceStmt.Header": {
+   "why": "plain_lit, the tactic that shows a literal leaf or key of an instance statement's header plain, a macro that expands to one simp call over the module's plain, plainStr and literal definitions. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+  },
+  "Proofs.Flock.SpotFlock.InstanceStmt.Plain": {
+   "why": "plain_json, the tactic that shows an instance statement's JSON object plain, a macro that expands to one simp call over FirewallObj.plain_mkObj and the module's plain, plainStr and hex lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
   }
  },
  "layers": {
