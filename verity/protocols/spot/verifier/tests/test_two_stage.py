@@ -24,7 +24,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.spot.verifier.profile import Bernoulli, Subset
-from verity.protocols.spot import optimize as O, plancheck as PC
+from verity.protocols.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
                                                             verifier as V)
