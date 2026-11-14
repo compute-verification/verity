@@ -77,8 +77,6 @@
     {"file": "tests/program/test_derive_negative.py", "kind": "override", "symbol": "DataDependentSlice.forward", "detail": ""},
     {"file": "tests/program/test_derive_realhf.py", "kind": "assignment", "symbol": "<module>", "detail": "", "count": 2},
     {"file": "tests/program/test_derive_realhf.py", "kind": "attr-defined", "symbol": "_probe_patches", "detail": ""},
-    {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "CubeNorm.forward", "detail": ""},
-    {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "LlamaStyleNorm.forward", "detail": ""},
     {"file": "tests/properties/deepgemm_capture_gpu.py", "kind": "index", "symbol": "einsum_launches", "detail": "", "count": 4},
     {"file": "tests/properties/dsv4_marlin_capture_gpu.py", "kind": "arg-type", "symbol": "gpu_phases", "detail": ""},
     {"file": "tests/properties/dsv4_marlin_capture_gpu.py", "kind": "assignment", "symbol": "gpu_phases", "detail": ""},
