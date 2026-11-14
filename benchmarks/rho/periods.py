@@ -73,6 +73,8 @@ LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provis
 #: fleet's capacity over the period, and the premises it takes in place of `DampenerRemote`'s per-window ones, each
 #: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
 PERIOD_BOUND = "Nci.Guarantees.DampenerRemotePeriod"
+#: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
+PER_BLOCK_BOUND = Remote.CITES[0]
 PERIOD_PREMISES = {"Nci.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
                    "Nci.Assumptions.SampledPerWindow": "the escape share and its tail",
                    "Nci.Assumptions.IdentitySchedule": "same",
@@ -147,13 +149,18 @@ def pooled(r: Result) -> dict | None:
     inner = operating._inner(r.scenario.regime)
     if not isinstance(inner, Remote) or isinstance(inner, Onsite):
         return None
-    record = lean.premises(PERIOD_BOUND)
+    record, shared = lean.premises(PERIOD_BOUND), lean.premises(PER_BLOCK_BOUND)
     missing = [p for p in PERIOD_PREMISES if p not in record]
     if missing:
         raise ValueError(f"the lock's record of {PERIOD_BOUND} takes no {missing}: PERIOD_PREMISES names its premises")
+    stray = sorted(p for p in record if p not in PERIOD_PREMISES and p not in shared)
+    if stray:
+        raise ValueError(f"the lock's record of {PERIOD_BOUND} takes {stray}, which neither PERIOD_PREMISES nor the "
+                         f"record of {PER_BLOCK_BOUND} names: add each to PERIOD_PREMISES with the terms it is on")
     d = inner.detection
     windows = {name: math.ceil(seconds / inner.window_s) for name, seconds in params.PERIODS.items()}
     return {"bound": PERIOD_BOUND, "premises": {p: [record[p], term] for p, term in PERIOD_PREMISES.items()},
+            "per_block": PER_BLOCK_BOUND, "shared": len(record) - len(PERIOD_PREMISES), "recorded": len(record),
             "tail": d.tail(), "p_evade": d.p_evade if d.sampled else 0.0, "window_s": inner.window_s,
             "window_ks": inner.window_ks, "windows": {k: [n, n * inner.window_ks] for k, n in windows.items()}}
 
@@ -163,7 +170,9 @@ def pooled_md(p: dict) -> str:
     premises = ", ".join(f"`{n.rsplit('.', 1)[-1]}` ({kind}; {term})" for n, (kind, term) in p["premises"].items())
     sums = "; ".join(f"{k} {fmt(n)}{' windows' if i == 0 else ''}, {fmt(s)}"
                      for i, (k, (n, s)) in enumerate(p["windows"].items()))
-    return (f": the terms of `{p['bound']}`, one statement pooled over the period, its premises on them {premises}; "
+    return (f": the terms of `{p['bound']}`, one statement pooled over the period, the premises it takes beyond "
+            f"`{p['per_block']}`'s, whose other {p['shared']} it shares ({p['recorded']} in the lock's record), on "
+            f"them {premises}; "
             f"the escape's tail `J (1 − q)^(K+1)` {fmt(p['tail'])}, within δ's `p_evade` {fmt(p['p_evade'])}; the "
             f"windows' knowledge errors `Σ_t ks_t`, in δ_crypto, at `window_ks` {fmt(p['window_ks'])} a window of "
             f"{operating.human(p['window_s'])}, the deployment's rounds of live coins (both assumed, for knowledge "
@@ -333,7 +342,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                  else "; ".join(f"{g['where']}, {g['period']}" for g in group))
         out += [f"### {x['scenario']} ({where})", "",
                 (f"Set by **{p['setter']}** ({p.get('status')}; premises {p.get('premise') or '—'}), binding at "
-                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."), "", "| kind | parts |", "|---|---|"]
+                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."
+                + (f" The kinds are the per-block cuts' citations; the period statement, `{sc['period']['bound']}`, "
+                   "is the \"not scaled\" line's." if sc["period"] else "")), "", "| kind | parts |", "|---|---|"]
         for kind, names in p["kinds"].items():
             cells = [f"`{n}`" + (f" ({p['standings'][n]})" if n in p["standings"] else "") for n in names]
             out.append(f"| {kind} | {', '.join(cells) or '—'} |")

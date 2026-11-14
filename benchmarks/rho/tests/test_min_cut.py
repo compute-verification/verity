@@ -580,3 +580,20 @@ def test_a_remote_period_row_cites_dampener_remote_period_with_its_tail_and_wind
     assert (p["tail"] > 0) == sampled and p["tail"] <= p["p_evade"]
     r = build(REG.override(periods.choices(name, fleet, "year")), name)
     assert p["windows"]["year"][1] == pytest.approx(r.regime.delta(r.context).by["windows"][1])
+
+
+def test_a_remote_period_row_refuses_a_premise_neither_its_list_nor_the_per_block_record_names(monkeypatch):
+    """The period statement's premises are `PERIOD_PREMISES` and the ones it shares with `DampenerRemote`'s record: one
+    the lock's record adds beyond both is refused, naming the fix, and the row counts the shared ones from the
+    records."""
+    import periods
+    from rho import analysis
+
+    r = analysis.result(REG, "reference-remote-h200")
+    p = periods.pooled(r)
+    record, shared = lean.premises(periods.PERIOD_BOUND), lean.premises(periods.PER_BLOCK_BOUND)
+    assert (p["recorded"], p["shared"]) == (len(record), len(set(record) & set(shared)))
+    grown = dict(record) | {"Nci.Assumptions.Unnamed": "open"}
+    monkeypatch.setattr(lean, "premises", lambda name: grown if name == periods.PERIOD_BOUND else shared)
+    with pytest.raises(ValueError, match=r"\['Nci.Assumptions.Unnamed'\].*add each to PERIOD_PREMISES"):
+        periods.pooled(r)
