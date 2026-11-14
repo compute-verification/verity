@@ -1,7 +1,7 @@
 """The exclusion bound: the server-block bound with its local minima (the working draft's §8, which states it).
 
 Everything here is in gates and counted weight. A **block** has a budget `(c, k)` (`Budget`): its gates and its
-fresh input bits. A pricing argument gives an inference-block yield `q(c, k)` (`Cap`), the most counted weight a block
+fresh input bits. A pricing argument gives an inference-block yield `q(c, k)` (`Yield`), the most counted weight a block
 with that budget holds; an attack gives a construction's count instead. A **server block** (`ServerBlock`) is one
 server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
 its free compute `U` by route, and an argument of the bound's minimum:
@@ -69,7 +69,7 @@ class Budget:
 
 #: `q(c, k)`: the inference-block yield, the most counted weight one block with this budget holds, an upper bound for a
 #: bound and a construction for an attack. `math.inf` is no bound (a class whose premises fail at this budget).
-Cap = Callable[[Budget], float]
+Yield = Callable[[Budget], float]
 
 
 @dataclass(frozen=True)
@@ -132,14 +132,14 @@ class Share:
 Side = Literal["bound", "attack"]
 
 
-def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = None,
+def terms(block: ServerBlock, cut: Cut, block_yield: Yield, w: float, u: float | None = None,
           per_bit: float | None = None) -> dict[str, float]:
     """`cut`'s argument of the minimum, term by term, over `w c_S`: each block kind's `n · min(q(c, k), u c)`, each
     route's `q_U(U) = u U` (`u` defaults to `w`), and its boundary term `ω_max μ k` at `per_bit = ω_max μ`
     (`classes.Structure.per_bit`)."""
     u = w if u is None else u
     full = w * block.gates
-    out = {b.kind: b.count * min(cap(b.budget), u * b.budget.gates) / full for b in cut.blocks}
+    out = {b.kind: b.count * min(block_yield(b.budget), u * b.budget.gates) / full for b in cut.blocks}
     for route, gates in cut.uncertified.items():
         out[route] = out.get(route, 0.0) + u * gates / full
     if cut.boundary:
@@ -150,7 +150,7 @@ def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = No
     return out
 
 
-def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None,
+def local(block: ServerBlock, block_yield: Yield, w: float, side: Side = "bound", u: float | None = None,
           per_bit: float | None = None) -> Share:
     """The server-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
     at `mfu`. Never more than the block's own gates hold (`u c_S`, or `mfu` of `w c_S` for a construction)."""
@@ -160,14 +160,14 @@ def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float
     if block.gates <= 0:
         return best
     for cut in block.cuts if side == "bound" else (block.layout,) if block.layout else ():
-        t = terms(block, cut, cap, w, u, per_bit)
+        t = terms(block, cut, block_yield, w, u, per_bit)
         total = math.fsum(t.values())
         if total < best.value:
             best = Share(total, cut.name, t)
     return best
 
 
-def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
+def aggregate(partition: Partition, block_yield: Yield, w: float, u: float | None = None,
               per_bit: float | None = None) -> dict[str, Share]:
     """The minimum of the global bounds: each cut name's terms summed over every server block (a block without that
     cut, or whose cut holds more than its capacity, at its capacity), the least of those sums, as each block's share."""
@@ -180,7 +180,7 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
         shares = {}
         for b in partition.serving:
             cut = next((c for c in b.cuts if c.name == name), None)
-            t = terms(b, cut, cap, w, u, per_bit) if cut and b.gates > 0 else {}
+            t = terms(b, cut, block_yield, w, u, per_bit) if cut and b.gates > 0 else {}
             v = math.fsum(t.values())
             shares[b.name] = Share(v, name, t) if cut and v < capacity.value else capacity
         s = math.fsum(weights[n] * v.value for n, v in shares.items())
@@ -243,7 +243,7 @@ class Slowdown:
         return {"unregistered": unregistered} | {t: (1 - self.eps_unreg) * v * scale for t, v in self.terms.items()}
 
 
-def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
+def slowdown(partition: Partition, block_yield: Yield, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
              reference_efficiency: bool = True, per_bit: float | None = None) -> Slowdown:
     """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
@@ -254,9 +254,9 @@ def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
     weights = {b.name: b.count * b.gates for b in partition.serving}
     total = math.fsum(weights.values())
     if aggregate_only and side == "bound":
-        shares = aggregate(partition, cap, w, u, per_bit)
+        shares = aggregate(partition, block_yield, w, u, per_bit)
     else:
-        shares = {b.name: local(b, cap, w, side, u, per_bit) for b in partition.serving}
+        shares = {b.name: local(b, block_yield, w, side, u, per_bit) for b in partition.serving}
     out: dict[str, float] = {}
     for name, s in shares.items():
         for term, v in s.terms.items():
@@ -285,7 +285,7 @@ def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = 
     return max(1.0, 1 / rate) if rate > 0 else math.inf
 
 
-def least(*caps: Cap) -> Cap:
+def least(*yields: Yield) -> Yield:
     """Several bounds on the same block at once: each bounds the same counted weight, so the least of them does, under
     the union of their premises."""
-    return lambda budget: min((a(budget) for a in caps), default=math.inf)
+    return lambda budget: min((a(budget) for a in yields), default=math.inf)

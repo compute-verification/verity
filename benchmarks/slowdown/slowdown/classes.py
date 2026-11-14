@@ -35,7 +35,7 @@ from slowdown import lean, min_cut
 from slowdown.hardware import Units
 from slowdown.params import Registry
 from slowdown.profile import Profile
-from slowdown.theorem import Cap
+from slowdown.theorem import Yield
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class FlopBudget:
 Allowance = Callable[[FlopBudget], float]
 
 
-def per_block(a: Allowance, units: Units) -> Cap:
+def per_block(a: Allowance, units: Units) -> Yield:
     """`q_T(c, k)`: allowance `a` on a block of `c` gates."""
     return lambda b: a(FlopBudget(units.flops(b.gates), b.inputs, b.cut))
 

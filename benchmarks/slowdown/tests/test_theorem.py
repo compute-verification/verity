@@ -35,7 +35,7 @@ def test_a_server_block_contributes_its_least_cut_and_never_more_than_its_capaci
 def test_the_local_minimum_beats_the_minimum_of_global_bounds_when_blocks_bind_different_cuts():
     """Two server blocks: the first's inference cut binds (few prompt bits), the second's serving cut (a small `k_S`).
     The local minimum takes each one's own least cut; the aggregate-only bound must pick one cut for both."""
-    cap = lambda bud: bud.inputs
+    block_yield = lambda bud: bud.inputs
     one = block(Cut("inference", (Blocks("inference", Budget(100, 10), 9),), {"undecl.gpu": 100}),
                 Cut("serving", (Blocks("serving", Budget(1000, 500), 1),)), name="one")
     two = block(Cut("inference", (Blocks("inference", Budget(100, 90), 9),), {"undecl.gpu": 100}),
@@ -43,38 +43,39 @@ def test_the_local_minimum_beats_the_minimum_of_global_bounds_when_blocks_bind_d
     part = Partition((one, two), 0.0)
     w = 1.0
     # one: inference 9·10/1000 + 0.1 = 0.19 against serving 0.5; two: inference 0.91 against serving 0.2
-    assert (local(one, cap, w).cut, local(two, cap, w).cut) == ("inference", "serving")
-    loc = slowdown(part, cap, w)
+    assert (local(one, block_yield, w).cut, local(two, block_yield, w).cut) == ("inference", "serving")
+    loc = slowdown(part, block_yield, w)
     assert loc.g == pytest.approx((0.19 + 0.2) / 2)
     # the global sums: inference (0.19 + 0.91)/2 = 0.55, serving (0.5 + 0.2)/2 = 0.35, so serving for both
-    agg = slowdown(part, cap, w, aggregate_only=True)
-    assert agg.g == pytest.approx(0.35) and {s.cut for s in aggregate(part, cap, w).values()} == {"serving"}
+    agg = slowdown(part, block_yield, w, aggregate_only=True)
+    assert agg.g == pytest.approx(0.35) and {s.cut for s in aggregate(part, block_yield, w).values()} == {"serving"}
     assert loc.padded == pytest.approx(1 / 0.195) and agg.padded == pytest.approx(1 / 0.35) and loc.padded > agg.padded
 
 
 def test_the_serving_cut_adds_its_boundary_term_and_still_sets_the_share():
     """`ServingBlockBound`'s serving argument is `q(c_S, k_S) + ω_max μ k_S`: the term raises the share the serving
     cut sets, and a cut with a boundary term needs `per_bit`."""
-    cap, w = (lambda bud: bud.inputs), 1.0
+    block_yield, w = (lambda bud: bud.inputs), 1.0
     inference = Cut("inference", (Blocks("inference", Budget(100, 10), 9),), {"undecl.gpu": 100})
     serving = Cut("serving", (Blocks("serving", Budget(1000, 100), 1),), boundary=100)
-    s = local(block(inference, serving), cap, w, per_bit=0.5)
+    s = local(block(inference, serving), block_yield, w, per_bit=0.5)
     # inference: 9·10/1000 + 100/1000 = 0.19; serving: q = 100, and ω_max μ k_S = 0.5·100 = 50, so 150/1000 = 0.15
     assert s.cut == "serving" and s.value == pytest.approx(0.15) and s.terms["boundary"] == pytest.approx(0.05)
-    without = local(block(inference, Cut("serving", serving.blocks)), cap, w)
+    without = local(block(inference, Cut("serving", serving.blocks)), block_yield, w)
     assert without.cut == "serving" and without.value == pytest.approx(0.10)
-    assert slowdown(Partition((block(inference, serving),), 0.0), cap, w, per_bit=0.5).padded == pytest.approx(1 / 0.15)
+    padded = slowdown(Partition((block(inference, serving),), 0.0), block_yield, w, per_bit=0.5).padded
+    assert padded == pytest.approx(1 / 0.15)
     with pytest.raises(ValueError, match="per_bit"):
-        local(block(inference, serving), cap, w)
+        local(block(inference, serving), block_yield, w)
 
 
 def test_the_aggregate_bound_is_never_tighter_than_the_local_one():
-    cap = lambda bud: bud.inputs ** 1.5
+    block_yield = lambda bud: bud.inputs ** 1.5
     blocks = tuple(block(Cut("inference", (Blocks("inference", Budget(100, k), 9),), {"undecl.gpu": 50}),
                          Cut("serving", (Blocks("serving", Budget(1000, 40 * k), 1),)), name=f"b{k}")
                    for k in (1, 3, 10, 30))
     part = Partition(blocks, 0.01)
-    assert slowdown(part, cap, 1.0).padded >= slowdown(part, cap, 1.0, aggregate_only=True).padded
+    assert slowdown(part, block_yield, 1.0).padded >= slowdown(part, block_yield, 1.0, aggregate_only=True).padded
 
 
 def test_an_attack_takes_the_layout_at_its_mfu_and_ignores_the_cuts():
@@ -98,19 +99,20 @@ def test_the_overhead_is_the_hardware_multiple_at_the_references_mfu_floored_at_
     A construction's padded circuit already holds the capacity it leaves idle, so its slowdown is `MFU₀` times its
     padded size ratio. `rates` splits `1 / slowdown` before the floor."""
     part = Partition((block(Cut("c", (Blocks("x", Budget(1000, 5), 1),)), mfu=0.4),), 0.01, unreg_mfu=0.55)
-    def cap(b):
+    def block_yield(b):
         return b.inputs
 
-    bound = slowdown(part, cap, W, efficiency=2.0, mfu=0.4)
+    bound = slowdown(part, block_yield, W, efficiency=2.0, mfu=0.4)
     s, x = 0.01 / 2.0, 0.99 * 0.01 / 2.0
     assert bound.g == pytest.approx(0.01) and bound.value == pytest.approx(multiple_bound(0.4, s, x))
     assert bound.value == pytest.approx(1 / (s + x)) == pytest.approx(bound.padded)
     assert sum(bound.rates().values()) == pytest.approx(1 / bound.value)
-    peak = slowdown(part, cap, W, efficiency=2.0, mfu=0.4, reference_efficiency=False)
+    peak = slowdown(part, block_yield, W, efficiency=2.0, mfu=0.4, reference_efficiency=False)
     assert peak.value == pytest.approx(multiple_bound(0.4, s, x, reference_efficiency=False))
     assert peak.value == pytest.approx(1 / (s + x / 0.4)) and peak.value < peak.padded
     assert sum(peak.rates().values()) == pytest.approx(1 / peak.value)
-    assert slowdown(part, cap, W, efficiency=2.0, reference_efficiency=False).value == pytest.approx(bound.padded)
+    value = slowdown(part, block_yield, W, efficiency=2.0, reference_efficiency=False).value
+    assert value == pytest.approx(bound.padded)
     attack = slowdown(part, lambda b: 0.0, W, side="attack", mfu=0.5)
     assert attack.value == pytest.approx(0.5 * attack.padded) and sum(attack.rates().values()) == pytest.approx(
         1 / attack.value)
