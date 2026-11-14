@@ -1426,7 +1426,7 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        moved = {f: o for f, o, *_ in changed_sources(c.lo, c.hi, (), lambda _: True) if o is not None and o != f}
+        moved = {new: old for old, new in renamed(c).items()}
         placed_before = carried(before, moved)
         grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
         uncalled, public = public_callers(c)
