@@ -188,7 +188,7 @@ theorem audit_profile (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (h
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans (prCoin_false.le.trans
       (zero_le))
 
-/-- **The count curve**: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks + ε_bind`. -/
+/-- **The count curve**: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks + ε_bind`. -/
 theorem audit_count (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.incorrect (A.committedOf σ)).card) (audit L Reg session) σ ≤

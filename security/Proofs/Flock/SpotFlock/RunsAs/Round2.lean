@@ -264,10 +264,11 @@ theorem inputsNone_of_registersNone {own : Spot.SecondStage.Own} (hR : Registers
     InputsNone own :=
   inputsFailure_none (own := core own) hR
 
-/-- **`InputsNone` in the running verifier's terms**: `second-inputs` passing once the verifier's own values and reads
-are emptied, which is all of `core` that `inputsFailure` reads. -/
+/-- **`InputsNone` in the running verifier's terms**: `second-inputs` passing once the verifier's own values, reads,
+tables and widths are emptied, which is all of `core` that `inputsFailure` reads. -/
 theorem inputsNone_of_emptied {own : Spot.SecondStage.Own}
-    (hI : Spot.SecondStage.inputsFailure { own with fixed := #[], supplied := #[], reads := #[] } = none) :
+    (hI : Spot.SecondStage.inputsFailure
+      { own with fixed := #[], supplied := #[], reads := #[], tables := #[], widths := #[] } = none) :
     InputsNone own :=
   hI
 

@@ -138,7 +138,7 @@ def AccSeqsCarried {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : 
     (As : Set (ℕ → Bool)) (valid : (ℕ → Bool) → Prop) (prow nrow : List ℕ) (rin : Hash.Row) (δ : ℝ)
     (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) : Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧
-    ∃ F ∈ faultySets d P δ, ∃ rout, AcceptedCarried C P lay n As valid prow nrow rin rout F op o}
+    ∃ F ∈ incorrectSets d P δ, ∃ rout, AcceptedCarried C P lay n As valid prow nrow rin rout F op o}
 
 /-- **The opening gates are inputs** of each statement's circuit: a run reads its opened row where values enter it. -/
 def OpensAtInputs (prow : AuditStatement → List ℕ) : Prop :=
@@ -155,7 +155,7 @@ def RLeakCarried (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg →
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧
     ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
       Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o → o.length = k s → (∀ y ∈ o, y.jitter < Dj) →
-        ∃ F ∈ faultySets s.design P δ, AcceptedCarried s.prog P (lay s) (k s)
+        ∃ F ∈ incorrectSets s.design P δ, AcceptedCarried s.prog P (lay s) (k s)
           (AsReg s.prog (lay s) (k s) (reg s) (traceVal s.prog (w.val H Cm s))) (valid s) (prow s) (nrow s)
           ((prow s).map (traceVal s.prog (w.val H Cm s)))
           ((nrow s).map (valOver s.prog (traceVal s.prog (w.val H Cm s))

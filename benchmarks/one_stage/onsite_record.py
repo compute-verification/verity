@@ -697,7 +697,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
     "windows-placed": {"is": "ExecutionPhasesPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
-                             "the period read, and each of its faulty sets at δ commits at most the bits β the period "
+                             "the period read, and each of its incorrect sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
                        "discharged_by": ("Properties.NetworkPeriod.scanWindowsPlaced",)},

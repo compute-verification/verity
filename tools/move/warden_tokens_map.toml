@@ -228,6 +228,8 @@ strings = [
     "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
     "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
     "the round's provenance: its link-window of the warden's run",
+    'b"warden-run"',                                  # the tests' seeds of a synthetic run and of a second one
+    'b"another warden"',
 ]
 
 [rewrite]

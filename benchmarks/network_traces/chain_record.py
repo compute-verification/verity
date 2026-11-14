@@ -675,7 +675,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
             "sum_eps": f"{windows}·(δ + ε_ks + ε_bind)",
             "a": "log2 #Ss + Σ_c log2(cap_c + 1), charged once a period",
-            "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
+            "b_w": "#(freeInputs_w \\ reg_w) + log2 #incorrectSets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",

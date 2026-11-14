@@ -61,7 +61,7 @@ of its possible incorrect sets at `δ` commits at most `β i` bits. -/
 def ExecutionPhasesPlaced {n : ℕ} (partition : AuditStatement → Option Partition) (δ : ℝ) (sw : Fin n → AuditStatement)
     (Pw : Fin n → Partition) (β : Fin n → ℕ) : Prop :=
   (∀ i, partition (sw i) = some (Pw i)) ∧
-    ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i
+    ∀ i, ∀ F ∈ incorrectSets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i
 
 /-- **The record reads back under a registered parameter.** `rd θ` reads the client's cells from the record given the
 parameter `θ` alone, and `allows θ s` says the schedule `s` is one of `θ`'s: on every schedule a parameter allows and
@@ -83,12 +83,12 @@ def MonitoringPeriodChannelReg {Conn Cell Srv Ob Z Par : Type} (f : RecordFormat
   (∀ z ∈ Zs, f.fits (schedOf z) ∧ ∃ θ ∈ Θ, allows θ (schedOf z)) ∧ ∀ z ∈ Zs, dec (cells (schedOf z, srvOf z)) = z
 
 /-- **The windows' count**: the product over the windows of what each one's audit leaves free with the inputs `pin`
-pinned, `2^#(freeInputs_i \ pin_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the free inputs outside the pinned ones, the
+pinned, `2^#(freeInputs_i \ pin_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`: the free inputs outside the pinned ones, the
 possible incorrect sets, their committed bits and the timing. -/
 noncomputable def executionPhasesCount {L S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (pin : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
     (β : Fin n → ℕ) : ℕ :=
   ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ pin (sw i)).card *
-    (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i))
+    (incorrectSets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i))
 
 end NetTiming

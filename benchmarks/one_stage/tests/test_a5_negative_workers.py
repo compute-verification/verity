@@ -281,7 +281,7 @@ def test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_ref
     no answer, and no entry exists: no negative is refused because a Lean process ended. Taken as Lean's refusal, as
     `verifier.lean` takes it, each entry would be ``refused: true`` beside Python's accept."""
     popen = subprocess.Popen
-    monkeypatch.setattr(V, "executable", lambda exe=V.EXE: Path(sys.executable))
+    monkeypatch.setattr(V, "executable", lambda exe=V.EXE, package=V.PACKAGE: Path(sys.executable))
     monkeypatch.setattr(V, "subprocess", SimpleNamespace(PIPE=subprocess.PIPE,
                                                          Popen=lambda argv, **kw: popen([*argv, "-c", ENDS], **kw)))
 

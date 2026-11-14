@@ -49,7 +49,7 @@ injectively to its inputs off the checked and registered ones, the bit at which 
 step `t` each egress row is the run's over the whole horizon (`rows_full`, by causality), and the check pins it from the
 ingress through `t`, the inputs off `chk` and the held values (`CheckedUnique`). The count is
 `2^#(freeInputs \ (reg ∪ chk)) · 2^(faultyBits F) · D^n`, and over the possible incorrect sets
-`2^#(freeInputs \ (reg ∪ chk)) · #faultySets · 2^β · D^n`, `β` the most bits one commits (`encard_accSeqsChecked_le`).
+`2^#(freeInputs \ (reg ∪ chk)) · #incorrectSets · 2^β · D^n`, `β` the most bits one commits (`encard_accSeqsChecked_le`).
 
 **The relation.** On `RAcc δ`, the trace run with the incorrect proof blocks' committed gates held at the trace's values
 (`heldAdv`) is the run the count reads at the inputs pinned to the trace (`inputOf_full`), so where it is `valid`,
@@ -106,10 +106,10 @@ theorem exists_of_mem_faultyGateSet {C : Prog} {P : Partition} {F : Finset ℕ} 
   · rw [List.getD_eq_getElem?_getD, hu, Option.getD_some] at hg hb
     exact ⟨v, hv, v, Finset.mem_singleton_self v, u, hu, hg, hb⟩
 
-theorem disjoint_of_mem_faultySets {d : Design} {P : Partition} {δ : ℝ} {F : Finset ℕ} (h : F ∈ faultySets d P δ) :
+theorem disjoint_of_mem_incorrectSets {d : Design} {P : Partition} {δ : ℝ} {F : Finset ℕ} (h : F ∈ incorrectSets d P δ) :
     Disjoint F (allSlots d P) := by
   classical
-  simp only [faultySets, Finset.mem_filter] at h
+  simp only [incorrectSets, Finset.mem_filter] at h
   exact h.2.2
 
 /-- **With no checked input, every check pins the rows**: where the layout fits, two runs whose ingress agrees through
@@ -248,29 +248,29 @@ theorem encard_acceptedChecked_le {L K S : ℕ} (C : Prog) (P : Partition) (d : 
         have h := Nat.mul_le_mul_right (D ^ n) (Nat.pow_le_pow_right (n := 2) (by norm_num) (card_faultyGateSet_le C P F))
         exact_mod_cast Nat.mul_le_mul_left _ h
 
-/-- **The count with a valid run over the possible incorrect sets**: `2^#(freeInputs \ (R ∪ chk)) · #faultySets · 2^β · D^n`,
+/-- **The count with a valid run over the possible incorrect sets**: `2^#(freeInputs \ (R ∪ chk)) · #incorrectSets · 2^β · D^n`,
 `β` the most committed bits of a possible incorrect set. -/
 theorem encard_accSeqsChecked_le {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (hfits : lay.Fits C n) (chk : Finset ℕ) (valid : (ℕ → Bool) → Prop) (hchk : CheckedUnique C P d lay n chk valid)
     (R : Finset ℕ) (ρ : ℕ → Bool) (δ : ℝ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
     (AccSeqsChecked C P d lay n (AsReg C lay n R ρ) valid δ op D).encard ≤
-      ((2 ^ (freeInputs C lay n \ (R ∪ chk)).card * (faultySets d P δ).card *
-        2 ^ ((faultySets d P δ).sup (faultyBits C P)) * D ^ n : ℕ) : ℕ∞) := by
+      ((2 ^ (freeInputs C lay n \ (R ∪ chk)).card * (incorrectSets d P δ).card *
+        2 ^ ((incorrectSets d P δ).sup (faultyBits C P)) * D ^ n : ℕ) : ℕ∞) := by
   classical
   let Sq : Finset ℕ → Set (List (Obs L K S)) := fun F =>
     {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedChecked C P lay n (AsReg C lay n R ρ) valid F op o}
-  set β := (faultySets d P δ).sup (faultyBits C P) with hβ
+  set β := (incorrectSets d P δ).sup (faultyBits C P) with hβ
   set c := (freeInputs C lay n \ (R ∪ chk)).card with hc
-  have hsub : AccSeqsChecked C P d lay n (AsReg C lay n R ρ) valid δ op D ⊆ ⋃ F ∈ faultySets d P δ, Sq F := by
+  have hsub : AccSeqsChecked C P d lay n (AsReg C lay n R ρ) valid δ op D ⊆ ⋃ F ∈ incorrectSets d P δ, Sq F := by
     rintro o ⟨hl, hD, F, hF, hacc⟩
     exact Set.mem_biUnion hF ⟨hl, hD, hacc⟩
-  calc _ ≤ (⋃ F ∈ faultySets d P δ, Sq F).encard := Set.encard_le_encard hsub
-    _ ≤ ∑ F ∈ faultySets d P δ, (Sq F).encard := encard_biUnion_le _ _
-    _ ≤ ∑ _F ∈ faultySets d P δ, ((2 ^ c * (2 ^ β * D ^ n) : ℕ) : ℕ∞) := by
+  calc _ ≤ (⋃ F ∈ incorrectSets d P δ, Sq F).encard := Set.encard_le_encard hsub
+    _ ≤ ∑ F ∈ incorrectSets d P δ, (Sq F).encard := encard_biUnion_le _ _
+    _ ≤ ∑ _F ∈ incorrectSets d P δ, ((2 ^ c * (2 ^ β * D ^ n) : ℕ) : ℕ∞) := by
         apply Finset.sum_le_sum
         intro F hF
         calc (Sq F).encard ≤ ((2 ^ c * (2 ^ faultyBits C P F * D ^ n) : ℕ) : ℕ∞) :=
-              encard_acceptedChecked_le C P d lay n hfits chk valid hchk R ρ F (disjoint_of_mem_faultySets hF) op D
+              encard_acceptedChecked_le C P d lay n hfits chk valid hchk R ρ F (disjoint_of_mem_incorrectSets hF) op D
           _ ≤ ((2 ^ c * (2 ^ β * D ^ n) : ℕ) : ℕ∞) := by
               have h := Nat.mul_le_mul_right (D ^ n)
                 (Nat.pow_le_pow_right (n := 2) (by norm_num) (Finset.le_sup (f := faultyBits C P) hF))
@@ -303,7 +303,7 @@ theorem rLeakChecked_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H :
   rw [hP] at hP₁
   obtain rfl := Option.some.inj hP₁
   obtain ⟨ι, hι⟩ := SampledAuditProof.correct_of_not_faulty H D.commit s P w
-  have hF := faulty_mem_faultySets hRel hdisj
+  have hF := faulty_mem_incorrectSets hRel hdisj
   let a : ℕ → Bool := fun g =>
     if g ∈ freeInputs s.prog (lay s) (k s) then traceVal s.prog (w.val H D.commit s) g else false
   refine ⟨s, P, hs, hP, fun op o hcar hcov hl hD => ⟨hl, hD, _, hF, a, ⟨fun g _ hg => if_pos hg, fun g hg => if_neg hg⟩,
