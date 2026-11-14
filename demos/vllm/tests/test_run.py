@@ -54,7 +54,7 @@ def test_the_window_runs_gate_is_at_the_address_the_launchers_environment_holds(
 @pytest.mark.parametrize("env", [{}, {"VY_CHALLENGER_1_HOST": ""}])
 def test_without_the_address_the_window_run_starts_nothing_and_names_the_variable(tmp_path, env):
     got = run(tmp_path, "window", "--dry-run", **env)
-    assert (got.returncode, got.stdout) == (2, "")
+    assert (got.returncode, got.stdout) == (1, "")
     assert got.stderr.strip() == ("run.sh: VY_CHALLENGER_1_HOST is unset: placement.toml's H1_GATE names it, so set it "
                                   "where the demo is launched, or give --env H1_GATE=VALUE")
 
