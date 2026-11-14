@@ -127,6 +127,7 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
 from verity_vllm.program.prune import dead_units
 from verity.definitions.registry import io_shell as IO
 
@@ -140,7 +141,7 @@ from .segment import edge_groups, edge_of, launch_of, segment_of
 from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
-SCHEMA = "verity-vllm/compiled-steps/v2"
+SCHEMA = COMPILED_STEPS_SCHEMA
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 
