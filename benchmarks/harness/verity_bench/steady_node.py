@@ -7,7 +7,8 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
 1. **Before any card is asked for** it holds the run to its point: the identity it was launched with is the one this
    tree gives the point (`steady_spec.point_identity`: a changed file of the closure is another point); the run's
    environment is the spec's; the node can run `gpu-lease` (`lease_tool`); the prover is the one the setup built
-   (`VERITY_BENCH_STEADY_BIN`); and the run's CPUs are exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
+   (`VERITY_BENCH_STEADY_BIN`); the toolkit's version, from the node's nvcc, is the spec's (`toolkit`); and the run's
+   CPUs are exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
    `benchmarks/served_units/stage.py`, or takes the one the row names as `staged`: a copy of a directory on the node,
    or a directory of an artifact fetched from the store (`fetched`), onto the node's disk and never into its memory.
    It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
@@ -315,6 +316,19 @@ def toolkit_on_node(ask: Asker) -> str:
     return found.group(1)
 
 
+def toolkit(spec: steady_spec.SteadySpec, ask: Asker) -> str:
+    """The toolkit's version (`toolkit_on_node`), read before any statement is staged or fetched and any card is asked
+    for, since it needs neither: a node at another toolkit is refused for nothing. The timed step reads it again inside
+    the lease, beside the driver's, which only the lease's card gives."""
+
+    read = toolkit_on_node(ask)
+    if read != spec.cuda_toolkit:
+        raise Refused(f"the node's CUDA toolkit is {read} (its nvcc), and spec {spec.id!r} says {spec.cuda_toolkit}: a "
+                      "row at another toolkit is another point. Set the spec's `cuda_toolkit` to the node's, which times "
+                      "its rows again there")
+    return read
+
+
 def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> None:
     """What else is on the node now, as `steady.card_file` says a run keeps it: each card another run's lease holds and
     each compute process on a card, or a line saying which of the two the node gave no answer on."""
@@ -469,6 +483,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     try:
         lease_tool(ask)
         record["prover"] = prover()
+        record["cuda_toolkit"] = toolkit(spec, ask)
         own = own_cores(spec, cpus())
         record["cores"] = {"count": spec.cores, "list": _spans(own)}
         record["lease_on"] = cards_near(own, ask)

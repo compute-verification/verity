@@ -1397,13 +1397,9 @@ def test_the_node_side_refuses_a_run_without_the_prover_its_setup_builds(tmp_pat
 
 #: the timed step refusing inside the lease: what the node answers otherwise, and what the refusal says
 INSIDE_THE_LEASE = [
+    # the toolkit's version is nvcc's (12.8.93), never the stamp's `cuda`, the newest the driver serves (12.9)
     ({"stamp": {"driver": "570.86.16"}},
      "the node's driver and CUDA toolkit are {'driver': '570.86.16', 'cuda_toolkit': '12.8.93'}, and spec 'steady' says"),
-    ({"answers": {"nvcc --version": NVCC.replace(CUDA, "12.9.41")}},
-     "Set the spec's `driver` and `cuda_toolkit` to the node's"),
-    # the stamp's `cuda`, the newest the driver serves, is never taken for the toolkit's version
-    ({"stamp": {"cuda": CUDA}, "answers": {"nvcc --version": NVCC.replace(CUDA, "12.9.41")}},
-     "the node's driver and CUDA toolkit are {'driver': '570.86.15', 'cuda_toolkit': '12.9.41'}, and spec 'steady' says"),
     ({"stamp": {"card": "NVIDIA B200"}},
      "the lease's card is a NVIDIA B200, not the `card` of spec 'steady' (h200: NVIDIA H200)"),
     ({"stamp": {"card": "none", "gpus": [], "driver": None, "cuda": None, "why": "no nvidia-smi on PATH"}},
@@ -1411,9 +1407,6 @@ INSIDE_THE_LEASE = [
     ({"stamp": {"gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}, {"uuid": "GPU-4", "sm_mhz": 0, "mem_mhz": 0}]}},
      "the host stamp doesn't say what the lease's card is (it names 2 GPUs and the driver '570.86.15'): inside a "
      "gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID"),
-    ({"answers": {"nvcc --version": None}}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
-    ({"answers": {"nvcc --version": "nvcc: no version here\n"}},
-     "the nvcc on the path the spec's setup leaves doesn't say its version"),
 ]
 
 
@@ -1424,6 +1417,31 @@ def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_pa
     assert [argv[0] for argv in node.ran] == [sys.executable, "gpu-lease"] and node.ran[0][1] == SP.STAGER, "nothing timed"
     assert says in node.read(N.POINT_FILE)["refused"] and says in node.read("result.json")["validation"]["detail"]
     assert not (node.run_dir / S.RATES).exists() and not (node.run_dir / START).exists()
+
+
+#: the toolkit's version refused before any statement or card: what the node's nvcc answers, and what the refusal says
+TOOLKIT_BEFORE_THE_STATEMENT = [
+    ({"nvcc --version": NVCC.replace(CUDA, "12.9.41")},
+     "the node's CUDA toolkit is 12.9.41 (its nvcc), and spec 'steady' says 12.8.93: a row at another toolkit is another "
+     "point. Set the spec's `cuda_toolkit` to the node's"),
+    ({"nvcc --version": None}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
+    ({"nvcc --version": "nvcc: no version here\n"}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
+]
+
+
+@pytest.mark.parametrize("answers, says", TOOLKIT_BEFORE_THE_STATEMENT,
+                         ids=[says[:40] for _, says in TOOLKIT_BEFORE_THE_STATEMENT])
+def test_a_toolkit_that_is_not_the_specs_is_refused_before_the_statement_and_the_lease(tmp_path, monkeypatch, answers,
+                                                                                        says):
+    """The toolkit's version needs no card, so a wrong one is refused before the statement is staged or fetched and
+    before the lease: nothing is spent on a node whose rows would be another point."""
+
+    node = Node(tmp_path, monkeypatch, answers=answers)
+    stored(node)
+    assert node.point() == N.REFUSED
+    assert node.ran == [] and node.asked == [], "nothing staged, fetched or leased"
+    assert says in node.read(N.POINT_FILE)["refused"] and says in node.read("result.json")["validation"]["detail"]
+    assert not list(node.scratch_root.iterdir())
 
 
 def test_a_lease_that_never_ran_the_timed_step_is_a_refusal(tmp_path, monkeypatch):
