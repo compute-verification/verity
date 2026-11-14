@@ -192,10 +192,10 @@ replay that differs, the first token that does and the first step.
   the loader builds and decodes back to the pass's counts, with its bits a row and, not sent, what the counts' entropy
   taken each alone would come to. Under it: the kept count's own figures as the loader gives them (`K`, the rows, the
   rows that kept each count, their entropy and its most, the code's bits and an ideal coder's, the bits where it is
-  derived); that the kept
-  count costs 0 where the audited block derives it, which rests on a Definition of the accept test that does not exist
-  yet; how the pass's sampled requests were seeded, from each one's own arrival (what a sampled request with no seed
-  there was sampled with is in no record: its tokens cannot be replayed); and the pass. The loader's own
+  derived); that the kept count costs 0 where the audited block derives it, which rests on a block of the served
+  Program calling the accept test's Definition (`SampledAccept_v1`), which none does yet; how the pass's sampled
+  requests were seeded, from each one's own arrival (what a sampled request with no seed there was sampled with is in
+  no record: its tokens cannot be replayed); and the pass. The loader's own
   replay of the scheduler must reproduce every step of the pass: where it does not, or the serve has no draft, the
   line is not measured and says the loader's reason.
 
@@ -206,7 +206,8 @@ the measured ones and names the arms that were not served whole.
 
 - **The advice line's serve is not under the network certifier.** No arm of this command is served under the
   certifier's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
-  kept count is charged at its code's bits: no Definition holds the accept test, so nothing derives it yet. A serve with
+  kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
+  it, so nothing derives the count yet. A serve with
   no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.

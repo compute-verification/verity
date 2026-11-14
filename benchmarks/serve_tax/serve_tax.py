@@ -597,8 +597,8 @@ def published_context(arm: str, model_id: str | None, given: int | str | None) -
 
 def published_args(text: str | None) -> tuple[str, ...]:
     """``--published-args``: the flags of vLLM's own a job adds to the line of an arm that starts the server as the
-    recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory), each one
-    ``--FLAG=VALUE``, comma-separated."""
+    recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory, and the
+    server's seed in place of `BASE_ARGS`'s), each one ``--FLAG=VALUE``, comma-separated."""
     args = tuple(x for x in (text or "").split(",") if x)
     bad = [x for x in args if not x.startswith("--") or len(x.split("=")) != 2 or not all(x.split("=")) or " " in x]
     if bad:
@@ -617,7 +617,8 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     """The server's command: vLLM's Python server, or behind `RUST` ``vllm serve``, the command that starts the Rust
     front end (under `RUST_ENV`, `server_env`). ``added`` (`published_args`) goes on the line of an arm that starts the
     server as the recipe does, after the recipe's flags and the runner's, and is refused where it names a flag the line
-    already sets; no other arm's line takes it."""
+    already sets, but for ``--seed=N``, which takes the place of the line's ``--seed 0``; no other arm's line takes
+    it."""
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
@@ -629,11 +630,14 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
     added = tuple(added) if arm.published else ()
     flags = [x.split("=")[0] for x in added]
-    twice = sorted({f for f in flags if f in line or flags.count(f) > 1})
+    twice = sorted({f for f in flags if f in line and f != "--seed" or flags.count(f) > 1})
     if twice:
         raise SystemExit(f"--published-args: {', '.join(twice)}: the arm's line sets it already; name each flag once, "
                          "and the context limit with --max-model-len")
-    return [*line, *added]
+    seed = [x for x in added if x.split("=")[0] == "--seed"]
+    if seed:
+        line[line.index("--seed") + 1] = seed[0].split("=")[1]
+    return [*line, *(x for x in added if x not in seed)]
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
