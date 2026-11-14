@@ -55,7 +55,9 @@
 #                each forgery refused by Lean at one of its parts (a ZK server's refusal, or a session with no proof, is
 #                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py); with every V* part run,
-#                Lean composes them over the challenger's record (rec-compose)
+#                Lean composes them over the challenger's record (rec-compose). A run without that record (any MODES
+#                but the ZK server's alone), or of some of V*'s parts, exits 0 on its parts and is not composed: the
+#                step's last line says so, and out/lean/rec-compose.json says whether Lean composed and accepted
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -592,7 +594,7 @@ stage_inner() {
 
 # inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage (rec_reprice.py partition): the
 # partition object (Q_template_instance over the population program, partition.json) and that program (program.json), which
-# STEP=lean's statement check reads, and the full draw over them (rec_live.full_draw: the stratified law at K = the
+# STEP=lean's statement check reads, and the full sample over them (rec_live.full_draw: the stratified sampling design at K = the
 # population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
   [ -f $DD/stage/own-partition ] && return 0   # STAGE=0's caller wrote them
@@ -669,7 +671,7 @@ inner)
   taskset -c $VCPU env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) > $O/inner/statement.txt 2>&1 \
     || { tail -5 $O/inner/statement.txt; exit 1; }
   python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
-  # the verifier's full draw, which verify requires of a session over the inner session (RecSetup.innerDrawn)
+  # the verifier's full sample, which verify requires of a session over the inner session (RecSetup.innerDrawn)
   inner_partition > $O/inner/partition.txt || exit 1
   cp $D/draw.json $O/inner/
   [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
@@ -874,9 +876,9 @@ oprove)
   [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
     || { tail -20 $O/build-lean.log; exit 1; }
   VS=$DD/v-sess; mkdir -p $VS $O/oprove
-  # Outer proofs through the firewall are independent sessions (AGENTS.md): every
-  # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
-  # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
+  # Outer proofs through the ZK server are independent sessions (AGENTS.md): every
+  # staged statement is fixed before any session flips coins (statements.sha512, checked again once all have ended), gets
+  # exactly one session, with its own loopback verifier, live coins and ZK server pass, never a second one (no lease retry,
   # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv: 0 only
   # when the verifier accepted each of its sessions, `loopback`), an honest one's failure, or one with no exit recorded,
   # failing the step.

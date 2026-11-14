@@ -25,10 +25,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
+
+from verity_vllm import settings
+
+__all__ = ["collect", "inductor_cache_dir", "triton_cache_dir"]
 
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
 _AOT_ID = re.compile(r"^# AOT ID: \[(.*?)\]", re.M)
@@ -49,7 +52,7 @@ def sha256_file(p: Path) -> str:
 
 def inductor_cache_dir() -> str:
     """Where this process's Inductor wrappers live (env override or torch's default); raises when torch can't say."""
-    d = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
+    d = settings.raw("TORCHINDUCTOR_CACHE_DIR")
     if d:
         return d
     from torch._inductor.runtime.runtime_utils import cache_dir
@@ -58,7 +61,7 @@ def inductor_cache_dir() -> str:
 
 
 def triton_cache_dir() -> str | None:
-    return os.environ.get("TRITON_CACHE_DIR")
+    return settings.raw("TRITON_CACHE_DIR")
 
 
 _WRAPPER_PATH_LINE = re.compile(r"^# (kernel path|AOT ID|Original path): .*$", re.M)
@@ -161,7 +164,7 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
                     entry["ptx_code_sha256"] = sha256_bytes(ptx_code(ptx_src).encode())
             cubins.append(entry)
     kernel_pairs = sorted({(k["name"], k["source_sha256"]) for w in wrappers for k in w["kernels"]})
-    doc = {
+    doc: dict[str, Any] = {
         "schema": "verity-vllm/kernel-identity/v1",
         "inductor_cache_dir": inductor_dir,
         "triton_cache_dir": triton_dir,

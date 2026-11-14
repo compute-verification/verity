@@ -1,4 +1,4 @@
-"""GPU run of the vocabulary-range exactness property (`verity_vllm.properties.vocab_range_exactness`) on a TP2 engine: in every rank's
+"""GPU run of the vocabulary-range exactness property (`tests.properties.vocab_range_exactness`) on a TP2 engine: in every rank's
 worker, the vocabulary-range source's committed values against the circuit's `EmbeddingShard_v1` values and the fused kernel's own output, on
 edge ids and live; write the sealed record `<out>/vocab_range_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a
 record's digest and verdict without a GPU.
@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.properties import vocab_range_exactness as X
+from tests.properties import vocab_range_exactness as X
 from verity_vllm.query import vocab_range as VR
 
 PROMPTS = ("The capital of France is", "def fibonacci(n):\n    ", "Tensor parallelism splits the vocabulary so that", "Zebra quartz vixen")

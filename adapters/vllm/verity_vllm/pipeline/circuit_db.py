@@ -79,7 +79,8 @@ CONSTRUCTION = "construction_manifest.json"
 
 
 def index() -> dict[str, dict[str, Any]]:
-    """Row id -> its index entry: `record`, its record's art: id (None for a row pinned before it has one), and its circuit's pins."""
+    """Row id -> its index entry: `record`, its record's art: id (None for a row whose pins no record of it holds: one pinned before
+    it has a record, or re-pinned since), and its circuit's pins."""
     return CR.load_index(INDEX)["rows"]
 
 
@@ -199,7 +200,7 @@ def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
     """Preserve the property records run `run` wrote (each property's shallowest `out/**/<property>.json` in its run record; only
     `properties`, when given) as `property-record/v1` artifacts referring to the run's record, each refused unless its schema is
     the registered property's, its digest recomputes and it holds.  Returns {property: art: id}."""
-    from verity_vllm.properties.record import REGISTRY, PropertyRecord
+    from verity_vllm.records.property_record import REGISTRY, PropertyRecord
     att = json.loads(data("show", run, "--json"))
     outputs, source = att.get("outputs"), att.get("source")   # an attempt may have kept no output, and may name no checkout
     rr = outputs.get("run_record") if outputs else None
@@ -238,7 +239,7 @@ def _meta(manifest: dict[str, Any]) -> dict[str, Any]:
 
 def check_capture(prop: str, art: str) -> None:
     """Refuse `art` as `prop`'s capture of record unless it is a holding `property-record/v1` of `prop` at its registered schema."""
-    from verity_vllm.properties.record import REGISTRY
+    from verity_vllm.records.property_record import REGISTRY
     m = json.loads(data("show", art, "--json"))["manifest"]
     meta, want = _meta(m), REGISTRY.get(prop)
     if m.get("kind") != PROPERTY_KIND or meta.get("property") != prop or meta.get("ok") is not True or want is None \
@@ -252,7 +253,7 @@ def newest_capture(prop: str) -> str | None:
     """`prop`'s newest holding capture of record at its registered schema in the store (the latest capture run's), None when none.
     A store with nothing to select from (no index and an empty catalog: a `research run` job's) raises: `research data select`
     exits 1 there rather than answer none."""
-    from verity_vllm.properties.record import REGISTRY
+    from verity_vllm.records.property_record import REGISTRY
     if (want := REGISTRY.get(prop)) is None:
         return None
     held = [(meta.get("run_id") or "", r["id"])
