@@ -147,7 +147,7 @@ def beta(k: float) -> float | None:
 class Bound:
     """The min-cut bound at a policy on one circuit's work, with what it rests on."""
 
-    #: `ρ = m c / |C| ≥` this, at least 1 (blocks of at most `c` gates cover `|C|`); 1 where the bound says nothing
+    #: `m c / |C| ≥` this, at least 1 (blocks of at most `c` gates cover `|C|`); 1 where the bound says nothing
     slowdown: float
     #: the least `m` the count allows (`blocks_at_least`), a real number; 0 where the bound says nothing
     blocks: float
