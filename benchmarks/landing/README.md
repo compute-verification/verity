@@ -12,7 +12,7 @@ batches, plain and Lean, and each class gives four measurements:
 | `ci/plain-within-2h`, `ci/lean-within-2h` | the share of them on `main` within 2 h of the mark |
 
 The two p90s are the metrics of the goals that a plain PR, and one that changes Lean, lands within two hours of its mark
-(`benchmarks/metrics.toml`). `landing.json`, beside the result, holds every landing's row: the PR, its head, the `main` it
+(`benchmarks/landing/metrics.toml`). `landing.json`, beside the result, holds every landing's row: the PR, its head, the `main` it
 landed on, its mark, its hours and its class.
 
 - **The window**: the 7 days before the run (`--days N`, `--until TIME` for another).

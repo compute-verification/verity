@@ -84,6 +84,11 @@
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
   "Properties.Verity.Sha512",
+  "Properties.Verity.Subprotocols",
+  "Properties.Verity.Coupling",
+  "Properties.Flock.Nets",
+  "Properties.Flock.ReadNet",
+  "Properties.Assumptions",
   "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
@@ -93,12 +98,7 @@
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
   "Properties.Firewall",
-  "Properties.Core.Site",
-  "Properties.Verity.Subprotocols",
-  "Properties.Verity.Coupling",
-  "Properties.Flock.Nets",
-  "Properties.Flock.ReadNet",
-  "Properties.Assumptions"
+  "Properties.Core.Site"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -1095,16 +1095,16 @@
   "Definitions.Pouw.Fp8Atom",
   "Definitions.Pouw.Game.Defs",
   "Properties.Core.Period",
-  "Definitions.Pouw.Dither",
-  "Definitions.Pouw.Assumptions.ServedWork",
-  "Properties.Firewall",
-  "Firewall",
   "Properties.Core",
   "CoreProtocol.Site",
   "Definitions.Flock.Audit",
   "Definitions.Flock.Game",
   "Properties.Flock.Nets",
-  "Properties.Challenger"
+  "Properties.Challenger",
+  "Definitions.Pouw.Dither",
+  "Definitions.Pouw.Assumptions.ServedWork",
+  "Properties.Firewall",
+  "Firewall"
  ],
  "claims": {
   "modules": ["Properties.Accounting.Remote.Subprotocol"],
@@ -1164,12 +1164,6 @@
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
-  "Properties.Challenger.Drawn.familyOneCommitment": {
-   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
-  },
-  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
-   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
-  },
   "Properties.Site.refuses": {
    "honest": ["Properties.Site.refuses_honest"],
    "nontrivial": "Properties.Site.refuses_nontrivial"
@@ -1214,6 +1208,86 @@
   },
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "nontrivial": "Properties.Remote.SecurityProofs.acceptComplies_nontrivial"
+  },
+  "Properties.NetworkScan.scanFits": {
+   "honest": ["Properties.NetworkScan.scan_honest"],
+   "nontrivial": "Properties.NetworkScan.scanFits_nontrivial"
+  },
+  "Properties.NetworkScan.scanScopeAcc": {
+   "honest": ["Properties.NetworkScan.scan_honest"],
+   "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
+   "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
+  },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "honest": ["Properties.RemoteAudit.opensAtPosition_honest"],
+   "nontrivial": "Properties.RemoteAudit.opensAtPosition_nontrivial"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "honest": ["Properties.RemoteAudit.planBlocks_honest"],
+   "nontrivial": "Properties.RemoteAudit.planBlocks_nontrivial"
+  },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "honest": ["Properties.RemoteAudit.steered_of_checked_honest"],
+   "nontrivial": "Properties.RemoteAudit.steered_of_checked_nontrivial"
+  },
+  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
+   "honest": ["Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
+  },
+  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
+   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
+   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeldCoins": {
+   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeldCoins_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeldCoinsAt": {
+   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeldCoins_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeldSha512": {
+   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeldSha512_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeldSha512At": {
+   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeldSha512_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.openingBinds": {
+   "honest": ["Properties.Pouw.PearlPlus.openingBinds_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.openingBinds_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.planMeans": {
+   "honest": ["Properties.Pouw.PearlPlus.planMeans_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.planMeans_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.acceptMeans": {
+   "honest": ["Properties.Pouw.PearlPlus.acceptMeans_honest", "Properties.Pouw.PearlPlus.acceptMeans_drawn"],
+   "nontrivial": "Properties.Pouw.PearlPlus.acceptMeans_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
+   "honest": ["Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.loadedGivesUp": {
+   "honest": ["Properties.Pouw.PearlPlus.loadedGivesUp_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.tileAcceptMeans": {
+   "honest": ["Properties.Pouw.PearlPlus.tileAcceptMeans_honest", "Properties.Pouw.PearlPlus.tileAcceptMeans_derived"],
+   "nontrivial": "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
+   "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheCap_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.yIsTheUnscale": {
+   "honest": ["Properties.Pouw.PearlPlus.yIsTheUnscale_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial"
   },
   "Properties.Firewall.admitNext": {
    "honest": ["Properties.Firewall.admitNext_honest"],
@@ -1331,93 +1405,19 @@
    "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
   },
+  "Pous.Period.SecurityProofs.pooledShort_log": {
+   "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
+  },
   "Properties.NetworkPeriod.rowsCapPublished": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
   },
-  "Properties.NetworkScan.scanFits": {
-   "honest": ["Properties.NetworkScan.scan_honest"],
-   "nontrivial": "Properties.NetworkScan.scanFits_nontrivial"
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
   },
-  "Properties.NetworkScan.scanScopeAcc": {
-   "honest": ["Properties.NetworkScan.scan_honest"],
-   "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
-  },
-  "Properties.RemoteAudit.codeLayoutTiles": {
-   "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
-   "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
-  },
-  "Properties.RemoteAudit.opensAtPosition": {
-   "honest": ["Properties.RemoteAudit.opensAtPosition_honest"],
-   "nontrivial": "Properties.RemoteAudit.opensAtPosition_nontrivial"
-  },
-  "Properties.RemoteAudit.planBlocks": {
-   "honest": ["Properties.RemoteAudit.planBlocks_honest"],
-   "nontrivial": "Properties.RemoteAudit.planBlocks_nontrivial"
-  },
-  "Properties.RemoteAudit.steered_of_checked": {
-   "honest": ["Properties.RemoteAudit.steered_of_checked_honest"],
-   "nontrivial": "Properties.RemoteAudit.steered_of_checked_nontrivial"
-  },
-  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
-   "honest": ["Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
-   "nontrivial": "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
-  },
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
-   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
-  },
-  "Pous.Period.SecurityProofs.periodHeldCoins": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
-   "nontrivial": "Pous.Period.SecurityProofs.periodHeldCoins_nontrivial"
-  },
-  "Pous.Period.SecurityProofs.periodHeldCoinsAt": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
-   "nontrivial": "Pous.Period.SecurityProofs.periodHeldCoins_nontrivial"
-  },
-  "Pous.Period.SecurityProofs.periodHeldSha512": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
-   "nontrivial": "Pous.Period.SecurityProofs.periodHeldSha512_nontrivial"
-  },
-  "Pous.Period.SecurityProofs.periodHeldSha512At": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
-   "nontrivial": "Pous.Period.SecurityProofs.periodHeldSha512_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.openingBinds": {
-   "honest": ["Properties.Pouw.PearlPlus.openingBinds_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.openingBinds_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.planMeans": {
-   "honest": ["Properties.Pouw.PearlPlus.planMeans_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.planMeans_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.acceptMeans": {
-   "honest": ["Properties.Pouw.PearlPlus.acceptMeans_honest", "Properties.Pouw.PearlPlus.acceptMeans_drawn"],
-   "nontrivial": "Properties.Pouw.PearlPlus.acceptMeans_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
-   "honest": ["Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.loadedGivesUp": {
-   "honest": ["Properties.Pouw.PearlPlus.loadedGivesUp_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.tileAcceptMeans": {
-   "honest": ["Properties.Pouw.PearlPlus.tileAcceptMeans_honest", "Properties.Pouw.PearlPlus.tileAcceptMeans_derived"],
-   "nontrivial": "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
-   "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheCap_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
-  },
-  "Properties.Pouw.PearlPlus.yIsTheUnscale": {
-   "honest": ["Properties.Pouw.PearlPlus.yIsTheUnscale_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial"
-  },
-  "Pous.Period.SecurityProofs.pooledShort_log": {
-   "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
-   "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   }
  },
  "unwitnessed": {
