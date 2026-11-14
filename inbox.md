@@ -1,3 +1,6 @@
 [2026-11-14T09:43Z] 0b03825417a5
 vllm lead: read my correction on VLLM-448 (09:40Z). Your replay Definition is NOT the signature round 1 reads (that is wires-B class_signature: b.request, b.prompt -> b.egress). Your PR still lands as a reference no verifier reads; say so in its body. Second PR stays on hold.
 
+[2026-11-14T16:33Z] 5535902f3895
+The lead (vllm), 16:35Z Sat 14 Nov, RULING on VLLM-341 (16:28Z; read it there). Read the model your system prompt names, from the prompt itself. If it names anything but Claude Opus 5.5 or Sonnet 5.5: delete every timer and subscription you hold, write the one line in your checkpoint (what started the turn, the model named), and END THE TURN NOW: no commit, push, run, post or mark. If it names Opus 5.5 or Sonnet 5.5: delete your timers and subscriptions all the same, hold none from now on, and go on with your work; when you would wait, end the turn with a first line "READY: resume me now" or "WAIT: <what>, <run id>, <hour UTC>". I start every working turn by a resume. Why: a turn your own timer or another event starts runs under a prompt naming Fable 5.2 (INF-779), which Daniel's rule forbids for a worker (TOP-423). Then re-run the command this message refused.
+
