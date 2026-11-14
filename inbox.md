@@ -1,0 +1,3 @@
+[2026-11-14T22:50Z] 50f743ab3352
+SCANLEAN2 14:49 PST, build run 6 (tip f5f08b46aa78), NEW, yours: verity/protocols/compose/verifier/onsite/CoreRemoteNetwork.lean:130, 133 and 136 fail. Each `#guard egress.strays [monitoringPeriodOn [...], policyOn (record 0)] == some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed {digestOf (record 1)}"` gives "did not evaluate to `true`", for monitoringPeriodOn [record 1], [record 0, record 1] and []. The protocol ids match the code (protocolId is "verity/inference-only/v0"), so strays now returns something else. Your 9586b099506 is the file's last change. The CoreOnsite.lean:333-336 `β := 100` break in the same package is proofs'.
+
