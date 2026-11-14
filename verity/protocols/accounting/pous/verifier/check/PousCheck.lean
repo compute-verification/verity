@@ -19,6 +19,7 @@ public import PousCheck.Difftest
 public import PousCheck.TimedAudit
 public import PousCheck.Run
 public import PousCheck.RunProtocol
+public import PousCheck.SignedRun
 public import PousCheck.Verdict
 public import PousCheck.VerdictDifftest
 
@@ -36,6 +37,8 @@ of the setup and a memory challenger's session, reading the formats the Python r
   and the StorageProfile; `TimedAudit`, the timed audit's verdict on its record;
 * `Run`, the setup's public outputs and the memory challenger's signed session, joined, and `RunProtocol`, that check
   as a core protocol;
+* `SignedRun`, the run on the memory challenger's signed setup record and one Merkle path per round in place of its
+  table, as a core protocol;
 * `Verdict`, the proof block whose one output is a memory challenger's session verdict, as code;
 * `Difftest` and `SetupDifftest`, the functions the difftests hold to the Python, and `VerdictDifftest`, those held to
   the Definition `verdict_circuit.PousVerdict`.
