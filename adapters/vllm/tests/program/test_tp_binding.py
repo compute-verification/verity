@@ -18,7 +18,7 @@ from verity.definitions.registry import dead_free as DF
 from verity.definitions.registry.prims import BF16
 
 from tests.program.predict.test_steps import _mixed, _registered
-from verity_vllm.program import prune as P
+from verity_torch import prune as P
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.steps import compile_steps

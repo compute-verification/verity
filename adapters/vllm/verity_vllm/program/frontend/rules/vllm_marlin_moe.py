@@ -30,8 +30,8 @@ from verity.definitions.registry import marlin_moe as MM
 from verity.definitions.registry.prims import F32 as F32_WORD
 from verity.definitions.registry.prims import I32 as I32_WORD
 
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     call_args,
     from_rows,
     known,

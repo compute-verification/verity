@@ -6,10 +6,10 @@ import torch
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Value
 
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import dtype_is, known, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import RuleInfo, StateRule
+from verity_torch.frontend.rules.common import dtype_is, known, shape
+from verity_torch.frontend.rules.bindings.operands import BF16
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 # -- the padded engine's step-boundary cache clear over implicit KV state ----------------------------------------------------
