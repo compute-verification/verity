@@ -1,7 +1,7 @@
 """A tiny data and start, built in a test's directory in the layout a node holds them in: a byte-level tokenizer of 259
 tokens, a stream of three parts (six windows at the start's context), a search pool of six full windows and a final
-set of two, an lf start of one block, and a registry naming both (`tiny_registry`); and one job of a config of that
-start, run as a node runs it (`run_job`) or counted in the test's process (`job_counted`)."""
+set of two, an lf start of one block (or more), and a registry naming both (`tiny_registry`); and one job of a config
+of that start, run as a node runs it (`run_job`) or counted in the test's process (`job_counted`)."""
 from __future__ import annotations
 
 import hashlib
@@ -21,8 +21,10 @@ from training_slowdown.starts import Start
 EOT = 0
 MERGES = ("ab", "abc")
 VOCAB = 1 + 256 + len(MERGES)
+#: a block's parameters: its four attention matrices, its three of the MLP and its two gains
+BLOCK = 16 * 16 * 4 + 3 * 16 * 32 + 2 * 16
 SHAPE = {"family": "lf", "d_model": 16, "n_layer": 1, "n_head": 2, "d_ff": 32, "vocab": VOCAB, "ctx": 1024, "tied": True,
-         "parameters": 16 * 16 * 4 + 3 * 16 * 32 + 2 * 16 + (VOCAB + 1) * 16, "tokens": 0}
+         "parameters": BLOCK + (VOCAB + 1) * 16, "tokens": 0}
 #: each token's bytes: end-of-text none, a byte one, a merge its letters
 TOKEN_BYTES = np.array([0] + [1] * 256 + [len(m) for m in MERGES], dtype=np.int64)
 PARTS = (2100, 1100, 3100)
@@ -90,11 +92,18 @@ def write_safetensors(path: Path, state: dict[str, torch.Tensor]) -> None:
     path.write_bytes(len(h).to_bytes(8, "little") + h + b"".join(blobs))
 
 
-def tiny_start(root: Path, name: str = "tiny", read: list[dict] | None = None) -> tuple[Start, dict[str, torch.Tensor]]:
-    """An installed start under `root` and its registry entry. Its start.json names `read` as the parts of the stream
-    its own training read (None: it says nothing of what it read)."""
+def shape_of(blocks: int) -> dict:
+    """The tiny start's shape with `blocks` blocks."""
+    return SHAPE | {"n_layer": blocks, "parameters": SHAPE["parameters"] + (blocks - 1) * BLOCK}
+
+
+def tiny_start(root: Path, name: str = "tiny", read: list[dict] | None = None,
+               blocks: int = 1) -> tuple[Start, dict[str, torch.Tensor]]:
+    """An installed start under `root` and its registry entry, of `blocks` blocks. Its start.json names `read` as the
+    parts of the stream its own training read (None: it says nothing of what it read)."""
+    shape = shape_of(blocks)
     torch.manual_seed(0)
-    theta = {k: v.detach().clone() for k, v in LM.of(SHAPE).state_dict().items()}
+    theta = {k: v.detach().clone() for k, v in LM.of(shape).state_dict().items()}
     d = root / name
     d.mkdir(parents=True)
     write_safetensors(d / "theta.safetensors", theta)
@@ -103,7 +112,7 @@ def tiny_start(root: Path, name: str = "tiny", read: list[dict] | None = None) -
         {} if read is None else {"data": {"parts": read}})}
     (d / "start.json").write_text(json.dumps(rec))
     s = Start(name, "tiny", "art:" + "0" * 64, f"starts/{name}", sha256((d / "theta.safetensors").read_bytes()),
-              sha256((d / "start.json").read_bytes()), digest, SHAPE, 12_345.0, 7.5)
+              sha256((d / "start.json").read_bytes()), digest, shape, 12_345.0, 7.5)
     return s, theta
 
 
@@ -115,13 +124,14 @@ def _toml(v) -> str:
     return json.dumps(str(v) if isinstance(v, Path) else v)
 
 
-def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None) -> Path:
-    """`root/starts.toml`, naming the tiny data and start built under `root`. `read` is what the start names as read
-    by its own training: parts of the tiny stream by index, each as the stream's manifest lists it, or the entries
-    as given."""
+def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None, blocks: int = 1) -> Path:
+    """`root/starts.toml`, naming the tiny data and start built under `root`, the start of `blocks` blocks. `read` is
+    what the start names as read by its own training: parts of the tiny stream by index, each as the stream's
+    manifest lists it, or the entries as given."""
     data = tiny_data(root / "data")
     parts = data.manifest()["parts"]
-    s, _ = tiny_start(root / "starts", read=read and [parts[q] if isinstance(q, int) else q for q in read])
+    s, _ = tiny_start(root / "starts", read=read and [parts[q] if isinstance(q, int) else q for q in read],
+                      blocks=blocks)
     d = {"tokenizer": data.tokenizer, "vocab": data.vocab, "eot": data.eot, "train": data.train,
          "manifest_sha256": data.manifest_sha256, "tokenizer_sha256": data.tokenizer_sha256,
          "selection_sha256": data.selection_sha256}
@@ -173,14 +183,50 @@ JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
         "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}},
         "shampoo": {"dials": {"trainable": "blocks.0.*,norm", "opt": "shampoo", "lr": 1e-2}},
         "grow": {"route": "grow", "dials": GROW}}
+#: Muon on the matrices as the library's configs run it: decayed, beside AdamW in torch's fused kernel, in two
+#: micro-batches
+FULLMUON = {"opt": "muon", "lr": 1e-2, "weight_decay": 0.05, "fused": True, "micro_batches": 2}
+#: QAT of the one block's matrices
+QAT = {"targets": "blocks.0.w*.weight", "keep": 0.35, "lr": 1e-2}
+#: each kind of step a config of the library (`attacks/`) takes that none of the jobs above takes, with the settings
+#: its configs give what the step computes (the optimizer, a decay, the fused kernel, micro-batches, what trains, a
+#: code or a state's width), on the tiny start, deeper (`blocks`) where blocks are frozen below or between trained
+#: ones. A QAT config's 8-bit gradient codes count as its 4-bit ones: the two differ only in shifts and ors, which no
+#: count holds
+KINDS = {"adamw-decay": {"dials": {"trainable": "*", "lr": 1e-2, "weight_decay": 0.1}},
+         "accumulate": {"dials": {"trainable": "*", "lr": 1e-2, "weight_decay": 0.1, "micro_batches": 2}},
+         "adafactor": {"dials": {"trainable": "*", "opt": "adafactor", "lr": 1e-2}},
+         "lion": {"dials": {"trainable": "*", "opt": "lion", "lr": 1e-2, "weight_decay": 1.0}},
+         "sgd": {"dials": {"trainable": "*", "opt": "sgd", "lr": 1e-2, "weight_decay": 1e-4}},
+         "last-blocks": {"blocks": 2, "dials": {"trainable": "blocks.1.*,norm", "lr": 1e-2, "weight_decay": 0.1}},
+         "muon-whole": {"dials": {"trainable": "*", "opt": "muon", "lr": 1e-2, "weight_decay": 0.05}},
+         "muon-whole-fused": {"dials": {"trainable": "*"} | FULLMUON | {"micro_batches": 1}},
+         "fullmuon": {"dials": {"trainable": "*"} | FULLMUON},
+         "muon-decay": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "weight_decay": 0.05}},
+         "muon-fused": {"dials": {"trainable": "blocks.0.*,norm"} | FULLMUON | {"micro_batches": 1}},
+         "fullmuon-fe": {"dials": {"trainable": "blocks.0.*,norm"} | FULLMUON},
+         "depthshare": {"dials": {"trainable": "blocks.*,norm"} | FULLMUON | {"weight_decay": 0.0}},
+         "depthshare-top": {"blocks": 2, "dials": {"trainable": "blocks.1.*,norm"} | FULLMUON
+                            | {"weight_decay": 0.0}},
+         "strideshare": {"blocks": 4, "dials": {"trainable": "blocks.3.*,blocks.1.*,norm"} | FULLMUON
+                         | {"weight_decay": 0.0}},
+         "shampoo-decay": {"dials": {"trainable": "blocks.0.*,norm", "opt": "shampoo", "lr": 1e-2, "weight_decay": 0.05}},
+         "shampoo-whole": {"dials": {"trainable": "*", "opt": "shampoo", "lr": 1e-2, "weight_decay": 0.05}},
+         "ema-whole": {"route": "ema", "dials": {"trainable": "*", "lr": 1e-2, "weight_decay": 0.1, "ema_decay": 0.99}},
+         "ema-fullmuon": {"route": "ema", "dials": {"trainable": "*"} | FULLMUON | {"ema_horizon": 0.1}},
+         "ema-fullmuon-fe": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm"} | FULLMUON | {"ema_horizon": 0.1}},
+         "qat": {"route": "qat", "dials": QAT},
+         "qat-grad4": {"route": "qat", "dials": QAT | {"grad_code": "rtn4"}},
+         "qat-grad4-lowstate": {"route": "qat", "dials": QAT | {"grad_code": "rtn4", "low_state": True}}}
+JOBS |= KINDS
 
 
-def job_counted(root: Path, steps: int, math: bool = False, **over):
+def job_counted(root: Path, steps: int, math: bool = False, blocks: int = 1, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
     attention kernel torch picks (a fused one, a job's on a GPU) or under the math kernel (a job's on a CPU,
-    `run.cpu_attention`): the counter's record, and what the job's trace is taken from (its config, route, model
-    and optimizers)."""
-    reg = tiny_registry(root / "reg")
+    `run.cpu_attention`), on the tiny start of `blocks` blocks: the counter's record, and what the job's trace is
+    taken from (its config, route, model and optimizers)."""
+    reg = tiny_registry(root / "reg", blocks=blocks)
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
     te = run.Harness(starts.load(cfg.start, reg.parent / "starts"), root / "out", start=cfg.start.entry(),
