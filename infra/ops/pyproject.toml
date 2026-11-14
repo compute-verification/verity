@@ -73,6 +73,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
           "tools/research/src/research/store/labels_sync.py",
+          # the declared numbers' reruns, tested here: the loop reads the door through research.metrics
+          "infra/control/metrics_rerun.py", "tools/research/src/research/metrics.py",
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
           "infra/control/vy-control-gate", "infra/control/door_setup.sh",
           # the coordinators' launcher, whose `tell` is tested here with the registry above
