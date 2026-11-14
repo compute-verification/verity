@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from verity_vllm.log import init_logger
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
@@ -14,6 +14,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
 __all__ = ["DSV4_TOPK_PINS", "QKV_RMS_PINS"]
+
+logger = init_logger(__name__)
 
 #: kernel pins of the admitted profile `vllm_d9105ea80_sm89_eager` (source: the profile module cited above).
 #: `NUM_SMS` is a TARGET fact: its admitted value is the default `TargetProfile`'s (one source; the active profile overrides it
@@ -128,7 +130,8 @@ def tuned_gemm_table_sha256() -> str | None:
     table-less target (Ampere: default tiling for every shape) or an unregistered one."""
     try:
         return active_gemm_target().table_sha256()
-    except UnregisteredGemmTarget:
+    except Exception:  # an unregistered target, or an observation that answers for none: no table
+        logger.debug("the active target gives no tuned GEMM table", exc_info=True)
         return None
 
 

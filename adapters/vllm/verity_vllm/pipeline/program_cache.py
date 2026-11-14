@@ -22,10 +22,11 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import workload_file
+from verity_vllm.records.schema_ids import PROGRAM_CACHE_ENTRY_SCHEMA
 
 __all__ = ["key", "lookup", "publish", "restore"]
 
-SCHEMA = "verity-vllm/program-cache-entry/v1"
+SCHEMA = PROGRAM_CACHE_ENTRY_SCHEMA
 #: the workload's `sweep` fields a derive reads
 DERIVE_INPUTS = ("sampling", "sampling_params", "batch", "sampling_seeds")
 
