@@ -24,7 +24,7 @@ The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uni
 `Flock.Draw.drawWith` on the challenger's coins, extends a stream that runs out and reruns, rather than sampling every
 unit; `ExecDrawOS.lean` proves the same bounds for it.
 
-`stratumK` is the count law's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
+`stratumK` is the count sampling design's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
 -/
 
 @[expose] public section
@@ -214,7 +214,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's law**: `flock_e2e_drawn` with `L := Law.execStratified St Ls`. -/
+/-- **The e2e drawn-unit bound at the executable's sampling design**: `flock_e2e_drawn` with `L := Law.execStratified St Ls`. -/
 theorem flock_e2e_drawn_exec
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -231,7 +231,7 @@ theorem flock_e2e_drawn_exec
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := Law.execStratified St Ls) plan tab vb k Rw M ρ t' :=
   P.flock_e2e_drawn H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr ht σ hCR
 
-/-- **The e2e count curve at the executable's law**: `flock_e2e_count` with `L := Law.execStratified St Ls`, its count
+/-- **The e2e count curve at the executable's sampling design**: `flock_e2e_count` with `L := Law.execStratified St Ls`, its count
 curve bounded by `Law.stratified`'s `miss` for the strata the executable's describe (`ExecStrata`). -/
 theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (hS : Law.ExecStrata σs ks St)

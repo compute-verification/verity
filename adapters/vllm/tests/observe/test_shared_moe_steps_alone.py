@@ -48,9 +48,9 @@ def test_the_router_step_alone_refuses_a_scaling_factor_that_is_no_number(monkey
 
 
 def test_the_gate_step_alone_looks_up_the_bias_a_router_does_not_bind_as_none(monkeypatch):
-    pattern, node, ctx, sc, hidden, hint = _step_arguments(monkeypatch, "_gate")
+    pattern, node, ctx, sc, hidden, hint = _step_arguments(monkeypatch, "_scope_gate")
     enter = sc.router.enter
     unbound = dataclasses.replace(enter, args=list(enter.args[:BIAS_AT]), kwargs={**enter.kwargs, "scoring_func": enter.args[BIAS_AT + 1]})
     router = dataclasses.replace(sc.router, enter=unbound)
     with pytest.raises(AttributeError, match=r"^'NoneType' object has no attribute 'alloc'$"):
-        pattern._gate(node, ctx, dataclasses.replace(sc, router=router), hidden, hint)
+        pattern._scope_gate(node, ctx, dataclasses.replace(sc, router=router), hidden, hint)

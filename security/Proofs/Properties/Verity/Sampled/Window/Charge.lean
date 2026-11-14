@@ -225,7 +225,7 @@ theorem avg_windowSampleMap_start (W : Window) (rd : Reading W.rounds) (σ : Str
       H (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
 
 /-- **The sample-coupled coin map's premise over the window, off the empty classes at their counts**
-(`sampleMap_couples_at`): the joint law's tape off `linkEmptyAt` and `roundEmptyAt` at every member's stops is within
+(`sampleMap_couples_at`): the joint distribution's tape off `linkEmptyAt` and `roundEmptyAt` at every member's stops is within
 the openings' gaps and empty classes at the stops' counts over the stops of the uniform tape, wherever the sample's
 coins are uniform. -/
 theorem windowSampleMap_couples_at (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))

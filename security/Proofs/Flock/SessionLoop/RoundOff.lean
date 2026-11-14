@@ -58,17 +58,17 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree)
 
 /-- **The frame starts a rep fresh after `prior`**: outside every phase, at absorbed position `0`. -/
-theorem step_prior_fresh {c : Cfg} {k : ℕ} {b : ByteArray} {a : _root_.Flock.Firewall.Frame.Reply}
-    {st' : _root_.Flock.Firewall.Frame.State} (h : _root_.Flock.Firewall.Frame.step c {} (.prior k b) = (a, st')) :
+theorem step_prior_fresh {c : Cfg} {k : ℕ} {b : ByteArray} {a : _root_.Flock.ZkServer.Frame.Reply}
+    {st' : _root_.Flock.ZkServer.Frame.State} (h : _root_.Flock.ZkServer.Frame.step c {} (.prior k b) = (a, st')) :
     st'.m.on = false ∧ st'.m.done = false ∧ st'.m.inner = none ∧ st'.m.pos = 0 := by
-  have e : (_root_.Flock.Firewall.Frame.step c {} (.prior k b)).2 = st' := (congrArg Prod.snd h).trans rfl
+  have e : (_root_.Flock.ZkServer.Frame.step c {} (.prior k b)).2 = st' := (congrArg Prod.snd h).trans rfl
   rw [← e]
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> (simp only [_root_.Flock.Firewall.Frame.step]; repeat' split) <;> rfl
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> (simp only [_root_.Flock.ZkServer.Frame.step]; repeat' split) <;> rfl
 
 /-- Frames none of whose bytes is a value's carry no value byte. -/
 theorem valBytes_off : ∀ fs : List Frame, (∀ f ∈ fs, ∀ i, ¬ valByte f i) → ∀ i, valBytes fs i → False
@@ -87,11 +87,11 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
     (hb : s.pos ≤ c.order.size) :
     ∃ out t, roundFree c s
         (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
-          .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray) 6 =
+          .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray) 6 =
         .ok (out, t, #[]) ∧
       out.data.toList = encs (zcBind digest cap c.root) ++ (Frame.sq 2 6).enc := by
   have hm5 : ∀ f ∈ ([.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
-      .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] : List Frame), midFrame f := by
+      .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] : List Frame), midFrame f := by
     intro f hf
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
     rcases hf with rfl | rfl | rfl | rfl | rfl
@@ -99,7 +99,7 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
     · show "flock-r1cs-v0".toUTF8.size < 2 ^ 64; decide
     · exact hdg
     · exact hcap
-    · show _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8.size < 2 ^ 64; decide
+    · show _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8.size < 2 ^ 64; decide
   obtain ⟨out, fr, hr, ho⟩ := roundFree_zc c s [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap] []
     2 6 hc hon hd hi hm5
     (by
@@ -112,9 +112,9 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
       · trivial)
     (by simp) (.inl rfl) (by decide) (by decide) hb
   have hfr := roundFree_free c s [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
-    .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] 2 6 (by simp [hi]) hm5 (.inl rfl) (by decide) (by decide) hr
+    .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] 2 6 (by simp [hi]) hm5 (.inl rfl) (by decide) (by decide) hr
   have hoff := valBytes_off [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
-      .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8]
+      .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8]
     (by
       intro f hf i h
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
@@ -126,14 +126,14 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
   subst hfr0
   refine ⟨out, _, hr, ?_⟩
   rw [ho]
-  simp only [maskFrames, zcBind, encs, _root_.Flock.Firewall.Frame.LABEL_ZC, List.flatMap_cons, List.flatMap_nil,
+  simp only [maskFrames, zcBind, encs, _root_.Flock.ZkServer.Frame.LABEL_ZC, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, List.append_assoc]
 
 /-- The PIOP's round `0` body: the pending bytes, the zerocheck's binding and `r_skip`'s squeeze. -/
 theorem piopBody_zero (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) :
     piopBody P m kLog digest cap root lay mk 0 = P ++ encs (zcBind digest cap root) ++ (Frame.sq 2 6).enc := by
-  simp [piopBody, piopFr, piopK, piopN, zcBind, _root_.Flock.Firewall.Frame.LABEL_ZC]
+  simp [piopBody, piopFr, piopK, piopN, zcBind, _root_.Flock.ZkServer.Frame.LABEL_ZC]
 
 namespace Loop
 
@@ -195,8 +195,8 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
         (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.kLog (Masked.zkTab x ⟨i, hi⟩).sch.k0).len +
         _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
       ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i).rep r) : V FlockComplete.InnerCommit) = .ok ic) :
-    ic.root = _root_.Flock.Firewall.Frame.padsRoot (Masked.layE x ⟨i, hi⟩)
-      (_root_.Flock.Firewall.Frame.Draws.ofBytes (Masked.layE x ⟨i, hi⟩) (Lr.draws (ν, t) (Loop.frepOf i r))) := by
+    ic.root = _root_.Flock.ZkServer.Frame.padsRoot (Masked.layE x ⟨i, hi⟩)
+      (_root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x ⟨i, hi⟩) (Lr.draws (ν, t) (Loop.frepOf i r))) := by
   have hx := Masked.live_of hsc hR
   have htab : (FlockDeploy.tabsOf (Masked.stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (Masked.stAt x ⟨i, hi⟩) :=
     Masked.tabsOf_stAt x ⟨i, hi⟩
@@ -371,7 +371,7 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     ∃ (tr : Tab) (hir : Array ByteArray), real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) ∧
       (ofLoop Masked.dataE L₁ real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
         0 :: (encs (zcBind (_root_.Flock.Setup.ofCircuit (Masked.stAt x j)).digest
-          (_root_.Flock.Firewall.Finish.flat tr.cm0.cap)
+          (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
           ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).root) ++ (Frame.sq 2 6).enc) ∧
       (ofLoop Masked.dataE L₁ real).rep x (ops.length + 1) = 2 * j.val + r.val ∧
       (∀ {m₁ : Masker} {out₁ : ByteArray} {s₁ : Masker} {fr₁ : Array ℕ},
@@ -379,7 +379,7 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
         roundFree ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m₁ with stopped := false }
           ⟨v.toArray⟩ ((ofLoop Masked.dataE L₁ real).coins x (ops.length + 1)) = .ok (out₁, s₁, fr₁) →
         fr₁ = #[]) ∧
-      ∃ lay mask, _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask) := by
+      ∃ lay mask, _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask) := by
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -478,8 +478,8 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       (.empty, 0)).1.data.toList =
       encs [.dom (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1 / 2]!)
           ((ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1 % 2)).toUTF8,
-        .label "flock-r1cs-v0".toUTF8, .bytes tr.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat tr.cm0.cap),
-        .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc := by
+        .label "flock-r1cs-v0".toUTF8, .bytes tr.st.digest, .bytes (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap),
+        .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc := by
     rw [hj0, hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left hsz0, h0'.1, head_encs]
     simp only [Option.getD_some, List.toList_toArray]
   have hdom := (sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx)
@@ -514,7 +514,7 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
         ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.size :=
     Claims.ZKServer.ofDraws_order _ _ _
   obtain ⟨o, tq, hro, ho⟩ := roundFree_zcHead_out ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops))
-    { m with stopped := false } tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap) _ hc hm0.1 hm0.2.1
+    { m with stopped := false } tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) _ hc hm0.1 hm0.2.1
     hm0.2.2.1 hdg hTcap hdom (by show m.pos ≤ _; rw [hm0.2.2.2]; exact Nat.zero_le _)
   have hvb := passes_eq hro (check_none_passes hck)
   have hrel := release_of_roundFree (ofLoop Masked.dataE L₁ real) x (ν, t) ((m₀, ρ₀) :: ops) false v hA hcoins
@@ -565,7 +565,7 @@ theorem release_sched_zcBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
       (by rw [hreal]; exact Loop.realTabs_of src x w (ν, t) hsx) hlt hl hv j r hn
   have hrel' : (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
       0 :: (encs (zcBind (_root_.Flock.Setup.ofCircuit (Masked.stAt x j)).digest
-        (_root_.Flock.Firewall.Finish.flat tr.cm0.cap)
+        (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
         ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).root) ++ (Frame.sq 2 6).enc) := hrel
   have hrep' : (ofLoopLink L₀ src real).rep x ((m₀, ρ₀) :: ops).length = Loop.frepOf j.val r.val := hrep
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds

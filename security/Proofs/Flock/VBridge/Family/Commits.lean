@@ -240,10 +240,10 @@ theorem reads_of_skOf {own : Fin F.stmts.size → Array Flock.Registered.Port} {
 theorem hFull_of (hrd : F.RowsRead) : F.HFull := hrd
 
 /-- **`VFull` at the read wires**, the restatement of `VFull` that V*'s padded rows need (`RowsRead`): `VFullR` at the
-family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit session `j`'s law samples. -/
+family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit session `j`'s sampling design samples. -/
 def VFullRead : Prop := VFullR (ℐ).r F.Sk
 
-/-- **`VFullRead` without `RowsRead`**: V*'s laws are the full sample, which samples every unit (`vFullR_of_read`). -/
+/-- **`VFullRead` without `RowsRead`**: V*'s sampling designs are the full sample, which samples every unit (`vFullR_of_read`). -/
 theorem vFullRead_of : F.VFullRead := vFullR_of_read _ _
 
 end VStarFamily

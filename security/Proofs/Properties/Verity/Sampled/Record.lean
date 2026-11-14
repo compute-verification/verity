@@ -88,7 +88,7 @@ def coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) : List FlockDeploy.Coin :
 /-- **The bytes the sample reads**: the coins' bytes, in order. -/
 def drawBytes (cs : List FlockDeploy.Coin) : ByteArray := ⟨(cs.flatMap FlockDeploy.Coin.bytes).toArray⟩
 
-/-- **The units the coins' bytes `src` sample** under the session's law over its population, as v2's challenger sample
+/-- **The units the coins' bytes `src` sample** under the session's sampling design over its population, as v2's challenger sample
 reads them (`Spot.Draw.drawUnits`); a sample that fails samples every unit (`Live.L`). -/
 def drawn (A : Live) (src : ByteArray) : List ℕ :=
   match _root_.Spot.Draw.drawUnits A.design A.n src with

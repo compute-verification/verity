@@ -17,7 +17,7 @@ Two modelling lines sit outside the statements:
   compose from the calls' is not stated here.
 
 `audit_window_of_le` takes any sampling design whose escapes are at most the product distribution's, such as an executable sample proved against
-it, so the ideal law here need not be the one run. `audit_window_of_le_slack` allows those escapes an additive `η`, which
+it, so the ideal sampling design here need not be the one run. `audit_window_of_le_slack` allows those escapes an additive `η`, which
 a keyed sample's pseudorandomness assumption supplies, and adds `η` to the bound; at `η = 0` it is `audit_window_of_le`.
 `extraction_audit_window_of_le_slack` and `extraction_audit_window_split_of_record_of_le_slack` are the same at the
 compiled layer.

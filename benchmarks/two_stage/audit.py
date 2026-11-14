@@ -44,7 +44,7 @@ those reads (the interior's at the interior record and the links' boundary ports
 (``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
-(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
+(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, sampling designs
 and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 

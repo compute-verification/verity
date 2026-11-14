@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Reference
-public import Flock.Firewall.SessionPlan
+public import Flock.ZkServer.SessionPlan
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -55,7 +55,7 @@ masked prover's transport runs it (`verity/ml/flock/live/src/coin_tree.rs`, `Che
   in order (`FlockDeploy.V`'s rounds), its stream's index in the tree's leaf order, `nr x (j + 1)` coins. The leaf index
   is `stream · 2^roundsLog + round`, the path `roundsLog + log₂(streams)` nodes, and a round past the schedule, a count
   past the block or a stream outside it fails. A tree whose streams are not the session's (`session`, then the rep
-  streams, distinct, two a table: `Flock.Firewall.Session.streamsOk`), which the transport refuses, places no coin.
+  streams, distinct, two a table: `Flock.ZkServer.Session.streamsOk`), which the transport refuses, places no coin.
 * **An opening** (`parseD`): `Resp::Coins` of `n + 16 + 4·depth` words, the coins, `T_n`, the salt and the path, read at
   the round's place; it passes where the walk reaches the answer's root (`treeChk`).
 * **The coin handed on** (`coinOfD`): the opening's words, which the reference prover reads as coins (`coinOf`, the first
@@ -195,7 +195,7 @@ def locate : List ℕ → ℕ → ℕ → ℕ × ℕ
 /-- **Coin `j`'s place in the committed schedule** at statement `x`: the spec of the masked session `x` sets up
 (`sessOf`), the coin tree's, the stream's index in the tree's leaf order and the round. Coin `0` is the `session`
 stream's round `0`; coin `j + 1` is rep round `j`, the rep streams' rounds in `spec.repStreams` order (`FlockDeploy.V`'s
-rounds). None where the tree's streams are not the session's (`Flock.Firewall.Session.streamsOk`). -/
+rounds). None where the tree's streams are not the session's (`Flock.ZkServer.Session.streamsOk`). -/
 def slot (x : Msg) (j : ℕ) : Option (Flock.SessionSpec × Flock.CoinTree.Spec × ℕ × ℕ) :=
   match sessOf x with
   | none => none
@@ -203,11 +203,11 @@ def slot (x : Msg) (j : ℕ) : Option (Flock.SessionSpec × Flock.CoinTree.Spec 
     match spec.coinTree with
     | none => none
     | some ct =>
-      if _root_.Flock.Firewall.Session.streamsOk spec sts ct then
+      if _root_.Flock.ZkServer.Session.streamsOk spec sts ct then
         if j = 0 then some (spec, ct, 0, 0)
         else
           let rs := (List.range spec.repStreams.size).map fun k => FlockDeploy.repRounds true spec sts[k / 2]!
-          some (spec, ct, ct.streams.toList.idxOf (_root_.Flock.Firewall.Session.repName spec (locate rs 0 (j - 1)).1),
+          some (spec, ct, ct.streams.toList.idxOf (_root_.Flock.ZkServer.Session.repName spec (locate rs 0 (j - 1)).1),
             (locate rs 0 (j - 1)).2)
       else none
 
