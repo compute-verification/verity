@@ -52,3 +52,7 @@ After the turn was cut at about 16:28Z I relaunched nothing. #9835: r20261114-15
 ## 2026-11-14T17:54:12Z
 
 Found the stall. Runs launched with --cwd source into one shared tree take that tree's Lean lock one at a time and hold it while they wait for a check slot. #9835's 8a4b and d405 sat 124 min behind c616 having done nothing, and #10140's 4bcf and 5289 sat behind 9460 and 0603. I cancelled those four and relaunched them with --cwd clone, each in a tree of its own: #9835 r20261114-175324-7860 (verity-vllm, verity-numerical) and r20261114-175324-fd54 (verity-flock 1/3); #10140 r20261114-175324-ee58 and r20261114-175324-b806 (verity-flock 2/3, 3/3). Kept: c616 (#9835 verity-flock 2/3, holding its tree's lock and waiting for a slot), and 9460 (#10140 verity-vllm passed, 21074 passed) and 0603. Passed so far at 3579b2f1: ebb4 (verity-flock 3/3) and c774 (repository), plus ten suites in 8e5d.
+
+## 2026-11-14T18:14:18Z
+
+c616 cancelled too: it had waited 67 min for a slot and never started. Relaunched as r20261114-175434-1fdd (#9835 verity-flock 2/3, own tree). All of #9835's three (7860, fd54, 1fdd) are waiting for check slots. #10140: 9460 done (verity-vllm passed); 0603, ee58 and b806 are waiting. Change 5: 315f is running.
