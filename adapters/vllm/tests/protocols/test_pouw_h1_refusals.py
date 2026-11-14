@@ -46,9 +46,8 @@ period's close (`pouw_h1_window.after_close`), a host library that returns nonze
 call tables whose kernels don't build (`pouw_h1_tables_device.available`,
 `pouw_h1_registered_device.zy_available`).
 
-And three things beside those: a row of the window's grid read several times (`pouw_h1._repeat`), a window core
-samples nothing from (`drawn.drawn_calls`), and, on `test_pouw_h1_drawn`'s served window, circuit files that are not
-the ones the window's period committed (`drawn.stage`)."""
+And two things beside those: a row of the window's grid read several times (`pouw_h1._repeat`), and a window that
+core samples nothing from or whose --circuits are another Program's (`drawn.stage`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -119,7 +118,6 @@ import verity_vllm.protocols.pouw.h1.window as PHW
 import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1_commit as TC
-from tests.protocols import test_pouw_h1_drawn as TDW
 from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_ranks as TR
 from tests.protocols import test_pouw_h1_served as TS
@@ -2549,55 +2547,27 @@ def test_a_row_read_n_times_in_a_row_is_its_leaves_in_order_n_times_over(row, on
     assert isinstance(got, Strided) is one_view
 
 
-def test_a_window_core_samples_nothing_from_is_refused_in_cores_words():
-    """`drawn_calls` gives core's sample of a window by call. A window core samples nothing from, here a record with
-    no sampling coin, is refused with the part of the record core refused and core's reason."""
+def test_a_windows_calls_are_staged_only_on_cores_sample_and_its_programs_circuit_files(tmp_path, monkeypatch, capsys):
+    """`stage` reads core's sample of the window, then --circuits' manifest, before it stages a call. A window core
+    samples nothing from, here a record with no sampling coin, is refused with the part of the record core refused
+    and core's reason. With the coin, a manifest for another Program is refused by both digests, and nothing is
+    written. `window_of` is stood in for: the window is a declared Program's descriptor and layout and, of its
+    record, the sampling coin alone."""
     raw = SV.descriptor(_declared().program)
-    units, why = PHC.drawn_of({}, {"root": "00"}, 1, raw)
-    assert units is None and why == ("draw", f"the window's draw coin is malformed ({NO_OPENING})")
-    with pytest.raises(Refused) as refused:
-        DN.drawn_calls({"record": {}, "root": "00", "raw": raw}, 1)
-    assert str(refused.value) == f"core draws nothing from the window: {why[0]}: {why[1]}"
-
-
-#: `test_pouw_h1_drawn`'s served window, under a name this file's own `served` windows don't take
-drawn_window = TDW.served
-
-
-@pytest.mark.slow
-def test_a_windows_calls_are_staged_only_on_the_circuit_files_its_period_committed(drawn_window, monkeypatch, capsys):
-    """`stage` holds --circuits to the window before it stages a sampled call. A manifest for another Program, one
-    with no file for the call's K, and a K file that is not the one the manifest commits are each refused by name.
-    So are a window whose template at K is not J10-R's on a K file (here the served window's shape with that flag
-    cleared) and a window that registers no root for credit's registered file to read (here the served window with
-    its roots taken out). No plan is written. Slow: it serves a window on a gate session and builds its K's circuit
-    file, as `test_pouw_h1_drawn` does; the refusals are read from one window."""
-    _drawn, serve_dir, tmp = drawn_window
-    path, plan = tmp / "circuits" / DN.MANIFEST, tmp / "work" / DN.PLAN
-    committed = json.loads(path.read_text())
-    win = DN.window_of(serve_dir, 0)
-    k, pin = TDW.K, committed["files"][f"k{TDW.K}"]
-    tiles = win["shape"]["tiles"]
-    assert committed["program"] == win["program"] and tiles[k]["j10r"] is True and win["roots"]
-
-    def refusal(manifest=committed, window=win):
-        path.write_text(json.dumps(manifest))
-        monkeypatch.setattr(DN, "window_of", lambda *a: window)
-        assert TDW._stage(DN, serve_dir, tmp, weights_key=tmp / "wkey") == 1 and not plan.exists()
-        return capsys.readouterr().err
-
-    assert refusal({**committed, "program": "00" * 64}) == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}"
-                                                            f"..., not the window's {win['program'][:16]}...\n")
-    assert refusal({**committed, "files": {}}) == (f"REFUSED: --circuits has no k{k} file: build it (pouw_h1_circuits "
-                                                   f"--strata {k})\n")
-    assert refusal({**committed, "files": {f"k{k}": "00" * 64}}) == (
-        f"REFUSED: K = {k}'s statement circuit (SHA-512 {pin[:16]}...) is not --circuits' k{k} file ({'00' * 8}...), "
-        "the one the period-open committed\n")
-    v1 = {**win, "shape": {**win["shape"], "tiles": {**tiles, k: {**tiles[k], "j10r": False}}}}
-    assert refusal(window=v1) == (f"REFUSED: K = {k}'s template is not J10-R's: drawn stages J10-R units on a k<K> "
-                                  f"file, and a v1 unit as its lanes (pouw_h1_circuits --lanes {k})\n")
-    call = min(DN.drawn_calls(win, TDW._PeriodAuditor.K))
-    _file, why = CR.registered_file(win["program"], win["layout"], win["shape"], call, {}, win["root"], win["steps"],
-                                    win["salt"])
-    assert why is not None
-    assert refusal(window={**win, "roots": {}}) == f"REFUSED: call {call}: credit builds no registered file: {why[1]}\n"
+    layout, why = CR.layout_of(raw)
+    assert why is None
+    coin, root, registered, receipts = (hashlib.sha512(x).hexdigest() for x in (b"coin", b"window", b"sample", b"receipts"))
+    opening = LC.LiveOpening(0, Wd.DRAW, 0, bytes(64), bytes.fromhex(coin), bytes(16), ()).to_json()
+    win = {"record": {}, "root": root, "raw": raw, "layout": layout, "program": hashlib.sha512(raw).hexdigest()}
+    monkeypatch.setattr(DN, "window_of", lambda *a: win)
+    (tmp_path / DN.MANIFEST).write_text(json.dumps({"program": "00" * 64}))
+    a = SimpleNamespace(serve_dir=tmp_path, work=tmp_path / "work", prover=None, window=0, k=1, circuits=tmp_path)
+    assert DN.run("stage", a) == 1
+    said = capsys.readouterr().err
+    assert said.startswith("REFUSED: core ") and said.endswith(
+        f" nothing from the window: draw: the window's draw coin is malformed ({NO_OPENING})\n"), said
+    win["record"] = {"commitment": {"draw": {"coin": opening, "root": registered, "receipts": receipts}}}
+    assert DN.run("stage", a) == 1
+    assert capsys.readouterr().err == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}..., not the window's "
+                                       f"{win['program'][:16]}...\n")
+    assert not (tmp_path / "work").exists()
