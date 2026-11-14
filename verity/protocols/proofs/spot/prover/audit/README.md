@@ -16,6 +16,26 @@ they sit in `prover/`: a file under `verifier/` loads none under `prover/`.
 They still load scripts under `benchmarks/` off `sys.path` (the proof leg, the network certifier's pieces, the
 zero-knowledge mutants) and read the measured data there (`benchmarks/prove_path/sources.json`).
 
+## The shell entry points
+
+- `window_audit.sh`: the window audit's entry point on a CPU machine. It audits a deferred Commit's window, a stand-in linked to its run root, the
+  commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture, committed under rows-sha512
+  (`COMMIT_SCHEME` names no other: vllm-v1 is kept only to read recorded runs), its window from `verity-vllm serving-rows`
+  (with `WINDOW=served`, the in-Commit hook's), and the circuit prover and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
+  single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the window its C2
+  site committed (`A5_WINDOW`).
+- `prove_bundle.sh`: a sampled-proof-block replay bundle (`benchmarks/one_stage/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
+  `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `bundle-window` (a W8A8 MLP's window under a
+  test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
+  `../tests/test_prove_bundle.py` holds that bundle to the window's public part (`../tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
+  sampling design the registered one among it), its run, registration and partition, each sampled member's public body and a live
+  sample's receipt and record. Each sampled member is one `prove --zk` session (behind the Lean ZK server with `ZK_SERVER=1`), one at a time, served the bundle's
+  sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `verity/protocols/proofs/flock/prover/agreement/zk_mutants.py`'s one-bit
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, refused by Lean (and with
+  `ZK_SERVER=1` stopped by the ZK server as well). `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
+  with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
+  source, so M3's reserved window doesn't spend time on the build.
+
 ## The prove path
 
 Network certification under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
