@@ -686,7 +686,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             _shape = getattr(self, "_plan_shape", (0, 0))
             self.footprint.event("begin_step", step=job.step, ntok=_shape[0], nreq=_shape[1], plan_key=int(self._plan_key), plan_key_mode=getattr(self, "_plan_key_mode", "counts"),
                                  step_min_bytes=int(getattr(self, "_step_min_bytes", 0) or 0),
-                                 arena_block_bytes=int(job.arena.numel()) if job.arena is not None else 0, arena_total_bytes=self.arena.bytes_total, arena_free_blocks=[int(b.numel()) for b in self.arena.free],
+                                 arena_block_bytes=int(job.arena.numel()) if job.arena is not None else 0,
+                                 arena_total_bytes=self.arena.bytes_total if self.arena is not None else 0,
+                                 arena_free_blocks=[int(b.numel()) for b in self.arena.free] if self.arena is not None else [],
                                  retained_device_total=self._retained_device_bytes())
 
     def _end_step(self) -> None:
