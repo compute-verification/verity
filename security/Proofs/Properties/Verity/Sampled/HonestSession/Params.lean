@@ -169,7 +169,8 @@ private theorem plain_law : Firewall.plain law = true := by
 /-- The query `build` falls back to for an empty one is plain. -/
 private theorem plain_defaultQuery : Firewall.plain Spot.Partition.defaultQuery = true := by
   unfold Spot.Partition.defaultQuery
-  refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
+  -- `defaultQuery`'s keys are name, version, params — distinct but not ascending, so prove distinctness directly.
+  refine plain_mkObj (by decide) ?_
   intro e he
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl
@@ -178,7 +179,7 @@ private theorem plain_defaultQuery : Firewall.plain Spot.Partition.defaultQuery 
     plstr
   · exact ⟨by plstr, by decide⟩                                    -- version
   · refine ⟨by plstr, ?_⟩                                          -- params
-    refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
+    refine plain_mkObj (by decide) ?_                              -- keys X, W: distinct but not ascending
     intro e2 he2
     simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
     rcases he2 with rfl | rfl
@@ -334,11 +335,17 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) : �
       { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, ?find, ?pchain⟩,
       ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
   case decode =>
-    fwd_walk [hA, hB] block [Core.canonicalJson, Flock.canon] shallow []
+    -- Rewrite the outer `canonicalJson` by its equation (`hA`) first; the walk then only reads `decodeParams`.
+    show (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
+      [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)]
+    rw [hA]
+    fwd_walk [hB] block [Flock.canon] shallow []
   case find => kernel_rfl'
   case pchain =>
-    dsimp only
-    fwd_walk [hC, hD, hE, hU] block [Core.canonicalJson, Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    -- Likewise rewrite the outer `canonicalJson` by `hC`; the walk then reads only `paramsOfJson`.
+    show (Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = _
+    rw [hC]
+    fwd_walk [hD, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
   case f1 => kernel_rfl'            -- own.partition = partitionObj
   case f2 => rw [hpf]               -- own.program = programFile
   case f3 => kernel_rfl'            -- own.circuit
