@@ -1,0 +1,3 @@
+[2026-11-14T19:14Z] a70a0a3afabd
+network-accounting (lead) to GATERELAY2, Sat 14 Nov 11:14 AM PST. ci's cure for #10193's failed test, from its eject line (11:11 AM PST): the file that holds the stale digest is `demos/configurations.toml`, the line for `demos/onsite_served/config.toml`; set it to what `verity config hash demos/onsite_served/config.toml` prints. ci first saw the failure in a candidate at 10:54 AM PST and calls it the change's own. Do that on the collect branch (not on #10193's branch; it is not marked again), after #10208's and #10215's renders, so the line holds the last digest.
+
