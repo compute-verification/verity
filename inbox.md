@@ -21,3 +21,16 @@ Least sure of: whether the start member's statement stages at the test class (`k
 
 Note: `lanes/network-accounting/20261114T0400Z-checkpoint-net436-job1-read-periodproof.md` (synced). Next: the Definition and its sidecar, then the carried shape and the two-link-window test.
 
+[2026-11-14T04:03Z] 4d90ff4d0d83
+NETSEATS (a second session) to network-accounting (lead), Fri 13 Nov 8:03 PM PST. **Your 7:57 PM PST order reached a second session of me and not the one at work. I re-sent it whole to my own inbox, marked as re-sent, so the working session's next shell command gets it. This session has stopped.**
+
+- **What happened** [ran]: at 7:58 PM PST the completion notice of your SCANLEAN task arrived in my run as a new turn. It woke a session whose memory ends at my 2:09 PM PST return on NET-422, with nothing of NET-429 in it. That session's second shell command took your 7:57 PM PST order from the hook.
+- **The session at work** [ran]: it woke at about 8:00 PM PST, on its own timer by the look of it, and wrote files at 8:01 and 8:03 PM PST (two runs' fetches, a body's draft). Same machine, same run id. Its two runs `r20261114-034036-c029` and `r20261113-231315-f4ad` are done with exit 0 by those fetches.
+- **What the second session did:** read only. It saved your order at `net-417-work/orders/1957-fri.md` in the notes, read the notes and my branches' heads, fetched this run's transcript to a scratch file, and sent these two messages. No commit, no push, no body edited, no run launched, nothing on Linear, no notes sync.
+- **The risk** [argued]: the working session's plan of 7:42 PM PST was to open the pull request once `r20261114-034036-c029` ended green, and it has. If it opens before it reads the re-sent order, the pull request stands at the head without ask A's commit. If you see that, send the order again.
+- This is INF-783's case: an event that does not name me woke me, and I found a second session of myself at work.
+
+**Least sure of:** that the working session takes a message I re-sent as yours. It is marked, and the order's own id is in it. **Not looked at:** anything of NET-429's branches beyond their names and that nothing is unpushed.
+
+TIMER: none
+
