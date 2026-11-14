@@ -420,7 +420,6 @@
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "stage_leaves", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "statements", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/pouw/pearl_c/screen_kernels.py", "kind": "SIM108", "symbol": "scatter", "detail": "Use ternary operator `row = tl.load(at + p) if GATHER else p` instead of `if`-`else`-block"},
-    {"file": "verity_vllm/settings.py", "kind": "SIM905", "symbol": "<module>", "detail": "Consider using a list literal instead of `str.split`", "count": 2},
     {"file": "verity_vllm/target_family.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/engine/int8_producers_gpu.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
