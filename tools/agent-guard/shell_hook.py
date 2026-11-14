@@ -85,6 +85,19 @@ a branch registered to another agent or of `main`, `checked` or `next`, to the r
 It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhere in the command (`flattened` holds what
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)
 whatever its `-C`, and an unplaced push is judged as theirs.
+In a checkout of those repositories a commit carries the machine's configured identity, so it refuses there a git command
+that names an author or committer of its own (`worktree_guard.identity_reason`): `-c user.name=...`, `commit --author`,
+`GIT_AUTHOR_NAME=... git`, a `git config` that writes `user.name` or `user.email`; and, wherever it is typed, a `git config
+--global` that writes the machine's. A scratch repository takes any identity. For this rule alone a git after a plain `cd
+DIR` is placed in DIR (`cd_dirs`), so `cd CHECKOUT && git ...` is refused and `cd SCRATCH && git ...` passes; such a command
+it still can't place passes.
+A shell hands a variable it holds to every later command, in every repository, and the hook reads a command, never a
+shell's environment. So it refuses, wherever it is typed, a command that leaves `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
+`GIT_COMMITTER_NAME` or `GIT_COMMITTER_EMAIL` set in the shell that runs it (`shell_identity_reason`): an `export`, a
+`declare` or `typeset`, an assignment with no command after it. This rule alone refuses in doubt: in a subshell or what a
+carrier runs too, where the name may die with it. The names ahead of one command, an `unset` and a read pass. Not covered: a
+variable the shell held before the guard arrived, one a script exports, and a name the shell builds
+(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`).
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
@@ -1220,6 +1233,51 @@ def git_env(raw: list[list[str]]) -> list[dict[str, str]]:
     return [{**dict.fromkeys(elsewhere, "$"), **mine} for mine in ahead]
 
 
+def shell_keeps(raw: list[list[str]]) -> list[str]:
+    """The variables the simple commands `raw` leave set in the shell that runs them, as far as the command shows: those one
+    of SETTERS other than `unset` names (`export NAME=VALUE`, `export NAME`, `declare -x NAME`; not `declare -p NAME`, which
+    prints one), and those assigned with no command after them (`NAME=VALUE` alone), which reach every later command where
+    the name is already exported or `set -a` is on, or once an `export` names it."""
+    out = []
+    for words in raw:
+        run = unwrap(words)
+        if not run or (run[0] in SETTERS - {"unset"} and not (run[0] != "export" and "-p" in run)):
+            out += [w.split("=", 1)[0] for w in run[1:] or words]
+    return out
+
+
+#: the operators beside which a `cd` moves the shell that runs what follows it ("" ends the text), and with them the ones
+#: after which the next command runs in the shell and directory of the one before
+IN_TURN = {"&&", ";", ""}
+SAME_SHELL = IN_TURN | {"||", "|", "|&"}
+
+
+def cd_dirs(text: str, cwd: str) -> tuple[list[str], str]:
+    """The directory each of `flattened(text)`'s commands runs in as far as the plain `cd`s before it say, "" where they
+    leave it in doubt, and the directory `text` ends in. A plain `cd` is a simple command `cd DIR` and no more, between
+    `&&`, `;` or a line's end, with DIR written out (no `~`, nothing the shell has yet to expand) and a directory, taken from
+    where the `cd` before it left the shell; what a carrier runs starts where the carrier does. Everything after any of
+    these is in doubt: another form of `cd`; a keyword (`if`, `then`, `do`, `{`), whose body may not run; an operator that
+    starts or ends a shell of its own (`(`, `)`, `&`) or a `case`; a carrier whose text moves. An unquoted backquote puts
+    the whole text in doubt: `words_of` gives the commands inside it as the text's own."""
+    out, d, before = [], cwd, ";"
+    if any("\0" in words for words, _ in words_of(text.replace("`", " \0 "))):
+        d = ""
+    for words, after in words_of(text):
+        words = strip_redirections(words)
+        run = unwrap(words)
+        d = "" if words[:1] and words[0] in KEYWORDS else d
+        out.append(d)
+        for carried_text in carried(run):
+            inner, end = cd_dirs(carried_text, d)
+            out, d = out + inner, d if end == d else ""
+        if run[:1] == ["cd"]:
+            to = os.path.join(d, words[-1])
+            d = os.path.normpath(to) if d and words == ["cd", words[-1]] and {before, after} <= IN_TURN and os.path.isdir(to) else ""
+        d, before = d if after in SAME_SHELL else "", after
+    return out, d
+
+
 def guard(name: str = "worktree_guard"):
     """The module `name` beside this hook (worktree_guard, kept_session), imported when a rule first needs it."""
     sys.dont_write_bytecode = True                      # no __pycache__ beside the hook: boot.sh copies its directory file by file
@@ -1232,11 +1290,29 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     """One agent per checkout (worktree_guard.py): why this command's git may not run here, or None."""
     worktree_guard = guard()
     try:
-        raw = flattened(command)
+        raw, (dirs, _) = flattened(command), cd_dirs(command, cwd)
     except ValueError:
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
-    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw))
+    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw), dirs)
+
+
+def shell_identity_reason(command: str) -> str | None:
+    """No author or committer in the shell (worktree_guard.kept_identity_reason): why this command, which leaves one of
+    their variables set in the shell that runs it (`shell_keeps`), may not run, or None. The hook reads a command and never
+    a shell's environment, so it can't refuse the later git such a variable reaches, and this rule alone refuses in doubt.
+    What a body, a subshell or a carrier runs is read as the command's own (`flattened`), though the name may die with it.
+    A text with a `#` in it, where `words_of` stops reading, is read line by line as well, and what the hook can't split,
+    the text or a line, is cut at its operators and line ends with its quotes left on."""
+    if "GIT_" not in command:
+        return None
+    text, raw = HEREDOC.sub(" ", command), []
+    for part in [text] + (text.split("\n") if "#" in text else []):
+        try:
+            raw += flattened(part)
+        except ValueError:
+            raw += [cut.split() for cut in re.split(r"[;&|()`\n]+", part)]
+    return guard().kept_identity_reason(shell_keeps(raw))
 
 
 def own_tmux(given: dict[str, str]) -> bool:
@@ -1376,9 +1452,10 @@ def main() -> int:
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     try:
+        low = low or (None if deny else shell_identity_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
-    except Exception:                                   # nor one in the checkout guard
+    except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell
         pass
     low = low or (None if deny else kept_session_reason(command))
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on
