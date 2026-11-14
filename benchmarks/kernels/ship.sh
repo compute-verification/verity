@@ -20,7 +20,7 @@ if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
     echo "setarch -R is refused here, and nvcc's PTX can depend on address layout: build where a process may turn address" \
       "randomization off" >&2; exit 1; }
   SHIP_FRAME=$(mktemp -d /tmp/ship.XXXXXXXX); trap 'rm -rf "$SHIP_FRAME"' EXIT; mkdir "$SHIP_FRAME/tmp"
-  gcc -shared -fPIC -O2 -o "$SHIP_FRAME/ship_clock.so" "$ROOT/benchmarks/torch_gpu/ship_clock.c" -ldl \
+  gcc -shared -fPIC -O2 -o "$SHIP_FRAME/ship_clock.so" "$ROOT/benchmarks/kernels/ship_clock.c" -ldl \
     || { echo "ship_clock.c doesn't build with gcc" >&2; exit 1; }
   SHIP_FRAME=$SHIP_FRAME TMPDIR=$SHIP_FRAME/tmp LD_PRELOAD="$SHIP_FRAME/ship_clock.so${LD_PRELOAD:+:$LD_PRELOAD}" \
     setarch "$(uname -m)" -R "$BASH" "$0" "$@" || exit $?
@@ -29,7 +29,7 @@ fi
 
 # the nvcc every build here compiles with (ship_nvcc.sh: its header says what it fixes); it reads CUDA, which ship_cuda
 # exports
-SHIP_NVCC=$ROOT/benchmarks/torch_gpu/ship_nvcc.sh
+SHIP_NVCC=$ROOT/benchmarks/kernels/ship_nvcc.sh
 
 # whether the toolkit $1 has nvcc 12.8 or later
 ship_nvcc_ok() { [ -x "$1/bin/nvcc" ] && "$1/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
@@ -48,7 +48,7 @@ ship_cuda() {
   ship_find_cuda "$@"
   ship_nvcc_ok "$CUDA" || { echo "no nvcc >= 12.8 at ${CUDA:-any of $*}: set CUDA" >&2; exit 1; }
   export CUDA
-  "$ROOT/benchmarks/torch_gpu/ship_probe.sh" || exit 1
+  "$ROOT/benchmarks/kernels/ship_probe.sh" || exit 1
 }
 
 # FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a): no FTZ, fast-math, FMA contraction or

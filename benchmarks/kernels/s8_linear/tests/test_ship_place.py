@@ -39,7 +39,7 @@ ship_nvcc_ok "$CUDA" && echo "$CUDA"
 #: build.sh's cubin step for one source: ROOT, the source's directory from it, the source's name, the cubin and the
 #: toolkit
 DRIVER = """set -euo pipefail
-. "$1/benchmarks/torch_gpu/ship.sh"
+. "$1/benchmarks/kernels/ship.sh"
 CUDA=$5
 ship_cuda
 ship_cubin_flags sm_90a
@@ -55,7 +55,7 @@ ship_cuda
 """
 
 #: where a copy puts the tree's root, the kernel's directory and the header beside the kernel
-AS_IS = ("as_is", "benchmarks/torch_gpu/s8_linear", "")
+AS_IS = ("as_is", "benchmarks/kernels/s8_linear", "")
 MOVED = ("moved_to_a_root_of_another_length", "kernels/exact_linear_at_another_place/and_depth/s8", "headers/of_its_own/")
 
 #: a source whose header names the file it is in
@@ -84,9 +84,9 @@ def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header:
     """A copy of the tree under tmp placed as `where` says, holding the frame and one source with its header, the source's
     #include spelled for the header's place; the copy's root and the source's directory from it."""
     root, own, beside = tmp / where[0], where[1], where[2]
-    (root / "benchmarks/torch_gpu").mkdir(parents=True)
+    (root / "benchmarks/kernels").mkdir(parents=True)
     for f in FRAME_FILES:
-        shutil.copy(FRAME / f, root / "benchmarks/torch_gpu" / f)
+        shutil.copy(FRAME / f, root / "benchmarks/kernels" / f)
     (root / own / beside).mkdir(parents=True)
     assert text.count(f'#include "{header}"') == 1
     (root / own / source).write_text(text.replace(f'#include "{header}"', f'#include "{beside}{header}"'))
@@ -129,7 +129,7 @@ def test_a_frame_whose_wrapper_is_nvcc_itself_builds_nothing(cuda: str, tmp_path
     stops at its toolkit, before it compiles."""
     root, own = copy(tmp_path, AS_IS, "s8_wgmma.cu", (KERNEL / "s8_wgmma.cu").read_text(), "s8_acc.h",
                      (KERNEL / "s8_acc.h").read_text())
-    (root / "benchmarks/torch_gpu/ship_nvcc.sh").write_text('#!/usr/bin/env bash\nexec "$CUDA/bin/nvcc" "$@"\n')
+    (root / "benchmarks/kernels/ship_nvcc.sh").write_text('#!/usr/bin/env bash\nexec "$CUDA/bin/nvcc" "$@"\n')
     r, cubin = build(cuda, root, own, "s8_wgmma.cu")
     assert r.returncode != 0 and not cubin.exists()
     assert "the second comparison failed: ship_nvcc.sh gives the probe two cubins at two places" in r.stderr, r.stderr[-2000:]
