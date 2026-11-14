@@ -6,7 +6,9 @@ non-causal call, dropout, another scale and a read of the forward's state outsid
 too in a step not under deterministic algorithms and in a variable-length call; only the training rules at the capture's cc
 hold the rules; and a bf16 step traced as the GPU runs it (`export_step(..., gpu=True)`) holds the op and its backward where
 the trace holds the math path otherwise, and a call the flash kernel doesn't take, with a mask or in f32, the op of the kernel
-the card takes it to, which is refused, or a refusal at export where the trace can't name that kernel."""
+the card takes it to, which is refused, or a refusal at export where the trace can't name that kernel; and a step exported
+there with an attention backend switched off, the backends in another priority order or another flash attention implementation
+activated is refused at export."""
 from __future__ import annotations
 
 import math
@@ -15,6 +17,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 from torch.fx.experimental.proxy_tensor import make_fx
+from torch.nn.attention import SDPBackend, sdpa_kernel
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import fa2_train as FT
@@ -252,6 +255,48 @@ def test_gpu_export_takes_no_kernel_it_cannot_name() -> None:
     assert ops["bmm"] == 6 and ops["flash"] == ops["efficient"] == 0, ops
     ops = _attention_ops(_one_attention(unbatched=True)[0][0])
     assert ops["flash"] == ops["backward"] == 1 and ops["bmm"] == ops["efficient"] == 0, ops
+
+
+_BACKENDS = {"flash": SDPBackend.FLASH_ATTENTION, "mem_efficient": SDPBackend.EFFICIENT_ATTENTION, "math": SDPBackend.MATH,
+             "cudnn": SDPBackend.CUDNN_ATTENTION}
+
+
+def _plain_export() -> None:
+    export_step(_OneAttention(), _sum_of_squares, AdamW(**ADAMW), torch.empty(1, 2, 16, 32, device="meta"))
+
+
+@pytest.mark.parametrize("off", [(n,) for n in sorted(_BACKENDS)] + [("flash", "mem_efficient")], ids="-".join)
+def test_gpu_export_refuses_a_step_with_a_backend_switched_off(off) -> None:
+    """A step exported at a cc with torch's attention backends `off` switched off is refused at export, naming each switch: the
+    trace reads no switch of the step's own and takes every backend on. Exported without a cc, the step's math path, it isn't."""
+    named = ", ".join(rf"torch\.backends\.cuda\.enable_{n}_sdp" for n in off)
+    with sdpa_kernel([b for n, b in _BACKENDS.items() if n not in off]):
+        with pytest.raises(ValueError, match=rf"exported with {named} off: export it with each on"):
+            _one_attention()
+        _plain_export()
+
+
+def test_gpu_export_refuses_a_step_in_another_backend_order() -> None:
+    """A step exported at a cc with every backend on but cuDNN first in torch's priority order (`set_priority=True`), which
+    the trace's own `sdpa_kernel` keeps, is refused at export, naming the order: the trace takes torch's default order, flash
+    first. Exported without a cc it isn't."""
+    order = [SDPBackend.CUDNN_ATTENTION, SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.MATH]
+    with sdpa_kernel(order, set_priority=True):
+        with pytest.raises(ValueError, match=r"priority order \['CUDNN_ATTENTION', 'FLASH_ATTENTION', .*: export it outside "
+                                             r"any `sdpa_kernel\(\.\.\., set_priority=True\)`"):
+            _one_attention()
+        _plain_export()
+
+
+def test_gpu_export_refuses_a_step_under_another_flash_implementation(monkeypatch) -> None:
+    """A step exported at a cc with a flash attention implementation activated (`activate_flash_attention_impl`), under which
+    the flash op runs another kernel than the FA2 one the rules lower, is refused at export, naming it. Exported without a cc
+    it isn't."""
+    monkeypatch.setattr(torch.nn.attention, "current_flash_attention_impl", lambda: "FA3")
+    with pytest.raises(ValueError, match=r"implementation 'FA3' activated: call "
+                                         r"torch\.nn\.attention\.restore_flash_attention_impl\(\) before the export"):
+        _one_attention()
+    _plain_export()
 
 
 class _TwoAttentions(torch.nn.Module):
