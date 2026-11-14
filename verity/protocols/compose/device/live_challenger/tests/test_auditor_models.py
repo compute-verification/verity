@@ -25,7 +25,7 @@ import models as M  # noqa: E402
 from test_auditor_periods import CIRCUIT, PIN, T0, admin, checked, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401
 
 _spec = importlib.util.spec_from_file_location(
-    "h1window_case", Path(__file__).resolve().parents[5] / "verity/protocols/pouw/verifier/tests/test_circuit_h1window.py")
+    "h1window_case", Path(__file__).resolve().parents[6] / "verity/protocols/pouw/verifier/tests/test_circuit_h1window.py")
 H1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(H1)
 
