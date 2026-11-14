@@ -80,7 +80,6 @@
 "wrongAllAt" = "incorrectAllAt"
 "wrongRegZc" = "incorrectRegZc"
 "WindowLaw" = "ExecutionPhaseLaw"
-"WindowRec" = "ExecutionPhaseRec"
 "wrongRegZ" = "incorrectRegZ"
 "wrong_sub" = "incorrect_sub"
 "wrongAll" = "incorrectAll"
@@ -539,7 +538,7 @@ files = [
     "security/Proofs/Flock/Soundness/Types/ProgramE2E.lean",
     "security/Proofs/Flock/VBridge/Keyed.lean",
     "security/Proofs/Nci/Remote.lean",
-    "security/Proofs/Pouw/EndToEndWindow/Statement.lean",
+    "security/Proofs/Pouw/EndToEnd*/Statement.lean",
     "security/Proofs/Pouw/PearlC/RowCircuit.lean",
     "security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
     "security/Proofs/Pouw/PearlC/TileCircuit.lean",
@@ -591,7 +590,7 @@ files = [
     "security/Proofs/Accounting/PouwWitness.lean",
     "security/Proofs/Pouw/Barrier/Proofs.lean",
     "security/Proofs/Pouw/BudgetAbort.lean",
-    "security/Proofs/Pouw/EndToEndWindow/Statement.lean",
+    "security/Proofs/Pouw/EndToEnd*/Statement.lean",
     "security/Proofs/Pouw/NCP/GameProofs.lean",
     "security/Proofs/Pouw/NCP/RouteUProofs.lean",
     "security/Proofs/Pouw/PearlC/DeviceCapGap.lean",
@@ -682,7 +681,7 @@ files = [
     "security/Proofs/Pouw/Barrier/Proofs.lean",
     "security/Proofs/Pouw/Deadline.lean",
     "security/Proofs/Pouw/DeadlineWitness.lean",
-    "security/Proofs/Pouw/EndToEndWindow/Statement.lean",
+    "security/Proofs/Pouw/EndToEnd*/Statement.lean",
     "security/Proofs/Pouw/Lemmas/Game.lean",
     "security/Proofs/Pouw/NCP/GameProofs.lean",
     "security/Proofs/Pouw/PearlC/Gap.lean",
