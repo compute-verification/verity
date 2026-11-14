@@ -1,5 +1,5 @@
 /-
-Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs/one-stage/v2`), a `Core.BlobProtocol`: the
+SPOT's one-stage audit on the proofs themselves (`verity/sampled-proofs/one-stage/v2`), a `Core.BlobProtocol`: the
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
 * **params**: v1's, plus `proofs`, exactly `{"circuit", "public", "registered"}`: the SHA-512s the auditor committed for

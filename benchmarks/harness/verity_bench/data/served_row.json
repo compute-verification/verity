@@ -2,13 +2,13 @@
  "verdicts": {
   "lean-verify": {
    "what": "each session's proof",
-   "verifier": "flock-verify verify",
+   "verifier": "verity-verify-proof verify",
    "decided_by": "lean",
    "proved_by": "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
   },
   "lean-draw": {
    "what": "each session's sample, checked against its statement",
-   "verifier": "flock-verify draw-test",
+   "verifier": "verity-verify-proof draw-test",
    "decided_by": "lean",
    "proved_by": null
   },

@@ -13,7 +13,7 @@
 A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
 ``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
-(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocols`): a set it cannot
+(``PROTOCOLS``) runs the row with protocol options beside SPOT (`verity_vllm.protocols`): a set it cannot
 run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
 its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 

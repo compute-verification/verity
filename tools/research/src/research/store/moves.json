@@ -2196,6 +2196,47 @@
     },
     {
       "paths": {
+        "benchmarks/remote_session/prover.py": "verity/protocols/poub/prover/remote_session/prover.py",
+        "benchmarks/remote_session/device.py": "verity/protocols/poub/prover/remote_session/device.py",
+        "benchmarks/remote_session/session.cu": "verity/protocols/poub/prover/remote_session/session.cu",
+        "benchmarks/word_codec/cuda_lib.py": "verity/protocols/poub/prover/word_codec/cuda_lib.py",
+        "benchmarks/word_codec/kv.cu": "verity/protocols/poub/prover/word_codec/kv.cu",
+        "benchmarks/word_codec/kv.py": "verity/protocols/poub/prover/word_codec/kv.py",
+        "benchmarks/word_codec/kv_bench.py": "verity/protocols/poub/prover/word_codec/kv_bench.py",
+        "benchmarks/word_codec/tests/kv_vectors.json": "verity/protocols/poub/prover/word_codec/kv_vectors.json",
+        "benchmarks/vllm_encoded/paged.py": "verity/protocols/poub/prover/word_codec/paged.py",
+        "benchmarks/codec_tensor/reader.py": "verity/protocols/poub/prover/codec_tensor/reader.py",
+        "benchmarks/codec_tensor/sketch_receipt.py": "verity/protocols/poub/prover/codec_tensor/sketch_receipt.py",
+        "benchmarks/codec_tensor/sketching.py": "verity/protocols/poub/prover/codec_tensor/sketching.py",
+        "benchmarks/codec_tensor/reader.cu": "verity/protocols/poub/prover/codec_tensor/reader.cu",
+        "benchmarks/codec_tensor/sha512.cuh": "verity/protocols/poub/prover/codec_tensor/sha512.cuh",
+        "benchmarks/pous/p2_v1/store.py": "verity/protocols/pous/prover/p2/p2_store/store.py",
+        "benchmarks/pous/p2_v1/gpu.py": "verity/protocols/pous/prover/p2/p2_store/gpu.py",
+        "benchmarks/pous/p2_v1/p2v1.cu": "verity/protocols/pous/prover/p2/p2_store/p2v1.cu",
+        "benchmarks/pous/p2_v1/p2sq.cuh": "verity/protocols/pous/prover/p2/p2_store/p2sq.cuh",
+        "benchmarks/pous/p2_v1/p2keys.cuh": "verity/protocols/pous/prover/p2/p2_store/p2keys.cuh",
+        "benchmarks/pous/p2_v1/p2keys4.cuh": "verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh",
+        "benchmarks/pous/p2_v1/Makefile": "verity/protocols/pous/prover/p2/p2_store/Makefile",
+        "benchmarks/pous/p2_v1/.gitignore": "verity/protocols/pous/prover/p2/p2_store/.gitignore",
+        "benchmarks/pous/p2_v1/store-toy/": "verity/protocols/pous/prover/p2/p2_store/store-toy/",
+        "benchmarks/pous/p2_gpu/p2dec.cu": "verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu",
+        "benchmarks/pous/p2_gpu/CGBN.commit": "verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit",
+        "benchmarks/pous/p2_v1/reference.py": "verity/protocols/pous/verifier/p2_v1/reference.py",
+        "benchmarks/pous/p2_v1/wire.py": "verity/protocols/pous/verifier/p2_v1/wire.py",
+        "benchmarks/pous/p2_v1/vectors.py": "verity/protocols/pous/verifier/p2_v1/vectors.py",
+        "benchmarks/pous/p2_v1/vectors.json": "verity/protocols/pous/verifier/p2_v1/vectors.json",
+        "benchmarks/pous/p2_v1/audit-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-vectors.json",
+        "benchmarks/pous/p2_v1/audit-negative-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json",
+        "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json": "verity/protocols/poub/verifier/bandwidth-mem69-v2.json"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/p2_v1/load.py": "verity/protocols/pous/prover/p2/p2_store/load.py"
+      }
+    },
+    {
+      "paths": {
         "verity/configuration/config/": "tools/config/"
       }
     },
@@ -2961,6 +3002,14 @@
     },
     {
       "paths": {
+        "verity/protocols/proofs/spot/verifier/workload.py": "verity/protocols/proofs/spot/prover/workload.py",
+        "verity/protocols/accounting/pouw/verifier/workload.py": "verity/protocols/accounting/pouw/prover/workload.py",
+        "verity/protocols/accounting/pous/verifier/workload.py": "verity/protocols/accounting/pous/prover/workload.py",
+        "verity/protocols/accounting/certifier/verifier/workload.py": "verity/protocols/accounting/certifier/prover/workload.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
         "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
         "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
@@ -3025,6 +3074,52 @@
         "benchmarks/sampling_plan/tests/test_recursion.py": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py",
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/mla_capture.py": "adapters/vllm/tests/program/mla_inputs.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/pearl_c4/": "verity/protocols/experimental/pearl_c4/prover/kernels/",
+        "benchmarks/pouw/pearl_c4/f1_fast.py": "verity/protocols/experimental/pearl_c4/prover/f1_fast.py",
+        "benchmarks/pouw/pearl_c4/README.md": "benchmarks/pouw/pearl_c4/README.md",
+        "benchmarks/pouw/pearl_c4/ship.sh": "benchmarks/pouw/pearl_c4/ship.sh",
+        "benchmarks/pouw/pearl_c4/replay.py": "benchmarks/pouw/pearl_c4/replay.py",
+        "benchmarks/pouw/pearl_c4/real.py": "benchmarks/pouw/pearl_c4/real.py",
+        "benchmarks/pouw/pearl_c4/real_table.py": "benchmarks/pouw/pearl_c4/real_table.py",
+        "benchmarks/pouw/tests/test_pearl_c4_f1_fast.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py",
+        "benchmarks/pouw/tests/test_pearl_c4_fixture.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_fixture.py",
+        "benchmarks/pouw/tests/test_pearl_c4_sass.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_sass.py",
+        "benchmarks/pouw/tests/test_pearl_c4_twin.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py"
+      }
+    },
+    {
+      "paths": {
+        "demos/onsite_served/served_table.py": "tools/verity/cli/verity_cli/served_table.py",
+        "demos/onsite_served/minutes.py": "benchmarks/demo_minutes/onsite_minutes.py",
+        "demos/onsite_served/tests/test_onsite_minutes.py": "benchmarks/demo_minutes/tests/test_onsite_minutes.py",
+        "demos/vllm/minutes.py": "benchmarks/demo_minutes/minutes.py",
+        "demos/vllm/settings.py": "benchmarks/demo_minutes/settings.py",
+        "demos/vllm/metrics.toml": "benchmarks/demo_minutes/metrics.toml",
+        "demos/vllm/pyproject.toml": "benchmarks/demo_minutes/pyproject.toml",
+        "demos/vllm/tests/test_minutes.py": "benchmarks/demo_minutes/tests/test_minutes.py",
+        "demos/vllm/README.md": "adapters/vllm/tools/served_run/README.md",
+        "demos/vllm/run.sh": "adapters/vllm/tools/served_run/run.sh",
+        "demos/vllm/placement.toml": "adapters/vllm/tools/served_run/placement.toml",
+        "demos/vllm/serve.sh": "adapters/vllm/tools/served_run/serve.sh",
+        "demos/vllm/serve_load.py": "adapters/vllm/tools/served_run/serve_load.py",
+        "demos/vllm/commit.sh": "adapters/vllm/tools/served_run/commit.sh",
+        "demos/vllm/published.sh": "adapters/vllm/tools/served_run/published.sh",
+        "demos/vllm/workloads/SHA256SUMS": "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
+        "demos/vllm/tests/test_run.py": "adapters/vllm/tests/tools/test_served_run.py",
+        "demos/lifecycle/README.md": "tools/verity/cli/tests/lifecycle/README.md",
+        "demos/lifecycle/lifecycle.py": "tools/verity/cli/tests/lifecycle/lifecycle.py",
+        "demos/lifecycle/onsite.py": "tools/verity/cli/tests/lifecycle/onsite.py",
+        "demos/lifecycle/remote.py": "tools/verity/cli/tests/lifecycle/remote.py",
+        "demos/lifecycle/tests/test_lifecycle.py": "tools/verity/cli/tests/lifecycle/test_lifecycle.py"
       }
     }
   ]

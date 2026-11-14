@@ -54,10 +54,11 @@ open Flock (V SessionSpec Stmt)
 
 /-- **What the relay reads at one request beyond the request's frame and its own state**: the setup at the sample
 (`Hello.Setup.setupAt`), the nonce and the id it samples from the operating system, the auditor's answer to what left
-(`none` where the auditor closed first), a `Round`'s release by its rep's frame (`Frames.round`), a `Commit`'s roots
-bound by the tables' level 0 (`Level0.commit`), whether the rep's frame took a round's coins (`Frames.coins`), whether
-every rep's frame finished (`Frames.finish`), the loop's own proofs (`ownProofs`), how many of them the auditor took
-before one it didn't, and the hold's barrier at the stop it is given. -/
+(`none` where the auditor closed first, or where the hold refused the session at its answer to `Register`), a
+`Round`'s release by its rep's frame (`Frames.round`), a `Commit`'s roots bound by the tables' level 0
+(`Level0.commit`), whether the rep's frame took a round's coins (`Frames.coins`), whether every rep's frame finished
+(`Frames.finish`), the loop's own proofs (`ownProofs`), how many of them the auditor took before one it didn't, and
+the hold's barrier at the stop it is given. -/
 structure Env where
   setup : V (SessionSpec × Array Stmt)
   nonce : ByteArray

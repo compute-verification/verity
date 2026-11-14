@@ -99,9 +99,6 @@ PUBLIC = {
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
-    "verity_torch.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
-                                               "layout and the primitives a census prices, which the grader "
-                                               "(benchmarks/training_slowdown/grader) reads",
     "verity_vllm.program.frontend.kernel_readback": "I7: what a built model's layers execute, read back: the int8 scope "
                                                     "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
                                                     "value over the layers, which the harness's engine checks against its "
@@ -204,9 +201,6 @@ PUBLIC = {
     "verity_vllm.correspondence.reader_for_query": "I7: the per-Call runtime correspondence of a derived Program for the query, "
                                                    "and a Call's name (call_name_of, parse_call_name), which "
                                                    "benchmarks/served_commit's granularity reads",
-    "verity_torch.correspondence.runtime": "I7: runtime-correspondence/v1: per Call, the facts that resolve a Program's logical "
-                                          "value to a runtime occurrence (RuntimeCorrespondence), which "
-                                          "benchmarks/served_commit's granularity reads",
     "verity_vllm.llm": "I1: the pinned engine's own module: LLM, the protocol options it resolves and the context it hands them "
                        "(resolve_options, protocol_context), which the harness's tests hold its engine to",
     "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor device's challenger, one challenge phase a Commit "
@@ -252,7 +246,6 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.opening",
     "verity_vllm.check.weights_of_record",
     "verity_vllm.commit.committer.host_retention",
-    "verity_vllm.commit.memory_map",
     "verity_vllm.commit.opened",
     "verity_vllm.engine.build",
     "verity_vllm.engine.engine_driver",
@@ -293,7 +286,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.tp.warmup",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
-    "verity_torch.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.rules.family",
     "verity_vllm.program.frontend.targets",
@@ -304,12 +296,9 @@ KNOWN = frozenset({
     "verity_vllm.program.predict.score",
     "verity_vllm.program.predict.steps",
     "verity_vllm.program.predict.window_circuit",
-    "verity_vllm.protocols.remote_bandwidth.interface",
-    "verity_vllm.protocols.remote_bandwidth.memory_map",
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.program_view",
-    "verity_vllm.query.required",
 })
 
 #: Every private name outside code imports from a module of the package. Move its importers off it and delete it.
@@ -318,7 +307,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
 })
 
 
