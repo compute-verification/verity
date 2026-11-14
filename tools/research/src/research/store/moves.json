@@ -2454,6 +2454,11 @@
     },
     {
       "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/torch_gpu/s8_linear/": "benchmarks/kernels/s8_linear/",
         "benchmarks/hash/exactlin/": "benchmarks/kernels/exactlin/",
         "benchmarks/torch_gpu/ship.sh": "benchmarks/kernels/ship.sh",
@@ -2461,11 +2466,6 @@
         "benchmarks/torch_gpu/ship_nvcc.sh": "benchmarks/kernels/ship_nvcc.sh",
         "benchmarks/torch_gpu/ship_probe.sh": "benchmarks/kernels/ship_probe.sh",
         "benchmarks/torch_gpu/job_nvcc.sh": "benchmarks/kernels/job_nvcc.sh"
-      }
-    },
-    {
-      "paths": {
-        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
     }
   ]

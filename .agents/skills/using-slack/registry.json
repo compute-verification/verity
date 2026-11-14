@@ -145,7 +145,14 @@
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
-        "verity/protocols/interface/"
+        "verity/protocols/interface/",
+        "security/Properties/Challenger.lean",
+        "security/Proofs/Properties/Challenger.lean",
+        "security/Proofs/Properties/Challenger/",
+        "security/Proofs/Properties/Verity/Sampled.lean",
+        "security/Proofs/Properties/Verity/Sampled/",
+        "security/Proofs/Properties/Verity/Recursive.lean",
+        "security/Proofs/Properties/Verity/Recursive/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -323,8 +330,6 @@
         "benchmarks/pouw/facet_break/",
         "benchmarks/pouw/dc/",
         "benchmarks/pouw/theory/",
-        "benchmarks/pouw/lean_headline.py",
-        "benchmarks/pouw/lean_headline_dc.py",
         "benchmarks/pouw/tests/test_lean_headline.py",
         "benchmarks/pouw/tests/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
@@ -428,7 +433,12 @@
         "security/Proofs/Accounting/Remote.lean",
         "security/Proofs/Accounting/Requirement.lean",
         "security/Proofs/Accounting/Responder.lean",
-        "security/Proofs/Accounting/Responder/"
+        "security/Proofs/Accounting/Responder/",
+        "security/Properties/Accounting/Requirement.lean",
+        "security/Proofs/Properties/Accounting/Requirement.lean",
+        "security/Definitions/Accounting/Requirement/Placed.lean",
+        "security/Proofs/Accounting/RequirementPouw.lean",
+        "security/Proofs/Accounting/Lemmas/RequirementPouw.lean"
       ],
       "branch_suffixes": [
         "3cf5",
@@ -493,6 +503,9 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
+      ],
+      "owns": [
+        "benchmarks/dashboard/"
       ]
     },
     {
@@ -565,7 +578,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",
@@ -756,7 +770,18 @@
       "linear_label": "lane:soundness",
       "owns": [
         "verity/protocols/compose/verifier/onsite/",
-        "verity/protocols/compose/verifier/remote/"
+        "verity/protocols/compose/verifier/remote/",
+        "security/Definitions/Claims.lean",
+        "security/Definitions/Claims/",
+        "security/Definitions/WeightSecurity.lean",
+        "security/Definitions/WeightSecurity/",
+        "security/Proofs/WeightSecurity.lean",
+        "security/Proofs/WeightSecurity/",
+        "security/Properties/Verity/",
+        "security/Proofs/Properties/Verity/Soundness.lean",
+        "security/Proofs/Properties/Verity/Coupling.lean",
+        "security/Proofs/Properties/Verity/Subprotocols.lean",
+        "security/Proofs/Properties/Verity/Assembled.lean"
       ],
       "branch_suffixes": [
         "9c4d"
