@@ -46,9 +46,10 @@ What it rewrites, in every tracked text file the map doesn't exclude:
 A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records (the
 move stops on one that would), but for a Lake manifest's: a pin of `tools/verity/check/pins.py` that held the digest of a
 manifest the move rewrites gets its new digest (`repin_manifests`, which `rename.py` runs too), since a move changes a
-manifest only in where its path packages sit, which no pinned output reads. A Lake package's path to another package that named one before the move names one after it, or the move stops (exit 1). An
-old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
-and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
+manifest only in where its path packages sit, which no pinned output reads. A Lake package's path to another package
+that named one before the move names one after it, or the move stops (exit 1). An old path that names something outside
+the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten, and neither is a dotted name that
+only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
