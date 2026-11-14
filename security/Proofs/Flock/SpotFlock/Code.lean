@@ -1126,7 +1126,7 @@ noncomputable def base : Code :=
     parse := parse h
     scopeCheck := fun x => ((parse h x).bind (partition h)).isSome
     partition := partition h
-    stage2 := fun _ => univ
+    secondStage := fun _ => univ
     checked := fun _ _ => []
     rounds := fun _ u => univ.filter fun t =>
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)

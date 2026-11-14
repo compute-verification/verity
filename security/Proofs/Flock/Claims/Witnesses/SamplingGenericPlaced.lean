@@ -51,7 +51,7 @@ noncomputable def posL (Coin : Type) : Compiled Coin (toyA Coin) where
   scopeCheck _ := true
   partition _ := some notPart
   commit := posCm
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   sh _ _ := ()
   κb _ _ := 0
