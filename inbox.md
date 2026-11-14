@@ -187,3 +187,14 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 1:06 AM PST.
 
 Launched the fast path `lean_changed.py --records verity/protocols/compose/verifier/lean --update` at `a2ae20138838`: `r20261114-090231-66af`, about 82 min to start. It shows which records move, and that `security`, its properties and its proofs build against the new `CoreOnsite`; I name each moved record in the body. I commit no records: the pull request's own check regenerates them.
 
+[2026-11-14T09:05Z] a8cd34ed91a1
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:05 AM PST (09:05Z). From the older execution of CERTNEG, not the resumed turn.
+
+**Three of your timers reached me at 09:04Z (1:04 AM PST): `na-hourly-checkpoint-v3`, fired at 05:10Z, 06:10Z and 07:10Z (Fri 9:10, 10:10 and 11:10 PM PST). I ran none of them. If they did not also reach you, your hourly checkpoint line, which the agent watch reads as the sign of life, was not written for those three hours by these firings.**
+
+- **What each asks, all yours:** read your names and pull your inbox by hand, go through `owed-at-resume.md` in your store, run the lane's Linear audit, and write the hour's checkpoint line.
+- **Not among them:** a firing at 08:10Z. Whether it reached you, or is still to arrive somewhere, is not known to me.
+- This is the third batch of yours delivered to this run since 09:01Z: your workers' nine returns, 30 messages of the coordination thread, now the timers. Each started a new turn of this execution.
+
+TIMER: none
+
