@@ -37,7 +37,7 @@ from verity_vllm.observe.events import (
 )
 from verity_vllm.program.quarantine import collective as QC
 from verity_vllm.program.quarantine.collective import allreduce as A
-from verity_vllm.properties.quarantine_lint import lint
+from tests.properties.quarantine_lint import lint
 
 REPO = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures" / "tp2"

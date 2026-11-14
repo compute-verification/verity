@@ -1,4 +1,4 @@
-"""verity_vllm/properties/quarantine_lint.py — PROTECTED (gate G4, admission rules 1–2).  Static purity + identity lint of the
+"""tests/properties/quarantine_lint.py — PROTECTED (gate G4, admission rules 1–2).  Static purity + identity lint of the
 quarantine registry: `lint(root)`.
 
 Rules (AST, no import of the checked modules):
