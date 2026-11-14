@@ -81,10 +81,6 @@ PROTECTED = (
     "verity_vllm/correspondence/runtime.py",
 )
 
-#: A row's Match (`pipeline.row_stages.SKIP`) runs run_config (`pipeline.match`) with `--skip census,...,golden,...`: the modules those
-#: stages would `-m` are statically reachable (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
-RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.properties.golden")
-
 #: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
 #: imports it; circuit-check's discovery (`sidecars.discover`) loads it by path
 SIDECAR = ".circuit-check.py"
@@ -565,10 +561,6 @@ def build(imported: set[str] | None) -> dict:
     static = set(live)
     profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.observe.fold.profiles.")}
     live_sans_profiles = g.closure(roots, skip=profiles_mods)
-    saved = set(g.edges["verity_vllm.pipeline.match"])
-    g.edges["verity_vllm.pipeline.match"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
-    skipped_only = {m for m in live - g.closure(roots) if not is_test_file(g.file_of[m])}
-    g.edges["verity_vllm.pipeline.match"] = saved
     if imported:
         live |= {m for m in imported if g.exists(m)}
     shell_refs = all_shell_refs(g)
@@ -636,7 +628,6 @@ def build(imported: set[str] | None) -> dict:
         "plan_totals": dict(sorted(plan_totals.items())),
         "plan": {"modules": sorted(g.file_of[m] for m in deleted_mods), "tests": dict(sorted(deleted_tests.items())), "broken_imports": broken},
         "keep_stale": sorted(m for m in keep if not g.exists(m) or m in live),
-        "live_only_via_run_config_skipped_stages": {g.file_of[m]: loc(path_of(g.file_of[m])) for m in sorted(skipped_only)},
         "live_only_via_profiles": sorted(rel for rel, e in modules.items() if e["live_only_via_profiles"]),
         "modules": modules,
         "artifacts": None,

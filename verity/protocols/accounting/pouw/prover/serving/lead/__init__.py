@@ -41,7 +41,7 @@ from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 from verity.commitments.merkle import CommitmentDomain
 
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L
-from verity_vllm.errors import Refused
+from verity.errors import Refused
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as F
 from verity.protocols.accounting.pouw.prover.serving.lead import record as R
 
@@ -152,6 +152,13 @@ class LeadRun:
         self.dom = window.words_domain(FORWARD, leaves)
         self.record, self.window, self.m, self.leaves = record, window, m, leaves
         return record, window
+
+    def gemm(self, site: int, x: Any, weight: Any, bias: Any = None, /) -> Any:
+        """`serving.run_matmul` on the lead: ``x`` the arm's `serving.QuantizedRows` and ``weight`` the linear as the
+        backend loaded it (`LeadBackend.load`), its y the arm's pre-bias y (`call`), so ``bias`` is None."""
+        if bias is not None:
+            raise Refused(f"linear {site}: the lead serves the arm's pre-bias y, and the arm adds the bias after it")
+        return self.call(site, weight, x.rows, x.scales)
 
     def call(self, w: int, layer: Any, xq: Any, s_a: Any) -> Any:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] and their scales ``s_a``: the served y. A call off linear

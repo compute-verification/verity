@@ -31,10 +31,6 @@ SPECIAL = [0, 0x80000000, PINF, NINF, 0x7FC00000, NAN, 0xFFFFFFFF, 1, 0x80000001
            0xC2FC0000, 0xC3000000, 0x42FE0000, 0x7F7FFFFF, 0xFF7FFFFF]
 
 
-def _f32(x) -> np.ndarray:
-    return np.asarray(x, dtype=np.float32).view(U)
-
-
 def _bf16_f64(w) -> np.ndarray:
     return (np.asarray(w, dtype=np.uint16).astype(U) << U(16)).view(np.float32).astype(np.float64)
 

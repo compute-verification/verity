@@ -70,7 +70,7 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline import serving_rows as SRW
 
-    monkeypatch.setattr(T, "I", 32)            # SiluMul's in0 (2I words) is one whole SHA-512 block
+    monkeypatch.setattr(T, "INTER", 32)            # SiluMul's in0 (2I words) is one whole SHA-512 block
     c = served_rope.commit(tmp_path)
     (pf := tmp_path / "silu.json").write_text(json.dumps({"templates": [SILU], "law": "subset:1"}))
     r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
