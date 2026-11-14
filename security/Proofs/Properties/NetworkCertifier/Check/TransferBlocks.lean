@@ -39,7 +39,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.NetworkCertifier.Device.Lms
+import Proofs.Properties.Hash.Lms
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
