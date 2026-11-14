@@ -12,7 +12,7 @@ import hashlib
 
 import numpy as np
 import pytest
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import reference as REF
 from verity.circuits.program import Program
@@ -270,7 +270,7 @@ def test_a_window_of_one_wire_read_whole_is_in_the_form_round_two_derives():
 def test_a_window_is_named_by_its_record_less_its_run_fields():
     circuit = _window()
     record = _record(circuit)
-    h = hashlib.sha512(IF.circuit_bytes(IF.circuit_of(record))).hexdigest()
+    h = hashlib.sha512(canonical_json(IF.circuit_of(record))).hexdigest()
     a = WR.replay(circuit, record)
     assert WR.window_digest(record) == h and a.id == f"WindowReplay_v1{{window='{h}'}}"
     assert WR.replay(circuit, {**record, "run": "another run", "context": "other coins"}).id == a.id
