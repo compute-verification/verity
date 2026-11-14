@@ -18,7 +18,7 @@ session input split back into its header and records root (`session_split`), a b
 namespace MemoryChallenger.Properties.SecurityProofs.WipeInputs
 
 open MemoryChallenger Flock
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
 
 theorem beInt_ok {n : Nat} {x : Int} {w : String} {b : ByteArray} (h : StreamedWipe.beInt n x w = .ok b) :
     0 ≤ x ∧ beN n x.toNat w = .ok b := by

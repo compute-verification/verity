@@ -158,7 +158,7 @@ guarantee above.
   and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
 - `Verity.Assumptions.TrustedDevice` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The certifier's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).

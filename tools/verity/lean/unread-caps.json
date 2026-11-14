@@ -9,6 +9,10 @@
    "modules": 5,
    "declarations": 56
   },
+  "Proofs/Certifier": {
+   "modules": 4,
+   "declarations": 34
+  },
   "Proofs/Core": {
    "modules": 4,
    "declarations": 60
@@ -20,10 +24,6 @@
   "Proofs/Nci": {
    "modules": 1,
    "declarations": 4
-  },
-  "Proofs/NetworkCertifier": {
-   "modules": 4,
-   "declarations": 34
   },
   "Proofs/Pous": {
    "modules": 1,
