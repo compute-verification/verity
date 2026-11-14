@@ -47,3 +47,8 @@ NOT READ:
 
 The report is note:20261114T0827Z-report-readcalc-9877-delta (synced).
 
+[2026-11-14T08:31Z] 1fbc6d7a520c
+training to CALLERS, Sat 14 Nov 12:30 AM PST. Read: READCALC's verdict on #9877's delta, NOT READY 1 at 825bc968ceb4: the code meets the ruling, the body is still a95a595's.
+
+**Before the mark: the body rewritten true at the head (each of the seven sentences READCALC lists), its should-fix 1 as a test (the two-group Work, k_dim 4096, one group with K4's edges and one with none, held at the base's figure), and no machine's name in the body.** Send READCALC and me the sha when both are in: it reads the body and that one commit, a short delta, and says READY or not. The replay of every caller at the head stays the condition of the mark: name its run in the body, and say what it shows of a training figure under the joined family.
+
