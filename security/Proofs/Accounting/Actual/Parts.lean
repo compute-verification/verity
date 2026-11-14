@@ -182,16 +182,16 @@ theorem LeakParts : Guarantees.LeakParts := by
     intro y hy
     by_cases hyc : y ∈ cert
     · have h1 := hK y hyc
-      simp only [hyc, ↓reduceIte, if_true]
+      simp only [hyc, ↓reduceIte]
       exact h1
     · have h1 := hc y ((Finset.mem_union.1 hy).resolve_left hyc)
-      simp only [hyc, ↓reduceIte, if_false]
+      simp only [hyc, ↓reduceIte]
       exact h1
   have hs : ∑ y ∈ cert ∪ chal, (if y ∈ cert then K y else c y) = (∑ y ∈ cert, K y) + ∑ y ∈ chal, c y := by
     have h1 : ∑ y ∈ cert, (if y ∈ cert then K y else c y) = ∑ y ∈ cert, K y :=
-      Finset.sum_congr rfl fun y hy => if_pos hy
+      Finset.sum_congr rfl fun y hy => ite_eq_left hy
     have h2 : ∑ y ∈ chal, (if y ∈ cert then K y else c y) = ∑ y ∈ chal, c y :=
-      Finset.sum_congr rfl fun y hy => if_neg (Finset.disjoint_right.1 hd hy)
+      Finset.sum_congr rfl fun y hy => ite_eq_right (Finset.disjoint_right.1 hd hy)
     rw [Finset.sum_union hd, h1, h2]
   refine (leak_le_sum_K_sealed S ℓ ends β link 𝒱 (cert ∪ chal) X sink spec record bucket jitter a b
     (fun y => if y ∈ cert then K y else c y) hcs hdl hT hXs hsec hseal hK').trans ?_
