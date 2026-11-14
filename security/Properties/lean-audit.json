@@ -20,7 +20,7 @@
   "Properties.Pouw.PearlPlusDraw",
   "Properties.Nci",
   "Properties.Nci.Threads",
-  "Properties.Nci.Baseline",
+  "Properties.Nci.Theta",
   "Properties.Nci.Count",
   "Properties.Nci.Desc",
   "Properties.Nci.Desc.Verdict",
@@ -1021,9 +1021,9 @@
   "Definitions.Core",
   "Definitions.Nci",
   "Definitions.Nci.Assumptions.Threads",
-  "Definitions.Nci.Assumptions.Baseline",
+  "Definitions.Nci.Assumptions.Theta",
   "NciCheck.Check",
-  "NciCheck.Baseline",
+  "NciCheck.Theta",
   "NciCheck.Desc",
   "NciCheck.Protocol",
   "NciCheck.DefinitionDigest",
@@ -1465,7 +1465,7 @@
    "type_hash": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
    "unfolded_hash": "82e46455326dfd2612e02bd029951e46f1ade3f9695018a910045c026d1f887f"
   },
-  "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
+  "NciCheck.Properties.SecurityProofs.ThetaProvenance": {
    "type_hash": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
    "unfolded_hash": "eb50dabcdd1724cf78b3d3f5cf2ef23e82bb9a19a32869bf1a8876d2e6cc1a00"
   },
@@ -2184,9 +2184,9 @@
     "Definitions.Core",
     "Definitions.Nci",
     "Definitions.Nci.Assumptions.Threads",
-    "Definitions.Nci.Assumptions.Baseline",
+    "Definitions.Nci.Assumptions.Theta",
     "NciCheck.Check",
-    "NciCheck.Baseline",
+    "NciCheck.Theta",
     "NciCheck.Protocol",
     "NciCheck.Count",
     "Properties.Nci"
@@ -2422,16 +2422,16 @@
     "Mathlib",
     "Definitions.Core",
     "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Baseline",
+    "Definitions.Nci.Assumptions.Theta",
     "Definitions.Nci.Assumptions.Cover",
     "NciCheck.Check",
-    "NciCheck.Baseline",
+    "NciCheck.Theta",
     "NciCheck.Desc",
     "Properties.Nci",
     "Properties.Nci.Desc"
    ],
    "except": [],
-   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Theta, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.NetworkCertifier.Device": {
@@ -12752,8 +12752,8 @@
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
-    "function": "NciCheck.Baseline.evaluate",
+   "NciCheck.Properties.SecurityProofs.ThetaProvenance": {
+    "function": "NciCheck.Theta.evaluate",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.liveIsRun": {
@@ -12813,7 +12813,7 @@
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-    "function": "NciCheck.Baseline.evaluate",
+    "function": "NciCheck.Theta.evaluate",
     "outcome": "accept"
    },
    "Properties.NetworkCertifier.transferBlocksAcceptMeans": {
