@@ -1,0 +1,100 @@
+# The areas of `security/` carry their protocol's name (MEM-152's second half; ARCHITECTURE.md section 7, "The areas
+# of `security/`"), by `python3 tools/move/rename.py --map tools/move/poub_area_map.toml`: PoUB's files leave the
+# accounting area for an area `Poub`, and PoUS's for `Pous/Accounting/`, in each tree of `security/` (`Definitions`,
+# `Properties`, `Proofs` and `Proofs/Properties`), keeping their paths below the area and their file names. Each row
+# renames one module path and one module name, so the file moves and every `import`, Lake root and lock module follows.
+# - PoUB: the remote audit's vocabulary (`Remote*`, `RemoteHeld`), its game (`RateAudit*`), the bandwidth audit's game
+#   and its block tags and sketches (`Bandwidth*`, `Tag`, `Sketch`), and the remote protocol's bound receipts, stacking
+#   and carriers (`BoundReceipt`, `BoundSketch`, `Stacking`, `Carrier`).
+# - PoUS: its responder, wipe, capacity audit, memory lemma and ring window (`Responder`, `Wipe`, `Capacity`, `Memory`,
+#   `Window`).
+# `Accounting` keeps the device model the audits share and their joint guarantee; PoUW's files there are its lane's.
+# Namespaces and declarations keep their names (`Accounting.Remote`, `Accounting.Rate`, `Properties.RemoteAudit`, which
+# `poub_names_map.toml` renames): a module is renamed here, never a declaration, so the locks' records stay.
+
+[words]
+"Definitions.Accounting.Assumptions.RateAudit" = "Definitions.Poub.Assumptions.RateAudit"
+"Definitions.Accounting.Assumptions.Remote" = "Definitions.Poub.Assumptions.Remote"
+"Definitions.Accounting.Assumptions.Stacking" = "Definitions.Poub.Assumptions.Stacking"
+"Definitions.Accounting.Bandwidth" = "Definitions.Poub.Bandwidth"
+"Definitions.Accounting.BoundReceipt" = "Definitions.Poub.BoundReceipt"
+"Definitions.Accounting.BoundSketch" = "Definitions.Poub.BoundSketch"
+"Definitions.Accounting.Capacity" = "Definitions.Pous.Accounting.Capacity"
+"Definitions.Accounting.Carrier" = "Definitions.Poub.Carrier"
+"Definitions.Accounting.Guarantees.Bandwidth" = "Definitions.Poub.Guarantees.Bandwidth"
+"Definitions.Accounting.Guarantees.BoundReceipt" = "Definitions.Poub.Guarantees.BoundReceipt"
+"Definitions.Accounting.Guarantees.BoundSketch" = "Definitions.Poub.Guarantees.BoundSketch"
+"Definitions.Accounting.Guarantees.Capacity" = "Definitions.Pous.Accounting.Guarantees.Capacity"
+"Definitions.Accounting.Guarantees.Memory" = "Definitions.Pous.Accounting.Guarantees.Memory"
+"Definitions.Accounting.Guarantees.RateAudit" = "Definitions.Poub.Guarantees.RateAudit"
+"Definitions.Accounting.Guarantees.Remote" = "Definitions.Poub.Guarantees.Remote"
+"Definitions.Accounting.Guarantees.Responder" = "Definitions.Pous.Accounting.Guarantees.Responder"
+"Definitions.Accounting.Guarantees.Sketch" = "Definitions.Poub.Guarantees.Sketch"
+"Definitions.Accounting.Guarantees.Stacking" = "Definitions.Poub.Guarantees.Stacking"
+"Definitions.Accounting.Guarantees.Tag" = "Definitions.Poub.Guarantees.Tag"
+"Definitions.Accounting.Memory" = "Definitions.Pous.Accounting.Memory"
+"Definitions.Accounting.RateAudit" = "Definitions.Poub.RateAudit"
+"Definitions.Accounting.Remote" = "Definitions.Poub.Remote"
+"Definitions.Accounting.Responder" = "Definitions.Pous.Accounting.Responder"
+"Definitions.Accounting.Tag" = "Definitions.Poub.Tag"
+"Definitions.Accounting.Window" = "Definitions.Pous.Accounting.Window"
+"Definitions.Accounting.Wipe" = "Definitions.Pous.Accounting.Wipe"
+"Definitions/Accounting/Assumptions/RateAudit" = "Definitions/Poub/Assumptions/RateAudit"
+"Definitions/Accounting/Assumptions/Remote" = "Definitions/Poub/Assumptions/Remote"
+"Definitions/Accounting/Assumptions/Stacking" = "Definitions/Poub/Assumptions/Stacking"
+"Definitions/Accounting/Bandwidth" = "Definitions/Poub/Bandwidth"
+"Definitions/Accounting/BoundReceipt" = "Definitions/Poub/BoundReceipt"
+"Definitions/Accounting/BoundSketch" = "Definitions/Poub/BoundSketch"
+"Definitions/Accounting/Capacity" = "Definitions/Pous/Accounting/Capacity"
+"Definitions/Accounting/Carrier" = "Definitions/Poub/Carrier"
+"Definitions/Accounting/Guarantees/Bandwidth" = "Definitions/Poub/Guarantees/Bandwidth"
+"Definitions/Accounting/Guarantees/BoundReceipt" = "Definitions/Poub/Guarantees/BoundReceipt"
+"Definitions/Accounting/Guarantees/BoundSketch" = "Definitions/Poub/Guarantees/BoundSketch"
+"Definitions/Accounting/Guarantees/Capacity" = "Definitions/Pous/Accounting/Guarantees/Capacity"
+"Definitions/Accounting/Guarantees/Memory" = "Definitions/Pous/Accounting/Guarantees/Memory"
+"Definitions/Accounting/Guarantees/RateAudit" = "Definitions/Poub/Guarantees/RateAudit"
+"Definitions/Accounting/Guarantees/Remote" = "Definitions/Poub/Guarantees/Remote"
+"Definitions/Accounting/Guarantees/Responder" = "Definitions/Pous/Accounting/Guarantees/Responder"
+"Definitions/Accounting/Guarantees/Sketch" = "Definitions/Poub/Guarantees/Sketch"
+"Definitions/Accounting/Guarantees/Stacking" = "Definitions/Poub/Guarantees/Stacking"
+"Definitions/Accounting/Guarantees/Tag" = "Definitions/Poub/Guarantees/Tag"
+"Definitions/Accounting/Memory" = "Definitions/Pous/Accounting/Memory"
+"Definitions/Accounting/RateAudit" = "Definitions/Poub/RateAudit"
+"Definitions/Accounting/Remote" = "Definitions/Poub/Remote"
+"Definitions/Accounting/Responder" = "Definitions/Pous/Accounting/Responder"
+"Definitions/Accounting/Tag" = "Definitions/Poub/Tag"
+"Definitions/Accounting/Window" = "Definitions/Pous/Accounting/Window"
+"Definitions/Accounting/Wipe" = "Definitions/Pous/Accounting/Wipe"
+"Proofs.Accounting.Bandwidth" = "Proofs.Poub.Bandwidth"
+"Proofs.Accounting.BoundReceipt" = "Proofs.Poub.BoundReceipt"
+"Proofs.Accounting.Capacity" = "Proofs.Pous.Accounting.Capacity"
+"Proofs.Accounting.Lemmas.Bandwidth" = "Proofs.Poub.Lemmas.Bandwidth"
+"Proofs.Accounting.Lemmas.RateAudit" = "Proofs.Poub.Lemmas.RateAudit"
+"Proofs.Accounting.Lemmas.Remote" = "Proofs.Poub.Lemmas.Remote"
+"Proofs.Accounting.Memory" = "Proofs.Pous.Accounting.Memory"
+"Proofs.Accounting.RateAudit" = "Proofs.Poub.RateAudit"
+"Proofs.Accounting.Remote" = "Proofs.Poub.Remote"
+"Proofs.Accounting.Responder" = "Proofs.Pous.Accounting.Responder"
+"Proofs.Accounting.Stacking" = "Proofs.Poub.Stacking"
+"Proofs.Accounting.Tag" = "Proofs.Poub.Tag"
+"Proofs/Accounting/Bandwidth" = "Proofs/Poub/Bandwidth"
+"Proofs/Accounting/BoundReceipt" = "Proofs/Poub/BoundReceipt"
+"Proofs/Accounting/Capacity" = "Proofs/Pous/Accounting/Capacity"
+"Proofs/Accounting/Lemmas/Bandwidth" = "Proofs/Poub/Lemmas/Bandwidth"
+"Proofs/Accounting/Lemmas/RateAudit" = "Proofs/Poub/Lemmas/RateAudit"
+"Proofs/Accounting/Lemmas/Remote" = "Proofs/Poub/Lemmas/Remote"
+"Proofs/Accounting/Memory" = "Proofs/Pous/Accounting/Memory"
+"Proofs/Accounting/RateAudit" = "Proofs/Poub/RateAudit"
+"Proofs/Accounting/Remote" = "Proofs/Poub/Remote"
+"Proofs/Accounting/Responder" = "Proofs/Pous/Accounting/Responder"
+"Proofs/Accounting/Stacking" = "Proofs/Poub/Stacking"
+"Proofs/Accounting/Tag" = "Proofs/Poub/Tag"
+"Properties.Accounting.Remote" = "Properties.Poub.Remote"
+"Properties/Accounting/Remote" = "Properties/Poub/Remote"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "uv.lock",
+           "**/*.lock", "tools/research/src/research/store/moves.json"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
