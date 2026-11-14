@@ -1,6 +1,6 @@
 """Composites of the B1 (Qwen2.5-1.5B, vLLM eager, `VLLM_BATCH_INVARIANT=1`) typed serving program.
 
-Every composite body is explicit dataflow over one-output primitives (`prims.py`); production kernel
+Every composite body is explicit dataflow over one-output primitives (`prims.py`); served kernel
 granularity does not determine circuit granularity (IR §C.1): a GEMM is one `AmpereBF16TcDot16` gate per
 16-wide accumulator-coordinate transition, an attention head is the FA2 online softmax written out gate
 by gate, an RMSNorm is the Triton kernel's exact reduction tree.

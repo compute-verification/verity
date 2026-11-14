@@ -110,7 +110,7 @@ def ScaledMmNvfp4(B, S, xq, xs, w, ws, alpha):
                        ("alpha", F32)), Tuple(Array(S.K, E2M1), Array(S.K // BLOCK, UE4M3), Array(S.N, BF16))),
            conformance=_GEMM_CONF)
 def QuantLinearNvfp4(B, S, x, g, w, ws, alpha):
-    """The NVFP4 linear on one token row: `Nvfp4ActQuant` then `ScaledMmNvfp4`; returns (x_q, x_s, y), what production
+    """The NVFP4 linear on one token row: `Nvfp4ActQuant` then `ScaledMmNvfp4`; returns (x_q, x_s, y), what serving
     materialises."""
     q = B.call(bind(Nvfp4ActQuant, K=S.K), x, g)
     y = B.call(bind(ScaledMmNvfp4, K=S.K, N=S.N, DOT=S.DOT), q[0], q[1], w, ws, alpha)

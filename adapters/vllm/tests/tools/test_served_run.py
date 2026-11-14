@@ -1,4 +1,4 @@
-"""`run.sh`: a placement value's ``${NAME}`` is filled from the environment the demo is launched in, so the window
+"""`run.sh`: a placement value's ``${NAME}`` is filled from the environment the run is launched in, so the window
 run's gate reaches the challenger host at the address that environment holds; with NAME unset nothing starts and the
 refusal names it, unless a FLAG sets that value; a run whose placement names no such variable reads none."""
 from __future__ import annotations
@@ -58,7 +58,7 @@ def test_without_the_address_the_window_run_starts_nothing_and_names_the_variabl
     got = run(tmp_path, "window", "--dry-run", **env)
     assert (got.returncode, got.stdout) == (2, "")
     assert got.stderr.strip() == ("run.sh: VY_CHALLENGER_1_HOST is unset: placement.toml's H1_GATE names it, so set it "
-                                  "where the demo is launched, or give --env H1_GATE=VALUE")
+                                  "where the run is launched, or give --env H1_GATE=VALUE")
 
 
 def test_a_value_the_flags_set_reads_no_variable_and_the_flags_value_is_the_runs(tmp_path):

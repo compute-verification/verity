@@ -87,3 +87,64 @@ def test_request_lines_bytes_unchanged(tmp_path):
     for name in ("requests.jsonl", "request_users.jsonl"):
         assert (after / name).read_bytes() == (before / name).read_bytes()
     assert A.io_record(after / "requests.jsonl") == A.io_record(before / "requests.jsonl")
+
+
+def test_advice_bytes_unchanged(tmp_path):
+    public = {"compiler": {"name": "i1", "digest": "ef" * 64}, "binding": {"advice": {"root": "01" * 64, "bits": 9}}}
+    data = bytes([0x49, 0x31, 0, 7, 255])
+    doc = {"requests": [{"id": "e0", "rows": [[0, 4]]}], "note": "é"}
+    texts = {"registration.json": json.dumps(public, indent=1) + "\n", "windows.json": json.dumps({"windows": {}}, indent=1)
+             + "\n", "advice.json": json.dumps(doc, separators=(",", ":")) + "\n", "opening.json": json.dumps(doc) + "\n"}
+    before, after = tmp_path / "before", tmp_path / "after"
+    before.mkdir()
+    after.mkdir()
+    (before / "advice.bin").write_bytes(data)
+    M.write(after / "advice.bin", "Advice", data)
+    for name, text in texts.items():
+        (before / name).write_text(text)
+        M.write(after / name, "Advice", text.encode())
+    for name in ("advice.bin", *texts):
+        assert (after / name).read_bytes() == (before / name).read_bytes()
+        assert M.read(after / name, "Advice") == (before / name).read_bytes()
+
+
+def test_pearl_pass_bytes_unchanged(tmp_path):
+    coins = {"source": "live", "seeds": ["0a" * 32], "note": "é"}
+    doc = {"schema": "pearl-served/v1", "window": 0, "passes": [{"pass": 0, "units": 3}], "coins": coins, "ok": True}
+    texts = {"coins.json": json.dumps(coins) + "\n", "served.json": json.dumps(doc, indent=1) + "\n"}
+    for name, text in texts.items():
+        (tmp_path / f"before-{name}").write_text(text)
+        M.write(tmp_path / f"after-{name}", "PearlPass", text.encode())
+        assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
+
+
+def test_h1_registration_bytes_unchanged(tmp_path):
+    w = {"schema": "h1-registration/v1", "window": 0, "prev": None, "roots": {"advice": "02" * 64}, "note": "é"}
+    lines = [{"kind": "declaration", "digest": "03" * 64}, {"window": 0, "kind": "registration",
+                                                             "file": "w0/registration.json", "digest": "04" * 64}]
+    (tmp_path / "before.json").write_text(json.dumps(w, indent=1) + "\n")
+    M.write(tmp_path / "after.json", "H1Registration", (json.dumps(w, indent=1) + "\n").encode())
+    assert (tmp_path / "after.json").read_bytes() == (tmp_path / "before.json").read_bytes()
+    assert json.loads(M.read(tmp_path / "after.json", "H1Registration")) == w
+    for line in lines:
+        with open(tmp_path / "before.jsonl", "a") as fh:
+            fh.write(json.dumps(line) + "\n")
+        M.append(tmp_path / "after.jsonl", "H1Registration", json.dumps(line).encode())
+    assert (tmp_path / "after.jsonl").read_bytes() == (tmp_path / "before.jsonl").read_bytes()
+    assert [json.loads(x) for x in M.lines(tmp_path / "after.jsonl", "H1Registration")] == lines
+
+
+def test_registered_weights_reading_unchanged(tmp_path):
+    reg = {"schema": "verity-vllm/weights-registration/v1", "roots": {"model.embed": "05" * 64}, "note": "é"}
+    (tmp_path / "weights_registration.json").write_text(json.dumps(reg, indent=1))
+    path = tmp_path / "weights_registration.json"
+    assert json.loads(M.read(path, "RegisteredWeights")) == json.loads(path.read_text()) == reg
+
+
+def test_request_program_bytes_unchanged(tmp_path):
+    docs = {"compiled.json": {"refused": "the advice's carry is refused: é"},
+            "manifest.json": {"programs": [{"request": "e0", "descriptor": "descriptor.json.gz"}]}}
+    for name, doc in docs.items():
+        (tmp_path / f"before-{name}").write_text(json.dumps(doc, indent=1) + "\n")
+        M.write(tmp_path / f"after-{name}", "RequestProgram", (json.dumps(doc, indent=1) + "\n").encode())
+        assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
