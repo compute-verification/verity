@@ -177,11 +177,40 @@ def test_the_caches_a_run_found_are_one_cards() -> None:
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
-def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
-    """`price.fp32_loop` is an FP32 add's price in a timed loop, so it is at least the add's price at the card's
-    ceilings: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction."""
+def test_the_default_reading_is_the_higher_ceiling(sku: str) -> None:
+    """`clock.default` names the reading of `readings(card)` every figure of the card is stated at unless it names the
+    other: one of `READINGS`, and the one whose tensor peak is the highest (soundness's ruling on CMP-438), so that a
+    reader that takes `readings(card)[card["clock"]["default"]]` credits no more than either reading would."""
     card = load_card(sku)
-    assert value(card, "price.fp32_loop") >= value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+    peaks = S.readings(card)
+    assert card["clock"]["default"] in S.READINGS, f"set clock.default to one of {S.READINGS}"
+    assert peaks[card["clock"]["default"]] == max(peaks.values())
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_an_fp32_add_at_each_clock_reading(sku: str) -> None:
+    """`price.fp32` is an FP32 add's price at the card's ceilings under each reading of `readings(card)`, keyed by its
+    name: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction, scaled by the reading's tensor
+    peak over the peak at `clock.sm`, to the card's two places. `price.fp32_loop`, a timed loop's, is at least the
+    default's."""
+    card = load_card(sku)
+    add = value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+    peaks = S.readings(card)
+    assert set(card["price"]["fp32"]) == set(S.READINGS)
+    for r, peak in peaks.items():
+        assert abs(value(card, f"price.fp32.{r}") - add * peak / peaks["sm"]) <= Fraction(1, 200), r
+    assert value(card, "price.fp32_loop") >= value(card, f"price.fp32.{card['clock']['default']}")
+
+
+def test_the_h200s_two_readings() -> None:
+    """The H200's FP32 add at both clock readings (CMP-438), pinned so that a change to either is deliberate: 32 with
+    both pipes at 1980 MHz, the default, and 29.58 with the tensor pipe at 1830 MHz, each naming its W1 price."""
+    card = load_card("h200-sxm-141gb")
+    fp32 = card["price"]["fp32"]
+    assert card["clock"]["default"] == "sm"
+    assert {r: value(fp32, r) for r in S.READINGS} == {"tensor": Fraction("29.58"), "sm": 32}
+    assert "Pouw.PearlC.W1.W1Prices.h100." in fp32["sm"]["source"]
+    assert "Pouw.PearlC.W1.W1Prices.h100Tensor." in fp32["tensor"]["source"]
 
 
 @pytest.mark.parametrize("sku", skus("host"))
@@ -422,6 +451,9 @@ def test_a_directory_without_the_card_names_itself(tmp_path) -> None:
     ('sku = "y"\nkind = "gpu"\n', "set it to the file's name"),
     ('sku = "x"\n', "kind = None; set it to one of"),
     ('sku = "x"\nkind = "cpu"\n', "kind = 'cpu'"),
+    ('sku = "x"\nkind = "gpu"\n', re.escape("x.toml: clock.default = None; set it to the reading its figures are "
+                                            "stated at, one of ('tensor', 'sm')")),
+    ('sku = "x"\nkind = "gpu"\n[clock]\ndefault = "boost"\n', re.escape("x.toml: clock.default = 'boost'")),
 ])
 def test_an_unsourced_or_unmarked_number_is_refused(tmp_path, monkeypatch, body: str, refusal: str) -> None:
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
