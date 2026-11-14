@@ -1,0 +1,26 @@
+# The retired word "firewall" in the ZK server's commands and variables, in the Glossary's words: what
+# `tools/move/rename.py --map tools/move/lean_words_zk_server_commands_map.toml` renames. GLOSSARY.md: flock-firewall,
+# FC_FIREWALL*, until renamed -> the ZK server. `flock-firewall` -> `flock-zk-server`, `core-firewall` ->
+# `core-zk-server` (with `-difftest`), `firewall-honest-difftest` -> `zk-server-honest-difftest`, `FC_FIREWALL` and
+# `FC_FIREWALL_*` -> `FC_ZK_SERVER` and `FC_ZK_SERVER_*`, suffix kept, and the recursion's Lake package `core_firewall`
+# -> `core_zk_server`. None of them names a Lean declaration or module, so `move_check.py` certifies none of it: it is
+# an ordinary change under the whole check. It runs after `lean_words_zk_server_layout_map.toml`, on the commit that
+# map makes. The distribution `verity-core-firewall` keeps its name ([keep]): its name is uv.lock's.
+
+[words]
+"firewall-honest-difftest" = "zk-server-honest-difftest"
+"flock-firewall" = "flock-zk-server"
+"core-firewall" = "core-zk-server"
+"core_firewall" = "core_zk_server"
+"FC_FIREWALL" = "FC_ZK_SERVER"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "GLOSSARY.md", ".agents/skills/friction/SKILL.md"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
+            'note:[\w./-]+',
+            'art:[0-9a-f]+',
+            'cursor/[\w./-]+',
+            'lanes/[\w.-]+',
+            'verity-core-firewall']

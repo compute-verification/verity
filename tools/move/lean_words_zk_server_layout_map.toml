@@ -1,0 +1,33 @@
+# The recursion's ZK server package's directory: what `tools/move/layout.py --map
+# tools/move/lean_words_zk_server_layout_map.toml` moves and rewrites. It runs after `lean_words_firewall_map.toml`, on
+# the commit that map makes, which renames the package's library, modules and binaries and leaves its directory.
+#
+# - `verity/protocols/proofs/recursion/verifier/firewall/` becomes `.../recursion/verifier/zk_server/`, whole and laid
+#   out as it was: its Lake package (`core_zk_server`), its Python test suite (the distribution `verity-core-firewall`,
+#   which keeps its name) and its lock. The new directory is a sibling of the old, so the package's paths to the
+#   packages it requires stay as they are.
+# - Its one Python module path follows it ([modules]); the suite's distribution is `package = false`, so no import
+#   statement names it. No directory is split.
+# Nothing is edited or deleted, and no file is added.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/proofs/recursion/verifier/firewall/" = "verity/protocols/proofs/recursion/verifier/zk_server/"
+
+[modules]
+"verity.protocols.proofs.recursion.verifier.firewall" = "verity.protocols.proofs.recursion.verifier.zk_server"
+
+[retired]
+paths = ["verity/protocols/proofs/recursion/verifier/firewall/"]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/lake-manifest.json"]
