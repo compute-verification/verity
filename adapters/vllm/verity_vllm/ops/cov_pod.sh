@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The coverage campaign's pod-side runner.  One configuration = one cell of the coverage table:
-# GPU phase (capture / control / census / nonint) then the CPU phase (resolve … tier A k=3 … gates + card) of
+# GPU phase (capture / control) then the CPU phase (resolve … tier A k=3 … gates + card) of
 # verity_vllm.pipeline.match, all on the pod's container disk (/workspace: /vol can be over quota, and the laptop stays a thin
 # client), then a SMALL bundle (json reports, cards, logs, tokens -- no snapshots, no instances.jsonl) at
 # /workspace/cp/cov/bundles/<run>.small.tgz for the laptop to pull.  The frozen candidate (program.json / instances.jsonl /
@@ -9,8 +9,7 @@
 #   cp verity_vllm/ops/cov_pod.sh /workspace/cp/ && COV_REPO=<tree>/adapters/vllm nohup bash /workspace/cp/cov_pod.sh run <case> <workload-name> [driver args…] > … &
 #   bash /workspace/cp/cov_pod.sh gpu <case> <workload-name> [driver args…]   # GPU phase only; COV_RUN_SUFFIX appends to the run name
 #   bash /workspace/cp/cov_pod.sh cpu <run-name> [driver args…]     # CPU phase again over an existing capture
-#   bash /workspace/cp/cov_pod.sh regate <run-name> [--census]      # cheap check stages (+ census GPU stage) + gates again over an existing capture
-#   bash /workspace/cp/cov_pod.sh holdouts <run-name> <replicate-run>...  # replicate runs as G7 holdouts (holdouts.json) + gates again
+#   bash /workspace/cp/cov_pod.sh regate <run-name>                 # gates again over an existing capture
 #   bash /workspace/cp/cov_pod.sh bundle <run-name>                 # small bundle only
 #   bash /workspace/cp/cov_pod.sh queue <case> <name1> <name2> …    # run several workloads of one case serially (GPU), CPU phases in
 #                                                                   # the background (at most COV_CPU_PAR at a time, default 2)
@@ -28,7 +27,7 @@ PY312=/workspace/venv-py312/bin/python; PY311=/workspace/venv-cu129/bin/python
 BASE=/workspace/cp/cov; OUT=$BASE/runs; CARDS=$BASE/cards; LOGS=$BASE/logs; BUNDLES=$BASE/bundles
 mkdir -p "$OUT" "$CARDS" "$LOGS" "$BUNDLES"
 K=${COV_K:-3}; PAR=${COV_PAR:-8}; SNAP_MB=${COV_SNAP_MB:-256}; SNAP_MB_MOE=${COV_SNAP_MB_MOE:-24}; CPU_PAR=${COV_CPU_PAR:-2}
-# COV_VOL: the durable copy of the small bundle.  Default = the campaign's canonical /vol/cp/cov; a rerun of gates / holdouts over a copy
+# COV_VOL: the durable copy of the small bundle.  Default = the campaign's canonical /vol/cp/cov; a rerun of gates over a copy
 # of a canonical record sets COV_VOL=/vol/cp/<name>, so a recheck of a copy never publishes over the canonical bundle.
 VOL=${COV_VOL:-/vol/cp/cov}
 say() { echo "[cov_pod] $(date -u +%FT%TZ) $*"; }
@@ -69,7 +68,7 @@ snap_args() {  # <workload-name>: raise the snapshot cap for batched / long pref
 }
 
 bundle() {  # <run-name>: json reports + cards + logs + tokens (no values/, traces/, program.json, instances.jsonl, accesses)
-  # wiring.json (≈ 5 KB, G5's operand-read evidence) is in the bundle: without it a G7 holdouts regate over a compact primary re-derives
+  # wiring.json (≈ 5 KB, G5's operand-read evidence) is in the bundle: without it a regate over a compact primary re-derives
   # G5 as `skipped: wiring.json missing`, and the recorded G5 pass is not reproducible from the retained artefacts.
   local n=$1
   [ -d "$OUT/$n" ] || { say "bundle $n: no run dir"; return 1; }
@@ -136,17 +135,11 @@ gpu_phase() {  # <case> <workload-name> [driver args…] -> run name on stdout
   return $rc
 }
 
-regate() {  # <run-name> [--census]: re-run the cheap check stages (+ the census GPU stage with --census) over an existing capture, then gates
-  local n=$1; shift
+regate() {  # <run-name>: re-run the gates over an existing capture
+  local n=$1
   [ -f "$OUT/$n/run.json" ] || { say "regate $n: no run.json"; return 1; }
   inherit_quarantine "$n"
-  if [ "${1:-}" = "--census" ]; then
-    say "regate $n: census (GPU) again"
-    # VERITY_CENSUS_GPU_UTIL: let the census share the GPU with a queue's engine (the census re-run must not wait for the queue)
-    VERITY_CENSUS_GPU_UTIL=${COV_REGATE_GPU_UTIL:-0.12} drv --run-dir "$OUT/$n" --phase gpu --skip capture,control,nonint \
-        > "$LOGS/$n.regate-census.log" 2>&1 || say "regate $n: census rc=$?"
-  fi
-  say "regate $n: census_reconcile + golden + gates"
+  say "regate $n: gates"
   drv --run-dir "$OUT/$n" --phase cpu --skip resolve,nonint_compare,compare,fold,fold_2,fold_other,root_policy,wiring,replay \
       > "$LOGS/$n.regate.log" 2>&1
   local rc=$?
@@ -155,31 +148,12 @@ regate() {  # <run-name> [--census]: re-run the cheap check stages (+ the census
   return $rc
 }
 
-holdouts() {  # <primary-run> <holdout-run>...: the replicate runs' gates.json assembled into the primary's holdouts.json (G7), then gates again.
-  # Campaign holdouts = the campaign's replicate workloads (same seeded length samples, other prompts / request ids; generated apart from
-  # the runs they hold out).  They cover fresh token values, not fresh lengths -- the card says so (holdouts.json lists the runs).
-  local n=$1; shift
-  local hd="$OUT/$n/holdouts"; mkdir -p "$hd"
-  for h in "$@"; do
-    [ -f "$OUT/$h/gates.json" ] || { say "holdouts $n: $h has no gates.json"; return 1; }
-    ln -sfn "$OUT/$h" "$hd/$h"
-  done
-  "${PY312%/*}/verity-vllm" holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
-  drv --run-dir "$OUT/$n" --phase cpu --skip resolve,census_reconcile,nonint_compare,compare,fold,fold_2,fold_other,root_policy,golden,wiring,replay \
-      >> "$LOGS/$n.holdouts.log" 2>&1
-  local rc=$?
-  say "holdouts $n ($*) rc=$rc  $($PY312 -c "import json;g=json.load(open('$OUT/$n/gates.json'));print(g['verdict'], {k:v.get('status') for k,v in g['gates'].items()})" 2>/dev/null)"
-  bundle "$n"
-  return $rc
-}
-
 MODE=${1:-run}; shift || true
 case "$MODE" in
   run)    case_=$1; wl=$2; shift 2; gpu_phase "$case_" "$wl" "$@" && cpu_phase "$case_-$wl${COV_RUN_SUFFIX:-}" ;;
-  gpu)    case_=$1; wl=$2; shift 2; gpu_phase "$case_" "$wl" "$@" ;;             # GPU phase only (capture / control / census / nonint)
+  gpu)    case_=$1; wl=$2; shift 2; gpu_phase "$case_" "$wl" "$@" ;;             # GPU phase only (capture / control)
   cpu)    n=$1; shift; cpu_phase "$n" "$@" ;;
-  regate) n=$1; shift; regate "$n" "$@" ;;
-  holdouts) n=$1; shift; holdouts "$n" "$@" ;;
+  regate) regate "$1" ;;
   bundle) bundle "$1" ;;
   queue)  case_=$1; shift
           for wl in "$@"; do

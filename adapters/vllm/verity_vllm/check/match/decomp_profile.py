@@ -15,7 +15,7 @@ from verity_vllm.check.match import program_compare as C
 # (never into it: the X-09 document's bytes are the record's) with, per request, wall seconds and counters for every phase of the leg --
 # projection build, shape, component load, compare_steps (sequence criterion), and the DAG diagnostic (live_cone A / P, dag_hashes A / P,
 # multiset diff) -- plus the sizes that drive them (instances, live-cone sizes, operand runs expanded, per-run fallbacks).  Inert unset.
-# `X09_FORCE_DAG=1` (diagnostic ONLY, never on a row of record) runs the DAG diagnostic even when the sequence criterion held, so the
+# `X09_FORCE_DAG=1` (diagnostic ONLY, never on a workload of record) runs the DAG diagnostic even when the sequence criterion held, so the
 # DAG path's cost can be measured on a PASS record; the verdict fields are computed exactly as before (`canonical_equal` = the same
 # expression), the extra `dag_multiset*` fields are then present where the record would have omitted them.
 PROFILE_ENV, FORCE_DAG_ENV = "X09_PROFILE_OUT", "X09_FORCE_DAG"

@@ -24,7 +24,7 @@ they abort:
   decision doesn't read it and the escapes are on accepted runs, `keep` folds into a prover that refuses at the last
   round (`FlockKSAcc`).
 * **One wait over samples** (`oneWaitD`): `joint_acc_le` at `drawGame`, one coin node flipping a run's coins with its
-  abort coins, at any run law, as `oneWait_of_tableBound` is at `runGame`; at the runs as they abort, with `ColsOk` and
+  abort coins, at any run sampling design, as `oneWait_of_tableBound` is at `runGame`; at the runs as they abort, with `ColsOk` and
   `ConflictTied` at the prover's runs, it gives `OneWaitAbort` (`oneWaitAbort_of_tableBound`), the conflict an escape
   at round `0` of weight `k` (`EscapesD.addFork`).
 * **KS** (`KSAbort_of_oneWaitAbort`): `PrBadAbort_trunc` and `EscapesD.le`, as `KS_of_oneWait`, at Flock's own `κ` and
@@ -44,7 +44,7 @@ section DrawGame
 
 variable {Dr : Type} [Fintype Dr] [Nonempty Dr]
 
-/-- **Samples' law as a game**: one coin node, a sample. -/
+/-- **Samples' sampling design as a game**: one coin node, a sample. -/
 def drawGame (Dr : Type) [Fintype Dr] [Nonempty Dr] : Game Dr := .coin Dr .ret
 
 /-- The game's one strategy. -/
@@ -72,7 +72,7 @@ theorem accPrD_eq (tr : Dr → Transcript) : accPrD tr = expect (ind (AccD tr)) 
   rw [expect_drawGame]
   exact Claims.Bridge.Pr_eq_Ex _
 
-/-- **`k` accepted samples that fail `G`**, on the samples' law. -/
+/-- **`k` accepted samples that fail `G`**, on the samples' sampling design. -/
 theorem accFailD_eq (tr : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) :
     accFailD tr k G = expectN (drawGame Dr) (drawS Dr) k fun bs =>
       (bs.map (ind (AccD tr))).prod * ind (fun bs => ¬ G (bs.map fun d => (tr d).seen)) bs := by
@@ -126,7 +126,7 @@ theorem firstTable_opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg)
       unfold opD
       simp only [show (tr b).out = .acc from hacc b hb, ↓reduceIte]]
 
-/-- **One wait's bound over samples, from the table's bound**: at a run law `tr` over finite samples, where the statement
+/-- **One wait's bound over samples, from the table's bound**: at a run sampling design `tr` over finite samples, where the statement
 has one table, `Ok` admits `0` and every column an accepted run opens, and every table of `Ok` columns that does not
 extract leaves accepted runs at least `ε − ε_c` off it, `ε · Q/ε^k ≤ ε_c + N·ε/(e·k) + √(k · Pr[conflict])`. -/
 theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}

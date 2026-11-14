@@ -143,15 +143,6 @@ def plane_copies(d: dict) -> list[dict]:
     return copies if copies else []
 
 
-def described(pi: ProgramIndex, r: dict) -> dict:
-    """`pi.describe(r)` of a row the caller took from the population (a picked VU, a row a request's replay needs), which holds
-    only modelled rows."""
-    d = pi.describe(r)
-    if d is None:
-        raise TypeError(f"row {r.get('i')} ({RM.spec_family(r['spec'])}) is unmodelled")
-    return d
-
-
 def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
     """``ProgramIndex(inst, **kw)``: the one of ``reuse`` built from this very document (no reader modifies one,
     `instances_file.read_instances`) with these same arguments (`index_key`), else a new one -- one index of a GLM-5.3 TP8 rank
@@ -387,7 +378,8 @@ class ProgramIndex:
         `[k]` name index when the Program names one; a violation yields members [] + `plane_error` -> counted by NAME as a mapping failure
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
-        g = self._moe_geo[s][mod]                 # there: the kind that sends the row here put its module in its step's geometry
+        geometry = self._moe_geo[s].get(mod)      # a module its step's geometry does not hold has no router rows: M = TOPK = 0, named below
+        g = geometry if geometry else {}
         layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))

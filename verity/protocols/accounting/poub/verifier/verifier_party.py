@@ -1,5 +1,5 @@
 """The PoUB session's verifier and challenger as a party of their own, so they run on a host the developer
-doesn't control (the challenger host, `trusted-host`) while the prover stays on its node.
+doesn't control (the challenger host, `trusted-device`) while the prover stays on its node.
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
@@ -38,7 +38,7 @@ from . import coins as C
 from . import period as P
 
 MODULE = "verity.protocols.accounting.poub.verifier.verifier_party"
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 
 
 def _send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
@@ -143,7 +143,7 @@ def side_of(period: Mapping[str, Any], node: str) -> Side:
 
 
 def placement(node: str, host: str) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-host`'s premise holds: that the verifier and its challenger
+    """Which host ran each party, and whether `trusted-device`'s premise holds: that the verifier and its challenger
     ran on a machine the developer doesn't control, which is never the developer's node."""
     return {"parties": {"challenger": host, "prover": node, "verifier": host},
             PREMISE: (f"holds: the verifier and its challenger ran on {host}, not the developer's {node}" if host != node else

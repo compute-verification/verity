@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "../gpu_kit/bench.cuh"
+#include "../../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/bench.cuh"
 
 struct OpClk {
   long long cyc;  // the block's SM cycles from OP_BEGIN to OP_END (its slowest warp: both sides hold a barrier)

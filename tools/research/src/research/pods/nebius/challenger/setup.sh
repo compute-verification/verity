@@ -1,5 +1,5 @@
 #!/bin/bash
-# vy-challenger-setup GATE_KEYS [--lock]: the auditor host's accounts and state (vy-challenger-1; RT4-INT-17, -18), as root, safe to
+# vy-challenger-setup GATE_KEYS [--lock]: the auditor device's accounts and state (vy-challenger-1; RT4-INT-17, -18), as root, safe to
 # rerun. verity/protocols/compose/device/live_challenger/auditor.py says what runs there and why.
 #
 #   - `auditor`: a system user with no login, home /var/lib/vy-challenger (0700, so research can't enter it): the challenger key

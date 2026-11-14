@@ -20,7 +20,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from glm53 import DEEPGEMM, FADD_READINGS, SCHEME, Linear, gamma, scheme
+from verity.protocols.proofs.spot.prover.cost.glm53 import DEEPGEMM, FADD_READINGS, SCHEME, Linear, gamma, scheme
 
 #: the checkpoint's config.json, the fields the linears read
 CONFIG = {"H": 2048, "NH": 32, "NKV": 8, "HD": 64, "I": 8192, "L": 16}
@@ -42,7 +42,7 @@ def linears(c: dict = CONFIG) -> list[Linear]:
 def table(name: str = SCHEME) -> list[dict]:
     """Every linear (`linears`) with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the
     record's) and, in the domain, γ at each FADD reading."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     rows = []
     for i, lin in enumerate(linears()):

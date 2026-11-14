@@ -144,7 +144,7 @@ def test_a_keep_names_the_program_digest_of_its_bundle_s_commit_arguments_and_no
     assert json.loads((CPU.slim_path(out, 1) / CPU.SLIM_DOC).read_text()) == doc
 
 
-def test_a_slim_tree_of_a_tensor_the_tree_holds_no_salt_key_for_raises_as_on_main() -> None:
+def test_a_slim_tree_of_a_tensor_the_tree_holds_no_salt_key_for_raises() -> None:
     """`keep` names only tensors that opened under the tree, so each has its key; a tree that carries none for one is not refused by
     name here, as it is where a root is folded (`tensor_root_of`)."""
     with pytest.raises(AttributeError):

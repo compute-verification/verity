@@ -412,7 +412,7 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
         x = sha512_row_v2_digest(row_bytes(out, 16), 64)
         assert bcs[i][2] == L.INST.commit_string(L.KEY, x, got["salts"]["o0"][i]), (m, i)
     for coins in ((), ("--coins", "tree")):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit", "--circuit",
                             str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), *coins], capture_output=True, text=True)
         assert p.returncode == 0, p.stdout + p.stderr
         assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want["seed"], (m, coins)
@@ -453,7 +453,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
         return tmp_path / sub
 
     def statement(d, own):
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit", "--circuit",
                                str(d / "circuit.txt"), "--public", str(d / "pub.bin"), "--public-inputs", str(own)], capture_output=True, text=True)
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)

@@ -4,7 +4,7 @@
 
 The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs
-(`verity.protocols.spot.verifier.one_stage`).
+(`verity.protocols.proofs.spot.verifier.one_stage`).
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
@@ -224,7 +224,7 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
     keys: dict[str, str] = {}
     for n in sorted(keep_ & at.keys(), key=at.__getitem__):
-        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here, as on main
+        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here
         keys[str(at[n])] = ks.hex()
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
         "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
@@ -487,7 +487,7 @@ class WorkerPeakOption(Protocol):
 
 
 def worker_peak(o: WorkerPeakOption) -> int:
-    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+    from verity_vllm.engine.profiles.admission_calibration import CALIBRATION
 
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 
@@ -613,10 +613,10 @@ def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     want = slim["picks"]
     if got == want:
         return
-    draw = getattr(s.args, "replay_draw", None)
+    design = getattr(s.args, "replay_draw", None)
     seen = (f"reads what the keep does not hold ({why})" if why else
-            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
-    raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
+            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} sampled)")
+    raise Refused(f"this code's sample from the keep {seen}" + (f"; the record samples by {design!r}" if design else ""))
 
 
 def replay(o: Options) -> bool | None:

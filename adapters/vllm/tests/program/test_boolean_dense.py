@@ -20,10 +20,10 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
 from verity.definitions.registry import b1
 from verity.definitions.registry import boolean_dense as BD
 from verity.definitions.registry import dense as D
-from verity.circuits.silicon import fp
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

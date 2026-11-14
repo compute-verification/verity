@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.DecodeL
 public import Proofs.Flock.Soundness.Audit.FlockLink
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
@@ -23,7 +24,9 @@ named).
   a fresh session; if the session accepts, `k` waits of at most `Rw` reruns each for a rerun in which
   the session accepts. It reads what the extraction from the runs found reads at `c` (`rdTL`), and
   costs `t'` per run it plays (`cTL`), `t'·(1 + k)` in expectation, `t'` one run's SHA-512 evaluations: the
-  prover's and the verifier's, whose verdict the trial reads.
+  prover's and the verifier's, whose verdict the trial reads. The cost counts SHA-512 calls only. The message a
+  reading is opened from is the radius decoder's (`candL`): the decoder hashes nothing, and its running time is not
+  bounded by that count.
 * **The value layer** (`XplurL`) is the plurality of the trial's single readings at each commit
   string. It is a function of the registration state.
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions
@@ -80,13 +83,24 @@ noncomputable abbrev tabExtL (ω : L.Ω) (u : Fin n) (bs : List (List (OutCL �
     ((stratωL H E Lf plan R τ ω).1 (tab (L.draw ω) R u)) bs
 
 open Classical in
-/-- The message the extraction settles on for unit `u`'s table: a close message packing a
-satisfying witness, when there is one. -/
+/-- **The message the extraction settles on for unit `u`'s table**: the first message the radius decoder lists at the
+extracted table (`decodeL`: `Claims.GS.flockDecodeR` at the table's columns written out) that is close to the table
+and packs a satisfying witness. It is a search of the decoder's list: among the close messages none is chosen. The
+decoder lists every close message (`mem_decodeL_of_close`), so there is a candidate exactly when the table is
+committed (`candL_of_committed`, `candL_spec`). The decoder hashes nothing. Its list is defined and not computed: the
+decoder reads a message off its polynomials by the inverse of the novel-basis coefficient map
+(`Claims.GS.novelInvEquiv`), over the novel-basis polynomials (`xP`), and each of the two is taken by choice, as is
+`ofRows` of its code (`Claims.Flock.levelZero`). -/
 noncomputable def candL (ω : L.Ω) (u : Fin n) (bs : List (List (OutCL 𝔽 D Sl))) :
     Option (Message 𝔽 (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
       (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols) :=
-  if h : Committed execArith (Partition.tabOf plan tab (L.draw ω) R u).S (Partition.tabOf plan tab (L.draw ω) R u).sch
-      (tabExtL H E Lf plan tab R τ ω u bs) then some (Classical.choose h) else none
+  (decodeL (Partition.tabOf plan tab (L.draw ω) R u).hsch (tabExtL H E Lf plan tab R τ ω u bs)).find? fun M =>
+    decide (Model.Close (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.radius
+        (asTable (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs))
+        (encode execArith (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logLen M) ∧
+      (Partition.tabOf plan tab (L.draw ω) R u).S.Satisfies (witnessOf execArith
+        (Partition.tabOf plan tab (L.draw ω) R u).S.m (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
+        (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols M))
 
 /-- An extraction opens `c` to value `v`, with the opening `o`: a sampled proof block that reads `c` opens it
 so from the message its table settles on. -/
@@ -126,21 +140,39 @@ noncomputable def rdTL (c : vb.Pos) (e : TrialOutL L D Sl) : Finset vb.Val :=
 open Classical in
 /-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. `t'` is one run's SHA-512
 evaluations, the prover's and the verifier's: the trial reads each run's verdict, and its extraction (`extractTableSL`)
-reads only openings the accepted runs' verification checked. -/
+reads only openings the accepted runs' verification checked. The cost is a count of SHA-512 calls and of nothing else:
+the radius decoder the trial's readings go through (`candL`) hashes nothing, and its running time is not bounded by
+this count. -/
 noncomputable def cTL (t' : ℝ) (e : TrialOutL L D Sl) : ℝ :=
   t' * (1 + if accωL plan R e.1 e.2.1 then (e.2.2.map (waitCost (accωL plan R e.1))).sum else 0)
 
 open Classical in
-/-- An opening a trial found for value `v` at `c`, when it found one. -/
-noncomputable def opOfVL (c : vb.Pos) (e : TrialOutL L D Sl) (v : vb.Val) : vb.Opening :=
-  Classical.epsilon fun o => accωL plan R e.1 e.2.1 ∧
-    ∃ bs, firsts (accωL plan R e.1) e.2.2 = some bs ∧ OpensAtL P H E Lf plan tab vb R τ e.1 bs c v o
+/-- **The openings of `c` after an extraction from the reruns `bs`**, each with its value: one for each sampled proof
+block that reads `c` and whose table settles on a message (`candL`), in the blocks' order. -/
+noncomputable def opensL (ω : L.Ω) (bs : List (List (OutCL 𝔽 D Sl))) (c : vb.Pos) : List (vb.Val × vb.Opening) :=
+  (List.finRange n).filterMap fun u =>
+    if u ∈ L.draw ω ∧ P.Reads plan tab vb u c then
+      (candL H E Lf plan tab R τ ω u bs).map fun M =>
+        (vb.val (vb.opening (L.draw ω) R u M c), vb.opening (L.draw ω) R u M c)
+    else none
 
-/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
-the trials its cost charges. -/
+open Classical in
+/-- **The openings a trial found at `c`**, each with its value: nothing unless the fresh session accepts and every wait
+finds an accepted rerun; then the openings of the extraction from those reruns (`opensL`). The list the finder's
+output searches. -/
+noncomputable def opsTL (c : vb.Pos) (e : TrialOutL L D Sl) : List (vb.Val × vb.Opening) :=
+  if accωL plan R e.1 e.2.1 then
+    (firsts (accωL plan R e.1) e.2.2).elim [] fun bs => opensL P H E Lf plan tab vb R τ e.1 bs c
+  else []
+
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOfOps`), from
+the trials its cost charges. It searches the openings those trials found (`opsTL`) and chooses none; the message each
+opening is of is the first the radius decoder lists that fits the extracted table (`candL`), a search too, of a list
+whose definition takes its inverses by choice. The finder's cost (`cTL`) counts SHA-512 calls: the decoder hashes
+nothing, and its running time is not bounded by that count. -/
 noncomputable def outCL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl)) :
     Option (List UInt8 × List UInt8) :=
-  outOf (rdTL P H E Lf plan tab vb R τ c) (opOfVL P H E Lf plan tab vb R τ c) vb.collide x
+  outOfOps (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -158,6 +190,35 @@ noncomputable def XplurL (k Rw : ℕ) : Fin C.N → Bool :=
 
 /-! ## Openings, and the finder's output -/
 
+/-- **The candidate fits the table**: it is close to the extracted table and packs a satisfying witness. -/
+theorem candL_spec {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
+    {M : Message 𝔽 (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
+      (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols}
+    (h : candL H E Lf plan tab R τ ω u bs = some M) :
+    Model.Close (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.radius
+        (asTable (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs))
+        (encode execArith (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logLen M) ∧
+      (Partition.tabOf plan tab (L.draw ω) R u).S.Satisfies (witnessOf execArith
+        (Partition.tabOf plan tab (L.draw ω) R u).S.m (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
+        (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols M) := by
+  unfold candL at h
+  simpa only [decide_eq_true_eq] using List.find?_some h
+
+/-- **A committed table has a candidate**: the radius decoder lists the close message that packs a satisfying
+witness (`mem_decodeL_of_close`), so the search finds one that fits. -/
+theorem candL_of_committed {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
+    (hc : Committed execArith (Partition.tabOf plan tab (L.draw ω) R u).S
+      (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs)) :
+    ∃ M, candL H E Lf plan tab R τ ω u bs = some M := by
+  obtain ⟨M, hM, hS⟩ := hc
+  have hmem := mem_decodeL_of_close (Partition.tabOf plan tab (L.draw ω) R u).hsch
+    (tabExtL H E Lf plan tab R τ ω u bs) M hM
+  have hsome : (candL H E Lf plan tab R τ ω u bs).isSome := by
+    unfold candL
+    rw [List.find?_isSome]
+    exact ⟨M, hmem, by simpa only [decide_eq_true_eq] using And.intro hM hS⟩
+  exact Option.isSome_iff_exists.1 hsome
+
 theorem cand_satL {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
     {M : Message 𝔽 (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
       (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols}
@@ -165,10 +226,7 @@ theorem cand_satL {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
     (Partition.tabOf plan tab (L.draw ω) R u).S.Satisfies (witnessOf execArith
       (Partition.tabOf plan tab (L.draw ω) R u).S.m (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
       (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols M) := by
-  unfold candL at h
-  split_ifs at h with hc
-  obtain rfl := Option.some.inj h
-  exact (Classical.choose_spec hc).2
+  exact (candL_spec H E Lf plan tab R τ h).2
 
 theorem opensAt_specL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.Pos} {v : vb.Val}
     {o : vb.Opening} (h : OpensAtL P H E Lf plan tab vb R τ ω bs c v o) :
@@ -179,31 +237,69 @@ theorem opensAt_specL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.P
   rw [hgc] at h1
   exact h1
 
-theorem opOfVL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
-    (hv : v ∈ rdTL P H E Lf plan tab vb R τ c e) :
-    vb.com (opOfVL P H E Lf plan tab vb R τ c e v) = vb.cs R c ∧
-      vb.val (opOfVL P H E Lf plan tab vb R τ c e v) = v := by
+/-- The listed openings of `c` are the extraction's openings of it. -/
+theorem mem_opensL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.Pos} {p : vb.Val × vb.Opening} :
+    p ∈ opensL P H E Lf plan tab vb R τ ω bs c ↔ OpensAtL P H E Lf plan tab vb R τ ω bs c p.1 p.2 := by
+  classical
+  unfold opensL OpensAtL
+  rw [List.mem_filterMap]
+  constructor
+  · rintro ⟨u, -, hu⟩
+    by_cases h : u ∈ L.draw ω ∧ P.Reads plan tab vb u c
+    · rw [ite_eq_left h] at hu
+      obtain ⟨M, hM, rfl⟩ := Option.map_eq_some_iff.1 hu
+      exact ⟨u, h.1, h.2, M, hM, rfl, rfl⟩
+    · rw [ite_eq_right h] at hu
+      exact absurd hu (by simp)
+  · rintro ⟨u, hu, hr, M, hM, ho, hv⟩
+    refine ⟨u, List.mem_finRange u, ?_⟩
+    rw [ite_eq_left ⟨hu, hr⟩, hM]
+    show some (vb.val (vb.opening (L.draw ω) R u M c), vb.opening (L.draw ω) R u M c) = some p
+    rw [← ho, hv]
+
+/-- Every opening a trial lists at `c` is an opening of `c`'s registered commit string, of the value it is listed
+with. -/
+theorem opsTL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {p : vb.Val × vb.Opening}
+    (hp : p ∈ opsTL P H E Lf plan tab vb R τ c e) : vb.com p.2 = vb.cs R c ∧ vb.val p.2 = p.1 := by
+  classical
+  unfold opsTL at hp
+  by_cases hacc : accωL plan R e.1 e.2.1
+  · rw [ite_eq_left hacc] at hp
+    cases hf : firsts (accωL plan R e.1) e.2.2 with
+    | none => simp [hf] at hp
+    | some bs =>
+        simp only [hf, Option.elim_some] at hp
+        exact opensAt_specL P H E Lf plan tab vb R τ ((mem_opensL P H E Lf plan tab vb R τ).1 hp)
+  · rw [ite_eq_right hacc] at hp
+    simp at hp
+
+/-- Every value a trial reads at `c` is listed with an opening. -/
+theorem opsTL_of_mem_rdTL {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
+    (hv : v ∈ rdTL P H E Lf plan tab vb R τ c e) : ∃ o, (v, o) ∈ opsTL P H E Lf plan tab vb R τ c e := by
   classical
   unfold rdTL at hv
-  split_ifs at hv with hacc
-  · cases hf : firsts (accωL plan R e.1) e.2.2 with
+  unfold opsTL
+  by_cases hacc : accωL plan R e.1 e.2.1
+  · rw [ite_eq_left hacc] at hv
+    rw [ite_eq_left hacc]
+    cases hf : firsts (accωL plan R e.1) e.2.2 with
     | none => simp [hf] at hv
     | some bs =>
         simp only [hf, Option.elim_some] at hv
+        simp only [Option.elim_some]
         unfold readsAtL at hv
         obtain ⟨o, ho⟩ := (Finset.mem_filter.1 hv).2
-        have hex : ∃ o, accωL plan R e.1 e.2.1 ∧ ∃ bs, firsts (accωL plan R e.1) e.2.2 = some bs ∧
-            OpensAtL P H E Lf plan tab vb R τ e.1 bs c v o := ⟨o, hacc, bs, hf, ho⟩
-        obtain ⟨-, bs', -, hop⟩ := Classical.epsilon_spec hex
-        exact opensAt_specL P H E Lf plan tab vb R τ hop
-  · simp at hv
+        exact ⟨o, (mem_opensL P H E Lf plan tab vb R τ (p := (v, o))).2 ho⟩
+  · rw [ite_eq_right hacc] at hv
+    simp at hv
 
 /-- **Every success of the finder outputs a collision.** -/
 theorem outC_specL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl))
     (hS : Succ (rdTL P H E Lf plan tab vb R τ c) x) :
     ∃ a b, outCL P H E Lf plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec (rdTL P H E Lf plan tab vb R τ c) (opOfVL P H E Lf plan tab vb R τ c) vb.collide
-    (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfVL_spec P H E Lf plan tab vb R τ hv)
+  outOfOps_spec (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide
+    (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hp => opsTL_spec P H E Lf plan tab vb R τ hp)
+    (fun _ _ hv => opsTL_of_mem_rdTL P H E Lf plan tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 
 /-! ## The trial's expectations -/
@@ -505,19 +601,18 @@ theorem linkEv_le_psiL (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw �
   by_cases hL : P.LinkEvB plan tab decode (L.draw ω) R u (XplurL P H E Lf plan tab vb R τ k Rw)
       (tabExtL H E Lf plan tab R τ ω u bs)
   · obtain ⟨hc, hall⟩ := hL
-    have hspec := Classical.choose_spec hc
-    obtain ⟨g, hg, hdec⟩ := hall (Classical.choose hc) hspec.1 hspec.2
-    have hcand : candL H E Lf plan tab R τ ω u bs = some (Classical.choose hc) := by
-      unfold candL; rw [dite_eq_left_of_eq_true (eq_true hc)]
+    obtain ⟨M₀, hcand⟩ := candL_of_committed H E Lf plan tab R τ hc
+    have hspec := candL_spec H E Lf plan tab R τ hcand
+    obtain ⟨g, hg, hdec⟩ := hall M₀ hspec.1 hspec.2
     have hop : OpensAtL P H E Lf plan tab vb R τ ω bs (vb.pos g)
-        (vb.val (vb.opening (L.draw ω) R u (Classical.choose hc) (vb.pos g)))
-        (vb.opening (L.draw ω) R u (Classical.choose hc) (vb.pos g)) :=
+        (vb.val (vb.opening (L.draw ω) R u M₀ (vb.pos g)))
+        (vb.opening (L.draw ω) R u M₀ (vb.pos g)) :=
       ⟨u, hu, ⟨g, hg, rfl⟩, _, hcand, rfl, rfl⟩
-    have hmem : vb.val (vb.opening (L.draw ω) R u (Classical.choose hc) (vb.pos g)) ∈
+    have hmem : vb.val (vb.opening (L.draw ω) R u M₀ (vb.pos g)) ∈
         readsAtL P H E Lf plan tab vb R τ ω bs (vb.pos g) := by
       unfold readsAtL; exact Finset.mem_filter.2 ⟨Finset.mem_univ _, _, hop⟩
-    have hbit := (vb.opening_spec (L.draw ω) R u hu (Classical.choose hc) hspec.2 g hg).2
-    have hne : vb.val (vb.opening (L.draw ω) R u (Classical.choose hc) (vb.pos g)) ≠
+    have hbit := (vb.opening_spec (L.draw ω) R u hu M₀ hspec.2 g hg).2
+    have hne : vb.val (vb.opening (L.draw ω) R u M₀ (vb.pos g)) ≠
         XvalL P H E Lf plan tab vb R τ k Rw (vb.pos g) := by
       intro heq
       apply hdec
@@ -540,7 +635,9 @@ theorem linkEv_le_psiL (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw �
 /-- **A2 for one prover's link finders** (`Assumptions.SHA512CRExpected`): at the registration `R` and the
 prover's continuation `τ`, for the finder built for each commit string a sample can read. A2 is a hypothesis about one
 finder, since some finder outputs a collision after no evaluations: a prover that hard-codes two openings of one commit
-string has link finders that find one. So the link theorem asks A2 only of the finders of the prover it bounds. -/
+string has link finders that find one. So the link theorem asks A2 only of the finders of the prover it bounds. The
+cost A2 is taken at (`finderCost` of `cTL`) is a count of SHA-512 calls. The finder's output also runs the radius
+decoder (`candL`), which hashes nothing: the decoder's running time is not bounded by that count. -/
 def LinkCRL (k Rw M : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512CRExpected Hc
     (finderG (trialGL P H E Lf plan tab vb R τ c k Rw) M)

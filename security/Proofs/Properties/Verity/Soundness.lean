@@ -3,6 +3,7 @@ module
 public import Properties.Verity.Soundness
 public import Properties.Verity.Idle
 public import Proofs.Properties.Composition
+public import Proofs.Properties.Verity.Soundness.Composite
 public import Proofs.Core.Game.Prob
 public import Proofs.Core.Game.Seq
 public import Proofs.Flock.Claims.Prob
@@ -10,12 +11,15 @@ public import Proofs.Flock.Claims.Prob
 /-!
 # Soundness at the verifier, from its subprotocols' targets
 
-A composite's acceptance is its acceptance as a `same` composition and every component's on its own case
-(`accepts_same`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at
-its ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
-subprotocols' events, each at most its target's error at the strategy: the union bound over the composite's
-subprotocols in one game (`soundness_at_of_targets`). `soundness_of_subprotocols` is it at onsite's seven, and
-`remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's.
+A composite is the list of its subprotocols' ids, and its verifier composes them under one rule
+(`Proofs.Properties.Verity.Soundness.Composite`). So at every list, a composite's acceptance is its acceptance as a `same`
+composition and every component's on its own case (`accepts_same`, `accepts_components`, from
+`Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at its ties and `acceptSame`), and the event
+`Verity.SoundnessOf` bounds at a composite lies inside the union of its subprotocols' events, each at most its target's
+error at the strategy: the union bound over the composite's subprotocols in one game (`soundness_at_of_targets`).
+`soundness_of_subprotocols` is it at onsite's list, and `remote_soundness_of_subprotocols` at remote's, whose three
+subprotocols are among onsite's seven: each takes its list's targets by name, which are the target of each subprotocol
+the list names (`Vocab.targets_onsite`, `Vocab.targets_remote`).
 
 Beside it, the two checks every guarantee carries, for any names `V`: `soundness_honest_of`, at the honest deployment
 (the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -49,36 +53,17 @@ namespace Verity
 open Accounting Core
 open scoped ENNReal
 
-theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P : BlobProtocol}
-    (h : component k a = some P) : P ∈ componentsOf k := by
-  cases k <;> cases a <;> simp [component] at h <;> subst h <;>
-    simp [componentsOf, Onsite.components, Remote.V1.components]
-
-/-- **Each composite's verifier is the one the composites' table lists for it**, with its subprotocols'
-ids. -/
-theorem verifier_mem (k : Verity.Registration.Composite) :
-    (verifier k, (componentsOf k).map (·.id)) ∈ Composites.composites := by
-  cases k
-  · exact List.mem_cons.2 (Or.inl rfl)
-  · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
-
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite every window of PoUW's period on the
-policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s run on the policy's record. -/
+its components whose record subprotocols committed to one record, with each tie between subprotocols it lists: at
+onsite every window of PoUW's period on the policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s
+run on the policy's record and its window record the one the policy's record is chained after. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
-  cases k
-  · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
-      Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied Onsite.ties ev
-      (Composition.checkSame "verity/onsite/v0" Onsite.tied (s.components .onsite) ps c ev) pub prof hch
-    exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
-      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
-  · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
-      Properties.Composition.answerAccepts (Remote.V1.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied Remote.V1.ties ev
-      (Composition.checkSame "verity/remote/v1" Remote.V1.tied (s.components .remote) ps c ev) pub prof hch
-    exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
-      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
+  obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
+    Properties.Composition.answerAccepts ((verifier k).on s.blobs) s.params s.commitment s.evidence h
+  obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied (ties k) ev
+    (Composition.checkSame (compositeId k) (tied k) (s.components k) ps c ev) pub prof hch
+  exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
+    Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
 /-- **What a composite's verifier accepts, each of its subprotocols' components accepts on its own
 case.** -/
@@ -123,20 +108,40 @@ theorem soundness_at_of_targets : SoundnessOf := by
         prob_exists_finset_le _ _ _ _
     _ ≤ ∑ a ∈ subprotocols k, V.error a θ F c σ := Finset.sum_le_sum fun a ha => hT a ha θ F c σ
 
-theorem soundness_of_subprotocols : Soundness := by
-  intro ι α _ d V hS hW hI hP hB hN hX
-  refine soundness_at_of_targets ι α d V .onsite fun a _ => ?_
+namespace Vocab
+
+variable {ι α : Type} [Fintype α] {d : Device ι}
+
+/-- **Onsite's targets, by name**: its seven subprotocols' named targets are the target of each subprotocol it
+lists. -/
+theorem targets_onsite (V : Vocab d α) (hS : V.SpotSound .onsite) (hW : V.PouwSound .onsite)
+    (hI : V.InferenceOnlySound .onsite) (hP : V.PousSound .onsite) (hB : V.BandwidthAuditSound .onsite)
+    (hN : V.NetworkCertifierSound .onsite) (hX : V.WipeSound .onsite) :
+    ∀ a ∈ subprotocols .onsite, V.Target .onsite a := by
+  intro a _
   cases a
   exacts [hS, hW, hI, hP, hB, hN, hX]
 
-theorem remote_soundness_of_subprotocols : RemoteSoundness := by
-  intro ι α _ d V hS hW hI
-  refine soundness_at_of_targets ι α d V .remote fun a ha => ?_
+/-- **Remote's targets, by name**: its three subprotocols' named targets are the target of each subprotocol it
+lists. -/
+theorem targets_remote (V : Vocab d α) (hS : V.SpotSound .remote) (hW : V.PouwSound .remote)
+    (hI : V.InferenceOnlySound .remote) : ∀ a ∈ subprotocols .remote, V.Target .remote a := by
+  intro a ha
+  have hm := mem_subprotocols.1 ha
   cases a
   · exact hS
   · exact hW
   · exact hI
-  all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
+  all_goals exact absurd hm (by decide)
+
+end Vocab
+
+theorem soundness_of_subprotocols : Soundness :=
+  fun ι α _ d V hS hW hI hP hB hN hX =>
+    soundness_at_of_targets ι α d V .onsite (V.targets_onsite hS hW hI hP hB hN hX)
+
+theorem remote_soundness_of_subprotocols : RemoteSoundness :=
+  fun ι α _ d V hS hW hI => soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW hI)
 
 open Classical in
 /-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
@@ -316,13 +321,32 @@ namespace Vocab
 
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 
+/-- **PoUW's claim where composite `k` lists Pearl+'s id is Pearl+'s**, in MACs at the credit its check published. -/
+theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k)
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
+    V.Holds k θ F c σ .pouw o ↔ ∃ w, PearlPlusCredits k o.sent w ∧
+      (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o := by
+  simp only [Holds, if_pos hk]
+
+/-- **PoUW's claim where composite `k` doesn't list Pearl+'s id is the period's.** -/
+theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k)
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
+    V.Holds k θ F c σ .pouw o ↔ (V.live k θ F c).Holds (V.certOf θ) σ .pouw o := by
+  simp only [Holds, if_neg hk]
+
 /-- **A target of a subprotocol that decides an `Audit` is the per-period guarantee** `Accounting.PeriodLive.Sound` at
 the period `live`, read in the one vocabulary, except PoUW's at remote, which is Pearl+'s claim in MACs. -/
 theorem target_audit (k : Verity.Registration.Composite) (b : Audit) (hb : k = .onsite ∨ b ≠ .pouw) :
     V.Target k (.ofAudit b) ↔ ∀ θ F c, (V.live k θ F c).Sound (V.certOf θ) b (V.error (.ofAudit b) θ F c) := by
-  cases k <;> cases b <;> first
-    | exact Iff.rfl
-    | exact hb.elim (fun h => nomatch h) (fun h => absurd rfl h)
+  cases b
+  case pouw =>
+    have hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k := by
+      rcases hb with rfl | h
+      · decide
+      · exact absurd rfl h
+    simp only [Target, Subprotocol.ofAudit, V.holds_pouw_of_not_mem hk]
+    exact Iff.rfl
+  all_goals exact Iff.rfl
 
 /-- **The honest commitment's case of sampled proofs' claim**: when the extractor's transcript is correct on every unit
 and the commitment opens every gate to it (a registered constant to its constant), no unit is unbound, and the claim
@@ -442,22 +466,23 @@ theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c 
     (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
-/-- At `exact`, PoUW's claim fails on every play after the empty commitment: at onsite it certifies one gate computed,
-which no play computes, and at remote no credit is published, since the empty commitment is no binding of the
-components' digests. -/
+/-- At `exact`, PoUW's claim fails on every play after the empty commitment: where the composite doesn't list Pearl+'s
+id (onsite) it certifies one gate computed, which no play computes, and where it does (remote) no credit is published,
+since the empty commitment is no binding of the components' digests. -/
 theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
     (σ : Game.Strategy (exact.game θ F .empty)) (o : Exchange)
     (ho : o.params = θ ∧ o.files = F ∧ o.commitment = .empty) : ¬ exact.Holds k θ F .empty σ .pouw o := by
   intro h
-  cases k
-  · change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf θ F).N)) : ℕ) : ℝ) at h
-    simp at h
-    norm_num at h
-  · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := h
+  by_cases hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k
+  · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := (exact.holds_pouw_of_mem hk).1 h
     have h64 : ¬ ByteArray.empty.size = 64 := by decide
     change Composition.decodeCommitment o.commitment = .ok c' at hc
     rw [ho.2.2, Composition.decodeCommitment, if_neg h64] at hc
     cases hc
+  · have h := (exact.holds_pouw_of_not_mem hk).1 h
+    change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf θ F).N)) : ℕ) : ℝ) at h
+    simp at h
+    norm_num at h
 
 /-- At `exact`, the conclusion at composite `k` fails for a verifier that accepts everything, at the files that are the
 parameters (`ByteArray.empty`, the one committed file), for the honest prover. -/
@@ -485,7 +510,7 @@ theorem soundness_at_of_targets_honest :
 /-- **`SoundnessOf`'s nontrivial lemma**: its conclusion fails at onsite for a verifier that accepts everything, at the
 idle deployment whose errors are all `0`. -/
 theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
-  Idle.nontrivial_at .onsite (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .onsite (mem_subprotocols.2 (by decide))
 
 /-- **`Soundness`'s honest lemma**: its seven hypotheses hold at the idle deployment's compiled onsite composite. -/
 theorem soundness_of_subprotocols_honest :
@@ -499,7 +524,7 @@ theorem soundness_of_subprotocols_honest :
 /-- **`Soundness`'s nontrivial lemma**: its conclusion fails at onsite for a verifier that accepts everything, at the
 idle deployment whose errors are all `0`. -/
 theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
-  Idle.nontrivial_at .onsite (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .onsite (mem_subprotocols.2 (by decide))
 
 /-- **`RemoteSoundness`'s honest lemma**: its three targets hold at the idle deployment's compiled remote composite. -/
 theorem remote_soundness_of_subprotocols_honest :
@@ -510,6 +535,6 @@ theorem remote_soundness_of_subprotocols_honest :
 /-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
 the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
-  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .remote (mem_subprotocols.2 (by decide))
 
 end Verity

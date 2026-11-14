@@ -60,7 +60,7 @@ salt, and the pads' opened columns and salts. `Loop.FinRepAt P` is that context 
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 section
 
@@ -79,7 +79,7 @@ theorem repFwC_map_tauSalt (io : FlockComplete.Asks M) (hs : Hashes M) (st : Set
 
 end
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace FlockSoundness.ZK.Table
 
@@ -191,7 +191,7 @@ theorem finSrc_tauSalt (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **`FinRepFinal`'s context at a property `P` of the two proofs**: at (c.3)'s context, where the session's rep returns
@@ -205,15 +205,15 @@ def FinRepAt (P : _root_.Flock.Zk.ZkProof → _root_.Flock.Zk.ZkProof → Prop) 
       (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras →
     ∀ ic l, (padsView vs x w ν t ops schs k).go l = (.ok ic, l) → l.size = Masked.repBase x k →
     ∀ tb hi q f, RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec k tb hi q f →
-    ∀ ic' p tr, (_root_.Flock.Firewall.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-        (_root_.Flock.Firewall.Finish.padsOf q.draws) (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
-        V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic' →
-      (((_root_.Flock.Firewall.Finish.repFwC
+    ∀ ic' p tr, (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws) (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts) :
+        V _root_.Flock.ZkServer.Finish.InnerCommit) = .ok ic' →
+      (((_root_.Flock.ZkServer.Finish.repFwC
           (FlockComplete.asksCut (fun k i => Masked.slotAt (finCoins x ops) k i) (refK x))
           (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) tb.st tb.sch tb.tPad (k % 2)
           (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 tb.g tb.cm0.toC
-          (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals
-          tb.extra tb.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
+          (_root_.Flock.ZkServer.Finish.claimsOf q.xs) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC ic'.toC q.vals
+          tb.extra tb.lanePad (fun l => _root_.Flock.ZkServer.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l).1 =
         .ok (p, tr) →
       ∀ p' l', (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l = (.ok (p', tr), l') →
@@ -268,8 +268,8 @@ theorem finRepTauSalt (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) : Fin
   intro ν t κ m₀ ρ₀ ops _ s0 spec hsx schs _ cms _ k hk extras _ ic l _ _ tb hi q f hR ic' p tr _ hrun p' l' hv _
   have e1 : p'.inner.tauSalt = ((finSrc vs x w ν t ops (k / 2)).rep (k % 2)).tauSalt :=
     Masked.FinRep.tauSalt_of_map (Masked.FinRep.repCut_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _) hv
-  have e2 : p.inner.tauSalt = (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.tauSalt :=
-    tauSalt_of_map1 (_root_.Flock.Firewall.Finish.repFwC_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
+  have e2 : p.inner.tauSalt = (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.tauSalt :=
+    tauSalt_of_map1 (_root_.Flock.ZkServer.Finish.repFwC_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
   obtain ⟨-, -, hT, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   have hJ : Masked.jOf x = (Masked.stsOf x).size := by
     unfold Masked.jOf
@@ -282,11 +282,11 @@ theorem finRepTauSalt (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) : Fin
   obtain ⟨-, hq, -⟩ := hR
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, hst, hq⟩ := bok hq
-  have hqd : q.draws = _root_.Flock.Firewall.Frame.Draws.ofBytes lay (L₀.draws (ν, t) k) := by
+  have hqd : q.draws = _root_.Flock.ZkServer.Frame.Draws.ofBytes lay (L₀.draws (ν, t) k) := by
     cases hq
     rfl
   have hLk : (LeanRelease.ofLoopLink L₀ src real).lay x k = lay := by
-    have e : Loop.startOf x k = _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[k / 2]! := by
+    have e : Loop.startOf x k = _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[k / 2]! := by
       unfold Loop.startOf
       rw [hsx]
       try dsimp only
@@ -302,7 +302,7 @@ theorem finRepTauSalt (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) : Fin
     (Masked.UE.tapeZk t)
   have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src real).drawsAt x (ν, t) (Loop.frepOf (k / 2) (k % 2)) := by
     rw [hk2, hqd]
-    show _ = _root_.Flock.Firewall.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src real).lay x k)
+    show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src real).lay x k)
       (L₀.draws (ν, t) k)
     rw [hLk]
   have hP := Masked.pads_frame_eq (LeanRelease.ofLoopLink L₀ src real) (ν, t) (Masked.UE.tapeZk t) Loop.frepOf x t

@@ -14,8 +14,8 @@ and the audit's session is `batchedSessionL` on the plan.
   `repsOf A (ts.get j)` and output `tableOutL`.
 * `live_le_sessionBLJ`: against any live prover of `liveSession`, the live verdict is no likelier than the salted
   session's acceptance (every table's) against the simulated prover (`live_le_session` at `sessionBL_eq_modelSession`).
-* `DecodesOnJ`: the decoder is right on the sessions flock-verify accepts, at the sampling design's samples, table by table: on every
-  live outcome flock-verify accepts, table `j`'s reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and
+* `DecodesOnJ`: the decoder is right on the sessions verity-verify-proof accepts, at the sampling design's samples, table by table: on every
+  live outcome verity-verify-proof accepts, table `j`'s reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and
   its proof files, and the salted table's verdict on those runs holds. One `DecodesTable` per sample, registration and
   table; at one table it is `DecodesOn`'s.
 * `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and the refinement at it with `bad = ⊥`.
@@ -103,9 +103,9 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (plan S R).length → Cap D) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts, at the sampling design's samples, table by table** (the decoder premise, named):
+/-- **The decoder is right on the sessions verity-verify-proof accepts, at the sampling design's samples, table by table** (the decoder premise, named):
 at every sample `L.draw ω`, registration `R` and table `j` of the plan, on every live outcome whose session directory
-flock-verify accepts, table `j`'s reps run on the tapes decoded from its streams and its proof files, and the salted
+verity-verify-proof accepts, table `j`'s reps run on the tapes decoded from its streams and its proof files, and the salted
 table's verdict on those runs, with the cap `root_B` decodes to and the openings and salts the proof files decode to,
 holds. -/
 def DecodesOnJ (L : Law n) : Prop :=
@@ -128,7 +128,7 @@ noncomputable def simAuditJ (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin 
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
 /-- **The refinement for sessions of `J` tables.** Against any live prover `τ` of the live audit whose session at each
-sample is `liveSession` over the plan's tables, written out by `wr`, flock-verify's acceptance is no likelier than the
+sample is `liveSession` over the plan's tables, written out by `wr`, verity-verify-proof's acceptance is no likelier than the
 salted audit's acceptance against the simulated prover `simAuditJ … τ`, with no live event added (`bad = ⊥`), whenever
 the decoder is right on accepted sessions at the sampling design's samples, table by table (`DecodesOnJ`). -/
 theorem execRefines_tables (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)

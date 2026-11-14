@@ -1140,7 +1140,7 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
             "295.7, not sent)\n"
             "  the kept count over the pass, as the scheduler replay's loader gives it: K 5, rows 5,143, counts [665, 553, "
             "442, 257, 150, 3076], entropy 1.840, max 2.585, alone 9,463.489, charged 6,997, ideal 6,995.721, derived 0\n"
-            "  the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet\n"
+            "  the kept count is 0 where the audited block derives it, and no served Program calls the accept test yet\n"
             "  no request was sampled, so no seed is read\n"
             "  the pass: record's burst rep 1, the one the replay re-ran; 2,040 steps, each reproduced by the scheduler "
             "replay\n") in txt
@@ -1246,7 +1246,7 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     got = declared(tmp_path, monkeypatch, c)
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
-        "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
+        "mark": "measured", "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
         "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
         "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
                    "lifetimes an arm"]}]
@@ -1332,11 +1332,15 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
     assert r["cost"]["measured"] and not r["cost"]["stands"]
     on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
     assert got == [
-        {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "better": "higher",
-         "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2, "requests_differing": 2,
-         "reproduces": False, **on},
-        {"name": "vllm/prod-advice-bits-glm53", "value": (230 + 6997) / 32, "unit": "bits a request", "better": "lower",
-         "bits": 230 + 6997, "requests": 32, "tick": False, **on}]
+        {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "mark": "measured",
+         "better": "higher", "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2,
+         "requests_differing": 2, "reproduces": False, **on,
+         "inputs": [f"measured: prod-record's served tokens on the {LOAD} load's burst rep 1 against its replay's, up "
+                    "to each request's first difference"]},
+        {"name": "vllm/prod-advice-bits-glm53", "value": (230 + 6997) / 32, "unit": "bits a request", "mark": "measured",
+         "better": "lower", "bits": 230 + 6997, "requests": 32, "tick": False, **on,
+         "inputs": [f"measured: the advice prod-record's record of the {LOAD} load's burst rep 1 charges, over its 32 "
+                    "requests"]}]
     assert got[1]["value"] == v["bits_a_request"]
     # a replay whose record disagrees with the tokens it kept: the match does not stand, the advice does
     _, got = report(tokens={b: [7, 9]}, requests_tokens_differing=0)
@@ -1349,6 +1353,27 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
         r, got = report(**kw)
         assert r["tokens"]["measured"] and r["advice"]["measured"]
         assert (r["tokens"]["metric"], r["advice"]["metric"], got) == (None, None, [])
+
+
+def test_each_of_the_three_measurements_carries_its_mark_and_inputs(tmp_path: Path):
+    """The cost, the replay match and the advice each carry a mark and inputs whose first opens with it, where the
+    Metrics tab reads the mark (benchmarks/README.md, "Metrics"): a row without one shows none."""
+    c, _ = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
+    window = {"rep": 1}
+    r = {"cost": c, "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
+         "arms": {"stock": "prod", "again": None, "ours": "prod-record"},
+         "tokens": {"measured": True, "metric": "vllm/prod-replay-match-glm53", "record_disagrees": False,
+                    "tokens_before_first_difference": 4, "tokens_served": 4, "requests": 2, "requests_differing": 0,
+                    "reproduces": True, "window": window},
+         "advice": {"measured": True, "metric": "vllm/prod-advice-bits-glm53", "bits_a_request": 19.5, "bits": 39,
+                    "requests": 2, "tick": False, "window": window}}
+    got = P.measurements(r)
+    assert [m["name"] for m in got] == ["vllm/prod-serving-cost-glm53", "vllm/prod-replay-match-glm53",
+                                        "vllm/prod-advice-bits-glm53"]
+    for m in got:
+        assert m["mark"] == "measured", m["name"]
+        assert m["inputs"] and all(isinstance(i, str) and i for i in m["inputs"]), m["name"]
+        assert m["inputs"][0].startswith(f"{m['mark']}: "), m["name"]
 
 
 def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(

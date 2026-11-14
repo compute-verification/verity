@@ -31,6 +31,8 @@ namespace FlockSoundness.Discharge.ZkSession
 open Game Model Accounting Audit
 open scoped ENNReal NNReal
 
+variable {wideLeaf : Bool}
+
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
 /-! ## The inner proof's positions and radius -/
@@ -117,17 +119,18 @@ theorem εInner_le_m1 {N : ℕ} (hF : Fintype.card F = 2 ^ 128) (hN : N ≤ 2 ^ 
 
 /-! ## One table -/
 
-/-- A `--zk` table at Flock ZK's parameters: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, with Flock ZK's
-padding and two extra lanes on a statement in `fast100`'s range, and the inner proof with 168 queries, `N ≤ 2^13`
+/-- A `--zk` table at Flock ZK's parameters: the padded level 0 of `m1Schedule wideLeaf m` at a statement version
+(`wideLeaf`) and `25 ≤ m ≤ 35`, with Flock ZK's padding and two extra lanes on a statement in `fast100`'s range, and the inner proof with 168 queries, `N ≤ 2^13`
 and `δ ≥ 7/16`. -/
 def TabZK.M1 (T : TabZK F mPts) : Prop :=
-  ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRange ∧
+  ∃ wideLeaf m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule wideLeaf m ∧ T.t = m1Pad wideLeaf m ∧ T.e = 2 ∧
+    (T.S.shape mPts).InRange ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
 
 /-- **A `--zk` table's bound at Flock ZK's parameters** is at most `2^-203`. -/
 theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT : T.M1) :
     T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) := by
-  obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
+  obtain ⟨wideLeaf, m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
   unfold TabZK.bound
   set r := padRepError T.sch (T.S.shape mPts) T.t T.e
   set l := padLinkError T.sch (T.S.shape mPts) T.t
@@ -144,7 +147,7 @@ theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT
     · rw [ENNReal.ofReal_of_nonpos h.le]
       simp
   have hpt : l + r ^ 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
-    have := padTableError_le_m1 m h1 h2 _ hst
+    have := padTableError_le_m1 (wide := wideLeaf) m h1 h2 _ hst
     rw [← hsch, ← ht, ← he] at this
     exact this
   have hb : b ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(114 : ℝ))) := by

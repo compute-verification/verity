@@ -95,8 +95,8 @@ def test_plugin_site_declares_the_arms_plugins_the_tick_after_this_one(tmp_path:
 
 def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: Path):
     """The serve's line as data: prefix caching off, which its history tables need, the step record and the boundary
-    commitment with the model's check template and one attention layer's tables, and the canonical top-k on the path
-    and switched on."""
+    commitment with the model's check template, its ids, the logits they were selected from and one attention layer's
+    tables, and the canonical top-k on the path and switched on."""
     glm, two, rows = S.MODELS["glm53"], S.ARMS["two-stage"], S.ARMS["boundary-rows"]
     assert S.server_argv(two, glm, Path("/ck"), 8000) == [*S.server_argv(rows, glm, Path("/ck"), 8000),
                                                           "--no-enable-prefix-caching"]
@@ -105,8 +105,8 @@ def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: 
     env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, check=glm.check, private=private)
     cfg = json.loads(env[S.PLUGIN_ENV])
     assert cfg["boundary_rows"] == {
-        "window_s": 3600.0, "check": "TokenSelect_v4{V=154880}", "inline": True, "per_prompt": 0, "per_output": 1,
-        "drained": True, "tables": {"layers": 1, "private": str(private)}}
+        "window_s": 3600.0, "check": "GreedySelect_v1{V=154880,N=7744}", "inline": True, "per_prompt": 0, "per_output": 1,
+        "drained": True, "ids": True, "logits": {"private": str(private)}, "tables": {"layers": 1, "private": str(private)}}
     assert (env["VERITY_DSA_TOPK"], env["VERITY_DSA_TOPK_LOG"]) == ("canonical", f"{private}/topk-log")
     assert str(S.ROOT / "benchmarks/dsa_topk") in env["PYTHONPATH"].split(S.os.pathsep)
     # a boundary commitment's classes hold the requests' tokens and the salts: the plugin is told the private
@@ -114,7 +114,8 @@ def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: 
     assert (cfg["out"], cfg["private"]) == (str(tmp_path), str(private))
     # the arms it is made of carry the same pieces: the boundary commitment without the tables, the top-k alone
     cfg = json.loads(S.server_env(rows, tmp_path, tmp_path, None, 3600.0, 600.0, check=glm.check, private=private)[S.PLUGIN_ENV])
-    assert cfg["boundary_rows"] == {"window_s": 3600.0, "check": glm.check, **S.ROWS} and "tables" not in S.ROWS
+    assert cfg["boundary_rows"] == {"window_s": 3600.0, "check": glm.check, **S.ROWS}
+    assert "tables" not in S.ROWS and "ids" not in S.ROWS and "logits" not in S.ROWS
     assert cfg["private"] == str(private)
     alone = S.server_env(S.ARMS["canonical-topk"], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=private)
     assert S.PLUGIN_ENV not in alone and alone["VERITY_DSA_TOPK"] == "canonical"
@@ -555,6 +556,21 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
                                                              "prod-trace"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
+
+
+def test_an_added_seed_takes_the_place_of_the_lines_seed():
+    """A job's ``--seed=N`` is the server's seed on the recipe's line, once, where every other flag the line sets is
+    refused; an arm whose line takes no added flag keeps ``--seed 0``."""
+    glm, context = S.MODELS["glm53"], S.published_context("prod", "glm53", None)
+    def seeds(arm: str, added: tuple[str, ...] = ()) -> list[str]:
+        argv = S.server_argv(S.ARMS[arm], glm, Path("/ck"), 8000, max_model_len=context, added=added)
+        return [argv[i + 1] for i, x in enumerate(argv) if x == "--seed"] + [x for x in argv if x.startswith("--seed=")]
+    assert seeds("prod") == ["0"] and seeds("prod", ("--seed=3",)) == ["3"]
+    assert seeds("prod", ("--gpu-memory-utilization=0.95", "--seed=3")) == ["3"]
+    assert seeds("record", ("--seed=3",)) == ["0"]
+    for refused in (("--max-model-len=131072",), ("--seed=1", "--seed=2")):
+        with pytest.raises(SystemExit, match=refused[0].split("=")[0] + ": the arm's line sets it already"):
+            S.server_argv(S.ARMS["prod"], glm, Path("/ck"), 8000, max_model_len=context, added=refused)
 
 
 def test_the_boundary_arm_takes_edges_every_period_or_at_set_times_and_keeps_no_kv_file_at_tp():

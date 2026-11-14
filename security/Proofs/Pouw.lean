@@ -76,6 +76,7 @@ public import Proofs.Pouw.Period
 public import Proofs.Pouw.Period.Accept
 public import Proofs.Pouw.Period.Honest
 public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.Period.Witnesses
 public import Proofs.Pouw.PeriodJ10RStrata
 public import Proofs.Pouw.PeriodJ10RStrata.Honest
 public import Proofs.Pouw.PeriodJ10R
@@ -94,6 +95,7 @@ public import Proofs.Pouw.PearlC.ChainCapLoopGap
 public import Proofs.Pouw.PearlC.ChainOnlyGap
 public import Proofs.Pouw.PearlC.Completeness
 public import Proofs.Pouw.PearlC.DeadlineWitness
+public import Proofs.Pouw.PearlC.DevGap
 public import Proofs.Pouw.PearlC.DeviceCapGap
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 public import Proofs.Pouw.PearlC.DeviceChainCapGap
@@ -123,6 +125,7 @@ public import Proofs.Pouw.PearlC.HiddenTileGame
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.PearlC.Instance
 public import Proofs.Pouw.PearlC.KernelWrefGap
+public import Proofs.Pouw.PearlC.Mend
 public import Proofs.Pouw.PearlC.Peel
 public import Proofs.Pouw.PearlC.PeelExactChecks
 public import Proofs.Pouw.PearlC.PeelExactProofs
@@ -140,6 +143,8 @@ public import Proofs.Pouw.PearlC.RowSeedKGap
 public import Proofs.Pouw.PearlC.RowSeedSkip
 public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
 public import Proofs.Pouw.PearlC.ServedH100Rev1Gap
+public import Proofs.Pouw.PearlC.W1Best
+public import Proofs.Pouw.PearlC.S8H100Rev1Gap
 public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.ServedRev1Gap
 public import Proofs.Pouw.PearlC.Sm120Checks
@@ -154,6 +159,7 @@ public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.W1BudgetAbort
 public import Proofs.Pouw.PearlC.W1Checks
+public import Proofs.Pouw.PearlC.Records
 public import Proofs.Pouw.PearlC.W1Priced
 public import Proofs.Pouw.PearlC.W1Stop
 public import Proofs.Pouw.PearlC.W1Tabulate

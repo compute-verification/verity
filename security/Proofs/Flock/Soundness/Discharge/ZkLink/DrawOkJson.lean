@@ -22,19 +22,19 @@ import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
-# The sample file `flock-verify draw` prints decodes to the sample it printed
+# The sample file `verity-verify-proof draw` prints decodes to the sample it printed
 
-`flock-verify draw` prints the verifier's sample as `UnitDraw.toJson` (`Main.lean`'s `DRAW` line), and `verify` decodes the
-record's `unit_draw` with `UnitDraw.ofJson`. For a stratified sample without a closure, the live law's, decoding what
+`verity-verify-proof draw` prints the verifier's sample as `UnitDraw.toJson` (`Main.lean`'s `DRAW` line), and `verify` decodes the
+record's `unit_draw` with `UnitDraw.ofJson`. For a stratified sample without a closure, the live sampling design's, decoding what
 `toJson` printed gives back the sample whenever `ofJson` accepts it (`ofJson_toJson_drawOf`), and likewise for a subset
-sample, the `J`-table sessions' law (`ofJson_toJson_drawOf_subset`), and for a work sample without a closure
+sample, the `J`-table sessions' sampling design (`ofJson_toJson_drawOf_subset`), and for a work sample without a closure
 (`ofJson_toJson_drawOf_work`). `ofJson` also checks the sample against its sampling design (the
 strata's tiling, each stratum's count, a subset sample's size, the units in the population), so it accepts only a sample the
 sampling design can make; the round trip claims nothing about the others.
 
 So `DrawFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each sample file being the
-JSON value `flock-verify draw` printed for the verifier's own sample (`drawFileZK_of_toJson`, `drawFileZK_of_toJson_subset`,
-`drawFileZK_of_toJson_work`), under every sampling design but a Bernoulli law (`drawFileZK_of_toJson_law`).
+JSON value `verity-verify-proof draw` printed for the verifier's own sample (`drawFileZK_of_toJson`, `drawFileZK_of_toJson_subset`,
+`drawFileZK_of_toJson_work`), under every sampling design but a Bernoulli sampling design (`drawFileZK_of_toJson_law`).
 That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
 `Flock.JsonParse.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
 trees that `ofJson` reads alike.
@@ -277,14 +277,14 @@ end
 
 variable {n : ℕ}
 
-/-- **The round trip of the live law's sample file**: when `UnitDraw.ofJson` accepts what `UnitDraw.toJson` prints for the
+/-- **The round trip of the live sampling design's sample file**: when `UnitDraw.ofJson` accepts what `UnitDraw.toJson` prints for the
 verifier's own sample of `S` under a stratified sampling design, it decodes to that sample. -/
 theorem ofJson_toJson_drawOf (K : ℕ) (strata : Array Draw.Stratum) (pop : ℕ) (S : Finset (Fin n)) {D : Draw.UnitDraw}
     (h : Draw.UnitDraw.ofJson (drawOf (.stratified K strata) pop S).toJson = .ok D) :
     D = drawOf (.stratified K strata) pop S :=
   ofJson_toJson_stratified K pop strata _ h
 
-/-- **`DrawFileZK` from the printed sample**: a record whose sample file at every sample `S` is what `flock-verify draw`
+/-- **`DrawFileZK` from the printed sample**: a record whose sample file at every sample `S` is what `verity-verify-proof draw`
 printed for the verifier's own sample of `S` (`UnitDraw.toJson` of `drawOf`) meets `DrawFileZK`. -/
 theorem drawFileZK_of_toJson (dj : Finset (Fin n) → Lean.Json) (K : ℕ) (strata : Array Draw.Stratum) (pop : ℕ)
     (hdj : ∀ S, dj S = (drawOf (.stratified K strata) pop S).toJson) : DrawFileZK dj (.stratified K strata) pop :=
@@ -297,7 +297,7 @@ theorem ofJson_toJson_drawOf_subset (k pop : ℕ) (S : Finset (Fin n)) {D : Draw
     D = drawOf (.subset k) pop S :=
   ofJson_toJson_subset k pop _ h
 
-/-- **`DrawFileZK` from the printed subset sample**: a record whose sample file at every sample `S` is what `flock-verify draw`
+/-- **`DrawFileZK` from the printed subset sample**: a record whose sample file at every sample `S` is what `verity-verify-proof draw`
 printed for the verifier's own sample of `S` under `subset k` meets `DrawFileZK` at that sampling design. -/
 theorem drawFileZK_of_toJson_subset (dj : Finset (Fin n) → Lean.Json) (k pop : ℕ)
     (hdj : ∀ S, dj S = (drawOf (.subset k) pop S).toJson) : DrawFileZK dj (.subset k) pop :=
@@ -310,13 +310,13 @@ theorem ofJson_toJson_drawOf_work (K : ℕ) (strata : Array Draw.WorkStratum) (p
     D = drawOf (.work K strata) pop S :=
   ofJson_toJson_work K pop strata _ h
 
-/-- **`DrawFileZK` from the printed work sample**: a record whose sample file at every sample `S` is what `flock-verify
+/-- **`DrawFileZK` from the printed work sample**: a record whose sample file at every sample `S` is what `verity-verify-proof
 draw` printed for the verifier's own sample of `S` under `work K strata` meets `DrawFileZK` at that sampling design. -/
 theorem drawFileZK_of_toJson_work (dj : Finset (Fin n) → Lean.Json) (K : ℕ) (strata : Array Draw.WorkStratum) (pop : ℕ)
     (hdj : ∀ S, dj S = (drawOf (.work K strata) pop S).toJson) : DrawFileZK dj (.work K strata) pop :=
   fun S _ hD => ofJson_toJson_drawOf_work K strata pop S (hdj S ▸ hD)
 
-/-- **`DrawFileZK` from the printed sample under any sampling design but a Bernoulli law**: the subset, stratified and
+/-- **`DrawFileZK` from the printed sample under any sampling design but a Bernoulli sampling design**: the subset, stratified and
 work round trips (`drawFileZK_of_toJson_subset`, `drawFileZK_of_toJson`, `drawFileZK_of_toJson_work`). -/
 theorem drawFileZK_of_toJson_law (dj : Finset (Fin n) → Lean.Json) (law : Draw.Law)
     (hb : ∀ a b, law ≠ .bernoulli a b) (pop : ℕ) (hdj : ∀ S, dj S = (drawOf law pop S).toJson) :

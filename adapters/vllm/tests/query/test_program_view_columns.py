@@ -31,8 +31,8 @@ from verity_vllm.query.program_view import (
 )
 from verity_vllm.query.units import (
     PartitionError,
+    ProofBlock,
     ValueRef,
-    VerificationUnit,
     boundary,
     partition_by,
 )
@@ -229,9 +229,9 @@ def test_a_body_that_is_not_columnar_or_units_that_are_not_a_partition_go_to_bou
     Q = QUERIES["module"]
     a, b = boundary_without_literals(R, Q, frozenset({6})), without_literals(boundary(R, Q), frozenset({6}))
     assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.read_by == b.read_by and isinstance(a.read_by, dict)
-    for units in ((VerificationUnit("a", frozenset(range(8))), VerificationUnit("b", frozenset({3}))),      # Call 3 in two units
-                  (VerificationUnit("a", frozenset(range(7))),),                                            # Call 7 in none
-                  (VerificationUnit("a", frozenset(range(1, 9))),)):                                        # 8 is not a Call
+    for units in ((ProofBlock("a", frozenset(range(8))), ProofBlock("b", frozenset({3}))),      # Call 3 in two units
+                  (ProofBlock("a", frozenset(range(7))),),                                            # Call 7 in none
+                  (ProofBlock("a", frozenset(range(1, 9))),)):                                        # 8 is not a Call
         with pytest.raises(PartitionError):
             boundary_without_literals(P, lambda _P, units=units: units, frozenset())
 

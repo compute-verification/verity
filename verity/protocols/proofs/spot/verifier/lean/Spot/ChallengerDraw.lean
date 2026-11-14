@@ -1,4 +1,8 @@
-/-
+module
+
+public import Spot.ChallengerCoins
+
+/-!
 A sample's live coins as a component's check reads them (`drawCoins`), with the verifier's own key, window and family,
 never the evidence's, and as a stream's run holds the bytes it read to them (`coinsReason`): `coins.py`'s `draw_coins`,
 `seed_salt_of` and `coins_reason`, which `tests/test_challenger_difftest.py` holds to this, the verifier.
@@ -34,9 +38,6 @@ R6 holds the window's registrations to name (`Registration.Verifier.seedSalt`).
 The difftest's pieces (`Pieces.table`): `challenger_draw_coins` (`coins_reason`), `{"reason"}`, or `{"refused": why}`
 for a key `ChallengerKey.ofJson` refuses, and `challenger_seed_salt` (`seed_salt_of`).
 -/
-module
-
-public import Spot.ChallengerCoins
 
 @[expose] public section
 
@@ -114,7 +115,7 @@ def drawCoinsPiece (j : Json) : V Json := do
 
 /-- The challenger's family of a window's seed salt, which no sample reads. -/
 def SEED_SALT_FAMILY : String := "seed-salt"
-def SEED_SALT_WINDOW : String := "a window's open root is lowercase hex of 64 bytes"
+def SEED_SALT_RUN : String := "a window's open root is lowercase hex of 64 bytes"
 def SEED_SALT_ONE : String :=
   "a window's seed salt is one coin, its family's first, released after the window's open root: the challenger " ++
   "released another"
@@ -124,7 +125,7 @@ coins that the session the auditor's ledger opens on `window` (its open root) un
 (`drawCoins`), which must be one coin, the family's first. So the salt is the one coin the challenger released for it,
 and a server that saw others could pick none of them. -/
 def seedSaltOf (key : ChallengerKey) (window : String) (coins : Json) : V ByteArray := do
-  unless window.length == 128 && isHex window do throw SEED_SALT_WINDOW
+  unless window.length == 128 && isHex window do throw SEED_SALT_RUN
   let salt ← drawCoins key window SEED_SALT_FAMILY (← Flock.unhex window) coins
   unless nat? (getD (getD coins "segment") "start") == some 0 && salt.size == COIN_BYTES do throw SEED_SALT_ONE
   return salt

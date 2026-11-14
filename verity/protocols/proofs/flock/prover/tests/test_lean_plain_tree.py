@@ -27,7 +27,7 @@ import pytest
 from verity.circuits.codec import canonical_json, encode_program
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json), ``session/`` (the sampled plain session's
 #: record and proofs), ``live.json`` (the prover's LIVE record) and ``challenger/`` (its record and release log)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "plain-tree"
@@ -40,7 +40,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 def fx():
     assert (FIXTURE / "live.json").is_file(), (
         f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree`")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return FIXTURE
 
 

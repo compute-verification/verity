@@ -1,13 +1,14 @@
-/-
+module
+
+import all Init.Data.String.Search
+import all Init.Data.String.Slice
+
+/-!
 `Flock.Scan`: a row's numbers read off its bytes (`nums`, and `numsU` in machine words), as `Flock.tokens` and
 `String.toNat?` read its chars. A line of ASCII decimal digits and whitespace gives the numbers
 `(tokens s).mapM String.toNat?` gives (`numsU_some`, `nums_eq`, `numsL_tokens`); `Net.lineNumsFast` falls back to that
 expression on any other line, and on a number past 19 digits, so the two agree on every line.
 -/
-module
-
-import all Init.Data.String.Search
-import all Init.Data.String.Slice
 
 @[expose] public section
 

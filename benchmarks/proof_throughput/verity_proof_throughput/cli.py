@@ -150,7 +150,7 @@ _MS = re.compile(r"^(inputs|setup(?: \(drawn\))?|.+?): (\d+) ms$")
 
 
 def cmd_lean_verdict(a) -> int:
-    """One JSON line for one session's ``flock-verify verify``: its verdict, time and peak memory."""
+    """One JSON line for one session's ``verity-verify-proof verify``: its verdict, time and peak memory."""
     out = Path(a.stdout).read_text() if Path(a.stdout).exists() else ""
     err = Path(a.stderr).read_text() if Path(a.stderr).exists() else ""
     verdict = next((json.loads(ln[len("VERDICT "):]) for ln in out.splitlines() if ln.startswith("VERDICT ")), None)

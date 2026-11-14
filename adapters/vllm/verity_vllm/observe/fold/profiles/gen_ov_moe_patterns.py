@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from verity.circuits.defs import bind
 from verity.definitions.registry import act as _ACT
@@ -91,7 +91,7 @@ def moe_subtree_census(node: TreeNode) -> dict[str, Any]:
         if n is node:
             continue
         if n.is_triton:
-            e = n.enter
+            e: Any = n.enter   # a Triton launch, as the log recorded it
             launches.append({"id": n.id, "fn": triton_name(n), "grid": list(e.grid), "constexprs": dict(e.constexprs),
                              "num_warps": e.num_warps, "num_stages": e.num_stages,
                              "args": {k: _scalar(v) for k, v in e.args.items() if k not in e.constexprs}})
@@ -170,7 +170,7 @@ class MoEFusedExperts:
     renormalize: bool = False
     #: the router's statement: None = kernel order, "ordered" = `MoeRouterTopKOrdered[Norm]_v1`, the same function (`MoEFusedExpertsOrdered`);
     #: a class attribute, not a field, so the default construction's pattern fields are unchanged
-    router = None
+    router: ClassVar[str | None] = None
     #: patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
     #: its `TpCollective` here so the collective is resolved (and its Compute appended after `MoeSum`) instead of making the whole scope
@@ -184,9 +184,9 @@ class MoEFusedExperts:
     #: the fused kernel's A / B dtype and the scale pointers it must not carry; class attributes like `router`, which the block-FP8
     #: scope (`MoEFusedExpertsFp8`) overrides with `_numeric_pins`
     operand_dtype = "bfloat16"
-    absent_ptrs = ("a_scale_ptr", "b_scale_ptr")
+    absent_ptrs: ClassVar[tuple[str, ...]] = ("a_scale_ptr", "b_scale_ptr")
     #: numeric pins `_tiling` checks instead (the block-FP8 scope's SWAP_AB, which a tuned tile sets)
-    tiling_keys = ()
+    tiling_keys: ClassVar[tuple[str, ...]] = ()
     kernel_note = "bf16 unquantised kernel"
 
     def _numeric_pins(self) -> dict[str, Any]:
@@ -195,9 +195,9 @@ class MoEFusedExperts:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or not op_name(node.op).startswith(MOE_OP_PREFIX):
             return None
-        C = self.config
-        E, TOPK, H, I = C.get("NUM_EXPERTS"), C.get("TOPK"), C["H"], C["I"]
-        if not all(isinstance(v, int) for v in (E, TOPK, H, I)):
+        C: Any = self.config   # the checkpoint's config: the four sizes are checked on the next lines
+        E, TOPK, H, INTER = C.get("NUM_EXPERTS"), C.get("TOPK"), C["H"], C["I"]
+        if not all(isinstance(v, int) for v in (E, TOPK, H, INTER)):
             return unsupported(node, "profile config lacks NUM_EXPERTS / TOPK / H / I", config={k: C.get(k) for k in ("NUM_EXPERTS", "TOPK", "H", "I")})
         ins = node.input_views()
         sx = bound_args(node).get("shared_experts_input")
@@ -208,7 +208,7 @@ class MoEFusedExperts:
         if hidden is None:
             return unsupported(node, "MoE scope: no [M,H] hidden_states input", inputs=[repr(v) for v in ins])
         M = hidden.shape[0]
-        if M != len(ctx.start.rows) or ctx.start.num_tokens != ctx.start.num_tokens_padded:
+        if len(ctx.start.rows) != M or ctx.start.num_tokens != ctx.start.num_tokens_padded:
             return unsupported(node, "MoE rows are not exactly the step's token rows (padding rows would reach the router)",
                                M=M, rows=len(ctx.start.rows), num_tokens=ctx.start.num_tokens, num_tokens_padded=ctx.start.num_tokens_padded)
 
@@ -223,15 +223,16 @@ class MoEFusedExperts:
                                        "silu_and_mul": len(silus), "moe_sum": len(sums)}, census=moe_subtree_census(node))
         router, up, down, silu, msum = routers[0], launches[0], launches[1], silus[0], sums[0]
         gates, own = self._gate_launches(node), self._scope_ops(node)
-        for r in (gates, own):
-            if isinstance(r, Unsupported):
-                return r
+        if isinstance(gates, Unsupported):
+            return gates
+        if isinstance(own, Unsupported):
+            return own
         keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns} | {g.id for g in gates} | {o.id for o in own}
         keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns, *gates, *own)))
         # descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
         extra: list[Compute] = []
         if self.scope_patterns:
-            for d in find_descendants(node, lambda n: n.id not in keep and not n.is_triton):
+            for d in find_descendants(node, lambda n, keep=keep: n.id not in keep and not n.is_triton):
                 if d.id in keep:
                     continue
                 for pt in self.scope_patterns:
@@ -250,7 +251,7 @@ class MoEFusedExperts:
         hint = node.enter.module or "mlp.experts"
 
         # 1. router --------------------------------------------------------------------------------------------
-        a = bound_args(router)
+        a: Any = bound_args(router)   # what the log recorded, each read checked below
         weights, ids, logits = a.get("topk_weights"), a.get("topk_indices"), a.get("gating_output")
         if not all(isinstance(v, ViewDesc) for v in (weights, ids, logits)):
             return unsupported(node, "topk_softmax arguments not bound as expected", args={k: repr(v) for k, v in a.items()})
@@ -272,7 +273,7 @@ class MoEFusedExperts:
             return unsupported(node, "no pinned router reduction geometry (VPT) for this expert count", E=E, pinned=self.router_vpt)
         router_c = Compute(bind(router_def, E=E, TOPK=TOPK, VPT=vpt), M, (PerRow(logits),), (PerRow(weights), PerRow(ids)), (router.id,),
                            hint=f"{hint}/router", kernels=(K_ROUTER,), attribution=tuple(ctx.start.rows), pattern=self.name)
-        gate_c = [self._gate(node, gates[0], router, logits, ctx)] if gates else []
+        gate_c: list[Any] = [self._gate(node, gates[0], router, logits, ctx)] if gates else []   # a Compute once the refusal is returned
         if gate_c and isinstance(gate_c[0], Unsupported):
             return gate_c[0]
         parts: list[Compute | Transparent] = list(before) + gate_c + [router_c]
@@ -286,10 +287,10 @@ class MoEFusedExperts:
         P = M * TOPK
         ids_flat = _flat(ids, P)
         try:   # the record target's expert GEMM Definitions (`frontend.targets.moe_expert_gemm_spec`): the same selection the builder makes
-            up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * I, False), (I, H, True)))
+            up_spec, down_spec = (T.moe_expert_gemm_spec(target_of(ctx)[0], E, K, N, routed=w) for K, N, w in ((H, 2 * INTER, False), (INTER, H, True)))
         except T.UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused-MoE binding: {e}")
-        r = self._fused(node, up, ctx, expect_weighted=False, expect_top_k=TOPK, E=E, K=H, N=2 * I, P=P)
+        r = self._fused(node, up, ctx, expect_weighted=False, expect_top_k=TOPK, E=E, K=H, N=2 * INTER, P=P)
         if isinstance(r, Unsupported):
             return r
         x_up, w13, c1 = r
@@ -297,7 +298,7 @@ class MoEFusedExperts:
             return unsupported(node, "up-GEMM A operand is not the [M,H] hidden_states view", a=repr(x_up), hidden=repr(hidden))
         up_c = Compute(up_spec, P,
                        (Gather(x_up, tuple(p // TOPK for p in range(P))), PerRow(ids_flat), Shared(w13)),
-                       (PerRow(_as_rows(c1, P, 2 * I)),), (up.id,), hint=f"{hint}/{_root_name(ctx, w13, 'w13')}", kernels=(K_FUSED,), pattern=self.name)
+                       (PerRow(_as_rows(c1, P, 2 * INTER)),), (up.id,), hint=f"{hint}/{_root_name(ctx, w13, 'w13')}", kernels=(K_FUSED,), pattern=self.name)
         parts.append(up_c)
 
         # 4. silu_and_mul on the pair rows ------------------------------------------------------------------------
@@ -311,14 +312,14 @@ class MoEFusedExperts:
         parts.append(dataclasses.replace(silu_r, spec=bind(_ACT.SiluMul, I=silu_r.spec.bindings["I"]), hint=f"{hint}/silu_and_mul", pattern=self.name))
 
         # 5. down GEMM over pairs, routed weight in the epilogue ---------------------------------------------------
-        r = self._fused(node, down, ctx, expect_weighted=True, expect_top_k=1, E=E, K=I, N=H, P=P)
+        r = self._fused(node, down, ctx, expect_weighted=True, expect_top_k=1, E=E, K=INTER, N=H, P=P)
         if isinstance(r, Unsupported):
             return r
         x_dn, w2, c3 = r
         wv = bound_args(down).get("topk_weights_ptr")
         if not isinstance(wv, ViewDesc) or wv.alloc != weights.alloc or wv.offset != weights.offset or wv.shape != (M, TOPK):
             return unsupported(node, "down-GEMM routed weights are not the router's topk_weights view", topk_weights_ptr=repr(wv), weights=repr(weights))
-        if x_dn.shape != (P, I) or not is_row_major(x_dn):
+        if x_dn.shape != (P, INTER) or not is_row_major(x_dn):
             return unsupported(node, "down-GEMM A operand is not the [M*TOPK, I] silu output", a=repr(x_dn))
         down_c = Compute(down_spec, P,
                          (PerRow(x_dn), PerRow(ids_flat), PerRow(_flat(weights, P)), Shared(w2)),
@@ -378,7 +379,7 @@ class MoEFusedExperts:
     def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
         """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages) or a tuned tile the Build accepts
         (`targets.moe_tuned_tile_refusal`)."""
-        e = launch.enter
+        e: Any = launch.enter   # the launch, as the log recorded it
         consts = dict(e.constexprs)
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
@@ -393,7 +394,7 @@ class MoEFusedExperts:
     def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,
                P: int):
         """Check one `fused_moe_kernel` launch against the pins and return `(a_view, b_view, c_view)` or an Unsupported."""
-        e = launch.enter
+        e: Any = launch.enter   # the launch, as the log recorded it
         consts = dict(e.constexprs)
         bad = {k: (consts.get(k), v) for k, v in self._numeric_pins().items() if k not in self.tiling_keys and consts.get(k) != v}
         if bad:
@@ -405,7 +406,7 @@ class MoEFusedExperts:
             return unsupported(node, "fused_moe_kernel launch order / role does not match (MUL_ROUTED_WEIGHT, top_k)",
                                observed={"MUL_ROUTED_WEIGHT": consts.get("MUL_ROUTED_WEIGHT"), "top_k": consts.get("top_k")},
                                expected={"MUL_ROUTED_WEIGHT": expect_weighted, "top_k": expect_top_k})
-        a = bound_args(launch)
+        a: Any = bound_args(launch)   # what the log recorded, each read checked below
         for k in ("b_bias_ptr", *self.absent_ptrs):
             if a.get(k) is not None:
                 return unsupported(node, f"fused_moe_kernel has a {k}", **{k: repr(a.get(k))})
@@ -459,15 +460,16 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
             return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
                                "expert bodies run the Ampere one", dot=dot.id)
-        from verity.definitions.registry import moe_pad as MP  # the padded Definitions register on first use, as vocab.py's kind does
+        # the padded Definitions register on first use, as vocab.py's kind does
+        from verity.definitions.registry import moe_pad as MP
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
                                renormalize=True)
         C = self.config
-        E, TOPK, H, I = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
+        E, TOPK, H, INTER = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
         parts = list(r.parts)
         computes = [p for p in parts if isinstance(p, Compute)]
-        by_id = {p.spec.name: p for p in computes}
+        by_id: dict[str, Any] = {p.spec.name: p for p in computes}   # the pairwise Computes: their operands are whole views
         router, up, down, msum = by_id["MoeRouterTopK"], by_id["MoeExpertGemm"], by_id["MoeExpertGemmW"], by_id["MoeSum"]
         silu = next(p for p in computes if p.spec.name == "SiluMul")
         M = router.rows
@@ -477,7 +479,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         out = msum.outputs[0].view
         vpt = router.spec.bindings["VPT"]                              # the pinned router geometry the pairwise reading bound
         hint = r.hint
-        one = Compute(bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=vpt, H=H, I=I), M,
+        one = Compute(bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=vpt, H=H, I=INTER), M,
                       (PerRow(hidden), PerRow(logits), Shared(w13), Shared(w2)), (PerRow(out),),
                       tuple(sorted(set(router.consumed) | set(up.consumed) | set(silu.consumed) | set(down.consumed) | set(msum.consumed))),
                       hint=f"{hint}/moe_ffn_fixed", kernels=(K_ROUTER, K_FUSED, *silu.kernels, K_SUM), attribution=router.attribution,
@@ -518,7 +520,7 @@ def header_moe_experts_class(ctx: StepContext) -> str | None:
         return None
 
 
-def _quant_io(q: TreeNode) -> tuple[Any, Any, Any]:
+def _quant_io(q: TreeNode) -> tuple[Any, ...]:
     """`(input, output_q, output_s)` of a `per_token_group_fp8_quant` call (its first three parameters), or of a
     `silu_and_mul_per_block_quant` call (`input`, `out`, `scales`)."""
     a = bound_args(q)
@@ -600,7 +602,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
         """A batch-invariant target's pinned tile (`MoEFusedExperts._tiling`) with SWAP_AB False; otherwise the tuned tile the Build
         accepts (`targets.moe_fp8_tuned_tile_refusal`: cc 9.0, SWAP_AB = `enable_swap_ab`, registered MMAv2/QGMMA step)."""
         tp = target_of(ctx)[0]
-        e = launch.enter
+        e: Any = launch.enter   # the launch, as the log recorded it
         c = e.constexprs
         if tp.batch_invariant:
             if c.get("SWAP_AB") is not False:
@@ -626,11 +628,12 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
 
     def _scaled(self, node: TreeNode, launch: TreeNode, *, E: int, K: int, N: int) -> _Scaled | Unsupported:
         G = self.group
-        a = bound_args(launch)
+        a: Any = bound_args(launch)   # what the log recorded, each read checked below
         av, asv, bv, bsv = a.get("a_ptr"), a.get("a_scale_ptr"), a.get("b_ptr"), a.get("b_scale_ptr")
         if not all(isinstance(v, ViewDesc) for v in (av, asv, bv, bsv)):
             return unsupported(node, "block-FP8 fused_moe_kernel without its a_scale / b_scale views", a_scale_ptr=repr(asv), b_scale_ptr=repr(bsv))
-        KB = launch.enter.constexprs.get("BLOCK_SIZE_K")
+        e: Any = launch.enter   # the launch, as the log recorded it
+        KB = e.constexprs.get("BLOCK_SIZE_K")
         if K % G or not isinstance(KB, int) or KB <= 0 or G % KB:
             return unsupported(node, "the block G does not tile K, or BLOCK_SIZE_K does not divide G", K=K, G=G, BLOCK_SIZE_K=KB)
         KG, NB = K // G, -(-N // G)
@@ -650,16 +653,19 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
 
     def _fp8_parts(self, node: TreeNode, ctx: StepContext, r: Group) -> Group | Unsupported:
         """`r` with each expert GEMM replaced by its activation quant, then its block-FP8 pair form."""
-        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # registry.fp8 loads with an FP8 scope only
+        # registry.fp8 loads with an FP8 scope only
+        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant
         C, G = self.config, self.group
-        E, TOPK, H, I = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
+        E, TOPK, H, INTER = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
+        up: Any   # the scope's two fused_moe_kernel launches, as the log recorded them
+        down: Any
         up, down = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_FUSED)
-        parts = list(r.parts)
+        parts: list[Any] = list(r.parts)   # the pairwise Group's parts; the two at `at` are its expert GEMMs' Computes
         at = {p.consumed: i for i, p in enumerate(parts) if isinstance(p, Compute)}
-        silu = next(p for p in parts if isinstance(p, Compute) and p.spec.name == "SiluMul")
+        silu: Any = next(p for p in parts if isinstance(p, Compute) and p.spec.name == "SiluMul")
         tp = target_of(ctx)[0]
         repl: dict[int, tuple[Compute, Compute]] = {}
-        for launch, K, N, routed in ((up, H, 2 * I, False), (down, I, H, True)):
+        for launch, K, N, routed in ((up, H, 2 * INTER, False), (down, INTER, H, True)):
             i = at[(launch.id,)]
             base, P = parts[i], parts[i].rows
             s = self._scaled(node, launch, E=E, K=K, N=N)
@@ -669,7 +675,8 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
             if not isinstance(q, Compute):
                 return unsupported(node, f"a {K_QUANT} inside the MoE scope did not resolve as Fp8GroupQuant_v1", child_id=s.quant.id,
                                    child_reason=getattr(q, "reason", None), child_detail=getattr(q, "detail", None))
-            if (q.operands[0].view, q.outputs[0].view, q.outputs[1].view) != (s.source, s.a, s.a_s):
+            qv: Any = q   # an Fp8GroupQuant_v1 Compute: its operand and its two outputs are whole views
+            if (qv.operands[0].view, qv.outputs[0].view, qv.outputs[1].view) != (s.source, s.a, s.a_s):
                 return unsupported(node, f"the {K_QUANT} the launch reads does not resolve to its own views", child_id=s.quant.id)
             if routed and not (_same(silu.outputs[0].view, s.source) and max(silu.consumed) < s.quant.id < launch.id):
                 return unsupported(node, "the w2 launch's quant does not read the SiLU output between the SiLU and the launch",
@@ -684,7 +691,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
             except T.UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
             if routed:
-                ops = (PerRow(s.a), PerRow(s.a_s), base.operands[1], base.operands[2], Shared(s.b), Shared(s.b_s))
+                ops: tuple[Any, ...] = (PerRow(s.a), PerRow(s.a_s), base.operands[1], base.operands[2], Shared(s.b), Shared(s.b_s))
             else:
                 rows = tuple(p // TOPK for p in range(P))
                 ops = (Gather(s.a, rows), Gather(s.a_s, rows), base.operands[1], Shared(s.b), Shared(s.b_s))

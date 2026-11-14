@@ -549,7 +549,7 @@ def test_rule_set_is_versioned_and_recorded():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# PAD — the padded circuit (PAD-INT stage-1 requirements; serve3-spec) — after freeze
+# PAD — the padded circuit (PAD-INT's first-stage requirements; serve3-spec) — after freeze
 # ---------------------------------------------------------------------------------------------------------
 
 PROF_V2 = dict(mode="profile", profile="b1-eager-v2")

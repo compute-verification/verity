@@ -18,7 +18,6 @@ flock_live::LiveChallenger, the proofs go to the verifier, and the verifier's ve
 three extra sessions submit rep 0 as rep 1, a flipped yr[0] and a flipped zerocheck round; each must be rejected.
 """
 import pathlib
-import re
 
 ch = pathlib.Path("cuda-ghash/challenger.hpp")
 s = ch.read_text()
