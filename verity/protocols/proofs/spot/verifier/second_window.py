@@ -76,10 +76,22 @@ def ranks_of(field: Any) -> list[tuple[str, dict[str, int], int]] | None:
     return out
 
 
+def bounds(ranks: Sequence[tuple[str, Mapping[str, int], int]], template: str) -> list[int]:
+    """`Spot.Ranks.Ranks.bounds`: ``template``'s first unit of each rank in the joined circuit, then its count."""
+    b = [0]
+    for q in ranks:
+        b.append(b[-1] + q[1].get(template, 0))
+    return b
+
+
+def _segment_in(b: Sequence[int], r: int) -> tuple[int, int]:
+    lo = b[min(r, len(b) - 1)]
+    return lo, b[r + 1] if r + 1 < len(b) else lo
+
+
 def segment(ranks: Sequence[tuple[str, Mapping[str, int], int]], template: str, r: int) -> tuple[int, int]:
     """`Spot.Ranks.Ranks.segment`: rank ``r``'s units of ``template`` in the joined circuit, ``[lo, hi)``."""
-    lo = sum(q[1].get(template, 0) for q in ranks[:r])
-    return lo, lo + (ranks[r][1].get(template, 0) if r < len(ranks) else 0)
+    return _segment_in(bounds(ranks, template), r)
 
 
 def index_of(template: str, key: str) -> int | None:
@@ -112,9 +124,12 @@ def _leaves_agree(ms: Sequence[tuple[int, Mapping[str, Any]]]) -> bool:
                for _j, h in ms)
 
 
+def _rank_in(b: Sequence[int], lo: int, hi: int) -> int | None:
+    return next((r for r in range(len(b) - 1) if b[r] <= lo <= hi < b[r + 1]), None)
+
+
 def _rank_of(ranks: Sequence[tuple[str, Mapping[str, int], int]], template: str, lo: int, hi: int) -> int | None:
-    return next((r for r in range(len(ranks)) if segment(ranks, template, r)[0] <= lo <= hi < segment(ranks, template, r)[1]),
-                None)
+    return _rank_in(bounds(ranks, template), lo, hi)
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -141,13 +156,14 @@ def _join_wire_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], w: Any) -
     if p is None:
         return False
     units, c = _reader_units(p), p["cut"][1]
-    if units < 1 or p["at"] + units > segment(ranks, p["reader"], len(ranks) - 1)[1]:
+    br, bw = bounds(ranks, p["reader"]), bounds(ranks, p["writer"])
+    if units < 1 or p["at"] + units > _segment_in(br, len(ranks) - 1)[1]:
         return False
     for r in range(len(ranks)):
-        lo, hi = segment(ranks, p["reader"], r)
+        lo, hi = _segment_in(br, r)
         if max(lo, p["at"]) < min(hi, p["at"] + units):
             x, y = _box(p, (max(lo, p["at"]) - p["at"]) * c, (min(hi, p["at"] + units) - p["at"]) * c - 1)
-            if x >= 0 and _rank_of(ranks, p["writer"], x, y) == r:
+            if x >= 0 and _rank_in(bw, x, y) == r:
                 return False
     return True
 
