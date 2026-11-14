@@ -72,8 +72,8 @@ def startProbe (roots : List String) (words : Nat) : Json :=
 /-- What the check says of an execution phase after its period's first. Its scan starts from the state the execution
 phase before it ended in, which the check neither holds nor charges. -/
 def startCarriedRefusal : String :=
-  "the scan's start is the state the link-window before it ended in, and the check holds or charges a start only at \
-    its period's first link-window (startCheck): a period is one link-window"
+  "the scan's start is the state the execution phase before it ended in, and the check holds or charges a start only \
+    at its period's first execution phase (startCheck): a period is one execution phase"
 
 /-- Execution phase `w`'s start finding in the rows form, the `i`-th of its period: a refusal unless it is the period's
 first (`i = 0`) and, where it is the run's first (`w = 0`), its scan starts from the empty state (`startEmpty`). The

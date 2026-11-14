@@ -1212,7 +1212,7 @@ UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 MISREAD = "the scan's state reads are not its transitions' chain"
 #: `startCheck`'s refusals, after its window's number: an execution phase after its period's first, and the run's first
 #: one's start that is not the empty state.
-CARRIED = "the scan's start is the state the link-window before it ended in"
+CARRIED = "the scan's start is the state the execution phase before it ended in"
 UNPINNED = "the scan's start is not the empty state"
 
 
