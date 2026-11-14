@@ -367,7 +367,9 @@ def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held
             (archive / "sha512").mkdir(parents=True, exist_ok=True)
             if not (archive / "sha512" / key).exists():
                 os.link(f, archive / "sha512" / key)
-        except OSError:
+        except OSError as e:
+            print(f"A0 archive-link: {f} not linked into {archive} ({type(e).__name__}: {e}), so it is put, a copy",
+                  file=sys.stderr)
             continue
         linked[f] = (key, archive / "sha512" / key)
         if ids[f] is not None:

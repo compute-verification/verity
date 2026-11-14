@@ -254,9 +254,10 @@ def test_under_archive_link_a_window_put_before_its_sessions_links_each_members_
     assert [json.loads(x) for x in puts.read_text().splitlines()] == [["pub-8.bin", "pub-8.bin"]]
 
 
-def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it(tmp_path, monkeypatch):
-    """Where the link can't be made (the archive on another filesystem), the member's circuit is put, a copy, and the
-    verdict is the same; a wrong key would be the verifier's to refuse, since it holds each object to its key."""
+def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it(tmp_path, monkeypatch, capsys):
+    """Where the link can't be made (the archive on another filesystem), the member's circuit is put, a copy, the
+    verdict is the same and a line says which file was not linked and why; a wrong key would be the verifier's to
+    refuse, since it holds each object to its key."""
     lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
@@ -267,6 +268,8 @@ def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it
 
     monkeypatch.setattr(a0.os, "link", refuse)
     assert a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"]
+    said = capsys.readouterr().err
+    assert f"{st['dir'] / 'circuit.txt'} not linked into {out / 'archive'}" in said and "Invalid cross-device link" in said
     assert [json.loads(x) for x in puts.read_text().splitlines()] == [["circuit.txt", "pub-8.bin"]]
     assert (out / "archive" / "sha512" / key).stat().st_ino != (st["dir"] / "circuit.txt").stat().st_ino
     assert st["archived"] and next(iter(st["archived"].values()))[0] == key
