@@ -471,9 +471,7 @@ def _launcher_copy(d: Path, rel: str) -> dict | None:
     if not isinstance(machine, str) or not machine or any(ids.is_run_id(a.name) or any(map(os.path.lexists, _places(a))) for a in above):
         return None
     job = _read_json(d / "job.json") or {}
-    runs_root = EV._get(job, "run", "runs_root")
-    if (EV._get(job, "environment", "hostname") == socket.gethostname() and isinstance(runs_root, str) and os.path.isabs(runs_root)
-            and os.path.realpath(runs_root) == os.path.realpath(d.parent)):
+    if EV._get(job, "environment", "hostname") == socket.gethostname() and _in_runs_root(d, EV._get(job, "run", "runs_root")):
         return None                                   # the run's own directory, on the machine it ran on: never a copy
     try:
         expires = datetime.fromtimestamp(math.ceil(_last_write(d)), UTC) + LAUNCHER_COPY_EXPIRY
