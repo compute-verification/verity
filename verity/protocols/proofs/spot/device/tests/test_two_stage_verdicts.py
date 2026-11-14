@@ -168,7 +168,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
     statement is given here, so ``second-statements`` or the design's own codes refuse it before the form's."""
     own = _pinned_round_two(PINS)
     assert SS.inputs_failure(own) is None
-    first = SS.check(SS.FORM, own, None)
+    first = SS.check_twin(SS.FORM, own, None)
     assert "second-inputs" not in first.codes and not first.ok
     for changed in (replace(own, tables=()),
                     replace(own, tables=tuple((p, {**e, "root": "ee" * 64}) for p, e in own.tables)),
@@ -177,7 +177,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
                     replace(own, tables=own.tables[:1])):
         assert SS.inputs_failure(changed) == f"{KEY}/row"
         assert dict(SS._interior_failures(changed))["second-inputs"] == {"value": f"{KEY}/row", "why": SS.INPUTS_WHY}
-        assert "second-inputs" in SS.check(SS.FORM, changed, None).codes
+        assert "second-inputs" in SS.check_twin(SS.FORM, changed, None).codes
     recorded = {"roots": [{"port": f"t{k}", **{x: e[x] for x in ("root", "domain", "leaves")}}
                           for k, e in enumerate(PINS.values())]}
     assert SS.inputs_failure(replace(own, boundary=recorded, tables=())) is None

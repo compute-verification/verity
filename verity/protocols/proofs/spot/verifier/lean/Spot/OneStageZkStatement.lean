@@ -667,6 +667,28 @@ def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.
 statement is unknown, which `run` refuses. -/
 def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
 
+/-- The parameter naming how many tables one session sets up: the audit at `J` tables in one session, as
+`verity-verify-proof --session-tables J` and `SampledKSLiveV5` take them. Read nowhere yet: `inputsOf` and `inputsAt`
+set up one table (`count := 1`) and `sessionTables` names it. -/
+def TABLES_KEY : String := "session_tables"
+
+/-- The refusal of parameters naming `TABLES_KEY`: a session of more than one table is not written. -/
+def TABLES_REFUSED : String :=
+  "session_tables: one-stage v2 sets up one table a session; J tables in one session are not written (proofs/zero-knowledge)"
+
+/-- The tables one session sets up, from the parameters `j`: one where they name no `TABLES_KEY`, and `TABLES_REFUSED`
+where they name it, at any `J`. Where it would be read: `inputsOf`'s and `inputsAt`'s `count`, `sessionTablesAt` in
+place of `sessionTables`, and so `rootBTablesAt`'s link lengths; a sample split over `J` tables is held to
+`Draw.tablesWhy`. -/
+def tablesOfJson (j : Json) : V Nat :=
+  match field? j TABLES_KEY with
+  | none => pure 1
+  | some _ => throw TABLES_REFUSED
+
+/-- The tables a session of `J` tables sets up: the statement's tags' at `J` (`Flock.Tags.tableNames`), the names its
+link's `root_b` would hold. At `J = 1` it is `sessionTables`. -/
+def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames J)).getD #[]
+
 /-- The byte length of table `st`'s `root_B`: the level-0 cap a `--zk` proof's reader reads (`Flock.ZkProof.reader`),
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
 `Zk.verify` holds `root_B` to that cap (S16/R1), so the statement fixes it. -/

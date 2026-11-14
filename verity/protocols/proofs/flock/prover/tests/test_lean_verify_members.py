@@ -1,12 +1,15 @@
 """`verify-members` (`Flock.VerifyMembers`, `verifyMember`): the Lean verifier's `verify` for each member of a run in one
-process, the run's registered program read once and kept. What it holds, each on real sessions:
+process, the run's registered program read once and kept, and each member's circuit file kept for the member after it.
+What it holds, each on real sessions:
 
 - a member's output is `verify`'s for that member alone, byte for byte, with its exit status on the `MEMBER` line after
   it, whether the member is accepted, refused, names a program that is other bytes than the kept one (the same
   descriptor, and another), cannot be read or is no argument list;
-- nothing but the kept program's digest and readings reaches a later member: a member with another program is verified
-  against its own, never the kept one, and a session's coin key is fresh for the next member as it is for the next
-  `verify`, while inside one member it is used once;
+- nothing but the kept program's digest and readings, and the SHA-512 and the parse of the circuit file of the member
+  before, reaches a later member: a member with another program is verified against its own, never the kept one; a
+  member whose circuit file is other bytes, or the same bytes under another statement's name, is verified against its
+  own file under its own name; and a session's coin key is fresh for the next member as it is for the next `verify`,
+  while inside one member it is used once;
 - a member that stops, on its usage, an exception or a line that is no argument list, stops alone, and the members after
   it get their verdicts;
 - each member is answered before the next line is read: the tests write a line only once the one before it is answered;
@@ -212,6 +215,52 @@ def test_each_member_gets_the_verdict_verify_gives_it_alone_and_nothing_of_anoth
     # every member accepted: exit 0
     rc, [answer], rest, _ = _members(["--program", str(program)], [_line(members["accepted"])], tmp_path / "one.log")
     assert (rc, rest, b"".join(answer[:-1]), answer[-1]) == (0, b"", alone["accepted"][1], b'MEMBER {"exit":0,"index":0}\n')
+
+
+def test_a_member_reads_the_kept_circuit_file_only_where_its_own_is_the_same(built, tmp_path):
+    """Seven lines in one process, each after a member that kept a circuit file: the accepted member; its circuit file
+    at another path (the same bytes, so the kept parse); the file with one more byte (other bytes: its own file, not
+    accepted); the accepted member again (its own file again, the kept one being the longer); the same file under
+    another statement's name (the kept bytes under other tags: its own parse, not accepted); a file that is no circuit,
+    and that file again (a kept refusal). Each is answered as `verify` answers it alone. Were a member answered from
+    the kept file where its own differs, the longer file's member or the other statement's would be accepted here. Each
+    line is a verify of its own, so the test is slow, and no cheaper one reaches it: which file a member is answered
+    from shows only in a run."""
+    assert (PLAIN / "live.json").is_file(), (
+        f"{PLAIN} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree`")
+    st = PLAIN / "stage"
+
+    def member(circuit: Path, statement: str = "verity/flock-circuit") -> list[str]:
+        return ["--statement", statement, "--coins", "tree", "--circuit", str(circuit), "--public", str(st / "pub-32.bin"),
+                "--partition", str(st / "partition.json"), "--program", str(st / "program.json"), "--session",
+                str(PLAIN / "session")]
+
+    same = tmp_path / "same.txt"
+    same.write_bytes((st / "circuit.txt").read_bytes())
+    longer = tmp_path / "longer.txt"
+    longer.write_bytes((st / "circuit.txt").read_bytes() + b"\n")
+    nothing = tmp_path / "not-a-circuit.txt"
+    nothing.write_text("not a circuit\n")
+    members = {
+        "accepted": member(st / "circuit.txt"),
+        "same bytes": member(same),
+        "longer": member(longer),
+        "accepted again": member(st / "circuit.txt"),
+        "other statement": member(st / "circuit.txt", "verity/flock-circuit+plain-leaves"),
+        "not a circuit": member(nothing),
+        "not a circuit again": member(nothing),
+    }
+    rc, answers, rest, errs = _members(["--program", str(st / "program.json")], [_line(x) for x in members.values()],
+                                       tmp_path / "members.log")
+    assert (rc, rest, len(answers), errs[-1]) == (1, b"", len(members), b""), (rc, rest, answers, errs)
+    runs: dict[tuple[str, ...], tuple[int, bytes, bytes]] = {}
+    alone = {name: _as_alone(i, x, answer, err, runs)
+             for i, ((name, x), answer, err) in enumerate(zip(members.items(), answers, errs))}
+    [accepted] = _verdicts(alone["accepted"][1])
+    assert (alone["accepted"][0], accepted["accepted"], accepted["why"]) == (0, True, "")
+    assert alone["same bytes"][0] == 0, alone["same bytes"]
+    for name in ("longer", "other statement", "not a circuit"):
+        assert alone[name][0] != 0 and not any(v["accepted"] for v in _verdicts(alone[name][1])), (name, alone[name])
 
 
 def test_members_whose_files_are_held_by_content_each_in_an_archive_of_its_own(built, tmp_path):

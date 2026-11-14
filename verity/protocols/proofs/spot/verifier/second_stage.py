@@ -1,7 +1,10 @@
 """Round 2's statement check, as the verifier's `Spot.SecondStage` defines it, which the difftest's
 `second_statements` holds this to: a two-stage run's second-stage sessions held, each by its statement, to the interior
-registration and to the second sample's cells. `service.Stream` adds it to the interior registration's audit record as
-`checks.statements` (`attach`). The parts and their cells, a statement, its codes and the form's switch are the Lean's
+registration and to the second sample's cells. Its verdict of record is the Lean's (`SecondStage.checkAny`, inside
+`Run.run`), which no interface here reaches on its own: `check` and `complete` raise (`verifier.not_written`), and
+`check_twin` and `complete_twin` are their Python twins, the difftest's references. `service.Stream` adds the twin's
+check to the interior registration's audit record as `checks.statements` (`attach`), the Python side `Run.run` is held
+to, and the outcome is `Run.run`'s. The parts and their cells, a statement, its codes and the form's switch are the Lean's
 (its module docstring).
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
@@ -90,7 +93,7 @@ table has another leaf count than the read's rows, is refused here. The code is 
 branch of `check`, so a run that has it still reaches its other stops.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
-(``two-stage-form``), and the Python flipped alone disagrees with the run of record. `complete` is what a two-stage
+(``two-stage-form``), and the Python flipped alone disagrees with the run of record. `complete_twin` is what a two-stage
 outcome may say of itself: nothing while `FORM` is off or its replay block is a stand-in for the request Definition."""
 
 from __future__ import annotations
@@ -106,6 +109,7 @@ from verity.circuits.refs import Affine, Concat, Explicit
 from verity.circuits.types import Array, RecordType, Tuple
 from verity.commitments.window import window_binding
 
+from .one_stage import verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
@@ -183,7 +187,7 @@ RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame
               ("registered",))
 
 
-def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+def complete_twin(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
     """Whether a two-stage outcome is complete, in the sense one-stage's accept publishes (`one_stage.audit.COMPLETE`:
     every verdict ran). It is only when all three hold. The two-stage form is allowed (`form`: `FORM` in a run of
     record, on only once the soundness proof covers the form). The replay block is the registered request Definition
@@ -1620,7 +1624,7 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
     return found if found or allow else [("two-stage-form", FORM_WHY)]
 
 
-def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
+def check_twin(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     """Round 2's statement check of `statements`, the two-stage form allowed when `allow` (`FORM` in a run): each code
     once, with the detail it first failed with, the interior record's order first (`SecondStage.checkAny`:
     `SecondStage.check` where every statement is of every slot of its part, and a statement of only its part's sampled
@@ -1640,6 +1644,18 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     return c.verdict()
 
 
+def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
+    """Round 2's verdict of record on `statements`: the Lean `SecondStage.checkAny`'s, which only `Run.run` reaches, so
+    this raises (`verifier.not_written`); `check_twin` is its Python twin."""
+    return V.not_written("check", "Spot.SecondStage.checkAny")
+
+
+def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+    """Whether a two-stage outcome is complete, of record: no Lean says it yet, so this raises
+    (`verifier.not_written`); `complete_twin` is its Python twin."""
+    return V.not_written("complete", "Spot.SecondStage.complete")
+
+
 def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]] = ()) -> dict[str, Any]:
     """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, and the reads
     `reads` that rest on the interior's own values (`interior_reads`) as ``interior_reads`` where there are any. It
@@ -1652,7 +1668,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KEY", "Checked", "Link", "Own", "Part",
            "Rows", "Run", "Width", "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "complete", "inputs_failure", "interior_order_ok",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "inputs_failure", "interior_order_ok",
            "interior_reads", "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_widths",
            "replay_wires", "returns_ok", "row_at", "rows_of",

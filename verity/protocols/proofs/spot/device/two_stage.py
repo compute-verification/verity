@@ -166,7 +166,7 @@ import numpy as np
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
@@ -1007,7 +1007,25 @@ def pins(proofs: Mapping[str, Any], stmts: Sequence[Mapping[str, Any]]) -> dict[
 def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
               brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
               record: Mapping[str, Any], proofs: Mapping[str, Any], tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
+    """Round 2's verdict of record on the sessions (`second_stage.check`, the form allowed): the Lean's, which raises
+    until an interface reaches it (`verifier.not_written`); `round_two_twin` is its Python twin."""
+    return SS.check(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
+                    stmts).to_json()
+
+
+def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
+                   brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
+                   record: Mapping[str, Any], proofs: Mapping[str, Any],
+                   tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`round_two`'s Python twin (`second_stage.check_twin`), for tests only."""
+    return SS.check_twin(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
+                         stmts).to_json()
+
+
+def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
+                   brec: Mapping[str, Any], drawn: Sequence[int], record: Mapping[str, Any], proofs: Mapping[str, Any],
+                   tie: Mapping[str, Any] | None) -> SS.Own:
+    """What round 2 holds of the run: over the links and wires the
     replay block ``replay`` defines under descriptor id ``key`` makes (`second_stage.replay_links`, at the boundary
     record's ports, and `second_stage.replay_wires`, as the stream derives them), their rows
     (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
@@ -1031,7 +1049,7 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
                  supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
                  fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs),
                  tables=S.pinned_tables(proofs))
-    return SS.check(True, own, stmts).to_json()
+    return own
 
 
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],

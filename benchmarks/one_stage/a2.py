@@ -29,6 +29,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+COMPOSE = HERE.parents[1] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "compose_circuit.py"
 sys.path.insert(0, str(HERE))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
@@ -36,7 +37,7 @@ from verity.protocols.proofs.spot.verifier.tests import other_population as R2  
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -46,7 +47,7 @@ def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, di
     it hasn't."""
     ub = out / "unbound"
     ub.mkdir(parents=True, exist_ok=True)
-    p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
+    p = a0.run([sys.executable, str(COMPOSE), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
                out / "compose-unbound.log", {"PYTHONPATH": a.unbound_m0_pythonpath or a.m0_pythonpath})
     made = json.loads(p.stdout.strip().splitlines()[-1])
     pin = made["pin"]
@@ -102,7 +103,7 @@ def main() -> int:
     # the verifier's own circuit, bound to its own partition and program
     st_dir = out / "stage"
     st_dir.mkdir(parents=True, exist_ok=True)
-    p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(st_dir / "circuit.txt"),
+    p = a0.run([sys.executable, str(COMPOSE), "--input-set", a.template_set, "--out", str(st_dir / "circuit.txt"),
                 "--partition", P.digest(part), "--program", part["program"]], out / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
     mine = json.loads(p.stdout.strip().splitlines()[-1])
     for name in (f"pub-{n}.bin", f"inst-{n}.bin"):

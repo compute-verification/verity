@@ -633,7 +633,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
 tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
@@ -656,7 +656,7 @@ pearl_dir() { echo "$D/pearlplus/w$K"; }
 pearl_tied() {  # under PEARLPLUS_TIE: 0 iff Pearl+'s piece wrote W for window K and $VW's registration R is chained right after it
   "$PY" - "$(pearl_dir)/registration.json" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 try:
     w = REG.digest(json.load(open(sys.argv[1])))
 except (OSError, ValueError):

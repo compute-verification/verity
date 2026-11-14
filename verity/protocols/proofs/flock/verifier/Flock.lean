@@ -66,6 +66,7 @@ public import Flock.PortRoots
 public import Flock.KsScope
 public import Flock.Registered
 public import Flock.ProgramRead
+public import Flock.CircuitRead
 public import Flock.SelfTest
 public import Flock.VerifyMembers
 public import Flock.RegBound

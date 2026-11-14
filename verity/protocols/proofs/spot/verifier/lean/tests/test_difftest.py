@@ -11,7 +11,7 @@ one, `coins.law_problem`), for the `select` piece the challenger's sample from a
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
-`service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check`) on the
+`service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check_twin`) on the
 second-stage sessions' statements over one and two templates' interiors, for the `fits` piece v2's refusal of a length
 a session's statement can't hold (`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece
 (a registration's whole run, `Run.run`) those references in a `Stream`'s order.
@@ -64,9 +64,18 @@ from verity.protocols.accounting.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum, work_k
 from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                  link_points as LP, partition as P, produced as PD, proofs as PF,
-                                                  registered as G, registration as R)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as DR,
+    hello as H,
+    hidden_draw as HD,
+    link_points as LP,
+    partition as P,
+    produced as PD,
+    proofs as PF,
+    registered as G,
+    docket as R,
+)
 from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.protocols.proofs.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
                                               coins_within, draw_coins, draw_first, law_problem)
@@ -1543,7 +1552,7 @@ def run(j):
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front. Under a two-stage rule the
     registration's query is its grain (`grain`), `select` is the first stage, then `interiors` and `second`
     (`_interior_steps`) before `deliver`, and the interior registration's audit record over the second stage's sample,
-    with round 2's statement check of the interior's `statements` (`second_stage.check` under `second_stage.FORM`), is
+    with round 2's statement check of the interior's `statements` (`second_stage.check_twin` under `second_stage.FORM`), is
     under `interior`, the symbol accepting when both do."""
     j = _json(j)
     if not isinstance(j, dict):
@@ -1658,7 +1667,7 @@ def run(j):
                      SS.replay_wires(p["program"], it["replay"]["program_fn"]),
                      SS.replay_rows(p["program"], it["replay"]["program_fn"]),
                      SS.replay_returns(p["program"], it["replay"]["program_fn"], rec))
-        out2 = SS.attach(out2, SS.check(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
+        out2 = SS.attach(out2, SS.check_twin(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
         accepted = accepted and out2["accepted"] is True
         staged = {"interior": {"audit": codec.canonical_json(out2).decode(), "draw": inner["draw"], "read": inner["read"],
                                "receipt": inner["receipt"]}}
@@ -4759,10 +4768,10 @@ def _returns_of(j):
 
 
 def second_statements(j):
-    """`Pieces.secondStatements`: round 2's statement check (`second_stage.check`) of `statements` (null for none), the
+    """`Pieces.secondStatements`: round 2's statement check (`second_stage.check_twin`) of `statements` (null for none), the
     two-stage form allowed when `allow`, over what `_second_own` reads of `j`."""
     allow, own, statements = _second_own(j)
-    return SS.check(allow, own, statements).to_json()
+    return SS.check_twin(allow, own, statements).to_json()
 
 
 def second_interior_reads(j):
@@ -8221,7 +8230,7 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
         assert got == want, (want, got)
     _, own, statements = _second_own(_read_interior(honest, 0))
-    v = SS.check(True, own, statements)
+    v = SS.check_twin(True, own, statements)
     assert v.ok and SS.attach({"checks": {}}, v, SS.interior_reads(own, statements))["interior_reads"] == [h]
     assert "interior_reads" not in SS.attach({"checks": {}}, v)
 

@@ -1,6 +1,6 @@
 module
 
-public import NciCheck.RecordText
+public import Spot.RecordText
 public import Proofs.Properties.Nci.LeafWidthsType
 
 /-!
