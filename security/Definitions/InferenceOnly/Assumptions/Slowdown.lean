@@ -1,12 +1,12 @@
 module
 
-public import Definitions.InferenceOnly.Dampener
+public import Definitions.InferenceOnly.Slowdown
 public import Definitions.InferenceOnly.Threads
 
 /-!
 # The compute dampener: the model's accounting, named
 
-The dampener's statements (`InferenceOnly.Guarantees.DampenerThreaded`, `DampenerRemote`, `DampenerRemotePeriod`) take the
+The dampener's statements (`InferenceOnly.Guarantees.SlowdownThreaded`, `SlowdownRemote`, `SlowdownRemotePeriod`) take the
 model's accounting of where counted multiplications run, and the shape of the servers' windows, as premises over
 numbers. These name them. None is about the world: each is how the model counts.
 -/
