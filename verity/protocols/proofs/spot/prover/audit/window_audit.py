@@ -1044,6 +1044,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
+        mm["st"][a0.ARCHIVE_LINK] = bool(getattr(a, "archive_link", False))
 
     relay = MT.Relay(tree_coins(a), MT.listener()) if trees else None
     summary["coin_trees"] = "window" if trees else "own"
@@ -1181,7 +1182,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             (out / "lean-verify").mkdir(exist_ok=True)
             keys = a0.archive_put(a.lean, out / "lean-verify" / "archive",
                                   [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
-                                  out / "lean-verify" / "archive-put.log", archived)
+                                  out / "lean-verify" / "archive-put.log", archived,
+                                  [a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)[0] for s in statements
+                                   if s["mm"]["st"].get(a0.ARCHIVE_LINK)])
             if a.zk_server and not plain(a):
                 kept = a0.VerifyMembers(a.lean, out / "lean-verify" / "archive",
                                         keys.get(Path(statements[0]["mm"]["st"]["program_file"]), ""),
@@ -1688,6 +1691,8 @@ def streamed(a: argparse.Namespace) -> bool:
 ZK_SERVER_HELP = ("the core protocols' path, Lean's flock-zk-server: every session's prover runs behind the ZK server's send check "
                  "(FC_ZK_SERVER=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
+ARCHIVE_LINK_HELP = ("link each member's circuit file into the archive under its SHA-512 rather than copying it "
+                     "(a0.archive_put): the archive holds no second copy, and Lean still holds the object to its key")
 #: the ZK server's Lean session loop's executable, beside Lean's verity-verify-proof in its package
 ZK_SERVER_LOOP = "flock-zk-server"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
@@ -2592,6 +2597,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    ap.add_argument("--archive-link", action="store_true", help=ARCHIVE_LINK_HELP)
     lean_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one ZK server session of a MoE "

@@ -36,7 +36,7 @@ def calleeAt (cs : Array Json) (nd : Json) : Option Json :=
   (nd.getObjValD "fn").getNat?.toOption.bind fun x => cs[x]?
 
 /-- A node's form, from its `form` string. -/
-def formOf : String → Option Form
+def formOf : String → Option Flock.Program.Form
   | "primitive" => some .prim
   | "call" => some .call
   | "batch" => some .batch

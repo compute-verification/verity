@@ -8,8 +8,8 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   column) grid, so each rest commits one BF16 (the width rule). Rows and weight rows off a whole tile (`TILE`, a warp's
   32 × 32, the tile the H1 kernel computes) are padded: pad row p reads constant zero bits of its own, contiguous, so it is a
   distinct row of the site, and its outputs are not served.
-* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, vLLM's
-  ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
+* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, the engine's
+  scheduler's tokens a step, ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
   served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
   steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's proof blocks,
   off(w) the proof blocks of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
@@ -40,7 +40,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, the arm's `int_mm` beside, `int8_arm.Int8Arm`, to check). The last ``retain`` calls' Y are kept.
 * **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
-  (`traced`); the call gate-passes only if the y it hands back to vLLM was written by the GEMM invocation that wrote its
+  (`traced`); the call gate-passes only if the y it hands back to the serving engine was written by the GEMM invocation that wrote its
   z, the only GEMM of the call, and z is its records, which hold together with its scales and served y
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
@@ -473,7 +473,7 @@ class H1Run:
               ) -> list[RQ.RequestEntry]:
         """The step about to run: the requests the engine admits for it, each (req_id, prompt token ids, token cap), and its
         batch order, each scheduled request's (req_id, rows) in the order the step's A tables hold its rows
-        (`pouw_h1_requests.batch_order`). Each new request's entry goes in the step's round, at its first slot; a req_id
+        (the adapter's). Each new request's entry goes in the step's round, at its first slot; a req_id
         already admitted (a request resumed
         after a preemption) keeps its entry (`readmitted`). A request past the window's S steps, with no prompt token or
         cap, or not in the batch is refused (`refused_requests`): it has no entry, and its rows are a gap
@@ -632,7 +632,7 @@ class H1Run:
 
     def judge(self, trace: Any, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
+        back to the serving engine; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
         the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
         made, self._recorded = self._recorded, None
         if made is None:

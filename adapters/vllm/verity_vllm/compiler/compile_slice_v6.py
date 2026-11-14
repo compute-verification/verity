@@ -121,7 +121,10 @@ from verity.protocols.accounting.certifier.verifier import replay_chain as RC
 from verity.protocols.accounting.certifier.verifier import replay_step as RS
 from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
 from verity_vllm.compiler import compile_slice_v5 as V5
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.trace import part as _part
+from verity.commitments.gates.frame_v3 import _refs
+from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
 
 STATICS = V5.STATICS
 COMPILE_FLAGS = ("load", "steps", "cache", "served", "carry", "calls", "edge")

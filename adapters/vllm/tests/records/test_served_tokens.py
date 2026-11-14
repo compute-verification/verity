@@ -24,11 +24,9 @@ from verity_vllm.records.served_tokens import ServedRequest, ServedTokens
 
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "served_tokens.json"
-#: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
-#: with G6 on the parsed JSON before it read the record, then once more when G6 began refusing a declared request the record has no
-#: entry for: that turned `a request unserved` and `no requests` from PASS to FAIL, and changed no other case; the sampler geometry's
-#: relation text is part of it; and once more when G6's message for a record without tokens.json said "workload of record" for
-#: "row of record", which changed only that text
+#: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory
+#: replaced): every case's verdicts and G6's problem texts, the sampler geometry's relation text among them, so a reworded
+#: message renews it
 OUTCOMES_SHA256 = "eed2b3c607bcbc4cbca4efe0228f1e92e7589ce118ce4b5e54f02df30db960a7"
 REQUIRED = ("requests", "requests[0].request_id", "requests[0].generated_token_ids", "lag.value")
 OPTIONAL = ("arrive_step_realized", "first_step", "finish_step", "finish_reason", "served_output_len", "executed_prefix_len")

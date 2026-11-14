@@ -205,7 +205,6 @@ from types import SimpleNamespace
 from typing import Any
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
-sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity.protocols.proofs.spot.prover.audit.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402

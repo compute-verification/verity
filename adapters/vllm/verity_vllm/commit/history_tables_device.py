@@ -19,15 +19,14 @@ from typing import Any
 import numpy as np
 from verity.commitments import history as HT
 from verity.commitments import hm96
-
 from verity.protocols.accounting.pouw.prover.serving import (
     ROW_TABLE_SEG_BYTES,
-    RowTableLibrary,
     hm_tables,
     leaf_prefixes,
     row_table_host_lib,
     u64_words,
 )
+from verity_torch.pouw import RowTableLibrary
 
 __all__ = ["Hist", "Table"]
 

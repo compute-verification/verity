@@ -431,18 +431,23 @@ def joined(pending: list[Future]) -> None:
         pending.clear()
 
 
+def _link(src: Path, path: Path) -> bool:
+    """Whether `path` is now a hard link to `src` (False where the link fails: another file system, `src` deleted)."""
+    try:
+        path.unlink(missing_ok=True)
+        os.link(src, path)
+    except OSError:
+        return False
+    return True
+
+
 def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True) -> dict:
     """`_write`'s file for bytes that don't change within an install (a weight's rows and tree): a hard link to the copy an
     earlier retained pass wrote (`kept`, by file name), so every pass's directory holds what it opens without writing it
     again; written (and kept) where there is none or the link fails (another file system, the copy deleted)."""
     first = kept.get(path.name)
-    if first is not None and first[0] != path:
-        try:
-            path.unlink(missing_ok=True)
-            os.link(first[0], path)
-            return dict(first[1])
-        except OSError:
-            pass
+    if first is not None and first[0] != path and _link(first[0], path):
+        return dict(first[1])
     out = _write(path, data(), digest)
     kept[path.name] = (path, out)
     return out
