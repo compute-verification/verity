@@ -39,6 +39,7 @@ from verity.commitments.windows.interface import digest_words
 from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
@@ -173,7 +174,7 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
+    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), D.parse_design(f"subset:{Q}"),
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -206,10 +207,10 @@ def _first():
                   S.TwoStage(P.template_instance_query(BLOCK), f"rate:{Q}/{SPANS}", 1),
                   S.Check((P.program_digest(Program(FUSED)),), P.template_instances_query((FUSED,)), proof_deadline=60.0),
                   public, b"interior-registered-tables-test")
-    draws = iter([list(SAMPLE)])
+    samples = iter([list(SAMPLE)])
     stream = S.Stream(spec, (FUSED,), span_values=IR.span_values(links), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
-                      sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
+                      sampler=lambda design, n: [0] * len(design["strata"]) if "strata" in design else next(samples))
     record, ports, layer = _boundary()
     reg = stream.register(record, ports, leaf_layer=layer)
     return stream, reg, stream.select(reg)
