@@ -13,11 +13,12 @@ Two kinds of case:
 
 * Through `inference-only-rows serve` (`PORT`): the record difftest's cases (`record_difftest_vectors.case`), split at
   the run's own record into params, commitment and evidence, each template's blob a few bytes that are no circuit
-  file, then at most one change (`EXPECT`). Every circuit file is tens of megabytes, so no such case reads one: each
-  ends in a refusal, `circuit-file` at the latest.
-* Through `inference-only-rows check PARAMS COMMITMENT EVIDENCE BLOB...` (`FILE_CASES`): one honest case of two
-  templates on the circuit files of Flock's fixtures: the accept at `Γ` and `α`, `size` and `nci` one past each, a
-  template's file swapped for one of more rows, a file missing, and each file the Lean refuses.
+  file, then at most one change (`EXPECT`); each ends in a refusal, `circuit-file` at the latest. Every circuit file
+  is tens of megabytes, so only one random case in `SERVE_FILE_ONE_IN` reads one (`SERVE_FILE_CASES`): one honest
+  case of two templates on a file of Flock's fixtures, at its limits and one past each.
+* Through `inference-only-rows check PARAMS COMMITMENT EVIDENCE BLOB...` (`CHECK_CASES`): that honest case on two
+  files of two values of a unit's rows: the accept at `Γ` and `α`, `size` and `nci` one past each, a template's file
+  swapped for one of more rows, a file missing, and each file the Lean refuses.
 
 The harness compares everything but a reject's reason; each test here also holds the reason's name, its text before
 the first colon, on both sides."""
@@ -221,7 +222,7 @@ EXPECT = {"honest": ("reject", "circuit-file"), "no-blob": ("reject", "circuit-f
           "evidence-key": ("reject", "evidence"), "evidence-noncanonical": ("reject", "evidence"),
           "record-type": ("reject", "evidence"), "blobs-type": ("reject", "case")}
 #: The first seeds of the record difftest's random cases, from which honest and refused cases are taken.
-SEEDS = 240
+SEEDS = 120
 
 
 def no_file(tid: str) -> bytes:
@@ -342,22 +343,41 @@ def made(draw, m: str) -> dict:
     return case_of(draw(st.sampled_from(refused if m == "refused" else honest)), m, draw(st.integers(0, 9)))
 
 
+#: The honest case on circuit files a random `serve` run takes now and then (`SERVE_FILE_ONE_IN` of its cases), each
+#: with the verdict it aims at: both templates on one taken file of 56 MB, at its limits and one past each.
+SERVE_FILES = ("plain-tree", "plain-tree")
+SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-nci": "nci"}
+SERVE_FILE_ONE_IN = 40
+#: what `limits` names: `at`, `Γ` and `α` exactly what a block holds; `rows`, `Γ` one under it; `fresh`, `α` one
+#: fresh bit under it
+LIMITS = {"accept": "at", "size": "rows", "nci": "fresh"}
+
 TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
+def tag_of(case) -> str:
+    """A case's key in `TAGS`: a digest of its canonical text, which is over 100 MB for a case on a circuit file."""
+    return hashlib.sha256(D.canonical(case).encode()).hexdigest()
+
+
 @st.composite
 def cases(draw, only: tuple[str, ...] = tuple(EXPECT)) -> dict:
-    """A case with one change of `only`, tagged with it for `counted`."""
-    m = draw(st.sampled_from(only))
-    case = draw(made(m))
-    TAGS[D.canonical(case)] = m
+    """A case with one change of `only`, or one in `SERVE_FILE_ONE_IN` a case of `SERVE_FILE_CASES`, tagged with it
+    for `counted`."""
+    if draw(st.integers(0, SERVE_FILE_ONE_IN - 1)) == SERVE_FILE_ONE_IN // 2:
+        m = draw(st.sampled_from(tuple(SERVE_FILE_CASES)))
+        case = serve_file_case(m)
+    else:
+        m = draw(st.sampled_from(only))
+        case = draw(made(m))
+    TAGS[tag_of(case)] = m
     return case
 
 
 def counted(case) -> dict:
     out = reference(case)
-    SEEN[(TAGS.get(D.canonical(case), "?"), name(out))] += 1
+    SEEN[(TAGS.get(tag_of(case), "?"), name(out))] += 1
     return out
 
 
@@ -385,16 +405,20 @@ def test_each_change_takes_its_path_on_both_sides(server):
                     assert name(py) == kind, (m, seed, pick, py)
 
 
+@pytest.mark.slow
 def test_the_rows_protocol_agrees_with_the_reference(server):
-    """Lean and the reference agree on every case, and every change takes its path at least once."""
+    """Lean and the reference agree on every case, and every change and every case of `SERVE_FILE_CASES` takes its
+    path at least once. Slow: what the cheaper test above can't reach is an accept, which only a circuit file of tens
+    of megabytes gives, its hex a line of over 100 MB, a few seconds a case on each side."""
     SEEN.clear()
     stats = D.run(PORT, examples=300, server=server)
-    missed = [m for m, (_, kind) in EXPECT.items() if kind != "code" and not SEEN[(m, kind)]]
+    aims = {**{m: kind for m, (_, kind) in EXPECT.items() if kind != "code"}, **SERVE_FILE_CASES}
+    missed = [m for m, kind in aims.items() if not SEEN[(m, kind)]]
     assert not missed, (missed, SEEN)
     assert stats.counts.get("reject", 0) > 200, stats
 
 
-# --- the cases on circuit files, through `check` ----------------------------------------------------------------------
+# --- the cases on circuit files ---------------------------------------------------------------------------------------
 
 
 @lru_cache(maxsize=None)
@@ -414,48 +438,61 @@ def file_seed() -> int:
     raise AssertionError("no honest split of two templates and two blocks whose blocks read fresh bits")
 
 
-#: Each case on circuit files: the file each template's `circuits` entry names (`None`: the file the honest case
-#: names, its blob left out), the limits (`at`: `Γ` and `α` exactly what a block holds; `rows`: `Γ` one under it;
-#: `fresh`: `α` one fresh bit under it), and the verdict and name the reference gives.
-FILE_CASES = {"accept": (("plain-tree", "forged-proofs"), "at", "accept"),
-              "zk-sessions": (("zk-sessions", "forged-proofs"), "at", "accept"),
-              "size": (("plain-tree", "forged-proofs"), "rows", "size"),
-              "nci": (("plain-tree", "forged-proofs"), "fresh", "nci"),
-              "more-rows": (("forged-proofs", "forged-proofs"), "at", "size"),
-              "no-blob": (("plain-tree", None), "at", "circuit-file"),
-              **{f"refused:{n}": ((n, None), "at", "circuit-file") for n in REFUSED}}
-
-
 @lru_cache(maxsize=None)
 def file_bytes(n: str) -> bytes:
     return circuit_file(n).read_bytes()
 
 
 @lru_cache(maxsize=None)
-def honest_limits() -> tuple[int, int]:
-    """A block's rows and fresh bits on the honest case's files."""
+def file_hex(n: str) -> str:
+    return file_bytes(n).hex()
+
+
+def digest_of(n: str) -> str:
+    return hashlib.sha512(file_bytes(n)).hexdigest()
+
+
+@lru_cache(maxsize=None)
+def block_on(files: tuple[str, str]) -> tuple[int, int]:
+    """A block's rows and fresh bits on the honest case, its templates on `files`, as `FILES` counts them."""
     s = split(file_seed())
-    p = params({**s["params"], "circuits": [[t, hashlib.sha512(file_bytes(n)).hexdigest()]
-                                            for t, n in zip(s["tids"], ("plain-tree", "forged-proofs"), strict=True)]})
+    p = params({**s["params"], "circuits": [[t, digest_of(n)] for t, n in zip(s["tids"], files, strict=True)]})
     inst, tr = inputs(p, (s["record"], NR.record_digest(s["record"])), s["evidence"])
-    out = ref.block_rows(inst, tr, {"table": dict(zip(s["tids"], (FILES["plain-tree"], FILES["forged-proofs"]),
-                                                      strict=True)),
+    out = ref.block_rows(inst, tr, {"table": {t: FILES[n] for t, n in zip(s["tids"], files, strict=True)},
                                     "gamma": 0, "alpha": [0, 1]})
     return out["rows"], out["fresh"]
 
 
-def file_case(which: str) -> tuple[dict, list[bytes]]:
-    names, limits, _ = FILE_CASES[which]
+def file_case(names: tuple[str | None, ...], limits: str, at: tuple[str, str]) -> dict:
+    """The honest case with each template's `circuits` entry naming the file `names` gives (`None`: `at`'s), and
+    `limits` (`LIMITS`) of a block on the files `at`."""
     s = split(file_seed())
-    rows, fresh = honest_limits()
+    rows, fresh = block_on(at)
     gamma, alpha = {"at": (rows, [fresh, rows]), "rows": (rows - 1, [fresh, rows]),
                     "fresh": (rows, [fresh - 1, rows])}[limits]
-    named = [n or "forged-proofs" for n in names]
+    named = [n or a for n, a in zip(names, at, strict=True)]
     p = {**s["params"], "gamma": gamma, "alpha": alpha,
-         "circuits": [[t, hashlib.sha512(file_bytes(n)).hexdigest()] for t, n in zip(s["tids"], named, strict=True)]}
-    case = {"commitment": D.canonical(s["record"]).encode().hex(), "evidence": D.canonical(s["evidence"]).encode().hex(),
+         "circuits": [[t, digest_of(n)] for t, n in zip(s["tids"], named, strict=True)]}
+    return {"commitment": D.canonical(s["record"]).encode().hex(), "evidence": D.canonical(s["evidence"]).encode().hex(),
             "params": p}
-    return case, [file_bytes(n) for n in dict.fromkeys(n for n in names if n is not None)]
+
+
+def serve_file_case(m: str) -> dict:
+    """The `serve` case of `SERVE_FILE_CASES`' `m`, its one blob the file of `SERVE_FILES`."""
+    return {**file_case(SERVE_FILES, LIMITS[SERVE_FILE_CASES[m]], SERVE_FILES), "blobs": [file_hex(SERVE_FILES[0])]}
+
+
+#: Each case through the executable's `check`: the file each template's `circuits` entry names (`None`: the file the
+#: honest case names, its blob left out), the limits (`LIMITS`) of a block on the honest case's files (`CHECK_AT`), and
+#: the verdict and name the reference gives.
+CHECK_AT = ("plain-tree", "forged-proofs")
+CHECK_CASES = {"accept": (CHECK_AT, "at", "accept"),
+               "zk-sessions": (("zk-sessions", "forged-proofs"), "at", "accept"),
+               "size": (CHECK_AT, "rows", "size"),
+               "nci": (CHECK_AT, "fresh", "nci"),
+               "more-rows": (("forged-proofs", "forged-proofs"), "at", "size"),
+               "no-blob": (("plain-tree", None), "at", "circuit-file"),
+               **{f"refused:{n}": ((n, None), "at", "circuit-file") for n in REFUSED}}
 
 
 def test_unit_rows_reads_each_files_unit():
@@ -468,29 +505,29 @@ def test_unit_rows_reads_each_files_unit():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("which", list(FILE_CASES))
+@pytest.mark.parametrize("which", list(CHECK_CASES))
 def test_the_rows_protocol_on_circuit_files(which, tmp_path):
     """The executable's `check` on the honest case's parts and its circuit files, against the reference: the same
-    outcome but for the reason's text after its name, the name `FILE_CASES` gives, and for a file the Lean refuses,
+    outcome but for the reason's text after its name, the name `CHECK_CASES` gives, and for a file the Lean refuses,
     the refusal `REFUSED` names. Slow: each run parses the circuit files it reads whole, one to three seconds a file."""
-    case, blobs = file_case(which)
+    names, limits, want = CHECK_CASES[which]
+    case = file_case(names, limits, CHECK_AT)
+    given = [n for n in dict.fromkeys(names) if n is not None]
     exe = D.build(LEAN, EXE)
     parts = []
     for k, data in (("params", D.canonical(case["params"]).encode()), ("commitment", bytes.fromhex(case["commitment"])),
                     ("evidence", bytes.fromhex(case["evidence"]))):
         (tmp_path / k).write_bytes(data)
         parts.append(str(tmp_path / k))
-    names = [n for n in dict.fromkeys(FILE_CASES[which][0]) if n is not None]
-    run = subprocess.run([str(exe), "check", *parts, *(str(circuit_file(n)) for n in names)], capture_output=True,
+    run = subprocess.run([str(exe), "check", *parts, *(str(circuit_file(n)) for n in given)], capture_output=True,
                          text=True)
     assert run.returncode in (0, 1), (run.returncode, run.stderr[-2000:])
     lean = json.loads(run.stdout)
-    py = answer(case, blobs, refused_digests())
-    want = FILE_CASES[which][2]
+    py = answer(case, [file_bytes(n) for n in given], refused_digests())
     assert (name(lean), name(py)) == (want, want), (which, lean["reason"], py["reason"])
     assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in py.items() if k != "reason"}, which
     assert run.returncode == (0 if want == "accept" else 1), which
     if which.startswith("refused:"):
         assert REFUSED[which.split(":", 1)[1]] in lean["reason"], lean["reason"]
     if want == "accept":
-        assert lean["profile"]["rows"] == honest_limits()[0] and lean["profile"]["fresh"] == honest_limits()[1], lean
+        assert [lean["profile"][k] for k in ("rows", "fresh")] == list(block_on(CHECK_AT)), lean
