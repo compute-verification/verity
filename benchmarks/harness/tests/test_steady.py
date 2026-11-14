@@ -98,12 +98,12 @@ FAILS = [
     ("level", {"gaps": (2.0,) * 9 + (2.75,) * 6},
      "its window isn't level: a statement took 2, 2, 2.75 s in its thirds, the slowest over 1.25 times the fastest"),
     ("level", {"changes": {"period": 2}, "gaps": (2.0,) * 9 + (2.75,) * 6},
-     "its window isn't level: a statement took 2, 2, 2.75 s in its parts of whole bursts of 4 sessions, the slowest "
-     "over 1.25 times the fastest"),
+     ("its window isn't level: a statement took 2, 2, 2.75 s in its parts of whole bursts of 4 sessions, the slowest "
+      "over 1.25 times the fastest")),
     # 31 sessions in bursts of 8: three whole bursts at 2 s a statement, then seven sessions at 10 s
     ("level", {"changes": {"period": 4}, "gaps": (1.0, *(2.0,) * 24, *(10.0,) * 7, 1.0, 1.0)},
-     "its window isn't level: a statement took 2, 2, 9 s in its parts of whole bursts of 8 sessions counted back from "
-     "its end, the slowest over 1.25 times the fastest"),
+     ("its window isn't level: a statement took 2, 2, 9 s in its parts of whole bursts of 8 sessions counted back from "
+      "its end, the slowest over 1.25 times the fastest")),
     ("every_prover_warmed", {"changes": {"warm_per_prover": {"prover-gpu3-0": 4}}},
      "1 of its 2 provers finished a warm session before the timed ones"),
     ("every_prover_warmed", {"changes": {"idle_provers": 1}}, "1 of its 2 provers filed no session in the window"),
@@ -154,8 +154,8 @@ UNTOLD = [
     ("card_clear_start_end", {"rates": None},
      "the run holds no `out/rate/rate.json`: it would say whether the record of its card is this row's alone"),
     ("card_clear_start_end", {"rates": "[{"},
-     "the run's `out/rate/rate.json` isn't JSON (Expecting property name enclosed in double quotes): it would say whether "
-     "the record of its card is this row's alone"),
+     ("the run's `out/rate/rate.json` isn't JSON (Expecting property name enclosed in double quotes): it would say whether "
+      "the record of its card is this row's alone")),
     ("card_clear_start_end", {"start": NODE + "app GPU ? pid 15 1MiB\n"},
      "`out/cotenants-k2-start.txt` names a compute process on a card it couldn't name (pid 15 1MiB)"),
     ("level", {"sessions": None}, "the run holds no `out/rate/gemm64-k2/sessions.jsonl`"),

@@ -35,7 +35,7 @@ says. These are the directories that have one:
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
-| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.sh` or else its `run.py`; given no NAME, the names |
+| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
@@ -131,7 +131,9 @@ id may give a value for each period and scope it is computed at, each in its own
 three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
 of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
 benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
-the name, period and `over` reads the others.
+the name, period and `over` reads the others. A value for one member of a set (a deployed guarantee, a lead) names it
+as `member`, a non-empty string held only where given, and the writer keys on it too, so one id gives a value for each
+member (`lean/trust-gap`'s, one a deployed guarantee).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
@@ -286,4 +288,6 @@ How long the team's own changes take to reach `main`: measured on the verified q
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
+| `dashboard/` | the top goals of the console's Metrics dashboard whose own number has a target, a value younger than its `every` and a mark, out of the top goals it lists (`run.py`) | maintained |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
+| `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
