@@ -2413,6 +2413,11 @@
     },
     {
       "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
       }
     }

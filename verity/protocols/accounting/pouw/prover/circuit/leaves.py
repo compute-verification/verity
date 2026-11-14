@@ -127,7 +127,7 @@ from collections.abc import Sequence
 from functools import lru_cache
 
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.circuits.refs import coll_concat
+from verity.circuits.refs import Coll, coll_concat
 from verity.circuits.types import Array, Value
 from verity.commitments import domains, hm96
 from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
@@ -179,7 +179,7 @@ ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _
               **{(row, role): _V2 for row in ("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes")
                  for role in (ROLE_X, ROLE_W)}}
 
-def chunk_digests(e: H.Emit, c, u, tn: int) -> list:
+def chunk_digests(e: H.Emit, c: Coll, u: Coll, tn: int) -> list:
     """`PearlTileDigest`'s digests of one tile row (``c``, ``u``: its TN words' C̃ and U): TurboSHAKE128 (D = 0x21) of each
     32-column chunk, eight half-lanes each."""
     out: list = []
@@ -225,7 +225,7 @@ def messages_type(tm: int, tn: int) -> Array:
     return Array(2 * tm * tn, W.F32)
 
 
-def tile_messages(c, u, tm: int, tn: int):
+def tile_messages(c: Coll, u: Coll, tm: int, tn: int) -> Coll:
     """A tile's C̃ and U (``c``, ``u``: `Array<TM, Array<TN, F32>>`) as its messages' words (`messages_type`), wiring only:
     `pearl_c.messages`' order, row-major, per row each 32-column chunk's C̃ words, then its U words.  Each word's bits least
     significant first (a Boolean element's, `boolean.bit_type`) are then ``b"".join(messages)``'s bits, bit i bit i % 8 of
