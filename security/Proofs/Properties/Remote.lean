@@ -7,7 +7,7 @@ public import Proofs.Properties.InferenceOnly.Theta
 public import Proofs.Properties.InferenceOnly.ThetaSteps
 public import Proofs.Properties.InferenceOnly
 public import Proofs.Properties.InferenceOnly.Agrees
-public import Proofs.InferenceOnly.FitWitness
+public import Proofs.Slowdown.FitWitness
 public import Proofs.Properties.Spot
 public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.Core.Expand

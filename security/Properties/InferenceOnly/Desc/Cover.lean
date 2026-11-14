@@ -1,8 +1,8 @@
 module
 
-public import Definitions.InferenceOnly.BitView
+public import Definitions.Slowdown.BitView
 public import Definitions.InferenceOnly.Assumptions.Theta
-public import Definitions.InferenceOnly.Assumptions.Cover
+public import Definitions.Slowdown.Assumptions.Cover
 public import InferenceOnlyCheck.Theta
 public import Properties.InferenceOnly.Desc.Verdict
 

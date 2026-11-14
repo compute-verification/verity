@@ -110,8 +110,8 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean), which bounds the slowdown by it
+#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/Slowdown/Remote.lean defines it, and the conclusion of
+#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/Slowdown/Guarantees/Remote.lean), which bounds the slowdown by it
 REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteSlowdown mfu (unregisteredShare C U)"
 
