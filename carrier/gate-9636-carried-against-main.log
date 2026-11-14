@@ -1,0 +1,16 @@
+ratchet gate 512644d14fbc..4f51d8ff9b16: 1 change(s), 1 failed
+  512644d14fbc..4f51d8ff9b16 (4f51d8ff9b16): failed: adds 17 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (benchmarks/one_stage/tests/test_stop_audit.py 1 -> 2; benchmarks/one_stage/two_stage.py 98 -> 102; verity/protocols/proofs/spot/verifier/README.md 71 -> 72; verity/protocols/proofs/spot/verifier/tests/test_two_stage.py 102 -> 107; verity/protocols/proofs/spot/verifier/tests/test_window_place.py 0 -> 3; verity/protocols/proofs/spot/verifier/window_place.py 0 -> 3): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).
+      benchmarks/one_stage/tests/test_stop_audit.py:177 'drawn' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      benchmarks/one_stage/two_stage.py:51 'stage1' is retired; say a two-stage design; the interior commitment; the second stage; the first stage (GLOSSARY.md)
+      benchmarks/one_stage/two_stage.py:303 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      benchmarks/one_stage/two_stage.py:445 'stage1' is retired; say a two-stage design; the interior commitment; the second stage; the first stage (GLOSSARY.md)
+      benchmarks/one_stage/two_stage.py:452 'stage1' is retired; say a two-stage design; the interior commitment; the second stage; the first stage (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/README.md:458 'drawn' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/tests/test_two_stage.py:1246 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/tests/test_two_stage.py:1247 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/tests/test_two_stage.py:1251 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/tests/test_two_stage.py:1258 'Law' is retired; say sampling design (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/tests/test_two_stage.py:1263 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      verity/protocols/proofs/spot/verifier/tests/test_window_place.py:53 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)
+      ... and 5 more
+GATE_EXIT 1
