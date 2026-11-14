@@ -670,7 +670,7 @@ def test_a_request_at_the_cap_passes_and_its_response_is_released():
         verdict = audit(CAPPED, *records(warden))
         assert verdict["accepted"], verdict["windows"]
         assert verdict["max_tokens_cap"] == 4 and [c["max_tokens"] for c in verdict["connections"]] == [4]
-    assert active.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
+    assert IDF.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
 
 
 def refused(request_bytes: bytes) -> None:
@@ -696,7 +696,7 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
 
 
 def malformed_requests() -> dict[str, bytes]:
-    """Requests whose `max_tokens` the network certifier can't read as `active.id_request` writes one."""
+    """Requests whose `max_tokens` the network certifier can't read as `id_form.id_request` writes one."""
     good, at = id_req(4), active.MAX_TOKENS_AT
     field = lambda f: good[:at] + f + good[at + active.ID_DIGITS:]  # noqa: E731
     return {
@@ -712,7 +712,7 @@ def malformed_requests() -> dict[str, bytes]:
 def test_a_request_whose_max_tokens_field_does_not_parse_is_refused(name):
     """A request whose field isn't a u32 at its place is refused (cap) as one past the cap is."""
     request_bytes = malformed_requests()[name]
-    assert active.id_request_max_tokens(request_bytes[:GP]) is None
+    assert IDF.id_request_max_tokens(request_bytes[:GP]) is None
     refused(request_bytes)
 
 

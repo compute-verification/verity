@@ -18,7 +18,7 @@ certifier path none of its records enters the chain.
   `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
-  (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
+  (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through a
          "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (`certifier_serve.py rehearse`'s, per strategy under ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
-#: an id request's fields (`active.id_request`'s keywords but the frame's)
+#: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
 #: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
 #: value for the field

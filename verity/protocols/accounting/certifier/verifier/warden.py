@@ -60,8 +60,8 @@ parameters' digest is no id form's, and the period check reads only the id form'
 
 **The response cap** (`WardenParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
 in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
-reads each request's `max_tokens` from its first request cell, where `active.id_request` puts it
-(`id_form.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32 or exceeds the cap
+reads each request's `max_tokens` from its first request cell, where `id_form.id_request` puts it
+(`id_form.id_request_max_tokens`), before cutting that cell. A request whose field is no u32 there or exceeds the cap
 is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is padding, and
 it fails at once, as the client's other problems do. Every other request's response is held to its `max_tokens`: an
 egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives

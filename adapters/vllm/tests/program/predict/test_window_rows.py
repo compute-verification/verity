@@ -251,7 +251,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 
 
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
-    """Id requests (`active.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
+    """Id requests (`id_form.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
     answered ids 100 + i and 200 + i, through the network certifier at ``cls``'s scan schedule for 3 link-windows of its
     buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""

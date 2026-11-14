@@ -224,9 +224,9 @@ ID_PAYLOAD = 503
 
 
 def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
-    """The fields (`active.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
+    """The fields (`id_form.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
     request as the network certifier forwards it: without the release headers it puts on the server's copy
-    (`release.with_release`), exactly `active.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
+    (`release.with_release`), exactly `id_form.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
     ``payload``), from their first byte (``offset`` 0). None for anything else."""
     head, _, body = request.partition(b"\r\n\r\n")
     line, *fields = head.split(b"\r\n")

@@ -37,7 +37,7 @@ prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximatel
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
-at the same sampling when given): network-certifier-form id requests (`active.id_request`, offset 0), each answered by
+at the same sampling when given): network-certifier-form id requests (`id_form.id_request`, offset 0), each answered by
 the fake endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`,
 at most `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends
 it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
@@ -230,7 +230,7 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
 def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
                max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0, temperature: float | None = None,
                top_p: float | None = None, users: str = "user") -> list[dict]:
-    """n network-certifier-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids":
+    """n network-certifier-form id requests (`id_form.id_request`'s fields), each {"at": seconds from the origin, "ids":
     its fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform,
     and the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when
     given, every request's; the arrivals, prompts, lengths and seeds are the seed's either way. Request i's `user` is
@@ -268,7 +268,7 @@ def closing_windows(params: WardenParams, at: float) -> int:
 
 def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
     """``--prompts``: a JSON array of prompts, each a non-empty array of token ids below 2^`PROMPT_ID_BITS` (the
-    scan's IDB), each prompt's id request (`active.id_request`, offset 0) within the schedule's ingress bound."""
+    scan's IDB), each prompt's id request (`id_form.id_request`, offset 0) within the schedule's ingress bound."""
     try:
         prompts = json.loads(data)
     except ValueError as e:
@@ -871,7 +871,7 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
 async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its network-certifier-form id
-    request (`active.id_request`, offset 0) and its response read as id-form."""
+    request (`id_form.id_request`, offset 0) and its response read as id-form."""
     params = WardenParams(**deployment["params"])
     origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])

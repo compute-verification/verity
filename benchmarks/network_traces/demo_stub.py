@@ -14,7 +14,7 @@ connection, each answered and the connection closed:
   every request (`certifier_serve.served_model`).
 - **A network certifier's id request of the class** (`warden_request`): the network certifier's copy of the client's
   bytes, its release headers right after the request line (`release.with_release`: ``x-verity-release: N`` and
-  ``x-verity-release-run: HEX``), around exactly `active.id_request` of its own fields in the scan's B = P + 9-byte
+  ``x-verity-release-run: HEX``), around exactly `id_form.id_request` of its own fields in the scan's B = P + 9-byte
   cells from their first byte (``offset`` 0), as `warden_serve.py rehearse --ids` sends one. The class (`refusal`): the
   model above, greedy (temperature 0, top_p 1), a prompt of exactly ``--prompt-ids`` ids each below ``--vocab`` (the
   prompt's bytes), and ``max_tokens`` exactly ``--tokens``. It is answered id-form with no HTTP head (`answer`): each
@@ -61,7 +61,7 @@ from verity.protocols.accounting.certifier.verifier import active as A, id_form 
 PROMPT_IDS, TOKENS, VOCAB = 8, 24, 256
 #: the scan's cell payload, P = B − 9 at its B = 512-byte cells (`auditor.SCAN_SCHEDULE`)
 ID_PAYLOAD = 503
-#: the fields of `active.id_request`, every one of which a network certifier's id request carries
+#: the fields of `id_form.id_request`, every one of which a network certifier's id request carries
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
 DOMAIN = b"verity/demo-stub/v1"
 
@@ -103,7 +103,7 @@ def prompts(count: int, shape: Shape = Shape()) -> list[list[int]]:
 
 def warden_request(request: bytes, payload: int = ID_PAYLOAD) -> dict | None:
     """A network certifier's id request's fields (`request`: its head and body as the server reads them), or None:
-    exactly `active.id_request` of its own fields in B = `payload` + 9-byte cells from their first byte, with the
+    exactly `id_form.id_request` of its own fields in B = `payload` + 9-byte cells from their first byte, with the
     release headers the network certifier puts on the server's copy when it has them (`release.release_of`,
     `release.with_release`)."""
     head, blank, raw = request.partition(b"\r\n\r\n")
@@ -183,7 +183,7 @@ class Endpoint:
         n = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         raw = await reader.readexactly(int(n.group(1))) if n else b""
         fields = warden_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
-        why = (f"a warden's id request (active.id_request in {self.shape.payload + 9}-byte cells from their first "
+        why = (f"a warden's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
                "byte) to POST /v1/completions") if fields is None else refusal(fields, self.shape)
         if why is not None:
             self.refused += 1

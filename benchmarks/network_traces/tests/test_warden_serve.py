@@ -588,7 +588,7 @@ def test_a_response_cap_is_a_schedule_flag_rehearse_passes_to_serve():
 
 
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
-    """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
+    """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`id_form.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
     `parse_id_response` reads its count, and a cut or altered response isn't complete."""
     sys.path.insert(0, str(HERE))

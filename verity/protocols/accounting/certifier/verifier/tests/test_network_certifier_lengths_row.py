@@ -132,7 +132,7 @@ def test_the_request_row_is_the_arrival_slots_layout():
 
 @pytest.mark.parametrize("B", (387, 395, 505, 509, 512, 4096))
 def test_request_bytes_is_the_id_requests_length(B):
-    """`request_bytes` is the length of the canonical id request in B-byte cells (`active.id_request` at offset 0) at
+    """`request_bytes` is the length of the canonical id request in B-byte cells (`id_form.id_request` at offset 0) at
     every prompt length around each cell's end and at lengths between, whatever the request's other fields, and it
     is increasing in the prompt's length, so a request's bytes hold its prompt's length."""
     f = LR.form(B)

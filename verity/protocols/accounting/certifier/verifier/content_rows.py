@@ -32,7 +32,7 @@ them, and of nothing a server or a prover says. This is the one statement of the
   released.
 - `max_tokens` is the u32 the request's first cell holds at `active.MAX_TOKENS_AT`, in `active.ID_DIGITS`
   characters after the key `{"max_tokens":`, which the reading holds to that place
-  (`active.id_request_max_tokens`). Every released request has it, so the rule has no default to apply. It is the
+  (`id_form.id_request_max_tokens`). Every released request has it, so the rule has no default to apply. It is the
   number the device reads at ingress under the response cap and holds the response to, so it is at most the cap.
 - The count of the prompt's ids is the cells' prompt fields, one id each, at least 1. It is at most its class's P:
   a canonical id request's length is a function of its prompt's count and B alone and grows with the count, and a
@@ -50,7 +50,7 @@ is a size of prompt ids P and a size of ids released O, each a power of two of a
 
 - a response row is 4·(O + 1) bytes (`response_bytes`);
 - a request row is 4 bytes and the longest request of at most P prompt ids, to a whole 16-bit word
-  (`request_bytes`): the canonical id request of P ids in the schedule's B-byte cells (`active.id_request` at offset
+  (`request_bytes`): the canonical id request of P ids in the schedule's B-byte cells (`id_form.id_request` at offset
   0), whose length is a function of P and B alone and grows with P (`request_room`);
 - an end row is 4 bytes (`END_BYTES`);
 - a words row is 8 bytes (`WORDS_BYTES`), whatever the class.
@@ -180,7 +180,7 @@ def response_bytes(O: int) -> int:
 @lru_cache(maxsize=None)
 def request_room(B: int, P: int) -> int:
     """The bytes of the longest request a class of P prompt ids holds in B-byte cells: the canonical id request of P
-    ids (`active.id_request` at offset 0), whatever its other fields. ValueError for a cell an id request doesn't
+    ids (`id_form.id_request` at offset 0), whatever its other fields. ValueError for a cell an id request doesn't
     fit."""
     check_size(P, "prompt ids")
     if type(B) is not int:

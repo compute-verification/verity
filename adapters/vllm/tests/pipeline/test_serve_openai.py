@@ -500,7 +500,7 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
+    """The network certifier's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
     return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
                         offset=0)
 
@@ -539,7 +539,7 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
 
 
 def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+    """``--protocol ids`` on the network certifier's own id request (`id_form.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
     scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what

@@ -748,7 +748,7 @@ def read_requests(path: Path) -> dict[str, dict]:
 
 
 def id_requests(advice, records: dict[str, dict] | None, frame_bytes: int, model: str = "") -> list[bytes]:
-    """The id requests (`active.id_request` at `frame_bytes`-byte cells and offset 0, as the network certifier's cells
+    """The id requests (`id_form.id_request` at `frame_bytes`-byte cells and offset 0, as the network certifier's cells
     carry them) of the advice's requests in its order, the ingress the network certifier certified: each from its record
     (`read_requests`: its prompt ids, user, and the
     max_tokens, temperature, top_p and seed it brought, a seed it brought none of 0, id requests' default), or, for a
