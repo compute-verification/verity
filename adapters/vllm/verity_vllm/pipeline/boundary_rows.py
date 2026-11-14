@@ -68,7 +68,11 @@ path stay as they are when the replay block becomes the class's own; its program
 replay block it is configured with. The class's own Definition has its boundary values as its ends (`class_signature`):
 its parameters are a span's `b.request` and `b.prompt` rows and it returns the span's `b.egress` row, so round 2's own
 derivation links a template's port that reads a parameter to the value of its name, and the template output it returns
-to the name round 2 gives a return (`ends`).
+to the name round 2 gives a return (`ends`). A class laid out under one (`Layout.own`) has it, whole, as its replay
+block and commits those three values and no other: `b.request`, `b.prompt` and, under the return's name, `b.egress`'s
+ids, each in the rows round 2's link reads of it (`Layout.cuts`: a prompt read an id at a time is P rows a span),
+audited with the templates its body calls. A parameter of any other name is the interior's, as a stand-in's all are.
+It takes no stop rule, whose check is the Definition's own to make, and no history tables.
 
 **Files** (`write`), under ``w<window>/p<P>-o<O>[-nostop]/``: ``commit.json`` (public: the layout, each value's root,
 domain and leaves, the index's hiding leaf), and prover-only ``index.json`` (each span's engine id, prompt, sampling
@@ -129,6 +133,9 @@ TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a t
                        "table's key names which of the two its class is (`boundary_tables.KEY`)")
 #: why no class says both `verdicts` and `ids`: its replay block has one return, and the class commits it once
 ONE_RETURN = "a class commits its replay block's return as verdicts or as ids, not as both"
+#: what `Layout.own` says ``check`` is
+OWN = ("a class's own Definition has a body of calls of templates, each a proof block, reads a span's `b.request` and "
+       "`b.prompt` rows at its parameters of those names and returns its `b.egress` row (`class_signature`)")
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
@@ -336,6 +343,9 @@ class Layout:
     it commits as `b.stop`. ``verdicts`` or ``ids`` (a class says at most one): the replay block returns the check's
     verdicts, every bit a one where it passes, or the ids the span was served, one check instance an output, and the
     class commits that return as one more value of its boundary record (`return_rows`).
+    ``own``: ``check`` is the class's own Definition and the replay block is it, whole (`OWN`): its proof blocks are the
+    templates its body calls, and the class's values are its ends (`ends`), `b.request`, `b.prompt` and its return, which
+    holds `b.egress`'s ids, each cut into the rows round 2's links read of it (`cuts`).
     What the prover commits under and the challenger's own copies (`ports`, `stop_ports`)."""
 
     check: SpecializedDefinition
@@ -352,6 +362,7 @@ class Layout:
     held: bool = True
     verdicts: bool = False
     ids: bool = False
+    own: bool = False
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -367,6 +378,8 @@ class Layout:
             raise ValueError(f"a table's capacity is a power of two of at least 2, not {self.capacity!r}")
         if self.verdicts and self.ids:
             raise ValueError(ONE_RETURN)
+        if self.own and (why := self._own_refusal()) is not None:
+            raise ValueError(f"{OWN}: not {P.template_id(self.check)}, {why}")
         if self.n_rho < 2:
             raise ValueError(f"a replay block holds two proof blocks or more (TwoStage), not {self.n_rho}: "
                              f"{self.per_prompt} a prompt row and {self.per_output} an output at ({self.prompt}, {self.outputs})")
@@ -381,8 +394,25 @@ class Layout:
                 raise ValueError(f"an inlined check template's body is calls of templates, each a proof block, not "
                                  f"{P.template_id(self.check)}'s {sorted(forms - {'call', 'batch'})}")
 
+    def _own_refusal(self) -> str | None:
+        """Why ``check`` is no class's own Definition at this class, or the class says what only a stand-in's does."""
+        said = [k for k in ("per_prompt", "per_output", "inline", "verdicts", "ids", "layers") if getattr(self, k)]
+        if said or self.stop is not None:
+            return (f"in a class that says {', '.join([*said, *(['stop'] if self.stop is not None else [])])}: instances of "
+                    "a check, a return of another kind, a stop rule and history tables are a stand-in's")
+        if not isinstance(getattr(self.check, "defn", None), CompositeDefinition):
+            return "which has no body"
+        params, ret = self.check.signature()
+        want = dict(class_signature(self.prompt, self.outputs)[0])
+        if any(t != want[v] for v, t in params if v in want) or ret != row_type(EGRESS, self.outputs):
+            return f"of parameters {[(v, t) for v, t in params if v in want]} and return {ret!r}"
+        forms = {n.form for n in self.check.body.nodes}
+        return None if forms <= {"call", "batch"} else f"whose body holds {sorted(forms - {'call', 'batch'})}"
+
     @property
     def n_rho(self) -> int:
+        if self.own:
+            return sum(n.n if n.form == "batch" else 1 for n in self.check.body.nodes)
         return self.per_prompt * self.prompt + self.per_output * self.outputs
 
     @property
@@ -392,9 +422,9 @@ class Layout:
 
     @cached_property
     def templates(self) -> tuple[SpecializedDefinition, ...]:
-        """The check's proof blocks' templates: the check template, or, inlined, each template its body calls, in the order
-        of its first call."""
-        if not self.inline:
+        """The check's proof blocks' templates: the check template, or, inlined or the class's own Definition, each
+        template its body calls, in the order of its first call."""
+        if not (self.inline or self.own):
             return (self.check,)
         return tuple({P.template_id(n.fn): n.fn for n in self.check.body.nodes}.values())
 
@@ -406,7 +436,26 @@ class Layout:
 
     @cached_property
     def replay(self) -> SpecializedDefinition:
+        if self.own:
+            return self.check
         return inlined(self.check, self.n_rho) if self.inline else population(self.check, self.n_rho)
+
+    @cached_property
+    def cuts(self) -> dict[str, int]:
+        """In a class under its own Definition, each of its values' rows a replay block, as round 2's links read it
+        (`second_stage.link_runs`): a parameter's or the return's rows of the width its template's port has, and one row
+        where no template reads the value. ValueError where round 2 derives no links from the Definition, or two
+        templates read one value in rows of different widths: no one value's rows are both."""
+        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay))
+        if runs is None:
+            raise ValueError(f"a class under its own Definition is laid out as round 2 links it, and round 2 derives no "
+                             f"links from {P.template_id(self.check)}: {SS.LINKS_WHY}")
+        out: dict[str, int] = {}
+        for x, per, _rs in runs:
+            if x.value in (*PARAMS, RETURN) and out.setdefault(x.value, per) != per:
+                raise ValueError(f"{P.template_id(self.check)}'s templates read {x.value} in rows of different widths, "
+                                 f"{out[x.value]} and {per} a replay block, and a class commits a value's rows once")
+        return {v: out.get(v, 1) for v in (*PARAMS, RETURN)}
 
     @cached_property
     def program(self) -> Program:
@@ -463,7 +512,10 @@ class Layout:
         `verdicts`: `verdict_rows`. A class of `ids`: one row an output, the 32-bit id the check's instance there returns,
         as round 2's return link reads them (`second_stage.link_runs`: unit j of a block its row j); ValueError for one
         whose block returns anything else, which round 2 would hold to no row of such a port: other than one template's
-        32-bit output, one an output of the class, in output order. None for a class that commits no return."""
+        32-bit output, one an output of the class, in output order. A class under its own Definition: `b.egress`'s O
+        ids in the rows the return's link reads (`cuts`). None for a class that commits no return."""
+        if self.own:
+            return self.cuts[RETURN], 32 * self.outputs // self.cuts[RETURN]
         if not self.ids:
             return self.verdict_rows
         params = {P.template_id(t): {name for name, _ty in t.signature()[0]} for t in self.templates}
@@ -485,14 +537,20 @@ class Layout:
         """The return's name where the class commits it (`return_port`, among its row values and the tables)."""
         if self.return_rows is None:
             return None
-        return return_port(descriptor_id(self.replay), (*(PORTS if self.stop is None else PARTS), *self.tables))
+        return return_port(descriptor_id(self.replay), (*self._rows, *self.tables))
+
+    @property
+    def _rows(self) -> tuple[str, ...]:
+        if self.own:
+            return PARAMS
+        return PORTS if self.stop is None else PARTS
 
     @cached_property
     def values(self) -> tuple[str, ...]:
-        """The boundary record's row values, in its order: `PORTS`, or under a stop rule `PARTS`; then the return where
-        the class commits it, under its name (`returned`)."""
-        rows = PORTS if self.stop is None else PARTS
-        return rows if self.returned is None else (*rows, self.returned)
+        """The boundary record's row values, in its order: `PORTS`, or under a stop rule `PARTS`, or under the class's
+        own Definition its parameters `PARAMS`; then the return where the class commits it, under its name
+        (`returned`)."""
+        return self._rows if self.returned is None else (*self._rows, self.returned)
 
     @property
     def committed(self) -> tuple[str, ...]:
@@ -506,17 +564,20 @@ class Layout:
         return tuple(BT.name(self.run, self.prompt, self.outputs, r, x) for r in range(self.spans) for x in self.layers)
 
     def leaves(self, port: str) -> int:
-        """A value's leaves: a row value's rows, one a span, or the return's rows a block a span; a table's capacity."""
+        """A value's leaves: a row value's rows, one a span (under the class's own Definition, its `cuts` a span), or the
+        return's rows a block a span; a table's capacity."""
         if port in ROWS:
-            return self.spans
+            return self.spans * (self.cuts.get(port, 1) if self.own else 1)
         return self.spans * self.return_rows[0] if port == self.returned else self.capacity
 
     def words(self, port: str) -> int:
         """The u16 words in a row of ``port``, a row value or a history table; `b.egress` holds its two head fields only
-        where no rule is registered."""
+        where no rule is registered, and a value of a class under its own Definition is cut into its `cuts` rows."""
         rows = {INGRESS: 2 * (HEAD_U32 + self.prompt), EGRESS: 2 * (self.outputs + (2 if self.stop is None else 0)),
                 REQUEST: 2 * HEAD_U32, PROMPT: 2 * self.prompt, STOP: 1}
-        return -(-self.return_rows[1] // 16) if port == self.returned else rows.get(port, BT.WORDS)
+        if port == self.returned:
+            return -(-self.return_rows[1] // 16)
+        return rows.get(port, BT.WORDS) // (self.cuts[port] if self.own and port in PARAMS else 1)
 
     def domain(self, port: str) -> CommitmentDomain:
         """``port``'s domain: a history table's own, or a row value's window domain, over the program of the record it is
@@ -550,7 +611,8 @@ class Layout:
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
                 "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline, **tables,
                 **({} if self.stop is None else {"stop": self.stop.to_json(), "stopped": self.held}),
-                **({"verdicts": True} if self.verdicts else {}), **({"ids": True} if self.ids else {})}
+                **({"verdicts": True} if self.verdicts else {}), **({"ids": True} if self.ids else {}),
+                **({"own": True} if self.own else {})}
 
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
@@ -566,7 +628,10 @@ def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
                                     for s in spans):
         raise ValueError(f"the spans are not {L.spans} of class ({L.prompt}, {L.outputs})")
     ingress = np.stack([ingress_row(s, L.prompt) for s in spans])
-    egress = np.stack([egress_row(s, L.outputs, head=L.stop is None) for s in spans])
+    egress = np.stack([egress_row(s, L.outputs, head=L.stop is None and not L.own) for s in spans])
+    if L.own:
+        rows = {REQUEST: ingress[:, :2 * HEAD_U32], PROMPT: ingress[:, 2 * HEAD_U32:], L.returned: egress}
+        return {p: np.ascontiguousarray(r).reshape(L.leaves(p), L.words(p)) for p, r in rows.items()}
     back = {}
     if L.ids:
         back[L.returned] = np.concatenate([id_rows(s, L.outputs) for s in spans])
@@ -653,7 +718,8 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Any = 
     if set(t) != {"layers", "capacity"} or not isinstance(t["layers"], list):
         raise ValueError(f"a {FORMAT} commitment's tables are its layers and capacity, not {sorted(t)}")
     L = Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline, tuple(t["layers"]),
-               t["capacity"], stop=stop, held=c.stopped is not False, verdicts=bool(c.verdicts), ids=bool(c.ids))
+               t["capacity"], stop=stop, held=c.stopped is not False, verdicts=bool(c.verdicts), ids=bool(c.ids),
+               own=bool(c.own))
     listed = (*L.ports(), *L.stop_ports())
     if tuple(c.values) != listed:
         raise ValueError(f"the commitment's values {list(c.values)[:4]} are not its layout's {list(listed)[:4]}")

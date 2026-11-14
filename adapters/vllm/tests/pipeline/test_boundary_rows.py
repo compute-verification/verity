@@ -686,6 +686,82 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
         BR.row_type(BR.INGRESS)
 
 
+#: a class's Definition at P = O that reads its prompt an id at a time and returns each id's successor
+BY_ID = CompositeDefinition("BoundaryRowsTestById", 0, ("P",), lambda S: BR.class_signature(S.P, S.P),
+                            lambda B, S, request, prompt: B.batch(PICK, prompt, axes=(0,)), register=False)
+
+
+def _own(tmp_path, D, prompt: int, outputs: int) -> tuple[BR.Layout, BR.Committed, dict]:
+    """A class of three spans laid out under its own Definition ``D``, committed, and its record, which both verifiers
+    take against the challenger's copy from ``commit.json`` alone and its files reopen to."""
+    L = BR.Layout(D, 0, 0, prompt, outputs, 3, "a" * 128, own=True)
+    c = BR.commit(_spans(3, prompt - 1, outputs), L, 0)
+    pub = json.loads(json.dumps(c.public()))
+    mine = BR.layout_of(pub, D)
+    rec = BR.record(pub, D, DESIGN)
+    assert mine == L and pub["own"] is True and pub["check"] == pub["replay"] == P.template_id(D)
+    assert [r["port"] for r in rec["roots"]] == list(L.values) and rec["window"]["own"] is True
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert BR.reopen(BR.write(c, tmp_path / P.template_id(D)[:16]), D).roots == c.roots
+    return L, c, rec
+
+
+def test_a_class_laid_out_under_its_own_definition_commits_its_ends_as_round_two_links_them(tmp_path):
+    """``own``: the class's replay block is its own Definition, whole, its proof blocks the templates its body calls,
+    and its values are its ends: `b.request`, `b.prompt` and, under the return's name, `b.egress`'s ids with no head.
+    Round 2's own derivation on the registered block links every one of its templates' linked ports to a port of the
+    class's record and reads its wires. Each value is in the rows its link reads: one row a span where a template reads
+    it whole, and an id a row where a batch reads the prompt and returns the ids an id at a time. The record names
+    ``own``, registers by both verifiers against the challenger's copy and reopens from its files."""
+    D = bind(CLASS, P=4, O=2)
+    L, c, rec = _own(tmp_path, D, 4, 2)
+    key = descriptor_id(D)
+    reads, prompts, writes = (descriptor_id(t) for t in (READS_REQUEST, bind(READS_PROMPT, P=4), bind(WRITES_EGRESS, O=2)))
+    assert L.replay is D and [P.template_id(t) for t in L.templates] == [reads, prompts, writes] and L.n_rho == 3
+    assert L.values == L.committed == (BR.REQUEST, BR.PROMPT, BR.RETURN) == tuple(BR.ends(key).values())
+    assert L.cuts == dict.fromkeys(L.values, 1) and L.return_rows == (1, 64)
+    assert [(L.leaves(p), L.words(p)) for p in L.values] == [(3, 2 * BR.HEAD_U32), (3, 8), (3, 4)]
+    rows, span = BR.port_rows(c.spans, L), c.spans[1]
+    assert rows[BR.REQUEST][1].tolist() == BR.ingress_row(span, 4)[:2 * BR.HEAD_U32].tolist()
+    assert _u32s(rows[BR.PROMPT][1]) == [10, 11, 12, 0] and _u32s(rows[BR.RETURN][1]) == [101, 102]
+    assert {x.value for x in SS.replay_links(L.program, key, rec)} == set(L.values)
+    assert set(SS.replay_wires(L.program, key)) == {SS.Wire(writes, "first", reads, "o0"),
+                                                    SS.Wire(writes, "step", prompts, "o0")}
+
+    E = bind(BY_ID, P=4)
+    L, c, rec = _own(tmp_path, E, 4, 4)
+    assert [P.template_id(t) for t in L.templates] == [P.template_id(PICK)] and L.n_rho == 4
+    assert SS.replay_wires(L.program, descriptor_id(E)) == ()
+    assert L.cuts == {BR.REQUEST: 1, BR.PROMPT: 4, BR.RETURN: 4} and L.return_rows == (4, 32)
+    assert [(L.leaves(p), L.words(p)) for p in L.values] == [(3, 2 * BR.HEAD_U32), (12, 2), (12, 2)]
+    rows = BR.port_rows(c.spans, L)
+    assert _u32s(rows[BR.PROMPT][4:8]) == [10, 11, 12, 0] and _u32s(rows[BR.RETURN][8:]) == [102, 103, 104, 105]
+    assert sorted((x.port, x.value) for x in SS.replay_links(L.program, descriptor_id(E), rec)) == [
+        ("o0", BR.RETURN), ("x", BR.PROMPT)]
+
+
+def test_a_class_is_under_its_own_definition_only_where_it_is_one_and_says_nothing_a_stand_in_says():
+    """``own`` is refused, by what is wrong, for a class that also says a stand-in's things (instances of a check, an
+    inlined body, a return of another kind, a stop rule, history tables), and for a ``check`` that is no class's
+    Definition there: one without a body, of another class's rows, or that returns anything but the class's O ids."""
+    D, run = bind(CLASS, P=4, O=2), "a" * 128
+    for said in ({"inline": True}, {"verdicts": True}, {"ids": True}, {"stop": RULE}, {"layers": (0,)}):
+        with pytest.raises(ValueError, match=f"in a class that says {next(iter(said))}"):
+            BR.Layout(D, 0, 0, 4, 2, 3, run, own=True, **said)
+    with pytest.raises(ValueError, match="in a class that says per_output"):
+        BR.Layout(D, 0, 1, 4, 2, 3, run, own=True)
+    with pytest.raises(ValueError, match="which has no body"):
+        BR.Layout(XOR8, 0, 0, 4, 2, 3, run, own=True)
+    for prompt, outputs in ((8, 2), (4, 4)):
+        with pytest.raises(ValueError, match="of parameters .* and return"):
+            BR.Layout(D, 0, 0, prompt, outputs, 3, run, own=True)
+    with pytest.raises(ValueError, match="of parameters .* and return"):
+        BR.Layout(PAIR, 0, 0, 4, 2, 3, run, own=True)
+    with pytest.raises(ValueError, match="two proof blocks or more"):
+        BR.Layout(D, 0, 0, 4, 2, 3, run)
+
+
 def test_a_stop_class_takes_a_span_only_as_the_rule_ends_it():
     """`Stop.word` is None, and the span in no stop class, for an abort, an error, a request still running, an end that
     isn't the rule's and a ``min_tokens`` other than 0, which the rule doesn't read."""

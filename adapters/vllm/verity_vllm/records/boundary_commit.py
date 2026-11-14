@@ -24,7 +24,7 @@ class BoundaryCommit:
     run: str                                          # the window's run, which every value's domain binds
     prompt: int                                       # the class's prompt cap P
     outputs: int                                      # its output cap O
-    check: str                                        # the check template's id
+    check: str                                        # the check template's id, or the class's own Definition's (`own`)
     per_prompt: int                                   # its instances a prompt row
     per_output: int                                   # its instances an output
     inline: bool                                      # whether the replay block holds them inlined (`Layout.inline`)
@@ -42,6 +42,7 @@ class BoundaryCommit:
     tables: Mapping[str, Any] | None = None           # its history tables' layers and capacity, when it has any
     verdicts: bool | None = None                      # that its values hold the replay block's return (`Layout.verdicts`)
     ids: bool | None = None                           # that its values hold the replay block's return (`Layout.ids`)
+    own: bool | None = None                           # that ``check`` is the class's own Definition (`Layout.own`)
 
     @classmethod
     def of(cls, doc: Any, where: str) -> BoundaryCommit:
@@ -66,4 +67,4 @@ KINDS: dict[str, type | tuple[type, ...]] = {"window": int, "run": str, "prompt"
                                              "values": Mapping, "index": str, "index_rule": str, "seconds": (int, float)}
 #: what a writer writes only where it holds one
 OPTIONAL: dict[str, type | tuple[type, ...]] = {"stop": Mapping, "stopped": bool, "tables": Mapping, "verdicts": bool,
-                                                "ids": bool}
+                                                "ids": bool, "own": bool}
