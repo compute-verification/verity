@@ -31,6 +31,12 @@ name = "VStarRecursive"
 name = "vstar-recursive"
 root = "VStarRecursiveMain"
 
+# SPOT's caller's check (`VStar.Recursive.Caller.check`) behind `Difftest.serve`: SPOT's verifier asks it once SPOT's
+# check passes (`one_stage.verifier.check`), and the difftest holds it to its Python twin.
+[[lean_exe]]
+name = "spot-flock-caller"
+root = "CallerMain"
+
 # The two-stage form (`VStar.Recursive.SampledTwo`, `id | check | serve`), which nothing dispatches to: its difftest drives it.
 [[lean_exe]]
 name = "sampled-two"

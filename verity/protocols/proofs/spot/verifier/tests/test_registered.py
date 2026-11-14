@@ -28,6 +28,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     partition as P,
     registered as G,
     docket as R,
+    caller as C,
     verifier as V,
 )
 
@@ -767,19 +768,19 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name():
     kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
     salt, other = "5a" * 64, "5b" * 64
     named = lambda s: {**rec, "window": {**rec["window"], R.SEED_SALT: s}}  # noqa: E731
-    assert R.check(named(salt), prog, Q, **kw, seed_salt=salt).ok
-    assert R.check(rec, prog, Q, **kw).ok
+    assert C.both(named(salt), prog, Q, **kw, seed_salt=salt).ok
+    assert C.both(rec, prog, Q, **kw).ok
     for s in (other, salt.upper(), None, 5):
-        assert R.check(named(s), prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",), s
-    assert R.check(rec, prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",)
-    chosen = R.check(named(salt), prog, Q, **kw)
+        assert C.both(named(s), prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",), s
+    assert C.both(rec, prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",)
+    chosen = C.both(named(salt), prog, Q, **kw)
     assert chosen.codes == ("R6-seed-salt",)
     assert chosen.detail == {"R6-seed-salt": {"registered": salt, "verifier": None}}
     for bad in (salt.upper(), salt[:-2], salt + "\n", "", 5, bytes.fromhex(salt)):
         with pytest.raises(ValueError, match="seed salt is lowercase hex"):
-            R.check(named(salt), prog, Q, **kw, seed_salt=bad)
+            C.both(named(salt), prog, Q, **kw, seed_salt=bad)
     with pytest.raises(ValueError, match="window's open root"):
-        R.check(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
+        C.both(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
 
 
 def test_advice_no_registered_compiler_reads_is_refused_by_name():
@@ -798,25 +799,25 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name():
     named = lambda d, bits: {**rec, "window": {**rec["window"], "compiler": {"name": "c", "digest": d},  # noqa: E731
                                                  "advice": {"root": "ad" * 64, "bits": bits}}}
     for bits in (0, 31, 32):
-        assert R.check(named(digest, bits), prog, Q, **kw, compiler=item).ok, bits
-        assert R.check(named(digest, bits), prog, Q, **kw).ok, bits
-    assert R.check(rec, prog, Q, **kw).ok and R.check(rec, prog, Q, **kw, compiler=None).ok
+        assert C.both(named(digest, bits), prog, Q, **kw, compiler=item).ok, bits
+        assert C.both(named(digest, bits), prog, Q, **kw).ok, bits
+    assert C.both(rec, prog, Q, **kw).ok and C.both(rec, prog, Q, **kw, compiler=None).ok
     for bits in (33, -1, 1.0, True, "8", None):
-        assert R.check(named(digest, bits), prog, Q, **kw, compiler=item).codes == ("R6-advice-length",), bits
-    assert R.check(named(other, 8), prog, Q, **kw, compiler=item).codes == ("R6-compiler",)
-    assert R.check(rec, prog, Q, **kw, compiler=item).codes == ("R6-compiler", "R6-advice-length")
-    unregistered = R.check(named(digest, 8), prog, Q, **kw, compiler=None)
+        assert C.both(named(digest, bits), prog, Q, **kw, compiler=item).codes == ("R6-advice-length",), bits
+    assert C.both(named(other, 8), prog, Q, **kw, compiler=item).codes == ("R6-compiler",)
+    assert C.both(rec, prog, Q, **kw, compiler=item).codes == ("R6-compiler", "R6-advice-length")
+    unregistered = C.both(named(digest, 8), prog, Q, **kw, compiler=None)
     assert unregistered.codes == ("R6-compiler",)
     assert unregistered.detail["R6-compiler"]["verifier"] is None
     advice_only = {**rec, "window": {**rec["window"], "advice": {"root": "ad" * 64, "bits": 0}}}
-    assert R.check(advice_only, prog, Q, **kw, compiler=None).codes == ("R6-compiler",)
+    assert C.both(advice_only, prog, Q, **kw, compiler=None).codes == ("R6-compiler",)
     for bad in ({**item, "kind": "theta"}, {**item, "cap": -1}, {**item, "digest": 5},
                 {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
         with pytest.raises(ValueError, match="registered compiler is the registration log's item"):
-            R.check(rec, prog, Q, **kw, compiler=bad)
+            C.both(rec, prog, Q, **kw, compiler=bad)
     for bad in (digest.upper(), digest[:-2]):
         with pytest.raises(ValueError, match="lowercase hex of 64 bytes"):
-            R.check(rec, prog, Q, **kw, compiler={**item, "digest": bad})
+            C.both(rec, prog, Q, **kw, compiler={**item, "digest": bad})
 
 
 def test_a_record_without_registered_values_keeps_v1s_bytes():
@@ -1233,23 +1234,23 @@ def test_a_tile_replayed_across_streams_in_one_window_is_refused():
     other form is refused before the record is read."""
     base = _seeded_case()
     rec, check, roots = _mixed_case(base)
-    assert R.check(rec, **check).ok
+    assert C.both(rec, **check).ok
     for k, theirs in (("stream", "5b" * 64), ("prover", "b1" * 32)):
         other = {**BINDING, k: theirs}
-        assert R.check(rec, **{**check, "binding": other}).codes == (f"R6-{k}", "R7-supplied"), k
+        assert C.both(rec, **{**check, "binding": other}).codes == ("R7-supplied", f"R6-{k}"), k
         relabeled = {**rec, "window": {**rec["window"], k: theirs}}
-        assert R.check(relabeled, **{**check, "binding": other}).codes == ("R7-supplied",), k
+        assert C.both(relabeled, **{**check, "binding": other}).codes == ("R7-supplied",), k
         own, own_check, own_roots = _mixed_case(base, window={**BOUND, k: theirs}, binding=other)
-        assert R.check(own, **own_check).ok
+        assert C.both(own, **own_check).ok
         assert own_roots.root != roots.root and own_roots.rows != roots.rows
-    assert R.check(rec, **{**check, "binding": None}).codes == ("R7-supplied",)
+    assert C.both(rec, **{**check, "binding": None}).codes == ("R7-supplied",)
     unbound = {**rec, "window": SERVED}
-    assert R.check(unbound, **check).codes == ("R6-stream", "R6-prover", "R7-supplied")
+    assert C.both(unbound, **check).codes == ("R7-supplied", "R6-stream", "R6-prover")
     for bad in ({"stream": "5a" * 64}, {**BINDING, "run": "r"}, {**BINDING, "stream": "5A" * 64},
                 {**BINDING, "stream": "5a" * 63}, {**BINDING, "prover": ""}, {**BINDING, "prover": "b0b"},
                 {**BINDING, "prover": 1}, ["stream", "prover"]):
         with pytest.raises(ValueError):
-            R.check(rec, **{**check, "binding": bad})
+            C.both(rec, **{**check, "binding": bad})
 
 
 def test_r7_holds_a_pinned_value_to_its_pin():
@@ -1583,15 +1584,15 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
     prog = _pooled()
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [])
-    assert R.check(first, prog, Q, **kw).ok
+    assert C.both(first, prog, Q, **kw).ok
     fixed = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[0]], word_bits=32).entry()
     assert _entry(first, "pin")["domain"] == fixed["domain"]
     carried = {**_entry(first, "pout"), "value": "pin"}
     second, kw2 = _pool_window(prog, w, 1, [first], carried)
     assert R.pool_chains(kw2["pool"], [first], prog)
-    assert R.check(second, prog, Q, **kw2).ok
+    assert C.both(second, prog, Q, **kw2).ok
     third, kw3 = _pool_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"})
-    assert R.check(third, prog, Q, **kw3).ok
+    assert C.both(third, prog, Q, **kw3).ok
     other = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[2]], word_bits=32, window=POOL_WINDOWS[1])
     for pin, codes in (({**carried, "root": other.root.hex()}, ("R7-held", "R7-pool-chain")),
                        (other.entry(), ("R7-domain", "R7-held", "R7-pool-chain")),
@@ -1599,9 +1600,9 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
                        ({**_entry(second, "pout"), "value": "pin"}, ("R7-domain", "R7-held", "R7-pool-chain")),
                        ({**carried, "domain": _entry(second, "pout")["domain"]}, ("R7-domain", "R7-pool-chain"))):
         wrong, _ = _pool_window(prog, w, 1, [first], pin)
-        assert R.check(wrong, prog, Q, **kw2).codes == codes, pin
+        assert C.both(wrong, prog, Q, **kw2).codes == codes, pin
     empty, _ = _pool_window(prog, w, 1, [first])
-    assert R.check(empty, prog, Q, **kw2).codes == ("R7-domain", "R7-held", "R7-pool-chain")
+    assert C.both(empty, prog, Q, **kw2).codes == ("R7-domain", "R7-held", "R7-pool-chain")
 
 
 def test_the_public_rule_restarts_the_pool_with_no_advice():
@@ -1619,22 +1620,22 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
     for log in ([], [elsewhere]):
         opened, kw2 = _pool_window(prog, w, 1, log)
         assert not R.pool_chains(kw2["pool"], log, prog)
-        assert R.check(opened, prog, Q, **kw2).ok
+        assert C.both(opened, prog, Q, **kw2).ok
     refused = {R.digest(first): False}
     after, kw3 = _pool_window(prog, w, 1, [first], verdicts=refused)
     assert R.pool_refused(kw3["pool"], [first]) and not R.pool_chains(kw3["pool"], [first], prog)
-    assert R.check(after, prog, Q, **kw3).ok
+    assert C.both(after, prog, Q, **kw3).ok
     carry = {**_entry(first, "pout"), "value": "pin"}
     carried, _ = _pool_window(prog, w, 1, [first], carry, verdicts=refused)
-    assert R.check(carried, prog, Q, **kw3).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
+    assert C.both(carried, prog, Q, **kw3).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
     for verdicts, lag in (({R.digest(first): True}, 1), ({GENESIS: False}, 1), (refused, 2)):
         on, kw4 = _pool_window(prog, w, 1, [first], carry, verdicts=verdicts, lag=lag)
         assert R.pool_chains(kw4["pool"], [first], prog), (verdicts, lag)
-        assert R.check(on, prog, Q, **kw4).ok, (verdicts, lag)
+        assert C.both(on, prog, Q, **kw4).ok, (verdicts, lag)
     second, _ = _pool_window(prog, w, 1, [first], carry)
     late, kw5 = _pool_window(prog, w, 2, [first, second], verdicts=refused, lag=2)
     assert not R.pool_chains(kw5["pool"], [first, second], prog)
-    assert R.check(late, prog, Q, **kw5).ok
+    assert C.both(late, prog, Q, **kw5).ok
     pool = kw["pool"]
     missing = ({k: v for k, v in pool.items() if k != b} for b in ("lag", "reset", "verdicts", "week"))
     for bad, change in (*((m, {}) for m in missing), ({**pool, "pin": "pout"}, {}), ({**pool, "pin": "V"}, {}),
@@ -1646,7 +1647,7 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
                         (pool, {"supplied": {"pin": [[{"bytes": GENESIS}]]}}),
                         (pool, {"pinned": {"pout": "ab" * 64}}), (pool, {"schemas": {"pin": G.SCHEMA_SEG}})):
         with pytest.raises(ValueError):
-            R.check(first, prog, Q, **{**kw, "pool": bad, **change})
+            C.both(first, prog, Q, **{**kw, "pool": bad, **change})
 
 
 def test_serving_resets_its_pool_at_most_once_a_week():
@@ -1661,19 +1662,19 @@ def test_serving_resets_its_pool_at_most_once_a_week():
     first, _ = _pool_window(prog, w, 0, [])
     restart, kw = _pool_window(prog, w, 1, [first], reset=True)
     assert not R.pool_chains(kw["pool"], [first], prog) and restart["window"][R.POOL_SPENT] is True
-    assert R.check(restart, prog, Q, **kw).ok
+    assert C.both(restart, prog, Q, **kw).ok
     stale, _ = _pool_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, reset=True)
-    assert R.check(stale, prog, Q, **kw).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
+    assert C.both(stale, prog, Q, **kw).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
     log = [first, restart]
     again, kw2 = _pool_window(prog, w, 2, log, reset=True)
-    assert R.check(again, prog, Q, **kw2).codes == ("R6-pool-reset-week",)
+    assert C.both(again, prog, Q, **kw2).codes == ("R6-pool-reset-week",)
     after, kw3 = _pool_window(prog, w, 2, log, reset=True, verdicts={R.digest(restart): False})
-    assert R.check(after, prog, Q, **kw3).codes == ("R6-pool-reset-week",)
+    assert C.both(after, prog, Q, **kw3).codes == ("R6-pool-reset-week",)
     kept, kw4 = _pool_window(prog, w, 2, log, {**_entry(restart, "pout"), "value": "pin"})
     assert R.pool_chains(kw4["pool"], log, prog) and kept["window"][R.POOL_SPENT] is True
-    assert R.check(kept, prog, Q, **kw4).ok
+    assert C.both(kept, prog, Q, **kw4).ok
     next_week, kw5 = _pool_window(prog, w, 2, log, reset=True, week=1)
-    assert R.check(next_week, prog, Q, **kw5).ok
+    assert C.both(next_week, prog, Q, **kw5).ok
 
 
 #: the window fields a verifier with no pool holds a record to name none of
@@ -1692,19 +1693,19 @@ def test_a_window_names_its_pools_reset():
     _, kw3 = _pool_window(prog, w, 1, [first], reset=True)
     for named in (True, None, 1, "true"):
         rec, _ = _pool_window(prog, w, 0, [], pool_reset=named)
-        assert R.check(rec, prog, Q, **kw).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **kw).codes == ("R6-pool-reset",), named
         rec, _ = _pool_window(prog, w, 1, [first], carried, pool_reset=named)
-        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-reset",), named
     for named in (False, None, 0, "false"):
         rec, _ = _pool_window(prog, w, 1, [first], reset=True, pool_reset=named)
-        assert R.check(rec, prog, Q, **kw3).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **kw3).codes == ("R6-pool-reset",), named
     fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
     unnamed, _ = _pool_window(prog, w, 1, [first], fresh, **UNPOOLED)
-    assert R.check(unnamed, prog, Q, **plain).ok
+    assert C.both(unnamed, prog, Q, **plain).ok
     for named in (False, True):
         rec, _ = _pool_window(prog, w, 1, [first], fresh, **{**UNPOOLED, R.POOL_RESET: named})
-        assert R.check(rec, prog, Q, **plain).codes == ("R6-pool-reset",), named
+        assert C.both(rec, prog, Q, **plain).codes == ("R6-pool-reset",), named
 
 
 def test_a_window_names_its_week_and_whether_its_weeks_reset_is_spent():
@@ -1716,28 +1717,28 @@ def test_a_window_names_its_week_and_whether_its_weeks_reset_is_spent():
     prog = _pooled()
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [], reset=True)
-    assert first["window"][R.POOL_SPENT] is True and R.check(first, prog, Q, **kw).ok
+    assert first["window"][R.POOL_SPENT] is True and C.both(first, prog, Q, **kw).ok
     carry = {**_entry(first, "pout"), "value": "pin"}
     second, kw2 = _pool_window(prog, w, 1, [first], carry)
-    assert second["window"][R.POOL_SPENT] is True and R.check(second, prog, Q, **kw2).ok
+    assert second["window"][R.POOL_SPENT] is True and C.both(second, prog, Q, **kw2).ok
     carry2 = {**_entry(second, "pout"), "value": "pin"}
     third, kw3 = _pool_window(prog, w, 2, [first, second], carry2, week=1)
-    assert third["window"][R.POOL_SPENT] is False and R.check(third, prog, Q, **kw3).ok
+    assert third["window"][R.POOL_SPENT] is False and C.both(third, prog, Q, **kw3).ok
     for named in (False, None, 1, "true"):
         rec, _ = _pool_window(prog, w, 1, [first], carry, pool_spent=named)
-        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-spent",), named
+        assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-spent",), named
     for named in (True, None, 0, "false"):
         rec, _ = _pool_window(prog, w, 2, [first, second], carry2, week=1, pool_spent=named)
-        assert R.check(rec, prog, Q, **kw3).codes == ("R6-pool-spent",), named
+        assert C.both(rec, prog, Q, **kw3).codes == ("R6-pool-spent",), named
     for named in (1, None, False, "0"):
         rec, _ = _pool_window(prog, w, 1, [first], carry, pool_week=named)
-        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-week",), named
+        assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-week",), named
     fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
     for field, code in ((R.POOL_WEEK, "R6-pool-week"), (R.POOL_SPENT, "R6-pool-spent")):
         for named in (0, False, True):
             rec, _ = _pool_window(prog, w, 1, [first], fresh, **{**UNPOOLED, field: named})
-            assert R.check(rec, prog, Q, **plain).codes == (code,), (field, named)
+            assert C.both(rec, prog, Q, **plain).codes == (code,), (field, named)
 
 
 def test_a_hit_on_a_page_an_older_window_wrote_reads_it_through_the_carried_copies():
@@ -1860,11 +1861,11 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     prog = _continued()
     w = _registered(prog)
     first, kw = _cut_window(prog, w, 0, [])
-    assert R.check(first, prog, Q, **kw).ok
+    assert C.both(first, prog, Q, **kw).ok
     second, kw2 = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"})
-    assert R.check(second, prog, Q, **kw2).ok
+    assert C.both(second, prog, Q, **kw2).ok
     third, kw3 = _cut_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"})
-    assert R.check(third, prog, Q, **kw3).ok
+    assert C.both(third, prog, Q, **kw3).ok
     (ing0, req0), (ing1, req1), (ing2, req2) = (_cut_rows(i) for i in range(3))
     assert ing0[:3] == [[1, 7, 5], [1, 8, 2], [1, 9, 3]] and [r[:2] for r in req0[:3]] == [[3, 1], [1, 0], [0, 1]]
     assert ing1[:3] == [[1, 7, 8], [1, 9, 3], [1, 10, 1]] and [r[:2] for r in req1[:3]] == [[2, 0], [1, 1], [0, 1]]
@@ -1874,9 +1875,9 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     assert served[0] == [1, 7, 9]
     for ing in (_entry(first, "ing"), G.Registered.commit(P.program_digest(prog), "ing", served).entry()):
         wrong, kw_wrong = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, ing)
-        assert R.check(wrong, prog, Q, **kw_wrong).codes == ("R7-held",)
+        assert C.both(wrong, prog, Q, **kw_wrong).codes == ("R7-held",)
     empty, kw_empty = _cut_window(prog, w, 1, [first])
-    assert R.check(empty, prog, Q, **kw_empty).codes == ("R7-domain", "R7-held", "R7-pool-chain")
+    assert C.both(empty, prog, Q, **kw_empty).codes == ("R7-domain", "R7-held", "R7-pool-chain")
 
 
 def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
@@ -1893,11 +1894,11 @@ def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
     assert _cut_rows(2)[0][:2] == [[1, 9, 4], [1, 10, 1]]
     for how in ({"verdicts": {R.digest(second): False}}, {"reset": True}):
         restart, kw = _cut_window(prog, w, 2, [first, second], **how)
-        assert R.check(restart, prog, Q, **kw).ok, how
+        assert C.both(restart, prog, Q, **kw).ok, how
         carried, kw2 = _cut_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"}, **how)
-        assert R.check(carried, prog, Q, **kw2).codes == ("R7-domain", "R7-supplied", "R7-pool-chain"), how
+        assert C.both(carried, prog, Q, **kw2).codes == ("R7-domain", "R7-supplied", "R7-pool-chain"), how
         stale, kw3 = _cut_window(prog, w, 2, [first, second], ing=_entry(second, "ing"), **how)
-        assert R.check(stale, prog, Q, **kw3).codes == ("R7-held",), how
+        assert C.both(stale, prog, Q, **kw3).codes == ("R7-held",), how
 
 
 #: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
