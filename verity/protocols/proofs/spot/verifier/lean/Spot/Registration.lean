@@ -82,6 +82,13 @@ a parameter of the program, neither registered nor held, whose gates are one int
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
 acceptance rests on that later check.
 
+A port whose rows are the leaves of another port's tree (a member's port wired to its writer's output, with no tree of
+its own) is named in the verifier's layout with the port it is wired to (`"wired"`), at that port's leaves and domain.
+The record names a root under both names, and R3 refuses one whose two roots differ or that lacks either (`R3-wired`,
+`wiredHeld`): one tree named at two ports is the wire itself, checked and not a name. It is a second check of what the
+second stage holds each session's read of a wired port to (`SecondStage.readOk_wired`), and only as good as the
+layout's `wired` entries: where the parameters come from is the composite's to hold, not R3's.
+
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
 sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
@@ -173,7 +180,8 @@ structure Verifier where
   law : Json
   workTable : Option Json
   scheme : String
-  /-- each port its layout derives, with its `{"leaves", "domain"}` -/
+  /-- each port its layout derives, with its `{"leaves", "domain"}`, and, for a port whose rows are the leaves of another
+  port's tree, that port's name (`"wired"`) -/
   ports : Array (String × Json)
   leafLayer : Option String
   anchors : Array Json
@@ -570,6 +578,29 @@ def r8Codes (v : Verifier) (c : Array String) : Array String :=
   kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
     "R8-shared-input"
 
+/-- One port of the layout against the record's roots (`wiredHeld`): where its entry names the port it is wired to
+(`wired`, a string), the record has a root under its own name and one under that port's (`find`: the record's last root
+of a name), each root a string, and the two are one string. A port whose entry names none holds. -/
+def wiredOk (find : String → Option Json) (p : String) (want : Json) : Bool :=
+  match getD want "wired" with
+  | .str q =>
+    match find p, find q with
+    | some r, some h =>
+      match getD r "root", getD h "root" with
+      | .str a, .str b => a == b
+      | _, _ => false
+    | _, _ => false
+  | _ => true
+
+/-- R3 of the wired ports: a port of the layout whose rows are the leaves of another port's tree names that port
+(`wired`), and the record registers one tree at both names (`wiredOk`, of every port). The clause is only as good as
+the layout's `wired` entries, which the verifier's parameters bring: a layout that leaves `wired` out of a port is not
+refused by R3 for it. So `R3-wired` is a second check of what `SecondStage.readOk_wired` gives, which holds each
+session's read of a wired port to its writer's root whatever the layout names; where the parameters come from is the
+composite's to hold, not R3's. -/
+def wiredHeld (find : String → Option Json) (ports : Array (String × Json)) : Bool :=
+  ports.all fun pw => wiredOk find pw.1 pw.2
+
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
@@ -605,9 +636,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
+  let ix := portIndex roots
   if roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
   else
-    let ix := portIndex roots
     if ix.count != roots.size || ix.count != v.ports.size || !v.ports.all (fun (p, _) => ix.has p) then
       c := addCode c "R3-ports"
     for (p, want) in v.ports do
@@ -616,6 +647,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
       if !(match getD r "root" with | .str s => isHex s | _ => false) then c := addCode c "R3-root"
       if !jeq (getD r "leaves") (getD want "leaves") then c := addCode c "R3-leaves"
       if !jeq (getD r "domain") (getD want "domain") then c := addCode c "R3-domain"
+  -- one tree at two names, read where the roots are well formed; a `kept` term, as R6's below are
+  c := kept (roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) || wiredHeld ix.find v.ports) c
+    "R3-wired"
   -- R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
   if !jeq (get "leaf_layer") (optStr v.leafLayer) then c := addCode c "R4-leaf-layer"
   -- R5
@@ -692,6 +726,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
       if !(match getD r "root" with | .str s => isHex s | _ => false) then c := addCode c "R3-root"
       if !jeq (getD r "leaves") (getD want "leaves") then c := addCode c "R3-leaves"
       if !jeq (getD r "domain") (getD want "domain") then c := addCode c "R3-domain"
+  c := kept (roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS)
+    || wiredHeld (fun p => roots.reverse.find? (fun r => jeq (getD r "port") (Json.str p))) v.ports) c "R3-wired"
   -- R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
   if !jeq (get "leaf_layer") (optStr v.leafLayer) then c := addCode c "R4-leaf-layer"
   -- R5
@@ -810,12 +846,17 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
+theorem portIndex_find_fun (roots : Array Json) :
+    (portIndex roots).find = fun p => roots.reverse.find? (fun r => jeq (getD r "port") (Json.str p)) :=
+  funext (portIndex_find roots)
+
 -- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and each join point of
 -- both checks into both of its branches. The link-points step names `c` in both of its branches, so the steps before
 -- it are rewritten twice, past `simp`'s default step limit
 set_option maxHeartbeats 1600000 in
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
-  simp (maxSteps := 800000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
+  simp (maxSteps := 800000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find,
+    portIndex_find_fun]
 
 end Spot.Registration

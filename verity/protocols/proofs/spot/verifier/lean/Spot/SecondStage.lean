@@ -131,8 +131,9 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
   whose units its rows don't place, a writer of other units a block than its rows, a writer's port a link names (an
   output the replay block returns, which the boundary commits: the interior's port of it is another tree, and nothing
-  holds the two to each other), or a writer whose part is not before its reader's (`wiresOk`), `second-statements`
-  when no
+  holds the two to each other), a reader's port a link names (a session reads that port at the link's entry, so the
+  wire would hold nothing of what is read), or a writer whose part is not before its reader's (`wiresOk`),
+  `second-statements` when no
   statements are given, `second-order` for each statement for a part other than the one at its position (round 2 reads
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
   `second-cover` for each part no statement is for (every part has one, sampled by the second sample or not), and
@@ -196,8 +197,8 @@ def LINKS_WHY : String :=
 def WIRES_WHY : String :=
   "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
   "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
-  "place its part's units or its writer's, or it reads an output the replay block returns, or its writer's part " ++
-  "is not before its reader's"
+  "place its part's units or its writer's, or it reads an output the replay block returns, or a link names the " ++
+  "port that reads it, or its writer's part is not before its reader's"
 
 def INTERIOR_ORDER_WHY : String :=
   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
@@ -748,9 +749,11 @@ whose members are the parts in order (the interior program's strata's); `ps.size
 def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
 
 /-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
-whose rows a block are its writer's units a block, whose writer's port no link names, and whose writer's part is before
-its reader's (`posOf`). Each wire names one writer port, so both hold of every writer a wired port reads. An output the
-replay block returns is committed at the boundary, and no unit inside it reads that output off the interior record.
+whose rows a block are its writer's units a block, whose writer's port and whose own port no link names, and whose
+writer's part is before its reader's (`posOf`). Each wire names one writer port, so these hold of every writer a wired
+port reads. An output the replay block returns is committed at the boundary, and no unit inside it reads that output
+off the interior record. A port a link names is read at the link's entry (`readOk`, whose link is looked up first), so
+a wire naming it too would hold nothing of what its sessions read: a port is read by a link or by a wire, never both.
 With each writer's part before its reader's, the members' circuits with every wired read sent to its writer's output
 read only earlier gates, and no unit reads its own output. -/
 def wiresOk (ps : Array Part) (own : Own) : Bool :=
@@ -758,7 +761,8 @@ def wiresOk (ps : Array Part) (own : Own) : Bool :=
   | some ws => ws.all fun w =>
     ps.any (fun p => p.template == w.template && placed own p w.port) &&
       (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
-      (linkOf own w.writer w.wport).isNone && decide (posOf ps w.writer < posOf ps w.template)
+      ((linkOf own w.writer w.wport).isNone && (linkOf own w.template w.port).isNone) &&
+      decide (posOf ps w.writer < posOf ps w.template)
   | none => false
 
 /-- The wire that names template `t`'s session port `port`. -/
@@ -1551,6 +1555,21 @@ theorem designFailures_ne_nil {ps : Array Part} {own : Own} (h : ¬designOk ps o
   revert h
   unfold designOk designFailures
   cases linksOk ps own <;> cases wiresOk ps own <;> simp
+
+/-- **A wired port is no linked port**: where the wires are derived over parts `ps` (`wiresOk`), no link names a
+wire's reader port, so a session's read of it is the wire's (`readOk_wired`), never a link's. -/
+theorem wiresOk_unlinked {ps : Array Part} {own : Own} (hok : wiresOk ps own = true) {w : Wire}
+    (hw : w ∈ own.wires.getD #[]) : linkOf own w.template w.port = none := by
+  unfold wiresOk at hok
+  cases hws : own.wires with
+  | none =>
+    rw [hws] at hok
+    cases hok
+  | some ws =>
+    simp only [hws, Option.getD_some] at hok hw
+    have h1 := Array.all_eq_true_iff_forall_mem.1 hok w hw
+    simp only [Bool.and_eq_true] at h1
+    exact Option.isNone_iff_eq_none.1 h1.1.2.2
 
 /-- **Off, round 2 never passes**: with the two-stage form refused, every run's check fails. -/
 theorem check_refused (own : Own) (stmts : Option (Array Json)) : (check false own stmts).codes ≠ #[] := by

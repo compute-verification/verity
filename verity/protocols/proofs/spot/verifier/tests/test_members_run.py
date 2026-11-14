@@ -312,6 +312,33 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
     assert w.run(record={"scheme": SCHEME, "roots": roots}) == (None, "the record names no population")
 
 
+def test_a_members_slice_outside_the_run_is_the_runs_own():
+    """`slices`, which an audit outside the run reads a member's slice by: each member's count of units, its roots of
+    the registration with its name taken off, and the scheme, at which its honest header holds; a root the record names
+    under a member that its header does not is refused there (a port wired to another member's tree, named under its
+    reader, is in the reader's slice and so must be in its header); and where the run refuses the record, so does it,
+    with the run's reason."""
+    got = M.slices(UNITS, RECORD)
+    assert got == {m: {"population": n, "scheme": SCHEME,
+                       "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": "out", "root": ROOTS[m][0]}]}
+                   for m, n in ((A, 2), (B, 3))}
+    strata = P.strata(PROGRAM, QUERY)
+    assert all(M.population_why(UNITS[m], strata, header(m), got[m]) is None for m in (A, B))
+    wired = RECORD | {"roots": [*RECORD["roots"], {**RECORD["roots"][0], "port": f"{B}/x"}]}
+    both = M.slices(UNITS, wired)
+    assert [r["port"] for r in both[B]["roots"]] == ["out", "x"] and both[A] == got[A]
+    assert M.population_why(UNITS[B], strata, header(B), both[B]) == "public file: not the registration's: roots, domains"
+    named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "x": ROOTS[A][1]},
+                                "roots": {"out": ROOTS[B][0], "x": ROOTS[A][0]}})
+    assert M.population_why(UNITS[B], strata, named, both[B]) is None
+    for record, why in ((RECORD | {"roots": [*RECORD["roots"], {"port": M.TABLE_PORT, "root": "00" * 64}]}, M.ROW_TABLES),
+                        (RECORD | {"population": 6}, M.MEMBERS_LAID),
+                        (RECORD | {"roots": {}}, "roots: the registration's roots are not a list")):
+        with pytest.raises(ValueError) as e:
+            M.slices(UNITS, record)
+        assert str(e.value) == why
+
+
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
     """Parameters or evidence the per-member parsers refuse, a program other than the parameters', and a registered
     file whose port is no registered port's."""

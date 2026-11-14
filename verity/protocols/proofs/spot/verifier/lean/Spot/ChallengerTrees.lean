@@ -36,6 +36,12 @@ passes. `membersTreeReason` holds the members' sessions to them: each so, one tr
 and the log opening the sessions' trees one after another in the sessions' order, no round of a tree before the
 closing round of the tree before it or after its own (`membersOrder`, `MEMBERS_ORDER`).
 
+Within one tree, none of those holds the rounds of different streams to an order: each round is its stream's next, and
+a rep's round may be opened before another rep's. `repStreamOrder` says whether the log opens a tree's rounds stream
+by stream, in the order its spec lists its streams, its last opening aside (`REP_STREAM_ORDER`). The two-stage form's
+check refuses by it (`VStar.Recursive.SampledTwo.repStreamsOrdered`); nothing in this module reads it, and the
+difftest has no piece for it.
+
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`), `challenger_session_trees` (`sessions_tree_reason`
 over the log's trees and the request's records, each with its tables), each `{"refused": why}` where Python refuses,
 and `challenger_sample_link_first` (`sample_link_first`).
@@ -532,6 +538,107 @@ private def closedT (c : Char) : List String := memberLogT c (evidenceT (String.
   some s!"the challenger's release log shows 2 coin trees and the sessions use 1: {UNUSED_TREE}"
 #guard oneReasonT ([helloT 'a'] ++ (closedT 'a').dropLast) == none
 #guard oneReasonT ([helloT 'a'] ++ closedT 'a') == some s!"session a's coins are not the challenger's: {EXTRA_OPENING}"
+
+/-! A coin tree's rounds, stream by stream. -/
+
+/-- The refusal of a coin tree whose rounds the release log doesn't open stream by stream, in the order the tree's
+spec lists its streams (`repStreamOrder`). -/
+def REP_STREAM_ORDER : String :=
+  "rep-stream-order: the challenger's release log does not open a coin tree's rounds stream by stream, in the " ++
+  "order the tree's spec lists its streams: a round is opened after a round of a stream the spec lists later, " ++
+  "or after a later round of its own stream, the tree's last opening aside, a member's closing round"
+
+/-- The place of the stream `stream` among the streams the coin tree's spec `spec` lists, from 0 in the spec's order:
+the first so named, as `coinTreesOf` finds a round's stream; the number of streams listed for one it doesn't list. -/
+def streamPlace (spec : Json) (stream : String) : Nat :=
+  match getD spec "streams" with
+  | .arr ss => (ss.findIdx? (jsonStrIs · stream)).getD ss.size
+  | _ => 0
+
+/-- Whether the round `a` comes before the round `b`, each its stream's place and its number in the stream: `a` is of
+an earlier stream, or an earlier round of `b`'s stream. -/
+def roundBefore (a b : Nat × Nat) : Bool := decide (a.1 < b.1) || (a.1 == b.1 && decide (a.2 < b.2))
+
+/-- Whether the round `a` comes before the first of the rounds `ps`, and each of them before the next
+(`roundBefore`). -/
+def roundsRise : Nat × Nat → List (Nat × Nat) → Bool
+  | _, [] => true
+  | a, b :: ps => roundBefore a b && roundsRise b ps
+
+/-- Whether each of the rounds `ps` comes before the next (`roundBefore`). -/
+def roundsOrdered : List (Nat × Nat) → Bool
+  | [] => true
+  | a :: ps => roundsRise a ps
+
+/-- `rep_stream_order`, **a coin tree's rounds, stream by stream**: whether the release log opens the tree `t`'s
+rounds in the order its prover's messages go in. It holds the log to exactly this order: of the rounds the log shows
+opened of `t`, in the log's order and the last one aside, each is of a stream the tree's spec lists after the stream
+of the round opened before it (`streamPlace`), or a later round of that same stream (`roundBefore`). So the log opens
+every round of the first stream the spec lists, then every round of the second, and so on, each stream's rounds in
+their order. The last opening is left aside because a member's session ends with one more round of its first stream,
+its closing round (`TreeOpening.closes`), which `memberTreeReason` holds to be the tree's last. A `--zk` session's
+verdict holds its record's tree's spec to the session's own (`Flock.CoinTree.checkRecord`): the stream
+`TREE_SESSION`, then each table's rep streams, rep 0's before rep 1's (`Flock.SessionSpec.repStreams`), the order the
+session's messages are read in. So where a member's session is accepted and its tree passes this, the log opens the
+tree's link points, then rep 0's rounds, then rep 1's, then the closing round, and no round's challenges are opened
+before the message of an earlier round is fixed. O(the tree's rounds, times the spec's streams). -/
+def repStreamOrder (t : LoggedTree) : Bool :=
+  roundsOrdered (t.unclosed.opened.toList.map fun o => (streamPlace t.spec o.stream, o.round))
+
+private def circuitSpecT : Json :=
+  specT.setObjVal! "streams" (Json.arr #[Json.str TREE_SESSION, Json.str "circuit/rep0", Json.str "circuit/rep1"])
+private def circuitHelloT : String :=
+  lineT (((coinTreeT 'a').setObjVal! "spec" circuitSpecT).setObjVal! "event" (Json.str TREE_EVENT))
+private def openedT (stream : String) (k : Nat) : String := roundT 'a' stream k 1 (hexT 'e' 128) (hexT 'c' 128)
+private def openedBT (stream : String) (k n : Nat) : String := roundT 'b' stream k n (hexT 'e' 128) (hexT 'c' 128)
+private def repsT (stream : String) (k count : Nat) : List String :=
+  (List.range count).map fun i => openedT stream (k + i)
+/-- Whether `coinTreesOf` reads the lines `log` and each tree it reads passes `repStreamOrder`; `none` where it
+refuses the log. -/
+private def orderedT (log : List String) : Option Bool :=
+  match coinTreesOf log with
+  | .ok trees => some (trees.all repStreamOrder)
+  | .error _ => none
+
+/-! The rounds of an honest two-stage play's second session's release log, in the log's order: one tree whose spec
+lists `session`, `circuit/rep0`, `circuit/rep1`; its link points, the 98 rounds of `circuit/rep0`, the 98 of
+`circuit/rep1`, then its closing round. The lines are rebuilt here from a kept play's order, each round's challenges
+and what it is opened after stand-ins; they are not the kept log's bytes. -/
+private def honestPlayT : List String :=
+  [circuitHelloT, openedT TREE_SESSION 0] ++ repsT "circuit/rep0" 0 98 ++ repsT "circuit/rep1" 0 98 ++
+    [openedT TREE_SESSION 1]
+
+#guard streamPlace circuitSpecT TREE_SESSION == 0 && streamPlace circuitSpecT "circuit/rep1" == 2
+#guard streamPlace circuitSpecT "circuit/rep2" == 3 && streamPlace Json.null "circuit/rep0" == 0
+#guard roundBefore (0, 5) (1, 0) && roundBefore (1, 0) (1, 1)
+#guard !roundBefore (1, 1) (1, 1) && !roundBefore (2, 0) (1, 9) && !roundBefore (1, 1) (1, 0)
+#guard roundsOrdered [] && roundsOrdered [(0, 0)] && roundsOrdered [(0, 0), (1, 0), (1, 1), (2, 0)]
+#guard !roundsOrdered [(0, 0), (2, 0), (1, 0)] && !roundsOrdered [(1, 1), (1, 0)]
+#guard !roundsOrdered [(1, 0), (1, 0)]
+#guard honestPlayT.length == 199 && orderedT honestPlayT == some true
+#guard orderedT [circuitHelloT] == some true
+#guard orderedT [circuitHelloT, openedT TREE_SESSION 0, openedT "circuit/rep0" 0, openedT TREE_SESSION 1] == some true
+/-! A rep 1 challenge opened before a rep 0 message is fixed: round 0 of `circuit/rep1` is opened before round 97 of
+`circuit/rep0`, whose message its prover then sends having seen rep 1's first challenges. -/
+#guard orderedT ([circuitHelloT, openedT TREE_SESSION 0] ++ repsT "circuit/rep0" 0 97 ++ [openedT "circuit/rep1" 0,
+  openedT "circuit/rep0" 97] ++ repsT "circuit/rep1" 1 97 ++ [openedT TREE_SESSION 1]) == some false
+#guard orderedT [circuitHelloT, openedT TREE_SESSION 0, openedT "circuit/rep1" 0, openedT "circuit/rep0" 0,
+  openedT TREE_SESSION 1] == some false
+/-! The reps' rounds in turn, and a rep's round before the link points. -/
+#guard orderedT [circuitHelloT, openedT TREE_SESSION 0, openedT "circuit/rep0" 0, openedT "circuit/rep1" 0,
+  openedT "circuit/rep0" 1, openedT "circuit/rep1" 1, openedT TREE_SESSION 1] == some false
+#guard orderedT [circuitHelloT, openedT "circuit/rep0" 0, openedT TREE_SESSION 0, openedT TREE_SESSION 1] ==
+  some false
+/-! Two members' trees one after another, each in order; then the second's reps the wrong way round. -/
+#guard orderedT ([helloT 'a', helloT 'b'] ++ closedT 'a' ++ closedT 'b') == some true
+#guard orderedT ([helloT 'a', helloT 'b'] ++ closedT 'a' ++ [openedBT TREE_SESSION 0 1, openedBT "t/rep1" 0 1,
+  openedBT "t/rep0" 0 1, openedBT TREE_SESSION 1 0]) == some false
+/-! The last opening is left aside, wherever it is of: `memberTreeReason` holds it to be the closing round. -/
+private def treeOfT (opened : Array TreeOpening) : LoggedTree :=
+  { key := "", nonce := "", root := "", spec := circuitSpecT, opened }
+#guard repStreamOrder (treeOfT #[⟨"circuit/rep1", 0, 1, "", ""⟩, ⟨"circuit/rep0", 0, 1, "", ""⟩])
+#guard !repStreamOrder (treeOfT #[⟨"circuit/rep1", 0, 1, "", ""⟩, ⟨"circuit/rep0", 0, 1, "", ""⟩,
+  ⟨TREE_SESSION, 1, 0, "", ""⟩])
 
 /-! The difftest's pieces. -/
 
