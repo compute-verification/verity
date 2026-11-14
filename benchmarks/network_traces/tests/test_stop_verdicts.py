@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
+HERE = (Path(__file__).resolve().parents[1])
 sys.path.insert(0, str(HERE))
 import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402

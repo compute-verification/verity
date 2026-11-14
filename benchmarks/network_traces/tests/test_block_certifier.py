@@ -15,7 +15,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[3]
 
 from verity.protocols.accounting.certifier.prover import block_certifier as BC  # noqa: E402
 

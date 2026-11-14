@@ -2511,6 +2511,14 @@
         "benchmarks/network_traces/tests/test_stop_verdicts.py": "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py",
         "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py": "benchmarks/network_traces/tests/test_block_certifier.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py": "benchmarks/network_traces/tests/test_stop_verdicts.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_window_chain.py": "benchmarks/network_traces/tests/test_window_chain.py",
+        "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json": "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json"
+      }
     }
   ]
 }
