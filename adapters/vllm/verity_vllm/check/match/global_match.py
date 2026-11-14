@@ -168,7 +168,7 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
 #                        Match time after an exit 4 (early EOS: served T_r < declared), `--derived`; the global Program itself is unchanged,
 #                        G1-G8 see exactly what they saw;
 #   "x09_document":      OUT -- the whole X-09 document decompose() returned (cb_a.batch_decomp's CLI schema): what row_pod's match.compare
-#                        stage computed AGAIN in its own process (365 s at B8 1024/128); `--decomp-out` writes it.  Module globals would not
+#                        stage computed AGAIN in its own process; `--decomp-out` writes it.  Module globals would not
 #                        do: under `python -m` the record path runs in `__main__` while the fast path imports this module a second time.
 X09_DOCUMENT, X09_EXTRA_DERIVED = "x09_document", "x09_extra_derived"
 
@@ -328,8 +328,8 @@ def impl_module(name: str | None = None):
 
 def impl_banner(mod, gp: dict | None = None) -> str:
     """One stderr line stating, before the run, which implementation is about to run and how (workers, operand form) and which
-    component dirs were relocated -- the two facts whose absence once cost an 8 h run (record checker by default,
-    a Build's dangling component paths noticed only at load)."""
+    component dirs were relocated -- the two facts a run otherwise learns only late (which checker runs by default; a Build's
+    dangling component paths, noticed only at load)."""
     name = getattr(mod, "IMPL_NAME", "record")
     env = settings.raw(IMPL_ENV)
     parts = [f"# global_match impl={name}", f"({IMPL_ENV}={env!r})" if env is not None else f"({IMPL_ENV} unset -> default {IMPL_DEFAULT})"]
