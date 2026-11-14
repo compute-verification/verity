@@ -342,6 +342,40 @@ def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_wer
     assert keys[2, :168].tobytes() == run.keys(run.roots[9], 4 + 2, 32)
 
 
+def test_a_graphed_calls_slots_are_predicted_at_the_first_weight_and_a_call_they_do_not_hold_uploads_its_own():
+    """`GraphCalls._slot`, a call's keys and offsets where its own graph reads them.  At the weight first in the run's
+    order every weight's slot is written as the forward is predicted to go on (the next indices, the same rows, the pass's
+    running offsets) and uploaded in one copy, behind the last one's and marked on the caller's stream.  A call the
+    prediction holds uploads nothing.  One it does not hold uploads its own keys and offsets alone, so the slot it reads
+    says the call's values."""
+    torch = pytest.importorskip("torch")
+    run = Calls(torch)
+    run.kernel = SimpleNamespace(run=SimpleNamespace(TILE=16, cdiv=lambda a, b: -(-a // b)))
+    run.weights = {7: SimpleNamespace(n=64), 8: SimpleNamespace(n=32), 9: SimpleNamespace(n=64)}
+    run.cur = PPD._Pass(None, base=2, tiles=5, flag_rows=16)
+    put: list = []
+
+    def upload(dst, data, stream):
+        dst[:len(data)].copy_(torch.frombuffer(bytearray(data), dtype=torch.uint8))
+        put.append((len(data), stream))
+    run.uploads = SimpleNamespace(put=upload)
+    run._slot(7, 4, 32, 30, "the caller's")
+    keys, offs = run.key_slots.numpy(), run.offs.numpy()
+    assert [keys[i, :168].tobytes() for i in range(3)] == [run.keys(run.roots[w], 4 + i, 32) for i, w in enumerate(run.order)]
+    assert offs.tolist() == [[64 * 5, 2 * 16, 64 * 2], [64 * 13, 2 * 46, 64 * 3], [64 * 17, 2 * 76, 64 * 4]]
+    assert run._predicted == {7: (4, 32, 5, 16), 8: (5, 32, 13, 46), 9: (6, 32, 17, 76)} and put == []
+    assert (run._slots_copied.synced, run._slots_copied.recorded) == (1, 1)
+    run.cur.tiles, run.cur.flag_rows = 13, 46
+    run._slot(8, 5, 32, 30, "the caller's")                   # as predicted: its slot holds it
+    assert put == [] and (run._slots_copied.synced, run._slots_copied.recorded) == (1, 1)
+    run.cur.tiles, run.cur.flag_rows = 18, 70
+    run._slot(9, 6, 16, 14, "the caller's")                   # other rows, at other offsets
+    assert put == [(168, "the caller's"), (24, "the caller's")] and run._predicted[9] == (6, 16, 18, 70)
+    assert keys[2, :168].tobytes() == run.keys(run.roots[9], 6, 16) and offs[2].tolist() == [64 * 18, 2 * 70, 64 * 4]
+    assert keys[1, :168].tobytes() == run.keys(run.roots[8], 5, 32) and offs[1].tolist() == [64 * 13, 2 * 46, 64 * 3]
+    assert run._host_keys.numpy()[2, :168].tobytes() == run.keys(run.roots[9], 6, 32)     # the host copy is the prediction
+
+
 def test_a_replay_without_hashing_appends_the_matmuls_only():
     torch = pytest.importorskip("torch")
     run = Calls(torch)
