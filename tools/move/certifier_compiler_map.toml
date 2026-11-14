@@ -1,17 +1,14 @@
-# vLLM's scheduler replay and the compile slice (the registered compiler's pieces) go from the network certifier to the
-# vLLM adapter, which holds the compiler (ARCHITECTURE.md): what `tools/move/layout.py --map tools/move/certifier_compiler_map.toml`
-# moves and rewrites. Each Definition moves with its circuit-check sidecar and pins and its tests. The advice format and its
-# charge (`advice`, `arith_encode`, `charge_chain`, `window_charge`) and `replay_chain` stay, since trusted code reads them;
-# the fixtures stay beside their writers and their other readers, and a hand commit after the move points the moved tests at
-# them.
+# The compile slice, vLLM's prefix cache and the served rows (the registered compiler's pieces) go from the network
+# certifier to the vLLM adapter, which holds the compiler (ARCHITECTURE.md): what `tools/move/layout.py --map
+# tools/move/certifier_compiler_map.toml` moves and rewrites. Each Definition moves with its circuit-check sidecar and pins
+# and its tests. The advice format and its charge (`advice`, `arith_encode`, `charge_chain`, `window_charge`),
+# `replay_chain` and `replay_step` stay, since trusted code or the certifier's own tests read them; the fixtures stay
+# beside their writers and their other readers, and a hand commit after the move points the moved tests at them.
 
 [roots]
 old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 [paths]
-"verity/protocols/accounting/certifier/verifier/replay_step.py" = "adapters/vllm/verity_vllm/compiler/replay_step.py"
-"verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.py" = "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.py"
-"verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.json" = "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.json"
 "verity/protocols/accounting/certifier/verifier/compile_slice.py" = "adapters/vllm/verity_vllm/compiler/compile_slice.py"
 "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.py" = "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.py"
 "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.json" = "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.json"
@@ -55,7 +52,6 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_v7.py" = "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_v7.py"
 "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_w1.py" = "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w1.py"
 "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_w212.py" = "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w212.py"
-"verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_replay_step.py" = "adapters/vllm/tests/compiler/test_network_certifier_replay_step.py"
 "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_replay_step_engine.py" = "adapters/vllm/tests/compiler/test_network_certifier_replay_step_engine.py"
 "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_served_rows.py" = "adapters/vllm/tests/compiler/test_network_certifier_served_rows.py"
 "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_served_statics.py" = "adapters/vllm/tests/compiler/test_network_certifier_served_statics.py"
@@ -72,7 +68,6 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity.protocols.accounting.certifier.prover.served_tie" = "verity_vllm.compiler.served_tie"
 "verity.protocols.accounting.certifier.verifier.cache_step" = "verity_vllm.compiler.cache_step"
 "verity.protocols.accounting.certifier.verifier.compile_slice" = "verity_vllm.compiler.compile_slice"
-"verity.protocols.accounting.certifier.verifier.replay_step" = "verity_vllm.compiler.replay_step"
 "verity.protocols.accounting.certifier.verifier.served_rows" = "verity_vllm.compiler.served_rows"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_advice_check" = "adapters.vllm.tests.compiler.test_network_certifier_advice_check"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_cache_step" = "adapters.vllm.tests.compiler.test_network_certifier_cache_step"
@@ -86,7 +81,6 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_compile_slice_v7" = "adapters.vllm.tests.compiler.test_network_certifier_compile_slice_v7"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_compile_slice_w1" = "adapters.vllm.tests.compiler.test_network_certifier_compile_slice_w1"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_compile_slice_w212" = "adapters.vllm.tests.compiler.test_network_certifier_compile_slice_w212"
-"verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_replay_step" = "adapters.vllm.tests.compiler.test_network_certifier_replay_step"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_replay_step_engine" = "adapters.vllm.tests.compiler.test_network_certifier_replay_step_engine"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_served_rows" = "adapters.vllm.tests.compiler.test_network_certifier_served_rows"
 "verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_served_statics" = "adapters.vllm.tests.compiler.test_network_certifier_served_statics"
