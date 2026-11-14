@@ -21,7 +21,7 @@ import stall_probe as sp  # noqa: E402
 
 ORIGIN = 10.0
 #: the process label the relay's serve program gives the probe
-RELAY = "warden"
+RELAY = "network_certifier"
 
 
 def _stat(tid: int, state: str, minor: int, major: int) -> str:

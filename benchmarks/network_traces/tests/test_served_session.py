@@ -46,7 +46,7 @@ SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
 #: the network certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
-_CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
+_CGROUP = '{"cgroups": {"network_certifier": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
 
 STUB = r'''#!PYTHON

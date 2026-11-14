@@ -862,7 +862,8 @@ async def serve(params: NetworkCertifierParams, out: Path, *, upstream: tuple[st
                     paced=paced_ms / 1000,
                     watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
     server = await listening(network_certifier.handle, listen, sock)
-    sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
+    sampler = stall_probe.start(out / "stalls.json", origin,
+                                {"network_certifier": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
