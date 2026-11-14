@@ -19,6 +19,7 @@ import pytest
 from verity.definitions.registry import tp_allreduce
 
 from tests.observe.test_patterns_synthetic import V, context, decode_step
+from verity_vllm.errors import Refused
 from verity_vllm.observe.events import Note, RunHeader
 from verity_vllm.observe.fold.patterns import GeometryError
 from verity_vllm.observe.fold.patterns.collectives import (
@@ -261,12 +262,12 @@ def test_a_builds_programs_register_their_values_where_result_json_says_so(tmp_p
     registered = build("registered", {"program": {"supplied": {"registration": {"values": 3}}}})
     assert not program_registered_values([]) and not program_registered_values(held)
     assert all(not program_registered_values([d]) for d in held) and program_registered_values([registered, registered])
-    with pytest.raises(SystemExit, match="some Programs register their values and some hold them as constants"):
+    with pytest.raises(Refused, match="some Programs register their values and some hold them as constants"):
         program_registered_values([held[0], registered])
     (tmp_path / "empty").mkdir()
     unreadable = [str(tmp_path / "empty"), build("list", []), build("text", "x")]
     (tmp_path / "broken").mkdir()
     (tmp_path / "broken" / "result.json").write_text("{")
     for d in (*unreadable, str(tmp_path / "broken")):
-        with pytest.raises(SystemExit, match=r"no readable result\.json"):
+        with pytest.raises(Refused, match=r"no readable result\.json"):
             program_registered_values([registered, d])

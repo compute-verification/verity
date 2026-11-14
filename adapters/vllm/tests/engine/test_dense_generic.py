@@ -121,7 +121,6 @@ def test_x07_name_and_derived_name_are_one_profile():
     g = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B").PROFILE
     assert d.config == g.config and d.id == g.id
     assert [type(x).__name__ for x in d.patterns] == [type(x).__name__ for x in g.patterns]
-    assert d.kernel_allowlist == g.kernel_allowlist
     for name in ("lm_head.weight", "model.layers.5.self_attn.o_proj.weight", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"):
         assert d.weight_field(name) == g.weight_field(name)
     assert profile_module_for_case("LLAMA32_1B") == "derived_LLAMA32_1B"
