@@ -313,8 +313,10 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
   of 32 words, the table's root (`of` = `root`) or its domain id (`domain`);
 * `registered.openings`, `{reader, table, key, ports, verdict, at, units}`: units `[at, at + units)` of the reader
   open a row of the table by the key in row `key`, filling `ports`, with the verdict in output `verdict`. One may
-  declare its `row` beside them, the output that returns the row opened, an output of the reader as the verdict is;
-  nothing fills a row by it, and an opening that declares none is read as before;
+  declare its `row` beside them, the output that returns the row opened: only where the reader is a table read's
+  shape, six input rows and two outputs, the row returned and then the verdict, and `row` is the first of the two, so
+  never the verdict's own output nor a row of a reader that returns more; nothing fills a row by it, and an opening
+  that declares none is read as before;
 * `ingress`, `{reader, port, at, units, step}`: units `[at, at + units)` of the reader read that row from outside. -/
 def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except String Inputs := do
   let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
@@ -390,7 +392,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     let _ ← rowIn t key
     if !(tables.any (·.name == table)) || (t.outs.lookup out).isNone then throw "inputs"
-    if row.any fun r => (t.outs.lookup r).isNone then throw "inputs"
+    if row.any fun r => !(t.rows.length == 6 && t.outs.map (·.1) == [r, out]) then throw "inputs"
     let mut ports : List String := []
     for pj in portsJ do
       let .str p := pj | throw "inputs"

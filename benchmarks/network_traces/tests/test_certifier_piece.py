@@ -62,6 +62,7 @@ from benchmarks.network_traces import warden_serve as WS  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden as W  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
@@ -114,7 +115,7 @@ def warden(tmp_path_factory):
             tar.add(run, arcname=RUN)
     cells = [json.loads(x)["registration"] for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
     registrations = [r for d_ in (Direction.INGRESS, Direction.EGRESS) for r in cells
-                     if (r["link"], r["direction"], r["window"]) == (WC.WS.LINK, d_.value, w)]
+                     if (r["link"], r["direction"], r["window"]) == (RC.LINK, d_.value, w)]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
             "windows": WC.deployment(run)[0]["windows"], "registrations": registrations,
             "deployment": json.loads((run / "out" / "deployment.json").read_text())}
@@ -153,10 +154,12 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     return d
 
 
-def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = ()) -> Path:
-    """What the chain leaves in its run dir's out/: its report, the endpoint's and the scan's one execution phase, with
-    the row registrations ``registrations``."""
-    out = d / "out"
+def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), witness: Path | None = None) -> Path:
+    """What the chain leaves in its run dir's out/: its report and the endpoint's; and on its private side
+    (``witness``, D/witness by default, which `_copied` copies to the chain's quarantine), the scan's answers: its one
+    execution phase, with the row registrations ``registrations``."""
+    out, witness = d / "out", witness or d / "witness"
+    (witness / "scan").mkdir(parents=True)
     (out / "report").mkdir(parents=True)
     (out / "endpoint").mkdir(parents=True)
     (out / "endpoint" / "report.json").write_text(json.dumps({"chain": {"bits": {"commit_windows": [
@@ -164,10 +167,16 @@ def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = ()) 
     (out / "scan" / "joint").mkdir(parents=True)
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
-    (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
+    (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
         {"window": w, "answer": {"verdict": "accept"}, "registrations": list(registrations)}]}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
     return d
+
+
+def _copied(chain: Path) -> str:
+    """A stand-in chain's command: `_chain_out`'s out/ copied to the run dir, and its witness/ to the quarantine."""
+    return (f'mkdir -p "$RESEARCH_RUN_DIR" "$CR_QUARANTINE" && cp -r {shlex.quote(str(chain / "out"))} '
+            f'"$RESEARCH_RUN_DIR/" && cp -r {shlex.quote(str(chain / "witness"))} "$CR_QUARANTINE/"')
 
 
 def _stub_lean(tmp_path: Path, answer: dict) -> Path:
@@ -195,7 +204,7 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
     `_stub_rows`' accept (or ``rows``)."""
     lean = lean or _stub_lean(tmp_path, answer)
     rows = rows or _stub_rows(tmp_path)
-    cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
+    cmd = cmd or _copied(chain)
     piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --rows {shlex.quote(str(rows))} --chain-cmd {shlex.quote(cmd)}")
@@ -267,8 +276,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert signed["rows"] == [{"link": r["link"], "direction": r["direction"], "window": r["window"],
                                "key_id": r["certificate"]["key"], "digest": r["certificate"]["digest"],
                                "signature": r["certificate"]["signature"]} for r in window["registrations"]]
-    key, session = WC.cs.read_public(warden["deployment"]["key"]), bytes.fromhex(warden["deployment"]["session"])
-    assert all(WC.cs.certificate_from_json(c).verify(key, session) for c in signed["records"] + signed["rows"])
+    key, session = RF.read_public(warden["deployment"]["key"]), bytes.fromhex(warden["deployment"]["session"])
+    assert all(RF.certificate_from_json(c).verify(key, session) for c in signed["records"] + signed["rows"])
     assert {(c["direction"], c["window"]) for c in signed["rows"]} == {(Direction.INGRESS.value, warden["w"]),
                                                                        (Direction.EGRESS.value, warden["w"])}
     log = (piece / "piece.log").read_text()
@@ -276,8 +285,10 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert (f"case: the serve dir's {CP.CASES / CP.CASE}, {len(raw)} bytes; {CP.CERTIFICATES}: 3 records' and 2 rows' "
             "certificates") in log
     keep = d / CP.PRIVATE / RUN
-    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz", CP.SESSION]
+    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz", "quarantine", CP.SESSION]
     assert (keep / "chain" / "out" / "endpoint" / "report.json").is_file()
+    assert (CP.chain_witness(keep.parent, RUN) / "scan" / "answers.json").is_file()
+    assert not _named(keep / "chain", "answers.json")
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
     row = S.piece_row("communication", tmp_path / "pieces")
     assert (row["verdict"], row["quantity"], row["owner"]) == ("accept", accept["public"], "network-accounting")
@@ -328,11 +339,13 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
 
     def chain(keep, run, ep, windows):
         assert sorted(p.name for p in ep.iterdir()) == sorted(CP.ENDPOINT) and windows == warden["windows"]
-        _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w)
+        _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w,
+                   witness=CP.chain_witness(keep, run))
         return 0
     (tmp_path / "dir").mkdir()
     a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=chain, check=check or (lambda c, p: pytest.fail("no check")),
-                            rows=lambda run: None, case=lambda run, scan: {"params": {}, "commitment": "", "evidence": ""})
+                            rows=lambda run: None,
+                            case=lambda run, scan, answers: {"params": {}, "commitment": "", "evidence": ""})
     assert unpacked is not None and unpacked.parent == d / CP.PRIVATE / RUN
     return a
 
@@ -438,10 +451,9 @@ def _piece(tmp_path: Path, warden: dict, chain: Path) -> tuple[int, Path, Path]:
     lean = tmp_path / "network-period"
     lean.write_text(f"#!/bin/sh\ncat <<'EOF'\n{json.dumps(CP.answer('reject', 'stub'))}\nEOF\n")
     lean.chmod(0o755)
-    cmd = f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     piece = tmp_path / "pieces" / "certifier"
     rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
-                  "--chain-cmd", cmd])
+                  "--chain-cmd", _copied(chain)])
     return rc, piece, d
 
 
@@ -681,7 +693,7 @@ def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_c
     on real records, which the stand-ins above don't."""
     honest = published(tmp_path / "honest")
     record = WC.own_record(honest)
-    (rec,) = [r for r in WS.read_records(honest, sz.W63.params)[WS.EGRESS] if r.window == 0]
+    (rec,) = [r for r in RC.read_records(honest, sz.W63.params)[RC.EGRESS] if r.window == 0]
     assert [W.read_cell(c, B)[:2] for c in rec.grid[27][:R]] == [(W.DATA, 1)] * (R - 1) + [(W.END, 1)]
     assert [W.read_cell(c, B)[:2] for c in rec.grid[26][:R]] == [(W.PAD, 1)] * R
     assert [W.read_cell(c, B)[1] for c in rec.grid[2] if c is not None] == [1] * R + [2] * R + [3] * R
@@ -772,7 +784,7 @@ def _private_chain_out(out: Path) -> Path:
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
                        "rows": [{"window": 0, "certified": True}],
-                       "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
+                       "warden_check": {"accepted": True, "problems": 0, "requests": REQUESTS}},
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
@@ -815,7 +827,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
     assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
     assert held["report/report.json"] >= {REQUESTS, OUTPUTS, V0, DERIVED} and held["report/report.md"] >= {
-        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS, OUTPUTS}
+        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS}
     assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
     hold, d, q = tmp_path / "hold", tmp_path / "pieces" / "certifier", tmp_path / "quarantine"
     CP.publish(out, hold)
@@ -876,8 +888,7 @@ def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int
     (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
     return ["--rows", str(_stub_rows(tmp_path)),
-            "--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
-                           f'cp -r {shlex.quote(str(out / "out"))} "$RESEARCH_RUN_DIR/"']
+            "--chain-cmd", f'printf "%s\\n" "$@" > {note}; {_copied(out)}']
 
 
 def _lean(tmp_path: Path, answer: dict) -> list[str]:

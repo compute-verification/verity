@@ -10,9 +10,9 @@ and its Lean.
   run's own, and one schedule, its integer fields and its response cap when it has one: the period check reads the id
   egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
   `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
-  the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+  the link `relay_check.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
-  the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
+  the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
@@ -66,9 +66,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import leak_bounds as LB  # noqa: E402
-import scan_zk as SZ  # noqa: E402
-from benchmarks.network_traces import warden_serve as WS  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -79,12 +78,12 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 def certificates(run: Path, w: int) -> list[dict]:
     """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
-    responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
-    docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
+    responses, fails: `relay_check.CERTIFIED`), each the certificate's own fields."""
+    docs = [json.loads(x)["certificate"] for x in SA._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]
     out = []
-    for name in (WS.INGRESS, WS.EGRESS, WS.FAILS):
-        link, d = WS.CERTIFIED[name]
+    for name in (RC.INGRESS, RC.EGRESS, RC.FAILS):
+        link, d = RC.CERTIFIED[name]
         got = [c for c in docs if (c["link"], c["direction"], c["window"]) == (link, d.value, w)]
         if len(got) != 1:
             raise SystemExit(f"{run}: link-window {w}'s {name} record has {len(got)} certificates, not 1")
@@ -93,7 +92,7 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
-              circuit: str | None = None) -> dict:
+              circuit: str | None = None, answers: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
@@ -101,16 +100,18 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     in place of ``answers.json``'s. With ``v3c``, ``circuit`` is required: the class circuit, the Program digest of the
     verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's registration. Without
     ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check refuses first (with no
-    block audit, none, whose parameters the check refuses)."""
+    block audit, none, whose parameters the check refuses). ``answers`` is the scan's ``answers.json`` where ``scan``
+    doesn't hold it: a chain record keeps it on its private side (chain_record.sh), for the row registrations it
+    carries whole."""
     if v3c is not None and circuit is None:
         raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
-    dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    dep = json.loads(SA._found(run, "deployment.json").read_text())
     if dep["params"].get("egress", "id") != "id":
         raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
     if "start" not in dep:
         raise SystemExit(f"{run}: deployment.json holds no signed start, and the period check reads each listed entry's "
                          "session's: take a run whose network certifier certified its session's start")
-    doc = json.loads((scan / "answers.json").read_text())
+    doc = json.loads((answers or scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]
     elif circuit is None and doc.get("audits"):
@@ -124,7 +125,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     else:
         reg = json.loads((scan / round_ / "registration.json").read_text())
         why = json.loads((scan / "summary.json").read_text())["rounds"][round_]["audit"]["why"]
-        answer = SZ.window_answer(reg, None, None, f"the scan's {round_} round refused: {why}")
+        answer = SA.window_answer(reg, None, None, f"the scan's {round_} round refused: {why}")
     certs = certificates(run, x["window"])
     if round_ == "forged":
         sig = certs[1]["signature"]
@@ -135,8 +136,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
     cells = WardenParams(**dep["params"]).rows_cells(1)
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": cells,
-              "circuit": circuit, "first": x["window"], "jitter": LB.JITTER_BOUND,
-              "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": WS.LINK,
+              "circuit": circuit, "first": x["window"], "jitter": SA.JITTER_BOUND,
+              "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": RC.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
               "windows": 1}
