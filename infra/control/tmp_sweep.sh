@@ -7,7 +7,7 @@ while :; do
            readlink "$p/cwd"; ls -l "$p/fd" 2>/dev/null | sed -n 's/.*-> //p'; tr '\0:=' '\n\n\n' < "$p/environ"
          done 2>/dev/null | grep '^/tmp/.' | cut -d/ -f1-3 | sort -u)
   freed=0
-  # drive's train checkouts (/tmp/train-<sha>, ~420 MB, a few an hour) go after 1 h, which a 20 GiB root needs
+  # drive's train checkouts (/tmp/train-<sha>.*, one a launch, ~420 MB, a few an hour) go after 1 h, which a 20 GiB root needs
   for e in $(find /tmp -mindepth 1 -maxdepth 1 \( -name 'train-*' -mmin +60 \) -o \( -mmin +360 ! -name 'tmux-*' ! -name '.*' ! -name 'ssh-*' ! -name 'systemd-*' \)); do
     printf '%s\n' "$used" | grep -qxF "$e" && continue
     case $e in /tmp/train-*) age=60 ;; *) age=360 ;; esac

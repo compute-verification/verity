@@ -2167,9 +2167,13 @@ def _train_repo(tmp_path):
         env.pop(k, None)
     calls = iter(range(1, 1000))
 
-    def train(*a, **extra):
-        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env={**env, "TEST_CALL": str(next(calls)), **extra})
+    def train(*a, started=False, **extra):
+        """train.sh with arguments ``a``, run to its end; with ``started``, the process started, its output piped."""
+        argv, kw = ["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], dict(
+            text=True, cwd=tmp_path / "repo", env={**env, "TEST_CALL": str(next(calls)), **extra})
+        if started:
+            return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kw)
+        return subprocess.run(argv, capture_output=True, **kw)
 
     return git, train, argv
 
@@ -2202,7 +2206,7 @@ def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact
     p = train("HEAD", "vy-x", "--cc-records")
     args = argv.read_text().split()
     assert p.returncode == 0 and args[args.index("--keep-going"):] == ["--keep-going", "--cc-records"], (p.stderr, args)
-    assert f"train-{git('rev-parse', 'HEAD')[:12]}-records.log" in p.stdout, p.stdout
+    assert re.search(rf"/train-{git('rev-parse', 'HEAD')[:12]}-records\.\w{{6}}\.log$", p.stdout, re.M), p.stdout
     art = f"art:{'a' * 64}@{'b' * 64}"
     p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "1/4", "--cc-records-from", art)
     args = argv.read_text().split()
@@ -2229,7 +2233,8 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
     p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "auto:2/3", "--shard-plan-file", str(plan))
     args = argv.read_text().split()
     assert p.returncode == 0 and args[-4:] == ["--shard", "auto:2/3", "--shard-plan-file", str(plan)], (p.stderr, args)
-    assert "shard auto:2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-auto-2of3.log" in p.stdout, p.stdout
+    assert "shard auto:2/3" in p.stdout, p.stdout
+    assert re.search(rf"/train-{git('rev-parse', 'HEAD')[:12]}-auto-2of3\.\w{{6}}\.log$", p.stdout, re.M), p.stdout
     argv.unlink()
     for flags, why in ((["--shard", "auto:2/3"], "--shard auto:K/N takes --shard-plan-file PLAN"),
                        (["--shard", "2/3", "--shard-plan-file", str(plan)], "--shard auto:K/N takes --shard-plan-file PLAN"),
@@ -2311,19 +2316,109 @@ def test_train_sh_hands_the_loops_deselect_list_to_a_check_that_takes_it(tmp_pat
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
-def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
-    """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
-    skips and `worktree add` refuses: every relaunch of that commit registered no run."""
+def _launch_log(p: subprocess.CompletedProcess) -> Path:
+    """The log a launch's train.sh named (`...; log PATH`)."""
+    named = re.search(r"; log (\S+)$", p.stdout, re.M)
+    assert named, (p.stdout, p.stderr)
+    return Path(named[1])
+
+
+def test_train_sh_gives_each_launch_of_a_commit_its_own_tree_and_log(tmp_path):
+    """The queue launches one commit more than once (a resend, a shard again): a launch that shared an earlier one's log could
+    read that launch's run line before its own launcher emptied the log, and print those runs as its own (or, the line gone
+    under its poll, stop a launcher that was launching), and one that shared its tree would take it from a launcher still
+    reading it. Each launch has a tree and a log of its own, and a tree left of an earlier launch stops none."""
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
     git("push", "-q", "origin", "HEAD:main")
-    stale = tmp_path / f"train-{git('rev-parse', 'HEAD')[:12]}"
-    (stale / ".venv").mkdir(parents=True)
-    (stale / "README.md").write_text("left\n")
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    assert (stale / "a").read_text() == "b\n" and not (stale / "README.md").exists()
+    left = tmp_path / f"train-{git('rev-parse', 'HEAD')[:12]}"
+    (left / ".venv").mkdir(parents=True)
+    (left / "README.md").write_text("left\n")
+    first = train("HEAD", "vy-x")
+    assert first.returncode == 0 and first.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (first.stdout, first.stderr)
+    log = _launch_log(first)
+    log.write_text("research: run r20261009-000000-0000 launched on vy-x (p) pid=1 -> /r\n")
+    second = train("HEAD", "vy-x")
+    assert second.returncode == 0 and second.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (second.stdout, second.stderr)
+    assert _launch_log(second) != log and "r20261009-000000-0000" in log.read_text()
+    assert (log.with_suffix("") / "a").read_text() == "b\n" and (_launch_log(second).with_suffix("") / "a").read_text() == "b\n"
+    assert (left / "README.md").read_text() == "left\n"
+
+
+def test_train_sh_holds_the_clones_lock_only_for_its_git_state(tmp_path):
+    """train.sh holds the clone's lock (`train.lock`) for its fetch and the worktree's registration alone, so the queue's
+    launches don't wait on one another's checkouts (about two minutes each on the control pod's NFS TMPDIR): the tree is checked
+    out with the lock free, and the maintenance a fetch starts detached, which can repack for an hour, never holds it."""
+    import fcntl
+    import os
+    import shutil
+
+    git, train, argv = _train_repo(tmp_path)
+    lock, seen, release, pidf = (tmp_path / "repo" / ".git" / "train.lock", tmp_path / "checkout-lock", tmp_path / "release",
+                                 tmp_path / "maintenance-pid")
+    os.mkfifo(release)
+    # a `git` ahead of the real one: a fetch leaves a child behind as a detached maintenance does (fds 0-2 closed, the rest
+    # kept), which waits on `release`; a checkout records whether the lock is free while it runs
+    (tmp_path / "bin" / "git").write_text(
+        f'#!/bin/sh\n{shutil.which("git")} "$@" || exit $?\n'
+        f'case " $* " in *" fetch "*) setsid sh -c \'echo $$ > {pidf}; read x < {release}\' < /dev/null > /dev/null 2>&1 &\n'
+        f'  until [ -s {pidf} ]; do :; done;;\n'
+        f'*" checkout "*) {shutil.which("flock")} -n {lock} true && echo free >> {seen} || echo held >> {seen};;\nesac\n')
+    (tmp_path / "bin" / "git").chmod(0o755)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "pushed by its path")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:refs/heads/queue/c1")      # no ref of the clone's has it: a fetch
+    try:
+        p = train("HEAD", "vy-x")
+        assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+        os.kill(int(pidf.read_text()), 0)
+        with open(lock, "a") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pytest.fail("the maintenance a fetch left running holds the clone's lock")
+        assert (seen.read_text().split() if seen.exists() else []) == ["free"], "the tree's checkout ran under the clone's lock"
+    finally:
+        if pidf.exists():
+            with open(release, "w"):
+                pass
+
+
+def test_train_sh_launches_nothing_for_a_commit_the_queue_dropped_while_it_waited_for_the_lock(tmp_path):
+    """The queue deletes a dropped candidate's branch (`queue/SHA`) from its clone, and a launch of it may still be waiting for
+    the clone's lock: once it holds the lock it finds no branch pointing at its commit, launches nothing and exits 0 (nothing
+    to tell the merge thread), even where a branch still standing holds the commit (a candidate above it, dropped next) and
+    with no fetch."""
+    import fcntl
+    import os
+    import shutil
+
+    git, train, argv = _train_repo(tmp_path)
+    calls = _counting_git(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "candidate")
+    dropped = git("rev-parse", "HEAD")
+    git("push", "-q", "origin", "HEAD:refs/heads/queue/c1")
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "the candidate above it")
+    git("push", "-q", "origin", "HEAD:refs/heads/queue/c2")
+    waiting = tmp_path / "waiting"
+    os.mkfifo(waiting)
+    (tmp_path / "bin" / "flock").write_text(f'#!/bin/sh\necho waiting > {waiting}\nexec {shutil.which("flock")} "$@"\n')
+    (tmp_path / "bin" / "flock").chmod(0o755)
+    with open(tmp_path / "repo" / ".git" / "train.lock", "a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        p = train(dropped, "vy-x", started=True)
+        assert waiting.read_text() == "waiting\n"
+        calls.unlink()
+        git("push", "-q", "origin", ":refs/heads/queue/c1")
+        fcntl.flock(held, fcntl.LOCK_UN)
+    out, err = p.communicate()
+    assert p.returncode == 0 and "the queue dropped it while this launch waited" in out and "RUN" not in out, (out, err)
+    assert not argv.exists() and not (tmp_path / "posted").exists()
+    assert "fetch" not in calls.read_text().split(), calls.read_text()
+    assert not list(tmp_path.glob(f"train-{dropped[:12]}*"))
 
 
 def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
