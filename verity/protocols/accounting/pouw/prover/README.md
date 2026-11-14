@@ -46,5 +46,5 @@ variable, and nothing under `benchmarks/` or `adapters/`. Its tests are in `test
 
 The SASS gate is `sass_gate.py`: no shipped kernel computes a value the verifier's scalar model can't replay. Its pins
 are `sass_pins.json`, whose numeric pin is built from `ieee_pin.cu` and changes only with ptxas; the listings and probes
-its tests read are `tests/fixtures/sass_gate/`. The kernels' checks, ships and runs on a card, and the gate's tests, are in
-`benchmarks/pouw/`.
+its tests read are `tests/fixtures/sass_gate/`. The kernels' checks, ships and runs on a card, and the gate's tests, are
+in `benchmarks/pouw/`.
