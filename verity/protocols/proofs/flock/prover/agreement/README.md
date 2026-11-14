@@ -92,12 +92,15 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 
 ~~~text
 cd verity/protocols/proofs/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
-flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
-    [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] --session DIR...
-flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
-flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
-flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
+verity verify proof verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] \
+    [--zk] [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] \
+    --session DIR...
+verity verify proof agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
+verity verify proof statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
+verity verify proof rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
 ~~~
+
+`verity verify proof ARGS` runs `flock-verify ARGS`, the executable that `lake build` wrote, in the directory you are in.
 
 - `--archive DIR` reads every object (circuit, public file, partition, program, tables) by its SHA-512 from the
   verifier's own store, never from the prover's session directory; without it the flags are paths, for the development
@@ -197,7 +200,7 @@ computation and make intermediate values public, so the Lean verifier sets none 
 one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.legacyWhy`). `Flock.Test.Legacy` pins
 that, and that every statement before hm96-sha512 rows is refused once every check has passed.
 
-The other `flock-verify` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
+The other subcommands of `verity verify proof` run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
 `verity/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
 sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
 partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
@@ -213,7 +216,7 @@ partition and program checks); `net-check`, `region-words`, `typed-expand`, `typ
 `ci-bundle.sh`'s bundle, run by `ci-pod.sh`), it fetches the set's inputs from the store, regenerates its proof mutants
 (`redigest.py`), retained-bytes sessions and seeded fuzz cases (`fuzz.py`), adds its forgeries, and runs `agree.py`, which
 compares the Lean verifier with upstream (`Server::from_record`, then `finish`) on every session. Upstream's builds write
-upstream's plain files, which `verify` refuses, so there the Lean side is `flock-verify agree`, after upstream: it runs
+upstream's plain files, which `verify` refuses, so there the Lean side is `verity verify proof agree`, after upstream: it runs
 `verify`'s checks and refusals and prints one `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}` line a
 session, whether the checks pass exactly when upstream accepted, and never an acceptance. `--zk` and live sessions are
 the deployed form, and `verify`'s verdicts:

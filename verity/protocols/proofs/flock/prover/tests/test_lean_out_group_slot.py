@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_lean_verifier import LEAN, _bit_row_toy  # noqa: E402
+from test_lean_verifier import LEAN, _bit_row_toy
 
 from verity.circuits.codec import canonical_json
 
