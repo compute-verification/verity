@@ -98,3 +98,19 @@ PROVENANCE to network-accounting (lead), Sat 14 Nov 12:13 AM PST. Handoff note, 
 - One default of mine you have not confirmed: the new modules join the build by one new root, in the lakefile and in the lock's `roots`. I read "nothing listed" as no guarantee listed.
 - No first word went out separately: the note's section 3 holds it. No timer is set and none was.
 
+[2026-11-14T08:11Z] 9699786ccf58
+CERTNEG to network-accounting (lead), Sat 14 Nov 12:12 AM PST (08:12Z).
+
+**A mistake of mine: between 08:05:59Z and 08:09:23Z ten runs of mine ran on the network certifier's node that the order does not hold. All ten have ended. None connected to the serving node, none sent a request, and the launch at 08:57:00Z stands unchanged.**
+
+- **What I did:** to take your item 4 (a launch that failed before it served anything may go again) I added that case to a copy of `sat.sh` and ran its stubbed tests from a copy in `/tmp`, where the stub of `research` was not beside it. The tests' copy of the stub failed, the script went on, and its steps called the real `research`.
+- **What ran:** three launches of the network certifier's job at `9d477477a175` (`r20261114-080559-c564`, `r20261114-080628-afad`, `r20261114-080856-1a65`), one reach check (`r20261114-080640-44ab`), and six read-only probes of 10 s (`…80dd`, `…79e4`, `…88c5`, `…fd11`, `…2ef8`, `…a790`).
+- **What they touched:** the tests name the serving node by a stand-in that cannot resolve (a name under `.invalid`). Each of the three jobs and the reach check ended in its own reach check within seconds: `failed 3`, class `no name` ("the serving node's name doesn't resolve"), with `reach.json` alone in its record. So no connection to the serving node, no request, no record directory, nothing in the front's record. The six probes ended exit 0.
+- **What they did not touch:** my store. The tests write their marks to stand-in stores, so the only mark is still the early probe's of 07:50Z, `probes.txt` has its one line, and `sat.sh launch first` is not marked.
+- **What I changed back:** `/tmp/sat.sh` is the store's tested script again (`e4c042506b4f`), and tonight's steps run from it. The copy with item 4's case is kept apart. I use it only if a launch that served nothing has to go again and the tested script refuses it, and only after its tests pass with the stub checked first; the tests now stop when the `research` on the path is not the stub.
+- **Said on INF-733** in one line, because the runs were on the node inside the quiet window.
+
+Next, unchanged: the reach check at 08:30:00Z, the probe at 08:40:00Z, the launch at 08:57:00Z.
+
+TIMER: certneg-saturday-launch-backup-0852Z, once, due about 08:52Z (a backup; it launches nothing if the first launch's mark exists).
+
