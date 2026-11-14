@@ -30,7 +30,11 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
-- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`).
+- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
+- an active network certifier's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
+  (`verity/network-rows/v1`), over the certifier program's `NetworkCertifier.Rows`. It does not hold an egress cell to
+  the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
+  caller that runs no io tie holds it itself.
 
 ## Zero knowledge: what ties the checks, and the named gap
 
