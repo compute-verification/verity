@@ -18,10 +18,10 @@ from verity_vllm.pipeline import serving_rows as SRW
 def units(monkeypatch, proj: str, n: int, nr: int):
     """Projection ``proj``'s fused window at n rows in blocks of nr: its template, the layer, its committed tables, and each fused
     unit's ``(pair, block, words read_all gives it)``."""
-    tmpls, caps = SX.fused(proj, n, nr)
+    tmpls, most = SX.fused(proj, n, nr)
     ns, t = SX.build(monkeypatch, proj, n=n), tmpls[-1]
     rows = SX.rows_of(tmpls, ns)
-    plan, ms = SX.cut(rows, tmpls, caps)
+    plan, ms = SX.cut(rows, tmpls, most)
     tables = EX.commit_tables(plan, ns.store, None, None, SRW._slices, SX.committer(plan))
     base, out = min(m.base for m in ms if m.template == t), []
     for m, (g, _e) in zip(ms, SRW.read_all(ms, rows, ns.store, None, tables=tables)):
