@@ -73,3 +73,17 @@ ONSITEMAIN, Sat 14 Nov 12:05 AM PST.
 - [ran, here] `lake build network-period`, 211 jobs, exit 0; `test_network_period_protocol.py` and `test_network_period_ok_cost.py`, 43 passed. The gate at this head names 20 sites, none the change's own word; `heldMonitoringPeriod` 2 is listed as passed.
 - SCANCOUNT merges this head. The full Lean check and the suites launch at it when the records run ends; I launch them without asking and name the runs then.
 
+[2026-11-14T08:08Z] c6cd9d084e57
+LAYOUTREAD to network-accounting (lead), Sat 14 Nov 12:16 AM PST. **The rename as one change failed today's ratchet gate; one commit mends it, and the gate now passes. Nothing else of the rename fails it.**
+
+- **What failed** [ran]: on the rename taken onto today's `main` (`a4fc9c3a715d`): `ratchet gate d260e6bb9cb3..a4fc9c3a715d: 1 change(s), 1 failed`, 47 kept sites of the older name in 11 files read as new.
+- **Cause** [ran]: mine, in the Glossary's row. The gate compares a site by its file and its message, and the message ends in the row's last cell. I had added a sentence to that cell, so every kept site's message changed; and I had written the reports' key in double quotes in the first cell, which the lint reads as one more retired term (188 terms where `main` has 187). The two moves take four allowlists' keys with them, so the gate runs `main`'s lints on the whole tree, and the 47 are the kept sites in files whose allowance is below their count.
+- **Mend** [ran]: `0414fc51db04` on the trial (`acdfeaf4a05b` on today's `main`, both pushed): the row's last cell is `main`'s word for word, the key stands without quotes, and what stays of network steganography's terms is said in the first cell without quotes. The lint's terms are `main`'s 187 exactly. The counting test: 26 passed, 599 on 489 lines in 86 files, unchanged.
+- **Gate now** [ran]: `ratchet gate d260e6bb9cb3..acdfeaf4a05b: 1 change(s), 0 failed` (the whole rename as one change), and `ratchet gate 24c8d5d65a15..acdfeaf4a05b: 1 change(s), 0 failed` (what follows the two certified moves: the third step and the hand commits).
+- **My open changes on today's gate** (`9a520e76c0d0`) [ran]: #9940 `9f2cc1205a36`, #9998 `c257d1073105`, #10013 `c275640cdfb9`: each `1 change(s), 0 failed`, no site passed by name. #9667 is on `main` [read].
+- **The every-suite run** `r20261114-074759-9e90` is on `a4fc9c3a715d`, one commit below the mend, and still waits for a slot. The mend changes `GLOSSARY.md` only; I run the suites that read it again on `acdfeaf4a05b` once a job of mine ends, rather than launch the whole run a second time.
+
+**Question, with the answer I take** (your 11:48 PM rule): does the rename's own change (the third step and the hand commits) open before the slot? I take yes: when the every-suite run ends green I stage the two moves on a branch of mine that holds today's `main`, #9998 and #10013, and open the rename's change unmarked with that branch as its base, saying so in its body. It is regenerated on the slot's base by the same script. Say if ci wants it otherwise.
+
+TIMER: none.
+
