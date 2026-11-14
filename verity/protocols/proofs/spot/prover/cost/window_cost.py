@@ -63,8 +63,8 @@ from verity.commitments.windows import interface as IF
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
 sys.path.insert(0, str(HERE))
-import class_rows as CR  # noqa: E402
-import class_size as CS  # noqa: E402
+from verity.protocols.proofs.spot.prover.cost import class_rows as CR  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import class_size as CS  # noqa: E402
 
 FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
 #: a first block's families (`class_size.FIRSTS`): v2's body is v1's node for node, so it is priced as v1

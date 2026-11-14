@@ -53,7 +53,7 @@ VLLM_DIR = HERE.parent / "pearl_c_vllm"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(VLLM_DIR))
 
-import glm53  # noqa: E402
+from verity.protocols.proofs.spot.prover.cost import glm53  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
