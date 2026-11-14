@@ -25,7 +25,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/device/remote.py`), a remote challenger's client;
 - `CertifierClient` (`verity/protocols/accounting/certifier/verifier/active.py`), onsite's network certifier, over the network;
-- the overhead bound's remote regime (`InferenceOnly.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
+- the slowdown bound's remote regime (`InferenceOnly.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
 
 ## Parties
@@ -393,8 +393,8 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The overhead over remote, per period | `InferenceOnly.Guarantees.SlowdownRemote` (`security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `InferenceOnly.Guarantees.SlowdownRemotePeriod` (`security/Definitions/InferenceOnly/Guarantees/RemotePeriod.lean`; proof `InferenceOnly.SecurityProofs.SlowdownRemotePeriod` in `security/Proofs/InferenceOnly/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The slowdown over remote, per period | `InferenceOnly.Guarantees.SlowdownRemote` (`security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The slowdown over a monitoring period | `InferenceOnly.Guarantees.SlowdownRemotePeriod` (`security/Definitions/InferenceOnly/Guarantees/RemotePeriod.lean`; proof `InferenceOnly.SecurityProofs.SlowdownRemotePeriod` in `security/Proofs/InferenceOnly/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from three open targets (the open gap, above) | — |
 
 `SlowdownRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`InferenceOnly.Slowdown.remoteSlowdown`; MFU₀ divides only
