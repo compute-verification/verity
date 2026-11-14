@@ -128,8 +128,8 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-mon
            "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools; the nightly check runs in
-# cpu-8's nightly pool): `managed` names just the OOM order, the memory drop-ins and the user-namespace setting
+# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools): `managed` names just the OOM
+# order, the memory drop-ins and the user-namespace setting
 [nodes.vy-nebius-cpu-7]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
@@ -186,7 +186,8 @@ managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/lo
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-14 to cpu-17 (uk-south2, train slots): cpu-12's entries; cpu-16 and cpu-17 are staged. pods/nebius/launch.sh creates one
+# cpu-14 to cpu-17 (uk-south2, train slots; the nightly check runs in cpu-14's nightly pool): cpu-12's entries; cpu-16 and
+# cpu-17 are staged. pods/nebius/launch.sh creates one
 # with NEBIUS_VM_NAME, cpu-13's shape (cpu-d3, 192vcpu-768gb, ubuntu24.04-driverless) and a data disk of a multiple of 93 GiB
 [nodes.vy-nebius-cpu-14]
 record = "/workspace/research/deploy/record.jsonl"
