@@ -15,7 +15,7 @@ layout's order (`slotsAt`, a part, a port and an instance each):
   nothing.
 
 `InnerRec.fit x` makes the inner records commit exactly those rows: as many as the round's slots, each sized to its
-port's words (`fitSlot`), a top's as `Firewall.topRows` lays a node (its 32 words, then zero words), every word 16 bits.
+port's words (`fitSlot`), a top's as `ZkServer.topRows` lays a node (its 32 words, then zero words), every word 16 bits.
 So the deployed prover's rows are counted and sized from `x`'s schedule and port widths by construction; at records
 already of that shape `fit` changes nothing. `strs` is the round's commit strings, and the inner prover's message is
 their concatenation (`P_eval`).
@@ -66,7 +66,7 @@ def isTop (x : Msg) (sl : ℕ × ℕ × ℕ) : Bool := (((circAt x sl.1).ports[s
 /-- `k` words of `ws`, each reduced to 16 bits, zero words past its end. -/
 def fitRow (k : ℕ) (ws : Array ℕ) : Array ℕ := ((ws.toList.map (· % 65536) ++ List.replicate k 0).take k).toArray
 
-/-- **A row fitted to its slot**: at a cap's `top`, a node's 32 words then zero words (`Firewall.topRows`); at any other
+/-- **A row fitted to its slot**: at a cap's `top`, a node's 32 words then zero words (`ZkServer.topRows`); at any other
 port, the port's words. -/
 def fitSlot (x : Msg) (sl : ℕ × ℕ × ℕ) (ws : Array ℕ) : Array ℕ :=
   if isTop x sl then fitRow 32 ws ++ Array.replicate (widthAt x sl - 32) 0 else fitRow (widthAt x sl) ws

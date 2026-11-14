@@ -23,24 +23,24 @@ statements are one, the two phases have as many scheduled rounds:
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128 SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Rep Release)
-open _root_.Flock.Firewall.Frame (Cfg)
+open _root_.Flock.ZkServer.Frames (Rep Release)
+open _root_.Flock.ZkServer.Frame (Cfg)
 
 /-- **`withAlg` on a frame with no scheduled rounds yet** schedules the algebraic phase by `Skeleton.rounds` on the
 frame's table's statement, at its `--zk` schedule, on the level-0 root and the stream's domain. -/
-theorem withAlg_alg {s : Release} {l0 : _root_.Flock.Firewall.Level0.Level0} {name : String} {p q : Rep} {stm : Stmt}
-    (h : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok q) (hp : p.alg.isEmpty = true)
+theorem withAlg_alg {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p q : Rep} {stm : Stmt}
+    (h : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok q) (hp : p.alg.isEmpty = true)
     (hst : s.sts[p.table]? = some stm) :
     ∃ sch tp, _root_.Flock.Zk.schedule stm.wideLeaf stm.m = .ok (sch, tp) ∧
-      _root_.Flock.Firewall.Skeleton.rounds (_root_.Flock.Setup.ofCircuit stm) sch.k0 l0.root
+      _root_.Flock.ZkServer.Skeleton.rounds (_root_.Flock.Setup.ofCircuit stm) sch.k0 l0.root
         (s.spec.domain name p.rep).toUTF8 = .ok q.alg := by
-  unfold _root_.Flock.Firewall.Frames.withAlg at h
+  unfold _root_.Flock.ZkServer.Frames.withAlg at h
   simp only [hp, hst, Bool.not_true, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
   split at h
   · cases h
   · rename_i alg hal
     cases h
-    unfold _root_.Flock.Firewall.Frames.algOf at hal
+    unfold _root_.Flock.ZkServer.Frames.algOf at hal
     simp only [bind, Except.bind] at hal
     split at hal
     · cases hal
@@ -50,13 +50,13 @@ theorem withAlg_alg {s : Release} {l0 : _root_.Flock.Firewall.Level0.Level0} {na
 /-- **The algebraic phase `withAlg` schedules has the placeholder's count of rounds**: on a frame with no scheduled
 rounds yet, whose table's statement is the placeholder's stream's table's, the frame `withAlg` gives has as many
 scheduled rounds as the placeholder's algebraic phase. -/
-theorem withAlg_size {s : Release} {l0 : _root_.Flock.Firewall.Level0.Level0} {name : String} {p p' : Rep}
-    {stm : Stmt} (hw : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok p') (hp : p.alg.isEmpty = true)
+theorem withAlg_size {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p p' : Rep}
+    {stm : Stmt} (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p') (hp : p.alg.isEmpty = true)
     (hst : s.sts[p.table]? = some stm) {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128}
-    {c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray} {xs : Array (Array F128)}
+    {c' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} (hph : Loop.placeholder spec sts k link = .ok (c', t, dom', xs, hi))
     (hk : sts[k / 2]! = stm) {alg : Array (ByteArray × Nat)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom' =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom' =
       .ok alg) :
     p'.alg.size = alg.size := by
   obtain ⟨sch, tp, hsch, ha⟩ := withAlg_alg hw hp hst

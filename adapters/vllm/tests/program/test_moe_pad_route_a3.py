@@ -5,7 +5,7 @@ GEMM is the layer's own `mlp.gate` Compute, one resolution per dispatcher root) 
   (1) value: `MoeFfnFixedL(x, Gemm(x, wg), w13, w2) == MoeFfnFixed(x, wg, w13, w2) == MOE-01` word for word on every admitted route;
   (2) lift of record: `lift_def(bind(MoeFfnFixedL))` IS `bind(LMoeFfnL)` (registry AND decoded path), never a replay; at enable 1 its
       payload equals the twin's; at enable 0 it is all bot; the unselected slots are DISABLED (bot z_e, a_e = Active(0)) as in `LMoeBlock`;
-  (3) the signed phase 2 object is untouched: `LMoeBlock_v1`'s digest at (E=4, K=2, VPT=2, H=I=16) is the signed one
+  (3) the signed phase-2 object is untouched: `LMoeBlock_v1`'s digest at (E=4, K=2, VPT=2, H=I=16) is the signed one
       (1dd831feee7ac882..., moe_pad_stage2_routes_E4_K2.json) -- the shared `_lifted_core` emits the same nodes in the same order;
   (4) the frontend vocabulary binds the kind: `PROFILE_B1_EAGER_V3.kind("moe_ffn_fixed", ...)` is `bind(MoeFfnFixedL, ...)`.
 
@@ -133,13 +133,13 @@ def _no_ord(fid: str) -> str:
 
 
 def test_3_the_signed_phase2_block_is_unchanged_by_the_factoring():
-    """`LMoeBlock_v1` (router-owning) emits through the shared `_lifted_core`: its digest at the phase 2 envelope is the signed
+    """`LMoeBlock_v1` (router-owning) emits through the shared `_lifted_core`: its digest at the phase-2 envelope is the signed
     one; `LMoeBlockL_v1` differs from it (no router GEMM node, `logits` an input) and from nothing else."""
     sp = MP.block(E, 2, VPT, H, INTER)
     d = program_digest(encode_program(Program(sp)))
-    # The PIN is the digest of the phase 2 block on the lifting stack of record; a pin is a pin, not a claim.  The digests it has had:
+    # The PIN is the digest of the phase-2 block on the lifting stack of record; a pin is a pin, not a claim.  The digests it has had:
     #   1dd831feee7ac882  the first lifting stack -- the signed digest;
-    #   de34ef2c82f65eb4  the ORDINARY class (ORD statics in the lifted ids) -- the same block, the same relation; the phase 2
+    #   de34ef2c82f65eb4  the ORDINARY class (ORD statics in the lifted ids) -- the same block, the same relation; the phase-2
     #                     evidence JSON (dump_routes.py at v2) still carries the first digest and is compared only when it names the current stack.
     #   43bb1ede072b2031  the re-baseline re-key (the k16 step AmpereBF16TcDot16_v1 -> core's _v2; nothing else moved).
     #   52de640566245b7f  the same descriptor, digested with SHA-512 (the identity re-baseline).

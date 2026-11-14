@@ -505,8 +505,8 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
                      "stacked/rep0: the binding round's statement digest is not the circuit reps'"),
                     ({"binds": binds, "digests": {"circuit/rep1": bytes(32)}},
                      "circuit/rep1: the binding round's statement digest is not the other reps'"),
-                    ({"binds": binds, "order": ("circuit/rep0", "stacked/rep0", "circuit/rep1")}, "FIREWALL-REFUSED: round "),
-                    ({"roots": binds}, "FIREWALL-REFUSED: Hello")]:
+                    ({"binds": binds, "order": ("circuit/rep0", "stacked/rep0", "circuit/rep1")}, "ZK-SERVER-REFUSED: round "),
+                    ({"roots": binds}, "ZK-SERVER-REFUSED: Hello")]:
         proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration,
                          registered={RL.STACKED: reg}, bound=bound)
         _stacked_session(proxy, **{"roots": roots, "sh": sh, "m_r": m_r, **kw})
@@ -571,7 +571,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
 
     proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch)
     _stacked_session(proxy, roots, sh, m_r, binds=binds)
-    assert proxy.stopped == "rec proxy: FIREWALL-REFUSED: stacked/rep0: stacked has no root at Commit and no registered top"
+    assert proxy.stopped == "rec proxy: ZK-SERVER-REFUSED: stacked/rep0: stacked has no root at Commit and no registered top"
 
     proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
     proxy.register(RL.STACKED, reg)
@@ -616,7 +616,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
                          (forged, bound, not_meta), (registration, None, not_meta), (None, bound, not_meta),
                          (with_desc, R.digest(with_desc), "stacked has no root at Commit and no registered top"),
                          (v1, R.digest(v1), "stacked has no root at Commit and no registered top")]:
-        with pytest.raises(ValueError, match=re.escape(f"FIREWALL-REFUSED: registration: {why}")):
+        with pytest.raises(ValueError, match=re.escape(f"ZK-SERVER-REFUSED: registration: {why}")):
             V.registered(public, bad, dg)
 
 
@@ -868,7 +868,7 @@ def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_sessi
         got = _opening(tmp_path / forge / "inner", relay, ss.rng)
         assert got.vstar["accepted"] and got.residuals == bad, (forge, got.residuals)
     relay, _, resp = _sparse_relay(ss.circuit, stacked={"bin": BIN, "dir": tmp_path / "late", "forge": "late"})
-    assert relay.proxy.stopped == "rec proxy: FIREWALL-REFUSED: stacked/rep0: the binding round's cap is not stacked's registered top"
+    assert relay.proxy.stopped == "rec proxy: ZK-SERVER-REFUSED: stacked/rep0: the binding round's cap is not stacked's registered top"
     assert json.loads(resp[-1][1]) == {"accepted": False, "why": relay.proxy.stopped}
     assert not any(r["stream"] == "stacked/rep0" for r in relay.proxy.coins.rounds)
     other = _toy_circuit(tmp_path, 9)[0].parent

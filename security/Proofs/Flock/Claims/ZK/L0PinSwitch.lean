@@ -58,7 +58,7 @@ namespace Claims.ZKServer.Switch
 
 open _root_.Flock (F128 Transcript TMW)
 open _root_.Flock.Transcript (framed header padded)
-open _root_.Flock.Firewall.Frame (LABEL_PCS)
+open _root_.Flock.ZkServer.Frame (LABEL_PCS)
 open FlockSoundness.Refine (Frame encs label_enc absorbSlice_enc framed_enc)
 open FlockComplete (PS asksCut ringSwitchCut)
 open FlockComplete.Replay (afterSq bind_go liftTM_ok)
@@ -197,7 +197,7 @@ theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ �
 
 section Piop
 
-open _root_.Flock.Firewall.Drive (Step OpenM)
+open _root_.Flock.ZkServer.Drive (Step OpenM)
 
 /-- **A program that ends with nothing pending**: wherever it returns, its transcript holds no pending bytes. -/
 def EndE {α : Type} (p : TMW OpenM α) : Prop :=
@@ -236,12 +236,12 @@ def sqT (t : Flock.Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : 
     k := t.k + 1
     rounds := t.rounds.push ⟨n, ByteArray.empty, (Array.range n).map coin, some (framed t kind n)⟩ }
 
-theorem endE_squeezeP (io : _root_.Flock.Firewall.Finish.Asks OpenM) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) :
-    EndE (_root_.Flock.Firewall.Finish.squeezeP io kind n) := by
+theorem endE_squeezeP (io : _root_.Flock.ZkServer.Finish.Asks OpenM) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) :
+    EndE (_root_.Flock.ZkServer.Finish.squeezeP io kind n) := by
   intro t got r h
-  have e : (_root_.Flock.Firewall.Finish.squeezeP io kind n).run t =
+  have e : (_root_.Flock.ZkServer.Finish.squeezeP io kind n).run t =
       io.round (framed t kind n) >>= fun coin => pure ((Array.range n).map coin, sqT t kind n coin) := by
-    simp only [_root_.Flock.Firewall.Finish.squeezeP, StateT.run, hn, ite_false, sqT] <;> rfl
+    simp only [_root_.Flock.ZkServer.Finish.squeezeP, StateT.run, hn, ite_false, sqT] <;> rfl
   rw [e, StateT.run_bind] at h
   obtain ⟨x, -, hx⟩ := step_done_inv h
   have e2 : (pure ((Array.range n).map x.1, sqT t kind n x.1) : OpenM (Array F128 × Flock.Transcript)).run x.2 =
@@ -250,15 +250,15 @@ theorem endE_squeezeP (io : _root_.Flock.Firewall.Finish.Asks OpenM) (kind : UIn
   subst e3
   rfl
 
-theorem endE_sampleP (io : _root_.Flock.Firewall.Finish.Asks OpenM) :
-    EndE (_root_.Flock.Firewall.Finish.sampleP io) := by
-  unfold _root_.Flock.Firewall.Finish.sampleP
+theorem endE_sampleP (io : _root_.Flock.ZkServer.Finish.Asks OpenM) :
+    EndE (_root_.Flock.ZkServer.Finish.sampleP io) := by
+  unfold _root_.Flock.ZkServer.Finish.sampleP
   exact endE_ret (endE_squeezeP io 1 (by decide)) fun _ => ⟨_, rfl⟩
 
-theorem endE_lincheckFw (io : _root_.Flock.Firewall.Finish.Asks OpenM) (c : _root_.Flock.CircuitFold)
+theorem endE_lincheckFw (io : _root_.Flock.ZkServer.Finish.Asks OpenM) (c : _root_.Flock.CircuitFold)
     (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) :
-    EndE (_root_.Flock.Firewall.Finish.lincheckFw io c lay mk zc) := by
-  unfold _root_.Flock.Firewall.Finish.lincheckFw
+    EndE (_root_.Flock.ZkServer.Finish.lincheckFw io c lay mk zc) := by
+  unfold _root_.Flock.ZkServer.Finish.lincheckFw
   dsimp only
   refine endE_bind fun _ => ?_
   refine endE_bind fun _ => ?_
@@ -271,10 +271,10 @@ theorem endE_lincheckFw (io : _root_.Flock.Firewall.Finish.Asks OpenM) (c : _roo
     exact endE_ret (endE_sampleP io) fun _ => ⟨_, rfl⟩
 
 /-- **A rep's PIOP ends on the lincheck's last squeeze**, nothing pending. -/
-theorem endE_repPiop (io : _root_.Flock.Firewall.Finish.Asks OpenM) (st : _root_.Flock.Setup)
+theorem endE_repPiop (io : _root_.Flock.ZkServer.Finish.Asks OpenM) (st : _root_.Flock.Setup)
     (lay : _root_.Flock.Zk.PadLayout) (cap root : ByteArray) (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) :
-    EndE (_root_.Flock.Firewall.Finish.repPiop io st lay cap root extras mk) := by
-  unfold _root_.Flock.Firewall.Finish.repPiop
+    EndE (_root_.Flock.ZkServer.Finish.repPiop io st lay cap root extras mk) := by
+  unfold _root_.Flock.ZkServer.Finish.repPiop
   refine endE_bind fun a => ?_
   obtain ⟨zp, zc⟩ := a
   exact endE_ret (endE_lincheckFw io _ _ _ _) fun b => by

@@ -229,7 +229,7 @@ def _query_checks(sr: dict) -> QueryChecks | None:
 def _faulted_prefix_facts(sr: dict) -> list[dict]:
     """The executed-prefix facts of record (`executed_prefix_of_record.facts_of_record`, what `sampled_replay.executed_prefix_of_record`
     was called with) of each request the replay's executed-prefix rule faulted, in the rule's order.  A fault's cause is read from these
-    fields -- `account_missing` (a Match account leg not beside the Commit, the fault named first), `linked` -- never from its text."""
+    fields -- `account_missing` (a Match account file not beside the Commit, the fault named first), `linked` -- never from its text."""
     facts = _d(_d(sr.get("executed_prefix_of_record")).get("facts_of_record"))
     c = _query_checks(sr)
     rule = c.executed_prefix_rule if c is not None else None
@@ -238,7 +238,7 @@ def _faulted_prefix_facts(sr: dict) -> list[dict]:
 
 def _scope_fail_account_missing(sr: dict) -> bool:
     """`_query_population_scope`'s FAIL is a missing input: the reconciliation's FAIL (not the engine cross-check's) whose first
-    executed-prefix fault is a request missing a Match account leg."""
+    executed-prefix fault is a request missing a Match account file."""
     pop, c, pf = _d(sr.get("population")), _query_checks(sr), _faulted_prefix_facts(sr)
     return (c is not None and c.ok is False and _d(_d(pop.get("query_total")).get("cross_check")).get("agree") is not False
             and bool(pf) and bool(pf[0].get("account_missing")))
@@ -656,7 +656,7 @@ def rule_route_pin(commit: dict, ctx: dict) -> CheckResult:
 def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     """The executed prefix of record + its Match-account link + rows past the stop, read from binding.coverage (executed_prefix.py's outputs).
     v1 gated these THROUGH the coverage / replay results (a faulted class fails the replay's population scope by name); here each is its own
-    check, and a MISSING ACCOUNT LEG (tokens.json / global_match.json not beside the Commit) is INSUFFICIENT_EVIDENCE, not FAIL."""
+    check, and a MISSING ACCOUNT FILE (tokens.json / global_match.json not beside the Commit) is INSUFFICIENT_EVIDENCE, not FAIL."""
     b = _binding_of(commit)
     cov = None if b is None else b.coverage
     epr, link, clink, past = ((None,) * 4 if cov is None else
@@ -671,7 +671,7 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
              ["binding.coverage.executed_prefix_of_record", "sampled_replay.executed_prefix_of_record", "executed_prefix_facts", "coverage.executed_prefix_of_record"])
     C_LINK = ("execution_extent/match_account_link", "executed-prefix conditions (a), (b)",
               ("The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt -- or, with no Match stage, every served "
-               "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested on every leg."),
+               "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested in every record."),
               ["binding.coverage.match_account_link", "binding.coverage.commit_account_link", "executed_prefix_facts.linked", "executed_prefix_facts.lag_attested",
                "account_missing"])
     C_PAST = ("execution_extent/rows_past_the_stop", "executed-prefix condition (c)",
@@ -698,9 +698,9 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             probs = list(epr.problems)
             out.append(_mk(*C_EPR, commit, ctx, outcome=FAIL, scope=scope, differences=[{"name": "executed_prefix_problems", "n": len(probs), "first": probs[:4]}],
                            reason=f"executed prefix of record: {probs[0] if probs else 'not ok'}"))
-    account_missing = sorted({leg for f in facts.values() if isinstance(f, dict) for leg in _listed(f, "account_missing")})
+    account_missing = sorted({name for f in facts.values() if isinstance(f, dict) for name in _listed(f, "account_missing")})
     if not account_missing and link is not None and not by_commit:
-        account_missing = [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
+        account_missing = [name for name, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     # v1 gated the link THROUGH the replay's not-executed class: it faults (-> population_scope FAIL) only when applied, i.e. when a request's
     # prefix is reduced from its cap (`link.required`) or the class names the fault.  Outside that the link is recorded, not gating.
     acct = clink if by_commit else link
@@ -720,10 +720,10 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         if account_missing and gating:
             out.append(_mk(*C_LINK, commit, ctx, outcome=INSUFFICIENT, scope=scope, inputs=inputs_extra,
                            differences=[{"name": "account_missing", "legs": account_missing}],
-                           reason=f"Match account leg(s) NOT beside the Commit: {', '.join(account_missing)} -- a missing input, not a verdict on the Program"))
+                           reason=f"Match account file(s) NOT beside the Commit: {', '.join(account_missing)} -- a missing input, not a verdict on the Program"))
         elif account_missing:
             out.append(_mk(*C_LINK, commit, ctx, outcome=PASS, scope=scope, inputs=inputs_extra,
-                           notes=[f"Match account leg(s) not beside the Commit: {', '.join(account_missing)}; not gating (no request stopped before its cap)"]))
+                           notes=[f"Match account file(s) not beside the Commit: {', '.join(account_missing)}; not gating (no request stopped before its cap)"]))
         elif linked:
             out.append(_mk(*C_LINK, commit, ctx, outcome=PASS, scope=scope, inputs=inputs_extra))
         elif gating:

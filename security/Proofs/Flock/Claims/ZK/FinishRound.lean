@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The `Finish` round where neither the frame nor the ZK server's own `Finish` stops
 
-`FinalRoundEq` holds the ZK server's `Finish` (the session's Lean finish, `Flock.Firewall.Finish`) to the session's
+`FinalRoundEq` holds the ZK server's `Finish` (the session's Lean finish, `Flock.ZkServer.Finish`) to the session's
 switched last message, which is `fin` of the tables' switched views where every table admits the opened coins and `off`
 of the cut where one does not (`RefSession.swMsgAt`). Here it is split at that branch:
 
@@ -45,7 +45,7 @@ of the cut where one does not (`RefSession.swMsgAt`). Here it is split at that b
   four coin faults `Admits` excludes (an outer coin `1`, `ρ_0, ρ_1` dependent over F128, a rank-deficient mask slot,
   `β = 0`: `Frame.Masker.answer`, `Frame.maskRank`), but the release reads the frame's state and coins through the
   transport (`prog`, `coinsOf`), so that the state it hands the frame is the frame's own run on the opened coins is
-  the session loop's (`Flock.Firewall.Frames`, on `Drive.reqs`), as `ReadsCoins` is. That the frames took every
+  the session loop's (`Flock.ZkServer.Frames`, on `Drive.reqs`), as `ReadsCoins` is. That the frames took every
   round's coins on such a history is proved (`LeanRelease.coins_taken_of_live`, `FrameTaken`), and that a rank the
   frame finds full is `maskRankOk` at the statement's mask words (`Rank.maskRankOk_of_maskRank`, `FrameRank`).
 * `LeanRelease.FinishIs`: on such a history where the ZK server's own `Finish` does not stop either (`finStops`), its
@@ -67,7 +67,7 @@ namespace LeanRelease
 pass and whose last coins the frame takes, every table admits the coins the openings open (`RefSession.Admits`). A named
 hypothesis, one of the transport's trusts: the Lean frame refuses each coin fault `Admits` excludes, and the state and
 coins the transport hands it (`prog`, `coinsOf`) are its own run on the opened coins (the session loop's rep frame,
-`Flock.Firewall.Frames`). -/
+`Flock.ZkServer.Frames`). -/
 def FrameAdmits (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg)
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),

@@ -32,20 +32,20 @@ CAPITALS = [("France", "Paris"), ("Japan", "Tokyo"), ("Kenya", "Nairobi"), ("Per
 
 
 def _texts() -> list[str]:
-    caps = "Countries and their capitals:\n" + "".join(f"{i + 1}. The capital of {c} is {k}.\n" for i, (c, k) in enumerate(CAPITALS * 8))
+    capitals = "Countries and their capitals:\n" + "".join(f"{i + 1}. The capital of {c} is {k}.\n" for i, (c, k) in enumerate(CAPITALS * 8))
     code = "".join(f"def f{i}(x):\n    \"\"\"Return {i} x plus {i * i}.\"\"\"\n    return {i} * x + {i * i}\n\n\n" for i in range(60))
     story = ("Once upon a time, in a small village by the sea, there lived an old fisherman and his granddaughter. Every morning "
              "they rowed out past the lighthouse, and every evening they counted the day's catch on the pier. ") * 20
-    return [caps, code, story]
+    return [capitals, code, story]
 
 
 def prompts(tokenizer: Any) -> list[list[int]]:
     """Token ids: the capitals and the code cut to 512 tokens, the story to 300, and a short prompt."""
-    caps, code, story = (tokenizer.encode(t) for t in _texts())
+    capitals, code, story = (tokenizer.encode(t) for t in _texts())
     short = tokenizer.encode("The capital of France is")
-    if min(len(caps), len(code)) < 512 or len(story) < 300:
-        raise SystemExit(f"prompt texts are too short: {len(caps)}, {len(code)}, {len(story)} tokens")
-    return [caps[:512], code[:512], story[:300], short]
+    if min(len(capitals), len(code)) < 512 or len(story) < 300:
+        raise SystemExit(f"prompt texts are too short: {len(capitals)}, {len(code)}, {len(story)} tokens")
+    return [capitals[:512], code[:512], story[:300], short]
 
 
 def generate(llm: Any, ids: list[list[int]], max_tokens: int) -> list[dict[str, Any]]:

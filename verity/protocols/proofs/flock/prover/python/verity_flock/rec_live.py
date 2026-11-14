@@ -47,21 +47,21 @@ stream, index, coin count, its salted tops' node counts, its copies of a level-0
 ``--schedule`` gives it and is required: `schedule_for` derives it from the statement's public shape alone (``flock-circuit
 statement``), never from a session the prover ran, and `serve` writes it to ``OUT/schedule.json`` before the first session. A
 request that leaves the schedule, or a ``Link`` whose ``y`` is not the schedule's number of zero elements (the prover sends
-zeros), is refused ``FIREWALL-REFUSED`` before the challenger sees it. A refusal, or a session that ends without ``Finish``,
+zeros), is refused ``ZK-SERVER-REFUSED`` before the challenger sees it. A refusal, or a session that ends without ``Finish``,
 is a **stop**: the challenger's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
 session.
 
 **The send check.** With ``--lean`` (required) every session's send check is Lean's: each
-request goes to ``flock-firewall live`` (`LeanFirewall`, `Flock.Firewall.liveWith`) before the proxy handles it, a refusal
+request goes to ``flock-zk-server live`` (`LeanZkServer`, `Flock.ZkServer.liveWith`) before the proxy handles it, a refusal
 there stops the session, and every call on the challenger's live-coin part is one of the messages Lean sent for the request (`deliver`),
 with the salts Lean drew. The proxy handles the request too, for the prover's side (the answers, the session record,
 ``private.json``), and stops the session unless it sends the same messages and samples the same salts. Under the coin tree
-Lean is given the tree's spec and holds the prover's ``Hello`` to it (`Flock.Firewall.treeHello`); the challenger's live-coin part's
+Lean is given the tree's spec and holds the prover's ``Hello`` to it (`Flock.ZkServer.treeHello`); the challenger's live-coin part's
 messages are the live-coin session's. Lean's ZK server refuses a binding round of a registered top, so
-`verity_flock.rec_session.serve`'s sessions keep the Python send check, held to Lean's by ``test_firewall_agreement``.
+`verity_flock.rec_session.serve`'s sessions keep the Python send check, held to Lean's by ``test_zk_server_agreement``.
 
 **Live coins.** Each round's coins are flipped by the challenger's live-coin part when the round's commitments reach it, never before
-(`RecursiveKS`'s game and `RecursiveZK` sample them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
+(`RecursiveKS`'s game and `RecursiveZK` sample them so, and `Flock.ZkServer.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
 points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those
@@ -146,7 +146,7 @@ RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_DRAW = range(1
 
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
-#: `Flock.Firewall.Contract.COINS_TAG`: the coin message's tag
+#: `Flock.ZkServer.Contract.COINS_TAG`: the coin message's tag
 COINS_TAG = b"verity/firewall-coins/v0\0"
 #: the stream name of the link points' coins (``Commit``'s answer), round 0, in the challenger's commitments and the transcript
 LINK_COINS = "link"
@@ -421,7 +421,7 @@ def commit_top(cap: bytes, salts: list[bytes]) -> list[bytes]:
 
 
 def coin_message(stream: str, k: int, coins: list[int]) -> bytes:
-    """What the challenger commits to for round ``k`` of ``stream``'s coins (`Flock.Firewall.Contract.coinMsg`): the tag,
+    """What the challenger commits to for round ``k`` of ``stream``'s coins (`Flock.ZkServer.Contract.coinMsg`): the tag,
     the stream's UTF-8 bytes after their length, the round, the coin count (each 4 bytes big-endian), then each coin's 16
     bytes (`f128_bytes`)."""
     s = stream.encode()
@@ -430,13 +430,13 @@ def coin_message(stream: str, k: int, coins: list[int]) -> bytes:
 
 def coin_commitment(stream: str, k: int, coins: list[int], salt: bytes) -> bytes:
     """The challenger's commitment to a round's coins: hm96-sha512's ``b || c`` of SHA-512(`coin_message`) under ``salt``
-    (`Flock.Firewall.Contract.commitBC`, the commit items' commitment); ``salt`` is its opening."""
+    (`Flock.ZkServer.Contract.commitBC`, the commit items' commitment); ``salt`` is its opening."""
     inst = hm96.SHA512
     return inst.commit_string(inst.default_key, hashlib.sha512(coin_message(stream, k, coins)).digest(), salt)
 
 
 def refused(what: str) -> str:
-    return f"FIREWALL-REFUSED: {what}"
+    return f"ZK-SERVER-REFUSED: {what}"
 
 
 def canonical(v) -> str:
@@ -601,7 +601,7 @@ def _plain_str(s: str) -> bool:
 
 
 def _plain(v) -> bool:
-    """`Flock.Firewall.plain`: a value whose numbers are naturals and whose strings and keys hold no ``"``, ``\\`` or
+    """`Flock.ZkServer.plain`: a value whose numbers are naturals and whose strings and keys hold no ``"``, ``\\`` or
     control character."""
     if v is None or type(v) is bool:
         return True
@@ -617,7 +617,7 @@ def _plain(v) -> bool:
 def check_schedule(s) -> dict:
     """``s``, if it is a schedule a session can be held to (every field of the type `schedule_of` gives it, a plain
     ``Hello`` naming no ``coins``, each round just its six fields, and each stream's rounds, at least one, numbered 0, 1, …
-    in the schedule's order, as many as its ``rounds``: `Flock.Firewall.Schedule.canonical`); else ValueError. Lean's
+    in the schedule's order, as many as its ``rounds``: `Flock.ZkServer.Schedule.canonical`); else ValueError. Lean's
     ZK server, which holds no registered top, also refuses a schedule with a stream or a copy of level 0's top whose
     table has no root."""
     nat = lambda v: type(v) is int and v >= 0
@@ -818,7 +818,7 @@ class CoinServer:
     with the nonce and ``Hello``'s answer (the root and the key); each round's coins are then the tree's, opened after what
     the round answers (`link_after`, `round_after`) and sent with their opening (``tree_openings``). The nonce is the
     challenger's, not the prover's: the ZK server shows the challenger the schedule's ``Hello`` alone
-    (`Flock.Firewall.Contract`)."""
+    (`Flock.ZkServer.Contract`)."""
 
     def __init__(self, rand: Callable[[int], bytes] = os.urandom, tree: CT.Spec | None = None,
                  source: TreeSource | None = None):
@@ -853,7 +853,7 @@ class CoinServer:
         """Commit to every coin of the session before it starts (Goldreich–Kahan): flip the coins the pinned schedule needs,
         the link points then each round's in the schedule's order (so ``rand`` is read as the rounds would read it), and
         commit to each round's under a salt of its own (`coin_commitment`). Returns the commitments in hex, per stream and
-        round in order: the verifier's public input's ``coins`` (`firewall_transcript.public`). Each round's coins then go
+        round in order: the verifier's public input's ``coins`` (`zk_server_transcript.public`). Each round's coins then go
         out with their salt as the opening (``openings``), and a round whose coins were not committed is refused. A
         schedule's round that is not its stream's next (no session reaches it: the ZK server holds its i-th round to the
         schedule's i-th) gets no commitment."""
@@ -1002,7 +1002,7 @@ def registered_entry(registration: dict | None, table: str) -> dict | None:
 
 
 def deliver(coins: CoinServer, m: dict):
-    """One message to the challenger's live-coin part, in `Flock.Firewall.sentJson`'s form, as the call it names on ``coins``; its answer."""
+    """One message to the challenger's live-coin part, in `Flock.ZkServer.sentJson`'s form, as the call it names on ``coins``; its answer."""
     (tag, v), = m.items()
     if tag == "hello":
         return coins.start(v)
@@ -1021,10 +1021,10 @@ def deliver(coins: CoinServer, m: dict):
     raise ValueError(f"{canonical(m)}: not a message to the coin server")
 
 
-class LeanFirewall:
-    """The inner phase's send check, Lean's ``flock-firewall live`` (`Flock.Firewall.liveWith`) on one session held to
+class LeanZkServer:
+    """The inner phase's send check, Lean's ``flock-zk-server live`` (`Flock.ZkServer.liveWith`) on one session held to
     ``schedule``: `step` hands it a request before the proxy handles it, and it answers with every message the challenger's live-coin part
-    gets for the request (`Flock.Firewall.sentJson`) and the salts it drew for them, ``{"sent", "salts"}``, or the refusal
+    gets for the request (`Flock.ZkServer.sentJson`) and the salts it drew for them, ``{"sent", "salts"}``, or the refusal
     that stops the session, ``{"stop": why}``. A ZK server that exits or answers otherwise stops the session too. ``tree``:
     the session is on the challenger's coin tree of that spec (`coin_tree.Spec.to_json`), whose ``Hello`` Lean holds to it."""
 
@@ -1062,7 +1062,7 @@ class LeanFirewall:
         """``req``'s messages to the challenger's live-coin part and the salts sampled for them, in order; a refusal raises it."""
         got = self._ask(req.hex())
         if set(got) == {"stop"} and isinstance(got["stop"], str):
-            raise ValueError(f"the Lean firewall: {got['stop']}")
+            raise ValueError(f"the Lean ZK server: {got['stop']}")
         if set(got) != {"sent", "salts"} or not isinstance(got["sent"], list) or not isinstance(got["salts"], list):
             raise ValueError(f"{self.binary} live: {canonical(got)[:200]}: neither sent and salts nor a stop")
         salts = [bytes.fromhex(x) for x in got["salts"]]
@@ -1080,13 +1080,13 @@ class Proxy:
     and V*'s witness need. ``commitments``, when the challenger committed to its coins before the session
     (`CoinServer.commit_coins`), are those commitments: every coin answer must then come with the salt that opens its
     round's commitment. Without them the coins are live, and a coin answer that comes with an opening stops the session
-    (`Flock.Firewall.Contract`'s rule). ``registration``: the circuit registration (``verity/registration/v2``) and
+    (`Flock.ZkServer.Contract`'s rule). ``registration``: the circuit registration (``verity/registration/v2``) and
     ``bound`` the digest the statement's META binds, which it must have; ``registered``: by table, the prover's opening of the registered top (`register_top`) of each table the schedule gives
     no root at ``Commit``, which the registration names by the table's name and its stream's binding round must bind
     (`register`). ``draw``: the verifier's sample (`full_draw`), answered at ``Register`` and kept as the record's
     ``unit_draw``.
 
-    ``lean``: the send check is Lean's (`LeanFirewall`, on this session's ``schedule``). Each request goes to it first, and
+    ``lean``: the send check is Lean's (`LeanZkServer`, on this session's ``schedule``). Each request goes to it first, and
     its refusal stops the session; the challenger's live-coin part gets the messages it sent, in its order, and the salts are the ones it
     drew. The proxy's own handling of the request must send the same messages and sample the same salts, or the session stops:
     it keeps the prover's side (the session record, ``private.json``, the answers) and relays. Lean's ZK server holds no
@@ -1095,12 +1095,12 @@ class Proxy:
     def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
                  commitments: dict[str, list[str]] | None = None, registration: dict | None = None,
                  registered: dict[str, dict] | None = None, bound: str | None = None, draw: dict | None = None,
-                 lean: LeanFirewall | None = None):
+                 lean: LeanZkServer | None = None):
         if draw is not None and not (isinstance(draw, dict) and isinstance(draw.get("law"), str)
                                      and type(draw.get("population")) is int and isinstance(draw.get("units"), list)):
             raise ValueError("a draw is a unit_draw object: law, population, units")
         if lean is not None and (fresh_salt != hm96.SHA512.fresh_salt or registered):
-            raise ValueError("under the Lean firewall the salts are its own, and it holds no registered top")
+            raise ValueError("under the Lean ZK server the salts are its own, and it holds no registered top")
         self.coins = coins
         self.draw = draw
         self.lean = lean
@@ -1159,19 +1159,19 @@ class Proxy:
 
     def _lean_salt(self) -> bytes:
         if not self.lean_salts:
-            raise ValueError(refused("a salt the Lean firewall did not draw"))
+            raise ValueError(refused("a salt the Lean ZK server did not draw"))
         return self.lean_salts.pop(0)
 
     def _send(self, m: dict):
-        """A message to the challenger's live-coin part (`Flock.Firewall.sentJson`'s form), delivered (`deliver`); under ``lean``, the next
+        """A message to the challenger's live-coin part (`Flock.ZkServer.sentJson`'s form), delivered (`deliver`); under ``lean``, the next
         one the Lean ZK server sent, which must be this one."""
         if self.lean is not None:
             tag = next(iter(m))
             if not self.lean_sent:
-                raise ValueError(refused(f"{tag}: a message the Lean firewall did not send"))
+                raise ValueError(refused(f"{tag}: a message the Lean ZK server did not send"))
             got = self.lean_sent.pop(0)
             if canonical(got) != canonical(m):
-                raise ValueError(refused(f"{tag}: not the message the Lean firewall sent"))
+                raise ValueError(refused(f"{tag}: not the message the Lean ZK server sent"))
             m = got
         return deliver(self.coins, m)
 
@@ -1230,11 +1230,11 @@ class Proxy:
                 self.lean_sent, self.lean_salts = self.lean.step(req)
             out = self._handle(decode_req(req))
             if self.lean_sent or self.lean_salts:
-                raise ValueError(refused("the Lean firewall sent or drew more for the request than the proxy"))
+                raise ValueError(refused("the Lean ZK server sent or drew more for the request than the proxy"))
             return out
         except Exception as e:  # noqa: BLE001 - a request the ZK server cannot handle stops its session, never the ZK server
             why = f"rec proxy: {e}" if isinstance(e, ValueError) else \
-                f"rec proxy: {refused(f'a request the firewall cannot read ({type(e).__name__}: {e})')}"
+                f"rec proxy: {refused(f'a request the ZK server cannot read ({type(e).__name__}: {e})')}"
             self.stop(why)
             return resp_str(RESP_REFUSED, why)
 
@@ -1448,7 +1448,7 @@ def write_stopped(d: Path, coins: CoinServer) -> None:
 
 
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
-          sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, firewall=None,
+          sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, zk_server=None,
           parts: list[str] | None = None, stream: str = "rec", budget: int | None = None, release: dict | None = None,
           now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000, draw: dict | None = None,
           tree: CT.Spec | None = None, source: TreeSource | None = None, lean: str | Path | None = None) -> list[dict]:
@@ -1459,12 +1459,12 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     frame) has only the challenger's live-coin part's record, ``public.json``, and its coin tree's record, ``coin_tree.json``, when it has
     one, and counts as one of the ``sessions``. Without ``tree`` each session's coins
     are live: the challenger commits to none. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
-    ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
+    ``out/schedule.json`` before the first is served. With ``zk_server`` (a `verity_flock.zk_server.ZkServer`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
-    algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
+    algebra at K = 4096), its id in the session directory's ``zk_server.json``: a stop is that recursive session's stop, so
     the ZK server serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
     ``budget`` is the stream's failure budget (the challenger's stream's ``budget``, a public parameter of the deployment,
-    at least `verity_flock.firewall.BUDGET_MIN`), which a ZK server needs: without one, or with a lesser one, ``serve``
+    at least `verity_flock.zk_server.BUDGET_MIN`), which a ZK server needs: without one, or with a lesser one, ``serve``
     raises before it listens, since a stream without a budget bounds none of its recursive sessions; once the stream has
     stopped at it, or its unended recursive sessions and its failures reach it, a connection is closed before anything is
     served and ``serve`` returns. ``release`` (``{"windows_ms": [one a
@@ -1473,23 +1473,23 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     ZK server cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
     closes the connection unserved, and ``serve`` raises. ``draw``: the verifier's sample every session's ``Register`` is
     answered with (`Proxy`). ``tree``: each session's coins are the challenger's coin tree of that spec, sampled by
-    ``source`` at its ``Hello`` (`CoinServer`). ``lean``: Lean's ``flock-firewall``, each session's send check
-    (`LeanFirewall`, one process a session, closed when it ends); a session it cannot start on ``schedule`` makes ``serve``
+    ``source`` at its ``Hello`` (`CoinServer`). ``lean``: Lean's ``flock-zk-server``, each session's send check
+    (`LeanZkServer`, one process a session, closed when it ends); a session it cannot start on ``schedule`` makes ``serve``
     raise before it serves anything."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
-    if firewall is not None and parts is None:
-        raise ValueError("serve with a firewall opens each recursive session with its statements in their order (parts)")
-    if firewall is not None:
-        from .firewall import BUDGET_MIN, budget_ok
+    if zk_server is not None and parts is None:
+        raise ValueError("serve with a ZK server opens each recursive session with its statements in their order (parts)")
+    if zk_server is not None:
+        from .zk_server import BUDGET_MIN, budget_ok
         if budget is None:
-            raise ValueError(f"serve with a firewall opens its stream with a failure budget (budget, at least {BUDGET_MIN}): "
+            raise ValueError(f"serve with a ZK server opens its stream with a failure budget (budget, at least {BUDGET_MIN}): "
                              "a stream without one bounds none of its recursive sessions")
         budget_ok(budget)
     check_schedule(schedule)
     lean_tree = None if tree is None else tree.to_json()
     if lean is not None:
-        LeanFirewall(lean, schedule, lean_tree).close()
+        LeanZkServer(lean, schedule, lean_tree).close()
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "schedule.json").write_text(json.dumps(schedule, indent=1))
     with socket.create_server((host, int(port))) as srv:
@@ -1501,14 +1501,14 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             conn, _ = srv.accept()
             sid = None
             try:
-                check = None if lean is None else LeanFirewall(lean, schedule, lean_tree)
+                check = None if lean is None else LeanZkServer(lean, schedule, lean_tree)
             except BaseException:
                 conn.close()
                 raise
-            if firewall is not None:
-                from .firewall import Refused
+            if zk_server is not None:
+                from .zk_server import Refused
                 try:
-                    sid = firewall.open(stream, parts, budget, None if release is None else {"start_ms": now_ms(), **release})
+                    sid = zk_server.open(stream, parts, budget, None if release is None else {"start_ms": now_ms(), **release})
                 except Refused as e:
                     conn.close()
                     if check is not None:
@@ -1545,8 +1545,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             if proxy.stopped is not None:
                 write_stopped(d, proxy.coins)
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
-                if firewall is not None:
-                    firewall.stop(sid, "inner", proxy.stopped)
+                if zk_server is not None:
+                    zk_server.stop(sid, "inner", proxy.stopped)
             else:
                 sess = proxy.write(d)
                 rec = proxy.coins.record()
@@ -1554,10 +1554,10 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                             "coins": sum(r["n"] for r in rec["rounds"]), "tops": sum(len(r["tops"]) for r in rec["rounds"]),
                             "top_nodes": sum(len(t) for r in rec["rounds"] for t in r["tops"]),
                             "proof_bytes": {f"{t}/rep{r}": len(b) for (t, r), b in proxy.proofs.items()}})
-                if firewall is not None:
-                    firewall.finish(sid)
-            if firewall is not None:
-                (d / "firewall.json").write_text(json.dumps({"kind": "firewall/v0/session", "session": sid}))
+                if zk_server is not None:
+                    zk_server.finish(sid)
+            if zk_server is not None:
+                (d / "zk_server.json").write_text(json.dumps({"kind": "firewall/v0/session", "session": sid}))
                 res[-1]["firewall"] = sid
             if done:
                 done(res[-1])
@@ -1610,18 +1610,18 @@ def main(argv=None) -> int:
     ap.add_argument("--stacked", type=int, metavar="M_R", help="--schedule-for: the stacked table R's stream, R of 2^M_R cells")
     ap.add_argument("--sparse", metavar="NU,ELL,S_LOG,T_LOG", help="--schedule-for: each rep's sparse stream at this RecSparse shape")
     ap.add_argument("--schedule-of", help="print the schedule of a challenger's record (public.json) and exit")
-    ap.add_argument("--firewall", metavar="DIR", help="the ZK server's state: each session opens a recursive session on it")
-    ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
+    ap.add_argument("--zk-server", metavar="DIR", help="the ZK server's state: each session opens a recursive session on it")
+    ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--zk-server)")
     ap.add_argument("--parts", metavar="L0,L1,...,alg",
-                    help="each recursive session's V* statements in their order, the only order served (required with --firewall)")
+                    help="each recursive session's V* statements in their order, the only order served (required with --zk-server)")
     ap.add_argument("--budget", type=int,
                     help="the stream's failure budget, the challenger's stream's, a public parameter of the deployment, "
-                         "at least 1 (required with --firewall)")
+                         "at least 1 (required with --zk-server)")
     ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
                     help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
-                         "plus W0 + ... + Wj (--firewall)")
+                         "plus W0 + ... + Wj (--zk-server)")
     ap.add_argument("--lean", metavar="BIN",
-                    help="Lean's flock-firewall, each session's send check (LeanFirewall): required")
+                    help="Lean's flock-zk-server, each session's send check (LeanZkServer): required")
     add_tree_args(ap)
     a = ap.parse_args(argv)
     if a.schedule_for:
@@ -1637,24 +1637,24 @@ def main(argv=None) -> int:
     if not a.out or not a.schedule:
         ap.error("--out and --schedule are required (rec_live --schedule-for STATEMENT derives the schedule)")
     release = None if a.release_windows_ms is None else {"windows_ms": [int(w) for w in a.release_windows_ms.split(",")]}
-    if (a.parts is not None or a.budget is not None or release is not None) and not a.firewall:
-        ap.error("--parts, --budget and --release-windows-ms need --firewall")
-    if a.firewall and a.parts is None:
-        ap.error("--firewall needs --parts: each recursive session's V* statements in their order (L0–L6,alg at K = 4096)")
-    if a.firewall and a.budget is None:
-        ap.error("--firewall needs --budget: the stream's failure budget, the challenger's stream's, at least 1; a stream "
+    if (a.parts is not None or a.budget is not None or release is not None) and not a.zk_server:
+        ap.error("--parts, --budget and --release-windows-ms need --zk-server")
+    if a.zk_server and a.parts is None:
+        ap.error("--zk-server needs --parts: each recursive session's V* statements in their order (L0–L6,alg at K = 4096)")
+    if a.zk_server and a.budget is None:
+        ap.error("--zk-server needs --budget: the stream's failure budget, the challenger's stream's, at least 1; a stream "
                  "without one bounds none of its recursive sessions")
     fw = None
-    if a.firewall:
-        from .firewall import Firewall
-        fw = Firewall(Path(a.firewall))
+    if a.zk_server:
+        from .zk_server import ZkServer
+        fw = ZkServer(Path(a.zk_server))
     source = tree_source(ap, a)
     if not a.lean:
-        ap.error("--lean BIN: Lean's flock-firewall is every session's send check")
+        ap.error("--lean BIN: Lean's flock-zk-server is every session's send check")
     try:
         serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
               done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True),
-              schedule=json.loads(Path(a.schedule).read_text()), firewall=fw,
+              schedule=json.loads(Path(a.schedule).read_text()), zk_server=fw,
               parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release,
               draw=json.loads(Path(a.draw).read_text()) if a.draw else None, tree=INNER_COIN_SPEC if a.coin_tree else None,
               source=source, lean=a.lean)

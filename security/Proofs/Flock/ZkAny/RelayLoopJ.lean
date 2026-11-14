@@ -51,7 +51,7 @@ public import Proofs.Flock.Claims.ZK.FrameZK
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed byte? helloOf reqAt)
+open _root_.Flock.ZkServer.Session (State Placed byte? helloOf reqAt)
 open _root_.Flock (SessionSpec Stmt F128)
 
 variable {wideLeaf : Bool}
@@ -64,18 +64,18 @@ whose commitment's cap is the level-0 root, at salts `hi` that are the rep's in 
 (`saltsAt`), which it has not where its coins are as many as its algebraic phase's rounds. Where it is stream
 `k + 1`'s first, the frame holds the history's words for each of stream `k`'s rounds. -/
 def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt) (k : Nat)
-    (h : List (Claims.Msg × Claims.Msg)) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-    (l0 : _root_.Flock.Firewall.Level0.Level0) (p : _root_.Flock.Firewall.Frames.Rep)
-    (R : _root_.Flock.Firewall.Frames.Sessions) : Prop :=
+    (h : List (Claims.Msg × Claims.Msg)) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+    (l0 : _root_.Flock.ZkServer.Level0.Level0) (p : _root_.Flock.ZkServer.Frames.Rep)
+    (R : _root_.Flock.ZkServer.Frames.Sessions) : Prop :=
   ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)).1 = k →
-    ∃ (j : Nat) (c : Array F128) (stm : Stmt) (t : _root_.Flock.Firewall.Finish.Tab) (xs : Array (Array F128))
-      (hi : Array ByteArray) (pre : List _root_.Flock.Firewall.Frame.Req)
-      (ev : List (Nat × ByteArray × _root_.Flock.Firewall.Frame.Place × Array F128)),
+    ∃ (j : Nat) (c : Array F128) (stm : Stmt) (t : _root_.Flock.ZkServer.Finish.Tab) (xs : Array (Array F128))
+      (hi : Array ByteArray) (pre : List _root_.Flock.ZkServer.Frame.Req)
+      (ev : List (Nat × ByteArray × _root_.Flock.ZkServer.Frame.Place × Array F128)),
       (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)).2 = j + 1 ∧ rel.link = some c ∧
         rel.sts[k / 2]? = some stm ∧
-        _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t ∧
-        _root_.Flock.Firewall.Finish.flat t.cm0.cap = l0.root ∧
-        xs = _root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm c) ∧
+        _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t ∧
+        _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root ∧
+        xs = _root_.Flock.ZkServer.Drive.extras stm (_root_.Flock.ZkServer.Drive.linkPoints stm c) ∧
         SameInv M.L M.x M.ρ h (h.tail.map fun e => ZKMal.CoinLayer.rd e.2) (h.length - 2) j t
           (rel.spec.domain name (k % 2)).toUTF8 xs hi pre ev p ∧
         (p.alg.size < p.coins.size → saltsAt R l0.root (k % 2) = some hi) ∧
@@ -87,7 +87,7 @@ def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Arra
         (h.length - 2 - (Loop.roundsOf spec sts).getD k 0 + j + 1))
 
 /-- **The rep's salts are an entry of the loop's salts.** -/
-theorem find?_of_saltsAt {R : _root_.Flock.Firewall.Frames.Sessions} {root : ByteArray} {r : Nat}
+theorem find?_of_saltsAt {R : _root_.Flock.ZkServer.Frames.Sessions} {root : ByteArray} {r : Nat}
     {hi : Array ByteArray} (h : saltsAt R root r = some hi) :
     ∃ r0 q0, R.salts.find? (fun x => x.1 == root && x.2.1 == r) = some (r0, q0, hi) := by
   unfold saltsAt at h
@@ -100,7 +100,7 @@ theorem find?_of_saltsAt {R : _root_.Flock.Firewall.Frames.Sessions} {root : Byt
     first | exact ⟨r0, q0, rfl⟩ | exact ⟨r0, q0, hf⟩
 
 /-- **An entry of the loop's salts is the rep's salts.** -/
-theorem saltsAt_of_find? {R : _root_.Flock.Firewall.Frames.Sessions} {root : ByteArray} {r : Nat}
+theorem saltsAt_of_find? {R : _root_.Flock.ZkServer.Frames.Sessions} {root : ByteArray} {r : Nat}
     {r0 : ByteArray} {q0 : Nat} {hi : Array ByteArray}
     (h : R.salts.find? (fun x => x.1 == root && x.2.1 == r) = some (r0, q0, hi)) : saltsAt R root r = some hi := by
   unfold saltsAt
@@ -109,9 +109,9 @@ theorem saltsAt_of_find? {R : _root_.Flock.Firewall.Frames.Sessions} {root : Byt
 
 /-- **`StreamAt` is kept where the rep's salts stay**: of the loop's frames it reads only them. -/
 theorem streamAt_stay {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
-    {h : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.Firewall.Frames.Release} {name : String}
-    {l0 : _root_.Flock.Firewall.Level0.Level0} {p : _root_.Flock.Firewall.Frames.Rep} {sid : Nat}
-    {R R' : _root_.Flock.Firewall.Frames.Sessions} (hs : Stay sid l0.root R R')
+    {h : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
+    {l0 : _root_.Flock.ZkServer.Level0.Level0} {p : _root_.Flock.ZkServer.Frames.Rep} {sid : Nat}
+    {R R' : _root_.Flock.ZkServer.Frames.Sessions} (hs : Stay sid l0.root R R')
     (hA : StreamAt M spec sts k h rel name l0 p R) : StreamAt M spec sts k h rel name l0 p R' := by
   refine ⟨fun hk => ?_, hA.2⟩
   obtain ⟨j, c, stm, t, xs, hi, pre, ev, hj, hlink, hstm, htab, hcap, hxs, hI, hsa, hord⟩ := hA.1 hk
@@ -124,10 +124,10 @@ name and its level 0 bound for the session, with `StreamAt` at rep stream `2 * i
 so far, in the loop's frames. -/
 def RepJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (i r : Nat)
     (σ : LoopAt) : Prop :=
-  ∃ (p : _root_.Flock.Firewall.Frames.Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-    (l0 : _root_.Flock.Firewall.Level0.Level0),
+  ∃ (p : _root_.Flock.ZkServer.Frames.Rep) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+    (l0 : _root_.Flock.ZkServer.Level0.Level0),
     frameAt σ.R sid i r = some p ∧ sessAt σ.R sid = some rel ∧ rel.spec.tables[i]? = some name ∧
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 ∧
+      _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 ∧
       StreamAt M spec sts (2 * i + r) (M.hist σ.c) rel name l0 p σ.R
 
 /-- **The model's next round** at its history `h`: its rep stream and its index in the stream, among the setup's
@@ -157,10 +157,10 @@ theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg
 run `M`: bound for the table `name`, it is `Level0.ofDraws` at table `j`'s statement's `m` on what the host and the
 operating system handed the loop for rep stream `2j` (`LoopModel.src`), `name` being table `j`'s. -/
 def BuiltAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt)
-    (L0 : _root_.Flock.Firewall.Level0.Slots) (sid : Nat) : Prop :=
-  ∀ name l0, _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0 →
+    (L0 : _root_.Flock.ZkServer.Level0.Slots) (sid : Nat) : Prop :=
+  ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0 →
     ∃ j g d hi, spec.tables[j]? = some name ∧ M.src (2 * j) = .ok (g, d, hi) ∧
-      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l0
+      _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l0
 
 /-- `BuiltAt` is kept where the session's tables' level 0 stay (`Stays`). -/
 theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {sid : Nat}
@@ -170,10 +170,10 @@ theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {s
   exact h name l0 hl
 
 /-- **A level 0 `Level0.ofDraws` gives is a `Level0.build`.** -/
-theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
-    (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l) :
-    ∃ lv tPad extra pads salts, l = _root_.Flock.Firewall.Level0.build wideLeaf m lv tPad g extra pads salts := by
-  unfold _root_.Flock.Firewall.Level0.ofDraws at h
+theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
+    (h : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g d = .ok l) :
+    ∃ lv tPad extra pads salts, l = _root_.Flock.ZkServer.Level0.build wideLeaf m lv tPad g extra pads salts := by
+  unfold _root_.Flock.ZkServer.Level0.ofDraws at h
   cases hz : _root_.Flock.Zk.schedule wideLeaf m with
   | error e => rw [hz] at h; cases h
   | ok p =>
@@ -186,13 +186,13 @@ theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.
 
 /-- **The table of a level 0 `Level0.ofDraws` gave has its commitment's cap at the level 0's root**:
 `Finish.tabOfLevel0` commits it as `commitOf` does, and a `build`'s cap is its root (`cap_root_build`). -/
-theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
-    {st : _root_.Flock.Setup} {t : _root_.Flock.Firewall.Finish.Tab}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l)
-    (ht : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
-    _root_.Flock.Firewall.Finish.flat t.cm0.cap = l.root := by
-  have hcm : t.cm0 = _root_.Flock.Firewall.Finish.commitOf l := by
-    unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at ht
+theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
+    {st : _root_.Flock.Setup} {t : _root_.Flock.ZkServer.Finish.Tab}
+    (hl : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g d = .ok l)
+    (ht : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
+    _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l.root := by
+  have hcm : t.cm0 = _root_.Flock.ZkServer.Finish.commitOf l := by
+    unfold _root_.Flock.ZkServer.Finish.tabOfLevel0 at ht
     simp only [bind, Except.bind] at ht
     split at ht
     · cases ht
@@ -219,30 +219,30 @@ theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Floc
 the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one sampled for the table the
 `Commit` binds as `name`, the setup's table of that name (`commit_inv`). -/
 theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt}
-    {R : _root_.Flock.Firewall.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.Firewall.Level0.Level0}
+    {R : _root_.Flock.ZkServer.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.ZkServer.Level0.Level0}
     {f : ByteArray} (hd : DrawInv sid ls R)
     (hdr : ∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) :
+      _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) :
     BuiltAt M spec sts (commitRead R sid (spec.tables.zip (sts.map (·.m))) f).2 sid := by
-  have hR : ∀ name l0, _root_.Flock.Firewall.Level0.ofSession R sid name = some l0 → False := by
+  have hR : ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession R sid name = some l0 → False := by
     intro name l0 h
-    unfold _root_.Flock.Firewall.Level0.ofSession at h
+    unfold _root_.Flock.ZkServer.Level0.ofSession at h
     obtain ⟨s, hs, -⟩ := Option.map_eq_some_iff.mp h
     exact hd.unbound s (Array.mem_of_find?_eq_some hs) name (by simpa using Array.find?_some hs)
   intro name l0 h
   unfold commitRead at h
-  rcases hr : _root_.Flock.Firewall.Session.commitRoots f with _ | roots
+  rcases hr : _root_.Flock.ZkServer.Session.commitRoots f with _ | roots
   · rw [hr] at h
     exact (hR name l0 h).elim
   · rw [hr] at h
     dsimp only at h
-    rcases hc : _root_.Flock.Firewall.Level0.commit R sid (spec.tables.zip (sts.map (·.m))) roots with e | R'
+    rcases hc : _root_.Flock.ZkServer.Level0.commit R sid (spec.tables.zip (sts.map (·.m))) roots with e | R'
     · rw [hc] at h
       exact (hR name l0 h).elim
     · rw [hc] at h
-      have h' : _root_.Flock.Firewall.Level0.ofSession R' sid name = some l0 := h
+      have h' : _root_.Flock.ZkServer.Level0.ofSession R' sid name = some l0 := h
       obtain ⟨hmap, hI⟩ := commit_inv hc
-      unfold _root_.Flock.Firewall.Level0.ofSession at h'
+      unfold _root_.Flock.ZkServer.Level0.ofSession at h'
       obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.mp h'
       have hb : s.bound = some (sid, name) := by simpa using Array.find?_some hs
       have hsm := Array.mem_of_find?_eq_some hs
@@ -286,8 +286,8 @@ structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSp
   built : 2 ≤ σ.c → BuiltAt M spec sts σ.L0 sid
   sess : st.sent = true → SessOn spec sts σ.R sid
   links : LinksOk spec st
-  link : 2 ≤ σ.c → ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ
-  sizes : st.sent = true → _root_.Flock.Firewall.Session.sizesOk spec sts = true
+  link : 2 ≤ σ.c → ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ
+  sizes : st.sent = true → _root_.Flock.ZkServer.Session.sizesOk spec sts = true
   took : σ.c < M.τ.length → M.TookAt st σ.c
 
 /-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
@@ -308,21 +308,21 @@ theorem repJ_stays {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessio
 
 /-- **`Hello`'s answer, where it checks, is `Resp::Coins`' frame**, so its first byte is the coins' tag. -/
 theorem answer_head {l : List UInt8} {p : ByteArray × List UInt8}
-    (h : _root_.Flock.Firewall.Coins.answer l = .ok p) : l.head? = some 2 := by
-  unfold _root_.Flock.Firewall.Coins.answer at h
-  cases hb : (l.length == 325 && l.take 5 == _root_.Flock.Firewall.Coins.frame 20 [])
+    (h : _root_.Flock.ZkServer.Coins.answer l = .ok p) : l.head? = some 2 := by
+  unfold _root_.Flock.ZkServer.Coins.answer at h
+  cases hb : (l.length == 325 && l.take 5 == _root_.Flock.ZkServer.Coins.frame 20 [])
   · rw [hb] at h
     simp at h
   · simp only [Bool.and_eq_true, beq_iff_eq] at hb
     have e := congrArg List.head? hb.2
-    simpa [List.head?_take, _root_.Flock.Firewall.Coins.frame] using e
+    simpa [List.head?_take, _root_.Flock.ZkServer.Coins.frame] using e
 
 /-- **The auditor's answer that begins the session's coin tree is coins.** -/
-theorem start_byte {h : _root_.Flock.Firewall.Coins.Hello} {a : ByteArray} {C : _root_.Flock.Firewall.Coins.Release}
-    (hs : _root_.Flock.Firewall.Coins.Release.start h a.data.toList = .ok C) : byte? a 0 = some 2 := by
+theorem start_byte {h : _root_.Flock.ZkServer.Coins.Hello} {a : ByteArray} {C : _root_.Flock.ZkServer.Coins.Release}
+    (hs : _root_.Flock.ZkServer.Coins.Release.start h a.data.toList = .ok C) : byte? a 0 = some 2 := by
   have hh : a.data.toList.head? = some 2 := by
-    unfold _root_.Flock.Firewall.Coins.Release.start at hs
-    rcases ha : _root_.Flock.Firewall.Coins.answer a.data.toList with e | p
+    unfold _root_.Flock.ZkServer.Coins.Release.start at hs
+    rcases ha : _root_.Flock.ZkServer.Coins.answer a.data.toList with e | p
     · rw [ha] at hs
       cases hs
     · exact answer_head ha
@@ -337,7 +337,7 @@ theorem start_byte {h : _root_.Flock.Firewall.Coins.Hello} {a : ByteArray} {C : 
 session's `Hello`. -/
 theorem answer_hello_start {S : State} {r id : ByteArray} (h : S.stop = none)
     (hn : (S.answer .hello r id).1.stop = none) :
-    ∃ hh C, S.hello = some hh ∧ _root_.Flock.Firewall.Coins.Release.start hh r.data.toList = .ok C ∧
+    ∃ hh C, S.hello = some hh ∧ _root_.Flock.ZkServer.Coins.Release.start hh r.data.toList = .ok C ∧
       (S.answer .hello r id).1.session = some C := by
   revert hn
   unfold State.answer
@@ -346,7 +346,7 @@ theorem answer_hello_start {S : State} {r id : ByteArray} (h : S.stop = none)
   · dsimp only
     split <;> intro hn <;> exact absurd hn (Option.isSome_iff_ne_none.mp rfl)
   · dsimp only
-    rcases hs : _root_.Flock.Firewall.Coins.Release.start hh r.data.toList with e | C
+    rcases hs : _root_.Flock.ZkServer.Coins.Release.start hh r.data.toList with e | C
     · intro hn
       exact absurd hn (Option.isSome_iff_ne_none.mp rfl)
     · intro _
@@ -376,7 +376,7 @@ theorem stepK_hello_start {st : State} {pl : Placed} {e : Env} {spec : SessionSp
     (hgo : ((stepK true st pl (some (tagOf .hello)) (.ok .hello) e).go &&
       (stepK true st pl (some (tagOf .hello)) (.ok .hello) e).st.stop.isNone) = true) :
     ∃ hh a C, helloOf spec sts e.nonce = some hh ∧ e.ans = some a ∧
-      _root_.Flock.Firewall.Coins.Release.start hh a.data.toList = .ok C ∧
+      _root_.Flock.ZkServer.Coins.Release.start hh a.data.toList = .ok C ∧
       (stepK true st pl (some (tagOf .hello)) (.ok .hello) e).st.session = some C := by
   obtain ⟨hg, hn⟩ := go_live hgo
   rcases hr : st.request pl .hello with _ | ⟨st', o⟩
@@ -400,7 +400,7 @@ theorem stepK_hello_start {st : State} {pl : Placed} {e : Env} {spec : SessionSp
 
 /-- **Coins the session goes on past are opened by its coin tree** as the schedule's next opening (`reqAt`), and the
 session after holds the tree after it. -/
-theorem coins_open {st : State} {r : ByteArray} {C : _root_.Flock.Firewall.Coins.Release} (h : st.stop = none)
+theorem coins_open {st : State} {r : ByteArray} {C : _root_.Flock.ZkServer.Coins.Release} (h : st.stop = none)
     (hs : st.session = some C) (hn : (st.coins r).1.stop = none) :
     ∃ C' c, C.open (reqAt st.plan C.hello.links C.opened.length).1 (reqAt st.plan C.hello.links C.opened.length).2
       r.data.toList = .ok (C', c) ∧ (st.coins r).1.session = some C' := by
@@ -417,8 +417,8 @@ theorem coins_open {st : State} {r : ByteArray} {C : _root_.Flock.Firewall.Coins
 
 /-- **Past a `Commit` or a frame round, where the session goes on, its coin tree is the one its tree before opens the
 auditor's coins to** as the schedule's next opening (`reqAt`). -/
-theorem stepK_coin_open {st : State} {pl : Placed} {k : _root_.Flock.Firewall.Session.Kind} {e : Env}
-    {C : _root_.Flock.Firewall.Coins.Release} (h : st.stop = none) (hk : k = .commit ∨ ∃ s n, k = .round s n)
+theorem stepK_coin_open {st : State} {pl : Placed} {k : _root_.Flock.ZkServer.Session.Kind} {e : Env}
+    {C : _root_.Flock.ZkServer.Coins.Release} (h : st.stop = none) (hk : k = .commit ∨ ∃ s n, k = .round s n)
     (hC : st.session = some C)
     (hgo : ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
       (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true) :
@@ -458,14 +458,14 @@ theorem stepK_coin_open {st : State} {pl : Placed} {k : _root_.Flock.Firewall.Se
 keep every rep's frame, the session's stop and what its rounds read of it, and takes no model message; such a slot
 keeps the session's coin tree (`stepK_ctl_session`), so what the loop took stays. -/
 theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} {k : _root_.Flock.Firewall.Session.Kind} (hm : isModel k = false)
+    {nonce : ByteArray} {k : _root_.Flock.ZkServer.Session.Kind} (hm : isModel k = false)
     (hs : ∀ seen, seenAfter seen k = seen)
     (hr : ∀ st pl e σ σ', LoopRead M sid spec sts nonce k st pl e σ σ' →
       Between sid σ.R σ'.R ∧ σ'.c = σ.c ∧ Stays sid σ σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) k := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
   obtain ⟨hbt, hcc, hst⟩ := hr _ _ _ _ _ hra
-  have hk : (Except.ok k : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
+  have hk : (Except.ok k : Except String _root_.Flock.ZkServer.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
     cases hm
@@ -508,7 +508,7 @@ theorem stepK_hello_sizes {st : State} {pl : Placed} {e : Env} {spec : SessionSp
     (he : e.setup = .ok (spec, sts))
     (hgo : ((stepK true st pl (some (tagOf .hello)) (.ok .hello) e).go &&
       (stepK true st pl (some (tagOf .hello)) (.ok .hello) e).st.stop.isNone) = true) :
-    _root_.Flock.Firewall.Session.sizesOk spec sts = true := by
+    _root_.Flock.ZkServer.Session.sizesOk spec sts = true := by
   rcases hr : st.request pl .hello with _ | ⟨st', o⟩
   · have hs : st.stop = none := by
       revert hr
@@ -612,7 +612,7 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
     (hf1 : 0 < M.τ.length → (M.L.frameAnswer M.x M.ρ (M.hist 1)).isOk = true) :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .commit := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  have hlk : spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX → LinkOn M sid σ' :=
+  have hlk : spec.points * spec.mPts ≤ _root_.Flock.ZkServer.Frames.COIN_MAX → LinkOn M sid σ' :=
     fun hpm => linkOn_commit hx hpm hsl hF hJ.links hra hgo
   obtain ⟨⟨hlt, hA⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, -, hbt, hcc⟩ := hra
   obtain ⟨hs1, -, hop⟩ := slot_commit hsl
@@ -624,7 +624,7 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
     have := hF.count hs1
     omega
   have hseen : seen = [] := hJ.early (by omega)
-  have hk : (Except.ok .commit : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
+  have hk : (Except.ok .commit : Except String _root_.Flock.ZkServer.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
   have hsent := stepK_sent (hold := true) (st := st) (pl := pl) (b := some (tagOf .commit)) (e := e) hk

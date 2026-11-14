@@ -48,10 +48,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `n` leaves), `hides_os` and `hides_leaves_os` (a registration, at one event), and, for the recursive audit,
   `Flock.SecurityProofs.recursiveZK_os_gap` (`Recursive/OsSalts.lean`).
 - **Its scope: the masks and the Reed–Solomon padding** are the operating system's bytes too (`live/src/zk_hooks.rs`),
-  read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-firewall
+  read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-zk-server
   frame`; `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.drawsWith` refuses a read of any other length):
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
-  (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
+  (`flock-zk-server tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
   salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_draws` (the
   frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for a unit sample;
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream

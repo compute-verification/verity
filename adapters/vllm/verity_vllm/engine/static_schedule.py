@@ -5,11 +5,11 @@ A workload declares the static form with `sampling.ignore_eos: true`: every requ
 arrival, so no generated token decides when a slot frees, who shares a launch, where a waiting prefill is cut by the token budget, or
 when the next arrival is admitted.  The EOS a request may sample is a value: the circuit's done flag masks the steps after it, and the
 host never acts on it.  The global Program's stop rule already reads the same declaration (`global_program.stop_rule`: ignore_eos -> every request
-must reach its cap); `vllm_adapter.sampling_params` hands it to vLLM.
+must reach its `max_tokens`); `vllm_adapter.sampling_params` hands it to vLLM.
 
 `check` holds a realized run to that form, failing by name on what the host decided from values:
 
-    early stop         a request finished other than by length at its cap (an EOS, a stop id, max_model_len)
+    early stop         a request finished other than by length at its `max_tokens` (an EOS, a stop id, max_model_len)
     preemption         a request's computed-token count went down (KV pressure: the host recomputed it)
     host prefix cache  a request read KV pages vLLM's hash match chose (`num_cached_tokens` > 0)
 
@@ -34,7 +34,7 @@ __all__ = ["against_warmup", "report_lines"]
 
 SCHEMA = STATIC_SCHEDULE_SCHEMA
 RULE = ("sampling.ignore_eos: every request finishes by length at exactly max_tokens, is never preempted and reads no KV block chosen by "
-        "the host prefix cache; the realized schedule is then a function of the declaration (arrivals, prompt lengths, caps, engine args)")
+        "the host prefix cache; the realized schedule is then a function of the declaration (arrivals, prompt lengths, token limits, engine args)")
 SCHEDULE_FIELDS = ("arrive_step_realized", "first_step", "finish_step", "n_generated", "finish_reason", "prefill_steps", "token_steps")
 
 
@@ -90,11 +90,11 @@ def check(requests: Sequence[Mapping[str, Any]], timing: Mapping[str, Any], *, c
     recs = _records(timing)     # read before the requests, as in `schedule_of`
     problems: list[str] = []
     for r in requests:
-        rid, cap = str(r["request_id"]), int(r["max_tokens"])
+        rid, max_tokens = str(r["request_id"]), int(r["max_tokens"])
         rec = _record(recs, rid)
         reason, n = rec.get("finish_reason"), rec.get("n_generated")
-        if any(str(x) != "length" for x in (reason if isinstance(reason, list) else [reason])) or n != cap:
-            problems.append(f"{rid}: finished by {reason!r} after {n} of its {cap} tokens: the host stopped it early, so its step count "
+        if any(str(x) != "length" for x in (reason if isinstance(reason, list) else [reason])) or n != max_tokens:
+            problems.append(f"{rid}: finished by {reason!r} after {n} of its {max_tokens} tokens: the host stopped it early, so its step count "
                             f"depended on a generated value")
         hit = (cached_tokens or {}).get(rid)
         if hit:

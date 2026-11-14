@@ -1,7 +1,7 @@
 """Real committers for value-check tests.
 
 The value checks read committed bytes through `oracle_compare.OpenedReader`, which opens them from a committer and verifies every read
-against the run commitment.  A test world's tensors are therefore committed by the production CPU core and read back through that reader:
+against the run commitment.  A test world's tensors are therefore committed by the library's CPU core and read back through that reader:
 
   * `commit_steps` packs each step's tensors into one step block and commits it with the committer's CPU reference
     (`NativeHostCommitter.commit_block_offline`: `step_rows`'s rows spanning tensor boundaries, salted from a fresh step key in

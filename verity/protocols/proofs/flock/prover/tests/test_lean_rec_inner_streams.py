@@ -11,7 +11,7 @@ committed, or its table named as a sparse phase's or R's stream (`sparse`, `stac
 its salted top is registered at staging (the entry `stacked` of the
 statement's `verity/registration/v2` circuit registration, `circuit-registration.json`), whose digest the inner circuit's
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
-`--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
+`--rec-inner-registration`) and refuses, each with its `ZK-SERVER-REFUSED` reason, a record META does not bind, a session
 with R's stream and no registered top, and R's binding round committing a top other than the registered one; a
 registration naming R needs R's stream. R's `m` and claims are META's `stacked`, the shape staging committed R at (the
 registered cap fixes neither: m 22 to 24 share it), and R's stream is held to that shape's rounds: a META naming no shape or
@@ -189,8 +189,8 @@ def _flip(x: str) -> str:
     return c.hex()
 
 
-CAP = "FIREWALL-REFUSED: registration: stacked/rep0's binding round's top is not stacked's registered top"
-NO_TOP = "FIREWALL-REFUSED: registration: stacked has no root at Commit and no registered top"
+CAP = "ZK-SERVER-REFUSED: registration: stacked/rep0's binding round's top is not stacked's registered top"
+NO_TOP = "ZK-SERVER-REFUSED: registration: stacked has no root at Commit and no registered top"
 
 
 def _top(change):
@@ -262,7 +262,7 @@ def test_an_r_stream_with_no_stacked_entry_is_refused(tmp_path, change):
 
 def test_an_r_stream_with_no_registration_is_refused():
     """With neither the inner circuit nor its registration, nothing binds R before the coins."""
-    assert _read(C3, inner=[]) == (1, None, "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's "
+    assert _read(C3, inner=[]) == (1, None, "ZK-SERVER-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's "
                                             "META binds no circuit registration (--rec-inner-circuit, --rec-inner-registration)")
 
 
@@ -274,7 +274,7 @@ def test_an_r_stream_with_no_registration_is_refused():
 ], ids=["window", "population", "root", "no-stacked"])
 def test_a_record_whose_digest_is_not_metas_is_refused(tmp_path, change):
     """The record changed and META left as staged: whatever the change, the record is not the one META binds."""
-    why = f"FIREWALL-REFUSED: registration: the record is not the circuit registration META binds ({_meta_registration()})"
+    why = f"ZK-SERVER-REFUSED: registration: the record is not the circuit registration META binds ({_meta_registration()})"
     assert _read(C3, inner=_registered(tmp_path, change, bind=False)) == (1, None, why)
 
 
@@ -285,16 +285,16 @@ def test_meta_and_the_record_go_together(tmp_path):
     del m["registration"]
     (tmp_path / "circuit-meta.txt").write_text(f"{head}\nMETA {json.dumps(m)}\n")
     assert _read(C3, inner=_inner(tmp_path / "circuit-meta.txt")) == (
-        1, None, "FIREWALL-REFUSED: registration: the record is not the circuit registration META binds (META binds none)")
+        1, None, "ZK-SERVER-REFUSED: registration: the record is not the circuit registration META binds (META binds none)")
     assert _read(C3, inner=["--rec-inner-circuit", str(C3 / "circuit-meta.txt")]) == (
-        1, None, f"FIREWALL-REFUSED: registration: META binds the circuit registration {_meta_registration()}, and the "
+        1, None, f"ZK-SERVER-REFUSED: registration: META binds the circuit registration {_meta_registration()}, and the "
                  "verifier holds none (--rec-inner-registration)")
 
 
 #: R's shape as staging committed R (META's `stacked`, `rec_session.stage_stacked`): `rec_sparse.table_m` at the bucket
 #: 18,13,6,0 and the two reps' claims
 R_SHAPE = {"m": 23, "claims": 2}
-SHAPE = ("FIREWALL-REFUSED: registration: stacked/rep0 is not R's stream at the shape staging committed R at (m {m}, claims "
+SHAPE = ("ZK-SERVER-REFUSED: registration: stacked/rep0 is not R's stream at the shape staging committed R at (m {m}, claims "
          "{claims}, META's stacked): ")
 
 
@@ -321,7 +321,7 @@ def test_rs_shape_is_metas():
 
 
 @pytest.mark.parametrize("change,why", [
-    (lambda m: m.__delitem__("stacked"), "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's META "
+    (lambda m: m.__delitem__("stacked"), "ZK-SERVER-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's META "
      "names no shape of R (stacked): R's m and claims are bound nowhere"),
     (lambda m: m.__setitem__("stacked", {"m": 22, "claims": 2}), SHAPE.format(m=22, claims=2) +
      "round 3 is (coins 16, tops [], level0 1, commits true), not (coins 15, tops [], level0 1, commits true)"),
@@ -439,7 +439,7 @@ def test_a_top_another_stream_committed_is_refused(tmp_path):
 
     rc, line, err = _read(C3, _changed(tmp_path, swap))
     assert (rc, line) == (1, None)
-    assert err == (f"rec inner transcript: the b ‖ c {swap.first[:16]}… is committed twice; the firewall commits each under a "
+    assert err == (f"rec inner transcript: the b ‖ c {swap.first[:16]}… is committed twice; the ZK server commits each under a "
                    "fresh salt"), err
 
 
@@ -965,13 +965,13 @@ def test_a_stopped_sessions_record_is_refused(tmp_path, d):
 
 def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
     """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the challenger's
-    live-coin part's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
+    live-coin part's record, ending `stop` (`test_rec_live_zk_server`); presented as the inner transcript, it is refused as no inner
     proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
     something else."""
-    import test_rec_live_firewall as F
+    import test_rec_live_zk_server as F
 
     stopped = F._proxy(F._schedule())
-    assert F._refusal(F._run(stopped, y=bytes(31))).startswith("rec proxy: FIREWALL-REFUSED: Link's y: ")
+    assert F._refusal(F._run(stopped, y=bytes(31))).startswith("rec proxy: ZK-SERVER-REFUSED: Link's y: ")
     assert stopped.coins.record()["end"] == "stop"
     assert _read(PLAIN, _write(tmp_path / "stopped.json", stopped.coins.record())) == (1, None, STOPPED)
     finished = F._proxy(F._schedule())

@@ -29,9 +29,9 @@ round's place, so only where that round goes out.
 
 namespace Claims.ZKServer
 
-open _root_.Flock.Firewall.Coins (Release)
+open _root_.Flock.ZkServer.Coins (Release)
 
-/-- The openings `ms ++ [a]` as `flock-firewall coins` takes them: `ms`'s, then `a` at its request. -/
+/-- The openings `ms ++ [a]` as `flock-zk-server coins` takes them: `ms`'s, then `a` at its request. -/
 theorem reqsFrom_snoc (req : ℕ → String × ℕ) :
     ∀ (j : ℕ) (ms : List Msg) (a : Msg),
       reqsFrom req j (ms ++ [a]) = reqsFrom req j ms ++ [((req (j + ms.length)).1, (req (j + ms.length)).2, a)]
@@ -59,7 +59,7 @@ theorem openAll_snoc : ∀ (S : Release) (os : List (String × ℕ × Msg)) {S' 
 
 /-- **Where the coin check's verdict is a session**, it read the `Hello`, `Hello`'s answer began a session, and that
 session took the openings. -/
-theorem coinVerdict_eq_ok {hl : Except String _root_.Flock.Firewall.Coins.Hello} {a : Msg}
+theorem coinVerdict_eq_ok {hl : Except String _root_.Flock.ZkServer.Coins.Hello} {a : Msg}
     {os : List (String × ℕ × Msg)} {C : Release} (H : coinVerdict hl a os = .ok C) :
     ∃ h S, hl = .ok h ∧ Release.start h a = .ok S ∧ S.openAll os = .ok C := by
   rcases hl with e | h
@@ -96,7 +96,7 @@ theorem opens_of_verdictAt {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R}
 /-- **`Hello`'s answer**: where the transport reads the `Hello` as `hl` and `Hello`'s answer `a` begins the session
 `C`, the verdict on the `Hello` alone is `C`. -/
 theorem verdictAt_start {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R}
-    {hl : _root_.Flock.Firewall.Coins.Hello} {m a : Msg} {C : Release} (hh : L.helloChk x ρ = .ok hl)
+    {hl : _root_.Flock.ZkServer.Coins.Hello} {m a : Msg} {C : Release} (hh : L.helloChk x ρ = .ok hl)
     (hs : Release.start hl a = .ok C) : L.verdictAt x ρ [(m, a)] = .ok C := by
   show coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 []) = .ok C
   rw [hh]
@@ -136,7 +136,7 @@ end LeanRelease
 
 namespace Relay
 
-open _root_.Flock.Firewall.Session (State)
+open _root_.Flock.ZkServer.Session (State)
 
 open Claims.ZKMal in
 /-- The run's history one message on: its `j`-th message and `V*`'s answer to it, read as the prover reads it. -/
@@ -170,7 +170,7 @@ open Claims.ZKMal in
 /-- **Past the `Hello`**: where the transport reads the `Hello` as `hl` and the session's coin tree after it is the one
 the model's first answer begins there (`Release.start`), the loop took the coins so far. -/
 theorem LoopModel.TookAt.hello {W Rr : Type} {M : LoopModel W Rr} {st : State} (hlt : 0 < M.τ.length)
-    {hl : _root_.Flock.Firewall.Coins.Hello} (hh : M.L.helloChk M.x M.ρ = .ok hl)
+    {hl : _root_.Flock.ZkServer.Coins.Hello} (hh : M.L.helloChk M.x M.ρ = .ok hl)
     (hs : ∀ C, st.session = some C → Release.start hl (msgOf (M.τ[0]'hlt).2) = .ok C) : M.TookAt st 1 := by
   have h1 : M.hist 1 = [((M.τ[0]'hlt).1, msgOf (M.τ[0]'hlt).2)] := M.hist_snoc hlt
   refine ⟨fun C hC => ?_, ?_, ?_⟩

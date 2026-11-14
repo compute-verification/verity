@@ -25,8 +25,8 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 theorem midAll_openBind (T : F128) (cap : ByteArray) (hcap : cap.size < 2 ^ 64) : Sched.MidAll (openBind T cap) := by
@@ -102,19 +102,19 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     have e := wordsAt_size x ops (s := ops.length) (p := 0) hpos le_rfl
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
-  have hXS : (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+  have hXS : (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size =
       spec.points * (Masked.stAt x j).regions.size := by
     rw [Count.extras_size, Count.linkPoints_size, hW0, hmp', Nat.mul_div_cancel _ hmp0]
     exact Nat.mul_comm _ _
   obtain ⟨-, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   rw [hst] at hxr
-  have hXb : (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+  have hXb : (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size + 2 < 2 ^ 64 := by
     rw [Count.extras_size]
     have := Nat.mul_le_mul_left (Masked.stAt x j).regions.size
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
-        (show _ ≤ _root_.Flock.Firewall.Frames.COIN_MAX by rw [hW0]; exact hpc))
+        (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
   -- the located round
   obtain ⟨NR, hNd⟩ : ∃ NR, NR = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! +
@@ -208,8 +208,8 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨hT1, hT2, -, -, -, hcapR⟩ := Count.real_tabAlike (Loop.realTabs_of src x w (ν, t) hsx) hph0 hre'
   have hs'' : schedSoFar tr ((2 * j.val + r.val) % 2)
       (spec.domain (spec.tables[(2 * j.val + r.val) / 2]!) ((2 * j.val + r.val) % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+      (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
           (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hir
       ((Array.range (a + 1)).map fun q =>
         wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (i + 1 - (a + 1) + q + 1)) = .ok sched' := by

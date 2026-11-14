@@ -314,7 +314,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
             if isinstance(r, Unsupported):
                 return r
             parts += r
-        gate = self._gate(node, ctx, sc, hidden, hint)
+        gate = self._scope_gate(node, ctx, sc, hidden, hint)
         if isinstance(gate, Unsupported):
             return gate
         parts.append(gate)
@@ -389,7 +389,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                     attribution=tuple(ctx.start.rows), pattern=self.name, roots=(None, bname))
         return [(sc.router.id, c)]
 
-    def _gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
+    def _scope_gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
         """The router gate: the in-scope `aten.mm.dtype` (cuBLAS), or, with no mm, the cuteDSL kernel bound by the empty it fills."""
         C, ra = self.config, bound_args(sc.router)
         bias: Any = ra.get("bias")   # None where the router binds none, which `_router` has refused
@@ -420,10 +420,11 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                 return unsupported(node, f"the {'w2' if routed else 'w13'} launch's A is not written by the routed "
                                          f"{'SiLU output' if routed else 'input'} quant", writer=s.quant.id)
             try:
-                c = launch.triton.constexprs
+                tr: Any = launch.triton   # as the log recorded it: `_fused` has passed its tile, integers where the target reads one
+                c = tr.constexprs
                 spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(c.get("SWAP_AB")),
                                                   BM=c.get("BLOCK_SIZE_M"), BN=c.get("BLOCK_SIZE_N"),
-                                                  WARPS=launch.triton.num_warps, routed=routed)
+                                                  WARPS=tr.num_warps, routed=routed)
             except T.UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
             launched[routed] = (s, r[2], spec)

@@ -1,7 +1,7 @@
 module
 
-public import Flock.Firewall.Frames
-meta import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
+meta import Flock.ZkServer.Frames
 
 /-!
 A rep's inner rounds in the loop's frames (`Frames.roundPlace`, `Frames.roundStep`), at table 0's rep 0 past its
@@ -14,7 +14,7 @@ is refused for it, and the rep's frame is not put back, so the session stops on 
 
 namespace Flock.Test.FramesInner
 
-open Flock Flock.Firewall Flock.Firewall.Frames
+open Flock Flock.ZkServer Flock.ZkServer.Frames
 
 def spec : SessionSpec := { (default : SessionSpec) with tables := #["t"] }
 

@@ -1,7 +1,7 @@
 module
 
-public import Flock.Firewall.Skeleton
-public import Flock.Firewall.SessionPlan
+public import Flock.ZkServer.Skeleton
+public import Flock.ZkServer.SessionPlan
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
@@ -25,8 +25,8 @@ lincheck squeeze `replayCoins`' counts in order.
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Skeleton (RecM recAsks)
-open _root_.Flock.Firewall.Finish (squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
+open _root_.Flock.ZkServer.Skeleton (RecM recAsks)
+open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
 
 /-- The rounds' counts the recording channel has kept. -/
 def cnts (s : Array (ByteArray × ℕ) × ℕ) : List ℕ := s.1.toList.map Prod.snd
@@ -137,10 +137,10 @@ theorem tally_squeezeP (kind : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
     cases h
     exact ⟨trivial, by simp [sq]⟩
   · have e : ((squeezeP recAsks kind n).run t).run (rs, k) =
-        .ok (((Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
+        .ok (((Array.range n).map fun i => _root_.Flock.ZkServer.Skeleton.coin (k + i + 1),
           { t with pending := ByteArray.empty, k := t.k + 1,
                    rounds := t.rounds.push ⟨n, ByteArray.empty,
-                     (Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
+                     (Array.range n).map fun i => _root_.Flock.ZkServer.Skeleton.coin (k + i + 1),
                      some (Flock.Transcript.framed t kind n)⟩ }),
           (rs.push (Flock.Transcript.framed t kind n,
             (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat),
@@ -254,11 +254,11 @@ theorem tally_run' {α : Type} {ns : List ℕ} {Q : α → Prop} {p : TMW RecM �
 
 /-- **The algebraic phase's scheduled rounds' counts** are the PIOP's. -/
 theorem rounds_counts {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
-    (hm : st.m < 2 ^ 64) (h : _root_.Flock.Firewall.Skeleton.rounds st k0 cap dom = .ok alg) :
+    (hm : st.m < 2 ^ 64) (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
     alg.toList.map Prod.snd = zcCounts st.m ++ lcCounts st.fold.kLog := by
   have hT := tally_bind (repPiop_tally st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap
     (ByteArray.mk (Array.replicate 64 0)) #[] (fun _ => 0) hm) fun _ _ => tally_pure (Q := fun _ => True) (a := ()) trivial
-  unfold _root_.Flock.Firewall.Skeleton.rounds at h
+  unfold _root_.Flock.ZkServer.Skeleton.rounds at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
@@ -282,13 +282,13 @@ theorem rounds_counts {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray}
 
 /-- The PIOP's counts are the masked replay's, a squeeze of no coins no round. -/
 theorem piop_counts (m kLog : ℕ) :
-    zcCounts m ++ lcCounts kLog = (_root_.Flock.Firewall.Session.replayCoins m kLog).toList.filter (· != 0) := by
+    zcCounts m ++ lcCounts kLog = (_root_.Flock.ZkServer.Session.replayCoins m kLog).toList.filter (· != 0) := by
   have e : ∀ n, (List.replicate n [1]).flatten = List.replicate n 1 := fun n => by
     induction n with
     | zero => rfl
     | succ n ih => rw [List.replicate_succ, List.flatten_cons, ih]; rfl
   by_cases h : m - 13 = 0
-  · simp [zcCounts, lcCounts, sq, h, e, _root_.Flock.Firewall.Session.replayCoins]
-  · simp [zcCounts, lcCounts, sq, h, e, _root_.Flock.Firewall.Session.replayCoins]
+  · simp [zcCounts, lcCounts, sq, h, e, _root_.Flock.ZkServer.Session.replayCoins]
+  · simp [zcCounts, lcCounts, sq, h, e, _root_.Flock.ZkServer.Session.replayCoins]
 
 end Claims.ZKServer.Count

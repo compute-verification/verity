@@ -46,10 +46,10 @@ end its head and META's line (`findByte_head`, `findByte_meta`), and META withou
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets
+open Flock Flock.ZkServer RecDeploy.VStarNets
 open FlockVBridge.Names (NoNl)
 open FlockDeploy.Concrete (trim_of startsWith_append drop_append objT noNl findByte_eq IntJ canonUtf8_eq)
-open FlockSoundness.Discharge.Recursion.FirewallJson (parse_printJson)
+open FlockSoundness.Discharge.Recursion.ZkServerJson (parse_printJson)
 open FlockSoundness.Refine
 open Lean (Json)
 
@@ -64,7 +64,7 @@ theorem metaJ_obj : metaJ = .obj ⟨⟨objT metaJ⟩⟩ := by kernel_rfl
 theorem plain_metaJ : plain metaJ = true := by
   simp only [metaJ, lsM, rng, mrng, partHex, progHex, NAME, HmRow.ROW_SCHEMA_V2, HmRow.SCHEME, HmRow.PARTITION_V1]
   plain_json
-theorem fjnorm_metaJ : FlockSoundness.Discharge.Recursion.FirewallJson.norm metaJ = metaJ := by kernel_rfl
+theorem fjnorm_metaJ : FlockSoundness.Discharge.Recursion.ZkServerJson.norm metaJ = metaJ := by kernel_rfl
 
 theorem parse_meta : JsonParse.parse metaText = .ok metaJ := by
   rw [metaText, parse_printJson plain_metaJ, fjnorm_metaJ]

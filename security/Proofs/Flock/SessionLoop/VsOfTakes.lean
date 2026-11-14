@@ -27,8 +27,8 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
-open _root_.Flock.Firewall.Frame (Cfg Masker absorbed nLig)
+open _root_.Flock.ZkServer.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
@@ -71,7 +71,7 @@ theorem locate_snd_ne_zero : ∀ (rs : List ℕ) (k i i' : ℕ), i < i' →
 
 /-- **The frame's check never moves the state back.** -/
 theorem check_pos {c : Cfg} {m : Masker} {st : Bool} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
-    {why : Option String} (h : _root_.Flock.Firewall.Frame.check c { m with stopped := st } v r n = .ok (out, s', why)) :
+    {why : Option String} (h : _root_.Flock.ZkServer.Frame.check c { m with stopped := st } v r n = .ok (out, s', why)) :
     m.pos ≤ s'.pos := by
   cases why with
   | none =>
@@ -84,9 +84,9 @@ theorem check_pos {c : Cfg} {m : Masker} {st : Bool} {v r : ByteArray} {n : ℕ}
 /-- **Two checks against one scheduled round leave the state at one place.** -/
 theorem check_pos_eq {c : Cfg} {m : Masker} {r : ByteArray} {n : ℕ} {st₁ st₂ : Bool} {v₁ v₂ o₁ o₂ : ByteArray}
     {s₁ s₂ : Masker} {w₁ w₂ : Option String}
-    (hr : ∃ q, _root_.Flock.Firewall.Frame.roundFree c { m with stopped := false } r n = .ok q)
-    (h₁ : _root_.Flock.Firewall.Frame.check c { m with stopped := st₁ } v₁ r n = .ok (o₁, s₁, w₁))
-    (h₂ : _root_.Flock.Firewall.Frame.check c { m with stopped := st₂ } v₂ r n = .ok (o₂, s₂, w₂)) :
+    (hr : ∃ q, _root_.Flock.ZkServer.Frame.roundFree c { m with stopped := false } r n = .ok q)
+    (h₁ : _root_.Flock.ZkServer.Frame.check c { m with stopped := st₁ } v₁ r n = .ok (o₁, s₁, w₁))
+    (h₂ : _root_.Flock.ZkServer.Frame.check c { m with stopped := st₂ } v₂ r n = .ok (o₂, s₂, w₂)) :
     s₁.pos = s₂.pos := by
   obtain ⟨⟨o, t, f⟩, hr⟩ := hr
   have e : unstop s₁ = unstop s₂ := (Free.check_unstop hr h₁).trans (Free.check_unstop hr h₂).symm
@@ -200,7 +200,7 @@ theorem start_of_answered (T : CoinLayer.TableData)
     (hA : (LeanRelease.ofLoop T L₀ real).answered x ρ (e0 :: h1) = .ok m)
     {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1) :
-    ∃ lay mask, _root_.Flock.Firewall.Drive.start sts[(CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]! =
+    ∃ lay mask, _root_.Flock.ZkServer.Drive.start sts[(CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]! =
       .ok (lay, mask) := by
   rcases hsn : (CoinLayer.locate (roundsOf spec sts) 0 q).2 with _ | e
   · have hF := (LeanRelease.answered_ok hA).2.2
@@ -565,7 +565,7 @@ theorem takesVals_vsOf
   have hF : FreedAt _ (blind _ (bwOf _ bx)) x w ν ((CoinLayer.session loopNr Masked.dataE).seenOf x t)
       ((List.ofFn ((CoinLayer.session loopNr Masked.dataE).pad (K := refK x)
         (ops.map fun p => (CoinLayer.session loopNr Masked.dataE).decOf p.2))).take ops.length) j r
-      (absorbed (layE x j))[m.pos + k]! ((_root_.Flock.Firewall.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]!) :=
+      (absorbed (layE x j))[m.pos + k]! ((_root_.Flock.ZkServer.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]!) :=
     ⟨t, κ, m₀, ρ₀, ops, v, m, out, s, fr, k, rfl, hcs.symm, hpos, hlt, hl', hok, hv', ha, hfr, hrep, hk,
       by rw [hord.1], rfl⟩
   have hex : ∃ n a, n < refK x ∧ FreedAt _ (blind _ (bwOf _ bx)) x w ν
@@ -577,7 +577,7 @@ theorem takesVals_vsOf
   have hfw : freeWord _ bx x w ν ((CoinLayer.session loopNr Masked.dataE).pad
       (ops.map fun p => (CoinLayer.session loopNr Masked.dataE).decOf p.2))
       ((CoinLayer.session loopNr Masked.dataE).seenOf x t) j r (absorbed (layE x j))[m.pos + k]! =
-      some ((_root_.Flock.Firewall.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]!) := by
+      some ((_root_.Flock.ZkServer.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]!) := by
     have e : freeWord _ bx x w ν ((CoinLayer.session loopNr Masked.dataE).pad
         (ops.map fun p => (CoinLayer.session loopNr Masked.dataE).decOf p.2))
         ((CoinLayer.session loopNr Masked.dataE).seenOf x t) j r (absorbed (layE x j))[m.pos + k]! =
