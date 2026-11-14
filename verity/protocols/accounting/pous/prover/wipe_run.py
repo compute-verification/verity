@@ -20,14 +20,16 @@ The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trust
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
 count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing either way (`wipe_period.uncounted`): its verdict
-is real and its quantity isn't. The leg's record says `trusted-device` holds only for a session signed under the challenger host's key
-that `wipe_party.AUDITOR_KEYS` pins, never from the hosts' names: a session accepted under a key the run pinned itself
+is real and its quantity isn't. The leg's record says `trusted-device` holds only under a committed configuration, for
+a session signed under a key its `[[pin]]` entries give the memory challenger for the wipe (`period.json`'s
+`deployment`, `period.deployment`), never from the hosts' names: a session accepted under a key the run pinned itself
 is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
-session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
-leave outside the boundary (`wipe_period.disk_gaps`) and each link leaving the node that no network certifier counts
+session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), what the prover's store
+leaves out (`wipe_period.store_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
 `main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
-through `wipe_on_node.py`, which hands it the runtime's `Side.of`).
+through `wipe_on_node.py`, which hands it the runtime's `Side.of`). Run as a module, with no side to hand it, this file
+exits 1 naming `wipe_on_node.py`.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ import os
 import re
 import secrets
 import socket
+import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -49,7 +52,7 @@ from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols.accounting.pous.verifier.period import decided_by, serve
+from verity.protocols.accounting.pous.verifier.period import decided_by, deployment, serve
 from verity.protocols.accounting.pous.verifier.wipe_party import ACK, CHALLENGE, DONE, END, FILL, READS, _read
 from verity.protocols.accounting.pous.verifier.wipe_period import (LIMIT_NS, PROTOCOL, SEGMENT_BYTES, SEGMENT_LABELS,
                                                                    SEGMENTS, TIER, case, egress_of, foreign_labels,
@@ -376,7 +379,7 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
         declared = {tier: declared_bytes}
         if store is not None and store.get("total_bytes", 0) > declared_bytes:
             out.append({"tier": store["tier"], "bytes": store["total_bytes"] - declared_bytes,
-                        "what": f"{store.get('device', 'the device')}'s memory outside the declared tier"})
+                        "what": "the device's memory outside the declared tier"})
     dram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     if (rest := dram - declared.get("host-dram", 0)) > 0:
         out.append({"tier": "host-dram", "bytes": rest, "what": "the host's DRAM outside the declared tier"
@@ -396,14 +399,16 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side])
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
     With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
-    which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
-    Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pin
-    `wipe_party.AUDITOR_KEYS` holds for the challenger's host), the memory the prover kept the fill in,
+    verifier) and must agree with the Python; without it the Python may only refuse: its reject or undecided stands,
+    and its accept is undecided (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
+    `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
+    Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
+    `period.json`'s `deployment`, `period.deployment`), what the prover's store leaves out (`wipe_period.store_gaps`),
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
-    (`placement`, `wipe_party.placement`); `wipe.json` adds the prover's own timings (`prover`: its store, gate, fill
-    and device read latency), the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
+    (`placement`, `wipe_party.placement`), which names no device; `wipe.json` adds the prover's own record (`prover`:
+    its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
+    the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
     round trip), the streamer's (`report.fill`), the session's window on each side's real-time clock (`window`) and
     what the bound doesn't cover (`uncertified`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
@@ -452,7 +457,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side])
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
         conn = wipe.report["connection"]
         links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
-    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], store=kept,
+    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], **deployment(doc),
+                                 store_gaps=W.store_gaps(kept),
                                  simulated=c["placement"] == "simulated", links=links,
                                  undeclared=undeclared(tier, memory_bits(params) // 8, kept))
     window = {"challenger": wipe.report.get("window"),
@@ -465,6 +471,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side])
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"wipe-protocol answered {lean}, the Python {answer}")
         answer = lean
+    elif answer["verdict"] == "accept":
+        answer = answer | {"profile": None, "public": None, "reason": W.NO_JUDGE, "verdict": "undecided"}
     if answer["profile"] is not None:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
@@ -523,3 +531,7 @@ def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side]) -> 
 __all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "Side", "Wipe", "answer", "config", "disks",
            "dram_available", "leg", "main", "run", "segments_of", "session", "store_of", "summary", "timing",
            "undeclared"]
+
+if __name__ == "__main__":
+    sys.exit(f"python -m {__spec__.name} runs no wipe, since it has no challenger's side to hand `main`: run "
+             "benchmarks/pous/streamed_wipe/wipe_on_node.py, which hands it the runtime's Side.of")

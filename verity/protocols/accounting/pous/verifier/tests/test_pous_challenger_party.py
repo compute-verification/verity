@@ -1,4 +1,4 @@
-"""`challenger_party` and `challenger_session`: the memory challenger's side and the prover's over a socket pair, each
+"""`challenger_party` and `challenger_prover`: the memory challenger's side and the prover's over a socket pair, each
 in its own thread, the challenger on an injected clock. Given the period's coins, the challenger's side designates
 the id `period.run` does in one process and challenges the same indices. The run's check accepts its session against
 the honest prover and refuses it against one that answers zeros. The warm-ups before round 0 are on a public index,
@@ -24,12 +24,14 @@ import pytest
 
 from verity.runtime import sources as S
 from verity.party import Send
+from verity.protocol import ProtocolDef
 from verity.runtime.runner import run as deploy_run
 from verity.runtime.stream import Side
 from verity.channel import Message
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period, run
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 
@@ -66,7 +68,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: i
     t = threading.Thread(target=side)
     t.start()
     with b:
-        rounds = CS.answer(CS.Polled(b), point.params.block_bytes, respond)
+        rounds = CR.answer(CS.Polled(b), point.params.block_bytes, respond)
     t.join()
     return *got["session"], rounds
 
@@ -88,6 +90,26 @@ def test_the_split_session_is_the_periods() -> None:
     refused = period.answer(point, ts.SCHEMES, (signer.public_key,), published, digests, zeros[1], zeros[0], TEST_ID,
                             setup_inputs=inputs)
     assert refused["verdict"] == "reject" and refused["reason"].endswith("answers are not their blocks of C"), refused
+
+
+def test_a_challenger_of_its_own_takes_the_provers_session_from_the_caller() -> None:
+    """With `party`, `period.run` hands the caller's `session` the side, the request and the prover's answers, and judges
+    the session it returns. With no `session` it refuses, naming what to pass."""
+    point = period.point_for(len(STORE), period.W, period.C0)
+    signer, side, seen = ts.TestSigner(b"challenger host", 2), object(), []
+
+    def session(party, request, respond) -> dict:
+        seen.append((party, dict(request)))
+        sid, record, _ = _split(point, bytes.fromhex(request["binding"]), respond, signer)
+        return {"session_id": sid.hex(), "public_key": signer.public_key.hex(), "session": record.to_json()}
+
+    kw = {"point": point, "schemes": ts.SCHEMES, "protocol": TEST_ID, "party": side}
+    p = period.run("n0", STORE, COINS, session=session, **kw)
+    assert p.verdict == "accept", p.answer
+    published = run.Setup.from_json(json.loads(bytes.fromhex(p.case["commitment"])))
+    assert seen == [(side, CS.request_of("n0", point, published.root))]
+    with pytest.raises(ValueError, match=r"challenger_prover\.session"):
+        period.run("n0", STORE, COINS, **kw)
 
 
 def test_the_warmups_come_first_and_are_neither_timed_nor_judged() -> None:
@@ -138,8 +160,9 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     capabilities = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
                     CS.PROVER: {"store": lambda i: blocks[i]}}
     clock = S.VirtualClock(S.VirtualTime(Clock()()), 1_000)
+    both = ProtocolDef(CS.MANIFEST, {**CP.PROTOCOL.parties, **CR.PROTOCOL.parties})
     r = deploy_run({"protocol": CS.ID, "params": CS.request_of("n0", point, published.root)},
-                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL},
+                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: both},
                    capabilities=capabilities, authenticate=False,
                    sources={CS.CHALLENGER: {"clock": clock, "coins": GivenCoins(S.SeededCoins(b"hiding").draw)}})
     assert r.status == "completed", r.outcomes
@@ -188,7 +211,7 @@ def test_a_short_answer_is_refused_by_the_prover() -> None:
         fa.write((3).to_bytes(8, "big"))
         fa.flush()
         with pytest.raises(ValueError, match="whole 8-byte block"):
-            CS.answer(fb, 8, lambda i: bytes(7))
+            CR.answer(fb, 8, lambda i: bytes(7))
 
 
 def test_the_prover_answers_with_no_collection_inside_the_rounds() -> None:
@@ -197,7 +220,7 @@ def test_the_prover_answers_with_no_collection_inside_the_rounds() -> None:
     with a, b, a.makefile("rwb") as fa, b.makefile("rwb") as fb:
         fa.write(b"".join(i.to_bytes(8, "big") for i in (5, 1, 4, CS.END)))
         fa.flush()
-        assert CS.answer(fb, 8, lambda i: (seen.append(gc.isenabled()), bytes([i]) * 8)[1]) == 3
+        assert CR.answer(fb, 8, lambda i: (seen.append(gc.isenabled()), bytes([i]) * 8)[1]) == 3
         assert fa.read(24) == bytes([5]) * 8 + bytes([1]) * 8 + bytes([4]) * 8
     assert seen == [False] * 3 and gc.isenabled()
 
@@ -225,7 +248,7 @@ def _audit_session(point: run.Point, published: run.Setup, respond, signer: mc.S
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        CS.answer(f, point.params.block_bytes, respond)
+        CR.answer(f, point.params.block_bytes, respond)
     t.join()
     return got["session"]
 
@@ -355,10 +378,38 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", "pous",
         CS.command(tmp_path))
     assert wired == Side("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
-    assert CS.placement("n0", "n0")[CS.PREMISE].startswith("unmet: ")
-    assert CS.placement("n0", "auditor-host") == {
-        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
-        CS.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
+    key, conf = "ab" * 64, "cd" * 64
+    under = {"pins": [{"key-sha512": key, "party": CS.CHALLENGER, "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}],
+             "configuration": conf, "committed": frozenset({conf})}
+    assert CS.placement("n0", "n0", key, **under)["kind"] == "prover-node"
+    assert CS.placement("n0", "auditor-host", key, **under) == {
+        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
+        CS.PREMISE: f"holds: the session is signed under the key configuration {conf} pins for memory-challenger's "
+                    "pous sessions; the memory challenger ran on auditor-host, not the prover's n0"}
+    assert not mc.holds(CS.placement("n0", "auditor-host", "ef" * 64, **under))
+    assert not mc.holds(CS.placement("n0", "auditor-host", key, **under | {"committed": frozenset()}))
+    assert CS.placement("n0", "auditor-host")[CS.PREMISE].startswith(f"{mc.UNCOMMITTED} (no configuration); ")
+
+
+class Handed(Exception):
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what it is handed."""
+
+
+def test_a_period_asks_its_caller_for_the_pous_side(tmp_path) -> None:
+    """A period's PoUS takes the side from the program that starts the run: `period.json`'s challenger under pous's key,
+    started on this node by `challenger_session.command` with its key and session log beside the periods."""
+    period_dir = tmp_path / "periods" / "p0"
+    period_dir.mkdir(parents=True)
+    (period_dir / "period.json").write_text("{}")
+    handed = []
+
+    def side_of(doc, node, key, local, what=None):
+        handed.append((doc, node, key, local, what))
+        raise Handed
+
+    with pytest.raises(Handed):
+        period.leg(period_dir, "n0", tmp_path / "out", side_of=side_of, session=CR.session)
+    assert handed == [({}, "n0", "pous", CS.command(tmp_path / "periods" / "pous-challenger"), None)]
 
 
 def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:

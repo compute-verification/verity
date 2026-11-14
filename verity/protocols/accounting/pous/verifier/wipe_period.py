@@ -24,13 +24,13 @@ what the bound rests on. The session signs no egress, and this check holds the e
 count whoever writes the evidence gives. That it is the network certifier's count over the span between the session's
 two marks is for the check that composes the wipe with the network certifier to establish.
 
-
-What runs one wipe, the prover's end of its session and the answer here, is `pous/prover/wipe_run.py`. What an accepted wipe's bound doesn't cover is `uncertified`, from its placement
-(`wipe_party.placement`): the key custody of a session not signed under the key `wipe_party.AUDITOR_KEYS` pins for the
-challenger's host, an uncounted egress, the node's memory outside the declared tiers, a GPU's driver reserve when NVML
-gave no total, what its disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
-certifier counts (`wipe_party.link`). `foreign_labels` is the labels a cheat of a given size keeps prior content in
-place of.
+What runs one wipe, the prover's end of its session and the answer here, is `pous/prover/wipe_run.py`. What an accepted
+wipe's bound doesn't cover is `uncertified`, from its placement (`wipe_party.placement`): the key custody of a session
+not signed under a key the committed configuration's `[[pin]]` entries give the memory challenger for the wipe
+(`period.deployment`), an uncounted egress, the node's memory outside the declared tiers, what the prover's store leaves
+out (`store_gaps`) and each link leaving the node that no network certifier counts (`wipe_party.link`). Without
+`wipe-protocol` among the period's tools the Python's accept decides nothing (`NO_JUDGE`). `foreign_labels` is the
+labels a cheat of a given size keeps prior content in place of.
 """
 
 from __future__ import annotations
@@ -71,6 +71,8 @@ EXPERIMENTAL = (
 OTHER = "the wipe's commitment is not of the period's server and session"
 EGRESS_RANGE = "the evidence's egress is {} MiB, outside 0 to {}"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
+NO_JUDGE = ("no wipe-protocol among the period's tools: the Lean decides the wipe, and the Python's accept decides "
+            "nothing alone")
 
 
 def params_for(segments: int = SEGMENTS, *, k: int = READS, limit_ns: int = LIMIT_NS, tier: str = TIER,
@@ -251,14 +253,28 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
     return out
 
 
+def store_gaps(store: Mapping[str, Any] | None) -> list[str]:
+    """What the memory the prover kept the fill in (`wipe_store`'s `info`) leaves outside the bound, by tier and naming
+    no device: a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too),
+    and what its disks leave outside the boundary (`disk_gaps`)."""
+    return [f"tier {s['tier']}: the memory the GPU's driver reserves is undeclared: the tier is CUDA's total "
+            f"({s['cuda_total_bytes']} bytes), which leaves it out, since NVML gave none; the fill doesn't cover it and "
+            "M doesn't count it" for s in _parts(store)
+            if s.get("backend") == "cuda" and s.get("nvml_total_bytes") is None] + disk_gaps(store)
+
+
 def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
     check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
     signed under the challenger host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
     any other count is the evidence writer's, which no network certifier signed, and certifies no wipe), each
-    undeclared tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
-    the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
-    certifier counts."""
+    undeclared tier, what the prover's store leaves out (`store_gaps`) and each link leaving the node that no network
+    certifier counts. A placement that names the prover's store (`prover_store`, before the placement named no device)
+    is refused: its store's gaps aren't in it."""
+    if "prover_store" in where or "store_gaps" not in where:
+        raise ValueError("the wipe's placement names the prover's store or has no store_gaps: it is of the format "
+                         "before the placement named no device, so what the store leaves out isn't in it; run the "
+                         "leg again")
     out = [] if wipe_party.holds(where) else [f"key custody: {where[wipe_party.PREMISE]}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
@@ -268,11 +284,7 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
                    "check certifies no wipe on it until the check that composes the wipe with the network certifier")
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
-    out += [f"tier {s['tier']}: the memory {s['device']}'s driver reserves is undeclared: the tier is CUDA's total "
-            f"({s['cuda_total_bytes']} bytes), which leaves it out, since NVML gave none ({s.get('nvml_error')}); the "
-            "fill doesn't cover it and M doesn't count it" for s in _parts(where.get("prover_store"))
-            if s.get("backend") == "cuda" and s.get("nvml_total_bytes") is None]
-    out += disk_gaps(where.get("prover_store"))
+    out += where["store_gaps"]
     out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network certifier, so what "
             "leaves on it is outside E" for e in where["links"] if e["counted_by"] is None]
     return out

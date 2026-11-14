@@ -824,7 +824,7 @@ a population `n`, and under the verifier's query the program's proof blocks are 
 (`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
 (`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
 for every input gate of the root. -/
-def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
+def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
   | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
@@ -979,9 +979,9 @@ def membersWiringOf (pr : Json) : V (Option (Spot.Wires.Wiring × Spot.Wires.Sum
 and everything else as the one statement's parameters hold it (`paramsParsed`, read at `proofs` of no file, so under
 any sampling design v1 parses and not the one statement's `subset` alone): `own` is that program and partition, with
 no file. The registration's check reads the members, each its units and its circuit's units a proof block
-(`Registration.Verifier.members`), so v1's check refuses a registration under which a sample that ends misses a
+(`Docket.Verifier.members`), so v1's check refuses a registration under which a sample that ends misses a
 member, or a member's sampled proof blocks give two counts of link points (`link-points`,
-`Registration.linkRefused`). -/
+`Docket.linkRefused`). -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
   membersKeysHeld pr

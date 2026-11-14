@@ -52,7 +52,7 @@ abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 -- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
--- Not yet read from here: sampled proofs and the proof system's challenger
+-- Not yet read from here: SPOT and the proof system's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
 abbrev CHALLENGER_AUDITOR_RECORD : String := "verity/challenger-auditor-record/v1"
@@ -151,7 +151,7 @@ abbrev WIPE_MONITORING_PERIOD : String := "verity/wipe-monitoring-period/v1"
 abbrev WIPE_PROTOCOL : String := "verity/wipe/v0"
 abbrev WIPE_EGRESS : String := "wipe-egress/v1"
 
--- Not yet read from here: the remote bandwidth audit
+-- Not yet read from here: PoUB
 abbrev REMOTE_BANDWIDTH_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
 abbrev REMOTE_BANDWIDTH_MONITORING_PERIOD : String := "verity/remote-bandwidth-monitoring-period/v1"
@@ -163,6 +163,7 @@ abbrev REMOTE_BANDWIDTH_CODEC : String := "verity/remote-bandwidth/codec/v0"
 abbrev REMOTE_BANDWIDTH_COINS : String := "verity/remote-bandwidth/coins/v1"
 abbrev REMOTE_BANDWIDTH_OPENINGS : String := "verity/remote-bandwidth/openings/v0"
 abbrev REMOTE_BANDWIDTH_P2_REGISTRATION : String := "verity/remote-bandwidth/p2-registration/v0"
+abbrev REMOTE_BANDWIDTH_P2_CLOSE : String := "verity/remote-bandwidth/p2/close/v0"
 abbrev REMOTE_BANDWIDTH_P2 : String := "verity/remote-bandwidth/p2/v0"
 abbrev REMOTE_BANDWIDTH_PAYLOAD : String := "verity/remote-bandwidth/payload/v0"
 abbrev REMOTE_BANDWIDTH_PLAN : String := "verity/remote-bandwidth/plan/v0"
@@ -173,6 +174,7 @@ abbrev REMOTE_BANDWIDTH_REGISTRY : String := "verity/remote-bandwidth/registry/v
 abbrev REMOTE_BANDWIDTH_SEED : String := "verity/remote-bandwidth/seed/v0"
 abbrev REMOTE_BANDWIDTH_SKETCH_RECEIPT : String := "verity/remote-bandwidth/sketch-receipt/v0"
 abbrev REMOTE_BANDWIDTH_SKETCH_SIGNS : String := "verity/remote-bandwidth/sketch-signs/v0"
+abbrev REMOTE_BANDWIDTH_SKETCH_SIGNS_WIDE : String := "verity/remote-bandwidth/sketch-signs/v1"
 abbrev REMOTE_BANDWIDTH_STUB_TILE : String := "verity/remote-bandwidth/stub-tile/v0"
 abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timing-jitter/v0"
 abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"

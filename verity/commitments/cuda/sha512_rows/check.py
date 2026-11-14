@@ -1,23 +1,19 @@
 """The engine against the CPU reference (``verity.commitments``), bit for bit: row digests on random rows at edge sizes
 (every variant), hm96 leaves under both salt forms and fused with their units' frame leaves, frame leaves, unit frame
-tables, levels (a front child, strided trees), pads and roots, and on a CUDA device the frozen H200
-layout's rows (``bench.h200_rows``) on sampled slots. ``report`` runs them all; the benchmarks'
+tables, levels (a front child, strided trees), pads and roots, and on a CUDA device a layout group's rows
+(``layout_rows``: the benchmarks pass one layer of commit_slots' frozen H200 layout) on sampled slots. ``report`` runs them all; the benchmarks'
 ``benchmarks/torch_gpu/sha512_rows/check_gpu.py`` runs it on a CUDA device and writes check.json, and the tests call the
 same functions on the host twin.
 """
 from __future__ import annotations
 
 import hashlib
-import sys
 import time
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-#: where ``bench.h200_rows`` is, the H200 layer's rows ``check_layout`` reads
-BENCH_DIR = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "sha512_rows"
 
 from verity.commitments import hm96
 from verity.commitments.crypto.chacha20 import keystream
@@ -217,13 +213,17 @@ def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
     return {"mismatches": bad}
 
 
-def check_layout(engine: E.Engine, slots: int, sample: Sequence[int], seed: int = 4) -> dict[str, Any]:
-    """The H200 layout's rows (one layer) at ``slots`` slots: every row's digest and leaf on the sampled slots."""
-    sys.path.insert(0, str(BENCH_DIR))
-    import bench
+def layout_rows(group: Any) -> tuple[list[int], list[list[tuple[int, int, int]]]]:
+    """A layout group's tensors (bytes a slot's row, ``group.sources``) and rows (each row's parts as (tensor, byte offset,
+    bytes), every unit's rows in order): ``check_layout``'s input, e.g. ``slots.h200_layout(layers=1).groups[0]``."""
+    return list(group.sources), [[(p.source, p.offset, p.nbytes) for p in r.parts] for u in group.units for r in u]
+
+
+def check_layout(engine: E.Engine, sources: Sequence[int], rows: Sequence[Sequence[tuple[int, int, int]]], slots: int,
+                 sample: Sequence[int], seed: int = 4) -> dict[str, Any]:
+    """A layout's rows (``layout_rows``) at ``slots`` slots: every row's digest and leaf on the sampled slots."""
     torch = engine.torch
     gen = torch.Generator(device=engine.device).manual_seed(seed)
-    sources, rows = bench.h200_rows()
     dev_tensors = [torch.randint(0, 256, (slots, n), dtype=torch.uint8, device=engine.device, generator=gen) for n in sources]
     table = engine.rows(rows, dev_tensors)
     G = len(rows)
@@ -245,9 +245,9 @@ def check_layout(engine: E.Engine, slots: int, sample: Sequence[int], seed: int 
             "mismatches": {"x": bad_x, "leaves": bad_l}}
 
 
-def report(engine: E.Engine, layout_slots: Sequence[int] = ()) -> dict[str, Any]:
-    """Every check on ``engine``, and on a CUDA device the H200 layout at each of ``layout_slots`` slots, with the total of
-    their mismatches (``all_mismatches``): what check.json holds."""
+def report(engine: E.Engine, layout_slots: Sequence[int] = (), layout: Any = None) -> dict[str, Any]:
+    """Every check on ``engine``, and on a CUDA device ``layout`` (``layout_rows``' (sources, rows)) at each of
+    ``layout_slots`` slots, with the total of their mismatches (``all_mismatches``): what check.json holds."""
     t0 = time.time()
     doc: dict[str, Any] = {"device": str(engine.device), "default": engine.default, "variants": engine.variants,
                            "lib": str(engine.lib.path)}
@@ -255,9 +255,9 @@ def report(engine: E.Engine, layout_slots: Sequence[int] = ()) -> dict[str, Any]
     doc["rows_many_slots"] = check_rows(engine, slots=97, seed=11, variants=[engine.default, *engine.variants[:2]])
     doc["leaves"] = check_leaves(engine)
     doc["trees"] = check_trees(engine)
-    if not engine.host:
+    if not engine.host and layout is not None:
         for slots in layout_slots:
-            doc[f"layout_{slots}"] = check_layout(engine, slots, sorted({0, 1, 31, 32, slots // 2, slots - 1}))
+            doc[f"layout_{slots}"] = check_layout(engine, *layout, slots, sorted({0, 1, 31, 32, slots // 2, slots - 1}))
     doc["seconds"] = time.time() - t0
 
     def total(d: Any) -> int:

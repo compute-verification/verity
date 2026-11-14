@@ -64,6 +64,17 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
 
+
+def _integration_sites() -> frozenset[tuple[str, str]]:
+    """``KNOWN`` of ``tests/test_integration_boundaries.py``, read from its source: this file is also loaded by path, where no
+    sibling imports."""
+    tree = ast.parse((ROOT / "tests" / "test_integration_boundaries.py").read_text(encoding="utf-8"))
+    return frozenset(next(ast.literal_eval(n.value) for n in tree.body
+                          if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == ["KNOWN"]))
+
+
+INTEGRATION_SITES = _integration_sites()
+
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
@@ -149,11 +160,6 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
-    "adapters/vllm/tests/engine/ppl_oracle.py": "circuits (vllm): the int8 step's oracle (`benchmarks/ppl/steps.py`)",
-    "adapters/vllm/tests/engine/fattn_oracle.py": "circuits (vllm): the int8 attention's oracle "
-                                                  "(`verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py`)",
-    "adapters/vllm/tests/engine/int8_kscale_gpu.py": "circuits (vllm): the K scales' calibration windows "
-                                                     "(`benchmarks/ppl/methodology.py`, `windows.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
@@ -194,11 +200,10 @@ PROVER_ONLY = {
                     "entry for a Definition's gates"),
 }
 
-#: The runtime's modules: what runs parties over channels and what starts a side as another process (the layout's
-#: ``verity/runtime/``, ``tests/tree.toml``).
-RUNTIME = ("verity.runtime.channels", "verity.runtime.process", "verity.runtime.runner",
-           "verity.runtime.sources", "verity.runtime.stream", "verity.runtime.transcript",
-           "verity.runtime.handshake")
+#: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
+#: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
+RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
+                                     if p.stem != "__init__"))
 #: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
@@ -323,14 +328,15 @@ def test_verity_imports_the_standard_library_its_dependencies_and_itself() -> No
     directory of the repository (``FORBIDDEN_EXTERNAL``), in an import or in a string, and imports only the standard
     library, ``verity`` and its declared dependencies (``DEPENDENCIES``).  A verifier's and a device's Python and the
     directories of ``STDLIB_ONLY`` import no dependency either, but for ``NUMPY_USERS``; each listed path still holds
-    Python of ``verity``."""
+    Python of ``verity``.  An integration's module that a file imports where ``tests/test_integration_boundaries.py``'s
+    ``KNOWN`` lists the pair is that test's to hold."""
     offenders, held = [], set()
     for path in _sources():
         rel = path.relative_to(ROOT).as_posix()
         held |= {p for p in (*STDLIB_ONLY, *NUMPY_USERS) if _under(rel, [p])}
         alone = (_trusted(rel) is not None or _under(rel, STDLIB_ONLY)) and not _under(rel, NUMPY_USERS)
         offenders += [f"{rel}:{line}: {name}" for name, line, imported in _imports(path)
-                      if _external(name, imported, set() if alone else DEPENDENCIES)]
+                      if _external(name, imported, set() if alone else DEPENDENCIES) and (rel, name) not in INTEGRATION_SITES]
     assert not offenders, ("verity imports the standard library, its declared dependencies and itself, and a verifier, a "
                            "device and the scalar references (STDLIB_ONLY) the standard library and verity alone:\n"
                            + "\n".join(offenders))
@@ -830,8 +836,8 @@ def _is_test(rel: str) -> bool:
 
 def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
     """``{file: ["line: module", ...]}`` for each file of ``RUNTIME_FREE`` outside its tests that names a module of
-    ``RUNTIME``: in an import statement (``from package import module`` too, and a relative one), or as a whole string (an
-    import call's argument, a ``"module:attr"``, a ``-m`` argument)."""
+    ``RUNTIME``, the most specific one a line names: in an import statement (``from package import module`` too, and a
+    relative one), or as a whole string (an import call's argument, a ``"module:attr"``, a ``-m`` argument)."""
     found: dict[str, list[str]] = {}
     for rel, text in sorted(texts.items()):
         if not rel.startswith(RUNTIME_FREE) or _is_test(rel) or not any(r.rpartition(".")[2] in text for r in RUNTIME):
@@ -849,7 +855,8 @@ def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
                 names = [node.value.partition(":")[0]]
             else:
                 continue
-            hits |= {(node.lineno, r) for n in names for r in RUNTIME if n == r or n.startswith(r + ".")}
+            named = {r for n in names for r in RUNTIME if n == r or n.startswith(r + ".")}
+            hits |= {(node.lineno, r) for r in named if not any(o.startswith(r + ".") for o in named)}
         if hits:
             found[rel] = [f"{line}: {name}" for line, name in sorted(hits)]
     return found
@@ -857,7 +864,8 @@ def _runtime_importers(texts: dict[str, str]) -> dict[str, list[str]]:
 
 def test_no_protocol_or_adapter_imports_the_runtime() -> None:
     """No file of a protocol or an adapter, outside its tests, imports the runtime (``RUNTIME``), apart from
-    ``RUNTIME_IMPORTERS``, which only shrinks."""
+    ``RUNTIME_IMPORTERS``, which only shrinks. It counts direct imports only: a file that imports ``verity.party`` loads
+    ``verity.runtime.handshake`` through it, uncounted."""
     found = _runtime_importers(_tracked_python())
     offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in RUNTIME_IMPORTERS for hit in hits]
     assert not offenders, ("no protocol or adapter imports the runtime, only what starts a run does: take the stream, the "
@@ -869,9 +877,10 @@ def test_no_protocol_or_adapter_imports_the_runtime() -> None:
 
 def test_a_runtime_import_is_found() -> None:
     """The check above isn't vacuous: an import of a runtime module by either statement, by a relative one, by an import
-    call and as a ``-m`` argument are each found; the manifest, the party, a docstring's mention, a test's import and a
-    file outside ``RUNTIME_FREE`` are not."""
-    module = RUNTIME[0]
+    call and as a ``-m`` argument are each found, and so is the package's own (``import verity.runtime``, ``from verity
+    import runtime``); the manifest, the party, a docstring's mention, a test's import and a file outside
+    ``RUNTIME_FREE`` are not."""
+    module = RUNTIME[1]
     package, _, name = module.rpartition(".")
     texts = {
         "verity/protocols/x/a.py": (f"from {package} import {name}\nfrom {module} import Side\nimport {module} as R\n"
@@ -882,6 +891,7 @@ def test_a_runtime_import_is_found() -> None:
         "verity/protocols/x/clean.py": (f'"""Handed a `{module}.Side`."""\n'
                                         "from verity.protocol import Manifest\n"
                                         "from verity.party import Party\n"),
+        "verity/protocols/x/c.py": "import verity.runtime\nfrom verity import runtime\n",
         "verity/protocols/x/tests/test_a.py": f"from {module} import run\n",
         "demos/d/run.py": f"from {package} import {name}\n",
     }
@@ -889,6 +899,7 @@ def test_a_runtime_import_is_found() -> None:
         "adapters/y/z.py": [f"1: {RUNTIME[-1]}"],
         "verity/protocols/x/a.py": [f"{line}: {module}" for line in (1, 2, 3, 4)],
         "verity/protocols/x/b.py": [f"{line}: {module}" for line in (2, 3, 4)],
+        "verity/protocols/x/c.py": ["1: verity.runtime", "2: verity.runtime"],
     }
 
 
@@ -1603,16 +1614,16 @@ BY_PATH = "verity/protocols/proofs/spot/by_path.py"
 ORDER_TREE = {
     "verity/__init__.py": "",
     "verity/circuits/__init__.py": "",
-    "verity/circuits/at_load.py": "from verity.definitions import toy\n",
-    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.toy\n",
-    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.toy:run'\n",
-    "verity/circuits/tests/test_a.py": "import verity.definitions.toy\n",
-    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.toy\n",
+    "verity/circuits/at_load.py": "from verity.runtime import toy\n",
+    "verity/circuits/in_function.py": "def f():\n    import verity.runtime.toy\n",
+    "verity/circuits/in_string.py": "TOOL = 'verity.runtime.toy:run'\n",
+    "verity/circuits/tests/test_a.py": "import verity.runtime.toy\n",
+    "verity/circuits/at_load.circuit-check.py": "import verity.runtime.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
     "verity/commitments/crypto/lms.py": "",
-    "verity/definitions/__init__.py": "",
-    "verity/definitions/toy.py": "import verity.circuits.at_load\n",
+    "verity/runtime/__init__.py": "",
+    "verity/runtime/toy.py": "import verity.circuits.at_load\n",
     "verity/protocols/proofs/flock/__init__.py": "",
     "verity/protocols/proofs/flock/prover/stage.py": "import verity.protocols.accounting.pouw.verifier.check\n",
     "verity/protocols/proofs/flock/verifier/__init__.py": "",
@@ -1674,13 +1685,13 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     verifier, prover, device, check = (f"verity/protocols/accounting/pouw/{d}" for d in ("verifier", "prover", "device", "verifier/check"))
     own = {"verity/protocols/proofs/flock": {"owner": "proofs", "reason": "Flock's distribution"}, check: {"owner": "memory-accounting"}}
     steps = _listing().steps
-    places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/definitions"]}, {"paths": ["verity/commitments/crypto"]},
+    places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/runtime"]}, {"paths": ["verity/commitments/crypto"]},
                       {"paths": [verifier]}, {"paths": [device]}, {"paths": [prover]}, {"paths": ["verity/protocols/proofs/flock/verifier"]},
                       {"paths": ["verity/hardware"]}, {"paths": ["verity/protocols/proofs/spot"]}])
     listing = Listing(steps, own, {}, places)
     found = {pair: sorted(files) for pair, files in _against(loads, steps).items()}
     assert found == {
-        ("verity/circuits", "verity/definitions"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
+        ("verity/circuits", "verity/runtime"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
         ("verity/hardware", "verity/protocols/proofs/flock"): ["verity/hardware/package_above.py"],
         ("verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"): ["verity/protocols/proofs/flock/verifier/Flock/V.lean", "verity/protocols/proofs/flock/verifier/lakefile.toml"],
         ("verity/protocols/proofs/flock", "verity/protocols/accounting/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
@@ -1691,9 +1702,9 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     }, found
     assert _row("verity/errors.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
         and _row("verity/protocols/proofs/flock/verifier/Flock/V.lean", steps) == "verity/protocols/proofs/flock/verifier"
-    listed = steps | {"verity/circuits/at_load.py": steps["verity/definitions"]}
+    listed = steps | {"verity/circuits/at_load.py": steps["verity/runtime"]}
     assert _row("verity/circuits/at_load.py", listed) == "verity/circuits/at_load.py"
-    assert sorted(_against(loads, listed)["verity/circuits", "verity/definitions"]) == [
+    assert sorted(_against(loads, listed)["verity/circuits", "verity/runtime"]) == [
         "verity/circuits/in_function.py", "verity/circuits/in_string.py"]
     assert [_below(f, steps) for f in ("verity/commitments/crypto/lms.py", "verity/commitments/merkle.py", "verity/errors.py",
                                        f"{prover}/circuit/words.py", "examples/a/b.py", "conftest.py")] == [
@@ -1708,7 +1719,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     assert [_trusted(f) for f in (f"{check}/interop.py", f"{device}/serve.py", f"{prover}/build.py", "tools/verifier/run.py")] == [
         verifier, device, None, None]
     assert [_trusted_place(e) for e in _places([{"paths": ["verity/commitments", party]}, {"paths": [party, prover]},
-                                                {"paths": ["verity/definitions"], "trusted": True}]).values()] == [False, True, True]
+                                                {"paths": ["verity/runtime"], "trusted": True}]).values()] == [False, True, True]
     assert sorted({(x.loader, x.line, x.loaded) for x in _to_provers(loads)}) == [
         (f"{verifier}/check.py", 6, f"{prover}/__init__.py"), (f"{verifier}/check.py", 6, f"{prover}/build.py"),
         (f"{check}/interop.py", 1, "verity/protocols/proofs/flock/prover/stage.py")]
@@ -1716,29 +1727,29 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/hardware/package_above.py:1: python package verity.protocols.proofs.flock.verifier.interface loads "
         "verity/protocols/proofs/flock/__init__.py"]
     found = _place_loads(loads, listing)
-    assert list(found) == sorted(["verity/circuits", "verity/definitions", "verity/hardware", "verity/protocols/proofs/flock/verifier",
+    assert list(found) == sorted(["verity/circuits", "verity/runtime", "verity/hardware", "verity/protocols/proofs/flock/verifier",
                                   device, prover, verifier, "verity/protocols/proofs/spot"]), list(found)
-    assert [sorted(x) for x in found["verity/circuits"]] == [["verity/definitions"], [], []], found["verity/circuits"]
-    assert [sorted(x) for x in found["verity/definitions"]] == [["verity/circuits"], [], []], found["verity/definitions"]
+    assert [sorted(x) for x in found["verity/circuits"]] == [["verity/runtime"], [], []], found["verity/circuits"]
+    assert [sorted(x) for x in found["verity/runtime"]] == [["verity/circuits"], [], []], found["verity/runtime"]
     assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["demos/e2e"], [], []], found["verity/protocols/proofs/spot"]
     assert [sorted(x) for x in found[prover]] == [[verifier], [], []], found[prover]
     direct, reach, loaders = found[verifier]
     assert sorted(direct) == ["verity/circuits", "verity/commitments/crypto", prover], direct
-    assert sorted(reach) == ["verity/circuits", "verity/commitments/crypto", "verity/definitions", prover], reach
-    assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/toy.py"]
+    assert sorted(reach) == ["verity/circuits", "verity/commitments/crypto", prover, "verity/runtime"], reach
+    assert reach["verity/runtime"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/runtime/toy.py"]
     assert sorted(loaders) == sorted(["verity/protocols/proofs/flock/prover/stage.py", f"{prover}/build.py"]), loaders
     assert [sorted(x) for x in found[device]] == [[verifier], sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
     assert [sorted(x) for x in found["verity/protocols/proofs/flock/verifier"]] == [[], [], ["verity/hardware/package_above.py"]]
-    marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/definitions"], "trusted": True}])))
-    assert [sorted(x) for x in marked["verity/definitions"]] == [["verity/circuits"], ["verity/circuits"], [
+    marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/runtime"], "trusted": True}])))
+    assert [sorted(x) for x in marked["verity/runtime"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
-        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/definitions"]
+        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/runtime"]
     parted = _place_loads(loads, listing._replace(places=split))
     assert list(parted) == sorted([*found, party]), list(parted)
     assert [sorted(x) for x in parted[device]] == [sorted(x) for x in found[device]], parted[device]
     assert [sorted(x) for x in parted[party]] == [[device], sorted([*reach, device, verifier]), []], parted[party]
     kept = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/circuits", party]}])))
-    assert sorted(kept["verity/circuits"][0]) == ["verity/definitions", device] and sorted(kept[device][2]) == [
+    assert sorted(kept["verity/circuits"][0]) == [device, "verity/runtime"] and sorted(kept[device][2]) == [
         party, f"{prover}/tests/test_build.py"], (kept["verity/circuits"], kept[device])
 
     def lists(places: dict[str, dict[str, Any]], found: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1750,10 +1761,10 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     _hold_places(loads, files, held)
     hold_distributions = functools.partial(_hold_distributions, neither=(check,))
     hold_distributions(tree.dirs, [x for x in loads if "package_above" not in x.loader], held)
-    pair = ("verity/circuits", "verity/definitions")
+    pair = ("verity/circuits", "verity/runtime")
     with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/periods -> tools'\]"):
         _hold_order(loads, held._replace(against=held.against | {("verity/commitments/periods", "tools"): {"verity/commitments/periods/rows.py"}}))
-    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
+    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.runtime.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
         _hold_order(loads, held._replace(against={p: files for p, files in held.against.items() if p[1] != "infra"}))
@@ -1770,8 +1781,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         _hold_places(loads, files, without(verifier, loads=prover, reaches=prover))
     with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} loads verity/commitments/crypto: "):
         _hold_places(loads, files, without(verifier, loads="verity/commitments/crypto"))
-    with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/definitions: {verifier}/check.py -> "):
-        _hold_places(loads, files, without(verifier, reaches="verity/definitions"))
+    with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/runtime: {verifier}/check.py -> "):
+        _hold_places(loads, files, without(verifier, reaches="verity/runtime"))
     aside = Load("verity/circuits/in_function.py", "verity/protocols/proofs/spot/by_path.py", 3, "python import", "verity.protocols.proofs.spot.by_path")
     with pytest.raises(AssertionError, match=f"gains no load(.|\n)*{verifier} reaches demos/e2e: {verifier} -> verity/circuits -> "
                                              f"verity/protocols/proofs/spot -> demos/e2e\n\\s*{verifier} reaches verity/protocols/proofs/spot: "):
@@ -1780,8 +1791,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         _hold_places(loads, files, without(device, loaded_by=f"{prover}/tests/test_build.py"))
     with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{verifier} is loaded by {prover}/build.py:1: "):
         _hold_places(loads, files, without(verifier, loaded_by=f"{prover}/build.py"))
-    with pytest.raises(AssertionError, match="only the places its `loads` lists.*\n\\s*verity/circuits loads verity/definitions: .*at_load.py:1: "):
-        _hold_places(loads, files, without("verity/circuits", loads="verity/definitions"))
+    with pytest.raises(AssertionError, match="only the places its `loads` lists.*\n\\s*verity/circuits loads verity/runtime: .*at_load.py:1: "):
+        _hold_places(loads, files, without("verity/circuits", loads="verity/runtime"))
     with pytest.raises(AssertionError, match=f"no longer has; delete them .*: \\['{verifier}: reaches tools'"):
         _hold_places(loads, files, also(verifier, reaches="tools"))
     with pytest.raises(AssertionError, match="no longer has; delete them .*: \\['verity/circuits: loads verity/commitments/crypto'"):

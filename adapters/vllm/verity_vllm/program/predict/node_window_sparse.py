@@ -26,7 +26,7 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.refs import Affine, runs
 from verity.commitments.periods import interface as IF
-from verity.definitions.registry import sparse_mla_split as SMS
+from verity_vllm.definitions.registry import sparse_mla_split as SMS
 
 from verity_vllm.check.weights_of_record import weight_param
 from verity_vllm.pipeline import chain_rows as CR

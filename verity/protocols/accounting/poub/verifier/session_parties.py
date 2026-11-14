@@ -74,7 +74,7 @@ MANIFEST = Manifest(
 
 def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
                window_ns: int = 100_000_000, deadline_ns: int = 500_000_000) -> dict[str, Any]:
-    """The session's request, its parameters: `period.run`'s defaults unless given."""
+    """The session's request, its parameters: `period_prover.run`'s defaults unless given."""
     return {"deadline_ns": deadline_ns, "node": node, "passes": passes, "samples": samples, "window_ns": window_ns,
             "windows": windows}
 

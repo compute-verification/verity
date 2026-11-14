@@ -14,7 +14,7 @@ meta import Flock
 meta import Spot.OneStageZk
 
 /-!
-Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
+SPOT's recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
 (`Spot.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
 verifier the auditor runs (`verity-verify-proof verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 

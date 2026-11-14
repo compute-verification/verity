@@ -18,15 +18,17 @@ holds.
     (`use_int8_arm`).
 
   ``site`` is the linear's ordinal in the forward pass. Beside the calls are the names a serve loop needs to manage a
-  window (its coins, salt session, gate, draw and outcome), and the schemes' names, settings and refusals. The package
+  window (its coins, salt session, gate, draw and outcome), the schemes' names, settings and refusals, and the row-table
+  kernels' build and table helpers the adapter's step-root and history tables run (`RowTableLibrary`, `row_table_nvcc`,
+  `row_table_host_lib`, `hm_tables`, `leaf_prefixes`, `table_width`, `u64_words`, …). The package
   defines the calls, their types and four wrappers that look up their targets at each call (`in_process_coins`,
   `verifier_coins`, `lead_in_process_certifier`, `ready_verifier`). Every other exported name is read from its module
   at each lookup, never cached, so importing the package loads no torch, and a function that imports a name sees its
   module's current attribute.
 - **Loaded by:** the vLLM adapter (`verity_vllm.protocols.pouw` and its `pipeline`, `acquire`, `program` and `commit`
   packages); PoUW's prover tests (`verity/protocols/accounting/pouw/prover/tests/`), SPOT's prove path, and PoUW's
-  `kernels/served_zk/`; and the benchmarks under `benchmarks/pouw/`, `benchmarks/one_stage/`, `benchmarks/harness/` and
-  `benchmarks/hash/`, which import its modules directly.
+  `kernels/served_zk/`; and the benchmarks under `benchmarks/pouw/`, `benchmarks/one_stage/`, `benchmarks/harness/`,
+  `benchmarks/hash/`, `benchmarks/commitments/` and `benchmarks/serve_tax/`, which import its modules directly.
 - **Loads:** `verity.circuits`, `verity.commitments`, `verity.errors`, the rest of `verity.protocols.accounting.pouw`
   and SPOT (`verity.protocols.proofs.spot`); numpy; torch, at import in `h1.receipts` and inside functions elsewhere;
   Triton, in `pearl_c.screen_kernels`; and `verity_flock`, inside the functions that use it. It loads nothing under

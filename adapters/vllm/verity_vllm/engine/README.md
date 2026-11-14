@@ -40,4 +40,4 @@ what it holds.
   `settings`, `errors`, `log`, `target_family`, `records.schema_ids`, `records.logits_capture`, `program.frontend`
   (the target profile, the kernel read-back and, in `meta_inventory`, the model on the meta device and the
   export's compatibility and tensor-parallel ops) and, in `vllm_adapter`, `program.prefix_plan` and `commit`;
-  `verity.definitions.registry`, `verity.commitments`, `verity.circuits.codec` and `verity_config`.
+  `verity_vllm.definitions.registry`, `verity.commitments`, `verity.circuits.codec` and `verity_config`.

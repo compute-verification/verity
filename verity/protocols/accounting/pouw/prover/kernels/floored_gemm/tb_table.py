@@ -1,6 +1,6 @@
 """The tensor-core receipts' cost table from tb_run.sh's bench.jsonl (and ncu's counts when the run dir has them), as Markdown.
 
-python3 tb_table.py BENCH.jsonl [RUN_OUT_DIR]
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/floored_gemm/tb_table.py BENCH.jsonl [RUN_OUT_DIR]
 
 η is m n k over the time, against 1,024 int8 MACs/SM/clk x SMs x the SM clock NVML read at each rep. Arms: lt cuBLASLt
 int8; b the noised call without receipts (form + GEMM + peel); c duo /32 and c2 duo2 /32 (table.py's); t4, t2, t1 the
@@ -13,7 +13,10 @@ import json
 import sys
 from pathlib import Path
 
-from table import LINEAR, ncu_tensor
+from verity.protocols.accounting.pouw.prover.kernels.floored_gemm.table import (
+    LINEAR,
+    ncu_tensor,
+)
 
 ORDER = ["lt", "b", "c", "c2", "t4", "t2", "t1", "t2w", "t1w", "t4c", "t1c", "t2wc", "t1wc"]
 

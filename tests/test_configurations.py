@@ -1,4 +1,4 @@
-"""The committed configurations' hashes (`tests/configurations.toml`): a line for each demo, each `.toml` file of
+"""The committed configurations' hashes (`tools/verity/cli/verity_cli/configurations.toml`): a line for each demo, each `.toml` file of
 `demos/` (the configuration `verity demo NAME` runs), and none for another file, each the hash `verity config hash`
 prints of it."""
 from __future__ import annotations
@@ -10,7 +10,7 @@ from verity import config as K
 from verity_cli import run as R
 
 ROOT = Path(__file__).resolve().parents[1]
-HASHES = ROOT / "tests" / "configurations.toml"
+HASHES = ROOT / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
 
 
 def test_each_demo_configuration_has_its_hash_and_nothing_else_does():

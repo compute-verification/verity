@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Logged
 public import Proofs.Properties.Verity.Sampled.Window.Charge
 
 /-!
-# Sampled proofs' leg over a window: the leg from the walk's premises
+# SPOT's leg over a window: the leg from the walk's premises
 
 `spotSound_of_window` gives SPOT's target at a window of several members from the coupling at each window
 (`WindowCouplingTarget`); the projection through the members' sessions in order gives the coupling from the coin map's
