@@ -33,3 +33,32 @@ The second run's line follows after 6 PM PST.
 
 TIMER: none
 
+[2026-11-14T01:50Z] cb29819c1286
+GATERELAY to network-accounting (lead), Fri 13 Nov 5:50 PM PST. **`r20261114-005059-1aba` ended: done, exit 0, 56 min 45 s. A rehearsal's fetch gets the same reject at the word as a session's, and the same refusal past it. Your four words are acted on, below.**
+
+**The run** (at `a7b47de7e2c66b152ab2ffadb4a23121b47dfceb`; the piece's code there is #9837's)
+- [ran] The rehearsal's front: exit 0. The gate's check accepted the run with no problem, and `rehearsed` passes. Four certified requests, each released in bucket 2 with its last egress cell in bucket 28, all inside execution phase 0. Commit window 0 holds the four, and `in_link_window` passes.
+- [ran] The piece with the real chain on Commit window 0: exit 1 after 3,354 s. The chain's three steps each exit 0 (`--draw 8`: 8 honest, 4 tampered). Its report says `accepted on the period check`, and `decide` rejects at the word.
+- [ran, by hand on the chain's kept output] Past the word: `in_link_window` passes, the rows case builds (first 0, 1 window, 1 audit), and `network-period check` answers reject: "window 0: the scan's prog is no compute audit's slot entries". That is the wiring.
+- So the reject at the word is not a session's. With #9880 the plain piece answers a rehearsal's run and a session's alike with the period check's reject at the wiring, as #9880's body says. No line of this run reads accept.
+- Not run: the split's two steps with V3c's audit.
+
+**Your four words**
+1. #9880's body now ends `Refs NET-435`, and the pull request is linked to NET-435 (5:41 PM PST). No push: the head is still `1d4a3178464b6128eb4aa419280f9982b8c08a97`.
+2. The table's split is mine: its own pull request off `main` after #9782's merge, open and unmarked by Tue 17 Nov 6 PM PST, not marked before one whole run of the split passes. I stop if you say memory-accounting writes it.
+3. What that whole run needs that I do not hold, and who holds each: by Mon 16 Nov noon PST, to you only.
+4. My list is on NET-436 as a comment (5:41 PM PST), as it stood, marked read and not run.
+
+**#9880's run, `r20261114-013020-8436`: still running at 5:50 PM PST, none failed.**
+- The network traces suite whole, slow tests included: 731 passed.
+- `--changed e936aedbc51e --quick` touches 8 suites: 7 are in (prove path 171, graph 220, network e2e 70, CLI 137, network sim 21, one stage 1,103, network traces from the first step), and the root suite is running. Its end comes as its own line.
+
+**The served runner's branch** is pushed at `88074c774d8818f1ce84cd332ad5276456233d03` (5:48 PM PST), no pull request yet.
+- It holds `LOAD=session` as you ruled it: the serve step sends nothing, the caller's command sends the load, and the preflight refuses a session without all three and each of the three under any other `LOAD`.
+- Its tests: the session's serve step (3 cases), the six earlier loads with a session's load and close named in the environment (the step issues and says exactly its pin and starts neither), and the preflight (10 cases). The runner's test file: 426 passed here; not yet on a node.
+- Still to come in it before it opens: proofs' fix of the listener with its test, and the body.
+
+**One correction.** At 5:33 PM PST I wrote "9 of mine uncollected". The counter is every sender's, not mine alone.
+
+TIMER: none.
+
