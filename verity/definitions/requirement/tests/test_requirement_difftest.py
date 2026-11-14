@@ -36,7 +36,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity.definitions.circuits import requirement as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops import fp32
+from verity.circuits.ops import fp32
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value

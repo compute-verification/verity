@@ -33,7 +33,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, or_reduce, sub
 from verity.circuits.boolean.gather import gather
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
 from verity.definitions.registry import boolean_dsv4_indexer as BI
 from verity.definitions.registry import boolean_dsv4_indices as BX
