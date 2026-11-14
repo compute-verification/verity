@@ -255,7 +255,7 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
     got = {}
     monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
     assert VP.main(["--port", "7781"]) == 0
-    assert got == {"argv": ["--port", "7781"], "verify": VP.lms_verify,
+    assert got == {"argv": ["--port", "7781"], "figures": VP.timing.RTX_PRO_6000_NODE, "verify": VP.lms_verify,
                    "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 

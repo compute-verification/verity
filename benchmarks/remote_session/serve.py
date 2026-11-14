@@ -158,13 +158,15 @@ def backend_class(remote):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
+    from verity.protocols.accounting.poub.verifier import timing
     from verity.protocols.accounting.poub.verifier.session import verifier
 
     sock, _ = lsock.accept()
     lsock.close()
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=a.windows,
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=timing.RTX_PRO_6000_NODE,
+                              source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()

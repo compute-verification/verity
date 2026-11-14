@@ -34,6 +34,7 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))
 
+from verity.protocols.accounting.poub.verifier import timing  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import challengers  # noqa: E402
 import host as H  # noqa: E402
 import store_layout as SL  # noqa: E402
@@ -201,7 +202,7 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
     assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period,
             a.challenger_main) == ("gate", SSH, "auditor-host", KEY, "memory-line-1", svc.main)
     assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
-        1843153879040, 4.4e9, V.HBM_BYTES, None, "127.0.0.1")
+        1843153879040, 4.4e9, timing.RTX_PRO_6000_NODE.hbm_bytes, None, "127.0.0.1")
     for spec in a.paced or []:
         V.pace_of(spec, 17.0)
 
@@ -781,7 +782,7 @@ def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
     assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_party", "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
-                                       "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
+                                       "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
     assert "bw_party takes --pous-session SID | --fixture" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
 
 

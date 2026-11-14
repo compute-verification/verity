@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.PlanDraw
 Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness package's Lean spec
 (`FlockSoundness/Randomness.lean`, `FlockSoundness/PlanDraw.lean`), for `tests/fixtures/randomness_lean.json`.
 
-* `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, which the tests hold equal to it.
+* `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, its `wide` cases under `deriveWide` and
+  `streamWide`, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
 * `window`: `PlanDraw.window` on small windows: the draw of each, and a repeated call index refused.
@@ -56,6 +57,7 @@ def num (n : Nat) : Json := .num (JsonNumber.fromNat n)
 def kat (j : Json) : Json := Id.run do
   let .ok (.arr fr) := j.getObjVal? "frame" | return .null
   let .ok (.arr cases) := j.getObjVal? "cases" | return .null
+  let .ok (.arr wides) := j.getObjVal? "wide" | return .null
   let frames := fr.map fun v => match v with
     | .arr #[.str r, _] => Json.arr #[.str r, .str (hexOf (frame (partOfRepr r)))]
     | _ => Json.null
@@ -98,7 +100,19 @@ def kat (j : Json) : Json := Id.run do
       ("stream", Json.mkObj [("index", sidx), ("bytes", .str (hexOf (stream key (indexOfJson sidx) (slen.length / 2))))]),
       ("shard", Json.mkObj [("index", hidx), ("key", .str (hexOf (shard key (indexOfJson hidx))))]),
       ("uniform", .arr us), ("bernoulli", .arr bs), ("subset", .arr ss)]
-  return Json.mkObj [("frame", .arr frames), ("cases", .arr cs)]
+  let ws := wides.map fun c =>
+    let src := unhex ((c.getObjValAs? String "source").toOption.getD "")
+    let dom := (c.getObjValAs? String "domain").toOption.getD ""
+    let ctx : List (String × Part) := match c.getObjVal? "context" with
+      | .ok (.obj kvs) => kvs.toArray.toList.map fun (k, v) => (k, partOfJson v)
+      | _ => []
+    let key := deriveWide src dom ctx
+    let sidx := ((c.getObjVal? "stream").toOption.bind fun s => (s.getObjVal? "index").toOption).getD Json.null
+    let slen := ((c.getObjVal? "stream").toOption.bind fun s => (s.getObjValAs? String "bytes").toOption).getD ""
+    Json.mkObj [("source", c.getObjValD "source"), ("domain", c.getObjValD "domain"), ("context", c.getObjValD "context"),
+      ("key", .str (hexOf key)),
+      ("stream", Json.mkObj [("index", sidx), ("bytes", .str (hexOf (streamWide key (indexOfJson sidx) (slen.length / 2))))])]
+  return Json.mkObj [("frame", .arr frames), ("cases", .arr cs), ("wide", .arr ws)]
 
 /-- The spec's own inputs: `(source, domain, context)`. -/
 def keys : List (ByteArray × String × List (String × Part)) :=
