@@ -90,7 +90,7 @@ end Verity.SampledTwo.CoinMap
 namespace Verity.SampledTwo
 
 open Claims
-open FlockVBridge.PartS (bind_ok mapM_forall₂)
+open FlockVBridge.PartS (mapM_forall₂)
 open Verity.Sampled.Record (get_what)
 
 /-! ## A session's evidence, part by part -/
