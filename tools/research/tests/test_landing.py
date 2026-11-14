@@ -22,7 +22,7 @@ import pytest
 from research import landing, merge, remote
 from research.landing import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, Landing, gating
 from research.policy import SCHEMA as POLICY_SCHEMA
-from research.queue import PR, Member
+from research.queue import PR, Member, merge_main
 from test_queue import World, _git
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "research"
@@ -126,7 +126,7 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
 
 #: the analysis's packages, as an audit's log names each after its scratch directory
 SPEC, PROOFS = "security", "security/Proofs"
-LEAN_AUDIT_LOG = f"""lean-audit: verity/hardware/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+LEAN_AUDIT_LOG = f"""lean-audit: verity/protocols/interface/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
 AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/{PROOFS}: FAIL; built WITHOUT a sandbox
   build: exit 1
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
@@ -298,14 +298,14 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     than every PR touching Lean."""
     from research.landing import lean_errors
 
-    flock = "verity/protocols/flock/verifier"
+    flock = "verity/protocols/proofs/flock/verifier"
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
-           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/accounting/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -377,7 +377,7 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
-    assert forces_cold(["verity/definitions/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["verity/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/landing.py"])
@@ -621,7 +621,7 @@ def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agr
     the base, and none for a root."""
     asked, changed = [], [False]
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/protocols/flock/prover/"]} if changed[0] else {}))
+        {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if changed[0] else {}))
     h = Harness(world, monkeypatch)
     h.q._clone()
     base, sha = _main(world), world.change({"f.txt": "1\n"})
@@ -1023,8 +1023,9 @@ def test_the_owner_of_each_unmarked_pr_stacked_on_a_landed_one_hears_once_to_mer
     tip = _main(world)
     state = {"told": []}
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
-    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2",
-                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}; merge main into #4"]
+    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}",
+                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}: {merge_main('#4', 'cursor/w-4')}"]
+    assert "`python3 tools/move/restack.py cursor/w-4 --main MOVE`, then merge today's `main`" in h.posts[-1]
     assert set(state["told"]) == {"stacked:2<1", "stacked:4<1"}
     h.posts.clear()
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
@@ -1054,7 +1055,7 @@ def test_after_members_reach_main_they_are_caught_up_with_their_run_their_stacke
     assert h.after == [(since, {h1: "r1 r2", tip: "r1 r2"})]
     assert swept == [("main", "origin", {"cursor/w-9": 9})]
     assert state["told"] == ["stacked:2<1"]
-    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2"]
+    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}"]
 
 
 # -- the verdict carry's judgement and a check's auto plan

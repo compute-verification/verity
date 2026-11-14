@@ -6,7 +6,8 @@ skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
-rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.
+rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.  A check module loads
+neither numpy, torch nor the core `verity` as it is imported.
 """
 from __future__ import annotations
 
@@ -14,17 +15,19 @@ import gzip
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 
 import pytest
 
+from tests.regression import checks, resolver, store_io
 from tests.regression import decisions as D
-from tests.regression import resolver
 from tests.regression import test_regression as TR
 from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
 
 
-class _Fake:
+class _Fake(resolver.Row):
     def __init__(self, docs: dict):
         self.docs = docs
 
@@ -78,7 +81,6 @@ def test_the_rebuilds_skip_unless_asked_for_or_a_candidate_states_the_manifest(m
 def test_the_post_train_job_selects_exactly_the_checks_that_skip_in_check():
     """post_train.py runs `-m "regression and rebuild"`: every `REBUILD` check carries the mark and nothing else does, so what
     `check` skips is what the job runs."""
-    from tests.regression import checks
     marked = {p.id.split("-")[1] for p in TR._params() if any(m.name == "rebuild" for m in p.marks)}
     assert marked == {c.NAME for c in checks.all_checks() if getattr(c, "REBUILD", False)} >= {"manifest_digest", "step_segmentation"}
     assert any(m.name == "rebuild" for m in TR.test_negative_57_refusal_reproduces.pytestmark)
@@ -110,7 +112,7 @@ def test_a_malformed_retirement_is_named(monkeypatch):
 def test_a_registered_fixture_is_found_by_its_path():
     reg = json.loads(resolver.REGISTRY.read_text())
     art, rel = next(iter(reg.items()))
-    assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
+    assert resolver.registered(resolver.REGISTRY.parent / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
     assert resolver.registered(resolver.FILES) is not None
 
@@ -183,7 +185,6 @@ def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monke
 def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeypatch):
     """An eviction of trees/ between a check's `applies` and its `actual` must not lose the row's inputs: a row's fetched tree is
     fetched again once it is gone."""
-    from tests.regression import store_io
     fetches = []
 
     def fetch(art):
@@ -193,9 +194,11 @@ def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeyp
         return tmp_path / art
     monkeypatch.setattr(store_io, "fetch", fetch)
     row = resolver.Row("k", {"row": 9, "artifacts": {"record": "art:t"}}, fixtures={})
-    assert (row._store_root("record") / "match" / "tokens.json").is_file()
+    first = row._store_root("record")
+    assert first is not None and (first / "match" / "tokens.json").is_file()
     shutil.rmtree(tmp_path / "art:t")
-    assert (row._store_root("record") / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
+    again = row._store_root("record")
+    assert again is not None and (again / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
     assert row._store_root("record") and fetches == ["art:t", "art:t"], "a tree still there is not fetched again"
 
 
@@ -215,3 +218,15 @@ def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch
 def test_a_rows_manifest_flags_replace_the_policies_off():
     assert MD._flags(resolver.Row("k", {"row": 9}, fixtures={})) == MD.POLICIES_OFF
     assert MD._flags(resolver.Row("k", {"row": 9, "manifest_flags": []}, fixtures={})) == []
+
+
+@pytest.mark.parametrize("name", checks.ORDER)
+def test_importing_a_check_module_loads_neither_numpy_torch_nor_the_core(name):
+    """`tests.regression.checks.<name>`, imported alone in a fresh interpreter: `checks.all_checks()` imports every one of them to lift a
+    contract or to say which apply, and only a recomputation needs numpy, torch or the core `verity`."""
+    code = ("import importlib, sys\n"
+            "before = set(sys.modules)\n"
+            "importlib.import_module(sys.argv[1])\n"
+            "loaded = sorted({m.partition('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'})\n"
+            "assert not loaded, f'{sys.argv[1]} loads {loaded} as it is imported: import them in the function that recomputes'\n")
+    subprocess.run([sys.executable, "-c", code, f"tests.regression.checks.{name}"], check=True, cwd=resolver.VLLM_ROOT)

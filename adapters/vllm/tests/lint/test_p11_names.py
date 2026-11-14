@@ -36,7 +36,7 @@ OPTION = "verity_vllm.config.option"
 
 
 def name_tokens(name: str) -> list[str]:
-    out = []
+    out: list[str] = []
     for part in re.split(r"[_\-.]+", name):
         out += re.findall(r"[A-Z]+[0-9]*(?![a-z])|[A-Z]?[a-z]+[0-9]*|[0-9]+", part) if not part.islower() else [part]
     return [t.lower() for t in out if t]

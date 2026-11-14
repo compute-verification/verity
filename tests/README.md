@@ -14,7 +14,8 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 | indexes and conventions | `test_benchmarks_index.py`, `test_examples.py`, `test_cli_conventions.py`, `test_seed_ports.py` |
 
 A test's docstring states its rule. Where a rule has exceptions, they are named in the test, one reason each (an `ALLOWED`
-table in the boundary, wall-clock, environment, retired-term, seed and verifier-cost tests).
+table in the wall-clock, environment, retired-term, seed and verifier-cost tests); the import order's are the listing
+`import_order.toml`, which `test_boundaries.py` reads and whose tables `tools/verity/check/import_order.py` writes.
 
 ## Lint ratchets
 
@@ -31,6 +32,13 @@ bookkeeping: they warn, and a later PR fixes them. Ruff's errors (`ERRORS` in it
 ahead of the tree (the Lean bar warns of one, naming the count to lower it to); the ratchet gate, which holds nothing
 (`off_gate` in `tools/verity/check/policy.toml`), reports a change that grows a list or adds a finding to a file it
 touches.
+
+`lint/allowlists/superseded_versions.json` is circuit-check's suite's
+(`tools/verity/circuit_check/tests/test_superseded_versions.py`): every Definition version the registries register below
+a higher one of its name and kind (a Boolean version, registered with the word Definition it computes, supersedes no word),
+one entry each, or one line of its `held` table naming the workload of record that still names it. That list is exact: a
+superseded version with neither fails, and so does a line for a version that is gone. The same gate reports a change that
+leaves its entries more than it found.
 
 ## Bookkeeping
 

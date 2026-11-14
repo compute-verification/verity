@@ -200,6 +200,24 @@ POD_TARGET_RETRY_S = 2.0
 _TOLD_KEPT: set[str] = set()     # the pods this process has said it reaches at a kept address because RunPod can't be asked
 PREFLIGHT_TIMEOUT_S = 180
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
+LAUNCH_DELIVERIES = 3            # how many times `launch` delivers one staged request before it gives up
+
+
+def launch_deadline(mem_wait_s: float | None) -> float:
+    """How long `launch` waits for one delivery of a staged request to answer: the claim and the runner's first record, behind
+    the preflight and the wait for memory the request allows."""
+    return 120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0)
+
+
+def launch_pause(attempt: int) -> float:
+    """The pause after delivery `attempt` (from 0) fails, before the next."""
+    return 3 * (attempt + 1)
+
+
+def launch_limit(mem_wait_s: float | None) -> float:
+    """How long after staging a request `launch` may still deliver it: every delivery's deadline and the pause after it.  A
+    staged request older than this with no run dir is one no launch is still bringing (`store.leftovers.evict_requests`)."""
+    return sum(launch_deadline(mem_wait_s) + launch_pause(k) for k in range(LAUNCH_DELIVERIES))
 
 
 class Refused(Exception):
@@ -2145,8 +2163,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
            gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
-           auto: dict[str, Any] | None = None) -> dict[str, Any]:
+           auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `mem_limit` (--mem-limit-gb): the memory limit the launch states, `{"gb", "by"}`, which the runner's memory mark is made
+    against (research.memmark); it limits nothing.
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
@@ -2208,6 +2228,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
+        if mem_limit and tool_pkg is not None and not (tool_pkg / "memmark.py").exists():
+            raise Refused(f"--mem-limit-gb: the research package in {source} predates the memory mark (no research/memmark.py); the "
+                          f"run's record would not say what was stated.  Commit a tree that has it, or drop --mem-limit-gb")
         if preflight_tool and not knows_preflight(tool_pkg):
             raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
                           f"a tree that has it, or drop --preflight")
@@ -2279,6 +2302,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
+                   **({"mem_limit": mem_limit} if mem_limit else {}),
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
@@ -2304,14 +2328,14 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         write_json_atomic(local_dir / "remote.json", rec)
         last_err = None
         expect = ["--expect-tool", rec["tool_identity"]] if rec["tool_checked"] else []
-        deadline = 120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0)
-        for attempt in range(3):
+        deadline = launch_deadline(mem_wait_s)
+        for attempt in range(LAUNCH_DELIVERIES):
             try:
                 r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", *expect, req_path],
                             timeout=deadline)
             except subprocess.TimeoutExpired:  # the request goes on on the machine: a re-delivery waits on its lock for the answer
                 last_err = f"no answer from launch-request in {deadline:g} s"
-                time.sleep(3 * (attempt + 1))
+                time.sleep(launch_pause(attempt))
                 continue
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
@@ -2319,9 +2343,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             last_err = r.stderr.decode(errors="replace")[-400:]
             if r.returncode != 255:            # 255 = ssh transport failure: re-deliver the SAME request (idempotent claim)
                 raise launch_request_failure(r.returncode, r.stdout, r.stderr)
-            time.sleep(3 * (attempt + 1))
+            time.sleep(launch_pause(attempt))
         else:
-            rec.update(phase="unknown", note=f"3 deliveries of the staged request failed; it may or may not have started: {last_err}")
+            rec.update(phase="unknown", note=f"{LAUNCH_DELIVERIES} deliveries of the staged request failed; it may or may not have started: "
+                                             f"{last_err}")
             write_json_atomic(local_dir / "remote.json", rec)
             raise Refused(rec["note"])
         rec.update(phase="refused" if out.get("refused") else "launched", launch=out, observed_utc=utc_now_ms())

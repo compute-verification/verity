@@ -49,7 +49,7 @@ Two kinds of committed run:
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
     prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
-        [--tables DIR] [--hf-config F] [--target F]
+        [--tables DIR] [--hf-config F] [--target F] [--deployment-record FILE]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...]
@@ -101,7 +101,8 @@ Two kinds of committed run:
   rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
   document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
   ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
-  coins and never recomputes one from the checkpoint.
+  coins and never recomputes one from the checkpoint. ``--deployment-record FILE`` writes it also as the first record of
+  the serve's registration log (`window_weights.deployment_record`).
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
@@ -162,7 +163,7 @@ every byte string: the requests, or a `ValueError` naming why, the same one on e
 
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
-covers (`I2Compiler`, `advice_windows.Traced`). The window's work law (``work-rate:NUM/DEN``, a stream's rule being a rate) then
+covers (`I2Compiler`, `advice_windows.Traced`). The window's work sampling design (``work-rate:NUM/DEN``, a stream's rule being a rate) then
 samples every unit of theirs beside the rest's share (`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
 server's code and ``serve.json`` (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
 A served window's list is its model's compiler of record's (`GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
@@ -203,8 +204,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -1309,12 +1310,15 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     ``verity-vllm advice --weights-of-record`` records in each window's registration, and the roots the verifier pins
     before the first window's coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never
     recomputes one. Refused (ValueError) for a checkpoint not of record or one the manifest pins as another model than
-    ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. -> how many
-    roots it registers, and the weight parameters it leaves free (``unrooted``)."""
+    ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. With
+    ``--deployment-record FILE``, the registration as the first record of the serve's registration log
+    (`window_weights.deployment_record`) is written there too, for Pearl+'s W to be chained after on a serve tied to it. -> how
+    many roots it registers, the weight parameters it leaves free (``unrooted``) and, given, that record's digest
+    (``deployment``)."""
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
-    from verity_vllm.program.predict.window_weights import weights_registration
+    from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
@@ -1322,8 +1326,12 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
                                a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
                                tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     roots = registered_weights(doc, serve)
+    first = deployment_record(doc) if a.deployment_record else None
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out}
+    if first is not None:
+        Path(a.deployment_record).write_text(json.dumps(first, indent=1) + "\n")
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out,
+            **({"deployment": R.digest(first)} if first is not None else {})}
 
 
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
@@ -1489,7 +1497,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.protocols.certifier.verifier import warden_rows as WRW
+    from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
@@ -1689,8 +1697,8 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.protocols.spot.verifier.one_stage import draw as DR
-    from verity.protocols.spot.verifier.one_stage import registered as CR
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
     seconds: dict[str, float] = {}
     t = time.time()
@@ -1922,6 +1930,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
     p.add_argument("--tables", help="the dir holding the engine's served rotary table, cos_sin_cache.npy (serve-openai's; "
                    "default SERVE_RUN/private): registered once within its bound, else unrooted")
+    p.add_argument("--deployment-record", metavar="FILE", help="write the registration there as the first record of the "
+                   "serve's registration log too (verity/registration/v2), which Pearl+'s W is chained after on a serve tied to it")
     p.add_argument("--hf-config")
     p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")

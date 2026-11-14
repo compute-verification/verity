@@ -5,9 +5,8 @@ the model's (N, K) is a key of vLLM d9105ea80's tuned sm_89 table, so the base `
 torch-free, < 0.1 GB, a few seconds."""
 from __future__ import annotations
 
-import importlib
-
 import hashlib
+import importlib
 import json
 import shlex
 import subprocess
@@ -15,20 +14,20 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity.definitions.registry import b1
 
-from verity_vllm.program import model as analytic
-from verity_vllm.pipeline.report import workload_summary
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch
 from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
 from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
+from verity_vllm.pipeline.report import workload_summary
+from verity_vllm.program import model as analytic
 
 L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
 B7 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B7")
-from verity.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
@@ -241,7 +240,7 @@ LEAF_BASES = {"Attention_v3", "Embedding_v1", "Gemm_v1", "RMSNormFusedCuda_v2", 
 def _weights_intervals(C):
     """(lo, hi) of the `embed` and `lm_head` fields in the family's weights parameter (leaf space)."""
     from verity_vllm.program.frontend.rules.family import _field_intervals
-    iv = {}
+    iv: dict[str, tuple[int, int]] = {}
     for lo, hi, name in _field_intervals(analytic.weights_type(C), ""):
         fld = name.split(".", 1)[0]
         a, b = iv.get(fld, (lo, hi))
@@ -266,8 +265,8 @@ def test_an_untied_serve_v4_differs_from_the_tied_binding_only_at_the_lm_head_op
     """Expanded to the derived leaf kinds, `Serve_v4` bound to an untied config (B7) is its tied binding node for node (ids, names,
     every operand) except that its 16 lm_head Gemm leaves read the `lm_head` field where the tied one reads `embed`
     (`b1.lm_head_of`)."""
-    from verity_vllm.program.frontend.rules.family import _runs, expand_leaves
     from verity_vllm.observe.fold.profiles import gen_ov_easy_family as F
+    from verity_vllm.program.frontend.rules.family import _runs, expand_leaves
     LP, STEPS = 4, 2                                           # small statics: the same construction, seconds on the laptop
     C = {k: v for k, v in B7.C.items() if k != "BN"}
     untied = F.serve_family(B7.C, LP=LP, STEPS=STEPS)
@@ -279,7 +278,8 @@ def test_an_untied_serve_v4_differs_from_the_tied_binding_only_at_the_lm_head_op
     (e_lo, e_hi), (h_lo, h_hi) = _weights_intervals(B7.C)
     assert e_hi - e_lo == h_hi - h_lo == B7.C["V"] * B7.C["H"] and h_lo >= e_hi                                 # lm_head after cos_sin
     pw = len(pu) - 1
-    rel = lambda leaf, fam: leaf.path[len(fam.id):]                                                     # paths are rooted at the family id
+    def rel(leaf, fam):                                                                                 # paths are rooted at the family id
+        return leaf.path[len(fam.id):]
     diff = []
     for j, (a, b) in enumerate(zip(lu, lt)):
         assert (a.id, rel(a, untied), a.out_leaves, len(a.args)) == (b.id, rel(b, tied), b.out_leaves, len(b.args)), (j, a.path, b.path)

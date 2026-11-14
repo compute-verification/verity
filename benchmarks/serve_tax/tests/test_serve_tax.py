@@ -551,7 +551,8 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     # alone is started by it
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
-    assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record"]
+    assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
+                                                             "prod-trace"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 
@@ -818,7 +819,7 @@ def test_loads_are_named_with_their_rungs_and_the_engines_context_fits_them():
 def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_time(tmp_path: Path):
     """Two prompts near the context limit, each sent again with another ending. The client's file gives each request
     its lengths and an id a block, and the second of a pair carries the first's ids for the blocks they share, so the
-    client draws both the same tokens there and no others. One request in flight: a second request starts when the
+    client samples both the same tokens there and no others. One request in flight: a second request starts when the
     prompt it repeats has been computed."""
     load, plan = S.LOADS["prefix"], S.PAIRS
     assert (load.plan, load.prompts, load.rungs, load.number, load.file) == (plan, 4, (1,), False, None)
@@ -984,7 +985,7 @@ def test_the_full_size_table_is_the_one_its_source_names_and_its_maker_makes(tmp
     assert [(x.prompt, y.prompt, y.blocks) for x, y in repeats] == [
         (x.prompt, y.prompt, y.blocks) for x, y in ((S.PAIRS[0], S.PAIRS[1]), (S.PAIRS[2], S.PAIRS[3]))]
     assert all(x.at_s < y.at_s for x, y in repeats) and M.BLOCK == S.BLOCK
-    # the maker: the rows sent within the span, arrivals the running sum of the draws over the rate, and a long
+    # the maker: the rows sent within the span, arrivals the running sum of the samples over the rate, and a long
     # request's hit as the earlier long request of its book and the whole blocks the two share
     rows = [{"i": 0, "kind": "chat", "prompt_len": 20, "max_tokens": 8, "gap_draw": 0.2},
             {"i": 1, "kind": "long128k", "book": "b", "prompt_len": 200, "max_tokens": 8, "gap_draw": 0.4},
@@ -1149,7 +1150,7 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
     kept = json.loads((tmp_path / "rep-1" / "result.json").read_text())
     assert kept == result(completed=197, failed=3) | detail and not S.UNKEPT & kept.keys()
     assert "a served answer" not in "".join(f.read_text() for f in (tmp_path / "rep-1").iterdir())
-    assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are drawn under
+    assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are sampled under
     assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
     assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
     for rc, why in ((1, "exited 1"), (0, "saved no result")):

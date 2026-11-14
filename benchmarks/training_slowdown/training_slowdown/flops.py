@@ -10,7 +10,8 @@ optimizer alike. It counts, in multiply-accumulates (MACs):
   (`cdist`, `pdist`) at one MAC per coordinate pair, and `embedding_bag` at one per index and column;
 - a fused attention kernel as the ops the math kernel computes attention by, which are the ones a step's trace holds
   (`Counter._attention`): the forward's two scalings and two products, and in the backward the products and scalings
-  of the gradients the step asks for. A job's record is the same under either kernel;
+  of the gradients the step asks for. A job's record is the same under either kernel, but for the dtype its rows
+  name for those ops: the fused kernel's operands', where the math kernel casts half-width operands to float32;
 - elementwise multiplications (`mul`, `div`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and
   `_foreach_` forms), one MAC per output element, so a matmul written as a broadcast product or quotient is counted
   too, and a fused optimizer step at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`);
@@ -24,9 +25,15 @@ An op outside torch's own namespaces (a `torch.library` custom op, whose body ru
 `foreign_ops`) or an aten op whose name says it computes products but that has no formula here (an RNN kernel,
 `_trilinear`, a packed matmul, `unknown_ops`) would count as zero; run.py makes such a run invalid. So does token data
 read out of torch (`numpy`, `tolist`, DLPack: `guard_exits`) at one value or more per token of its step (`exited`), since
-what is computed on it outside torch isn't counted.
+what is computed on it outside torch isn't counted. So does torch's fused CPU attention kernel run while the process
+holds more than one thread (`CPU_FUSED_ATTENTION`, `unrepeatable_ops`): there a call can return a wrong tile of its
+result, so one step run twice need not give one result.
 
-|C| is their sum (`macs`). Each multiplication is a node classified by its operands' provenance, which the counter tracks
+|C| is their sum (`macs`). A step's op log (`Counter.record`) holds each counted op by its operands' shapes and the
+dtype it computed in, its result's (`dtype_of`), and training_slowdown.gates prices its MACs in that dtype: an
+optimizer's product cast to bf16 as a bf16 GEMM, a forward scaling autocast leaves in f32 as an f32 multiply.
+
+Each multiplication is a node classified by its operands' provenance, which the counter tracks
 per tensor through every op within a step:
 
 - *token-indexed*: computed from this step's token data (a batch from the start's data stream, `Counter.batch`, through
@@ -74,12 +81,14 @@ import math
 import os
 import resource
 import time
+import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import torch
+from torch._prims_common import ELEMENTWISE_TYPE_PROMOTION_KIND, elementwise_dtypes
 from torch.utils import flop_counter
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_flatten
@@ -145,6 +154,11 @@ SHAPE_OPS = _ops("mm", "_int_mm", "addmm", "addmm_", "_addmm_activation", "bmm",
 FUSED_ATTENTION = _ops(*(f"_scaled_dot_product_{kernel}{part}" for part in ("", "_backward")
                          for kernel in ("flash_attention", "flash_attention_for_cpu", "efficient_attention",
                                         "cudnn_attention")))
+#: torch's fused CPU attention kernel, forward and backward: at more than one thread a call can return a wrong tile of
+#: its result, so a run in which it runs there is invalid (`unrepeatable_ops`); a job on a CPU runs attention under the
+#: math kernel (`run.cpu_attention`)
+CPU_FUSED_ATTENTION = _ops("_scaled_dot_product_flash_attention_for_cpu",
+                           "_scaled_dot_product_flash_attention_for_cpu_backward")
 #: torch's FLOP formulas, for the ops priced neither by shape nor as a fused attention kernel: convolutions
 FLOP_FORMULAS = {p: f for p, f in flop_counter.flop_registry.items() if p not in FUSED_ATTENTION}
 #: the op namespaces whose kernels the counter knows; any other (a `torch.library` custom op, whose body it can't see)
@@ -233,6 +247,39 @@ def _tensors(x) -> list[torch.Tensor]:
     return [t for t in tree_flatten(x)[0] if isinstance(t, torch.Tensor)]
 
 
+#: kernels that cast their result out of the dtype they compute in, their first operand's
+CAST_RESULTS = frozenset({"_scaled_mm"})
+
+
+def in_place(name: str) -> bool:
+    """Whether the op named `name` is an in-place form (`mul_`, `addcmul_`, `_foreach_lerp_`), which computes in its
+    tensor operands' promoted dtype and writes its first operand's: not a fused kernel (`_fused_adamw_`), which
+    computes in its own."""
+    return name.endswith("_") and not name.endswith("__") and not name.startswith("_fused_")
+
+
+def dtype_of(name: str, results: list, first: list, operands: list = ()) -> str:
+    """The dtype the op named `name` computes in, which its gates are priced in (`gates.kind_of`), by its result's
+    tensors, its first operand's and all its tensor operands (traced ones too): its result's. Its first operand's
+    where it returns none (an in-place `_foreach_` form and a fused optimizer step write it; an op inside a fused
+    kernel has a stand-in at the kernel's dtype) or casts its result (`CAST_RESULTS`). An in-place form (`in_place`)
+    computes in its operands' promoted dtype, torch's `result_type` over them, and writes its first operand's: it is
+    named the one it computes in (`bf16.mul_(f32)` float32). It is the name of their floating-point dtype (a
+    decomposition's pivots and flags beside it are not its work), or of the dtype they have where none is floating
+    (a comparison, an integer op). Tensors in more than one are named together ("bfloat16+float32"), which no price
+    reads: a trace holds a list op as one node at one price (`capture.structure`), so a row split by dtype would
+    have nothing to equal there."""
+    named = _named({t.dtype for t in (first if name in CAST_RESULTS or not results else results)})
+    if operands and in_place(name) and "+" not in named:
+        return _named({elementwise_dtypes(*operands, type_promotion_kind=ELEMENTWISE_TYPE_PROMOTION_KIND.DEFAULT)[1]})
+    return named
+
+
+def _named(dtypes: set) -> str:
+    names = {str(d).removeprefix("torch."): d.is_floating_point for d in dtypes}
+    return "+".join(sorted(n for n, floating in names.items() if floating or not any(names.values())))
+
+
 def _ptr(t: torch.Tensor) -> int:
     """`t`'s storage's address; 0 for a tensor with no storage (a sparse or a wrapper tensor)."""
     return t.untyped_storage().data_ptr() if t.layout == torch.strided and torch._C._has_storage(t) else 0
@@ -244,6 +291,11 @@ def read_positions(t: torch.Tensor) -> np.ndarray:
     for n, s in zip(t.shape, t.stride()):
         pos = pos[..., None] + np.arange(n, dtype=np.int64) * s
     return np.unique(pos)
+
+
+def _grid(t: torch.Tensor) -> np.ndarray:
+    """The storage position of each element of a 2-D tensor `t`, as rows by columns (no data read)."""
+    return t.storage_offset() + np.arange(t.shape[0])[:, None] * t.stride(0) + np.arange(t.shape[1]) * t.stride(1)
 
 
 def _written(func, args, kwargs) -> list[torch.Tensor]:
@@ -385,7 +437,7 @@ class Step:
     approx_macs: int = 0
     by: dict = field(default_factory=dict)
     updated: list = field(default_factory=list)  # [per_row_macs, upstream_per_row, macs, rows, weight_bits]
-    log: dict = field(default_factory=dict)  # (phase, kind, op, shapes) -> [count, macs]
+    log: dict = field(default_factory=dict)  # (phase, kind, op, shapes, dtype) -> [count, macs]
     weights: dict = field(default_factory=dict)  # weight key -> [digest of each value used, in order]
     shapes: dict = field(default_factory=dict)  # weight key -> [dtype, shape]
     cpu_s: float = 0.0
@@ -393,6 +445,8 @@ class Step:
     gpu_s: float = 0.0
     device_macs: dict = field(default_factory=dict)
     exited: int = 0  # elements of token data read out of torch (`guard_exits`)
+    repeats: int | None = None  # its positions that repeat another's words by the batch's tokens (`Counter._repeats`)
+    batch_rows: int | None = None  # the rows of its batches `repeats` is counted over
 
 
 #: torch.Tensor's methods that hand its values to Python or another library past the dispatcher (`__array__` calls
@@ -422,6 +476,33 @@ def guard_exits() -> None:
 def structure_id(struct: dict) -> str:
     """The name a record's `structures` holds a step's structure (its updated nodes and its log) under."""
     return hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def repeats(rows: np.ndarray) -> int:
+    """The positions of `rows` (token ids, a row each, of one length) past each row's first whose key is a first
+    position's key or an earlier position's: a position's key is its row's tokens up to it, its own included, and
+    inside a row's leading run of one token that one token. A causal model whose words read positions only through
+    attention's weights computes one word at two positions of one key: two rows that share a prefix, at every place
+    of it; and a leading run of one token, along the run, since attention over equal keys returns their one value.
+
+    Counted on the rows sorted, with no hash: their distinct prefixes are the first row's length plus, for each next
+    row, its length less the prefix it shares with the row before; less the distinct first tokens; less, for each
+    first token, the longest leading run among its rows less one. What is left are the positions kept."""
+    rows = np.asarray(rows)
+    n, length = rows.shape
+    if not n or not length:
+        return 0
+    s = rows[np.lexsort(rows.T[::-1])]
+    same = s[1:] == s[:-1]
+    shared = np.where(same.all(1), length, same.argmin(1))
+    distinct = length + int((length - shared).sum())
+    first = s[:, 0]
+    off = s != first[:, None]
+    run = np.where(off.any(1), off.argmax(1), length)
+    tokens, which = np.unique(first, return_inverse=True)
+    longest = np.zeros(len(tokens), dtype=np.int64)
+    np.maximum.at(longest, which, run)
+    return n * (length - 1) - (distinct - len(tokens) - int((longest - 1).sum()))
 
 
 def leaked(step: dict) -> bool:
@@ -459,6 +540,7 @@ class Counter(TorchDispatchMode):
         self.unseen_writes: list[tuple[int, str]] = []
         self.unknown_ops: dict[str, int] = {}
         self.foreign_ops: dict[str, int] = {}
+        self.unrepeatable_ops: dict[str, int] = {}
         self.batches = WeakTensorKeyDictionary()
         self.n_batches = 0
         self.blank: dict[tuple, torch.Tensor] = {}
@@ -544,6 +626,10 @@ class Counter(TorchDispatchMode):
         self.tags = WeakTensorKeyDictionary()
         self.token_seen: dict = {}
         self.sources: set[int] = set()  # the token sources `_token_source` made (not the data stream's batches)
+        self.stream: dict[int, weakref.ref] = {}  # each of the data stream's batches by its source
+        self.read: dict[int, tuple[torch.Tensor, int]] = {}  # the data stream's batches the step reads, each with
+        # its version at its first read, held to the step's end (`_repeats`)
+        self.lengths: set = set()  # each token read's prefix length (`_prefix`)
         self.node_rows: dict[int, int] = {}
         self.used: set[tuple[str, int]] = set()
         for t in list(self.batches.keys()):
@@ -568,6 +654,7 @@ class Counter(TorchDispatchMode):
                         self.unseen_writes.append((self.cur.index, self.theta_ptr[ptr]))
                         self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
         self._resolve(self.cur)
+        self.cur.repeats, self.cur.batch_rows = self._repeats() or (None, None)
         self.steps.append(self.cur)
         self.cur = Step(self.done)
         self._reset_tags()
@@ -647,6 +734,7 @@ class Counter(TorchDispatchMode):
     def _tag_batch(self, t: torch.Tensor) -> None:
         self.n_batches += 1
         self.tags[t] = Tag(tok=True, src=frozenset((self.n_batches,)))
+        self.stream[self.n_batches] = weakref.ref(t)
 
     def _token_source(self, idx: torch.Tensor, tag: Tag) -> Tag:
         """Count `idx`'s elements as this step's tokens, once each: a source's tokens are the union of the positions
@@ -662,6 +750,7 @@ class Counter(TorchDispatchMode):
                 if key not in self.token_seen:
                     self.token_seen[key] = idx.numel()
                     self.cur.tokens += idx.numel()
+                self.lengths.add(None)
                 return tag
             self.n_batches += 1
             self.sources.add(self.n_batches)
@@ -669,11 +758,49 @@ class Counter(TorchDispatchMode):
             self.tags[idx] = tag
         by_base = self.token_seen.setdefault(tag.src, WeakTensorKeyDictionary())
         base = idx if idx._base is None else idx._base
-        seen = by_base.get(base)
-        now = read_positions(idx) if seen is None else np.union1d(seen, read_positions(idx))
+        seen, read = by_base.get(base), read_positions(idx)
+        now = read if seen is None else np.union1d(seen, read)
         self.cur.tokens += len(now) - (0 if seen is None else len(seen))
         by_base[base] = now
+        self.lengths.add(self._prefix(tag.src, base, read))
         return tag
+
+    def _prefix(self, src: frozenset, base: torch.Tensor, read: np.ndarray) -> int | None:
+        """The length L of the prefix a read of a source (`src`, at the storage positions `read` of `base`) covers in
+        each row it touches, from the row's first position: None unless it is a read of a 2-D batch of the data
+        stream (`batch`) through the batch's own storage that covers [0, L) in every row it touches. A batch it reads
+        is held to the step's end with its version at its first read (`_repeats`)."""
+        ref = self.stream.get(next(iter(src))) if len(src) == 1 else None
+        b = None if ref is None else ref()
+        if b is None or b.dim() != 2 or base is not (b if b._base is None else b._base):
+            return None
+        mask = np.isin(_grid(b), read)
+        width = mask.sum(1)
+        touched = np.flatnonzero(width)
+        if int(mask.sum()) != len(read) or not len(touched):
+            return None
+        n = int(width[touched[0]])
+        if (width[touched] != n).any() or not mask[touched, :n].all():
+            return None
+        self.read.setdefault(next(iter(src)), (b, b._version))
+        return n
+
+    def _repeats(self) -> tuple[int, int] | None:
+        """The step's positions that repeat another's words by the batch's tokens (`repeats`) and the rows of its
+        batches they are counted over, the batches it reads together: None unless every token read of the step
+        covers [0, L) of each row it touches, with one L over the step (`_prefix`), so its `tokens` are those rows
+        times L, and none of its batches was written after its first read, since the count reads their tokens at the
+        step's end. Its batches' tokens are read off their device once a batch, outside the count."""
+        if len(self.lengths) != 1 or None in self.lengths or any(b._version != v for b, v in self.read.values()):
+            return None
+        (n,) = self.lengths
+        parts = [(b, np.flatnonzero(np.isin(_grid(b), self.token_seen[frozenset((src,))][
+            b if b._base is None else b._base]).any(1))) for src, (b, _) in self.read.items()]
+        if sum(len(t) for _, t in parts) * n != self.cur.tokens:
+            return None
+        with self.pause(), torch.utils._python_dispatch._disable_current_modes():
+            rows = np.concatenate([b[torch.as_tensor(t, device=b.device), :n].cpu().numpy() for b, t in parts])
+        return repeats(rows), len(rows)
 
     # -- provenance
 
@@ -768,6 +895,9 @@ class Counter(TorchDispatchMode):
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         kwargs = kwargs or {}
         out = func(*args, **kwargs)
+        if func.overloadpacket in CPU_FUSED_ATTENTION and (n := torch.get_num_threads()) > 1:
+            key = f"{func} at {n} threads"
+            self.unrepeatable_ops[key] = self.unrepeatable_ops.get(key, 0) + 1
         if self.paused:
             for t in _written(func, args, kwargs):
                 self.epoch[_ptr(t)] = self.epoch.get(_ptr(t), 0) + 1
@@ -828,14 +958,21 @@ class Counter(TorchDispatchMode):
             mixed = [g for t, g in zip(ins, tags) if id(t) not in src]
             if any(g.tok for g in mixed) and any(g.roots and not g.tok for g in mixed):
                 macs, cls = _work(func, args, kwargs, out), "elementwise"
-        return self._count(func, ins, tags, macs, cls, tag, bwd) if macs else tag
+        if not macs:
+            return tag
+        return self._count(func, ins, tags, macs, cls, tag, bwd,
+                           dtype_of(p.__name__, _tensors(out), _tensors(args[:1]), ins))
 
     def _attention(self, func, args, kwargs, tags: dict[int, Tag], bwd: bool) -> Tag:
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'
         provenance: they are the ops a step's trace holds (`capture` traces under the math kernel), so a job's record
-        is one record under either kernel. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the product of q's
-        batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
-
+        is one record under either kernel in its ops, their shapes and their MACs. Each row names the dtype of the
+        kernel's operands (`dtype_of` of the stand-ins `_shaped` makes in the query's), the one a fused kernel
+        computes in; the math kernel casts half-width operands to float32 first, and its rows, and a trace's nodes,
+        name that. A trace counts a call's ops at the dtype the call computes in all the same
+        (`capture.structure._counted_dtype`), so its gates there are this count's. With q [*b, L, E], k [.., S, E],
+        v [.., S, Ev] and n the product of q's batch dims (k and v counted at q's heads, as grouped-query attention
+        repeats them):
         - forward: the scalings of q and of kᵀ (`mul`, each by the root of the scale); the scores (`bmm`, [n, L, E] by
           [n, E, S]); a mask added to them, where that combines token data with an updated weight (`add`, as any
           such op counts); dropout's scaling of its keep mask and of the weights by it (`div_` and `mul`, at
@@ -843,6 +980,9 @@ class Counter(TorchDispatchMode):
         - backward, for the gradients the step asks for: v's product ([n, S, L] by [n, L, Ev]); the weights' ([n, L, Ev]
           by [n, Ev, S]) where q, k or the mask asks, and with it dropout's scaling; and for each of q and k its
           product ([n, L, S] by [n, S, E]; [n, E, L] by [n, L, S]) and its scaling.
+
+        The card's fused backward computes the scores again, a seventh product: this count, and the library's table with
+        it, holds six of the kernel's seven products, and a circuit of the kernel as it runs holds seven.
 
         What the step asks for is the kernel's own word where it takes one (`grad_input_mask`), else which of q, k and v
         require a gradient. A kernel that takes no such word computes all three gradients whatever `autograd.grad` was
@@ -896,7 +1036,7 @@ class Counter(TorchDispatchMode):
         shapes = {tuple(t.shape) for t in [*self.held.values(), *self.new_tensors.values()] if t.dim() == 2}
         return shapes | {s[::-1] for s in shapes}
 
-    def _count(self, func, ins, tags, macs, cls, tag: Tag, bwd: bool) -> Tag:
+    def _count(self, func, ins, tags, macs, cls, tag: Tag, bwd: bool, dtype: str) -> Tag:
         s = self.cur
         s.macs += macs
         setattr(s, f"{cls}_macs", getattr(s, f"{cls}_macs") + macs)
@@ -920,7 +1060,8 @@ class Counter(TorchDispatchMode):
         phase = "bwd" if bwd else ("fwd" if tok else "other")
         key = f"{phase}/{kind}"
         s.by[key] = s.by.get(key, 0) + macs
-        sig = (phase, kind, str(func.overloadpacket).removeprefix("aten."), json.dumps([list(t.shape) for t in ins]))
+        sig = (phase, kind, str(func.overloadpacket).removeprefix("aten."), json.dumps([list(t.shape) for t in ins]),
+               dtype)
         entry = s.log.setdefault(sig, [0, 0])
         entry[0] += 1
         entry[1] += macs
@@ -955,19 +1096,25 @@ class Counter(TorchDispatchMode):
         self._close(self.cur)
 
     def record(self) -> dict:
-        """The run's count: totals, per-step records with their structures deduplicated, timings and flags."""
+        """The run's count: totals, per-step records with their structures deduplicated, timings and flags. A
+        structure's `log`, the step's op log, holds one row [phase, kind, op, shapes, count, MACs, dtype] per counted
+        op by its operands' shapes and the dtype it computed in, its result's (`dtype_of`), which its gates are priced
+        in (`gates.of_log`). A step's `repeats` are its positions that repeat another's words by the batch's tokens,
+        counted over `batch_rows` rows of its batches, its `tokens` those rows times their length (`_repeats`; both
+        None where the step's reads don't give them, and on the setup and the tail)."""
         structures, steps = {}, []
         tail = self.cur if self.cur is not self.setup else Step(self.done)
         for s in [self.setup, *self.steps, tail]:
             self._resolve(s)
             struct = {"updated": sorted(s.updated, key=lambda u: (u[1], u[0])),
-                      "log": sorted([list(k) + v for k, v in s.log.items()])}
+                      "log": sorted([*k[:4], *v, k[4]] for k, v in s.log.items())}
             sid = structure_id(struct)
             structures[sid] = struct
             steps.append({"step": s.index, "tokens": s.tokens, "macs": s.macs, "matmul_macs": s.matmul_macs,
                           "elementwise_macs": s.elementwise_macs, "approx_macs": s.approx_macs, "by": s.by,
                           "struct": sid, "weights": s.weights, "shapes": s.shapes, "cpu_s": s.cpu_s, "wall_s": s.wall_s,
-                          "gpu_s": s.gpu_s, "device_macs": s.device_macs, "exited": s.exited})
+                          "gpu_s": s.gpu_s, "device_macs": s.device_macs, "exited": s.exited, "repeats": s.repeats,
+                          "batch_rows": s.batch_rows})
         ru = resource.getrusage(resource.RUSAGE_CHILDREN)
         totals = {
             "macs": sum(s["macs"] for s in steps),
@@ -987,6 +1134,7 @@ class Counter(TorchDispatchMode):
         return {"totals": totals, "setup": steps[0], "steps": steps[1:-1], "tail": steps[-1], "structures": structures,
                 "unseen_writes": self.unseen_writes, "new_weights": sorted(self.new_tensors),
                 "unknown_ops": dict(sorted(self.unknown_ops.items())), "foreign_ops": dict(sorted(self.foreign_ops.items())),
+                "unrepeatable_ops": dict(sorted(self.unrepeatable_ops.items())),
                 "digest_key": self.wdigest.key.hex() if self.wdigest else None}
 
 

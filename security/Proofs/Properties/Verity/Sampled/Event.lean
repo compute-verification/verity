@@ -10,7 +10,7 @@ public import Proofs.Flock.Bridge.V5.Accepted
 
 `SampledKSLiveV3` bounds an event of the live audit, that `verify --zk` accepts the files and the transcript
 (`Flock.Bridge.LiveAcceptsScoped`) and the run passes the registration's population (`Flock.Bridge.RunPopOk`), and
-`SampledKSLiveV5` another (`Flock.Bridge.LiveAcceptsKSP`). The verifier of record is one-stage v2
+`SampledKSLiveV5` another (`Flock.Bridge.LiveAcceptsKSP`). The verifier is one-stage v2
 (`Spot.OneStageZk.checkBlobs`), which runs `verify --zk`'s checks on the session's files itself. Where it
 accepts, every outcome whose transcript is the session's record and proof files is in both events:
 

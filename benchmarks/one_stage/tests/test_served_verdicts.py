@@ -61,11 +61,11 @@ from typing import Any
 
 import jsonschema
 import pytest
-from verity.hardware import site as SITE
+from verity import device as SITE
 from verity.hardware import registration as RL
-from verity.protocols.pous.verifier import wipe_period as W
-from verity.protocols.spot.verifier.one_stage import registration as REG
-from verity.protocols.poub.verifier import ledger
+from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -385,22 +385,33 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
 
 def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
     """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
-    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    private/, 0700, and leaves the piece's answer, its certificates and its verdict where the record and its reader
+    find them. The piece's case is in that private directory already, where the piece keeps it (0600): the move
+    leaves it as it is, and no case is under $OUT."""
     piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
     moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log",
              "chain.log", "period.log"]
-    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    kept = ["answer.json", "certificates.json"]
     for f in moved + kept:
         (piece / f).parent.mkdir(parents=True, exist_ok=True)
         (piece / f).write_text(f)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
-                        check=False).returncode
-    assert rc == 0
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"],  # noqa: E731
+                                 cwd=tmp_path, env=env, check=False).returncode
+    assert run() == 0
     assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
     private = d / "private" / "pieces" / "certifier"
     assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
     assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    (private / "case.json").write_text("the case")
+    (private / "case.json").chmod(0o600)
+    (piece / "period.log").write_text("a later step's")
+    assert run() == 0 and (private / "period.log").read_text() == "a later step's"
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(
+        moved + ["case.json"])
+    assert (private / "case.json").read_text() == "the case" and (private / "case.json").stat().st_mode & 0o777 == 0o600
+    assert not list((tmp_path / "out").rglob("case.json"))
     assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
 
 
@@ -959,7 +970,7 @@ def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomp
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
@@ -1266,11 +1277,11 @@ DSID = "s20261104T090000Z-dr01"
 
 
 def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
-    """A challenger draw as the coin record carries it (`bench_arm.LiveDraw`): a real draw session's commitment and its
+    """A challenger sample as the coin record carries it (`bench_arm.LiveDraw`): a real sample session's commitment and its
     coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
     import random
 
-    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier import window as Wd
 
     ch = Wd.draw_challenger(0, random.Random(seed).randbytes)
     opening = ch.open(Wd.DRAW, 0, bytes.fromhex(after))
@@ -1287,7 +1298,7 @@ NODE = {"from": "node", "claim": "uniform/io-getrandombytes"}
 
 def _coin_record(source: str = "5e" * 32, draw: dict | None = None, commitment: str = "c1" * 64) -> bytes:
     """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``), its
-    draw the node's unless ``draw`` names a challenger's."""
+    sample the node's unless ``draw`` names a challenger's."""
     return (json.dumps({"schema": S.COIN_KIND, "commitment": commitment, "source": source, "passes": ["p0", "p1"],
                         "draw": draw or NODE}, indent=1) + "\n").encode()
 
@@ -1357,7 +1368,7 @@ def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(
 
 
 def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, monkeypatch):
-    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was drawn on, the record's digest and
+    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was flipped on, the record's digest and
     where it went: preserved, in the node's store alone (and the put of the run's custody copy that preserves that id),
     or in no store; a record that isn't the verifier's is refused, exit 1."""
     (rec := tmp_path / "coin.json").write_bytes(raw := _coin_record())
@@ -1397,9 +1408,9 @@ def test_the_coin_names_the_runs_attempt_as_its_custody_off_the_node(tmp_path, c
 
 
 def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, capsys, live):
-    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its draw: the piece and its
+    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its sample: the piece and its
     line carry the coin's store id, whether the put preserved it and the record's digest, and an accept whose run
-    commitment or draw source isn't the published record's, a copy that isn't the one put, or a coin never published
+    commitment or sample source isn't the published record's, a copy that isn't the one put, or a coin never published
     rejects, while a verdict that rejects keeps its own reasons. The piece names its load."""
     served, verified = _pearlplus_run()
     served.update(requests=16, engine={"max_num_batched_tokens": 8192})
@@ -1492,9 +1503,9 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
     its own manifest and to main's first-parent line, so the piece accepts; the first refusal names its pass and no pass
     after it is checked, and a key other than the pin's, no gate, key pin or line, a run that names no session or has no
     pass with calls, and a gate that refuses the fetch each reject, naming why."""
-    from verity.protocols.pouw.verifier import core_check as CC
-    from verity.protocols.spot.device import challenger as Ch
-    from verity.protocols.spot.device import remote
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
+    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.device import remote
 
     files = {remote.KEY: json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}), remote.RELEASES: '{"event": "root"}\n',
              remote.CLOSE: "{}"}
@@ -1654,7 +1665,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     published, Pearl+'s verdict tied to W, the window's registration R chained after W and its audit tied to W, and the
     Lean verdict on the same run. Returns the pieces dir, the sampled
     proofs dir, the compose's key pin and lane."""
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import remote
 
     served, verified = _pearlplus_run()
     draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
@@ -1837,7 +1848,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
 
 
 def _draw_answers(calls: list, public: bytes = PUBLIC):
-    """The gate's answers for the run's draw session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
+    """The gate's answers for the run's sample session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
     the ledger (its reserve and its open on the run's commitment) and the pins."""
     def ask(*words: str) -> bytes:
         calls.append(words)
@@ -1873,13 +1884,13 @@ def _draw_answers(calls: list, public: bytes = PUBLIC):
     ("other source", "ValueError: the record's source is not its draw session's coin"),
 ])
 def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_path, monkeypatch, case, reason):
-    """`pearlplus_draw`: a challenger draw's session fetched through the gate with the ledger and pins, its key held to
+    """`pearlplus_draw`: a challenger sample's session fetched through the gate with the ledger and pins, its key held to
     the pin, the ledger opening it alone on the run's commitment C (`challenger.trusted_session_of`, its signed session),
     withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
-    coin after C with the record's source that coin; a node's draw is checked by none of it. Each failure names why, and
+    coin after C with the record's source that coin; a node's sample is checked by none of it. Each failure names why, and
     the piece rejects on it."""
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.proofs.spot.device import challenger as Ch
 
     other = _draw(seed=8)
     signed = {"other commitment": other["commitment"]}.get(case, DRAW["commitment"])
@@ -2076,7 +2087,7 @@ def test_the_tied_close_waits_for_the_ledger_to_end_each_windows_salt_session(tm
 @pytest.mark.parametrize("case", ["held", "between", "open", "node"])
 def test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
                                                                                           capsys, case):
-    """``pearlplus-period rule``, once the coin is drawn: HELD where the coin record's draw session is the lane's first
+    """``pearlplus-period rule``, once the coin is flipped: HELD where the coin record's sample session is the lane's first
     reserve after the period in DIR's period.json closed (`pouw_h1_window.after_close`), else BROKEN, exit 1, saying
     why; kept as period.json's ``rule``. A reserve of another lane between them leaves it held."""
     ledger = [{"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
@@ -2270,6 +2281,61 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
 
+FAKE_WEIGHTS = '''import json, os, sys
+a = sys.argv[1:]
+assert a[0] == "weights-registration"
+if os.environ.get("REFUSE"):
+    print("prove_path.py weights-registration: the checkpoint is not of record", file=sys.stderr)
+    sys.exit(2)
+entry = {"value": "weights/w@64", "root": "ab" * 64, "leaves": 2, "words": 64, "domain": "cd" * 64}
+doc = {"model": {"repo": "org/m", "revision": "0123456789abcdef"}, "values": {"weights/w@64": entry}, "unrooted": {}}
+open(a[a.index("--out") + 1], "w").write(json.dumps(doc))
+said = {"out": a[a.index("--out") + 1], "roots": 1, "unrooted": []}
+if "--deployment-record" in a:
+    open(a[a.index("--deployment-record") + 1], "w").write(json.dumps({"registered": [entry], "previous": None}))
+    said["deployment"] = "9e" * 64
+print(json.dumps(said, sort_keys=True))
+'''
+
+
+def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
+    """`served_verdicts.sh weights` in a toy tree whose prove_path.py registers one weight (or, under REFUSE, refuses) and
+    writes the record ``--deployment-record`` names: the exit status and the verdict lines."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    for d in (tree / "benchmarks" / "prove_path", venv, tmp_path / "serve"):
+        d.mkdir(parents=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_WEIGHTS)
+    (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (venv / "python").chmod(0o755)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "weights"], cwd=tree, env=env,
+                        check=False).returncode
+    return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+
+
+def test_the_weights_step_writes_the_serves_first_registration_record_and_says_who_wrote_it(tmp_path):
+    """The serve's weights step asks ``weights-registration`` for the serve's first registration record too
+    (deployment-registration.json in the serve dir, the one Pearl+'s W is chained after and a deferral lists among its
+    follow-on's inputs), copies it out beside the registration, and says its digest and that the developer wrote it
+    before the first request with no auditor holding the digest. A refused registration leaves neither file."""
+    rc, lines = _weights(tmp_path)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert rc == 0 and lines[0].startswith("WEIGHTS registered before the first request: 1 weight parameters rooted "), lines
+    assert lines[1] == ("DEPLOYMENT-REGISTRATION the serve's first registration record, which registers those roots: "
+                        "written before the first request by the developer (no auditor holds its digest), digest "
+                        + "9e" * 64)
+    first = json.loads((serve / "deployment-registration.json").read_text())
+    assert first["previous"] is None and first == json.loads((out / "deployment-registration.json").read_text())
+    assert json.loads((out / "weights_registration.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
+    script = (HERE.parent / "served_verdicts.sh").read_text()
+    assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
+    rc, lines = _weights(tmp_path / "refused", REFUSE="1")
+    assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
+    assert "the checkpoint is not of record" in lines[0]
+    assert not [f.name for f in (tmp_path / "refused" / "serve").iterdir() if f.is_file()]
+
+
 def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
     """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
     which CLASSES doesn't name and which would run out of time here, is never started."""
@@ -2325,7 +2391,7 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-NCI_CHECK = "verity/protocols/inference_only/verifier/nci/lean/.lake/build/bin/nci-check"
+NCI_CHECK = "verity/protocols/policy/inference_only/verifier/nci/lean/.lake/build/bin/nci-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
@@ -2472,7 +2538,7 @@ else:
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
         w = json.load(open(tail[1]))
         if "--pearl-passes" in a:
-            from verity.protocols.spot.verifier.one_stage import registration as REG
+            from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
             r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else REG.digest(w)}}
         else:
             r = {{"format": "toy", "after": w}}
@@ -2524,13 +2590,13 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     alone off the node (``extra`` adds to the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the
     exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
-    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "flock" / "verifier",
-              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "pod", bin_, venv,
+    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "proofs" / "flock" / "verifier",
+              tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
-    (tree / "verity" / "protocols" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
@@ -2693,7 +2759,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
 def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
     """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
     before the window's sample coin: the tie fails at once, never polls; a refused window-commit fails it too. Either way
-    no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
+    no R, so `serve_tie` refuses the window's record and H1 samples no sample coin."""
     run, order = _tie(tmp_path, **extra)
     assert (run.returncode, order, run.stdout.splitlines()[-1]) == (rc, steps, said), run.stderr
     assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
@@ -3125,6 +3191,86 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
         assert not any(x.startswith("GATE") for x in lines), lines
 
 
+@pytest.mark.parametrize("live, peer, exported", [(False, None, ""), (True, None, "vy-dc-h200"), (True, "vy-peer", "vy-peer")])
+def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_there_is_a_gate(tmp_path, live, peer,
+                                                                                              exported):
+    """Under POUW=pearlplus the run's steps read Pearl+'s gate and peer from its environment as a pair, and what reads
+    them (bench_arm.py's live coins, at the serve and at the verify) refuses a peer with no gate: with the gate empty the
+    run exports no peer, where H1_PEER as its default had Pearl+'s verify refuse before its coin; with a gate the peer is
+    H1_PEER unless PEARLC_CHALLENGER_PEER names another. Here step 0's `predict row` says the pair it was started
+    under, then fails."""
+    venv = tmp_path / "toy-venv" / "bin"
+    said = tmp_path / "pair"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && '
+                             f'{{ printf "%s\\n" "${{PEARLC_CHALLENGER_GATE-unset}}" "${{PEARLC_CHALLENGER_PEER-unset}}" > {said}; '
+                             f'exit 9; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    _script(gate := tmp_path / "gate", FAKE_GATE)
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", POUW="pearlplus",
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                      PEARLC_CHALLENGER_GATE=str(gate) if live else "", PEARLC_CHALLENGER_PEER=peer)
+    assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
+    assert said.read_text().splitlines() == [str(gate) if live else "", exported]
+
+
+@pytest.mark.parametrize("there", [True, False])
+def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tmp_path, there):
+    """`predict row`'s predicted.json names its checkpoint config where the run's tree has it, and a run's own clone goes
+    when it ends. So step 0 copies the config beside predicted.json (served_compare.py's CONFIG_COPY), where the served
+    compare reads it, on this run and on a kept serve dir afterwards; a config it can't copy stops the run there. Here
+    `predict row` writes a predicted.json naming CONFIG_NAMED, and `predict compare` then fails."""
+    venv = tmp_path / "toy-venv" / "bin"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n'
+                             'if [ "$1 $2 $3 $4" = "-m verity_vllm.pipeline.cli predict row" ]; then\n'
+                             '  mkdir -p "$8" && printf \'{"config": "%s"}\' "$CONFIG_NAMED" > "$8/predicted.json"; echo "{}"; exit 0\n'
+                             'fi\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
+                             f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    named = tmp_path / "clone" / "LLAMA.config.json"
+    if there:
+        named.parent.mkdir()
+        named.write_text('{"hidden_size": 2048}')
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", CONFIG_NAMED=str(named),
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}")
+    kept = tmp_path / "serve" / "predicted" / "checkpoint_config.json"
+    if there:
+        assert rc == 18 and lines[-1] == "STOP at predict-compare (exit 18)", lines
+        assert kept.read_text() == '{"hidden_size": 2048}'
+    else:
+        assert rc == 17 and lines[-2:] == [
+            f"PREDICT-ROW row: its checkpoint config {named} can't be kept beside predicted.json, where the served "
+            "compare reads it", "STOP at predict (exit 17)"], lines
+        assert not kept.exists()
+
+
+@pytest.mark.parametrize("extra, refused", [
+    ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, True),
+    ({"PEARLC_CHALLENGER_GATE": ""}, False),
+    ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": ""}, False),
+    ({"PEARLC_CHALLENGER_GATE": "a gate", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
+    ({"POUW": "h1", "H1_GATE": "", "PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
+])
+def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path, extra, refused):
+    """Under POUW=pearlplus a peer set with PEARLC_CHALLENGER_GATE empty is a pair Pearl+'s serve and verify refuse
+    (bench_arm.py's live coins), the verify only once the window is served and tied: the preflight
+    refuses it before anything runs, naming both ways out. A peer with a gate, no peer, and the pair under H1, which
+    reads neither, pass."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "POUW": "pearlplus", **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    line = ("PREFLIGHT: PEARLC_CHALLENGER_PEER is vy-peer and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins "
+            "in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.py's live coins): unset "
+            "PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)")
+    assert (rc, said) == ((3, [line]) if refused else (0, []))
+
+
 def test_the_script_parses_whole():
     """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
     run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
@@ -3322,7 +3468,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
 def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_period_on_its_circuit_record(tmp_path):
     """With a gate, serve() opens the lane's Pearl-C period on PEARLPLUS-CIRCUIT's record (``pearlplus-period open
     --circuit-record``) once it is built and before serve-openai starts, so the window's salt session joins it, and
-    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws, its reserves first
+    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece samples, its reserves first
     held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/), once the ledger ends them
     (``--wait`` PEARLPLUS_CLOSE_WAIT, default 300 s). Between the record and the
     open the inference-only policy is written, before serve-openai's start, from serve-phi's φ. In-process coins
@@ -3468,7 +3614,7 @@ def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, 
 def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_compilers_transfer_gates(
         tmp_path, given, tie, refusal):
     """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
-    which step 3 proves beside the drawn rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
+    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
     one holding them, and the preflight refuses another law or a partition without them, before anything runs. The int8
     checkpoint's compiler lists none, so its subset:2 partition passes."""
     (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
@@ -3529,9 +3675,14 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
 
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
-SHORT_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, 772288 short of PEARLPLUS_INODES "
-                "(772388), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows "
-                "with `research retention rm`, or set SERVE_ROOT on another filesystem")
+#: the preflight's refusal of a serve dir short of inodes: ``{short}`` short of ``{inodes}``, ``{held}`` what holds them
+SHORT_OF_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, {short} short of PEARLPLUS_INODES "
+                   "({inodes}), two commits of the tied window at three files a member. {held}. Remove enough, each with "
+                   "its retention record's owner's yes and none that a deferred V3c audit still reads: `research "
+                   "retention rm DIR --approved-by @OWNER --ref WHERE-THEY-SAID-YES` is the dry run, and `--apply` "
+                   "deletes; or set SERVE_ROOT on another filesystem")
+NONE_KEPT = "No other serve dir under {at}/root keeps a tied window (v3c-w*/window), so what holds them is elsewhere on /workspace"
+SHORT_INODES = SHORT_OF_INODES.format(short=772288, inodes=772388, held=NONE_KEPT)
 
 
 @pytest.mark.parametrize("env, df, refusal", [
@@ -3560,6 +3711,34 @@ def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_h
         assert (rc, order) == (0, []) and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
     else:
         assert (rc, lines, order) == (3, [refusal.format(at=tmp_path)], [])
+
+
+@pytest.mark.parametrize("inodes, held", [
+    ("104", "{root}/r0/v3c-w*/window (5 entries)"),
+    ("106", "{root}/r0/v3c-w*/window (5 entries), {root}/r2/v3c-w*/window (2 entries)"),
+    ("772388", "{root}/r0/v3c-w*/window (5 entries), {root}/r2/v3c-w*/window (2 entries); together they hold 7, so 772281 "
+               "more are elsewhere on /workspace"),
+])
+def test_a_preflight_short_of_inodes_names_the_kept_tied_windows_that_hold_them_and_the_command(tmp_path, inodes, held):
+    """What fills the serve dir's filesystem is the tied windows earlier runs' serve dirs keep, three files a member.
+    So the refusal names them: each other serve dir under the serve root that keeps one, the largest first with its
+    entries, until they cover the shortfall (and how much is elsewhere when they don't), and the command that removes
+    one with its owner's yes, dry run first. The run's own serve dir and a serve dir with no tied window aren't named;
+    the window's number isn't either, which no public line says."""
+    root = tmp_path / "root"
+    for run, window, files in (("r0", "v3c-w3-4-32-4", ("a", "b", "c", "members/d")), ("r2", "v3c-w9-4-32-4", ("a", "b")),
+                               ("r1", "v3c-w7-4-32-4", ("a", "b", "c", "d", "e", "f", "g", "h"))):
+        for f in files:
+            (root / run / window / "window" / f).parent.mkdir(parents=True, exist_ok=True)
+            (root / run / window / "window" / f).write_text("")
+    (root / "r3" / "pearlplus").mkdir(parents=True)
+    _script(tmp_path / "bin" / "df", FAKE_DF)
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(root / "r1"),
+                                     DF_LINE="2000000 100 /workspace", PEARLPLUS_INODES=inodes, **PEARL_TIED)
+    said = SHORT_OF_INODES.format(short=int(inodes) - 100, inodes=inodes, held=(
+        f"Other serve dirs' tied windows under {root} hold them, the largest first: " + held.format(root=root)))
+    assert (rc, lines, order) == (3, [said], [])
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
@@ -3970,7 +4149,7 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
     audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. Nothing runs,
-    and neither the serve root nor C-Flock's work dir is made."""
+    and neither the serve root nor Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
@@ -4529,7 +4708,7 @@ sys.exit(H.gate(["--ssh", " ".join(sys.argv[1:]), "--key", "vllm"], host, sink=s
 '''
 GATE_PIN = "c0" * 20
 #: the compose gate's directory (its `host.py`), which the driver imports from
-LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "poub" / "device" / "live_verifier"
+LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "accounting" / "poub" / "device" / "live_verifier"
 
 
 def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
@@ -4857,6 +5036,63 @@ def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, produc
     assert (rc, (tmp_path / "called").read_text().split() if (tmp_path / "called").exists() else []) == (0, called)
 
 
+NO_PIECE = "set POUS_CMD empty, which runs no PoUS piece and leaves its row missing"
+POUS_PIECE = 'bash benchmarks/pous/served_piece.sh "$@"'
+
+
+@pytest.mark.parametrize("pous_cmd, asked, line", [
+    (POUS_PIECE, 'exit 0', None),
+    (POUS_PIECE, 'echo "checkpoints-int8.json pins no $1@$2"; exit 3',
+     "PREFLIGHT: PoUS's piece answers no period of some/model@abc, the checkpoint this run serves: checkpoints-int8.json "
+     "pins no some/model@abc. Serve a row whose checkpoint the piece pins (ROW, REPO and REV), run a tree whose piece "
+     f"pins this one, or {NO_PIECE}"),
+    (POUS_PIECE, 'echo "ModuleNotFoundError: No module named torch" >&2; exit 1',
+     "PREFLIGHT: PoUS's piece can't be asked whether it pins some/model@abc, the checkpoint this run serves "
+     "(onsite_pous_pins exit 1: ModuleNotFoundError: No module named torch): the piece would not start on this node "
+     f"either. Mend what it names, or {NO_PIECE}"),
+    ("", 'exit 3', None),
+    ("another-piece", 'exit 3', None),
+    (POUS_PIECE, None, None),
+])
+def test_the_preflight_refuses_a_checkpoint_the_trees_pous_piece_does_not_pin(tmp_path, pous_cmd, asked, line):
+    """PoUS's piece answers only a checkpoint its own manifests pin, and says so only once the window is served and tied.
+    So where POUS_CMD is the tree's piece, the preflight asks the piece (ONSITE_PIECES' `onsite_pous_pins REPO REV`, here
+    a stand-in that exits as the piece's lookup does) and refuses a checkpoint it doesn't pin with the piece's own
+    words and the ways out; a lookup that doesn't run is refused too, since the piece would not start either. With no
+    PoUS piece, another command, or an ONSITE_PIECES file with no such question, nothing is asked."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    (tree / "pieces.sh").write_text("onsite_piece_commands() { :; }\n"
+                                    + (f'onsite_pous_pins() {{ echo "$PWD" > {tmp_path}/asked; {asked}; }}\n' if asked else ""))
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "ONSITE_PIECES": "pieces.sh", "POUS_CMD": pous_cmd, "REPO": "some/model", "REV": "abc"}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "pous-pins"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+    was_asked = (tmp_path / "asked").read_text().split() if (tmp_path / "asked").exists() else []
+    assert was_asked == ([str(tree)] if asked and pous_cmd == POUS_PIECE else [])
+
+
+@pytest.mark.parametrize("pinned", [True, False])
+def test_the_serves_preflight_asks_pous_piece_about_the_checkpoint_before_anything_runs(tmp_path, pinned):
+    """The whole preflight of a serving run (PREFLIGHT_ONLY, in `_v3c`'s toy tree) asks the question with the run's own
+    REPO and REV: a checkpoint the piece doesn't pin is refused there, and one it pins passes."""
+    (pieces := tmp_path / "pieces.sh").write_text(
+        "onsite_piece_commands() { :; }\n"
+        f'onsite_pous_pins() {{ echo "$1@$2" > {tmp_path}/asked; {"return 0" if pinned else "echo no pin; return 3"}; }}\n')
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", ONSITE_PIECES=str(pieces),
+                                     POUS_CMD=POUS_PIECE, REPO="some/model", REV="abc")
+    assert (tmp_path / "asked").read_text().split() == ["some/model@abc"] and order == []
+    if pinned:
+        assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert rc == 3 and len(lines) == 1 and lines[0].startswith(
+            "PREFLIGHT: PoUS's piece answers no period of some/model@abc, the checkpoint this run serves: no pin. "), lines
+
+
 def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     tree.mkdir()
@@ -4958,6 +5194,18 @@ if __name__ == "__main__":
 '''
 
 
+def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
+    """served_composite.sh writes out each product's Lake package directory (`package`), and each is a package this tree
+    has. A directory built from the product's name follows no move of the packages, and the stand-in trees of the tests
+    below would go on agreeing with it."""
+    script = (HERE.parent / "served_composite.sh").read_text()
+    packages = re.findall(r"\) echo (verity/[\w/]+) ;;", script)
+    assert len(packages) >= 2 and 'exe "$x" "$(package "$x")"' in script, (
+        "served_composite.sh: write each product's package directory out in `package`, as a path a layout move rewrites")
+    gone = [d for d in packages if not (HERE.parents[2] / d / "lakefile.toml").is_file()]
+    assert not gone, f"served_composite.sh's `package` names {gone}: no Lake package of this tree"
+
+
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
     under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
@@ -4989,8 +5237,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     (out / "pieces" / "pous").mkdir(parents=True)
     (out / "pieces" / "pous" / "pous.json").write_text(json.dumps(
         {"window": 0, "verdict": "accept", "decided_by": {"program": "pous-run-protocol", "host": "the-served-node"}}))
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
-        (tree / "verity" / pkg).mkdir(parents=True)
+    for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
+        (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"
@@ -5156,8 +5404,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
-        (tree / "verity" / pkg).mkdir(parents=True)
+    for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
+        (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
 
@@ -5205,13 +5453,69 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
             p for p in C.COMPONENTS[x] if p not in want]
 
 
+def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory_which_holds_no_answer(tmp_path):
+    """The certifier's piece keeps its case in the serve dir's private/pieces/certifier, beside the chain files
+    `private-pieces` moves there and no answer: its answer is the run's, under OUT/pieces. served_composite.sh, with
+    onsite_pieces.sh's `onsite_cases` and composite.py as they are and a stand-in for each product's Lean (`NO_LEAN`),
+    takes a directory for a case beside an answer, so it composes every other subprotocol's case and nothing of that
+    directory: no product's case has a component of it, onsite names the certifier missing (NOT_ESTABLISHED), and
+    remote, which doesn't compose it, misses nothing. What reads the certifier's private case into a composite is not
+    shown here."""
+    import composite as C
+    certifier = "verity/certifier/v0"
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
+        (tree / "verity" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
+    own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
+           if p != certifier}
+    for p, where in own.items():
+        (d / "private" / where).mkdir(parents=True)
+        (d / "private" / where / "case.json").write_text(json.dumps(
+            {"commitment": "c0", "evidence": "beef", "params": {"in": where}}))
+        (d / "private" / where / "answer.json").write_text(json.dumps({"protocol": p, "verdict": "accept"}))
+    for _, summary, lean, _ in ONSITE_OWN.values():
+        (out / "pieces" / summary).parent.mkdir(parents=True)
+        (out / "pieces" / summary).write_text(json.dumps(
+            {"window": 0, "verdict": "accept", "decided_by": {"program": lean, "host": "the-served-node"}}))
+    kept = d / "private" / "pieces" / "certifier"
+    case = json.dumps({"commitment": "ce", "evidence": "f00d", "params": {"in": "pieces/certifier"}})
+    for f, text in (("case.json", case), ("chain/report/report.json", "{}"), ("piece.log", "")):
+        (kept / f).parent.mkdir(parents=True, exist_ok=True)
+        (kept / f).write_text(text)
+    (out / "pieces" / "certifier").mkdir(parents=True)
+    (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
+    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+                       check=False, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
+    said = [x for x in (out / "verdicts.txt").read_text().splitlines() if "NOT_ESTABLISHED" in x or "LEFT_OUT" in x]
+    assert said == [f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}"]
+    for x in ("remote", "onsite"):
+        want = [p for p in C.COMPONENTS[x] if p != certifier]
+        made = d / "private" / "composite" / x / "private"
+        assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
+            (p, {"in": own[p]}) for p in want]
+        assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
+        assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
+            p for p in C.COMPONENTS[x] if p not in want]
+    assert (kept / "case.json").read_text() == case and not list(out.rglob("case.json"))
+
+
 DIGEST = "5e" * 64
 
 
 def _auditor():
-    """Infra's gate, ``verity/composite/device/live_challenger/auditor.py``, as a module of its own."""
+    """Infra's gate, ``verity/protocols/compose/device/live_challenger/auditor.py``, as a module of its own."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -5240,7 +5544,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     commits the Program digest serve-openai wrote, its T, the sample K, the fixed length and the circuit files, each read
     back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity.commitments.crypto import lms
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
@@ -5397,7 +5701,7 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     from types import SimpleNamespace
 
     torch = pytest.importorskip("torch")
-    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1 as PH

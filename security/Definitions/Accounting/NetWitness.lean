@@ -9,7 +9,7 @@ satisfiability witnesses)
 
 `acceptAllNet`: on a device with no capacity (`PouwWitness.nullDevice`), over the circuit with no gate
 (`emptyCircuit`) and an idle schedule (`PouwWitness.idleStep`), a period run whose every audit accepts at every coin
-while the network certifier's claim never holds: what `Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted` rules
+while the network certifier's claim never holds: what `Accounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` rules
 out.
 -/
 

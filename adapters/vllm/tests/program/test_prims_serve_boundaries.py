@@ -13,7 +13,9 @@ from pathlib import Path
 import pytest
 
 REG = "verity.definitions.registry"
-REGISTRY = Path(importlib.util.find_spec(REG).origin).parent
+_SPEC = importlib.util.find_spec(REG)
+assert _SPEC is not None and _SPEC.origin is not None, REG
+REGISTRY = Path(_SPEC.origin).parent
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
@@ -21,7 +23,7 @@ OTHER_FAMILIES = {"dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_chec
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
+CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
@@ -54,8 +56,8 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
-                "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
+    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
+                "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
                 "verity.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))

@@ -35,7 +35,7 @@ from typing import Any, Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 
-from verity.definitions.tiny import TINY
+from verity.circuits.tiny import TINY
 
 from . import cache as CC
 
@@ -183,7 +183,7 @@ def _static(text: str) -> Any:
 def _element(text: str) -> Any:
     """A tuple element (`_static`), a bare id among them the registered Definition it names, as `call_scope.specialization`
     resolves a function-valued static, else its text."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     v = _static(text)
     if v is not text or not _BARE.fullmatch(text):
@@ -258,7 +258,7 @@ def definition(spec: str) -> Any:
     one a body calling it binds), or else the suite's target of that id: a Definition that only tracing the catalog's roots
     registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its digest, such as
     `gf2k.GfResiduals`'s schema."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     load_registries()
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", spec.strip())
@@ -336,8 +336,8 @@ def _read_by(reader: str, what: str, path: str) -> Any:
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
     """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
-    population as `verity.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
-    (`verity.definitions.cross_call.check_program`)."""
+    population as `verity.circuits.word.call_groups` reads one, and its instance rows, from the first at each call
+    (`verity.circuits.cross_call.check_program`)."""
     return _read_by(ROW_READER, "a request Program", path)
 
 
@@ -691,7 +691,7 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "F32Max_v2": ("AttnBlockFirst_v3",),
     "F32MulFtzConst_v1": ("AttnBlockFirst_v3",),
     "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
-    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4", "ScaledMmFp8BlockSharedScale_v2"),
     "FmaSubRowF32FtzConstElement_v1": ("AttnBlockFirst_v3",),
     "FmaSubRowF32FtzConstScalar_v1": ("AttnBlockFirst_v3",),
     "GuardNegInfZero_v2": ("AttnBlockFirst_v3",),
@@ -706,6 +706,7 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
     "RMSNormSumInOrderCuda_v2": ("RMSNormFusedCudaVector8_v4",),
     "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "ScaledMmFp8BlockCoordinateGivenScale_v2": ("ScaledMmFp8BlockSharedScale_v2",),
     "Xor2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
 }
 

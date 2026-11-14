@@ -13,12 +13,12 @@ SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`
 (`Registration.Entry.refusal`), and the views the protocols read. Its log holds site entries only; the spec's
 declarations of a day's circuit are the registration log's (`Core.Registration`). Its checks are the spec's, clause for
 clause and in the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
-`verity.hardware.site` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
+`verity.device` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
 figures (`DeviceFigures`, the spec's `Definitions/Core/DeviceFigures.lean`), nonnegative rationals (`Figure`, the spec's
 `ℚ≥0`).
 
 The digests are parameters as in the spec (`Registration.Digests`); the deployed ones (`Registration.sha512`) are
-`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.hardware.site` writes, under `verity/registration/site/v2`,
+`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.device` writes, under `verity/registration/site/v2`,
 `verity/registration/sheet/v2` and `verity/registration/genesis/v1`,
 a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
 `registered`, `host`) are functions of the site alone, but `device`, which reads the auditor's sheet too.

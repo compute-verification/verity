@@ -42,6 +42,10 @@ Two kinds of local copy can go, and only these:
   The one process it passes over unread is an nginx worker whose configuration cannot name a tree (`_nginx_worker`): RunPod's
   proxy, which runs as `nobody` on every pod, where the pass has no CAP_SYS_PTRACE.
 
+`leftovers.py` holds the command's other passes, over what a node's work leaves that nothing else removes: request directories
+whose run dir is gone, the clones of runs that are over or whose run dir is gone, the store's lock files, a uv cache's idle
+shards.
+
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
 Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
 `research data verify` / `push` them first.  `free_fn` is the free-space probe (an `os.statvfs` over the store root by default);
@@ -58,12 +62,13 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from concurrent.futures import ThreadPoolExecutor
 
+from ..telemetry.procs import gone
 from . import ids, sealed
-from .local import LocalStore, manifest_key, object_key, sha256_file
+from .local import REPLICA_MAPS, LocalStore, manifest_key, object_key, sha256_file
 from .model import utc_now
 
 MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
@@ -566,33 +571,43 @@ def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
             and not re.search(r"\b(include|load_module)\b", text) and not any(t in text for t in tops))
 
 
-def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None,
-              src_root: Path | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
-    """{sha: reasons} for the trees a live process names; a process whose cwd `inside` matches (<src> or a tree in it) keeps every sha
-    it names.  Unestablished when `proc` can't be listed or a live process outside the kernel can't be read: as anyone but root,
-    without CAP_SYS_PTRACE, most can't.  Given `src_root`, an unreadable nginx worker that cannot name a tree under it
-    (`_nginx_worker`) is passed over; its master is read like any process."""
+def live_texts(proc: Path = Path("/proc"), src_root: Path | None = None,
+               nginx_conf: Path = NGINX_CONF) -> Iterator[tuple[str, str, str]]:
+    """(pid, cwd, every path and string it names) for each live process (`_proc_texts`).  Unestablished when `proc` can't be listed
+    or a live process outside the kernel can't be read: as anyone but root, without CAP_SYS_PTRACE, most can't.  Given `src_root`,
+    an unreadable nginx worker that cannot name a path under it (`_nginx_worker`) is passed over; its master is read like any
+    process."""
     try:
         pids = sorted((p for p in os.listdir(proc) if p.isdigit()), key=int)
     except OSError as e:
         raise Unestablished(f"2: cannot list {proc}: {e}") from None
     if not pids:
         raise Unestablished(f"2: {proc} lists no process")
-    uses: dict[str, set[str]] = {}
     for pid in pids:
         try:
             texts = _proc_texts(proc / pid)
-            cwd = (_quiet(lambda pid=pid: os.readlink(proc / pid / "cwd")) or "") if texts and inside else ""
+            cwd = (_quiet(lambda pid=pid: os.readlink(proc / pid / "cwd")) or "") if texts else ""
         except PermissionError as e:
             if src_root is not None and _nginx_worker(proc, pid, src_root, nginx_conf):
                 continue
             raise Unestablished(f"2: {proc / pid} is unreadable ({e.strerror}) as uid {os.geteuid()}: the pass needs root or "
                                 "CAP_SYS_PTRACE") from None
-        joined = "\n".join(texts)
+        yield pid, cwd, "\n".join(texts)
+
+
+def comm(proc: Path, pid: str) -> str:
+    return (_quiet((proc / pid / "comm").read_text) or "?").strip()
+
+
+def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None,
+              src_root: Path | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
+    """{sha: reasons} for the trees a live process names (`live_texts`); a process whose cwd `inside` matches (<src> or a tree in
+    it) keeps every sha it names."""
+    uses: dict[str, set[str]] = {}
+    for pid, cwd, joined in live_texts(proc, src_root, nginx_conf):
         bare = _BARE.finditer(joined) if cwd and inside and inside.match(cwd) else ()
         for m in [*pattern.finditer(joined), *_LOOSE.finditer(joined), *bare]:
-            comm = (_quiet((proc / pid / "comm").read_text) or "?").strip()
-            uses.setdefault(m.group(1), set()).add(f"2: process {pid} ({comm}) uses it")
+            uses.setdefault(m.group(1), set()).add(f"2: process {pid} ({comm(proc, pid)}) uses it")
     return uses
 
 
@@ -634,21 +649,9 @@ def _run_state(rd: Path, proc: Path = Path("/proc")) -> str:
     state = str(status.get("state") or last.get("state") or "unknown")
     if state == "running":
         runner = next((t for t in reversed(tr) if t.get("pid") is not None), status)
-        if _gone(runner.get("pid"), runner.get("starttime_ticks"), proc):
+        if gone(runner.get("pid"), runner.get("starttime_ticks"), proc):
             return LOST
     return state
-
-
-def _gone(pid: Any, ticks: Any, proc: Path) -> bool:
-    """Whether a recorded runner is known not to run: its pid has no /proc entry, or one started at another time (reused). No
-    pid, or a stat without a start time, is not known gone."""
-    if not isinstance(pid, int) or isinstance(pid, bool):
-        return False
-    text = _quiet(lambda: (proc / str(pid) / "stat").read_text())
-    if text is None:
-        return True
-    fields = text.rsplit(")", 1)[-1].split()
-    return isinstance(ticks, int) and len(fields) > 19 and fields[19].isdigit() and int(fields[19]) != ticks
 
 
 def _get(d: Any, *keys: str) -> Any:
@@ -793,9 +796,12 @@ _CLEAN_C = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c
 
 
 def _fixture_paths(tree: Path) -> list[str]:
-    """The paths `fixtures/artifacts.json` registers (fetched fixtures are among them); [] when it is absent or unreadable."""
-    doc = _doc(_quiet((tree / "fixtures" / "artifacts.json").read_text))
-    return [p.strip("/") for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
+    """The paths the tree's registry registers (fetched fixtures are among them), read at each place a tree may hold it
+    (`REPLICA_MAPS`); [] when it is absent or unreadable.  A tree holding it at both gives both's paths, where the store reads
+    the first: a research of either age may have fetched into the tree, each from the place it names, so a path either
+    registers is one whose bytes its id fetches again."""
+    docs = [_doc(_quiet((tree / place).read_text)) for place in REPLICA_MAPS]
+    return [p.strip("/") for doc in docs for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
 
 
 def _ignored_ok(tree: Path, path: str, fixtures: list[str]) -> bool:

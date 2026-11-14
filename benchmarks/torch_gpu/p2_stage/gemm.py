@@ -80,7 +80,7 @@ def definition_words(K: int, x: np.ndarray, sx: np.ndarray, w: np.ndarray, sw: n
     """`ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on each sample by the Definition's plain-integer reference (CPU)."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import batch as E
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
 
     target = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM90_S8)
     out = E.evaluate_batch(target, np.ascontiguousarray(x).view(np.uint8), np.ascontiguousarray(sx).view(np.uint32),

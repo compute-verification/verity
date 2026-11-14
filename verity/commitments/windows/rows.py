@@ -1,6 +1,6 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
 format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
-labels the one-stage audit binds (``verity.protocols.spot.verifier.one_stage``).
+labels the one-stage audit binds (``verity.protocols.proofs.spot.verifier.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``verity.commitments.windows.population``, over the builders core's ``one_stage.partition`` names too), its
@@ -22,7 +22,7 @@ value: no output word is ever public).  A bit-row member
 
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
-  salt    ``y`` = 192 fresh bytes from the OS generator, drawn for this row alone.  The salts are kept only in the prover's
+  salt    ``y`` = 192 fresh bytes from the OS generator, sampled for this row alone.  The salts are kept only in the prover's
           files and never logged.  Under a test's salt key (``commit``'s ``salt_key``) they are instead ChaCha20 (RFC 8439)
           under it, nonce = the row port's index over all members (12 bytes LE), at stream offset ``192 i``
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)
@@ -327,8 +327,9 @@ class Binding:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the sampling design it samples by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
-    at least one linked member's ``x`` table, under ``context`` (hex, 64 bytes known before the first segment: the live coin
-    commitment's root).  A ``work`` law
+    at least one linked member's ``x`` table (rows of the tables' schema, `TABLE_SCHEMA`, refused otherwise: a linked row
+    takes its row table row's salt, which then hides one string), under ``context`` (hex, 64 bytes known before the first
+    segment: the live coin commitment's root).  A ``work`` law
     samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
@@ -370,6 +371,9 @@ class Binding:
                                      "row, or one row a unit in its writer's order")
         covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
         for m in self.members:
+            if m.links and m.schema(LINKED) != TABLE_SCHEMA:
+                raise ValueError(f"{m.key}: its {LINKED!r} rows are {m.schema(LINKED)} rows, a row table's are {TABLE_SCHEMA}: a "
+                                 "linked row takes its row table row's salt, and a salt hides one string (Member.schemas)")
             for t, r in m.links:
                 if not (0 <= t < len(covered) and 0 <= r < len(covered[t])):
                     raise ValueError(f"{m.key}: link {(t, r)} is no row of the window's {len(covered)} row tables")
@@ -654,6 +658,7 @@ def _table_rows(window: Binding, rows: Mapping[str, np.ndarray]) -> list[np.ndar
 
 
 def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
+           carried: Mapping[str, bytes] | None = None,
            row_salt_key: bytes | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
            chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None,
            strings_of: Mapping[str, bytes] | None = None) -> Committed:
@@ -675,7 +680,12 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     ``b || c`` are its source's, so the commitment is the one their rows given in full make, and the committed rows (`_Rows`)
     are read off the sources when a body is written. A wired port of a member with no wired trees (``Member.wired_trees``)
     is given `WIRED` and gets no tree, domain or root: its writer's tree holds its rows (`Binding.held`), and its rows,
-    salts and ``b || c`` are its writer's output rows', whole, a shared-row member's each unit's ref its writer's row."""
+    salts and ``b || c`` are its writer's output rows', whole, a shared-row member's each unit's ref its writer's row.
+
+    ``carried``: by port of ``salts_of``, the ``b || c`` its salts already carry in the value's own tree, one a row.  The
+    commit is refused where a row's ``b || c`` is another: a salt hides one string, and a second under it gives away the XOR
+    of the two rows' digests.  A port it leaves out is held to no string: one whose salts are public, which hide nothing,
+    or carry no string yet."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
@@ -771,6 +781,14 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
         roots = {p: roots[p] for p in counts if p not in held}
         bc |= strings
         rows = _Rows(ms, rows, refd, tuple(counts))
+    for p, s in (carried or {}).items():
+        if p not in (salts_of or {}) or len(s) != len(bc.get(p, b"")):
+            raise ValueError(f"carried {p}: not one {BC_BYTES}-byte b || c for each row of one of salts_of's ports")
+        if bc[p] != bytes(s):
+            mine, theirs = (np.frombuffer(x, dtype=np.uint8).reshape(-1, BC_BYTES) for x in (bc[p], bytes(s)))
+            raise ValueError(f"{p}: rows {np.flatnonzero((mine != theirs).any(axis=1))[:4].tolist()} are not the rows its salts "
+                             "already carry (carried): a salt hides one row, so give the registered value's rows under its "
+                             "salts, or other rows under salts of their own")
     table_roots = {t.port: roots.pop(t.port) for t in window.row_tables}
     segs = {s: window.segment_root(s, [table_roots[window.row_tables[k].port] for k in ks]) for s, ks in window.segments}
     if segment_roots is not None:
@@ -837,18 +855,23 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
-                 registrar: Any, entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+                 registrar: Any, entries: Sequence[Mapping[str, Any]] = (),
+                 outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
-    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
-    own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
-    whose link to the record's roots is provenance."""
+    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``outputs``: the registered values the window
+    outputs for a later record to take (``{"port", "root", "leaves", "domain"}`` each), named among the roots after its ports.
+    ``served``: these roots are the integration's own commitment as it ran, made before any sample; ``stand-in``: a fresh
+    commitment to values opened from its record afterwards, whose link to the record's roots is provenance."""
     if kind not in registrar.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
+    if {o["port"] for o in outputs} & set(c.roots):
+        raise ValueError(f"output values {sorted({o['port'] for o in outputs} & set(c.roots))} are named like the window's ports")
+    roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                             leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,
@@ -1162,13 +1185,13 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
           index_salt: bytes | None = None, previous: str | None = None,
-          entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+          entries: Sequence[Mapping[str, Any]] = (), outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
-    the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
-    registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
-    ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the OS.  ``registered``: by member
-    key, an outside value's reads (``salts_of``), each a header entry
+    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
+    the values' ``entries`` and naming the roots of the values it ``outputs``; the window's provenance gets the index's hiding
+    leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
+    are prover only: the salt is ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the
+    OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names
@@ -1187,7 +1210,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     with _private(d / INDEX_SALT) as f:
         f.write(salt)
     rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, previous, kind=kind, registrar=registrar,
-                       entries=entries)
+                       entries=entries, outputs=outputs)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}

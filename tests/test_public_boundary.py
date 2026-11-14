@@ -68,14 +68,14 @@ def _loaded(module: Path) -> set[str]:
 
 
 def test_the_pearl_c_kernels_the_integration_loads_are_public() -> None:
-    """`verity_vllm.protocols.pouw.pearl_c.kernel` loads ``run.py``, ``fixture.py`` and the cubin from the directory a run's
+    """`verity_vllm.protocols.pouw.pearl_c.kernel` loads ``run.py`` and the cubin from the directory a run's
     ``kernel`` setting names, and `pearl_c.grouped` the ``grouped.py`` beside that ``run.py``: paths a run gives, which the
     check reads no edge for. So a `public` glob covers each kernel directory's loaded files and what builds its cubin:
     ``build.sh``, the source it compiles and every file that source includes, which the check doesn't read either. What
     those files import, reach and run in turn are edges the check reads."""
     boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
     always, beside = _loaded(PEARL_C / "kernel.py"), _loaded(PEARL_C / "grouped.py")
-    assert {"run.py", "fixture.py"} <= always and beside, (
+    assert "run.py" in always and beside, (
         f"pearl_c's `_load` calls name {sorted(always)} and {sorted(beside)}: read here what it loads as it names it now")
     needs: set[str] = set()
     for d in PEARL_C_KERNELS:
@@ -824,7 +824,7 @@ def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_pa
                                            ("3", "verity/pub/other.bin"), ("4", "tools/secret/s.json"),
                                            ("5", "verity/pub/imports.py"))}
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg), encoding="utf-8")
+    (root / "artifacts.json").write_text(json.dumps(reg), encoding="utf-8")
     sizes = {"verity/pub/data/w.json": 3, "verity/pub/data/set/a": 1, "verity/pub/data/set/b/c": 2}
     asked: list[list[str]] = []
 

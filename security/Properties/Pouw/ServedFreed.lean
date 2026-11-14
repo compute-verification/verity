@@ -75,7 +75,7 @@ accepts a period that exchanged more than `K` bits but with probability `δ`**: 
 that the certifier's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
 outside the registered devices is at most `δ`. The served form of the certifier's count, which
 `Pouw.Assumptions.CertifierSeesImports` states surely for the onsite guarantee; the certifier's guarantee
-(`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out, and the step from it
+(`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) bounds the information an accepted period carries out, and the step from it
 to this count is open. It is falsified by a strategy whose periods the certifier accepts, with
 probability more than `δ`, after its window programs exchanged more than `K` bits. -/
 def CertifiedExchange {Ω : Type} [Fintype Ω] (cert : Ω → Prop) (ext : Ω → ℝ) (K δ : ℝ) : Prop :=
@@ -101,7 +101,7 @@ def ServedFreed : Prop :=
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U)
     (folded : Paths (Coin C Ξ Cd.rounds σ sT) n → ℝ) (ρ δs δbind δks : ℝ)
     (G : Pouw.Dither.Accel) (μ : G.Res → ℝ) (Reg : Set I) (hon : I → C → Fin (tileCount σ sT) → W) (p : ℝ) (lam : I → ℝ)
@@ -115,8 +115,8 @@ def ServedFreed : Prop :=
     (∀ j, stageShare (tileStage Cd (tileCount σ sT)) (shareCone Sc Cd (tileCount σ sT)) j ≤ 1) →
     (∀ t : Fin (tileCount σ sT), 0 < shareCone Sc Cd (tileCount σ sT) t →
       tileLuck Sc Cd (tileCount σ sT) t ≤ 7 / 8 ∧ tileLuck0 Sc Cd (tileCount σ sT) t ≤ 1 / 2) →
-    Pl.game = periodGame (tileStage Cd (tileCount σ sT)) (liveCone Sc Cd (tileCount σ sT)) 1 1 (k sT) Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd (tileCount σ sT) live) →
+    Pl.game = monitoringPeriodGame (tileStage Cd (tileCount σ sT)) (liveCone Sc Cd (tileCount σ sT)) 1 1 (k sT) Wp →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd (tileCount σ sT) live) →
     PrefixOf (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
@@ -126,7 +126,7 @@ def ServedFreed : Prop :=
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
-      (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
+      (monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile)))
       (fun _ t => (tileWords Sc Cd (tileCount σ sT) t : ℝ)) folded →
     G.G1 → G.G2 → G.P1 → G.P2 →

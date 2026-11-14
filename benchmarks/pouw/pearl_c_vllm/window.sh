@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The e2e's timed window on setup.sh's node, from the run tree's root, with GPU 1's build.sh output tarred as
+# The e2e's timed window on setup.sh's node, from the run tree's root, with GPU 1's ship.sh output tarred as
 # pearl-c-sm120-ship.tar:
 #   research run --on MACHINE --project verity --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=<you> --send pearl-c-sm120-ship.tar -- \
@@ -34,7 +34,7 @@
 # STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
 # /usr/local/cuda-13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 # PEARLC_KERNEL=benchmarks/pouw/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
-# under `gpu-lease 1`: the ship is pearl_c_sm90/build.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
+# under `gpu-lease 1`: the ship is pearl_c_sm90/ship.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
 # VARIANTS=h100, SCHEME defaults to pearl-c-h100-v1-h3, and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
 # with no setup.sh: no ready.json and no FlashInfer build, since every request e2e.py serves samples greedily. MODEL (the
 # checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
@@ -70,7 +70,7 @@ SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GR
 # the epoch's coins are the Lean verifier's (e2e.Coins, pouw.verifier.coins), which Lake builds and runs
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$PWD:$PWD/verity/configuration/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 # NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}

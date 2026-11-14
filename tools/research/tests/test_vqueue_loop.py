@@ -19,7 +19,7 @@ import research.vqueue_loop as L
 from research import carry, vqueue, vqueue_records, vqueue_slim
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.landing import PREFLIGHT
-from research.queue import DRIVE_FLAGS
+from research.queue import DRIVE_FLAGS, merge_main
 from research.store import vocab
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, RecordsRun, Red,
                              Rerun, Retry, Ring, Snapshot, Verdict)
@@ -397,7 +397,7 @@ def test_a_member_that_conflicts_with_one_merged_before_it_is_left_out_naming_it
     assert built["members"] == [1, 3], built
     (post,) = env.posts
     assert "#2 at" in post and "doesn't merge" in post and "conflicts with `main`" not in post, post
-    assert post.endswith("It is left out until it merges: merge `main` into it once #1 is on it"), post
+    assert post.endswith(f"It is left out until it merges: once #1 is on it, {merge_main('it', env.o.gh.prs[2].branch)}"), post
     assert _acts(loop.tick()) == ["drop"]
     again, built = loop.tick()                                      # the same head onto the same base: told once
     assert (again["action"], again["text"], again["done"], built["action"]) == ("skip", None, False, "build")
@@ -460,7 +460,8 @@ def test_a_member_that_conflicts_with_a_candidate_below_names_its_member_and_one
     assert (skip2["number"], skip2["by"], none["action"], none["base"]) == (2, [1], "build", low["sha"]), (skip2, none)
     assert skip2["why"] == "conflicts with #1, merged before it, in a.txt (it merges onto `main`)", skip2
     assert (skip3["number"], skip3["why"], "by" in skip3) == (3, "conflicts with `main` in c.txt", False), skip3
-    assert [p.rsplit(": ", 1)[1] for p in env.posts[1:]] == ["merge `main` into it once #1 is on it", "merge `main` into it"]
+    assert [p.split("It is left out until it merges: ", 1)[1] for p in env.posts[1:]] == [
+        f"once #1 is on it, {merge_main('it', env.o.gh.prs[2].branch)}", merge_main("it", env.o.gh.prs[3].branch)]
 
 
 def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_then_logged_once_as_riding(env):
@@ -2187,7 +2188,7 @@ def test_the_failing_tests_graph2_s_verdict_names_count_beside_its_result_s_for_
 
 
 #: a lean-suites result's row of a suite that failed on one test and nothing more
-ROW = {"name": "verity-flock", "suite": "verity/protocols/flock/prover", "failed_tests": ["tests/test_d.py::test_draw"], "beyond_tests": False}
+ROW = {"name": "verity-flock", "suite": "verity/protocols/proofs/flock/prover", "failed_tests": ["tests/test_d.py::test_draw"], "beyond_tests": False}
 #: the test a fail for more than the tests it names adds, of the candidate's key alone
 BEYOND = "fault:suite {} failed beyond the tests it names, at sha512:t1"
 
@@ -2652,7 +2653,7 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
     its base lists may go.  A candidate whose base's check isn't listed waits for it."""
     env.gates = ["pytest", "lean-build", "lean-suites"]
-    lean, exe = "verity/protocols/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/flock/verifier/.lake/build/bin/v"}
+    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
     build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
@@ -4609,8 +4610,8 @@ def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_au
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") is None
 
 
-@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
-                                         ("verity/protocols/pouw/verifier/lean/models.json", True)])
+@pytest.mark.parametrize("path, takes", [("verity/protocols/accounting/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/accounting/pouw/verifier/lean/models.json", True)])
 def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits_itself_and_one_beside_it_does_not(
         env, monkeypatch, path, takes):
     """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
@@ -4619,7 +4620,7 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     file beside the package's directory takes its base's."""
     from research.landing import AFTER_LANDING
 
-    pkg = "verity/protocols/pouw/verifier/lean/check"
+    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
     env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
     env.put(2, {path: "{}\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
@@ -4631,8 +4632,8 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
 
 
-@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
-                                         ("verity/protocols/pouw/verifier/lean/check/README.md", True)])
+@pytest.mark.parametrize("path, takes", [("verity/protocols/accounting/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/accounting/pouw/verifier/lean/check/README.md", True)])
 def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits_itself(env, monkeypatch, path, takes):
     """The candidate's tree no longer lists a file its member deletes, and the audit's declaration says of a path what it
     says of a file there: the member's change is judged in that tree's files with the paths it changes, so the candidate on
@@ -4640,7 +4641,7 @@ def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits
     whose member only deletes the package's README takes its base's."""
     from research.landing import AFTER_LANDING
 
-    pkg = "verity/protocols/pouw/verifier/lean/check"
+    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
     _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
     env.put(1, {f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
     env.put(2, {path: None})
@@ -5034,9 +5035,9 @@ OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = 
                 ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"), ("flock-rust-tests", "proofs"))),
             Q.REGISTRY.as_posix(): json.dumps({"handles": [
                 *({"handle": h} for h in ("ci", "circuits", "vllm", "lane-1", "lane-2")),
-                {"handle": "heads", "owns": ["verity/protocols/certifier/"]},
+                {"handle": "heads", "owns": ["verity/protocols/accounting/certifier/"]},
                 {"handle": "artifacts", "owns": ["fixtures/"]}]}),
-            "verity/protocols/certifier/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
+            "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
             "fixtures/head.json": json.dumps({HEAD: "no pin"}) + "\n"}
 #: a change meeting circuit-check's inputs (`queue.forces_cold`), and one that doesn't
 CIRCUITS, OTHER = {"verity/circuits/rope.py": "# rope\n"}, {"a.txt": "1\n"}
@@ -5049,9 +5050,10 @@ def _circuit(*failed: str) -> str:
 
 
 def _ratchet(*failed: int) -> str:
-    """ratchet-gate's log failing the merge of each PR of ``failed``, and passing #3's, as `ratchet_gate.render` writes it."""
+    """ratchet-gate's log failing the merge of each PR of ``failed``, and passing #3's unless it fails, as `ratchet_gate.render`
+    writes it."""
     return ("ratchet gate: 3 change(s)\n" + "".join(f"  #{n} ({n:012x}): failed: grows p01.json\n" for n in failed)
-            + "  #3 (000000000003): passed: grows nothing\n")
+            + ("" if 3 in failed else "  #3 (000000000003): passed: grows nothing\n"))
 
 
 def _off(env: Env, monkeypatch, *changes: dict[str, str], decide=None, **kw) -> tuple[Loop, Runs, str, str]:
@@ -5075,12 +5077,11 @@ def _off_said(sha: str, members: str, step: str, base: str, *lines: str) -> str:
             f"{base[:12]} doesn't: {'; '.join(f'`{x}`' for x in lines)}. Nothing is held or ejected for it: fix it forward")
 
 
-def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose_merge_it_fails_and_its_owner_once(
-        env, monkeypatch):
+def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose_merge_it_fails_once(env, monkeypatch):
     """ratchet-gate is off the merge gate (policy.toml's `off_gate` at the base): the candidate passes on its check all the
-    same, and once that verdict is in, the lane of each member whose merge the gate fails (#1's and #2's, not #3's) and the
-    step's owner in ci.toml at the candidate (vllm) are rung, with the gate's line for each, once a candidate and step.  A
-    merge the gate names that is no member's (one below the base) rings nobody."""
+    same, and once that verdict is in, the lane of each member whose merge the gate fails (#1's and #2's, not #3's) is rung,
+    not the step's owner in ci.toml (vllm), since each such lane is known, with the gate's line for each, once a candidate
+    and step.  A merge the gate names that is no member's (one below the base) rings nobody."""
     loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1, 2, 9)})
@@ -5088,12 +5089,78 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
     assert _acts(logged) == ["slim", "slim", "ring"] and logged[1]["record"]["verdict"]["state"] == PASS
     ring = logged[2]
     assert (ring["sha"], ring["step"], ring["failures"], ring["to"], ring["done"], ring["posted"]) == (
-        sha, "ratchet-gate", ["#1", "#2"], ["@lane-1", "@lane-2", "@vllm"], True, True)
+        sha, "ratchet-gate", ["#1", "#2"], ["@lane-1", "@lane-2"], True, True)
     assert ring["why"] == "off the gate: ratchet-gate failed" and ring["base"] == main and ring["members"] == [1, 2, 3]
-    assert env.posts == ["@lane-1 @lane-2 @vllm vqueue: " + _off_said(
+    assert env.posts == ["@lane-1 @lane-2 vqueue: " + _off_said(
         sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
     assert loop.tick() == [] and len(env.posts) == 1
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
+
+
+def _closed(env: Env, monkeypatch, *numbers: int, fails: bool = False) -> list[int]:
+    """Each of ``numbers`` closed on GitHub, as a member is once its candidate lands: out of the open PRs, with GitHub's read of
+    one PR (`GitHub.pr`) answering it, or failing (``fails``).  Returns the numbers that read is asked, in order."""
+    gh, read = env.o.gh, []
+    closed = {n: gh.prs.pop(n) for n in numbers}
+
+    def pr(n: int) -> Q.PR:
+        read.append(n)
+        if fails:
+            raise Q.QueueError(f"gh api repos/{gh.repo}/pulls/{n}: HTTP 502")
+        return closed[n]
+
+    monkeypatch.setattr(gh, "pr", pr)
+    return read
+
+
+def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_it_fails_that_has_landed(env, monkeypatch):
+    """What a candidate fails off the gate is read once its runs end, after it landed, when GitHub has closed its members: the
+    lane of each member whose merge ratchet-gate fails is read from GitHub's PR (`World.handle`), not from the open ones."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
+    read = _closed(env, monkeypatch, 1, 2, 3)
+    runs.end(main)
+    runs.end(sha, also={"ratchet-gate": _ratchet(1, 2)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert (ring["failures"], ring["to"]) == (["#1", "#2"], ["@lane-1", "@lane-2"]) and sorted(read) == [1, 2]
+    assert env.posts == ["@lane-1 @lane-2 vqueue: " + _off_said(
+        sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
+
+
+def test_under_gate_check_a_red_ratchet_gate_failing_a_member_of_no_known_lane_rings_the_step_s_owner_too(env, monkeypatch):
+    """ratchet-gate fails #1's merge and #3's, whose lane the registry doesn't hold: #1's lane is rung, and the step's owner in
+    ci.toml (vllm) after it, since the gate itself may be what is wrong."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
+    runs.end(main)
+    runs.end(sha, also={"ratchet-gate": _ratchet(1, 3)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert (ring["failures"], ring["to"]) == (["#1", "#3"], ["@lane-1", "@vllm"])
+
+
+def test_under_gate_check_a_landed_member_github_can_t_read_rings_the_step_s_owner_and_is_logged_once(env, monkeypatch):
+    """A landed member whose PR GitHub doesn't answer for names no lane: the ring goes to ratchet-gate's owner in ci.toml, as
+    for a member no lane owns, with one line logged, and the tick goes on."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER)
+    read = _closed(env, monkeypatch, 1, fails=True)
+    runs.end(main)
+    runs.end(sha, also={"ratchet-gate": _ratchet(1)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert (ring["to"], ring["done"], read) == (["@vllm"], True, [1])
+    assert loop.world.handle(1) is None and read == [1]
+    assert [x for x in env.out if "#1" in x and "HTTP 502" in x] == [
+        f"research queue vqueue: #1 isn't open and its PR can't be read, so it names no lane: gh api repos/{env.o.gh.repo}"
+        "/pulls/1: HTTP 502"]
+
+
+def test_a_pr_no_longer_open_is_read_from_github_once_a_tick(env, monkeypatch):
+    """`World.handle` of a PR that isn't open reads GitHub's PR once a number until the next tick's fetch, however often it is
+    asked, and an open PR's handle reads none."""
+    loop, _, _, _ = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"})
+    read = _closed(env, monkeypatch, 1)
+    w = loop.world
+    loop.tick()
+    assert 1 not in w.prs and [w.handle(n) for n in (1, 1, 2, 1)] == ["lane-1", "lane-1", "lane-2", "lane-1"] and read == [1]
+    w.fetch()
+    assert w.handle(1) == "lane-1" and read == [1, 1]
 
 
 def test_under_gate_check_with_the_graph2_shadow_off_no_graph2_verdict_is_read_and_the_check_alone_judges(env, monkeypatch):
@@ -5165,7 +5232,7 @@ def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_
     too); one no pins file pins, or only one the registry gives no owner, rings the lane of each member whose change meets
     circuit-check's inputs (#2's, not #1's), and the step's owner in ci.toml (circuits) where one such member has no lane in
     the registry (#3) or none meets them."""
-    second = {"own pins": {"verity/protocols/certifier/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
+    second = {"own pins": {"verity/protocols/accounting/certifier/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "unowned pins": {"verity/circuits/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "job": {"b.txt": "2\n"}}.get(who, CIRCUITS)
     prs = [OTHER, second, *([{"verity/circuits/x.py": "# x\n"}] * (who == "stranger"))]
@@ -5310,7 +5377,7 @@ def test_under_gate_check_a_red_off_the_gate_rings_beside_a_failed_verdict_and_n
         runs.state["c-6"] = ("done", 137, None)
     logged = loop.tick()
     assert logged[1]["record"]["verdict"]["state"] == verdict
-    assert [r["to"] for r in logged if r["action"] == "ring"] == ([["@lane-1", "@vllm"]] if verdict == FAIL else [])
+    assert [r["to"] for r in logged if r["action"] == "ring"] == ([["@lane-1"]] if verdict == FAIL else [])
 
 
 def test_under_gate_check_a_candidate_on_another_is_rung_about_what_that_one_s_check_passed_once_it_is_logged(env, monkeypatch):
@@ -5361,20 +5428,21 @@ def test_under_gate_check_the_steps_off_the_gate_are_its_bases_and_the_allowance
     """What a candidate fails off the gate is read by the policy its verdict and its landing are: the steps off the gate are its
     base's (one it takes off the gate itself fails it on the gate, and rings nothing off it), the allowances and the jobs'
     owners its own, as the check after it lands reads them (an allowance it adds covers its failure, one expired covers
-    nothing, and the ratchet gate's new owner is rung)."""
+    nothing, and the ratchet gate's new owner is rung of a merge whose lane is unknown, #3's)."""
     allow = '[[allow]]\nid = "circuit-check lowering/dead {}"\nowner = "circuits"\nexpires = "{}"\nreason = "red for now"\n'
     pol = (OFF_TREE["tools/verity/check/policy.toml"].replace('"ratchet-gate"]', '"ratchet-gate", "pytest"]')
            + allow.format("New_v1", "2030-06-01T00:00:00Z") + allow.format("Old_v1", "2020-06-01T00:00:00Z"))
     jobs = OFF_TREE["tools/verity/check/ci.toml"].replace('"vllm"', '"ratchets"')
-    loop, runs, main, sha = _off(env, monkeypatch, {"tools/verity/check/policy.toml": pol, "tools/verity/check/ci.toml": jobs})
+    loop, runs, main, sha = _off(env, monkeypatch, {"tools/verity/check/policy.toml": pol, "tools/verity/check/ci.toml": jobs},
+                                 {"b.txt": "2\n"}, {"c.txt": "3\n"})
     runs.end(main)
     runs.end(sha, 3, "pytest", "error: no\n", also={"circuit-check": _circuit("lowering/dead New_v1", "lowering/dead Old_v1"),
-                                                     "ratchet-gate": _ratchet(1)})
+                                                     "ratchet-gate": _ratchet(3)})
     logged = loop.tick()
     assert logged[1]["record"]["verdict"]["state"] == FAIL
     rings = {r["step"]: r for r in logged if r["action"] == "ring"}
     assert set(rings) == {"circuit-check", "ratchet-gate"} and rings["circuit-check"]["failures"] == ["lowering/dead Old_v1"]
-    assert rings["ratchet-gate"]["to"] == ["@lane-1", "@ratchets"]
+    assert rings["ratchet-gate"]["to"] == ["@ratchets"]
 
 
 def test_under_gate_check_a_ring_off_the_gate_in_shadow_is_only_logged_once(env, monkeypatch):
@@ -5382,7 +5450,7 @@ def test_under_gate_check_a_ring_off_the_gate_in_shadow_is_only_logged_once(env,
     runs.end(main)
     runs.end(sha, also={"ratchet-gate": _ratchet(1)})
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
-    assert (ring["done"], ring["shadow"], ring["to"], env.posts) == (False, True, ["@lane-1", "@vllm"], [])
+    assert (ring["done"], ring["shadow"], ring["to"], env.posts) == (False, True, ["@lane-1"], [])
     assert [r for r in loop.tick() if r["action"] == "ring"] == [] and env.posts == []
 
 
@@ -5394,7 +5462,7 @@ def test_under_gate_check_a_ring_off_the_gate_whose_post_failed_is_rung_again_by
     loop.world.post = lambda text, to=(): env.posts.append(text) or answer[0]
     (failed,) = [r for r in loop.tick() if r["action"] == "ring"]
     assert (failed["done"], failed["posted"], failed["error"]) == (
-        False, False, f"ringing @lane-1, @vllm about {sha[:12]}'s ratchet-gate failed: the next tick rings again")
+        False, False, f"ringing @lane-1 about {sha[:12]}'s ratchet-gate failed: the next tick rings again")
     answer[0] = True
     (again,) = loop.tick()
     assert (again["action"], again["done"], again["posted"], again["why"], len(env.posts)) == (

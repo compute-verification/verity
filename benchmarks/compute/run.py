@@ -60,7 +60,12 @@ sampled tiles over the inert-work bound, and the inert-work share ι's) and its 
 over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
 the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
 commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
-cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. Where the passes hold the LM head's
+cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. An answer held to its class's fixed
+load publishes its work in the grid form instead (``give_up`` among it: Pearl+'s `verify_run.grid_work`): its ``macs``
+are the passes' whole MACs, each call's real MACs less its side channels, and its ``credited`` the whole passes' credit
+less ``give_up``, the give-up padded up to H1's window grid. So there the split's whole MACs are the answer's ``macs``,
+its credit, floored, is at least the answer's ``credited`` and at most that plus ``give_up``, and what the padding
+takes off past the split's credit is the cause ``grid``. Where the passes hold the LM head's
 calls, the LM head is no cause of its own: its calls are calls like the linears', and what the head computes outside
 the passes is the cause ``lm_head_outside``, as the linears' is ``outside``. The ε deduction is the run's, at its
 sample: the verifier takes it off the records whose cells hold the most MACs a ticket, so the calls it lands on carry it
@@ -76,9 +81,10 @@ Through the harness kit's writer (`verity_bench.kit`) it also writes the run dir
 and `$OUT/result.json` outside one where `OUT` is set, with the
 fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
 recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
-the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
-are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
-registered device's card file (`clock.tensor`, `clock.sm`; `verity.hardware.cards`), capacity the registered devices'
+the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). The metric is
+named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
+resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
+registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
 peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
 run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
 are written as one entry each, with no value and why.
@@ -95,16 +101,17 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.hardware import cards
-from verity.hardware.site import Site
+from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_config.settings import SHARED
 
-__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
            "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable", "amounts",
            "capacity", "from_run", "main", "model_macs"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
+#: the number's id in metrics.toml beside this file, the name result.json records it under
+METRIC = "compute-accounting/verified-compute-share"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
@@ -124,7 +131,7 @@ CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "lm_head_outside": 
           "excluded_b": "excluded B rows' column blocks", "voluntary": "voluntary rows' bands and blocks",
           "kept_width": "side channels (k beyond |K|)", "epsilon_macs": "ε's deduction",
           "over_bound_macs": "sampled tiles over the inert-work bound", "rho_macs": "ι, the inert-work share",
-          "floor": "the credit's floor"}
+          "floor": "the credit's floor", "grid": "the give-up padded up to the window grid"}
 #: a call's terms the split states, beside its MACs
 ROWS = ("excluded_a", "excluded_b", "voluntary", "kept_width")
 TERMS = ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")
@@ -391,8 +398,14 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
         raise Unreadable("the per-call split's passes' records are not the answer's")
     if stated != sums or totals.get("credited") != int(sums["credited_macs"]):
         raise Unreadable("the per-call split's totals are not its calls' sums")
-    if (sums["checked_macs"], int(sums["credited_macs"])) != (work["macs"], credited):
-        raise Unreadable(f"the per-call split's calls credit {int(sums['credited_macs']):,} of "
+    exact = int(sums["credited_macs"])
+    if "give_up" in work:
+        whole = sums["checked_macs"] + sum(sums[x] for x in ROWS[:3])
+        if whole != work["macs"] or not credited <= exact <= credited + work["give_up"]:
+            raise Unreadable(f"the per-call split's calls credit {exact:,} of {int(whole):,} whole MACs and the answer's "
+                             f"grid form {credited:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
+    elif (sums["checked_macs"], exact) != (work["macs"], credited):
+        raise Unreadable(f"the per-call split's calls credit {exact:,} of "
                          f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['macs']:,}")
     if sums["macs"] - in_head > macs["linears"]:
         raise Unreadable(f"the per-call split's calls hold {int(sums['macs'] - in_head):,} real MACs, more than the "
@@ -403,6 +416,8 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
     gave = {("lm_head_outside" if heads else "lm_head"): macs["lm_head"] - in_head, "attention": macs["attention"],
             "outside": macs["linears"] - (sums["macs"] - in_head),
             **{x: sums[x] for x in (*ROWS, *TERMS[:3])}, "floor": sums["credited_macs"] - credited}
+    if "give_up" in work:
+        gave |= {"floor": sums["credited_macs"] - exact, "grid": exact - credited}
     give_up = sum(macs.values()) - credited
     assert sum(gave.values()) == give_up, (gave, give_up)
 
@@ -449,7 +464,7 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
 
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
     """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
-    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.hardware.cards.rate` on the card
+    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.device.rate` on the card
     file of its sheet's SKU), summed over the devices, times the span, rounded up. `Unreadable` where the site registers
     no device, or a device names no registered sheet or an SKU with no card file."""
     if not site.units:
@@ -459,17 +474,17 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         if (sheet := site.sheet(d)) is None:
             raise Unreadable(f"the registered device {d} names no registered sheet")
         try:
-            card = cards.load(sheet.sku)
+            card = load_card(sheet.sku)
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
-            total[r] += cards.rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
+            total[r] += rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
     return {r: math.ceil(v) for r, v in total.items()}
 
 
 def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None) -> list[dict]:
     """The result a document `doc` gives in the fields every resource's benchmark reports, as the kit writer's
-    measurements: the metric (`metric`, the printed number in its unit, beside its target), the verified amount
+    measurements: the metric (`METRIC`, the printed number in its unit, beside its target), the verified amount
     (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
     registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
     and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
@@ -477,7 +492,7 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     the recorded run."""
     inputs = [doc["run"]] if doc["run"] else []
     verified = doc["credited_macs"]
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
+    out = [{"name": METRIC, "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
             "verdict": "at or above target" if doc["met"] else "below target", "inputs": inputs},
            {"name": "verified", "value": verified, "unit": "MAC", "inputs": inputs}]
     if site is None or span_s is None:
@@ -600,7 +615,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         (Path(out) / "compute.json").write_text(line + "\n")
         writer = kit.writer(out)
         for m in measured:
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     return 0
 
 

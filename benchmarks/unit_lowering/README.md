@@ -9,7 +9,7 @@ What writing a PoUW H1 circuit file costs, and the file it writes, for three sta
   (`python -m tests.protocols.pouw_h1_circuits --lower K R C BIND PATH` from `adapters/vllm`).
 
 The tile is a parameter. 32 × 32 is the H1 kernel's warp tile, never a choice made for proving. The lane and the combine are
-what can be proved once the tile is past the block (`verity/protocols/pouw/verifier/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).
+what can be proved once the tile is past the block (`verity/protocols/accounting/pouw/verifier/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).
 `lanes.py` stages each one as `h1_lanes/leaf.py`'s `stager` does, with its `RC` set to the leaf, bound to the Program a served
 window's verifier derives for it. They exist only at an R that is a multiple of 16: a lane reads the leaf's R admit bits as
 one row, and a row is whole 16-bit words (`h1zy._leaf`). So at 4 × 8 and 8 × 8 the tile itself is the statement; a 4 × 8 tile
@@ -59,9 +59,6 @@ research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sy
   K from 384.
 - `--guard` exits 1 and names each shape whose SHA-512 or k_log fails. `--tree PATH` runs another checkout's lowering (a
   worktree of your approach) under this harness.
-- `fit.py RECORD...` fits ANDs, bytes, peak and wall on one unit's terms and projects them:
-  - lane and combine, one leaf at a time: 1 and K, projected to K 2048, 8192 and 14336 at that leaf;
-  - tile: 1, R C, R C K and (R + C) K, projected to (2048, 32 × 32), (8192, 32 × 32) and (128, 32 × 32).
 - `mem_profile.py --k K --tile R,C [--unit tile|lane|combine] --scratch DIR --out DIR [--frames N]` runs the lowering
   in-process. It reports:
   - each phase's peak: `unit_lowering`, `ir_lower.lower`, `ir_lower.layout`, `circuit.compose`, the circuit's description, the digests;

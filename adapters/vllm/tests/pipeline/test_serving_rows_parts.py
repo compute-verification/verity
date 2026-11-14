@@ -11,20 +11,20 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.registry import boolean_sigma as SG
+from verity.definitions.registry import cuda_rmsnorm as C
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import dsa_norm as DN
+from verity.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry import tp_allreduce_split as TS
 
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
-from verity.definitions.registry import boolean_sigma as SG
-from verity.definitions.registry import cuda_rmsnorm as C
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import dsa_norm as DN
-from verity.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS
 
 WORLD, N = 4, 256
 STATICS = {"WORLD": WORLD, "N": N, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}

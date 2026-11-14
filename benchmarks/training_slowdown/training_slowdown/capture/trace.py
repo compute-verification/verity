@@ -33,7 +33,11 @@ size changes. `token_dims` names each batch tensor's token dimensions in axis or
 integer tensor, every one but the last of a floating one); axis i of every tensor is varied together. The captures must
 agree node for node, so a step whose graph changes with the batch size is refused.
 
-Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax.
+Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax. That
+backend computes a 16-bit call from operands it casts up to float32, so the graph alone does not show the dtype the
+call was made in. The capture states it at the call: everything a call computes, forward and backward, is inside a
+``te_capture::attention::DTYPE`` marker, DTYPE the dtype the call computes in: its query's as autocast hands it to the
+kernel (`_marked_attention`).
 
 `CaptureRefused` names what stops a capture, with the user's source line where there is one: a tensor value read into
 Python (``aten._local_scalar_dense``: an ``if`` on a tensor, ``.item()``), an output shape set by values
@@ -61,8 +65,9 @@ from torch._subclasses.fake_tensor import (DataDependentOutputException, Dynamic
                                            FakeTensorMode, UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
-__all__ = ["BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
+__all__ = ["ATTENTION", "BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
 
+ATTENTION = "te_capture::attention::"
 BACKWARD = "te_capture::backward"
 STEP = "te_capture::step::"
 _TORCH_DIR = os.path.dirname(torch.__file__)
@@ -76,8 +81,9 @@ DEEP_COPY = ("the step deep-copies a tensor of the model's (copy.deepcopy of the
 
 class CaptureRefused(Exception):
     """The step is not one fixed graph this package can count. `reason` is one of ``dynamic_control_flow``,
-    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``batch_dependent``, ``deep_copy`` or ``trace``;
-    `op` the ATen op or construct; `where` the user's source line, if found."""
+    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``unpriced_dtype`` (a counted op in a dtype no
+    Definition prices, `gates.Unpriced`), ``batch_dependent``, ``deep_copy`` or ``trace``; `op` the ATen op or
+    construct; `where` the user's source line, if found."""
 
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where
@@ -308,6 +314,97 @@ def _marked_backward():
         torch.autograd.backward, torch.autograd.grad = ab, ag
 
 
+class _MarkedAttention(torch.overrides.TorchFunctionMode):
+    """Every scaled-dot-product attention call the step makes runs inside a ``te_capture::attention::DTYPE`` marker,
+    DTYPE the dtype the call computes in (`_computes_in`), and so does the call's backward: each autograd node the
+    call made (one reached from its output and numbered between the call's start and its end) enters the marker
+    before it runs and leaves it after. Either kernel returns in the dtype its operands reached it in, so a call that
+    returns in another than DTYPE is refused. The mode sees the call at torch's own dispatch, however the step names
+    the function. `handling` counts the other calls it is handling: torch turns a mode off while it handles one, so a
+    call made inside one is seen only where it is made with the mode entered again (`_marked_attention`), and one
+    made there through a name bound before the capture is not marked."""
+
+    def __init__(self, call) -> None:
+        super().__init__()
+        self.call, self.handling = call, 0
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        kwargs = kwargs or {}
+        if func is not self.call:
+            self.handling += 1
+            try:
+                return func(*args, **kwargs)
+            finally:
+                self.handling -= 1
+        dtype = _computes_in(args[0] if args else kwargs["query"])
+        marker = f"{ATTENTION}{str(dtype).removeprefix('torch.')}"
+        first = torch.autograd._get_sequence_nr()
+        with torch.autograd.profiler.record_function(marker):
+            out = func(*args, **kwargs)
+        if out.dtype != dtype:
+            raise CaptureRefused("trace", "scaled_dot_product_attention",
+                                 f"an attention call marked {dtype} returned {out.dtype}, so the dtype its ops are "
+                                 f"priced in is not the one it computed in")
+        last = torch.autograd._get_sequence_nr()
+        made, stack = set(), [out.grad_fn]
+        while stack:
+            node = stack.pop()
+            if node is None or node in made or not first <= node._sequence_nr() < last:
+                continue
+            made.add(node)
+            _mark_node(node, marker)
+            stack.extend(f for f, _ in node.next_functions)
+        return out
+
+
+def _computes_in(query: torch.Tensor) -> torch.dtype:
+    """The dtype a scaled-dot-product attention call computes in, from its query as the step passes it: autocast's
+    where autocast is on for the query's device and casts it (a floating query that isn't float64), as it does the
+    call's operands before either kernel takes them; else the query's own."""
+    device = query.device.type
+    if torch.is_autocast_enabled(device) and query.is_floating_point() and query.dtype != torch.float64:
+        return torch.get_autocast_dtype(device)
+    return query.dtype
+
+
+@contextlib.contextmanager
+def _marked_attention():
+    """While the capture records, every attention call is marked (`_MarkedAttention`), one that a function of
+    torch's own makes too (`torch.nn.MultiheadAttention`'s forward): torch runs such a function with the mode off,
+    so `torch.nn.functional`'s name for the call enters the mode again there. In force for the recording alone, and
+    undone on every way out of it."""
+    call = torch.nn.functional.scaled_dot_product_attention
+    mode = _MarkedAttention(call)
+
+    def resumed(*args, **kwargs):
+        if not mode.handling:
+            return call(*args, **kwargs)
+        with mode:
+            return call(*args, **kwargs)
+
+    torch.nn.functional.scaled_dot_product_attention = resumed
+    try:
+        with mode:
+            yield
+    finally:
+        torch.nn.functional.scaled_dot_product_attention = call
+
+
+def _mark_node(node, marker: str) -> None:
+    """An autograd node's backward inside a `marker` of its own: entered before the node runs, left after it."""
+    entered = []
+
+    def enter(grad_outputs) -> None:
+        entered.append(torch.autograd.profiler.record_function(marker))
+        entered[-1].__enter__()
+
+    def leave(grad_inputs, grad_outputs) -> None:
+        entered.pop().__exit__(None, None, None)
+
+    node.register_prehook(enter)
+    node.register_hook(leave)
+
+
 class _DeepCopy(Exception):
     """A deep copy of a fake tensor, met while a capture records (`_no_deep_copy`)."""
 
@@ -353,7 +450,7 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
 
     from torch.nn.attention import SDPBackend, sdpa_kernel
     try:
-        with _marked_backward(), _no_deep_copy(), sdpa_kernel([SDPBackend.MATH]):
+        with _marked_backward(), _no_deep_copy(), sdpa_kernel([SDPBackend.MATH]), _marked_attention():
             gm = make_fx(run, tracing_mode="fake", _allow_non_fake_inputs=True)(*[f[i] for f in fakes for i in tensor_at])
     except Exception as e:
         raise _refusal(e) from e
