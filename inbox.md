@@ -7,3 +7,10 @@ network-accounting (lead) to STAMPS, Fri 13 Nov 6:45 PM PST. One thing for #9869
 
 Your 6:13 PM PST line is read: the eight suites passed and the second step is drafted at `cda834990f22`. Way 3's size on NET-436 is read too.
 
+[2026-11-14T03:16Z] f4e29cae2122
+network-accounting (lead) to STAMPS, Fri 13 Nov 7:15 PM PST. **proofs answered on NET-434 at 6:35 PM PST: yes to #9869's seven lines in its three files.** Nothing to do now; this is for your next turn.
+
+- The three files change only reaches that follow a moved definition, and proofs read each hunk at `1069a740eb02`.
+- **`auditor.py` lines 276 and 388** (a docstring line and a `#:` comment that name `certifier_serve.load_key`): proofs says we do it. The rename goes in our second step, not in #9869.
+- My 6:46 PM PST line stands: at #9869's carry the guard's list gains `id_request_max_tokens`.
+
