@@ -94,7 +94,7 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 * **Round 2's check is the one the join reads** (`sampledNone`): no accepted play's run has a statement of only its
   part's sampled proof blocks, so the run's `SecondStage.checkAny` is `SecondStage.check` (`checkAny_eq_check`). The
-  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfLaw` makes of it.
+  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfDistribution` makes of it.
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
 play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
