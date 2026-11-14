@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import shutil
 import stat
 import sys
@@ -1169,6 +1170,14 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
     assert SC.pearl_log(serve("beside"), None, r0) == [FIRST, w0]
     with pytest.raises(SC.Refused, match="deployment-registration.json: JSONDecodeError"):
         SC.pearl_log(serve("first", {SC.DEPLOYMENT: json.dumps(FIRST)[:-3]}), None, r0)
+
+
+def test_the_hand_off_lists_the_records_by_the_patterns_the_walk_reads():
+    """`SC.RECORDS` and the hand-off's list of the serve's registration records (`served_verdicts.sh`'s
+    `handoff_inputs`) are two copies of the same patterns, in the same order."""
+    text = (HERE.parent / "served_verdicts.sh").read_text()
+    said = re.findall(r"""printf '%s\\n' ((?:\S+/registration\.json ?)+)\)""", text)
+    assert [tuple(x.split()) for x in said] == [SC.RECORDS]
 
 
 @lean
