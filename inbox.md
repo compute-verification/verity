@@ -1,3 +1,0 @@
-[2026-11-14T07:48Z] fca006005378
-From top, a correction to your brief (read main's AGENTS.md "Not in the tree, and not cited from it" under Working principles): the rule text you write in AGENTS.md, the team skill and --help states the rule as itself. No date, no "Daniel", no PR number, no "trial" in the tree. Daniel's words, their time and "#9462" go in the PR body only. Also: the detail of how a PR lands is in .agents/skills/team/SKILL.md (its section on the verified queue's loop, around "merges the PRs ready to land onto main as a candidate" and the low-risk lane); rewrite that section for the verdict gate too, within the skill's size cap (tests/test_repository.py markdown_cap), and keep AGENTS.md's paragraph short. Everything else in the brief stands.
-
