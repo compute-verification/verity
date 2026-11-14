@@ -162,9 +162,10 @@ reads. Proved:
 - **In ε form:** the audit end to end, `Pouw.SecurityProofs.EndToEndEps` (under TT(g₀) and the bound Ω_max, the
   protocol's advantage is ε = Ω_max/(1 − g₀) − 1, and an audit of t work-weighted samples accepts while
   (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
-  NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`; Pearl-C's at 8192³ on the RTX PRO 6000 (sm_120) at an inert-work
-  share of 1/1,000, `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%).
-  Each follows from its gap form. Pearl-C's figure is not the served point's. What is served is Llama 3.2 1B on an
+  NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`. Each follows from its gap form. Pearl-C's at 8192³ on the RTX PRO
+  6000 (sm_120) at an inert-work share of 1/1,000 is a lemma beside its gap form, not a listed guarantee
+  (`PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192`, ε = 1648180439/444424569561, 0.371%, in
+  `security/Proofs/Pouw/Lemmas/PearlCRecords.lean`), and its figure is not the served point's. What is served is Llama 3.2 1B on an
   H200, credited under the H100 record at an inert-work share of 1/400, and its gap is a lemma, not yet a listed
   guarantee: `pearlCGapH100Rev1_llama32_1b` (`security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s

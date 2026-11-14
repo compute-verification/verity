@@ -319,8 +319,6 @@
     {"file": "security/Definitions/Pouw/Fp8Atom/Pinned.lean", "count": 1},
     {"file": "security/Definitions/Pouw/Game/Defs.lean", "count": 3},
     {"file": "security/Definitions/Pouw/Guarantees.lean", "count": 1},
-    {"file": "security/Definitions/Pouw/Guarantees/Advantage.lean", "count": 4},
-    {"file": "security/Definitions/Pouw/Guarantees/Deadline.lean", "count": 16},
     {"file": "security/Definitions/Pouw/Guarantees/Dither.lean", "count": 19},
     {"file": "security/Definitions/Pouw/Guarantees/DitherInstance.lean", "count": 7},
     {"file": "security/Definitions/Pouw/Guarantees/Eps1.lean", "count": 2},
@@ -341,7 +339,6 @@
     {"file": "security/Definitions/Pouw/PearlC/DeviceFp4Hot.lean", "count": 11},
     {"file": "security/Definitions/Pouw/PearlC/DeviceFp4Issue.lean", "count": 1},
     {"file": "security/Definitions/Pouw/PearlC/DeviceKernelWref.lean", "count": 2},
-    {"file": "security/Definitions/Pouw/PearlC/DevicePricesLoop.lean", "count": 1},
     {"file": "security/Definitions/Pouw/PearlC/DeviceRev1.lean", "count": 29},
     {"file": "security/Definitions/Pouw/PearlC/FlockTile/Audit.lean", "count": 5},
     {"file": "security/Definitions/Pouw/PearlC/Fp4Skip.lean", "count": 12},
@@ -5213,10 +5210,11 @@
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean", "count": 3},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean", "count": 3},
     {"file": "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean", "count": 6},
-    {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 123},
+    {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 126},
     {"file": "verity/protocols/experimental/dither/prover/kernels/h1c.cu", "count": 1},
     {"file": "verity/protocols/experimental/dither/prover/kernels/h1o.cu", "count": 1},
     {"file": "verity/protocols/experimental/dither/prover/kernels/h1r.cu", "count": 1},
-    {"file": "verity/protocols/experimental/dither/prover/kernels/h1u.cu", "count": 41}
+    {"file": "verity/protocols/experimental/dither/prover/kernels/h1u.cu", "count": 41},
+    {"file": "security/Proofs/Pouw/Lemmas/Deadline.lean", "count": 16}
   ]
 }

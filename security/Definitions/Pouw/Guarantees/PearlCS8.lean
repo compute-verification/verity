@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
+public import Definitions.Pouw.Guarantees.PearlCDev
 public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 
 /-!
