@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
+public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Properties.Pouw.PeriodJ10R
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

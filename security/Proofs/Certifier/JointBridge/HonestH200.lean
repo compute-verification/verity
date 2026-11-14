@@ -46,12 +46,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import PouwCheck
 import PouwWindow
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Accounting.Compose.SplitRateExp
-import Proofs.Accounting.ComposeMonitoringPeriod
+import Proofs.Compose.Compose.CircuitWork
+import Proofs.Compose.Compose.ServiceBudget
+import Proofs.Compose.Compose.ServiceCovers
+import Proofs.Compose.Compose.SplitRateClosed
+import Proofs.Compose.Compose.SplitRateExp
+import Proofs.Compose.ComposeMonitoringPeriod
 import Proofs.Pouw.HMu
 import Proofs.Pouw.Headline.Luck
 import Proofs.Certifier.JointBridge.WorkOfCreditedWords
@@ -68,7 +68,7 @@ import Proofs.Pouw.Receipt
 import Proofs.Properties.Pouw.Check
 import Proofs.Properties.Pouw.Draw
 import Proofs.Properties.Pouw.Grid
-import Proofs.Properties.Accounting.Remote.Sort
+import Proofs.Properties.Compose.Remote.Sort
 import Spot.Record
 
 /-!

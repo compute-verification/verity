@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.JointPeriod
-public import Definitions.Accounting.Compose
+public import Definitions.Compose.JointPeriod
+public import Definitions.Compose.Compose
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

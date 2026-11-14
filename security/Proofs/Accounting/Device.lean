@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Joint
+public import Definitions.Compose.Joint
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 

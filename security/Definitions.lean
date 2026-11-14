@@ -96,11 +96,11 @@ public import Definitions.Certifier.Assumptions
 public import Definitions.Certifier.Guarantees
 public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Flock.Guarantees
-public import Definitions.Accounting.Assumptions.Remote
+public import Definitions.Compose.Assumptions.Remote
 public import Definitions.Certifier.Assumptions.RemoteOutside
 public import Definitions.Pouw.Assumptions.CreditedWords
-public import Definitions.Accounting.Assumptions.RemoteP2
-public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Compose.Assumptions.RemoteP2
+public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions

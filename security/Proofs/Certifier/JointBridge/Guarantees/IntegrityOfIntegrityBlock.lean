@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.EndToEnd.Carry.Statement
-public import Definitions.Accounting.JointPeriod
+public import Definitions.Compose.JointPeriod
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

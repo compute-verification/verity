@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointPeriod
+public import Definitions.Compose.JointPeriod
 
 /-!
 # A period whose PoUS audit is a joint run's capacity audit (trusted)

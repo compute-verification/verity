@@ -4,7 +4,7 @@ public import Definitions.Accounting.Guarantees.Capacity
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Accounting.Device
-import Proofs.Accounting.Joint
+import Proofs.Compose.Joint
 import Proofs.Pouw.Prob
 
 /-!

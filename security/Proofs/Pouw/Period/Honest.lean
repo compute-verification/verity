@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
+public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Pouw.Period
 public import Proofs.Pouw.Period.Accept
 public import Properties.Pouw.Period

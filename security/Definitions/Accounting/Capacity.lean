@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Joint
+public import Definitions.Compose.Joint
 
 /-!
 # A state-bounded game as the capacity audit of a joint run (trusted)

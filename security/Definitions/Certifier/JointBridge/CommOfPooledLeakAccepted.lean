@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointPeriod
+public import Definitions.Compose.JointPeriod
 public import Definitions.Certifier.PooledLeak
 public import Definitions.Certifier.Checked
 public import Definitions.Certifier.Tap

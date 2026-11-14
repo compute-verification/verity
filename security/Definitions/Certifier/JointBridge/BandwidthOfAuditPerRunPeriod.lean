@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointPeriod
+public import Definitions.Compose.JointPeriod
 public import Definitions.Poub.BandwidthAudit
 import Mathlib.Basic.ENNReal.Real
 

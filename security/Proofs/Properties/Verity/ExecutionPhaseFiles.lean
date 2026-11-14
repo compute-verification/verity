@@ -2,7 +2,7 @@ module
 
 public import Proofs.Core.Circuit
 public import Properties.Verity.ExecutionPhaseFiles
-public import Definitions.Accounting.JointLive
+public import Definitions.Compose.JointLive
 
 /-!
 # Circuits side by side: a unit of the whole is a unit of its own circuit

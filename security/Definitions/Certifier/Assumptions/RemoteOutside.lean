@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Remote.Outside
+public import Definitions.Compose.Remote.Outside
 
 /-!
 # No device outside the node computes for it, as the network certifiers observe it (trusted)

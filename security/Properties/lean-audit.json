@@ -71,18 +71,18 @@
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
   "Properties.Accounting.Requirement",
-  "Properties.Accounting.Remote",
-  "Properties.Accounting.Remote.Coins",
-  "Properties.Accounting.Remote.Shared",
-  "Properties.Accounting.Remote.Pooled",
-  "Properties.Accounting.Compose",
+  "Properties.Compose.Remote",
+  "Properties.Compose.Remote.Coins",
+  "Properties.Compose.Remote.Shared",
+  "Properties.Compose.Remote.Pooled",
+  "Properties.Compose.Compose",
   "Properties.Accounting.Served",
   "Properties.Accounting.RegisteredCircuit",
-  "Properties.Accounting.Remote.Line",
-  "Properties.Accounting.Remote.Schedule",
-  "Properties.Accounting.Remote.Live",
-  "Properties.Accounting.Remote.Subprotocol",
-  "Properties.Accounting.Remote.SubprotocolDeployed",
+  "Properties.Compose.Remote.Line",
+  "Properties.Compose.Remote.Schedule",
+  "Properties.Compose.Remote.Live",
+  "Properties.Compose.Remote.Subprotocol",
+  "Properties.Compose.Remote.SubprotocolDeployed",
   "Properties.Composition",
   "Properties.InferenceOnly.Protocol",
   "Properties.InferenceOnly.Record",
@@ -1081,7 +1081,7 @@
   "Properties.Attest",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
-  "Properties.Accounting.Remote",
+  "Properties.Compose.Remote",
   "Poub",
   "Properties.Accounting",
   "CircuitRequirement",
@@ -1118,7 +1118,7 @@
   "ZkServer"
  ],
  "claims": {
-  "modules": ["Properties.Accounting.Remote.Subprotocol"],
+  "modules": ["Properties.Compose.Remote.Subprotocol"],
   "witnesses": {
    "Properties.Poub.Subprotocol.AcceptIsVerifiedFor": {
     "fails": "Properties.Poub.Subprotocol.acceptIsVerified_nontrivial",
@@ -2282,7 +2282,7 @@
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
    "except": [
-    "Properties.Accounting.Compose",
+    "Properties.Compose.Compose",
     "Properties.Accounting.Served",
     "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
     "Properties.Accounting.RegisteredCircuit",
@@ -2292,13 +2292,13 @@
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
-  "Properties.Accounting.Compose": {
+  "Properties.Compose.Compose": {
    "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw"],
    "except": [],
-   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
+   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Compose.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
   },
   "Properties.Accounting.Served": {
-   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Accounting.Compose"],
+   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Compose.Compose"],
    "except": [],
    "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
@@ -2310,17 +2310,17 @@
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
    "except": ["Properties.Pouw.Period.Witnesses"],
-   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Accounting.Assumptions`), never a proof"
+   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
    "except": [],
-   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Certifier.JointBridge`), its named premises (`Definitions.Pouw.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Compose.JointPeriod`), the bridge's realization (`Definitions.Certifier.JointBridge`), its named premises (`Definitions.Pouw.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
    "except": [],
-   "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Pouw.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
+   "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Pouw.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
   },
   "Properties.Certifier.JointBridge": {
    "imports": [
@@ -2330,12 +2330,12 @@
     "Properties.Pouw.Period"
    ],
    "except": [],
-   "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Certifier.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
+   "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Compose.JointPeriod`), its bridge (`Definitions.Certifier.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
   },
   "Properties.Certifier.JointBridge.WorkOfCreditedWords": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
    "except": [],
-   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
+   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
@@ -2383,7 +2383,7 @@
     "Attest.Period",
     "Properties.Pous.MemoryChallenger",
     "Definitions.Claims",
-    "Definitions.Accounting.Assumptions.Parties"
+    "Definitions.Compose.Assumptions.Parties"
    ],
    "except": [],
    "why": "a party's signed periods are stated over the code that checks them (Attest.Period, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
@@ -2406,7 +2406,7 @@
     "Properties.Verity.Game",
     "Properties.Verity.Sha512",
     "Definitions.Core.Hash",
-    "Definitions.Accounting.JointLive",
+    "Definitions.Compose.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
     "Flock.Hash",
@@ -2420,7 +2420,7 @@
     "Flock.Hm96",
     "Properties.Verity.Subprotocols",
     "Properties.Verity.Coupling",
-    "Definitions.Accounting.JointPeriod",
+    "Definitions.Compose.JointPeriod",
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlusDraw",
     "Properties.Remote",
@@ -2501,16 +2501,16 @@
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Accounting.Remote": {
-   "imports": ["Poub", "Properties.Accounting.Remote"],
+  "Properties.Compose.Remote": {
+   "imports": ["Poub", "Properties.Compose.Remote"],
    "except": [
-    "Properties.Accounting.Remote.Pooled",
-    "Properties.Accounting.Remote.Line",
-    "Properties.Accounting.Remote.Line.Premises",
-    "Properties.Accounting.Remote.Line.Record",
-    "Properties.Accounting.Remote.Schedule",
-    "Properties.Accounting.Remote.Subprotocol",
-    "Properties.Accounting.Remote.SubprotocolDeployed"
+    "Properties.Compose.Remote.Pooled",
+    "Properties.Compose.Remote.Line",
+    "Properties.Compose.Remote.Line.Premises",
+    "Properties.Compose.Remote.Line.Record",
+    "Properties.Compose.Remote.Schedule",
+    "Properties.Compose.Remote.Subprotocol",
+    "Properties.Compose.Remote.SubprotocolDeployed"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
@@ -2520,24 +2520,24 @@
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`Spot.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   },
-  "Properties.Accounting.Remote.Pooled": {
+  "Properties.Compose.Remote.Pooled": {
    "imports": ["Definitions.Accounting", "Poub"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Draw`), never a proof"
   },
-  "Properties.Accounting.Remote.Line": {
+  "Properties.Compose.Remote.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
-    "Definitions.Accounting.Remote",
+    "Definitions.Compose.Remote",
     "Definitions.Accounting.Assumptions",
     "Poub",
-    "Properties.Accounting.Remote.Line"
+    "Properties.Compose.Remote.Line"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Compose.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
-  "Properties.Accounting.Remote.Schedule": {
-   "imports": ["Definitions.Accounting", "Poub", "Properties.Accounting.Remote"],
+  "Properties.Compose.Remote.Schedule": {
+   "imports": ["Definitions.Accounting", "Poub", "Properties.Compose.Remote"],
    "except": [],
    "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
@@ -2546,15 +2546,15 @@
    "except": [],
    "why": "what the two-stage rule's second stage misses is stated against `Select.selectSecond` and the claims' escape `escCell` (`Definitions.Claims.SamplingTwo`), with `Properties.Spot.bytesOf`'s reading of uniform bytes, never a proof"
   },
-  "Properties.Accounting.Remote.Subprotocol": {
-   "imports": ["Poub", "Properties.Accounting.Remote.Line"],
+  "Properties.Compose.Remote.Subprotocol": {
+   "imports": ["Poub", "Properties.Compose.Remote.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`Poub.Protocol`) and the memory line of record (`Properties.Poub.Line`), whose model vocabulary it reads through that module; never a proof"
   },
-  "Properties.Accounting.Remote.SubprotocolDeployed": {
-   "imports": ["Properties.Accounting.Remote.Subprotocol"],
+  "Properties.Compose.Remote.SubprotocolDeployed": {
+   "imports": ["Properties.Compose.Remote.Subprotocol"],
    "except": [],
-   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Accounting.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
+   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Compose.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
   },
   "Properties.Spot.Bits": {
    "imports": ["Definitions.Claims.Sampling", "Spot.Bits"],
@@ -2582,7 +2582,7 @@
    "why": "what a two-stage point's bits bound is stated against its own function and the factor bounds' covers, on the two-stage count's definitions: never a proof"
   },
   "Properties.Accounting.RegisteredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.Accounting.Remote.Schedule"],
+   "imports": ["Definitions.Accounting", "Properties.Compose.Remote.Schedule"],
    "except": [],
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.RegisteredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.Poub.Schedule`), never a proof"
   },
@@ -2668,7 +2668,7 @@
     "Mathlib",
     "Properties.Pous.MemoryChallenger",
     "MemoryChallenger",
-    "Definitions.Accounting.Assumptions.Parties"
+    "Definitions.Compose.Assumptions.Parties"
    ],
    "except": [],
    "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
@@ -12636,8 +12636,8 @@
   "premises": [
    "Definitions.Certifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.Accounting.Remote.Line.Premises",
-   "Properties.Accounting.Remote.Schedule"
+   "Properties.Compose.Remote.Line.Premises",
+   "Properties.Compose.Remote.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {

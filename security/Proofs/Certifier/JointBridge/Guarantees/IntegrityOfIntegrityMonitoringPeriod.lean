@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointPeriod
+public import Definitions.Compose.JointPeriod
 public import Proofs.Flock.EndToEnd.Period.Statement
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
