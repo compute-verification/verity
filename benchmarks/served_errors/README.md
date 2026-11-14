@@ -16,6 +16,8 @@ The terms:
 - the Sm120 headlines' n_π·δ_ZK (`ProofSoundAt`, proof soundness) against their 2^-41 window;
 - Pearl+'s ε_a, δ_a and composed ε as served, credited at the H100 record (the gap held to
   `security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean` by the suite);
+- the recursive audit's error for one proof (`RecursiveAuditC3`): its sample's δ_s by design, its knowledge term `ksAt`
+  on and off the deployment's tables, and its binding term, which has no value;
 - Dither's κ_S, the outer proof's κ + t·ε, a proof and a replica-week, against the design point's budget;
 - the integrity subprotocol's ks_t at the workload card's floor and at one request, and its sum over hourly windows;
 - the remote product's joint error a block, statistical and cryptographic (every term at one budget), and the latter over
