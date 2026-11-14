@@ -1,12 +1,12 @@
 module
 
 public import Properties.Challenger
-public import Properties.Spot.Period
+public import Properties.Spot.MonitoringPeriod
 
 /-!
-# SPOT's period: the ledger its check reads is the auditor's device's own (`Spot.Period.read`)
+# SPOT's period: the ledger its check reads is the auditor's device's own (`Spot.MonitoringPeriod.read`)
 
-`Properties.Spot.Period`'s statements are about the ledger the check was presented. These two say whose it is,
+`Properties.Spot.MonitoringPeriod`'s statements are about the ledger the check was presented. These two say whose it is,
 against the device model of `Properties.Challenger` (`History`: the device's runs and its ledger's lines under a
 key; `Break`: the fixed finder's forgery or SHA-512 collision).
 
@@ -36,7 +36,7 @@ finder.
 
 @[expose] public section
 
-namespace Properties.Spot.Period
+namespace Properties.Spot.MonitoringPeriod
 
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger Properties.Challenger
@@ -50,13 +50,13 @@ def unsignedText (line : Json) : Option String := do
 
 /-- **Each line of the ledger a period's check reads is one the device wrote, under the number it is read at.** For
 every challenger device and every ledger the ledger's half of the period's check reads under the verifier's key
-(`Spot.Period.read`): the ledger is a list of lines that reaches the monitoring period's end, and the line at each
+(`Spot.MonitoringPeriod.read`): the ledger is a list of lines that reaches the monitoring period's end, and the line at each
 place `i` is an entry numbered `i` that says, its signature aside, what a line of the device's own ledger under that
 key says; or the fixed finder outputs a break from the presented ledger and the device (`Break`, on the ledger
 alone). -/
 def LedgerLinesOfDevice : Prop :=
-  ∀ (dev : History) (p : _root_.Spot.Period.Params) (ledger : Json) (r : _root_.Spot.Period.Read),
-    _root_.Spot.Period.read p ledger = .ok r →
+  ∀ (dev : History) (p : _root_.Spot.MonitoringPeriod.Params) (ledger : Json) (r : _root_.Spot.MonitoringPeriod.Read),
+    _root_.Spot.MonitoringPeriod.read p ledger = .ok r →
       (∃ lines : Array Json, ledger = .arr lines ∧ Reaches p ledger ∧
           ∀ (i : Nat) (line : Json), lines[i]? = some line →
             (∃ e, ledgerEntry? line = some e ∧ e.seq = i) ∧ (unsignedText line).isSome ∧
@@ -73,14 +73,14 @@ def Numbered (dev : History) (pk : ByteArray) : Prop :=
 
 /-- **The ledger a period's check reads is the device's own, whole up to the period's end.** For every challenger
 device that numbers its ledger's lines under the verifier's key (`Numbered`), and every ledger the ledger's half of
-the period's check reads under that key (`Spot.Period.read`): the presented lines are, their signatures aside, the
+the period's check reads under that key (`Spot.MonitoringPeriod.read`): the presented lines are, their signatures aside, the
 first lines of the device's own ledger, as many as were presented, in order, none dropped and none added, and one of
 them is stamped at or after the monitoring period's end; or the fixed finder outputs a break from the presented
 ledger and the device (`Break`, on the ledger alone). So of the lines the device signed up to its first line stamped
 at or after the period's end, the check read every one. -/
 def LedgerOfDevice : Prop :=
-  ∀ (dev : History) (p : _root_.Spot.Period.Params) (ledger : Json) (r : _root_.Spot.Period.Read),
-    _root_.Spot.Period.read p ledger = .ok r →
+  ∀ (dev : History) (p : _root_.Spot.MonitoringPeriod.Params) (ledger : Json) (r : _root_.Spot.MonitoringPeriod.Read),
+    _root_.Spot.MonitoringPeriod.read p ledger = .ok r →
     Numbered dev p.key.pub →
       (∃ lines : Array Json, ledger = .arr lines ∧ Reaches p ledger ∧
           lines.size ≤ (dev.ledger p.key.pub).length ∧
@@ -88,4 +88,4 @@ def LedgerOfDevice : Prop :=
           lines.toList.map unsignedText = ((dev.ledger p.key.pub).take lines.size).map unsignedText) ∨
         Break dev p.key p.label (Json.mkObj [("ledger", ledger)])
 
-end Properties.Spot.Period
+end Properties.Spot.MonitoringPeriod

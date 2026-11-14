@@ -1,11 +1,11 @@
 module
 
-public import Properties.Spot.PeriodLedger
-public import Proofs.Properties.Spot.Period
+public import Properties.Spot.MonitoringPeriodLedger
+public import Proofs.Properties.Spot.MonitoringPeriod
 public import Proofs.Properties.Challenger.Lines
 
 /-!
-# Proofs that the ledger a period's check reads is the device's own (`Properties.Spot.PeriodLedger`)
+# Proofs that the ledger a period's check reads is the device's own (`Properties.Spot.MonitoringPeriodLedger`)
 
 `read` passes the ledger to `Challenger.checked`, so each presented line is an entry numbered by its place that
 says what a line of the device's own ledger says, or the finder outputs a break (`read_lines`, `Lines.line_at`,
@@ -18,7 +18,7 @@ device's ledger is the line at its own number, its line that says what presented
 
 @[expose] public section
 
-namespace Properties.Spot.Period
+namespace Properties.Spot.MonitoringPeriod
 
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger Properties.Challenger
@@ -31,8 +31,8 @@ theorem unsignedText_eq {line : Json} {e : LedgerEntry} {s : String} (he : ledge
 
 /-- What `read` read of the ledger where it returns: a list of lines that reaches the monitoring period's end, each
 line an entry, entry `i` numbered `i` and signed under the key. -/
-theorem read_lines {p : _root_.Spot.Period.Params} {ledger : Json} {r : _root_.Spot.Period.Read}
-    (h : _root_.Spot.Period.read p ledger = .ok r) :
+theorem read_lines {p : _root_.Spot.MonitoringPeriod.Params} {ledger : Json} {r : _root_.Spot.MonitoringPeriod.Read}
+    (h : _root_.Spot.MonitoringPeriod.read p ledger = .ok r) :
     ∃ (lines : Array Json) (es : Array LedgerEntry), ledger = .arr lines ∧ Reaches p ledger ∧
       lines.toList.map ledgerEntry? = es.toList.map some ∧ SeqInv es.toList ∧ SigInv p.key es.toList := by
   obtain ⟨hck, stop, hstop, -⟩ := read_ok h
@@ -40,7 +40,7 @@ theorem read_lines {p : _root_.Spot.Period.Params} {ledger : Json} {r : _root_.S
   exact ⟨lines, es, hl, by simp [Reaches, hstop], hlines, verifyLedger_seq hvl, verifyLedger_sig hvl⟩
 
 /-- **Each line of the ledger a period's check reads is one the device wrote**
-(`Properties.Spot.Period.LedgerLinesOfDevice`). -/
+(`Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice`). -/
 theorem ledgerLinesOfDevice : LedgerLinesOfDevice := by
   intro dev p ledger r h
   obtain ⟨lines, es, hl, hreach, hlines, hseq, hsig⟩ := read_lines h
@@ -53,7 +53,7 @@ theorem ledgerLinesOfDevice : LedgerLinesOfDevice := by
       (unsignedText_eq he' hs').trans (unsignedText_eq hle hs).symm⟩
 
 /-- **The ledger a period's check reads is the device's own, whole up to the period's end**
-(`Properties.Spot.Period.LedgerOfDevice`). -/
+(`Properties.Spot.MonitoringPeriod.LedgerOfDevice`). -/
 theorem ledgerOfDevice : LedgerOfDevice := by
   intro dev p ledger r h hnum
   obtain ⟨lines, es, hl, hreach, hlines, hseq, hsig⟩ := read_lines h
@@ -87,4 +87,4 @@ theorem ledgerOfDevice : LedgerOfDevice := by
           hs']
       · rw [Array.getElem?_eq_none (Nat.le_of_not_lt hi), List.getElem?_take_eq_none (Nat.le_of_not_lt hi)]
 
-end Properties.Spot.Period
+end Properties.Spot.MonitoringPeriod
