@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType, Type, Value
-from verity.definitions.registry.tables import table_type
+from verity_vllm.definitions.registry.tables import table_type
 
 from verity_vllm.program.inputs import run_field
 

@@ -9,8 +9,8 @@ implementation."""
 from __future__ import annotations
 
 import pytest
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import lifted as L
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import lifted as L
 
 from tests.program.test_lifted_request import tiny_component
 from tests.program.test_serve3 import D_MAX, TINY, _inputs

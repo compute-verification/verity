@@ -17,7 +17,7 @@ What a record says
   (`verity_vllm.engine.engine_profile.gpu_info`).
 * `tuned_table` — the pinned copy of vLLM's tuned table for that family (identity = `table_sha256()`, an applicability
   condition), `{}` for a family without one.  `launch_config(M, N, K)` mirrors `_get_matmul_config` on that table.
-* `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity.definitions.registry.b1.GemmV2` with
+* `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity_vllm.definitions.registry.b1.GemmV2` with
   `DOT = AmpereBF16TcDot16`, `mma.sync.m16n8k16` bf16 -> f32) — per output coordinate one f32 accumulator advanced over the
   K/16 k16 steps in ascending k order from zero, RNE to bf16.  The tile constants and the pipeline depth decide which output
   coordinates a CTA owns and how the k tiles are staged, NOT the per-coordinate arithmetic — but that is a claim per

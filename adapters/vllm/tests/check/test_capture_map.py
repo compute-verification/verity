@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from verity_vllm.acquire.sources import moe_source

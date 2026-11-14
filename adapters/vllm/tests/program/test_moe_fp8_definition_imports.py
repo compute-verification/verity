@@ -4,7 +4,7 @@
 `verity`, once the other families' modules are Definitions only too.
 
 An import is any import statement in the module, a function-level one included, with a relative one resolved against the registry
-package; `from verity.definitions.registry import m` imports the module `m`.
+package; `from verity_vllm.definitions.registry import m` imports the module `m`.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity.definitions.registry"
+REGISTRY = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(REGISTRY)
 assert _SPEC is not None and _SPEC.origin is not None, REGISTRY
 DIR = Path(_SPEC.origin).parent
@@ -30,10 +30,10 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", 
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention", "act", "boolean_silu",
                             "topp_word_gates", "gumbel_boolean", "dsv4_decode_indices", "sampling")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
+EVIDENCE = "verity_vllm.definitions.evidence"
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES} | {EVIDENCE}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+CATALOG = ("verity.circuits", "verity_vllm.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
 
 
 def _imports(name: str) -> list[tuple[str, int]]:
@@ -61,7 +61,7 @@ def _core(name: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
                 "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
-                "verity.definitions")
+                "verity_vllm.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
@@ -79,8 +79,8 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(name):
 
 
 def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
-    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from verity.definitions.numerics import fp8_twins\n"
+    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from verity_vllm.definitions.numerics import fp8_twins\n"
                                    "    from . import fp8, targets\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [
-        ("numpy", False), ("verity.definitions.numerics", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
+        ("numpy", False), ("verity_vllm.definitions.numerics", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]

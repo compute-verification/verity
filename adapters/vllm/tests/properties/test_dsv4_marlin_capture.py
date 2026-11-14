@@ -18,7 +18,7 @@ import struct
 import numpy as np
 import pytest
 import torch
-from verity.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 
 from tests import fake_vllm
 from tests.properties import dsv4_marlin_capture_gpu as X

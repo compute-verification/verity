@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from verity.definitions.registry.dsv4_moe import limit_bits
+from verity_vllm.definitions.registry.dsv4_moe import limit_bits
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major

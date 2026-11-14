@@ -129,10 +129,10 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.boolean import boolean_version
-from verity.definitions.numerics import marlin_moe_rows as MR
-from verity.definitions.numerics.derived_rows import f2fp_bf16
-from verity.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.numerics.derived_rows import f2fp_bf16
+from verity_vllm.definitions.registry import marlin_moe as MM
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G

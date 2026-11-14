@@ -1,7 +1,7 @@
 """`RMSNormFusedCuda_v2` (generic `fused_add_rms_norm_kernel` under `VLLM_BATCH_INVARIANT=1`): the circuit body equals its
 numpy twin gate for gate.
 
-Needs the numerics package's MUFU.RSQ model (`verity.definitions.numerics`: `librms_triton_model.so`, built on demand into the
+Needs the numerics package's MUFU.RSQ model (`verity_vllm.definitions.numerics`: `librms_triton_model.so`, built on demand into the
 `_jit` cache outside the checkout); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 
 def _numerics():
-    from verity.definitions.numerics import rms_relation
-    from verity.definitions.numerics import rms_triton_model as RM
+    from verity_vllm.definitions.numerics import rms_relation
+    from verity_vllm.definitions.numerics import rms_triton_model as RM
     try:
         RM.build()                                     # into the _jit cache; a no-op when fresh
     except Exception as e:  # noqa: BLE001  -- no compiler / compile failure: skip, do not fail
@@ -37,8 +37,8 @@ def test_ir_body_equals_numpy_twin(N, eps):
     _numerics()
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.numerics import rmsnorm_fused as SW
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.numerics import rmsnorm_fused as SW
+    from verity_vllm.definitions.registry import b1
     rng = np.random.default_rng(1234 + N)
     for defn, tree in ((b1.RMSNormFusedCuda, SW.variance_v2), (b1.RMSNormFusedCudaV1, SW.variance_v1)):
         prog, call = _standalone(bind(defn, N=N, EPS=eps))
@@ -56,7 +56,7 @@ def test_ir_body_equals_numpy_twin(N, eps):
 def test_v2_gate_counts():
     """N=1536: 1024 threads (512 with an FFMA), 32 warps x 31 adds + 31; N=576: 576 threads, 18 warps x 31 + 17."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
     for N, eps, nthreads, nfma, nwarps in ((1536, 1e-6, 1024, 512, 32), (576, 1e-5, 576, 0, 18)):
         prog, call = _standalone(bind(b1.RMSNormFusedCuda, N=N, EPS=eps))
         expected = (N            # Bf16AddF2fp (res')
@@ -75,7 +75,7 @@ def test_v2_gate_counts():
 
 def test_v1_and_v2_trees_differ_only_in_the_variance():
     """Same residual output, same epilogue: an output difference between v1 and v2 is a variance difference."""
-    from verity.definitions.numerics import rmsnorm_fused as SW
+    from verity_vllm.definitions.numerics import rmsnorm_fused as SW
     rng = np.random.default_rng(7)
     N = 1536
     z = rng.standard_normal((64, N)).astype(np.float32)

@@ -1,9 +1,8 @@
 """Ratchet machinery shared by the rule lints in this directory (one rule per ``test_pNN_*.py``).
 
-Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``), and the
-circuit Definitions that moved from it to ``verity/definitions/`` (``LIBRARY`` and ``MOVED_OUT``: circuits' since the
-move, held to the ratchets as they stood), with ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm
-and run in seconds.  What a scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the
+Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``, the
+served circuits' Definitions in ``verity_vllm/definitions/`` among them), with ``ast`` and regexes.  Nothing scanned is
+imported, so the lints need neither torch nor vllm and run in seconds.  What a scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the
 violations that existed when the rule was introduced.
 
 A violation is keyed by ``(file, kind, symbol, detail)``: the file relative to ``adapters/vllm`` (to the repository
@@ -33,15 +32,8 @@ ROOT = HERE.parents[1]                     # adapters/vllm
 REPO = ROOT.parents[1]
 PKG = ROOT / "verity_vllm"
 CORE_PKG = REPO / "verity"
-DEFINITIONS = REPO / "verity" / "definitions"
-#: what of ``DEFINITIONS`` moved out of the integration: the modules at its top and these packages of it. Any other package
-#: of that directory is core's
-MOVED_OUT = frozenset({"numerics", "registry", "tests"})
-#: the modules at its top that stay with core when the served Definitions leave it, so are no more the library's than its
-#: other packages
-CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
-#: the scanned packages: the integration's, and the Definitions that moved out of it
-LIBRARY = (PKG, DEFINITIONS)
+#: the scanned packages: the integration's
+LIBRARY = (PKG,)
 ALLOWLISTS = HERE / "allowlists"
 SKIP_DIRS = frozenset({"__pycache__", "tests"})
 
@@ -62,11 +54,7 @@ class Violation:
 # --- the scanned tree -------------------------------------------------------------------------------------------------
 
 def in_library(p: Path) -> bool:
-    """Whether ``p`` is the library's: under the integration's package, or of ``DEFINITIONS`` and moved out of the
-    integration (``MOVED_OUT``)."""
-    if p.is_relative_to(DEFINITIONS):
-        parts = p.relative_to(DEFINITIONS).parts
-        return (len(parts) == 1 and parts[0] not in CORE_TOPS) or parts[0] in MOVED_OUT
+    """Whether ``p`` is the library's: under the integration's package."""
     return p.is_relative_to(PKG)
 
 

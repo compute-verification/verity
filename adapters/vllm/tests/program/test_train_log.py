@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import sampling as SM
 
 from tests.program.test_train_step import _bits, _data, _outputs, _program, _same_bits
 from verity_vllm.program.frontend.derive_graph import derive_graph

@@ -59,15 +59,15 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.derived_rows import (
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics.derived_rows import (
     add_rn,
     f2fp_bf16,
     fma_rn,
     mul_rn,
 )
 from verity.circuits.ops import fp32, prims
-from verity.definitions.registry import fp8 as F
+from verity_vllm.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -121,7 +121,7 @@ def _step(dot: str):
 
         return lambda acc, a, b: np.asarray(K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32)
     if dot == "hopper":
-        from verity.definitions.numerics.derived_rows import tc_dot32_e4m3
+        from verity_vllm.definitions.numerics.derived_rows import tc_dot32_e4m3
 
         return lambda acc, a, b: tc_dot32_e4m3(acc, a, b)[0]
     raise ValueError(f"unknown k32 step {dot!r}")

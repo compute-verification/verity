@@ -71,17 +71,17 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import REGISTRATION, Program, input_id
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, type_from_json
-from verity.definitions.registry import act as ACT
-from verity.definitions.registry import dense as DENSE
-from verity.definitions.registry import dsa as DSA
-from verity.definitions.registry import hopper as HOP
-from verity.definitions.registry import moe as MOE
-from verity.definitions.registry import pouw_rows as PR
-from verity.definitions.registry import prims as VP
-from verity.definitions.registry import ref_prims as RP
-from verity.definitions.registry import sampling as SPL
-from verity.definitions.registry import tables as TB
-from verity.definitions.registry import topp_word_gates as TW
+from verity_vllm.definitions.registry import act as ACT
+from verity_vllm.definitions.registry import dense as DENSE
+from verity_vllm.definitions.registry import dsa as DSA
+from verity_vllm.definitions.registry import hopper as HOP
+from verity_vllm.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import pouw_rows as PR
+from verity_vllm.definitions.registry import prims as VP
+from verity_vllm.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.registry import sampling as SPL
+from verity_vllm.definitions.registry import tables as TB
+from verity_vllm.definitions.registry import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

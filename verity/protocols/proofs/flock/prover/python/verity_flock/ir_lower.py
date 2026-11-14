@@ -55,7 +55,7 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
@@ -129,7 +129,7 @@ def _boolean_build(key):
     """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
-    `verity.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `verity_vllm.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
     `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
     module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
     `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has
@@ -283,7 +283,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
-    `verity.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
+    `verity_vllm.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
     (`verity.circuits.boolean.trace.folded`) has no ``build``, so its caller's builder lowers it; only one no builder in the
     chain holds is lowered by its own (``fold_build``)."""
     s = getattr(g, "scope", None)
@@ -1298,7 +1298,7 @@ def write_tables(out_dir) -> dict:
     :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity.definitions.numerics import fa2_relation, rms_relation
+    from verity_vllm.definitions.numerics import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

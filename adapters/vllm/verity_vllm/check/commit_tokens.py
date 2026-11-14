@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from verity_vllm.check import executed_prefix as EP
 from verity_vllm.check.replay.index import SAMPLER_OP

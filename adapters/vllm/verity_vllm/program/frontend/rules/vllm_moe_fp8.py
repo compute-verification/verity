@@ -29,8 +29,8 @@ import math
 
 import torch
 from verity.circuits.refs import Coll
-from verity.definitions.registry.fp8 import weight_blocks
-from verity.definitions.registry.prims import F32, I32
+from verity_vllm.definitions.registry.fp8 import weight_blocks
+from verity_vllm.definitions.registry.prims import F32, I32
 
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.derive import Alloc

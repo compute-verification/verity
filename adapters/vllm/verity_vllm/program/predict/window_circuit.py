@@ -141,11 +141,11 @@ from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
-from verity.definitions.registry import rmsnorm_fused_split as NS
-from verity.definitions.registry import int8_exact as IX
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
-from verity.definitions.registry.fa3_check_inf import AttentionV20
+from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
+from verity_vllm.definitions.registry import int8_exact as IX
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
+from verity_vllm.definitions.registry.fa3_check_inf import AttentionV20
 from verity.commitments.windows import interface as IF
 from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config

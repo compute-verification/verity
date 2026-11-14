@@ -14,8 +14,8 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity.definitions.registry import b1_tp2
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1_tp2
+from verity_vllm.definitions.registry import prims as P
 
 from tests.engine.collectives import collective_link as CL
 from tests.engine.collectives.collective_record import (

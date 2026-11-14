@@ -17,7 +17,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.partition_v2 import UNIT_CLASSES
 from verity.commitments.windows import interface as IF
-from verity.definitions.registry import stop_rule
+from verity_vllm.definitions.registry import stop_rule
 from verity.protocols.accounting.certifier.prover import response_tie as RT
 from verity.protocols.accounting.certifier.prover.response_tie import ACCEPT
 from verity.protocols.accounting.certifier.verifier import content_rows as CT

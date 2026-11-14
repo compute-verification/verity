@@ -17,7 +17,7 @@ OPTS = CK.Options()
 def _toy():
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     return bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
                                     lambda B, S, x: B.call(P.F32Add, x[0], x[1]), register=False))
@@ -157,7 +157,7 @@ def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     """GLM-5.3's `SparseMla_v1` at its circuit-check binding (T = 65, the served heads and widths) is past the block whole
     (2^30 bits) and cut by `sparse_mla.CUTS` into each head's blocks and end, whose largest, a full block, fits."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sparse_mla as M
+    from verity_vllm.definitions.registry import sparse_mla as M
 
     F = CK.Findings()
     b = CK.block_range(bind(M.SparseMla, T=65, **M.SPARSE_MLA_GLM53), F)
@@ -171,7 +171,7 @@ GREEDY_SERVED = """
 import json
 from circuit_check import checks as CK
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 F = CK.Findings()
 b = CK.block_range(bind(b1.TokenSelect, V=154880), F)
@@ -199,7 +199,7 @@ def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
     `sparse_mla_split.CUTS` into each split's blocks, its ends in column blocks and each column block's combine, whose
     largest, a full block, fits."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sparse_mla as M, sparse_mla_split as W
+    from verity_vllm.definitions.registry import sparse_mla as M, sparse_mla_split as W
 
     F = CK.Findings()
     b = CK.block_range(bind(W.SparseMlaSplit, T=130, NS=2, **M.SPARSE_MLA_GLM53), F)

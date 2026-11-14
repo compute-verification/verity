@@ -1,6 +1,6 @@
 """The training rules' embedding gradient at a compute capability (`rules.training_loss.EmbeddingDenseBackward` at `cc`): an f32 table's
 gradient as embedding_dense_backward_cuda's kernels compute it, one `torch_embedding_f32.EmbeddingGradF32_v1` call, word for word
-against `torch_kernels.embedding_dense_backward`, the model `verity/definitions/tests/test_torch_embedding_f32.py` holds the
+against `torch_kernels.embedding_dense_backward`, the model `adapters/vllm/verity_vllm/definitions/tests/test_torch_embedding_f32.py` holds the
 Definition to: int64 and int32 ids, ids out of range, the feature kernel's chunks and the sort path; and the refusal of sort keys
 past 31 bits."""
 from __future__ import annotations
@@ -10,9 +10,9 @@ import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from verity.circuits.defs import bind
-from verity.definitions.numerics import torch_kernels as TK
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import torch_embedding_f32 as TEF
+from verity_vllm.definitions.numerics import torch_kernels as TK
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import torch_embedding_f32 as TEF
 
 from tests.program.test_train_step import _bits, _outputs, _program, _same_bits
 from verity_vllm.program.frontend.derive_graph import derive_graph

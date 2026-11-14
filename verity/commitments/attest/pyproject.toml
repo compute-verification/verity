@@ -8,4 +8,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `BINDING` to the period unit's (`verity.commitments.gates.attest`, which builds on `verity.circuits`).
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
-          "verity/definitions/__init__.py",]
+          "adapters/vllm/verity_vllm/definitions/__init__.py",]

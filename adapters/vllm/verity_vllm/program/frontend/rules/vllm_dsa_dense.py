@@ -22,8 +22,8 @@ from verity.circuits.refs import (
     concat,
 )
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics import fa3_model
-from verity.definitions.registry import fa3_split
+from verity_vllm.definitions.numerics import fa3_model
+from verity_vllm.definitions.registry import fa3_split
 
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import refuse

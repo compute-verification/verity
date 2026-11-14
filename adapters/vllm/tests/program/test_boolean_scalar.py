@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_scalar`'s Boolean versions of `ref_prims`' `I64ToI32_v1`, `F32MaxRef_v1` and
+"""`verity_vllm.definitions.registry.boolean_scalar`'s Boolean versions of `ref_prims`' `I64ToI32_v1`, `F32MaxRef_v1` and
 `F32Sqrt_v1`: each is Boolean, names its word primitive, and agrees with it on edge and random words (both zeros, the
 infinities, NaNs with either sign and payload, subnormals, every binade's ends, the i32 range's edges); their gate counts are
 pinned. `F32Sqrt_v2` is held on every one of the 2^32 words by `benchmarks/f32_exhaustive/run.py boolean F32Sqrt`."""
@@ -9,9 +9,9 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import boolean_scalar as BR
-from verity.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.registry import boolean_scalar as BR
+from verity_vllm.definitions.registry import ref_prims as RP
 
 #: id -> (And, Xor, Not gates)
 PINS = {"I64ToI32_v2": (63, 94, 3), "F32MaxRef_v2": (167, 371, 46), "F32Sqrt_v2": (967, 1714, 145)}

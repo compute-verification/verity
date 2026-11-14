@@ -17,7 +17,7 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry import marlin_moe as MM
 
 from tests import fake_vllm
 from tests.acquire.test_glm53_sources import Committer

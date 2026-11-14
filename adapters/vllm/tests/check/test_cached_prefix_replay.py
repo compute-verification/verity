@@ -7,7 +7,7 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics.kernel_registry import Declined
 
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import evaluate as EV

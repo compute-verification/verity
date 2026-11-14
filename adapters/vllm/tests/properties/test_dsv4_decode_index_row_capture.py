@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import dsv4_decode_indices_twin as T
+from verity_vllm.definitions.numerics import dsv4_decode_indices_twin as T
 
 from tests import fake_vllm
 from tests.properties import dsv4_decode_index_row_capture_gpu as X

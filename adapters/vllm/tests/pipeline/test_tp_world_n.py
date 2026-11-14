@@ -12,8 +12,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity.definitions.registry import b1_tp2 as TP2
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1_tp2 as TP2
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend import collective_kinds
 
@@ -185,7 +185,7 @@ RTX_PRO_6000 = ((12, 0), 188)
 def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: int = 8192):
     pytest.importorskip("torch")
     import torch
-    from verity.definitions.registry.tp_allreduce import settings_of
+    from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
@@ -294,7 +294,7 @@ def test_link_three_synthetic_ranks():
     assert link["ranks"] == [0, 1, 2] and link["world_size"] == 3 and link["by_status"] == {"linked": 2}
     ar, ag = link["links"]
     assert ar["definition"]["id"] == "AllReduce_v2{WORLD=3,N=32}" and set(ar["required_writes"]) == {"0", "1", "2"}
-    assert ar["definition"]["module"] == "verity.definitions.registry.b1_tp2"
+    assert ar["definition"]["module"] == "verity_vllm.definitions.registry.b1_tp2"
     assert ag["definition"]["id"] == "AllGather_v1{WORLD=3,N=8}"
     # world 2 of the same synthetic run keeps the recorded gather identity
     sh2 = {r: CL.extract_rank_shard(_rank_events(r, 2), rank=r) for r in range(2)}

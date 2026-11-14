@@ -51,8 +51,8 @@ def long_row_units() -> dict[str, tuple[Any, tuple[str, ...]]]:
     from verity.circuits.defs import bind
     from verity.commitments.gates.embedding import read
     from verity.commitments.history import CAPACITY
-    from verity.definitions.registry import dsa_topk_mask_cut as X
-    from verity.definitions.registry import dsa_topk_reads as R
+    from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
+    from verity_vllm.definitions.registry import dsa_topk_reads as R
 
     out: dict[str, tuple[Any, tuple[str, ...]]] = {}
     for n in (X.WHOLE_MAX, CAPACITY):
@@ -110,7 +110,7 @@ def measure(t: str) -> dict:
     """Template ``t``'s entry: its bytes and largest Definition, the seconds its build and encoding took past what a test
     process has already loaded (the registry, the long row's cut), and this process's peak GB."""
     from verity.circuits.codec import descriptor_id
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
 
     BB.load()
     long_row_units()

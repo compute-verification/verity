@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.correspondence.reader_for_query import Correspondence

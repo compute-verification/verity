@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 import torch
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1, dead_free, sampling_vocab, topp_words
-from verity.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import b1, dead_free, sampling_vocab, topp_words
+from verity_vllm.definitions.registry import sampling as SM
 
 from verity_vllm.check.match import split_selects
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc

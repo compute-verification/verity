@@ -26,8 +26,8 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
-from verity.definitions.registry.sampling import GumbelArgmaxBf16, GumbelArgmaxTempBf16
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.sampling import GumbelArgmaxBf16, GumbelArgmaxTempBf16
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (

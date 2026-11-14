@@ -124,8 +124,8 @@ def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatc
     lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
     name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
     from verity.circuits.defs import REGISTRY, bind
-    from verity.definitions.registry import lifted as L
-    from verity.definitions.registry import moe, ref_prims
+    from verity_vllm.definitions.registry import lifted as L
+    from verity_vllm.definitions.registry import moe, ref_prims
 
     from circuit_check import checks as CK
 
@@ -150,8 +150,8 @@ def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
     composite, the lifted module's; the on-demand ``Lifted[...]_v2`` family lifts primitives only, and made from it,
     ``Lifted[ArgmaxStepF32_v1]_v2``'s pin raised ``'CompositeDefinition' object has no attribute 'params'``, which killed the
     target's check in ``--all``.  A lift its id doesn't name (`MoeFfnFixed`'s is by hand) names no owner."""
-    from verity.definitions.registry import lifted as L
-    from verity.definitions.registry import ref_prims
+    from verity_vllm.definitions.registry import lifted as L
+    from verity_vllm.definitions.registry import ref_prims
 
     from circuit_check import sidecars as SC
 
@@ -325,7 +325,7 @@ def test_reading_every_hook_imports_no_module_of_the_catalog():
             "from circuit_check import sidecars as SC, targets as TG\n"
             "for name in TG.HOOKS:\n"
             "    TG._handed(name)\n"
-            "print(sorted(m for m in sys.modules if m.startswith(('verity.definitions.registry', 'verity.definitions.numerics',"
-            " 'verity.definitions.boolean')) and not m.endswith('.circuit-check')))\n")
+            "print(sorted(m for m in sys.modules if m.startswith(('verity_vllm.definitions.registry', 'verity_vllm.definitions.numerics',"
+            " 'verity_vllm.definitions.boolean')) and not m.endswith('.circuit-check')))\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "[]", r.stdout + r.stderr

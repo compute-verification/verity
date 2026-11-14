@@ -59,8 +59,8 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.dsv4_moe_twin import (
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics.dsv4_moe_twin import (
     clamp_twin,
     hash_twin,
     lg2_words,
@@ -68,8 +68,8 @@ from verity.definitions.numerics.dsv4_moe_twin import (
     score_words,
 )
 from verity.circuits.ops import mufu as MU
-from verity.definitions.registry import dsv4_moe as D
-from verity.definitions.registry import mla_check as MC
+from verity_vllm.definitions.registry import dsv4_moe as D
+from verity_vllm.definitions.registry import mla_check as MC
 
 SCHEMA = "verity-vllm/dsv4-moe-capture/v1"
 RECORD = "dsv4_moe_capture.json"

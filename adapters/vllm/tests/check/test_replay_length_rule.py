@@ -10,7 +10,7 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from tests.program.predict import test_steps as ST
 from verity_vllm.check.match.instance_sequence import RootView

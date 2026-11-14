@@ -7,8 +7,8 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry.topp_geometry import registered_splits
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.frontend import seed_rule as SEED

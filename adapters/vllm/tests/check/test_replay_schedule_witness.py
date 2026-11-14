@@ -5,7 +5,7 @@ pairs: any order the kernel's atomics can hand out passes, and a rank that is no
 from __future__ import annotations
 
 import numpy as np
-from verity.definitions.numerics.moe_align_rows import moe_align_ranks
+from verity_vllm.definitions.numerics.moe_align_rows import moe_align_ranks
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import opening as OP

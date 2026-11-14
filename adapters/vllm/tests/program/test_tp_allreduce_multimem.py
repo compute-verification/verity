@@ -20,11 +20,11 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_tp_allreduce as BA
-from verity.definitions.registry import tp_allreduce as TA
-from verity.definitions.registry import tp_allreduce_check as K
-from verity.definitions.registry import tp_allreduce_nodes as TN
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.registry import boolean_tp_allreduce as BA
+from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import tp_allreduce_check as K
+from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x807F, 0x0080, 0x8080, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80,
                      0xFF80, 0x7FC0, 0x7F81, 0xFFFF], np.uint16)

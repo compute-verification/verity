@@ -23,7 +23,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity.definitions.boolean import write_word
+from verity_vllm.definitions.boolean import write_word
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
@@ -85,13 +85,13 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/common.py", "verity_vllm/program/frontend/value_types.py",
                          "verity_vllm/program/frontend/targets.py",
                          # the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/program/frontend/export_ops.py", "verity/definitions/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/definitions/registry/b1_tp2.py",
                          # the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "verity/definitions/boolean.py",
+                         "verity_vllm/definitions/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
@@ -100,8 +100,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
 
 
 def _source_root(rel: str) -> str:
-    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`, or
-    `verity` for the Definitions), which in a checkout are different directories."""
+    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`)."""
     from importlib import resources
     from pathlib import Path
     return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)
@@ -256,7 +255,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                   "hint": (f"the row's sampling policy is {sampling} (source: {sampling.get('source')}); this builder binds the token-select "
                                            f"kinds {sorted(SAMPLERS_BOUND)} only ({'; '.join(f'{k}: {v}' for k, v in SAMPLERS_BOUND.items())}). A stochastic "
                                            f"row needs a token-select Definition for the pinned BI sampler and a rule that emits it — not the greedy argmax. "
-                                           f"`GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity.definitions.registry.sampling; seed/pos/temperature as "
+                                           f"`GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity_vllm.definitions.registry.sampling; seed/pos/temperature as "
                                            f"bound inputs) is exact to `_temperature_kernel` -> `_gumbel_sample_kernel` for top_p == 1 / no top_k; the top-p "
                                            f"mask (`topk_topp_triton._topp_sb_{{stats,step,mask}}_kernel`) has no exact Definition and no "
                                            f"wrapper authors the stochastic select yet."),
@@ -327,7 +326,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             if tp > 1:
                 # rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                from verity.definitions.registry.tp_allreduce import settings_of
+                from verity_vllm.definitions.registry.tp_allreduce import settings_of
                 env_now = engine_env.snapshot()
                 allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
                 observe_allreduce_settings(allreduce_settings)

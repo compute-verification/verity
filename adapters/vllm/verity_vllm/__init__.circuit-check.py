@@ -35,11 +35,11 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.ops.boolean import gemm as BG
-    from verity.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
-    from verity.definitions.registry import flashmla as FM, flashmla_prefill as FP
-    from verity.definitions.registry import marlin_moe as MM
-    from verity.definitions.registry import sparse_mla as SM
-    from verity.definitions.registry import tp_allreduce as TA
+    from verity_vllm.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
+    from verity_vllm.definitions.registry import flashmla as FM, flashmla_prefill as FP
+    from verity_vllm.definitions.registry import marlin_moe as MM
+    from verity_vllm.definitions.registry import sparse_mla as SM
+    from verity_vllm.definitions.registry import tp_allreduce as TA
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
@@ -83,7 +83,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend.rules import vocab as V
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,

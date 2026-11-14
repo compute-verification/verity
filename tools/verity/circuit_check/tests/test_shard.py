@@ -439,7 +439,7 @@ def _forked(name: str) -> str:
     # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
     # first check to load it records the kernels it registers as reads this process can't digest
     return UNITS_FORKED.replace(*ROOTS_LOGGED).replace("fork=True)", f"fork=True, binding={name!r})").replace(
-        "rep = cli.run(", "from verity.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+        "rep = cli.run(", "from verity_vllm.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
 
 
 @pytest.mark.slow
@@ -644,7 +644,7 @@ def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_
 #: `test_units`' ``--records-only`` with each binding's slice and the shared part beside the tree (`cli.records`' ``slices``)
 SLICED_RECORDS = RECORDS_ONLY.replace("jobs=2)", "jobs=2, slices=root.parent / f'{root.name}-slices')")
 #: the real registry loaded before the run, as `_forked` loads it
-LOADED = ("rep = cli.run(", "from verity.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(")
+LOADED = ("rep = cli.run(", "from verity_vllm.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(")
 
 
 def _slices(root: Path) -> tuple[dict, Path]:

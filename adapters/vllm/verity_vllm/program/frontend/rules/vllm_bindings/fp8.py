@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 from verity.circuits.refs import Coll, array_of
-from verity.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
+from verity_vllm.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.derive import Alloc, refuse

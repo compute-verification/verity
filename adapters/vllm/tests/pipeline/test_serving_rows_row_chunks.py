@@ -14,12 +14,12 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as IF
 from verity.circuits.ops import mufu as MU
 from verity.circuits.ops import prims as OP
-from verity.definitions.registry import b1 as B1
-from verity.definitions.registry import dead_free as DF
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fa2_check_inf as FA2
-from verity.definitions.registry import fa3_check_inf as FA3
-from verity.definitions.registry import hopper as HP
+from verity_vllm.definitions.registry import b1 as B1
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fa2_check_inf as FA2
+from verity_vllm.definitions.registry import fa3_check_inf as FA3
+from verity_vllm.definitions.registry import hopper as HP
 from verity_flock.class_statement import UnitStager
 
 from verity_vllm.pipeline import chunk_rows as CR

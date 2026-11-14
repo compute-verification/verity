@@ -1,5 +1,5 @@
 """GPU run: vLLM's read-back of an `fp8_ds_mla` cache row on its dense prefill (``ops.cp_gather_and_upconvert_fp8_kv_cache``,
-whose token function is `verity.definitions.registry.fp8_ds_mla_upconvert`'s docstring's), every bf16 word it writes held to
+whose token function is `verity_vllm.definitions.registry.fp8_ds_mla_upconvert`'s docstring's), every bf16 word it writes held to
 ``Fp8DsMlaUpconvertRow_v1{DN=512,DR=64}``.
 
 Three phases, each a process of its own:
@@ -89,7 +89,7 @@ def sources(block_table: np.ndarray, ws: np.ndarray, starts: np.ndarray | None, 
 
 def held(rows: np.ndarray, words: np.ndarray) -> dict[str, Any]:
     """The kernel's words against the Definition's numpy kernel on the rows it read."""
-    from verity.definitions.registry import fp8_ds_mla_upconvert as U
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
     want = U.upconvert_rows(*U.split_rows(rows, **U.FP8_DS_MLA_GLM53))[0]
     bad = want != words
@@ -112,7 +112,7 @@ def planted_rows(rng: np.random.Generator) -> np.ndarray:
     """Rows of planted bytes (N, 656): each hand vector across a whole row; every code under each four of `EDGE_SCALES`,
     forward and reversed; 512 rows of uniform bytes; 512 of uniform codes under scales of uniform sign, exponent and
     mantissa. The RoPE words are uniform, NaN payloads among them."""
-    from verity.definitions.registry import fp8_ds_mla_upconvert as U
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
     DN, DR = U.FP8_DS_MLA_GLM53["DN"], U.FP8_DS_MLA_GLM53["DR"]
     G = DN // U.QT
@@ -388,7 +388,7 @@ def serve(out: Path) -> dict[str, Any]:
 def capture(out: Path) -> int:
     if os.environ.get("PYTHONHASHSEED") != "0":
         raise SystemExit("fp8-read-back: PYTHONHASHSEED=0 (a set's order decides a batch's row order)")
-    from verity.definitions.registry import fp8_ds_mla_upconvert as U
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
     # A phase that raises ends the script with its traceback; the record written before it then says ok false.
     doc: dict[str, Any] = {"definition": {"id": U.glm53_row().id, "module": U.__file__}, "ok": False}
@@ -453,7 +453,7 @@ def compare(out: Path, library: bool = True, expect_sha256: str | None = None) -
     """Every saved row through the Definition's evaluator; with ``library``, the loaded vLLM's ``_C_stable_libtorch.abi3.so``
     by sha256 (against ``expect_sha256``, a build whose SASS was read, where given) and its kernel's SASS."""
     from verity.circuits.evaluation import evaluate_batch
-    from verity.definitions.registry import fp8_ds_mla_upconvert as U
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
     D = U.glm53_row()
     DN, DR = U.FP8_DS_MLA_GLM53["DN"], U.FP8_DS_MLA_GLM53["DR"]

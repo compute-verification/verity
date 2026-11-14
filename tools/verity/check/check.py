@@ -469,7 +469,7 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     (("lean-agreement",), 390),                                  # the agreement beside lean-build, Flock suite: 339 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
     (("circuit-check",), 290),                                   # circuit-check granted the slot once alone: 251 + 15%
-    (("pytest:verity/definitions", "lean-suites:verity-vllm"), 170),   # its test beside the parallel suites: 144 + 15%
+    (("pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm"), 170),   # its test beside the parallel suites: 144 + 15%
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 110),                                      # lean-build and the Flock suite alone: 94 + 15%
@@ -1781,7 +1781,7 @@ OPT_IN = {
     "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
         "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
         "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
-    "verity/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
+    "adapters/vllm/verity_vllm/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
         "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
         "tests/test_figures.py::test_figures_writes_every_figure",)},
@@ -3210,7 +3210,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
 
 #: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
 #: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
-PREBUILD = "import json\nfrom verity.definitions.numerics import twins\nprint(json.dumps(twins.preload()))\n"
+PREBUILD = "import json\nfrom verity_vllm.definitions.numerics import twins\nprint(json.dumps(twins.preload()))\n"
 #: the prebuild's output, in the output directory beside the steps' logs
 PREBUILD_LOG = "prebuild.log"
 

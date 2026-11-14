@@ -27,8 +27,8 @@ from verity.circuits.evaluation import evaluate
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.definitions.registry import boolean_dsa_norm as BDN
-from verity.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry import boolean_dsa_norm as BDN
+from verity_vllm.definitions.registry import dsa_norm as DN
 from verity.commitments.windows import history as HW
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS

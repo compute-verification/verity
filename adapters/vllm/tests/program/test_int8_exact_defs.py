@@ -12,8 +12,8 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.registry import int8_exact as X
-from verity.definitions.registry.prims import bits_of, f32_of
+from verity_vllm.definitions.registry import int8_exact as X
+from verity_vllm.definitions.registry.prims import bits_of, f32_of
 
 from verity_vllm.engine import int8_attention as IA
 from verity_vllm.engine import int8_exact as E
@@ -61,8 +61,8 @@ def test_the_replay_row_quantizer_is_the_definition_and_the_served_quantizer(K):
     """`kernels.int8_rows` (the Commit's sampled replay of `Int8RowQuant_v1`) word for word against the Definition and
     `engine.int8_exact.quantize_rows` on rows at four spreads, a zero row (the floored scale), a row of subnormals, -0 and +-1,
     and one whose max is bf16's largest finite."""
-    from verity.definitions.numerics import int8_rows as Q
-    from verity.definitions.numerics import rows
+    from verity_vllm.definitions.numerics import int8_rows as Q
+    from verity_vllm.definitions.numerics import rows
 
     g = torch.Generator().manual_seed(K)
     x = torch.cat([_rows(g, 4, K, spread=sp) for sp in (0.5, 4.0, 12.0, 30.0)])
@@ -97,9 +97,9 @@ def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
     """`kernels.int8_rows.scaled_mm` (the replay of `ScaledMmS8_v1`) word for word against `engine.int8_exact.plain_linear` on
     quantized rows (a zero row among them) and against the Definition, there and on codes the quantizer never makes (-128),
     with DOT spelt as the spec text, a bare id and the bound primitive; another DOT is declined by name."""
-    from verity.definitions.numerics import int8_rows as Q
-    from verity.definitions.numerics import rows
-    from verity.definitions.numerics.kernel_registry import Declined
+    from verity_vllm.definitions.numerics import int8_rows as Q
+    from verity_vllm.definitions.numerics import rows
+    from verity_vllm.definitions.numerics.kernel_registry import Declined
     from verity.circuits.ops import gemm
 
     g = torch.Generator().manual_seed(seed)
@@ -130,8 +130,8 @@ def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
 def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
     """Rows whose bf16 word tells the epilogue's order apart (searched: about 4 in 10^6 random ones do): the replay's word is the
     Definition's, (Y sx) sw, and not (Y sw) sx."""
-    from verity.definitions.numerics import derived_rows as D
-    from verity.definitions.numerics import int8_rows as Q
+    from verity_vllm.definitions.numerics import derived_rows as D
+    from verity_vllm.definitions.numerics import int8_rows as Q
     from verity.circuits.ops import gemm
 
     x, w = [1] * 32, [127] * (Y // 127) + [Y % 127] + [0] * (31 - Y // 127)
@@ -146,7 +146,7 @@ def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
 def test_the_replay_s8_chain_clamps_each_step():
     """`s8_chain` is the `BlackwellS8ImmaDot32_v1` chain step for step where a step clamps: 4,097 steps of 32 x (-128)^2 past
     2^31 - 1, then 64 of -(128 x 127) back down, one long row against its negation."""
-    from verity.definitions.numerics import int8_rows as Q
+    from verity_vllm.definitions.numerics import int8_rows as Q
     from verity.circuits.ops import prims as CP
 
     K = (4097 + 64) * 32
@@ -168,8 +168,8 @@ def test_the_replay_attention_is_the_definition_and_the_served_attention(n, s, h
     word against `engine.int8_attention.kv_quant` / `window_attention` on every KV head and (row, head), and against the Definitions
     on one KV head and the last row's heads: prefill, chunk (1 < n < s) and decode rows, a window past one k step, K clamped by a
     small scale and A saturated by a large one, SCALE spelt as a float, the spec text's f64 literal and a decimal string."""
-    from verity.definitions.numerics import int8_rows as Q
-    from verity.definitions.numerics import rows
+    from verity_vllm.definitions.numerics import int8_rows as Q
+    from verity_vllm.definitions.numerics import rows
 
     g = torch.Generator().manual_seed(n * 1000 + s)
     d, scale = 32, 32 ** -0.5
@@ -272,7 +272,7 @@ def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
     `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
     from verity.circuits.program import Program
     from verity.circuits import operations as O
-    from verity.definitions.registry import tables as T
+    from verity_vllm.definitions.registry import tables as T
 
     table = X.exp2_lut127_words()
     assert len(table) == X.EXP2_LUT127_TABLE.leaves == 512 and T.table_read(8, 2).params[0][1].w == 16

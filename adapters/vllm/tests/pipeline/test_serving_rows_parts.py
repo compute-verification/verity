@@ -14,12 +14,12 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.registry import boolean_sigma as SG
-from verity.definitions.registry import cuda_rmsnorm as C
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import dsa_norm as DN
-from verity.definitions.registry import tp_allreduce as TA
-from verity.definitions.registry import tp_allreduce_split as TS
+from verity_vllm.definitions.registry import boolean_sigma as SG
+from verity_vllm.definitions.registry import cuda_rmsnorm as C
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import tp_allreduce_split as TS
 
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW

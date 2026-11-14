@@ -36,8 +36,8 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.registry import b1
-from verity.definitions.registry import inductor as IR
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import inductor as IR
 
 from verity_vllm.acquire.inductor_texts import (
     ADD2_NORM,

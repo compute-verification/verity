@@ -69,7 +69,7 @@ def test_the_plans_are_the_documented_ones():
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
-        5: ((*NAMED, "pytest:verity/definitions", *BESIDE_AUDIT),
+        5: ((*NAMED, "pytest:adapters/vllm/verity_vllm/definitions", *BESIDE_AUDIT),
             ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate"),
             (*build, *BESIDE_BUILD, "lean-agreement"), ("pytest:*",), ("circuit-check",))}
 
@@ -87,16 +87,17 @@ def test_the_5_pod_plan_runs_circuit_check_alone_in_its_last_shard():
 
 
 def test_the_5_pod_plan_runs_pytest_in_two_shards_by_suite_and_the_others_run_it_whole(tmp_path):
-    """pytest alone held the 5-pod plan's fourth shard, its whole run that shard's critical path: verity/definitions (one served
-    test of about a quarter hour bounds it, whatever its workers) beside circuit_check's catalog and the one-process suites.
-    The plan names verity/definitions beside the security analysis's audit and the rest of pytest's suites (`pytest:*`) in the
+    """pytest alone held the 5-pod plan's fourth shard, its whole run that shard's critical path: the served
+    Definitions' suite, adapters/vllm/verity_vllm/definitions (one served test of about a quarter hour bounds it, whatever
+    its workers) beside circuit_check's catalog and the one-process suites.
+    The plan names it beside the security analysis's audit and the rest of pytest's suites (`pytest:*`) in the
     fourth: each shard's pytest step runs exactly its suites by name (`suites.py SUITE...`), and the two cover every suite of
     pytest's once.  A plan that names none of pytest's suites runs it whole, one part `pytest`."""
     names = [s.name for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN]
     shards = [CHECK.shard(f"{k}/5")["parts"] for k in range(1, 6)]
     held = [[p.partition(":")[2] for p in s if p.partition(":")[0] == "pytest"] for s in shards]
-    assert held[0] == ["verity/definitions"] and not held[1] and not held[2] and not held[4]
-    assert sorted(held[3]) == sorted(n for n in names if n != "verity/definitions") and all(":" not in s for s in held[3])
+    assert held[0] == ["adapters/vllm/verity_vllm/definitions"] and not held[1] and not held[2] and not held[4]
+    assert sorted(held[3]) == sorted(n for n in names if n != "adapters/vllm/verity_vllm/definitions") and all(":" not in s for s in held[3])
     assert all(p.startswith("pytest:") for p in shards[3])
     for k in (1, 4):
         [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
@@ -586,8 +587,8 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
     pytest = sorted(f"pytest:{s.name}" for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN)
-    assert parts == [[["pytest:verity/definitions", *SECURITY, *sorted(BESIDE_AUDIT)]],
-                     [[p for p in pytest if p != "pytest:verity/definitions"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[["pytest:adapters/vllm/verity_vllm/definitions", *SECURITY, *sorted(BESIDE_AUDIT)]],
+                     [[p for p in pytest if p != "pytest:adapters/vllm/verity_vllm/definitions"]], [[]], []], "an unsharded check sends none"
 
 
 def _records_run(tmp_path, monkeypatch, rc: int = 0) -> tuple[Path, list[list[str]]]:

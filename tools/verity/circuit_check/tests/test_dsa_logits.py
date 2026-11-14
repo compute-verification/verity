@@ -21,7 +21,7 @@ def test_a_long_rows_logits_are_its_q_once_and_a_key_block_a_key():
     """The composite's ANDs at GLM-5.3's 131,072 keys, read from its descriptor without tracing a row (a traced one would be
     some 10^11 gates at H 32, D 128); the cut keeps each of `DsaMqaLogit_v4`'s ANDs once."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_dsa as BD
+    from verity_vllm.definitions.registry import boolean_dsa as BD
     from verity_flock.ir_lower import definition_ands
 
     q, key = definition_ands(bind(BD.DsaMqaLogitsQ, H=8, D=32)), definition_ands(bind(BD.DsaMqaLogitsKey, H=8, D=32))
@@ -34,7 +34,7 @@ def test_one_keys_logits_lower_to_its_logits_ands():
     """Catches a lowering of the composite's Call and batch that repeats or drops a gate its descriptor counts once: no cheaper
     test lowers both.  Only the ANDs: the cut's circuit is not the logit's gate for gate."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_dsa as BD
+    from verity_vllm.definitions.registry import boolean_dsa as BD
     from verity_flock.ir_lower import definition_ands
 
     one = bind(BD.DsaMqaLogitsV4, N=1, H=8, D=32)

@@ -7,7 +7,7 @@ import sys
 import types
 
 import pytest
-from verity.definitions.registry.topp_geometry import (
+from verity_vllm.definitions.registry.topp_geometry import (
     SPLIT_MAX_BATCH,
     registered_splits,
     splits_for,

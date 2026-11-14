@@ -35,7 +35,7 @@ def row(p, requests=None):
 def test_the_sparse_mla_blocks_count_glm53_s_heads():
     """The 128k workload's sparse-MLA blocks are GLM-5.3's eight heads', not one head's: every sparse-MLA block of
     the `workload` card takes a factor, a head's units at one head a row an eighth of it and a whole row its own."""
-    from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+    from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
 
     assert H.heads() == SPARSE_MLA_GLM53["NH"] == 8
     vol, one = H.volume(), H.volume(1)
@@ -51,7 +51,7 @@ def test_the_sparse_mla_blocks_count_glm53_s_heads():
 def test_the_head_count_is_read_not_written(monkeypatch):
     """The volume counts the registry's `NH` heads a row, as a head count written into the driver would not: under
     another count the card's own request no longer gives the card's blocks, and the row is refused."""
-    from verity.definitions.registry import sparse_mla
+    from verity_vllm.definitions.registry import sparse_mla
 
     monkeypatch.setitem(sparse_mla.SPARSE_MLA_GLM53, "NH", 3)
     with pytest.raises(ValueError, match="not its own request's at 3 heads a row"):

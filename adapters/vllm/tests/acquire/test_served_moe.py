@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
-from verity.definitions.registry import act
-from verity.definitions.registry import moe as M
+from verity_vllm.definitions.registry import act
+from verity_vllm.definitions.registry import moe as M
 
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD

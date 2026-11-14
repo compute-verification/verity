@@ -111,7 +111,7 @@ def _program_output_gate(P):
 def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
     from verity.circuits import Program, bind
     from verity.circuits.evaluation.reference import evaluate_region
-    from verity.definitions.registry.sampling import GumbelArgmaxBf16
+    from verity_vllm.definitions.registry.sampling import GumbelArgmaxBf16
     P = Program(bind(GumbelArgmaxBf16, V=V, SEED=seed, POS=pos))
     C = P.circuit
     gates = [g for _, _, g in P.input_coll(0).refs]
@@ -285,8 +285,8 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     import numpy as np
     from verity.circuits import Program, bind
     from verity.circuits.evaluation.reference import evaluate_region
-    from verity.definitions.registry import prims as P
-    from verity.definitions.registry.sampling import GumbelArgmaxTempBf16
+    from verity_vllm.definitions.registry import prims as P
+    from verity_vllm.definitions.registry.sampling import GumbelArgmaxTempBf16
 
     from tests.engine.gumbel_oracle import gumbel_noise_exact
     V, seed, pos = 80, 11, 5

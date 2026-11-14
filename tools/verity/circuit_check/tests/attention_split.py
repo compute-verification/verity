@@ -23,8 +23,8 @@ from circuit_check import units as UN
 from test_circuit_check import PINS, REPO
 
 SNAPSHOT = json.loads((Path(__file__).parent / "fixtures" / "attention_split_facts.json").read_text())
-PKG = "verity.definitions.registry"
-REGISTRY = REPO / "verity" / "definitions" / "registry"
+PKG = "verity_vllm.definitions.registry"
+REGISTRY = REPO / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry"
 #: the family's Definition modules (the DSA and sparse-MLA ones included), and `hopper`, which the split left as it was
 MODULES = ("fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa", "boolean_dsa",
            "sparse_mla", "boolean_sparse_mla", "hopper")

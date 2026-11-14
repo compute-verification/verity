@@ -61,8 +61,8 @@ from verity.circuits.evaluation.bits import compile as compile_bits  # noqa: E40
 from verity.circuits.program import Program, is_input  # noqa: E402
 from verity.circuits.refs import Coll, concat, tuple_of  # noqa: E402
 from verity.circuits.types import Array, Tuple  # noqa: E402
-from verity.definitions.boolean import boolean_version  # noqa: E402
-from verity.definitions.registry import prims as PRIMS  # noqa: E402
+from verity_vllm.definitions.boolean import boolean_version  # noqa: E402
+from verity_vllm.definitions.registry import prims as PRIMS  # noqa: E402
 from verity_vllm.program.frontend.train_step import AdamW, step_program  # noqa: E402
 
 LF_PATH = ROOT / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"

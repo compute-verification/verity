@@ -35,7 +35,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report

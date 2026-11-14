@@ -14,9 +14,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.definitions import boolean as SW
+from verity_vllm.definitions import boolean as SW
 from verity.circuits.ops.boolean import gemm as BG
-from verity.definitions.registry import boolean_fp8 as BF
+from verity_vllm.definitions.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

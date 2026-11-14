@@ -38,9 +38,9 @@ import numpy as np
 import torch
 from verity.circuits.refs import Coll, PartLog, Refs, array_of, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import dsa
-from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import (

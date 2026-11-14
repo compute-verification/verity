@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from verity.definitions.numerics.rows import EVALUATORS
+from verity_vllm.definitions.numerics.rows import EVALUATORS
 
 from verity_vllm.check.c2_rules import (
     _complete_replay_population_gap,

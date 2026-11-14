@@ -193,7 +193,7 @@ def test_add_norm_quant_is_the_definitions_twin(norm_refs):
     statement the Commit's tapped norm is held to."""
     import numpy as np
 
-    from verity.definitions.numerics import rmsnorm_fused as RF
+    from verity_vllm.definitions.numerics import rmsnorm_fused as RF
     from verity_vllm.engine import int8_fused as F
     for x, r, w, eps in norm_refs[0]:
         z = (x.float() + r.float()).bfloat16().float()

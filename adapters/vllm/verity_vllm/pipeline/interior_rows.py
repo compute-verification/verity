@@ -51,9 +51,9 @@ import numpy as np
 
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.commitments import history as HT
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry.dead_free import CHUNK
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry.dead_free import CHUNK
 from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay

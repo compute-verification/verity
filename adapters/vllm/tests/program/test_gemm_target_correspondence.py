@@ -6,7 +6,7 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import cpu_model as CM
+from verity_vllm.definitions.numerics import cpu_model as CM
 
 from verity_vllm.config import ROOT
 from verity_vllm.pipeline import cli

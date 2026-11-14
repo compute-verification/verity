@@ -961,7 +961,7 @@ def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
     {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
     {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
     {G.REPO_RUFF_CONFIG: None},
-    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"verity/definitions/")', '"verity/definitions/", "tools/")')},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"adapters/vllm/",)', '"adapters/vllm/", "tools/")')},
 ], ids=["ignore", "exclude", "deleted", "lint-code"])
 def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
     both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})
@@ -1120,11 +1120,11 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
     seen: list[list[str]] = []
     monkeypatch.setattr(G, "ruff_findings", _noting(seen, lambda ruff, config, files: sorted(files), G.ruff_findings))
     both_ruffed.git("checkout", "-q", "main")
-    both_ruffed.commit("definitions", {"verity/definitions/registry/word.py": "X = 1\n"})
+    both_ruffed.commit("definitions", {"adapters/vllm/verity_vllm/definitions/registry/word.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
     both_ruffed.commit("a clean file, and others the lint doesn't hold", {
         "tools/c.py": "C = 1\n", "adapters/vllm/verity_vllm/c.py": "import os\n",
-        "verity/definitions/registry/tiny.py": "import os\n", "verity/definitions/registry/word.py": None, "tools/notes.md": "import os\n"})
+        "adapters/vllm/verity_vllm/definitions/registry/tiny.py": "import os\n", "adapters/vllm/verity_vllm/definitions/registry/word.py": None, "tools/notes.md": "import os\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
     assert seen == [[], ["tools/c.py"]]

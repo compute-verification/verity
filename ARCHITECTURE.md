@@ -259,7 +259,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 
 | What | Today | At the end |
 | --- | --- | --- |
-| The circuits of served kernels | `verity/definitions/` | what a protocol names to `verity/circuits/ops/`, the rest to `adapters/vllm/` |
+| The circuits of served kernels | `adapters/vllm/verity_vllm/definitions/`, the circuits a protocol names among them | what a protocol names to `verity/circuits/ops/` |
 | Leftovers in `verity/`: `claims/`, `settings.py`, `composite/` | `verity/` | deleted, `tools/`, and inside `compose/` |
 | Loose files inside five protocols | beside `verifier/`, `prover/`, `device/` | inside one of the three, or out of `verity/` |
 | `fixtures/` | the root | each file beside its reader |

@@ -12,7 +12,7 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     Boolean version that flips one bit of every output word is caught."""
     import verity.circuits.evaluation.bits as EB
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_dsa_topk as BT
+    from verity_vllm.definitions.registry import boolean_dsa_topk as BT
 
     t = bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8)
     F = CK.Findings()

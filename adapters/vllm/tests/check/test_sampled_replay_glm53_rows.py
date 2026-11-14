@@ -13,10 +13,10 @@ from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.circuits.evaluation.reference import signature_of
-from verity.definitions.numerics import batched_gemm_rows, glm53_rows, rows
-from verity.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics import batched_gemm_rows, glm53_rows, rows
+from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import (
+from verity_vllm.definitions.registry import (
     b1,
     boolean_rope,
     cublas_bf16,
@@ -124,7 +124,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     """The replay record's `evaluator_provenance` for LlBf16SplitKGemm_v1 is the capture that held cuteDSL's split-K launches to
     `splitk_rows`: at both gates, every M the capture runs that the dispatch table sends to the split-K kernel, at the table's
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
 

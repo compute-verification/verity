@@ -13,12 +13,12 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
 from verity.commitments.windows import interface as IF
-from verity.definitions.registry import b1, hopper
-from verity.definitions.registry import dead_free as DF
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import sampling as SA
-from verity.definitions.registry import topp_words as TW
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import topp_words as TW
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL

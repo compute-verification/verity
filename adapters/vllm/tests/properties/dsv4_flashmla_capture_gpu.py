@@ -92,11 +92,11 @@ from typing import Any, SupportsInt
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import flashmla_prefill_twin as PT
-from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
-from verity.definitions.registry import flashmla as F
-from verity.definitions.registry import flashmla_prefill as P
+from verity_vllm.definitions.numerics import flashmla_prefill_twin as PT
+from verity_vllm.definitions.numerics import flashmla_twin as T
+from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
+from verity_vllm.definitions.registry import flashmla as F
+from verity_vllm.definitions.registry import flashmla_prefill as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G

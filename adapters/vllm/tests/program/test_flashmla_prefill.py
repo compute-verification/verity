@@ -18,13 +18,13 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions import boolean as SW
+from verity_vllm.definitions import boolean as SW
 from verity.circuits.kernels import tc as CK
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import flashmla_prefill_twin as T
-from verity.definitions.numerics import flashmla_twin as FT
-from verity.definitions.registry import boolean_flashmla_prefill as BP
-from verity.definitions.registry import flashmla_prefill as P
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import flashmla_prefill_twin as T
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.registry import boolean_flashmla_prefill as BP
+from verity_vllm.definitions.registry import flashmla_prefill as P
 
 U = np.uint32
 DEFS = {d.id: d for d in P.FLASHMLA_PREFILL_COMPOSITES}

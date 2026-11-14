@@ -7,7 +7,7 @@ from __future__ import annotations
 
 def boolean_version(block: str, definition: str) -> bool:
     """Whether the tree registers `definition` (a Definition's id) as the Boolean version of the census type `block`
-    (its census name): the registry binds the type's Definition, and `verity.definitions.boolean.boolean_version` of
+    (its census name): the registry binds the type's Definition, and `verity_vllm.definitions.boolean.boolean_version` of
     it, the newest registered Boolean Definition that names it as its word and no caller has to opt in to, has that
     id. A type this tree's registry doesn't bind, or registers no Boolean version of, has none."""
 
@@ -15,7 +15,7 @@ def boolean_version(block: str, definition: str) -> bool:
 
     # registers `EmbeddingRead_v1`, a `READ` static's Definition, which `boolean.load` doesn't
     from verity.commitments.gates import embedding  # noqa: F401
-    from verity.definitions import boolean
+    from verity_vllm.definitions import boolean
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
 
     boolean.load()

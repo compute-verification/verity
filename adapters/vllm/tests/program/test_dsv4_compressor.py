@@ -24,15 +24,15 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import dsv4_compressor_twin as T
-from verity.definitions.numerics import flashmla_twin as FT
-from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
-from verity.definitions.registry import boolean_dsv4_compressor as BC
-from verity.definitions.registry import boolean_dsv4_indexer as BI
-from verity.definitions.registry import dsv4_compressor as C
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import flashmla as F
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.numerics import dsv4_compressor_twin as T
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
+from verity_vllm.definitions.registry import boolean_dsv4_compressor as BC
+from verity_vllm.definitions.registry import boolean_dsv4_indexer as BI
+from verity_vllm.definitions.registry import dsv4_compressor as C
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import flashmla as F
 from verity.circuits.silicon import fp as FP
 
 U = np.uint32

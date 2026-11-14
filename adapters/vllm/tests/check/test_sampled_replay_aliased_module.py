@@ -17,7 +17,7 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics import rows as RK
 
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 from verity_vllm.check.replay import driver as SR

@@ -15,7 +15,7 @@ from verity.circuits.codec import encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.definitions.registry import moe
+from verity_vllm.definitions.registry import moe
 
 from verity_vllm.program.frontend.target_profile import TargetProfile
 

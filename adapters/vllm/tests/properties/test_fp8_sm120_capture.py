@@ -9,8 +9,8 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fp8_moe_rows as MR
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fp8_moe_rows as MR
 from verity.circuits.ops import prims
 
 from tests.properties import fp8_sm120_capture_gpu as X

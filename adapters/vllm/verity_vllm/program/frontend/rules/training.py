@@ -40,11 +40,11 @@ import torch
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.circuits.ops import scalar as SC
-from verity.definitions.registry import int8_exact as IE
-from verity.definitions.registry import moe as MOE
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
-from verity.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import int8_exact as IE
+from verity_vllm.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import sampling as SM
 
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_attention import FlashSdpa

@@ -1,5 +1,5 @@
 """The flag/select primitives of the padded serving circuit --
-`verity/definitions/registry/pad_prims.py` (`BitAnd_v1`/`BitNot_v1` new; the selects and `I32Eq_v1` reused from
+`adapters/vllm/verity_vllm/definitions/registry/pad_prims.py` (`BitAnd_v1`/`BitNot_v1` new; the selects and `I32Eq_v1` reused from
 `prims.py`).  The `veritor.pad-serve@1` gate set itself, its digest and its out-of-width rejections are pinned by the SP1
 statement table's own tests (`archive/sp1/common/src/gateset.rs`: `pad_serve_manifest_matches_the_python_family`,
 `pad_serve_gates_evaluate_and_reject_out_of_width_words`)."""
@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import pad_prims as PP
 
 
 def test_bit_gates_truth_tables_and_absorption():

@@ -8,7 +8,7 @@ unreplayable families) computes cuBLAS's routes as the pin's scan saw them, whic
 departure, an unrecorded fact one too."""
 from __future__ import annotations
 
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 __all__ = ["route_pin_gate", "stamp"]
 

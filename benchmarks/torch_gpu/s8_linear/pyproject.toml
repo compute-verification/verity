@@ -19,4 +19,4 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/pouw/prover/sass_gate.py", "benchmarks/torch_gpu/ship_nvcc.sh",
           "benchmarks/torch_gpu/ship_probe.sh", "benchmarks/torch_gpu/job_nvcc.sh", "benchmarks/torch_gpu/ship.sh",
           "benchmarks/torch_gpu/ship_clock.c",
-          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon"]

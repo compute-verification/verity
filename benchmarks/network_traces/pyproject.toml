@@ -64,7 +64,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven",
           "benchmarks/certifier_term/run.py",
           "adapters/vllm/workloads",
-          "adapters/vllm/verity_vllm/__init__.py",
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/window_advice.py",
           "adapters/vllm/verity_vllm/pipeline/advice.py", "adapters/vllm/verity_vllm/pipeline/advice_windows.py",
           "adapters/vllm/verity_vllm/pipeline/cli.py",

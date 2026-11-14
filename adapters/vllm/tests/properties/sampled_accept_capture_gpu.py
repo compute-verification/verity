@@ -69,7 +69,7 @@ for _p in (ROOT / "adapters" / "vllm", ROOT):
         sys.path.insert(0, str(_p))
 
 SV = importlib.import_module("tests.program.sampled_accept_vectors")
-A = importlib.import_module("verity.definitions.registry.sampled_accept")
+A = importlib.import_module("verity_vllm.definitions.registry.sampled_accept")
 
 SCHEMA = "verity-vllm/sampled-accept-capture/v1"
 RECORD = "sampled_accept_capture.json"

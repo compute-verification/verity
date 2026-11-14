@@ -17,8 +17,8 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import mla_check as MK
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import mla_check as MK
 
 from tests import fake_vllm
 from tests.properties import glm53_bf16_gemm_capture_gpu as X

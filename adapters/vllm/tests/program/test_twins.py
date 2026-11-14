@@ -1,4 +1,4 @@
-"""verity/definitions/numerics/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast)."""
+"""adapters/vllm/verity_vllm/definitions/numerics/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast)."""
 from __future__ import annotations
 
 import zlib
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import kernel_registry as KR
-from verity.definitions.numerics import twins as TW
+from verity_vllm.definitions.numerics import kernel_registry as KR
+from verity_vllm.definitions.numerics import twins as TW
 
 FAMILIES = sorted(TW.FAMILIES)
 

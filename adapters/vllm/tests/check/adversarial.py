@@ -21,8 +21,8 @@ from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import concat
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, fold

@@ -128,7 +128,7 @@ from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.program.prune import dead_units
-from verity.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry import io_shell as IO
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape

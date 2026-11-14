@@ -66,8 +66,8 @@ def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_po
     import numpy as np
 
     from verity_vllm.pipeline.topp_split_probe import gen_random
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
-    from verity.definitions.registry.topp_split import topp_keep_row
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
+    from verity_vllm.definitions.registry.topp_split import topp_keep_row
 
     nsm, V = RTX["num_sms"], 4096
     S_reg = registered_splits(nsm)
@@ -423,7 +423,7 @@ def test_workload_labels_by_provenance():
 def test_compile_steps_passes_its_own_rule():
     """At top_p 1 and below: the compiler emits the registered split count at any top_p; an unseeded request's seed,
     derived from its id and the window's seed salt, is the one it compiles to alone."""
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
     I1 = pytest.importorskip("verity.protocols.accounting.certifier.verifier.advice")

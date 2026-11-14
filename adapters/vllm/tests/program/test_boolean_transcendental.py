@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_transcendental`'s `F32ExpRn_v2` and `F32LogRn_v2`, `ref_prims`' `F32ExpRn_v1` and
+"""`verity_vllm.definitions.registry.boolean_transcendental`'s `F32ExpRn_v2` and `F32LogRn_v2`, `ref_prims`' `F32ExpRn_v1` and
 `F32LogRn_v1` on bits: each is Boolean, names its word primitive and is its Boolean version, its gates and its Flock rows and
 nonzeros are pinned, and it agrees with the word on edges, every binade's ends, its thresholds or the words near 1, the
 words whose result lies nearest a rounding boundary, and random words. Each is held on every one of the 2^32 words by
@@ -11,9 +11,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import boolean_transcendental as BT
-from verity.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.registry import boolean_transcendental as BT
+from verity_vllm.definitions.registry import ref_prims as RP
 
 #: per Definition: (And, Xor, Not) gates, and the Flock unit's rows (ANDs and committed bits) and nonzeros in A and B
 PINS = {"F32ExpRn": ((6055, 45190, 192), (6484, 445332)), "F32LogRn": ((3080, 27298, 293), (3541, 103111))}

@@ -85,8 +85,8 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import mhc_twin as W
-from verity.definitions.registry import mhc as R
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import mhc as R
 from verity.circuits.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
@@ -479,7 +479,7 @@ def phase_mufu(work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     import torch
 
     from verity.circuits.ops import mufu as MU
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     x = mufu_inputs()
 

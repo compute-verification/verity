@@ -17,7 +17,7 @@ from verity_vllm.program.compact import p_item_weight_span as _p_w_span
 
 def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
-    from verity.definitions.boolean import word_descriptor
+    from verity_vllm.definitions.boolean import word_descriptor
     with gzip.open(word_descriptor(d)) as f:
         desc = json.load(f)
     with open(os.path.join(d, "derive-report.json")) as f:

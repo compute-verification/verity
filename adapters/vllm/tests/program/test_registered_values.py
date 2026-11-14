@@ -9,10 +9,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.constants import program_data
-from verity.definitions.registry import b1, hopper
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import value_inputs as VI
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import value_inputs as VI
 
 
 def _bf16(rng, n: int, scale: float = 1.0) -> list[int]:
@@ -92,7 +92,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
     """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
     `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""
     import torch
-    from verity.definitions.numerics.serve3_reference import materialize
+    from verity_vllm.definitions.numerics.serve3_reference import materialize
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
@@ -136,7 +136,7 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""
     import torch
     from verity.circuits import boolean as BL
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
 
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report

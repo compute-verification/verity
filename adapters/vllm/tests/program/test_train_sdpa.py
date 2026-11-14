@@ -8,8 +8,8 @@ import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import fa2_train as FT
 
 from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity_vllm.program.frontend.derive_graph import derive_graph

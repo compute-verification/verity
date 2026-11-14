@@ -9,7 +9,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from verity.definitions.numerics.rows import EVALUATORS
+from verity_vllm.definitions.numerics.rows import EVALUATORS
 
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.delegate import DELEGATES

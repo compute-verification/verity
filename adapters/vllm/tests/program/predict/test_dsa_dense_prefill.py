@@ -13,7 +13,7 @@ import re
 from collections import Counter
 
 import pytest
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
 from tests.program.predict.test_dsa_long_rows import _canonical
 from tests.program.predict.test_node import _first_layers

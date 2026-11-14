@@ -19,8 +19,8 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import mhc_twin as W
-from verity.definitions.registry import mhc as R
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import mhc as R
 
 from tests import fake_vllm
 from tests.properties import dsv4_mhc_capture_gpu as X

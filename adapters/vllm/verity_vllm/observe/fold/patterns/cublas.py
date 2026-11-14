@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1, cublas_bf16
+from verity_vllm.definitions.registry import b1, cublas_bf16
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import (
@@ -45,7 +45,7 @@ class CublasLinear:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
             return None
-        from verity.definitions.registry import bf16_gemm_check
+        from verity_vllm.definitions.registry import bf16_gemm_check
 
         a = bound_args(node)
         x, w, bias = a.get("input", a.get("arg0")), a.get("weight", a.get("arg1")), a.get("bias", a.get("arg2"))

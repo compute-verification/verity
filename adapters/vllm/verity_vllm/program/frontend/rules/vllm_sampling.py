@@ -1,6 +1,6 @@
 """The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
 pos, S)` -> one `GumbelTopPTokenSelect_v2{V,S}(logits_row, top_p, seed, pos, temp, Const32[S])` per logits row
-(verity.definitions.registry.sampling).
+(verity_vllm.definitions.registry.sampling).
 
 What the op stands for (vLLM d9105ea80 `Sampler.sample` for a request whose `SamplingParams` are temperature T > 0, top_p < 1, top_k 0,
 an explicit `seed`, no penalties / logit bias / min_p / logprobs):
@@ -25,7 +25,7 @@ import struct
 import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity.definitions.registry.sampling import SPLIT_COUNTS
+from verity_vllm.definitions.registry.sampling import SPLIT_COUNTS
 
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape

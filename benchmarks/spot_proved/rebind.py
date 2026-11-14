@@ -55,7 +55,7 @@ def main() -> int:
     from verity_vllm.pipeline import serving_rows as SRW
 
     from verity.circuits.codec import decode_program
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
 
     src, out = Path(a.values), Path(a.out)
     doc = json.loads((src / "values.json").read_text())

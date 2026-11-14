@@ -7,11 +7,11 @@ import os
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import fa2_model as FA
-from verity.definitions.numerics import fa2_relation, rms_relation
-from verity.definitions.numerics import rms_triton_model as RM
+from verity_vllm.definitions.numerics import fa2_model as FA
+from verity_vllm.definitions.numerics import fa2_relation, rms_relation
+from verity_vllm.definitions.numerics import rms_triton_model as RM
 from verity.circuits.ops import mufu
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import prims as P
 
 TANH_TABLE_WORD = 0x3F000000  # tanh(0.5): between the identity and the saturation rule, so answered from the table
 

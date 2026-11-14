@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.sampling_rows` against the GPU's own words (`test_sampling_rows`): on the GPU fixture's rows
+"""`verity_vllm.definitions.registry.sampling_rows` against the GPU's own words (`test_sampling_rows`): on the GPU fixture's rows
 (`fstoch01_rows.npz`, over a tracked file's limit) the vectorised row and the lane walk equal the device's served token and the
 device kernel's masked row, and the `_v2` logs are the GPUs' words on every input of their probe, fetched from the evidence
 store.
@@ -10,7 +10,7 @@ import os
 
 import numpy as np
 import pytest
-from verity.definitions.registry import sampling_rows as SR
+from verity_vllm.definitions.registry import sampling_rows as SR
 
 from tests.program.test_sampling_rows import _gpu_paths, f32b, needs_tables
 
@@ -47,7 +47,7 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
     """Three real rows of the llama B8 stochastic record (`fstoch01_rows.npz`, an L40S, vLLM d9105ea80): the device's served token,
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
-    from verity.definitions.registry import sampling_topp_difftest as D
+    from verity_vllm.definitions.registry import sampling_topp_difftest as D
 
     from verity_vllm.properties.admission import evaluate_spec
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))

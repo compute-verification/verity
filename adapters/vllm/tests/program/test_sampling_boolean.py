@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.sampling_boolean`: the Boolean greedy path agrees with its word Definitions (`trace.word_of`):
+"""`verity_vllm.definitions.registry.sampling_boolean`: the Boolean greedy path agrees with its word Definitions (`trace.word_of`):
 `ArgmaxStep_v2` with `ArgmaxStep_v1` on special and random carries, `TokenSelect_v2{V}` with `TokenSelect_v1{V}` on over 90,000
 logit rows (ties, signed zeros, infinities, NaNs, a NaN first logit) and at the served vocabularies (SmolLM2's 49,152,
 Llama-3.2's 128,256, Gemma-2's 256,000), the maximum at the first and the last index included; its stages chained as root Calls give the same token, each stage is separable and partitions under `Q_word_v1` with
@@ -22,10 +22,10 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import word as W
-from verity.definitions.numerics import rows
-from verity.definitions.registry import b1
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import sampling_boolean as SB
+from verity_vllm.definitions.numerics import rows
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import sampling_boolean as SB
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

@@ -1,4 +1,4 @@
-"""The Boolean-first fill (`verity.definitions.boolean`): the Boolean versions of the word Definitions the served rows reached
+"""The Boolean-first fill (`verity_vllm.definitions.boolean`): the Boolean versions of the word Definitions the served rows reached
 with none.
 
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
@@ -21,17 +21,17 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
 from verity.circuits.types import Array, Value
-from verity.definitions import boolean as BB
+from verity_vllm.definitions import boolean as BB
 from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as MP
 from verity.circuits.ops import scalar as S
-from verity.definitions.registry import b1, b1_tp2, hopper, moe
-from verity.definitions.registry import dsv4_decode_indices as DI
-from verity.definitions.registry import inductor as I
-from verity.definitions.registry import marlin_moe as MM
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import b1, b1_tp2, hopper, moe
+from verity_vllm.definitions.registry import dsv4_decode_indices as DI
+from verity_vllm.definitions.registry import inductor as I
+from verity_vllm.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 F32 = Value(32)
 SPECIAL32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x00000001, 0x807FFFFF, 0x3F800000,

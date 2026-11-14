@@ -64,7 +64,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/commitments/lms/lean/Lms",
           "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
           "verity/protocols/proofs/flock/verifier/lean-toolchain", "verity/protocols/proofs/flock/verifier/Flock",
-          "verity/definitions/__init__.py", "verity/hardware/__init__.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/hardware/__init__.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/device/__init__.py", "verity/circuits/base", "verity/circuits/lean",
           "verity/commitments/lean"]

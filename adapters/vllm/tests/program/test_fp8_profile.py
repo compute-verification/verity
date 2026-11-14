@@ -10,7 +10,7 @@ import importlib
 import json
 
 import pytest
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.observe.events import (

@@ -29,9 +29,9 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
-from verity.definitions import boolean as BL  # noqa: E402
-from verity.definitions.registry.catalog import load  # noqa: E402
-from verity.definitions.registry.sampling import bit_at  # noqa: E402
+from verity_vllm.definitions import boolean as BL  # noqa: E402
+from verity_vllm.definitions.registry.catalog import load  # noqa: E402
+from verity_vllm.definitions.registry.sampling import bit_at  # noqa: E402
 from verity.commitments.windows import interface as IF  # noqa: E402
 from verity_vllm.program.predict import block_counts as BC  # noqa: E402
 

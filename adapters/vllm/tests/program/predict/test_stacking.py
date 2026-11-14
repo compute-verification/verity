@@ -14,7 +14,7 @@ import pytest
 from verity.circuits.program import Program
 from verity.circuits import stacking as P
 from verity.circuits.census import census, step_ends
-from verity.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
+from verity_vllm.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 
 from tests.program.predict.test_predict import FIX, _phi
 from verity_vllm.program.predict.build import build_program

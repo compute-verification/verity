@@ -20,7 +20,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program, is_input
-from verity.definitions.boolean import boolean_version, lift
+from verity_vllm.definitions.boolean import boolean_version, lift
 from verity.circuits.census import (
     PRODUCTS,
     SILICON,
@@ -37,9 +37,9 @@ from verity.circuits.requirement import (
 )
 from verity.circuits.ops import prims as P
 from verity.circuits.ops.boolean import gemm as BG
-from verity.definitions.registry import b1, b1_tp2
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import b1, b1_tp2
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 from tests.program import test_derive_neutrality as GLM
 from tests.program.predict.test_predict import FIX, TINY, _phi

@@ -10,7 +10,7 @@
     F32SumPartHalf_v1{G, HALF}         (s: Array<G, Array<32, Value<1>>>) -> Array<16, Value<1>>
     RmsNormRecipHalf_v1{N, G, EPS, HALF}  (s: Array<G, Array<32, Value<1>>>) -> Array<16, Value<1>>
 
-Softmax over x_0 .. x_{N-1} is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity.definitions.registry.ref_prims`) on the GPU's
+Softmax over x_0 .. x_{N-1} is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity_vllm.definitions.registry.ref_prims`) on the GPU's
 operations, so a kernel matches it bit for bit with ``add.rn.f32``, ``mul.rn.f32``, ``div.rn.f32``, ``ex2.approx.ftz.f32``
 and ``cvt.rn.bf16.f32``:
 
@@ -18,7 +18,7 @@ and ``cvt.rn.bf16.f32``:
   when any x_i is a NaN. It is one of the x_i, so `SoftmaxMax` outputs it exactly, in 16 bits.
 - ``e_j = MUFU.EX2.FTZ(RN(RN(f32(x_j) - f32(m)) * L))``, L = RN32(log2 e) = 0x3FB8AA3B (`MufuEx2Ftz_v2`'s builder): the
   reference's `F32ExpRn_v1` has no Boolean form, and MUFU.EX2 is what an sm_90 kernel computes, read from the sm_89 table
-  as the H200 Definitions read it (`verity.definitions.numerics.fa3_model`: assumed identical on sm_90).
+  as the H200 Definitions read it (`verity_vllm.definitions.numerics.fa3_model`: assumed identical on sm_90).
 - ``s = (((+0 + e_0) + e_1) + ...) + e_{N-1}``, in ascending order, and ``r = RN(1 / s)``. `SoftmaxRecip` outputs r's low
   (HALF = 0) or high (HALF = 1) 16 bits.
 - ``p_j = bf16_rn(RN(e_j * r))``. `SoftmaxOut` recomputes e_j from x_j and m, so it reads x_j, m and r's two halves.

@@ -18,9 +18,9 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
-from verity.definitions.registry import boolean_dsa_topk_mask as BM
-from verity.definitions.registry import dsa_topk_mask_cut as X
-from verity.definitions.registry import dsa_topk_reads as R
+from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
+from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
+from verity_vllm.definitions.registry import dsa_topk_reads as R
 
 #: the long row's merge as served: the longest row's 8 blocks, TOPK slots
 SERVED = dict(M=8, K=2048)

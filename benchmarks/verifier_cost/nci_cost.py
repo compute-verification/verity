@@ -10,7 +10,7 @@ must be `nci-check --policy`'s.
       per Call (`run.instance`)
   glm --out DIR --phases EXE --scratch DIR --workload PATH [--word-only]
       GLM-5.3's rank 0 workload Program of the B1 Build (root: its inputs and one Call, the request) word-level as built,
-      then on bits: `verity.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
+      then on bits: `verity_vllm.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
       (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one IU, the
       request, at `nci_glm.GAMMA`, `nci_glm.ALPHA`
 
@@ -177,7 +177,7 @@ def peak_gb() -> float:
 def glm(args) -> int:
     from verity.circuits import codec
     from verity.circuits.program import Program
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
 
     import lift
 

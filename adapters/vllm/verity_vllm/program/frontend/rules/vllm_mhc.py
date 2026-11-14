@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import array_of
-from verity.definitions.numerics.mhc_twin import tf32_num_split
+from verity_vllm.definitions.numerics.mhc_twin import tf32_num_split
 
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, known, shape

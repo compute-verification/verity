@@ -28,9 +28,9 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.windows import interface as I
-from verity.definitions.registry import b1_tp2 as B1T
-from verity.definitions.registry import tp_allreduce as TA
-from verity.definitions.registry import tp_combine as TC
+from verity_vllm.definitions.registry import b1_tp2 as B1T
+from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import tp_combine as TC
 
 from verity_vllm.pipeline import serving_templates as ST
 

@@ -10,7 +10,7 @@ name and takes the names its `__all__` lists: `schemes.get(name)` returns a conf
 module's `__all__`. Six modules state none (`circuit.h1window`, `circuit.live` and four of `schemes/`), and eleven lists
 are short of what is read: eight of the modules a `circuit-check` sidecar binds, `circuit.plan`, `circuit.words` and
 `schemes.pearl_c4`. The package is stated over the verifier's parameters: it imports `verity.circuits`,
-`verity.definitions`, `verity.commitments`, `verity.protocols.accounting.pouw.verifier` and SPOT's verifier
+`verity_vllm.definitions`, `verity.commitments`, `verity.protocols.accounting.pouw.verifier` and SPOT's verifier
 (`verity.protocols.proofs.spot.verifier`, for a window's Program and sampling design), with `verity.errors`, and nothing else
 of the workspace. It reads no file and no environment variable, and nothing under `benchmarks/` or `adapters/`. Its
 tests are in `verity/protocols/accounting/pouw/verifier/tests/`.

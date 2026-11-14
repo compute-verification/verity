@@ -70,11 +70,11 @@ from typing import Any, NamedTuple
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import dsv4_compressor_twin as T
-from verity.definitions.numerics import flashmla_twin as FT
-from verity.definitions.registry import dsv4_compressor as R
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import flashmla as F
+from verity_vllm.definitions.numerics import dsv4_compressor_twin as T
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.registry import dsv4_compressor as R
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import flashmla as F
 
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C

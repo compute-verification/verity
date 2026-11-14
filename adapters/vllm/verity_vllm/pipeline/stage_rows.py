@@ -106,7 +106,7 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 def _twin(family: str, V: int, logits: np.ndarray, ops: dict[str, int]) -> tuple[int, dict]:
     """A row's token and every unit's outputs (its plan's key -> its return fields' words), by its family's twin."""
     if OPERANDS[family] == _TOPP_OPERANDS:
-        from verity.definitions.numerics.topp_stage_twins import stage_rows
+        from verity_vllm.definitions.numerics.topp_stage_twins import stage_rows
 
         return stage_rows(V, logits, ops["top_p"], ops["seed"], ops["pos"], ops["temp"], ops["splits"])
     return importlib.import_module(STAGE_PLANS[family]).twin(V, logits)

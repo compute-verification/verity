@@ -15,8 +15,8 @@ from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
-from verity.definitions.registry import greedy_stages as G
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import greedy_stages as G
+from verity_vllm.definitions.registry.prims import BF16
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 

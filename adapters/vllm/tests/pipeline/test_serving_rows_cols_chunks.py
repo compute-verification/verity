@@ -12,11 +12,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import rows as CS
-from verity.definitions.registry import boolean_moe as BMOE
-from verity.definitions.registry import boolean_sigma as SG
-from verity.definitions.registry import boolean_tp_allreduce as BTA
-from verity.definitions.registry import moe as M
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import boolean_moe as BMOE
+from verity_vllm.definitions.registry import boolean_sigma as SG
+from verity_vllm.definitions.registry import boolean_tp_allreduce as BTA
+from verity_vllm.definitions.registry import moe as M
+from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_flock.class_statement import UnitStager
 
 from verity_vllm.pipeline import chunk_rows as CR
