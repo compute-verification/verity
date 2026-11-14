@@ -22,7 +22,6 @@ inputs = ["benchmarks/network_traces/load_relay.py", "verity/protocols/accountin
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/coins.py",
           "verity/protocols/proofs/spot/device/remote.py",
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/circuits",

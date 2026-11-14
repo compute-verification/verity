@@ -10,7 +10,6 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
           # one_stage's registration, which core_check imports, and its draw and verdict
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
@@ -34,8 +33,6 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
           # canonical JSON, held to the circuits codec's
           "verity/protocols/accounting/pouw/verifier/lean/check/models.json",
-          # the claims registry, which test_ledger.py holds the memory line's named PRF claim to
-          "verity/claims/__init__.py",
           # PoUW's core answer form and what it imports, which test_p2_party.py holds a session's answer to
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py",
           "verity/protocols/accounting/pouw/verifier/coins.py", "verity/protocols/accounting/pouw/verifier/core_check.py",

@@ -21,7 +21,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/circuits/difftest", "tools/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
-          "verity/claims/__init__.py", "verity/protocols/proofs/spot",
+          "verity/protocols/proofs/spot",
           # verifier.py and its in-process harness, which the stub verifier runs
           "benchmarks/remote_session",
           # auditor_line.py --boundary, which the stub verifier's run is read with: the network certifiers' records and audit

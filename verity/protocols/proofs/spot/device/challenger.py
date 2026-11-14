@@ -17,8 +17,8 @@ and never twice: a retry never resamples.  There is no beacon and no Fiat–Sham
 a client derives what it samples from the opened coin (`verity.commitments.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
-**Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+**Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` claim id of
+`verity.commitments.claim_ids` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
 `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
@@ -199,7 +199,7 @@ So the log shows each session's evidence fixed before the next session's tree is
 
 The first client is PoUW's live window (`verity.protocols.accounting.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.commitments`, `verity.claims` and `verity.channel`, so any client calls it as it is.
+`verity.commitments` and `verity.channel`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -217,10 +217,10 @@ from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity import claims
 from verity.channel import Record
 from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
+from verity.commitments import claim_ids
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 from verity.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
@@ -364,7 +364,7 @@ NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only a
 #: the property every coin source's claim instance is assumed of: independent uniform output
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
-            "assumption of verity.claims), so no assumption covers its coins: a served challenger draws from a named "
+            "claim id of verity.commitments.claim_ids), so no assumption covers its coins: a served challenger draws from a named "
             "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
@@ -373,15 +373,14 @@ class CoinError(ValueError):
 
 
 def coin_claim(entropy: Any) -> str | None:
-    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` assumption of
-    `verity.claims`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
+    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` claim id of
+    `verity.commitments.claim_ids`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
     `CoinError`: a misnamed source is refused, never taken for an unnamed one."""
     claim = getattr(entropy, "claim", None)
     if claim is None:
         return None
-    prop, sep, instance = claim.partition("/") if type(claim) is str else ("", "", "")
-    if not (sep and prop == COIN_PROPERTY and instance in claims.INSTANCES):
-        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> assumption of verity.claims, "
+    if not (type(claim) is str and claim.startswith(f"{COIN_PROPERTY}/") and claim in claim_ids.IDS):
+        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> claim id of verity.commitments.claim_ids, "
                         f"not {claim!r}")
     return claim
 

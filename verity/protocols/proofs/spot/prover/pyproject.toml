@@ -107,7 +107,6 @@ inputs = [
     "verity/errors.py",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/proofs/spot",
-    "verity/claims",
     "verity/protocols/accounting/pouw/verifier/__init__.py",
     "verity/protocols/accounting/pouw/verifier/window.py",
     "verity/protocol.py",

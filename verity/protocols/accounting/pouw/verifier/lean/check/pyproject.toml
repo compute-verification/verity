@@ -27,7 +27,6 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "tools/difftest", "verity/__init__.py",
           "verity/channel.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py",
-          "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
           "verity/protocols/accounting/pouw/verifier/period_check.py",
           "verity/protocols/accounting/pouw/verifier/verifier.py", "verity/protocols/accounting/pouw/verifier/salt.py",
