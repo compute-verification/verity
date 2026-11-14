@@ -10699,97 +10699,6 @@
    },
    "type_hash": "9eb1993b8b572a50b8618a175ce013cc2296b4a4695af3bfec3de6ae607ef5aa"
   },
-  "Accounting.SecurityProofs.Tag.DigestNonCollision": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.DigestNonCollision : Accounting.Guarantees.Tag.DigestNonCollision"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a5885b18cdc13950f3c4fc02f5c781a957dd2052abf4391c6b55a518ad2f19f5",
-   "unfolded_hash": "9c2ef6610a26f27a4a2bf806a819bf54ba559531793bc4162ab3b1adcfea52b8"
-  },
-  "Accounting.SecurityProofs.Tag.FoldNonCollision": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.FoldNonCollision : Accounting.Guarantees.Tag.FoldNonCollision"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "79612cf8b8ff82de4c0a82bfddf5723de71efbdc8cb5219aec9a866c5fcb6876",
-   "unfolded_hash": "a2764e7edd2b0a17bbd197be6654243383e06432c2aba23d250c37719f3a08ab"
-  },
-  "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.HornerIsBlockHash : Accounting.Guarantees.Tag.HornerIsBlockHash"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "fad930b61c45eb758145c976bd5544c44efb5cba4dcc55342e5dfe5865f76b63",
-   "unfolded_hash": "684eb2c46ae76c0b24b803db7c9a375c0c8a738778489547731629a03d857f3a"
-  },
-  "Accounting.SecurityProofs.Tag.PartialReadGuess": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PartialReadGuess : Accounting.Guarantees.Tag.PartialReadGuess"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a699a385085916af1e166ba392545ca8d2ebe459f68e867c508db72f919f6803",
-   "unfolded_hash": "bf0b50e910c6de4e1240c69a89b8f7d304abcf36c926a6611277d01944957f18"
-  },
-  "Accounting.SecurityProofs.Tag.PolyNonCollision": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollision : Accounting.Guarantees.Tag.PolyNonCollision"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "7b0f647827cedcc43c3c71d20282fe6947495ea846027d4268fddc1dfbc468f1",
-   "unfolded_hash": "2e3a45d22326e90e2227a215324d5980418b232ee96f907579ee201f33792b92"
-  },
-  "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed : Accounting.Guarantees.Tag.PolyNonCollisionKeyed"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "c6ca9b886962d17559eb99064498a277a8c46edf712e5c11a84d8542bbda4fee",
-   "unfolded_hash": "3898ed6b1852fa74022addfab0f400b0970e2bac8de7697a8f69b924a2cfc024"
-  },
-  "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PolyUnpredictable : Accounting.Guarantees.Tag.PolyUnpredictable"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035",
-   "unfolded_hash": "c8de82d578c7417ca97a3a512ad758506cdff5525562eedc5baca40120052254"
-  },
   "Accounting.SecurityProofs.TileUnpredictableMono": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono"],
@@ -27684,34 +27593,6 @@
     "function": ["Flock.Stmt.setupTables", "Flock.verify", "Flock.Zk.verify", "Flock.ProvedScope.check"],
     "outcome": "accept"
    },
-   "Accounting.SecurityProofs.Tag.PolyNonCollision": {
-    "function": "Accounting.Tag.blockHash",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
-    "function": "Accounting.Tag.blockHash",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
-    "function": "Accounting.Tag.blockHash",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.PartialReadGuess": {
-    "function": "Accounting.Tag.wordGuess",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.FoldNonCollision": {
-    "function": "Accounting.Tag.fold",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
-    "function": "Accounting.Tag.digest",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
-    "function": "Accounting.Tag.hornerHash",
-    "outcome": "none"
-   },
    "Accounting.SecurityProofs.Sketch.NonCollision": {
     "function": "Accounting.Tag.project",
     "outcome": "none"
@@ -32735,18 +32616,6 @@
     "Accounting.Guarantees.TS.StageIdeal": "e2eba2e20dd90d4907c1c875563f4f688a48e04f1377b5b49deacddb61decdc9"
    }
   },
-  "Definitions.Accounting.Guarantees.Tag": {
-   "digest": "533da6a305f33505ed0f25315957b0ae15f186f2640d6c25548f002ad3a1f1a8",
-   "definitions": {
-    "Accounting.Guarantees.Tag.DigestNonCollision": "b2bbf0f3fe90bbc7f00ec47104bccecf86654fb805dbd915012efea8f51539af",
-    "Accounting.Guarantees.Tag.FoldNonCollision": "7d5c2d7e9e66f77884e7ec4fca8352c6374372698f946df3f93e4cf9d8f0a408",
-    "Accounting.Guarantees.Tag.HornerIsBlockHash": "4aeb9f5d243bf02331ce33cb21d3ef2069d685a12a434962eae9a2065f22d9d8",
-    "Accounting.Guarantees.Tag.PartialReadGuess": "55bc754da56b8532c229cb1de73feddffa64bfe8587a04d99e43728a3b600a4a",
-    "Accounting.Guarantees.Tag.PolyNonCollision": "c03170cdfcf63bcfcd7565abcb832017a16c82ab79e46e2789ad5409d362adc6",
-    "Accounting.Guarantees.Tag.PolyNonCollisionKeyed": "1846a66d78e12bdfc749bfd54bb47b49e4771a904d2bd14afd14357701524593",
-    "Accounting.Guarantees.Tag.PolyUnpredictable": "cea57330a90d80d581e054836260227f00581ca42ee4db6fc22c2ec71337d7ee"
-   }
-  },
   "Definitions.Accounting.HMu": {
    "digest": "d6b04be97b6e0f666b8689c8584c4059f064d7c20805cc7b32901bc4f19eec2c",
    "definitions": {
@@ -34150,23 +34019,6 @@
     "Accounting.TS.Unfolded.rec": "bb7c868ff6b06c922d8ffe2e35efdbbe95cfc1e5e47678cb1d321464049f3ece",
     "Accounting.TS.Unfolded.round": "7d37232d94dabc302c97bc664c8b1e986e5ee1578f7e8e582682e288e324bb86",
     "Accounting.TS.Unfolded.share": "b40c514c298a06d7440aae8461f26316b5d97de3efb3ec67710331a924e6c819"
-   }
-  },
-  "Definitions.Accounting.Tag.PolyHash": {
-   "digest": "5349ca3ab135f216b32f81822d42be297bc7f5e4b326186e0198d0205eb531e8",
-   "definitions": {
-    "Accounting.Tag.Chunk": "9bc9ea62e047df32e8abcf68c7868382b7b9e10a7e54d085ed94bf610b8be513",
-    "Accounting.Tag.P": "1e13f3806b340c3540c6539824653737b91897e76b4efef6d60b36f94cd96623",
-    "Accounting.Tag.Word": "1e46537a35242d3e7593eaf643bd8c90094a2654a54862103b3b0a6a872b4b6c",
-    "Accounting.Tag.blockHash": "4bad2043a7b81fac13aadd5db87e9888fdd92bf978d34db9ccb6a5c515262091",
-    "Accounting.Tag.consistent": "f823f31420d3bf23fde22fbdaed8f51cecc8cc283fa0bced182ca7c8f19bc067",
-    "Accounting.Tag.digest": "c494572e7d73997000128255544388e996a816525dbdcbcf18b157ddd5731b40",
-    "Accounting.Tag.fold": "f171954ac318bc9e64af7d1f4d9ae66fa957de8ef6d5371630342e7a7ce54e6e",
-    "Accounting.Tag.hornerHash": "05406102fc52f3a9679bf83083f4dd84a12edbae2940ab945c48e67c9a2532d6",
-    "Accounting.Tag.partialRead": "ebda9fb497425ae57a781878861918b49a141c3bd72fc75dc8a7141ca3924f67",
-    "Accounting.Tag.residue": "35490ea3a9bc32d44807b5f8fe8b4b17f9a33a23aaa2ddd5bf256542543ab63c",
-    "Accounting.Tag.residues": "fc5a97172cd35ed75837ae4dbade7a67fff3151a41bc1e390a4b244a4792d622",
-    "Accounting.Tag.wordGuess": "18cffad6621d3a1e17ae63c078238192bf7d5ce7194db09baf59145cece4cff3"
    }
   },
   "Definitions.Accounting.Tag.Sketch": {
