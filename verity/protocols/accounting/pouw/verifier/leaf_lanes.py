@@ -81,7 +81,7 @@ from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.accounting.pouw.verifier.weights import chunks
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"

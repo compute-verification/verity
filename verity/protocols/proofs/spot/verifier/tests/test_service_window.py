@@ -12,7 +12,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 
 from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes
 from test_remote import signer  # noqa: F401  (the challenger key's signer fixture)

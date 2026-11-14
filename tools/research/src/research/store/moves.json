@@ -2559,6 +2559,11 @@
         "security/Proofs/Properties/NetworkCertifier/": "security/Proofs/Properties/Certifier/",
         "security/Properties/NetworkCertifier/": "security/Properties/Certifier/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
+      }
     }
   ]
 }

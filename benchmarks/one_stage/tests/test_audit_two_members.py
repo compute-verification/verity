@@ -55,7 +55,7 @@ import pytest
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.device import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch

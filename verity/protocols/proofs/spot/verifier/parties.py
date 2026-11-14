@@ -126,7 +126,7 @@ from verity.party import Finish, Identity, Received, LogEntry, Send
 from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
-from .one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 ID = R.PROTOCOL
 #: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the

@@ -21,7 +21,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import mul

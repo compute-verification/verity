@@ -85,7 +85,7 @@ from verity.protocols.accounting.certifier.verifier.certificate import Certifica
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402

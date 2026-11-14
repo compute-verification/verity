@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch

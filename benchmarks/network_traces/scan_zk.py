@@ -206,7 +206,7 @@ from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py"

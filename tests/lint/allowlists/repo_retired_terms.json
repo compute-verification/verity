@@ -3947,7 +3947,7 @@
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/partition.py", "count": 13},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/produced.py", "count": 10},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/proofs.py", "count": 27},
-    {"file": "verity/protocols/proofs/spot/verifier/one_stage/registration.py", "count": 23},
+    {"file": "verity/protocols/proofs/spot/verifier/one_stage/docket.py", "count": 23},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/served.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/verifier.py", "count": 54},
     {"file": "verity/protocols/proofs/spot/prover/optimize.py", "count": 79},

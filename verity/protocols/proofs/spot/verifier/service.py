@@ -175,7 +175,14 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
 from . import second_stage as SS, window_place as WP
-from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit as A,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+    verifier as V,
+)
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.device.challenger import ChallengerKey
 from verity.protocols.proofs.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt

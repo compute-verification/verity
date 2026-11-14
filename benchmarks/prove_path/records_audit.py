@@ -192,7 +192,7 @@ from verity.protocols.accounting.registration.verifier import registration as G 
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
 

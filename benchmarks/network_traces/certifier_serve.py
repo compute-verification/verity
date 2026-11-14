@@ -238,7 +238,7 @@ from verity.protocols.accounting.certifier.verifier.lean_audit import DISAGREEME
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, expected_grids, handing_buckets
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile
 from verity.protocols.accounting.certifier.verifier.service import LinkWindows
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 HERE = Path(__file__).resolve().parent

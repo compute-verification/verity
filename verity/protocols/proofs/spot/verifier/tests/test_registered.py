@@ -21,8 +21,14 @@ from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.circuits.types import Array, Value
 from verity.protocols.accounting.pouw.verifier import audit as PA
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, partition as P, registered as G, registration as R,
-                                                 verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+    verifier as V,
+)
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)

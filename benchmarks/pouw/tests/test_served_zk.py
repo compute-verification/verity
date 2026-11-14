@@ -40,7 +40,7 @@ from verity.protocols.accounting.pouw.verifier.coins import CoinOpening, coin_re
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 import of_record as OR
 import served_commit as SC

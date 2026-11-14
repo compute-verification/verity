@@ -64,7 +64,7 @@ def _meta_registration() -> str:
 def _registered(tmp_path: Path, change, bind: bool = True) -> list[str]:
     """`rec-c3-inner`'s circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
     record's digest when ``bind`` (as a statement staged with that record would be), `rec-c3-inner`'s own otherwise."""
-    from verity.protocols.proofs.spot.verifier.one_stage.registration import digest
+    from verity.protocols.proofs.spot.verifier.one_stage.docket import digest
 
     rec = json.loads((_fixture(C3) / "circuit-registration.json").read_text())
     change(rec)

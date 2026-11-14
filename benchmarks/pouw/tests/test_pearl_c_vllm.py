@@ -26,7 +26,7 @@ from typing import ClassVar
 import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PH
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR

@@ -16,8 +16,14 @@ from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _s
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
-                                                            verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    hello as H,
+    partition as P,
+    docket as R,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 

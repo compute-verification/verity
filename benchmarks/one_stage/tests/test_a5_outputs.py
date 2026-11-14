@@ -16,7 +16,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

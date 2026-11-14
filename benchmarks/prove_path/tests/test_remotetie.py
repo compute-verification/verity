@@ -75,7 +75,7 @@ from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.prover.serving.h1.words import chunk_words, ids_words
 
 from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF, rows as CS

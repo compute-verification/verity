@@ -21,8 +21,12 @@ import pytest
 
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R, \
-    verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    partition as P,
+    registered as REG,
+    docket as R,
+    verifier as V,
+)
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program

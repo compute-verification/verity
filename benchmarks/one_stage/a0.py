@@ -34,7 +34,14 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    docket as R,
+    served as SV,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 

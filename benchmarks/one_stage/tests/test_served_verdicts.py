@@ -65,7 +65,7 @@ import pytest
 from verity import device as SITE
 from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.accounting.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
@@ -1054,7 +1054,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
@@ -2699,7 +2699,7 @@ else:
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
         w = json.load(open(tail[1]))
         if "--pearl-passes" in a:
-            from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+            from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
             r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else REG.digest(w)}}
         else:
             r = {{"format": "toy", "after": w}}

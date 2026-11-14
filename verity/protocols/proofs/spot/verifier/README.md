@@ -267,7 +267,7 @@ Tests: `uv run tools/verity/check/suites.py protocols/spot`.
 
 ~~~python
 from verity.protocols.proofs.spot.verifier import service
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, registration
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, docket as registration
 from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.proofs.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
 from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget

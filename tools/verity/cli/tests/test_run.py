@@ -20,7 +20,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
 from verity_cli import run as R
 

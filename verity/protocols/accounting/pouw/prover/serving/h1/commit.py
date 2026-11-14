@@ -50,7 +50,7 @@ from verity.circuits.codec import canonical_json
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity_vllm.commit import step_rows
 from verity.protocols.accounting.pouw.prover.serving.h1 import names as NM

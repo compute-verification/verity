@@ -145,7 +145,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c import K_MIN, TILE
 from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as REG
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD

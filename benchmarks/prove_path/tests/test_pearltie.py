@@ -65,7 +65,7 @@ from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PW
 
 from verity.protocols.accounting.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF, rows as CS

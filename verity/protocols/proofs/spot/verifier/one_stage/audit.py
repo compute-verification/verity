@@ -32,7 +32,7 @@ from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityP
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
-from .registration import PROTOCOL, digest as registration_digest
+from verity.protocols.proofs.spot.verifier.one_stage.docket import PROTOCOL, digest as registration_digest
 
 FORMAT = "verity/one-stage/audit/v0"
 PROFILE = "verity/integrity-profile/v1"

@@ -27,7 +27,7 @@ from verity.protocols.accounting.certifier.verifier import advice as ADV, head_c
 from verity.protocols.accounting.certifier.verifier.active import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 
 import standin
 

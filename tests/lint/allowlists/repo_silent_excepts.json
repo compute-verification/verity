@@ -271,7 +271,7 @@
     {"file": "verity/protocols/proofs/spot/device/challenger.py", "count": 7},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/hello.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/proofs.py", "count": 1},
-    {"file": "verity/protocols/proofs/spot/verifier/one_stage/registration.py", "count": 2},
+    {"file": "verity/protocols/proofs/spot/verifier/one_stage/docket.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/verifier.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/device/remote.py", "count": 5},
     {"file": "verity/protocols/proofs/spot/verifier/service.py", "count": 1},

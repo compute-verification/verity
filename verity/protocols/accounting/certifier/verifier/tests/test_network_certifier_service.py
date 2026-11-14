@@ -27,7 +27,7 @@ from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.protocols.accounting.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, VALUE, LinkWindows, encode,
                                                                       rows)
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 

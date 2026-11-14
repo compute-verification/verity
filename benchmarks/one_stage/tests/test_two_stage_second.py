@@ -23,7 +23,7 @@ import pytest
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import flock_inputs as FI, links as LK, rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
 
 HERE = Path(__file__).resolve().parent

@@ -43,7 +43,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/protocols/proofs/spot/verifier/one_stage/audit.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/hello.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/registration.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           "verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/service.py",
           "verity/protocols/proofs/spot/verifier/profile.py",

@@ -12,7 +12,7 @@ from typing import Any
 from verity.circuits.codec import canonical_json
 from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree
 
 #: a statement's ``--registered`` file, one a call

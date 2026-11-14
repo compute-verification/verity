@@ -43,7 +43,7 @@ _partitions: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def _partition(evaluate: Callable, program: Program, query: Mapping[str, Any]) -> Any:
     """`evaluate(program, query)`, once per Program, query and evaluator (a refusal too)."""
-    from verity.protocols.proofs.spot.verifier.one_stage.registration import query_digest
+    from verity.protocols.proofs.spot.verifier.one_stage.docket import query_digest
 
     memo = _partitions.setdefault(program, {})
     key = (evaluate, query_digest(query))
@@ -171,7 +171,7 @@ class Placed:
         """Each block's proof blocks under the registered partition, as core's one-stage verifier evaluates and checks it,
         or the served query's as circuits evaluates it, assumed; and which it was."""
         from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-        from verity.protocols.proofs.spot.verifier.one_stage.registration import query_digest
+        from verity.protocols.proofs.spot.verifier.one_stage.docket import query_digest
         from verity.circuits import partition_object as PO
 
         program = self.program
