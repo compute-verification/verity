@@ -384,7 +384,7 @@ day = "2026-11-15"
 note = "its Lake package moves with Sunday's chain"
 
 [[not_yet]]
-path = "verity/composite/"
+path = "verity/protocols/compose/"
 to = "verity/protocols/compose/device/live_challenger/"
 owner = "top"
 day = "2026-11-14 12:00 PST"
