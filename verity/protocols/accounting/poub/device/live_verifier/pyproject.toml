@@ -11,7 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_host.py"]
 inputs = ["verity/__init__.py", "verity/errors.py", 
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/poub/verifier", 
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
           # the Lean verifier a session runs beside audit.AuditRun, and the difftest a replay serves: their Lake
@@ -23,9 +23,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/claims/__init__.py", "verity/protocols/proofs/spot",
           # verifier.py and its in-process harness, which the stub verifier runs
-          "benchmarks/remote_session",
-          # auditor_line.py --boundary, which the stub verifier's run is read with: the network certifiers' records and audit
-          "verity/protocols/accounting/certifier", "verity/protocols/accounting/certifier/prover",
+          "benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
           "verity/protocols/compose/device/live_challenger/serve.py",
           # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its

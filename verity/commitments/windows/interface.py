@@ -1,8 +1,9 @@
 """What an integration hands Verity (integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
-1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
-   (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
+1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition a catalog registers
+   (`catalog`: Verity's own, or a catalog package's, as the circuits of the kernels an adapter serves are the adapter's),
+   with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
@@ -109,7 +110,8 @@ import numpy as np
 
 from verity.circuits import boolean as B, partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
+                                  bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
@@ -141,19 +143,26 @@ _ID = re.compile(r"([A-Za-z][A-Za-z0-9]*_v[0-9]+)(?:\{(.*)\})?", re.S)
 
 
 def _verity(d: Any) -> bool:
+    """Whether a catalog registers ``d``: the registry holds this object under its id, and its code is in a ``verity`` module
+    or in a catalog package (`defs.catalog_package`: the package that named itself, or a module under it). The catalog that
+    registered it decides, not where its file is."""
     code = d.evaluate if isinstance(d, PrimitiveDefinition) else d.body
-    return d.id in REGISTRY.defs and REGISTRY[d.id] is d and code.__module__.startswith("verity.")
+    at = code.__module__
+    return (d.id in REGISTRY.defs and REGISTRY[d.id] is d
+            and (at.startswith("verity.") or any(at == p or at.startswith(f"{p}.") for p in CATALOG_PACKAGES)))
 
 
 def catalog(fn: Any) -> None:
-    """Refuse (ValueError) a template that is not a complete binding of a Definition Verity registers from a ``verity`` module:
-    an integration's own Definition never defines what a unit computes."""
+    """Refuse (ValueError) a template that is not a complete binding of a Definition a catalog registers (`_verity`): Verity's
+    own, from a ``verity`` module, or a catalog package's. A Definition no catalog registers never defines what a unit
+    computes."""
     base = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     if not isinstance(base, CompositeDefinition) or (isinstance(fn, SpecializedDefinition) and not fn.complete):
         raise ValueError(f"{getattr(fn, 'id', fn)!r}: a template is a complete binding of a composite Definition")
     if not _verity(base):
-        raise ValueError(f"{base.id}: not a Definition Verity registers (defined in {base.body.__module__}); an integration "
-                         "builds its units from Verity's Definitions and silicon semantics, never its own")
+        raise ValueError(f"{base.id}: not a Definition a catalog registers (defined in {base.body.__module__}); a unit's "
+                         "Definition is registered from a verity module or from a catalog package, one that names itself "
+                         "with verity.circuits.defs.catalog_package as it loads, and from nowhere else")
 
 
 def _bindings(record: str) -> dict[str, Any]:
@@ -202,13 +211,14 @@ def _load_catalog() -> None:
 
 
 def resolve(tid: str, *, template: bool = True) -> Any:
-    """The Definition descriptor id ``tid`` names in Verity's catalog (every Definition registered from a ``verity`` module):
+    """The Definition descriptor id ``tid`` names among those a catalog registers (every Definition registered from a
+    ``verity`` module or from a catalog package, `_verity`):
     its base and binding record parsed (`codec.descriptor_id`'s form) and bound; a ``template`` refused unless `catalog`'s.
     Refused (ValueError) unless the Definition it binds is named exactly ``tid``."""
     _load_catalog()
     m = _ID.fullmatch(tid)
     if m is None or m[1] not in REGISTRY.defs or not _verity(REGISTRY[m[1]]):
-        raise ValueError(f"{tid}: names no Definition in Verity's catalog")
+        raise ValueError(f"{tid}: names no Definition a catalog registers")
     base = REGISTRY[m[1]]
     try:
         if m[2] is not None:
@@ -373,7 +383,7 @@ def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
     return w.astype(np.uint16)
 
 
-def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
+def leaves_of_rows(rows: np.ndarray, ty: Any) -> np.ndarray:
     """A port's ``(n, words)`` u16 rows as its ``(n, leaves)`` leaves of type ``ty``, as `evaluate_batch` takes them: a row
     is the little-endian bit concatenation of the leaves, so a 16-bit leaf is one word, and a 1-bit leaf (a Boolean-profile
     port's, whose rows are its `boolean.word_type` words) one bit."""
@@ -388,8 +398,8 @@ def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
                      for lo, hi in zip(at, at[1:])], axis=1)
 
 
-def _port_rows(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
-    """`_port_leaves`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
+def rows_of_leaves(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
+    """`leaves_of_rows`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
     w = ty.homogeneous_width()
     if w is not None and w % 8 == 0:
         b = np.ascontiguousarray(leaves.astype(f"<u{w // 8}")).view(np.uint8)
@@ -662,7 +672,9 @@ class TableOpening:
     holds: ``ports`` are the opening (the row, its salt, its path), and ``verdict`` the output row whose bit is 1 exactly
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
     and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the window's root for
-    the table's parameter is the pinned root (`input_count`)."""
+    the table's parameter is the pinned root (`input_count`). ``row``, where the opening declares one: the output row that
+    returns the row opened, the first of the reader's two outputs, the second the verdict, of a reader of six input
+    rows; nothing is filled by it, and a record names it only where it is declared."""
     reader: str
     table: str
     key: str
@@ -670,10 +682,11 @@ class TableOpening:
     verdict: str
     at: int
     units: int
+    row: str | None = None
 
     def doc(self) -> dict[str, Any]:
         return {"reader": self.reader, "table": self.table, "key": self.key, "ports": list(self.ports), "verdict": self.verdict,
-                "at": self.at, "units": self.units}
+                "at": self.at, "units": self.units, **({} if self.row is None else {"row": self.row})}
 
 
 #: a registered value's row format (`Registered.formats`): its rows' schema and its leaves' width in bits, of `WIDTHS`
@@ -1032,10 +1045,14 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
             raise ValueError(f"table read {r.doc()}: a declared table's root or domain id, a 64-byte port")
         rects.append((r.reader, r.port, r.at, r.at + r.units, 0, k, r.doc()))
     for o in reg.openings:
-        units(o.reader, o.at, o.units, o.doc())
         port(o.reader, o.key, o.doc())
+        units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
+        lay = templates[o.reader][0]
+        if o.row is not None and not (len(lay.rows) == 6 and [q for q, _ in lay.outs] == [o.row, o.verdict]):
+            raise ValueError(f"opening {o.doc()}: the row it declares is the first of its reader's two outputs, the "
+                             "second its verdict, of a reader of six input rows")
         for p in o.ports:
             rects.append((o.reader, p, o.at, o.at + o.units, 0, port(o.reader, p, o.doc())[1], o.doc()))
     for g in ingress:
@@ -1812,7 +1829,8 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
     ``hm96-sha512/row-seg/v1`` rows of its words and its runs tiling its positions over the writer's units; a table read
     (`TableRead`) fills a 64-byte input row no wire or row table fills
     with its table's root or domain id; an opening (`TableOpening`) holds its ``ports``, input rows no wire or row table
-    fills, to its table's row at its ``key``, an input row (wired or not), by its ``verdict``, an output. Refused
+    fills, to its table's row at its ``key``, an input row (wired or not), by its ``verdict``, an output, as the ``row`` it
+    may declare is. Refused
     (ValueError) otherwise, or where two declarations, or one and the window's ``ingress``, meet: every input row is wired,
     registered, window ingress or free, at most one of them. The work is per declaration and per member it covers, never
     per unit. `circuit_record`, `window_of_record` and `input_count` each refuse a listed record whose declarations this
@@ -1909,6 +1927,9 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
             if o.key not in dict(m.rows) or o.verdict not in dict(m.outs):
                 raise ValueError(f"{what}: {m.key} has no input row {o.key} or no output {o.verdict}; an opening's key is "
                                  "an input row and its verdict an output")
+            if o.row is not None and not (len(m.rows) == 6 and [q for q, _ in m.outs] == [o.row, o.verdict]):
+                raise ValueError(f"{what}: {m.key}'s outputs are not {o.row} then {o.verdict} over six input rows; the "
+                                 "row an opening declares is a table read's row returned")
             for p in o.ports:
                 unfilled(i, p, what)
                 out[(i, p)] = tables[o.table].param
@@ -2323,7 +2344,7 @@ class Window:
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
         """Per template, the units whose recorded outputs are not its Definition's outputs on their recorded inputs
         (`evaluate_batch` under ``kernel``): what the proof of a sampled one would refuse. The Definition reads each input row
-        by its leaves' width (`_port_leaves`: a Boolean-profile port bit by bit), and each output row it gives is held to
+        by its leaves' width (`leaves_of_rows`: a Boolean-profile port bit by bit), and each output row it gives is held to
         the committed row whole, its zero padding too."""
         out = {}
         for fn, _n in self.circuit.templates:
@@ -2331,11 +2352,11 @@ class Window:
             (params, ret), lay = fn.signature(), layout(fn)
             for b in self._recorded.get(tid, ()):
                 given = self.input_words(tid, at, b.n) if any(x is None for x in b.inputs) else b.words[:len(params)]
-                want = np.asarray(evaluate_batch(fn, *(_port_leaves(r, ty) for r, (_, ty) in zip(given, params)),
+                want = np.asarray(evaluate_batch(fn, *(leaves_of_rows(r, ty) for r, (_, ty) in zip(given, params)),
                                                  kernel=kernel)).reshape(b.n, -1)
                 wrong, k = np.zeros(b.n, dtype=bool), 0
                 for ty, (_, count), got in zip(_fields(ret), lay.outs, b.words[len(params):]):
-                    wrong |= (_port_rows(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
+                    wrong |= (rows_of_leaves(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
                     k += ty.leaves
                 bad += [at + int(i) for i in np.flatnonzero(wrong)]
                 at += b.n

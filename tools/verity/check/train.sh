@@ -46,9 +46,10 @@
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell with a debug or unknown check setting (`settings.py
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
-# origin/main, or its parent for a commit on main) or that origin doesn't hold.
+# origin/main, or its parent for a commit on main) or that origin doesn't hold. A COMMIT a branch of origin pointed at when it
+# started and none does once it holds the clone's lock (the queue dropped it meanwhile) launches nothing and exits 0.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep= deselect=
 while [ $# -gt 0 ]; do
@@ -117,6 +118,7 @@ why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log=
 die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
+  exec 9>&-
   if [ "$rc" -ne 0 ]; then
     { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${records:+ --cc-records}${deferred:+ --deferred $deferred}${shard:+ --shard $shard} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
@@ -136,13 +138,22 @@ held() {
   [ -n "$(git -C "$root" for-each-ref --count=1 --points-at "$sha" refs/remotes/origin)" ] \
     || git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main 2>/dev/null
 }
-# one fetch and worktree at a time per checkout: two launches racing on the fetch both fail
+# A commit held before the lock and not once it is taken left origin's branches while this launch waited: the queue deletes a
+# dropped candidate's branch (`queue/SHA`) from this clone, so the launch ends there, launching nothing.
+was=; held && was=1
+# one fetch and worktree registration at a time per checkout: two launches racing on the fetch both fail. It is held only for
+# git's own state; the checkout of the tree and everything after run beside other launches.
 exec 9> "$common/train.lock"
 flock 9
 if ! held; then
-  # a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
+  if [ -n "$was" ]; then
+    echo "train: ${sha:0:12} is on no branch of origin any more (the queue dropped it while this launch waited for $common/train.lock): nothing launched"
+    exit 0
+  fi
+  # a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries. Without fd 9: the
+  # maintenance a fetch starts detached would hold the lock for as long as it repacks
   for backoff in 5 15 ''; do
-    git -C "$root" fetch -q origin 2>>"$why" && break
+    git -C "$root" fetch -q origin 2>>"$why" 9>&- && break
     [ -n "$backoff" ] || die "git fetch origin failed"
     sleep "$backoff"
   done
@@ -169,14 +180,15 @@ fi
 trees="${TRAIN_TREES:-${TMPDIR:-/tmp}}"
 mkdir -p "$trees" || die "can't make $trees"
 tag=${shard/\//of}
-tree="$trees/train-${sha:0:12}${shard:+-${tag/:/-}}${records:+-records}"
-git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
-# a tree git no longer lists as a worktree (half removed on the control pod's NFS TMPDIR) would refuse `worktree add`
-rm -rf "$tree" 2>/dev/null || rm -rf "$tree" || true
+# a tree and a log of its own: another launch of this commit may still be reading its own, and a launch that read an earlier
+# launch's log would print that launch's runs as its own. The hosts' sweeps remove `train-*` once nothing works in it.
+tree=$(mktemp -d "$trees/train-${sha:0:12}${shard:+-${tag/:/-}}${records:+-records}.XXXXXX") || die "can't make a tree in $trees"
 git -C "$root" worktree prune
-git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
+git -C "$root" worktree add -q --no-checkout --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
+git -C "$tree" checkout -q --force --detach "$sha" 2>>"$why" || die "git checkout of ${sha:0:12} in $tree failed"
 log="$tree.log"
+: > "$log" || die "can't write $log"
 cd "$tree"
 if [ -n "$bookkeep" ]; then
   if grep -q -- "--bookkeeping-warn" tools/verity/check/check.py; then pass+=(--bookkeeping-warn)

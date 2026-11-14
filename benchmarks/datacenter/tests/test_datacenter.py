@@ -7,7 +7,7 @@ import struct
 from dataclasses import replace
 
 import pytest
-from verity.hardware import registration
+from verity.protocols.accounting.registration.verifier import registration
 from verity.protocols.proofs.spot.verifier.one_stage import registration as one_stage
 from verity.circuits import partition_object
 from verity.circuits.census import census

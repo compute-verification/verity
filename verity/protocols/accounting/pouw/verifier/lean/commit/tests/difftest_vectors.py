@@ -3,7 +3,7 @@
     python tests/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}`. The outcome is the checkout's
-`verity.protocols.accounting.pouw.verifier` (the samples: its clear audit's, ``verity/protocols/accounting/pouw/clear``): `{"ok": v}`, `{"reason": text}` for
+`verity.protocols.accounting.pouw.verifier` (the samples: its clear audit's, ``verity/protocols/accounting/pouw/prover/clear``): `{"ok": v}`, `{"reason": text}` for
 a coin `coin_reason` refuses, `{"error": type}` when it raises. The Lean is PoUW's verifier (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
 file (`runs` in `lean-audit.json`, which pins its SHA-256), which fails on any case whose Python outcome is not the
 Lean's, and `tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
@@ -17,7 +17,7 @@ path and value lengths); execution phase coin openings from a `Challenger`, hone
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
 them), execution phases and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a sample
 with no coin commitment; the audit, sample and replay keys and `draw_after`; and the clear audit's work-weighted samples
-(``verity/protocols/accounting/pouw/clear``: `Sampled.select`'s and `clear_work.draw`'s), each run as written with only its tickets given
+(``verity/protocols/accounting/pouw/prover/clear``: `Sampled.select`'s and `clear_work.draw`'s), each run as written with only its tickets given
 (`tickets` patched), over ticket lists with zeros, totals past 64 bits, none, or all zero.
 """
 from __future__ import annotations
@@ -48,8 +48,8 @@ def generate(seed: int = 0) -> list[dict]:
     from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                        VerificationLimits, verify_opening)
 
-    # the clear audit's samples are a reference tool's (verity/protocols/accounting/pouw/clear, not a package) in the checkout `audit` is from
-    sys.path.insert(0, str(Path(audit.__file__).resolve().parents[1] / "clear"))
+    # the clear audit's samples are a reference tool's (verity/protocols/accounting/pouw/prover/clear, not a package) in the checkout `audit` is from
+    sys.path.insert(0, str(Path(audit.__file__).resolve().parents[1] / "prover" / "clear"))
     import clear_audit as CA
     import clear_work as CW
 

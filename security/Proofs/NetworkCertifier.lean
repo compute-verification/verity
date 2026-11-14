@@ -7,6 +7,8 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
+public import Definitions.NetworkCertifier.Guarantees.PooledReg
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -22,13 +24,12 @@ public import Proofs.NetworkCertifier.MonitoringPeriodSum
 public import Proofs.NetworkCertifier.Pooled
 public import Proofs.NetworkCertifier.TapRows
 public import Proofs.NetworkCertifier.MonitoringPeriod
+public import Proofs.NetworkCertifier.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.PooledLeak
 public import Proofs.NetworkCertifier.Schedule
 public import Proofs.NetworkCertifier.PerWindow
 public import Proofs.NetworkCertifier.Sanity
 public import Proofs.NetworkCertifier.Code
-public import Proofs.NetworkCertifier.Accepted
-public import Proofs.NetworkCertifier.Causal
 public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
@@ -42,6 +43,12 @@ public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
 public import Proofs.NetworkCertifier.MonitoringPeriodCheckedChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion
+public import Proofs.NetworkCertifier.MonitoringPeriodFails
+public import Proofs.NetworkCertifier.MonitoringPeriodFailsChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodLengths
+public import Proofs.NetworkCertifier.PooledReg
+public import Proofs.NetworkCertifier.WitnessesPooledReg
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -80,10 +87,10 @@ import Mathlib.Topology.Sheaves.Init
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
-`Schedule` (Theorem 3 for the constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over
-whole windows) or `SampledCharge` (the leak bound under a sampled audit: the incorrect proof blocks' charge), and every lemma
-behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis
-(`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
+`Ingress` (the ingress bound), `PerWindow` (the ingress bound over whole periods) or `SampledCharge` (the leak bound
+under a sampled audit: the incorrect proof blocks' charge), and every lemma behind them. `Schedule` counts the
+constant-rate Program's runs (Theorem 3 for it), for `Accepted` and `Causal`. `SampledLeak` composes `SampledCharge`'s
+count with `SampledAuditAccepted`, taken as a hypothesis (`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
 registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
@@ -91,19 +98,25 @@ nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two
 monitoring period's guarantee, at the instances of `Definitions.NetworkCertifier.Witness`, from what `WitnessToys`
 proves there. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
-`Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
-check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
-`Causal` proves `ExpectedGridCausal` (a later window's sync never changes an earlier window's expected grid) and,
-from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` windows.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
-`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
-trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
-network certifier's; `Period` counts with it. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`):
-inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.MonitoringPeriodLeakChecked`, stated and not
-yet proved): which run its check is held to, and its nontrivial lemma.
+`TapRows` fills an extracted trace in with the network certifier's values and reduces a disagreement between the two
+to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extracted trace carries the network
+certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the network
+certifier's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
+advice bits, and `WitnessesChecked` gives its nontrivial lemma.
+`MonitoringPeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
+at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
+empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
+checked statement: which run its check is held to, and its nontrivial and honest lemmas. `MonitoringPeriodCheckedExclusion` shows
+the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
+`MonitoringPeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
+`MonitoringPeriodLeakFailsAtMost`, `MonitoringPeriodLeakCharged`): `MonitoringPeriodLeakChecked` at each fail pattern, at the pattern's operator and
+registered values, summed over the patterns. `MonitoringPeriodFailsChecks` checks them at a placed window whose operator follows
+the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
+`MonitoringPeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
+registered parameters (`LengthsRows.readsBy`).
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
@@ -112,23 +125,22 @@ each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarrie
 `SampledLeakCarried`'s honest one. `PoolRoots` proves the period bound's premise on the opened rows' roots
 (`CarriedRoots`) from each run's in-circuit check of its roots (`CheckedRoots`) and the record rule (`PoolChained`), as
 the lemma `rootsOfChecked`.
+`PooledReg` proves the period's bound at the trace with the registered openings (`PooledLeakRegistered`), where the
+incorrect proof blocks are those of the trace read at each statement with its registered openings: `PooledRegSample`
+bounds each execution phase's verdict by the sample's term and an event, `PooledRegEvent` bounds that event, and
+`PooledRegLeak` proves each accepted phase's leak relation with no error. `WitnessesPooledReg` gives its honest and
+nontrivial lemmas.
 -/
 
 @[expose] public section
 
 namespace NetTiming.SecurityProofs
 
-theorem CardFree : NetTiming.Guarantees.CardFree := NetTiming.card_free
-theorem CardLeftPacked : NetTiming.Guarantees.CardLeftPacked := NetTiming.card_leftPacked
 theorem FillInjective : NetTiming.Guarantees.FillInjective := @NetTiming.fill_injective
 theorem ExistsFillOfLeftPacked : NetTiming.Guarantees.ExistsFillOfLeftPacked := @NetTiming.exists_fill_of_leftPacked
-theorem CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe := NetTiming.card_counts_eq_le
 theorem CardCountsLeLe : NetTiming.Guarantees.CardCountsLeLe := NetTiming.card_counts_le_le
 theorem ReleasedSelf : NetTiming.Guarantees.ReleasedSelf := NetTiming.released_self
 theorem SumReleasedLe : NetTiming.Guarantees.SumReleasedLe := NetTiming.sum_released_le
-theorem EncardFifoGridsLeOfAvailable : NetTiming.Guarantees.EncardFifoGridsLeOfAvailable :=
-  @NetTiming.encard_fifoGrids_le_of_available
-theorem EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids := @NetTiming.encard_fifoGrids
 
 theorem EncardLeProdOfBranching : NetTiming.Guarantees.EncardLeProdOfBranching := @NetTiming.encard_le_prod_of_branching
 theorem EncardAcceptedRunsLe : NetTiming.Guarantees.EncardAcceptedRunsLe := @NetTiming.encard_acceptedRuns_le
@@ -138,16 +150,6 @@ theorem NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted := @NetTiming
 
 theorem RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill := @NetTiming.recorded_row_eq_fill
 theorem EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice := @NetTiming.encard_accSeqs_le_advice
-theorem EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits :=
-  @NetTiming.encard_accSeqs_le_adviceBits
-theorem EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate :=
-  fun T g E k frames op n D _ => NetTiming.encard_accSeqs_le_constantRate_bits T g E k frames op n D
-theorem ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal :=
-  fun T g E frames t ins a a' ha => NetTiming.constantRate_rows_causal T g E frames t ins a a' ha
-theorem EncardAccSeqsLeConstantRateExecutionPhases : NetTiming.Guarantees.EncardAccSeqsLeConstantRateExecutionPhases :=
-  fun T g E k frames op n D m _ hm => NetTiming.encard_accSeqs_le_constantRate_executionPhases_bits T g E k frames op n D m hm
-theorem EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate :=
-  fun I T g E k frames n D m _ hm => NetTiming.encard_decodable_le_constantRate_bits I T g E k frames n D m hm
 
 theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe :=
   @NetTiming.encard_ingress_obsDecodable_le
@@ -157,11 +159,6 @@ theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngress
   @NetTiming.encard_ingress_obsDecodable_le_contents
 theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
   @NetTiming.encard_ingress_decodable_le_contents
-
-theorem EncardAccSeqsLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerExecutionPhase :=
-  @NetTiming.encard_accSeqs_le_constantRate_perExecutionPhase
-theorem EncardDecodableLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardDecodableLeConstantRatePerExecutionPhase :=
-  @NetTiming.encard_decodable_le_constantRate_perExecutionPhase
 theorem EncardIngressObsDecodableLePerExecutionPhase : NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase :=
   @NetTiming.encard_ingress_obsDecodable_le_perExecutionPhase
 theorem EncardIngressObsDecodableLeContentsPerExecutionPhase :
@@ -179,11 +176,16 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
+theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.monitoringPeriodLeakChecked
+theorem MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails := NetTiming.monitoringPeriodLeakFails
+theorem MonitoringPeriodLeakFailsAtMost : NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost := NetTiming.monitoringPeriodLeakFailsAtMost
+theorem MonitoringPeriodLeakCharged : NetTiming.Guarantees.MonitoringPeriodLeakCharged := NetTiming.monitoringPeriodLeakCharged
 theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
 theorem SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried := NetTiming.sampledLeakCarried
 theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
+theorem PooledLeakRegistered : NetTiming.Guarantees.PooledLeakRegistered := NetTiming.pooledLeakRegistered
 
 end NetTiming.SecurityProofs

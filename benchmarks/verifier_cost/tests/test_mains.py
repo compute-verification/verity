@@ -5,6 +5,8 @@ builds against a verifier's package. Nothing else reads those files, so a change
 benchmark unable to build, unnoticed until somebody next runs it. So each main is elaborated here (`lake env lean`, which
 writes nothing) in the package that holds the libraries it imports, once `lake build` has built there the modules it imports;
 and whole_run.py, whose inputs come from sampled proofs' difftest module, still writes a run that its own check accepts.
+The ledger replay's two generators are held the same way to the references they write their inputs with: the challenger
+still accepts ledger_replay.py's ledger, and PoUW's period check replays.py's period.
 
 An elaboration compiles and links nothing and runs nothing: that a benchmark's executable still gives the numbers its script
 reads is its run's to show.
@@ -12,6 +14,7 @@ reads is its run's to show.
 from __future__ import annotations
 
 import fcntl
+import json
 import re
 import shutil
 import subprocess
@@ -71,3 +74,25 @@ def test_whole_run_writes_a_run_its_check_accepts(tmp_path):
     assert got.returncode == 0 and (tmp_path / "run-toy-146.json").is_file(), (
         f"whole_run.py toy 146 --check failed ({got.returncode}), so whole_run.sh has no input to time: fix the generator "
         f"in the change that moved what it calls:\n{got.stdout[-3000:]}{got.stderr[-3000:]}")
+
+
+def test_ledger_replay_writes_a_ledger_the_challenger_accepts(tmp_path):
+    """ledger_replay.py at three sessions in periods of two, under a small key: the piece's reference
+    (`challenger.audited_session`) accepts the ledger it wrote, and verifies one signature an entry."""
+    got = subprocess.run([sys.executable, str(HERE / "ledger_replay/ledger_replay.py"), str(tmp_path), "3", "--period", "2",
+                          "--lms", "1,5"], cwd=ROOT, capture_output=True, text=True)
+    row = json.loads(got.stdout) if got.returncode == 0 else {"refused": "no row"}
+    assert row["refused"] is None and row["verifies"] == row["entries"] == 14 and (tmp_path / "ledger-3.json").is_file(), (
+        f"ledger_replay.py 3 --period 2 wrote no ledger the challenger accepts ({got.returncode}), so ledger_replay.sh has "
+        f"no input to time: fix the generator in the change that moved what it calls:\n{got.stdout[-3000:]}{got.stderr[-3000:]}")
+
+
+def test_replays_writes_a_period_its_check_accepts(tmp_path):
+    """replays.py at one window: PoUW's period reference (`period_check.case`) accepts the period it wrote, and replays
+    the ledger on the way."""
+    got = subprocess.run([sys.executable, str(HERE / "ledger_replay/replays.py"), str(tmp_path), "1"], cwd=ROOT,
+                         capture_output=True, text=True)
+    row = json.loads(got.stdout) if got.returncode == 0 else {"verdict": "no row", "replays": 0}
+    assert row["verdict"] == "accept" and row["replays"] > 0 and (tmp_path / "period-1.json").is_file(), (
+        f"replays.py 1 wrote no period its check accepts ({got.returncode}), so replays.sh has nothing to count: fix the "
+        f"generator in the change that moved what it calls:\n{got.stdout[-3000:]}{got.stderr[-3000:]}")

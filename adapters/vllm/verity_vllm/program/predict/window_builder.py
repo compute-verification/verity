@@ -285,8 +285,8 @@ class _Builder:
         """The table reads and the openings, each run of like ones at consecutive units one."""
         return (_merge(self.roots, lambda x: (x.reader, x.port, x.table, x.of),
                        lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
-                _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict),
-                       lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
+                _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict, x.row),
+                       lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n, x.row)))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:

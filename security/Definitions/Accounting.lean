@@ -51,6 +51,8 @@ public import Definitions.Accounting.RateAuditSketchDeployed
 public import Definitions.Accounting.RateAuditSketchInteractive
 public import Definitions.Accounting.RateAuditSketchLayout
 public import Definitions.Accounting.ReadUnit
+public import Definitions.Accounting.Records
+public import Definitions.Accounting.RecordsToy
 public import Definitions.Accounting.Remote
 public import Definitions.Accounting.Remote.Deployed
 public import Definitions.Accounting.Requirement
@@ -123,7 +125,8 @@ This module imports the area's definitions; the lock's `layers` lists what they 
   the actual circuit, its physical assumptions, its runs, strategies and confidence set, and the schedule it induces.
   `Window` is a location with the ring's oracle locations, `CostModel` the cost model of the actual circuit's provers,
   and `Additive` a device's period on the machine model 𝓜. `Gates` is the gate model of the lower bounds on a
-  registered circuit, and `Requirement` what a registered circuit needs of a device's memory.
+  registered circuit, and `Requirement` what a registered circuit needs of a device's memory. `Records` is a trusted
+  device's record limit, and `RecordsToy` the runs its honest lemma is stated at.
 * The joint audit. `Joint` is a joint audit's run and what each audit's guarantee says about it, and `PerRun` the
   per-run audits. `JointPeriod` and `JointBridge` are a period audited by every subprotocol, with each per-period
   guarantee read as its account. `JointLive` is a period as a causal game. `NetWitness` is the run the network

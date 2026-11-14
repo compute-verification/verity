@@ -316,10 +316,10 @@ def test_a_run_refused_before_its_workload_does_not_keep_the_tree_once_it_is_old
     assert kept(rep)[node.b] == ["recent: run r16 was recorded within 1 h"], "a refused run still counts as recent"
 
 
-def _captured(n, *, marker: dict | None, digest: str = "d" * 64, cap_digest: str | None = None) -> None:
+def _captured(n, *, marker: dict | None, digest: str = "d" * 64, capture_digest: str | None = None) -> None:
     rd = write_run(n, "r14", source=n.a, store={"commit": n.a, "dirty": True, "dirty_digest": digest})
     job = json.loads((rd / "job.json").read_text())
-    job["store"]["dirty_capture"] = {"path": "source-dirty.tar", "bytes": 10, "sha256": "e" * 64, "dirty_digest": cap_digest or digest}
+    job["store"]["dirty_capture"] = {"path": "source-dirty.tar", "bytes": 10, "sha256": "e" * 64, "dirty_digest": capture_digest or digest}
     (rd / "job.json").write_text(json.dumps(job))
     if marker is not None:
         (rd / ".custody").write_text(json.dumps(marker))
@@ -337,7 +337,7 @@ def test_a_dirty_run_whose_preserved_record_holds_its_capture_no_longer_keeps_th
     assert rep["error"] is None and node.a in [d["tree"] for d in rep["deleted"]], kept(rep)
 
 
-@pytest.mark.parametrize("marker, digest, cap_digest", [
+@pytest.mark.parametrize("marker, digest, capture_digest", [
     (None, "d" * 64, None),
     ({**PRESERVED, "preserved": False}, "d" * 64, None),
     ({"preserved": True, "files": {"source-dirty.tar": [10, "0" * 64]}}, "d" * 64, None),
@@ -345,8 +345,8 @@ def test_a_dirty_run_whose_preserved_record_holds_its_capture_no_longer_keeps_th
     (PRESERVED, "too-large", None),
     (PRESERVED, "d" * 64, "a" * 64),
 ], ids=["no-custody", "not-preserved", "other-bytes", "not-in-record", "too-large", "other-digest"])
-def test_a_dirty_run_keeps_the_tree_unless_its_preserved_record_holds_that_capture(node, marker, digest, cap_digest):
-    _captured(node, marker=marker, digest=digest, cap_digest=cap_digest)
+def test_a_dirty_run_keeps_the_tree_unless_its_preserved_record_holds_that_capture(node, marker, digest, capture_digest):
+    _captured(node, marker=marker, digest=digest, capture_digest=capture_digest)
     rep = run(node)
     assert any(w.startswith("3: run r14's source is dirty, and no preserved record") for w in kept(rep).get(node.a, [])), kept(rep)
     assert (node.src / node.a).is_dir()
@@ -622,13 +622,6 @@ def test_a_tree_that_is_not_exactly_its_commit_is_kept(node):
 def _status_line(t: Path) -> str:
     out = _git(t, "status", "--porcelain=v2", "-z", "--untracked-files=normal")
     return next(e for e in out.split("\0") if e and e != f"? {EV.READY_FILE}")[-120:]
-
-
-def test_a_git_worktree_made_from_a_tree_keeps_it(node):
-    """ci-bundle.sh and train.sh `git worktree add` from a checkout: its git data lives in the tree, its processes elsewhere."""
-    _git(node.src / node.a, "worktree", "add", "-q", "--detach", str(node.tmp / "wt"), node.a)
-    _age(node.src / node.a, 5)
-    assert "2: a git worktree made from it (.git/worktrees) may be in use" in kept(run(node))[node.a]
 
 
 def test_one_pass_at_a_time(node, monkeypatch):

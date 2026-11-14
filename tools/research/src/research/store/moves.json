@@ -2196,6 +2196,47 @@
     },
     {
       "paths": {
+        "benchmarks/remote_session/prover.py": "verity/protocols/poub/prover/remote_session/prover.py",
+        "benchmarks/remote_session/device.py": "verity/protocols/poub/prover/remote_session/device.py",
+        "benchmarks/remote_session/session.cu": "verity/protocols/poub/prover/remote_session/session.cu",
+        "benchmarks/word_codec/cuda_lib.py": "verity/protocols/poub/prover/word_codec/cuda_lib.py",
+        "benchmarks/word_codec/kv.cu": "verity/protocols/poub/prover/word_codec/kv.cu",
+        "benchmarks/word_codec/kv.py": "verity/protocols/poub/prover/word_codec/kv.py",
+        "benchmarks/word_codec/kv_bench.py": "verity/protocols/poub/prover/word_codec/kv_bench.py",
+        "benchmarks/word_codec/tests/kv_vectors.json": "verity/protocols/poub/prover/word_codec/kv_vectors.json",
+        "benchmarks/vllm_encoded/paged.py": "verity/protocols/poub/prover/word_codec/paged.py",
+        "benchmarks/codec_tensor/reader.py": "verity/protocols/poub/prover/codec_tensor/reader.py",
+        "benchmarks/codec_tensor/sketch_receipt.py": "verity/protocols/poub/prover/codec_tensor/sketch_receipt.py",
+        "benchmarks/codec_tensor/sketching.py": "verity/protocols/poub/prover/codec_tensor/sketching.py",
+        "benchmarks/codec_tensor/reader.cu": "verity/protocols/poub/prover/codec_tensor/reader.cu",
+        "benchmarks/codec_tensor/sha512.cuh": "verity/protocols/poub/prover/codec_tensor/sha512.cuh",
+        "benchmarks/pous/p2_v1/store.py": "verity/protocols/pous/prover/p2/p2_store/store.py",
+        "benchmarks/pous/p2_v1/gpu.py": "verity/protocols/pous/prover/p2/p2_store/gpu.py",
+        "benchmarks/pous/p2_v1/p2v1.cu": "verity/protocols/pous/prover/p2/p2_store/p2v1.cu",
+        "benchmarks/pous/p2_v1/p2sq.cuh": "verity/protocols/pous/prover/p2/p2_store/p2sq.cuh",
+        "benchmarks/pous/p2_v1/p2keys.cuh": "verity/protocols/pous/prover/p2/p2_store/p2keys.cuh",
+        "benchmarks/pous/p2_v1/p2keys4.cuh": "verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh",
+        "benchmarks/pous/p2_v1/Makefile": "verity/protocols/pous/prover/p2/p2_store/Makefile",
+        "benchmarks/pous/p2_v1/.gitignore": "verity/protocols/pous/prover/p2/p2_store/.gitignore",
+        "benchmarks/pous/p2_v1/store-toy/": "verity/protocols/pous/prover/p2/p2_store/store-toy/",
+        "benchmarks/pous/p2_gpu/p2dec.cu": "verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu",
+        "benchmarks/pous/p2_gpu/CGBN.commit": "verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit",
+        "benchmarks/pous/p2_v1/reference.py": "verity/protocols/pous/verifier/p2_v1/reference.py",
+        "benchmarks/pous/p2_v1/wire.py": "verity/protocols/pous/verifier/p2_v1/wire.py",
+        "benchmarks/pous/p2_v1/vectors.py": "verity/protocols/pous/verifier/p2_v1/vectors.py",
+        "benchmarks/pous/p2_v1/vectors.json": "verity/protocols/pous/verifier/p2_v1/vectors.json",
+        "benchmarks/pous/p2_v1/audit-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-vectors.json",
+        "benchmarks/pous/p2_v1/audit-negative-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json",
+        "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json": "verity/protocols/poub/verifier/bandwidth-mem69-v2.json"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/p2_v1/load.py": "verity/protocols/pous/prover/p2/p2_store/load.py"
+      }
+    },
+    {
+      "paths": {
         "verity/configuration/config/": "tools/config/"
       }
     },
@@ -2243,11 +2284,17 @@
       "paths": {
         "security/Definitions/NetworkCertifier/Guarantees/Period.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
         "security/Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/Guarantees/PeriodFails.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodFails.lean",
         "security/Definitions/NetworkCertifier/Period.lean": "security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
         "security/Definitions/NetworkCertifier/PeriodChecked.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodChecked.lean",
         "security/Definitions/NetworkCertifier/PeriodConditions.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodConditions.lean",
         "security/Proofs/NetworkCertifier/Period.lean": "security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Proofs/NetworkCertifier/PeriodChecked.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodChecked.lean",
         "security/Proofs/NetworkCertifier/PeriodCheckedChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodCheckedExclusion.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedExclusion.lean",
+        "security/Proofs/NetworkCertifier/PeriodFails.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodFails.lean",
+        "security/Proofs/NetworkCertifier/PeriodFailsChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodFailsChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodLengths.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodLengths.lean",
         "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
         "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
         "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
@@ -2395,6 +2442,87 @@
         "verity/protocols/poub/": "verity/protocols/accounting/poub/",
         "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
         "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/circuit/dither.py": "verity/protocols/experimental/dither/prover/dither.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.py": "verity/protocols/experimental/dither/prover/dither.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.json": "verity/protocols/experimental/dither/prover/dither.circuit-check.json",
+        "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
+      }
+    },
+    {
+      "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/coin_link.py": "verity/protocols/accounting/certifier/device/coin_link.py",
+        "verity/protocols/accounting/certifier/verifier/device_needs.py": "verity/protocols/accounting/certifier/device/device_needs.py",
+        "verity/protocols/accounting/certifier/verifier/device_party.py": "verity/protocols/accounting/certifier/device/device_party.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/warden_serve.py": "verity/protocols/accounting/certifier/device/warden_serve.py",
+        "benchmarks/network_traces/runner_parts.py": "verity/protocols/accounting/certifier/device/runner_parts.py",
+        "benchmarks/network_traces/runner_cli.py": "verity/protocols/accounting/certifier/device/runner_cli.py",
+        "benchmarks/network_traces/connection_rows_run.py": "verity/protocols/accounting/certifier/device/connection_rows_run.py",
+        "benchmarks/network_traces/certifier_key.py": "verity/protocols/accounting/certifier/device/certifier_key.py",
+        "benchmarks/network_traces/load_relay.py": "verity/protocols/accounting/certifier/device/load_relay.py",
+        "benchmarks/network_traces/leak_guard.py": "verity/protocols/accounting/certifier/device/leak_guard.py",
+        "benchmarks/network_traces/leak_guard.json": "verity/protocols/accounting/certifier/device/leak_guard.json",
+        "benchmarks/network_traces/released_keys.py": "verity/protocols/accounting/certifier/device/released_keys.py",
+        "benchmarks/network_traces/released_keys.json": "verity/protocols/accounting/certifier/device/released_keys.json",
+        "benchmarks/network_traces/tests/test_warden_serve.py": "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py",
+        "benchmarks/network_traces/tests/test_warden_serve_phase10.py": "verity/protocols/accounting/certifier/device/tests/test_warden_serve_phase10.py",
+        "benchmarks/network_traces/tests/test_session_start.py": "verity/protocols/accounting/certifier/device/tests/test_session_start.py",
+        "benchmarks/network_traces/tests/test_endpoint_call.py": "verity/protocols/accounting/certifier/device/tests/test_endpoint_call.py",
+        "benchmarks/network_traces/tests/test_connection_rows_run.py": "verity/protocols/accounting/certifier/device/tests/test_connection_rows_run.py",
+        "benchmarks/network_traces/tests/test_certifier_term.py": "verity/protocols/accounting/certifier/device/tests/test_certifier_term.py",
+        "benchmarks/network_traces/tests/test_load_relay.py": "verity/protocols/accounting/certifier/device/tests/test_load_relay.py",
+        "benchmarks/network_traces/tests/test_leak_guard.py": "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py",
+        "benchmarks/network_traces/tests/test_released_keys.py": "verity/protocols/accounting/certifier/device/tests/test_released_keys.py",
+        "benchmarks/network_traces/tests/fixtures/weights-v1-tiny.json": "verity/protocols/accounting/certifier/device/tests/fixtures/weights-v1-tiny.json",
+        "benchmarks/network_traces/scan_zk.py": "verity/protocols/accounting/certifier/prover/scan_zk.py",
+        "benchmarks/network_traces/egress_zk.py": "verity/protocols/accounting/certifier/prover/egress_zk.py",
+        "benchmarks/network_traces/warden_zk.py": "verity/protocols/accounting/certifier/prover/warden_zk.py",
+        "benchmarks/network_traces/n2_zk.py": "verity/protocols/accounting/certifier/prover/n2_zk.py",
+        "benchmarks/network_traces/n2_tie_zk.py": "verity/protocols/accounting/certifier/prover/n2_tie_zk.py",
+        "benchmarks/network_traces/leak_scan.py": "verity/protocols/accounting/certifier/prover/leak_scan.py",
+        "benchmarks/network_traces/scan_period.py": "verity/protocols/accounting/certifier/prover/scan_period.py",
+        "benchmarks/network_traces/block_certifier.py": "verity/protocols/accounting/certifier/prover/block_certifier.py",
+        "benchmarks/network_traces/window_chain.py": "verity/protocols/accounting/certifier/prover/window_chain.py",
+        "benchmarks/network_traces/stop_verdicts.py": "verity/protocols/accounting/certifier/prover/stop_verdicts.py",
+        "benchmarks/network_traces/tests/test_scan_zk.py": "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py",
+        "benchmarks/network_traces/tests/test_scan_zk_challenger.py": "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_challenger.py",
+        "benchmarks/network_traces/tests/test_scan_zk_lean_one.py": "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_lean_one.py",
+        "benchmarks/network_traces/tests/test_scan_zk_v3c.py": "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_v3c.py",
+        "benchmarks/network_traces/tests/test_egress_zk.py": "verity/protocols/accounting/certifier/prover/tests/test_egress_zk.py",
+        "benchmarks/network_traces/tests/test_warden_zk.py": "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py",
+        "benchmarks/network_traces/tests/test_n2_zk.py": "verity/protocols/accounting/certifier/prover/tests/test_n2_zk.py",
+        "benchmarks/network_traces/tests/test_n2_tie_zk.py": "verity/protocols/accounting/certifier/prover/tests/test_n2_tie_zk.py",
+        "benchmarks/network_traces/tests/test_leak_scan.py": "verity/protocols/accounting/certifier/prover/tests/test_leak_scan.py",
+        "benchmarks/network_traces/tests/test_block_certifier.py": "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py",
+        "benchmarks/network_traces/tests/test_window_chain.py": "verity/protocols/accounting/certifier/prover/tests/test_window_chain.py",
+        "benchmarks/network_traces/tests/test_stop_verdicts.py": "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py",
+        "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py": "benchmarks/network_traces/tests/test_block_certifier.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py": "benchmarks/network_traces/tests/test_stop_verdicts.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_window_chain.py": "benchmarks/network_traces/tests/test_window_chain.py",
+        "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json": "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json"
       }
     }
   ]

@@ -1,0 +1,13 @@
+{
+ "held": {
+  "a served Call with no cut in serving_templates, past the block whole even at these statics: no partition may name it until its chunked form, which is to come": [
+   "FlashMlaPrefill_v1{NH=1,NP=1,D=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}"
+  ],
+  "neither a Call of a served Program (targets.call_families), a serving cut (serving_templates) nor PoUW's: a subcircuit proved inside its callers' units, or a whole step's composition, which no window stages whole": [
+   "FlashMlaPrefillHead_v1{NP=1,D=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}",
+   "FlashMlaPrefillHead_v1{NP=2,D=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}",
+   "FlashMlaPrefillPair_v1{D=512,BN=64,FIRST=False,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}",
+   "FlashMlaPrefillPair_v1{D=512,BN=64,FIRST=True,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}"
+  ]
+ }
+}

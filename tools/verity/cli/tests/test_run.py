@@ -16,7 +16,9 @@ import pytest
 
 from verity import config as K
 from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
 from verity.channel import Refused
@@ -169,10 +171,10 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash before the network certifier's response cap and its lengths rows' form were
-#: parameters: a configuration that sets neither keeps it.
-UNCAPPED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
-                   "cbb336535923a6320f0cf3f717ddecfccd9ff8cef279e1eb20d992ab719fb9b8")
+#: The onsite configuration's hash with neither the network certifier's response cap nor its lengths rows' form set:
+#: a configuration that sets neither keeps it.
+UNCAPPED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
+                   "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
 
 
 def capped(cap):
@@ -482,6 +484,17 @@ def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypat
     assert "refused no-table" in capsys.readouterr().err
     assert R.config_main(["check", str(path)]) == 2
     assert "refused no-table" in capsys.readouterr().out
+
+
+def test_the_certifier_and_the_policy_are_declared_from_their_manifests():
+    certifier, policy = REG.components["certifier"], REG.components["inference-only"]
+    assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
+    assert (certifier.id, certifier.channels) == (NC.ID, NC.MANIFEST.channels)
+    assert [r for r in NC.MANIFEST.parties if r not in certifier.parties] == [NC.MANIFEST.role(NC.WORKERS)]
+    assert all(r in NC.MANIFEST.parties for r in certifier.parties)
+    assert set(D.PARTIES["certifier"]) == {r.name for r in certifier.parties}
+    assert [r.name for r in D.TOY.parties] == [NC.WORKERS]
+    assert NC.WORKERS not in {p for ps in D.PARTIES.values() for p in ps}
 
 
 def test_the_table_holds_what_the_listed_components_need():

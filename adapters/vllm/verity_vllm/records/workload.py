@@ -2,8 +2,8 @@
 `workloads/<row>.json` holds it and a run reads it; and the v1 layout (no `engine` block, the flat keys it replaced), which a
 pod's older run directories still hold.
 
-Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.workload_doc`, `pipeline.coverage_workloads`,
-`observe.prefix_cache` and `properties.holdout`; each writes every field typed here as required.  `config.RowConfig` parses a
+Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.workload_doc`, `pipeline.coverage_workloads`
+and `properties.holdout`; each writes every field typed here as required.  `config.RowConfig` parses a
 row file for running it (v2 only, with the engine's checks); this is the record a check reads.
 
     w = Workload.load(path)                     # MissingField / UnknownField name the file and the field

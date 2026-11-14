@@ -147,7 +147,7 @@ def test_a_head_the_service_keeps_failing_ends_in_its_http_error_after_its_one_r
     assert e.value.code == 503 and _Stall.calls == ["HEAD"] * (remote_s3.HEAD_RETRIES + 1)
 
 
-def test_a_retry_after_a_dropped_connection_never_draws_another_idle_one(server, monkeypatch):
+def test_a_retry_after_a_dropped_connection_never_takes_another_idle_one(server, monkeypatch):
     # R2 closes idle keep-alives (a pod's custody push had its sockets in CLOSE-WAIT, then failed with RemoteDisconnected on every try):
     # with a pool full of such connections, the retry must open a new one instead of taking the next dead one
     monkeypatch.setattr(_Stall, "stall_first", False)

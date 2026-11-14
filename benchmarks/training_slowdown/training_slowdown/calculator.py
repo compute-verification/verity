@@ -268,8 +268,9 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     - `figure`: the choice of the work (`_figure`'s: the subset of M that binds, each subset's term and what the
       choice read); None where there is no slowdown;
     - `read`: what the record says of itself: the k its rows were classified at (`k_classified`), its `capture` and,
-      where it has them, its `capture_code`, `stand_in` and `other_program`, and its `p_match` where that is why it
-      has no slowdown.
+      where it has them, its `capture_code`, `stand_in` and `other_program`, its `p_match` where that is why it
+      has no slowdown, and the batch's repeats its M left out (`repeats`, `work.batch_count`'s) where the job
+      counted them.
 
     The work is M at the policy's k (the record's own, or a trace's at each k of the console's dial,
     `work.classified_at`), the best of three choices of it (`HE_SUBSETS`). A weight's β is at most the run's code
@@ -323,6 +324,8 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     he = p.get("he")
     if he is None:
         return out | {"why": W.HE_RETRACE if "he" in p else W.HE_NO_ROWS}
+    if he.get("repeats"):
+        out["read"] = read = read | {"repeats": he["repeats"]}
     if p.get("p_match"):
         return out | {"why": W.p_match_reason(p["p_match"]), "read": read | {"p_match": p["p_match"]}}
     if _min_cut().beta(k) is None:

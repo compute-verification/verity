@@ -21,6 +21,7 @@ class _HostWindows:
     kept -- the replay opening path at batch sizes whose whole raw stream does not fit the pod's host cgroup); a slice touching a window
     that was not retained is an error, never zeros."""
     is_cuda = False
+    on_device: bool                 # set, to True, only on a block whose views are the device pool's until their release
 
     def __init__(self, wins: list[tuple[int, Any, int]], used: int, W: int, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.wins = {int(k): (hv, int(n)) for k, hv, n in wins if n}
@@ -79,6 +80,7 @@ class _HostRanges:
     may span consecutive ranges (a window boundary splits one retained region in two) but never a gap: a gap is a KeyError, never
     zeros.  Same duck type as `_HostWindows` / the contiguous `keep` tensor."""
     is_cuda = False
+    on_device: bool                 # as `_HostWindows.on_device`
 
     def __init__(self, ranges: list[tuple[int, int, Any]], used: int, excluded: dict[str, int] | None = None, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.ranges = sorted(((int(lo), int(hi), hv) for lo, hi, hv in ranges if hi > lo), key=lambda r: r[0])
@@ -153,7 +155,7 @@ def retain_exclude_families(spec: str | None) -> set[str]:
     return out
 
 
-def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUNK_BYTES) -> list[tuple[int, int, str]]:
+def _excluded_chunk_ranges(metas: list | PlanMetas, exclude: set[str], chunk: int = GPU_CHUNK_BYTES) -> list[tuple[int, int, str]]:
     """The chunk-aligned INTERIOR [lo, hi) of every tensor of an excluded value family in step-stream order (merged when adjacent): the
     bytes retain=host + exclude does not copy off the staging window.  Boundary chunks shared with a neighbouring tensor are retained
     (the neighbour opens from host); a tensor shorter than one chunk contributes nothing."""

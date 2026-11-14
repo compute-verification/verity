@@ -178,7 +178,6 @@ def select_cuda_platform(world: int = 1, device_name: str | None = None) -> str:
 def read_back_applied() -> dict:
     """What the pinned vLLM answers RIGHT NOW for the target facts the construction consults — the manifest's `target.applied` block
     is this record, taken inside `apply_target_profile`, never a literal. Absent answers are recorded as None (a mismatch)."""
-    import importlib
     out: dict = {"compute_capability": None, "num_sms": None, "batch_invariant": None, "vllm_version": None, "torch_version": torch.__version__,
                  "triton_version": None, "tuned_gemm_arch_family": None}
     try:
@@ -220,8 +219,8 @@ def read_back_applied() -> dict:
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
     from verity_vllm import settings
-    h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
-         "host_gpu": None}
+    h: dict[str, object] = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"),
+                            "cuda_available": bool(torch.cuda.is_available()), "host_gpu": None}
     if h["cuda_available"]:
         try:
             h["host_gpu"] = torch.cuda.get_device_name(0)
@@ -391,8 +390,9 @@ def _router_params_through_owner(model, h) -> None:
         held = tuple((a, *owners[id(p)]) for a, p in vars(r).items() if isinstance(p, torch.nn.Parameter) and id(p) in owners)
         if not held:
             continue
+        sel = r.select_experts
 
-        def select(*a, _r=r, _held=held, _sel=r.select_experts, **k):
+        def select(*a, _r=r, _held=held, _sel=sel, **k):
             for attr, owner, name in _held:
                 setattr(_r, attr, getattr(owner, name))
             return _sel(*a, **k)

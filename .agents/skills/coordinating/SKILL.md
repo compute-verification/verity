@@ -100,7 +100,8 @@ using-slack skill).
   Daniel as it arrives.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
-  - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the team's handle and any names the text starts with;
+  - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the issue's lane (its `lane:` label, else its team's
+    handle) and any names the text starts with, never you;
   - `research msg linear state ISSUE STATE`;
   - `research msg linear place ISSUE PROJECT --milestone M`;
   - `research msg linear edit ISSUE --title T --due D`;
@@ -155,5 +156,6 @@ using-slack skill).
 
 top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. Once every 12 hours it rings a
 lane with findings, and a lane with a person's ask off track until it holds (a slip, until its `slip:` comment), and it
-records the counts in `linear-audit.jsonl`. Once a day top rings the owner of a goal past its due, for a new date or its
-evidence. top reads the campaign's state from the Goals page and Linear, not from Slack.
+records the counts in `linear-audit.jsonl`. Once a day top rings the owner of each goal `research goals audit` names as
+past its due, off track and not written in a day, or due within a day and not written in the day before. top reads the
+campaign's state from the Goals page and Linear, not from Slack.

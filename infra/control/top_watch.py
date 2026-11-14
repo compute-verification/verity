@@ -4,7 +4,7 @@ top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended.
 inbox doorbells, and whatever needs judgment rings top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
-    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
+    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $CURSOR_API_KEY,
                                                                                       $LINEAR_CLIENT_ID, $LINEAR_CLIENT_SECRET
 
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
@@ -27,7 +27,9 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci.
+4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci. It reads
+   GitHub with the token GH_TOKEN_CMD prints, taken at each pass and never from the loop's environment; a read GitHub
+   refuses, or no token to read with, rings infra once until a read works again, with what to do.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
    ($FLEET_DIR): top, with the numbers.
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
@@ -37,9 +39,15 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
    LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
    a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
    can't read (`unread`), which the audit skips.
-7. The Goals page as this hour has it, saved as <state dir>/goals/goals-<YYYYMMDDTHHMMZ>.json.gz: the earlier dump `research
-   velocity` compares the page with. The pod holds no Cursor identity, so it reads the page with the site key in <state
-   dir>/goals.key (one line, `events:read`). A dump older than KEEP_S goes. It rings nobody.
+7. The Goals page as this hour has it, saved as <state dir>/goals/goals-<YYYYMMDDTHHMMZ>.json.gz and put in the store,
+   preserved, as a `goals-dump/v1` by `research velocity`'s own save (`velocity.save`), through a scratch store in a temporary
+   directory that is gone once the save returns: the earlier dumps `research velocity` compares the page with. Each pass
+   also puts in up to SAVE_MAX of the earlier copies the store doesn't hold yet, oldest first, starting none after SAVE_S of
+   saves; the pass's state is written before these saves start. A copy is deleted once it is older than KEEP_S and the
+   store has reported its file preserved (`goals_preserved` in the state, each with its `art:` id and its file's sha256),
+   never before; a failed save is logged and tried again at the next pass. One pass at a time saves and deletes (the lock
+   <state dir>/goals/.lock). The pod holds no Cursor identity, so it reads the page with the site key in
+   <state dir>/goals.key (one line, `events:read`). It rings nobody.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -49,6 +57,7 @@ rings nobody and saves no state.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import gzip
 import hashlib
 import importlib.util
@@ -57,7 +66,9 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -68,6 +79,9 @@ from research import goals, linear, slack
 
 QUOTE_MAX = 600
 KEEP_S = 14 * 86400
+SAVE_MAX = 24                           # the earlier copies of the Goals page a pass puts in the store, besides this hour's
+SAVE_S = 300                            # and no save of an earlier one starts once a pass's saves have taken this long
+LAST = ("goals",)                       # the checks a pass runs after it has saved the state
 SINCE_MARGIN_S = 600
 UNANSWERED_H = 1
 RULES_THREAD = "1792037552.043289"
@@ -76,9 +90,12 @@ H200_BUSY_PCT = 10
 REPORT_HOUR_UTC = 15
 LANE_RING_S = 12 * 3600
 AUDIT_LOG = "linear-audit.jsonl"
-GOALS_DIR, GOALS_KEY, GOALS_STAMP = "goals", "goals.key", "goals-%Y%m%dT%H%MZ.json.gz"
+GOALS_DIR, GOALS_KEY, GOALS_STAMP, GOALS_LOCK = "goals", "goals.key", "goals-%Y%m%dT%H%MZ.json.gz", ".lock"
 DAY_BEFORE_S = 86400 - 1800             # the line 24 h earlier: the newest one at least this old (passes drift within the hour)
 REPO = "compute-verification/verity"
+GH_TOKEN_CMD = ("/data/infra/gh_read_token.sh", "--cached")     # the pod's read-only App token: every reader's one source
+GH_REFUSED = (401, 403)
+GH_REFUSED_ID = "github:refused"
 OPEN = ("Waiting on Daniel", "Revising")
 HANDLE_LEAD = re.compile(r"^\s*@[a-z0-9][a-z0-9._-]*")
 OPTION_LETTER = re.compile(r"^([A-E])\.")
@@ -332,15 +349,38 @@ MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owne
   ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
 
 
-def gh_main() -> dict:
+class GitHubRefused(Exception):
+    """GitHub refused a read (HTTP 401 or 403), or the token command gave no token to read with."""
+
+
+def gh_token() -> str:
+    """The read-only token of the moment: what GH_TOKEN_CMD prints, run at each read, so a loop that has run for days reads
+    with a token minted within the hour."""
+    cmd = " ".join(GH_TOKEN_CMD)
+    try:
+        r = subprocess.run(GH_TOKEN_CMD, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise GitHubRefused(f"`{cmd}` didn't run ({type(e).__name__})") from None
+    if r.returncode != 0 or not r.stdout.strip():
+        raise GitHubRefused(f"`{cmd}` gave no token (exit {r.returncode}: {r.stderr.strip()[-300:] or 'nothing on stderr'})")
+    return r.stdout.strip()
+
+
+def gh_main(token: Callable[[], str] | None = None) -> dict:
     """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued)."""
+    carries every commit and patch: megabytes while a few hundred commits are queued), with the token `token` gives now
+    (`gh_token`)."""
     owner, name = REPO.split("/")
     req = urllib.request.Request("https://api.github.com/graphql", method="POST",
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
-                                 headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        out = json.load(r)
+                                 headers={"Authorization": f"Bearer {(token or gh_token)()}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            out = json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code in GH_REFUSED:
+            raise GitHubRefused(f"GitHub answered HTTP {e.code} to the read of main") from None
+        raise
     if out.get("errors"):
         raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
     ref = out["data"]["repository"]["ref"]
@@ -349,8 +389,18 @@ def gh_main() -> dict:
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
-    to it, so the clock starts at the later of that and the first pass that saw the head."""
-    head = read()
+    to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
+    and again only after a read that worked: until it reads, a stalled main rings nobody."""
+    try:
+        head = read()
+    except GitHubRefused as e:
+        once_each(state, GH_REFUSED_ID, ring, "infra",
+                  f"infra: the sweep can't read main from GitHub: {e}. Until it reads, a stalled main rings nobody. On the "
+                  f"control pod, `{GH_TOKEN_CMD[0]} > /dev/null` mints a token and prints GitHub's reason when it can't (the "
+                  f"App's key, its installation or its permissions); if that mints, the cached token is the one GitHub no "
+                  f"longer takes: `rm /dev/shm/verity-read-token`. The next pass reads again.", None, now)
+        raise
+    (state.get("rung") or {}).pop(GH_REFUSED_ID, None)
     committed = datetime.fromisoformat(head["committed"].replace("Z", "+00:00")).timestamp()
     seen = state.get("main_head") or {}
     if seen.get("sha") != head["sha"]:
@@ -455,28 +505,82 @@ def goals_page(key: Path) -> list[dict]:
     return goals.Route(key=key.read_text().strip()).call()
 
 
-def save_goals(now: float, page: Callable[[], list[dict]], out: Path | None) -> None:
-    """The Goals page as `page` reads it, saved in `out` under its minute (None: a dry run, which saves nothing); the dumps
-    older than KEEP_S go."""
+def store_copy(path: Path, save: Callable | None) -> tuple[str | None, str]:
+    """One saved copy of the page put in the store by `save` (default `velocity.save`) through a scratch store of its own, a
+    temporary directory gone once the save returns: its `art:` id, and why it isn't preserved there ('' when it is). The
+    goals and the minute are the file's own, so every save of one copy makes the one artifact."""
+    try:
+        from research import velocity
+        from research.store.local import LocalStore
+
+        goals, taken = json.loads(gzip.decompress(path.read_bytes())), velocity.when(velocity.DUMP_NAME.fullmatch(path.name)[1])
+        with tempfile.TemporaryDirectory(prefix="goals-store-") as d:
+            return (save or velocity.save)(goals, taken, LocalStore(d))
+    except Exception as e:  # noqa: BLE001 (one copy that can't be put leaves the others, and the pass, to go on)
+        return None, f"{type(e).__name__}: {e}"
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def save_goals(now: float, page: Callable[[], list[dict]], out: Path | None, state: dict, save: Callable | None = None,
+               clock: Callable[[], float] = time.monotonic) -> None:
+    """The Goals page as `page` reads it, saved in `out` under its minute (None: a dry run, which saves nothing) and put in the
+    store by `save` (default `velocity.save`): this pass's copy, then up to SAVE_MAX of the earlier ones `state` doesn't name as
+    preserved, oldest first, none started once SAVE_S has gone by on `clock`. The record of a copy preserved holds its `art:`
+    id and its file's sha256, and a copy older than KEEP_S is deleted only while its file is the one the store reported
+    preserved. One pass at a time saves and deletes: a pass that finds another holding `out`'s lock leaves the copies to it."""
     dump = gzip.compress(json.dumps(page(), ensure_ascii=False).encode(), mtime=0)
     if out is None:
         return
     out.mkdir(parents=True, exist_ok=True)
-    name = time.strftime(GOALS_STAMP, time.gmtime(now))
-    tmp = out / f"{name}.tmp"
-    tmp.write_bytes(dump)
-    tmp.replace(out / name)
-    for old in out.glob("goals-*.json.gz"):
-        if old.name < time.strftime(GOALS_STAMP, time.gmtime(now - KEEP_S)):
-            old.unlink()
+    with open(out / GOALS_LOCK, "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            log(f"goals: another pass holds {out / GOALS_LOCK}, so this one saves nothing")
+            return
+        name = time.strftime(GOALS_STAMP, time.gmtime(now))
+        tmp = out / f"{name}.tmp"
+        tmp.write_bytes(dump)
+        tmp.replace(out / name)
+        names = sorted(p.name for p in out.glob("goals-*.json.gz"))
+        kept = {n: r for n, r in (state.get("goals_preserved") or {}).items() if n in names and isinstance(r, dict)}
+        state["goals_preserved"] = kept
+        todo, start = [name] + [n for n in names if n not in kept and n != name][:SAVE_MAX], clock()
+        for i, n in enumerate(todo):
+            if i and clock() - start > SAVE_S:
+                log(f"goals: {SAVE_S} s of saves this pass; {len(todo) - i} copies wait for the next")
+                break
+            sha = digest(out / n)
+            art, why = store_copy(out / n, save)
+            if art and not why:
+                kept[n] = {"art": art, "sha256": sha}
+            else:
+                kept.pop(n, None)
+                log(f"goals: {n} is not preserved in the store ({why}); the next pass puts it again")
+        if left := sum(n not in kept for n in names):
+            log(f"goals: {left} of the {len(names)} copies here are not preserved in the store yet")
+        for n in names:
+            if n in kept and n < time.strftime(GOALS_STAMP, time.gmtime(now - KEEP_S)):
+                if digest(out / n) == kept[n]["sha256"]:
+                    (out / n).unlink()
+                else:
+                    log(f"goals: {n} is not the file the store reported preserved; the next pass puts it again")
+                del kept[n]
 
 
-def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]]) -> None:
-    for name, check in checks.items():
+def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]],
+               write: Callable[[], None] = lambda: None) -> None:
+    """Each check in turn, one failing leaving the others; `write` saves the state before the checks in LAST, which can take
+    minutes, so what the others rang is recorded whatever those do."""
+    for name, check in [*((n, c) for n, c in checks.items() if n not in LAST), ("", write),
+                        *((n, c) for n, c in checks.items() if n in LAST)]:
         try:
             check()
         except Exception as e:  # noqa: BLE001 (one check failing leaves the others)
-            log(f"{name} failed: {type(e).__name__}: {e}")
+            log(f"{name or 'saving the state'} failed: {type(e).__name__}: {e}")
 
 
 def fleet_samples(start: float, end: float) -> list[dict]:
@@ -540,6 +644,12 @@ def main(argv: list[str] | None = None) -> int:
         now = time.time()
         state = json.loads(state_path.read_text()) if state_path.is_file() else {}
         ring = None if ns.seed else Ringer(api, reg, "asks-relay" if ns.cmd == "asks" else "sweep", ns.dry_run)
+
+        def write(state: dict = state) -> None:
+            if not ns.dry_run:
+                tmp = state_path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(state, indent=1, sort_keys=True))
+                tmp.replace(state_path)
         try:
             if ns.cmd == "asks":
                 asks_pass(state, slack.Notion(), ring, slack.asks_db(reg)["data_source"], now, ns.dry_run)
@@ -553,12 +663,10 @@ def main(argv: list[str] | None = None) -> int:
                     "h200": lambda: h200s(state, ring, now, fleet_samples),
                     "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG),
                     "goals": lambda: save_goals(now, lambda: goals_page(state_path.parent / GOALS_KEY),
-                                                None if ns.dry_run else state_path.parent / GOALS_DIR)})
+                                                None if ns.dry_run else state_path.parent / GOALS_DIR, state)},
+                           lambda: (prune(state, now), write()))
                 prune(state, now)
-            if not ns.dry_run:
-                tmp = state_path.with_suffix(".tmp")
-                tmp.write_text(json.dumps(state, indent=1, sort_keys=True))
-                tmp.replace(state_path)
+            write()
             log(f"{ns.cmd} pass done" + (" (seeded: nothing rung)" if ns.seed else ""))
         except (slack.SlackError, OSError, ValueError, KeyError) as e:   # the next pass tries again from the saved state
             log(f"{ns.cmd} pass failed: {type(e).__name__}: {e}")

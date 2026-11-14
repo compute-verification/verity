@@ -406,7 +406,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
         pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-        history: Mapping[str, Any] | None = None, family: str | None = None) -> Verdict:
+        history: Mapping[str, Any] | None = None, family: str | None = None,
+        key: Mapping[str, Any] | None = None, main: Sequence[str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
@@ -417,16 +418,19 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins of the challenger's
     family `family` (the one the stream read them from, never the evidence's) that the session the ledger
-    opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
-    `coins` or `family` is missing (code `coins`), and where the family's log shows a root other than the registration's
-    digest (code `family`); for one that read none, `coins` must be None. Where the two differ,
+    opens for `window_root` under the challenger key `key` (`ChallengerKey.to_json`'s form), from a commit on `main`,
+    the verifier's copy of main's first-parent history, released after the registration's digest; `key` and `main` are
+    the stream's own, and the evidence names neither. It refuses the select step where they aren't those coins or
+    `coins`, `family` or `key` is missing (code `coins`), and where the family's log shows a root other than the
+    registration's digest (code `family`); for one that read none, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
     when it has one, and its `history` tables when it has any), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`), their evidence
-    (`coins`) and their family (`family`, the second stage's own: a family's coins follow one registration), its
+    (`coins`, held to the run's `key` and `main`: a run has one challenger) and their family (`family`, the second
+    stage's own: a family's coins follow one registration), its
     `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
     and `proofs`, the auditor's params naming each template's circuit file and reference header
     (`service.template_circuits`'s form, under the interior's params; None names none); the Lean derives the design's
@@ -445,7 +449,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
             "served": None if served is None else list(served),
             "session_roots": None if session_roots is None else dict(session_roots),
-            "coins": None if coins is None else dict(coins), "family": family}
+            "coins": None if coins is None else dict(coins), "family": family,
+            "key": None if key is None else dict(key), "main": None if main is None else list(main)}
     if interior is not None:
         it = interior
         i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \

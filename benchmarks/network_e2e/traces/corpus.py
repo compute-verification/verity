@@ -150,7 +150,7 @@ CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"e
 TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
            for name, c in CUT.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.protocols.accounting.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: active warden (`verity.protocols.accounting.certifier.verifier.warden`, run by `verity/protocols/accounting/certifier/device/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
@@ -545,18 +545,19 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
 
 
 def warden_modules():
-    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a warden trace."""
+    """`verity`'s warden and its device's `warden_serve`, imported only for a warden trace; benchmarks/network_traces
+    is on the path for what `warden_serve` still loads from there by name."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
     from verity.protocols.accounting.certifier.verifier import warden
 
-    import warden_serve
+    from verity.protocols.accounting.certifier.device import warden_serve
     return warden, warden_serve
 
 
-async def drive_warden(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
-                       drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
+async def drive_warden(deployment: dict, endpoints: dict, served: str, requests: list[dict], arrivals: list[float],
+                       ids: list[str], out: Path, drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
     """`drive` through the warden: from the warden's origin, each request at its arrival on a connection of its own to the
     warden's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the warden's
     close. client.jsonl has `drive`'s fields (`read_response`) and each request's warden ordinal and outcome, and
@@ -572,8 +573,8 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
 
     warden, ws = warden_modules()
     params = warden.WardenParams(**deployment["params"])
-    B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(deployment["listen"])
-    host = "%s:%d" % tuple(deployment["upstream"])
+    B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(endpoints["listen"])
+    host = "%s:%d" % tuple(endpoints["upstream"])
     loop = asyncio.get_running_loop()
     affinity = os.sched_getaffinity(0)
     if cpus:
@@ -716,7 +717,7 @@ def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: 
     windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "keys", "--dir", str(key)],
+    subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/certifier/device/warden_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
     flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))] + ["--watermark"] * watermark
     with open(w / "serve.log", "w") as log:
@@ -735,7 +736,7 @@ def check_warden(d: Path) -> int:
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
-        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "check", "--run",
+        return subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/certifier/device/warden_serve.py"), "check", "--run",
                                str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 
@@ -844,10 +845,11 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         else:
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
             warden, dep = start_warden(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
+            ends = warden_modules()[1].read_endpoints(d / "warden" / "deployment.json")
             end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
             meta["warden"] = {"where": WARDEN_WHERE, "egress_base": egress_base(warden_modules()[0]), "params": dep["params"],
                               "digest": dep["digest"], "windows": dep["windows"], "origin_unix": dep["origin_unix"],
-                              "listen": dep["listen"], "slack_s": dep.get("slack"),
+                              "listen": ends["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
             if tick:
@@ -858,9 +860,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
                                         f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}",
                                         *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
-            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay} from the "
+            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {ends['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
-            meta |= asyncio.run(drive_warden(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
+            meta |= asyncio.run(drive_warden(dep, ends, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
                 meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + WARDEN_END_S)

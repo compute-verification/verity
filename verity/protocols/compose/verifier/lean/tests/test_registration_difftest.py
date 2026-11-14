@@ -1,5 +1,6 @@
 """The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`,
-`verity/registration/log/v1`, in the core interface's package) against its Python (`verity.hardware.registration`). Hypothesis generates a log for
+`verity/registration/log/v1`, in the core interface's package) against its Python
+(`verity.protocols.accounting.registration.verifier.registration`). Hypothesis generates a log for
 either composite, from the honest example site, its information and its declaration of day 0 (`EXAMPLE`, the Lean's
 `Core.Registration.Example`) with a few changes (among them a declaration added or changed, so a day is sometimes declared
 twice), or from small random entries, chained or with a broken `previous`; it checks it under the
@@ -22,7 +23,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity import device as S
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 from verity_difftest import protocol as P
 
 INTERFACE = Path(__file__).resolve().parents[6] / "verity/protocols/interface"

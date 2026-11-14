@@ -3,6 +3,7 @@ module
 public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessesChecked
+public import Proofs.NetworkCertifier.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.SampledAuditAccepted
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Claims.Prob
@@ -71,37 +72,13 @@ verifier `certL`, as `MonitoringPeriodLeakAccepted`'s does, at the check every r
 any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RLeakCertifier`
 (`rLeakCertifier_of_rLeakCertifierChecked`), and none is (`certL_noWit`).
 
-**The read-back.** `RecordFormat.readsBy_read`: every record format reads back under its own schedule as the
-parameter, so `RecordFormat.ReadsBy` asks of a format what `RecordFormat.read_record` gives, at fewer parameters.
+**The statement's honest lemma.** `MonitoringPeriodLeakChecked_honest`: its premises at the toy code, as `MonitoringPeriodLeakAccepted`'s
+(`MonitoringPeriodLeakAccepted_honest`), over a monitoring period of no windows. The toy code gives no statement a partition, so
+it places no window, and its verifier rejects every run: the lemma shows the premises hold together. It shows no run
+that passes, holds no window's check to `CheckedUnique` and states no window's good event.
 -/
 
 @[expose] public section
-
-namespace NetTiming
-
-open Claims Claims.Sampling
-
-/-- **The leak relation at the network certifier's rows with a valid run gives the leak relation there**: a sequence
-accepted with a valid run is accepted. -/
-theorem rLeakCertifier_of_rLeakCertifierChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool}
-    {parse : Msg → Option AuditStatement} {partition : AuditStatement → Option Partition} {L K S : ℕ}
-    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ}
-    {As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)} {valid : AuditStatement → (ℕ → Bool) → Prop} {Dj : ℕ}
-    {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit}
-    (h : RLeakCertifierChecked H Cm parse partition L K S lay k δ As valid Dj tops x w) :
-    RLeakCertifier H Cm parse partition L K S lay k δ As Dj tops x w := by
-  obtain ⟨s, P, hs, hP, h⟩ := h
-  refine ⟨s, P, hs, hP, fun op o hC hCov hl hD => ?_⟩
-  obtain ⟨hl', hD', F, hF, a, ha, free, hfree, -, hacc⟩ := h op o hC hCov hl hD
-  exact ⟨hl', hD', F, hF, a, ha, free, hfree, hacc⟩
-
-/-- **Every record format reads back under its own schedule as the parameter** (`RecordFormat.read_record`). -/
-theorem RecordFormat.readsBy_read {κ Cell Ob : Type} (f : RecordFormat κ Cell Ob) :
-    f.ReadsBy f.read fun θ s => θ = s := by
-  rintro θ s rfl hfit a
-  exact f.read_record _ hfit a
-
-end NetTiming
 
 namespace NetTiming.Witness
 
@@ -566,5 +543,34 @@ theorem MonitoringPeriodLeakChecked_nontrivial :
   certL_bound_fails FlockDeploy.sha512 _ ((certL Bool).κ 0 [] + 0 + 0) []
     (fun w hw => certL_noWit FlockDeploy.sha512 _ [] w (rLeakCertifier_of_rLeakCertifierChecked hw))
     (by linarith [certL_κ (Coin := Bool) []])
+
+/-! ## The statement's honest lemma -/
+
+set_option synthInstance.maxSize 1024 in
+/-- **`MonitoringPeriodLeakChecked`'s premises at the toy code**, over a monitoring period of no windows, the one period the toy
+code places, since it gives no statement a partition: `Compiled.KS` and the commitment's binding
+(`MonitoringPeriodLeakAccepted_honest`); the windows' registrations (`WindowsPlaced`) and their checks' pinning
+(`CheckedUnique`), of which that period has none; and, at the record format of no connection (`noFormat`), the
+read-back under the one parameter (`RecordFormat.ReadsBy`) and the channel of the one secret (`MonitoringPeriodChannelReg`),
+whose view holds no cell. The toy code parses no statement and its verifier rejects every run, so the lemma shows that
+the premises hold together and nothing of a window: no run passes there, and a period of no windows states no window's
+good event (`ExecutionPhaseGoodChecked`). -/
+theorem MonitoringPeriodLeakChecked_honest :
+    (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+        (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
+      (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+        (fun _ _ _ => [])).commit.Binds FlockDeploy.sha512 ∧
+      WindowsPlaced
+        (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+          (fun _ _ _ => [])).partition 0 (Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) Fin.elim0 Fin.elim0 ∧
+      (∀ i : Fin 0, CheckedUnique ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).prog
+        ((Fin.elim0 : Fin 0 → Claims.Sampling.Partition) i)
+        ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).design trivLay 1 ∅ fun _ => True ∧ True) ∧
+      noFormat.ReadsBy (fun (_ : Unit) _ c => c.elim) (fun _ _ => True) ∧
+      MonitoringPeriodChannelReg noFormat (fun (_ : Unit) _ => True) Set.univ (Set.univ : Set Unit)
+        (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ => ())
+        (fun p => (recordingCode noFormat p.1 fun c => c.elim).1) :=
+  ⟨MonitoringPeriodLeakAccepted_honest.1, MonitoringPeriodLeakAccepted_honest.2, ⟨fun i => i.elim0, fun i => i.elim0⟩, fun i => i.elim0,
+    fun _ _ _ _ _ => funext fun c => c.elim, ⟨fun _ _ => ⟨trivial, (), Set.mem_univ _, trivial⟩, fun _ _ => rfl⟩⟩
 
 end NetTiming.Witness

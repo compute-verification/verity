@@ -4,7 +4,6 @@ public import Definitions.NetworkCertifier.Grid
 public import Definitions.NetworkCertifier.Run
 public import Definitions.NetworkCertifier.Ingress
 public import Definitions.NetworkCertifier.Schedule
-public import Definitions.NetworkCertifier.Premises
 
 /-!
 # The network certifier's protocol: grids, the interaction, the Program and acceptance
@@ -12,8 +11,7 @@ public import Definitions.NetworkCertifier.Premises
 `Grid`: one link's rows and grids, occupancy, left-packing, fill, and the FIFO certifier. `Run`: statuses, observations,
 the certifier, the interaction and its runs, the Program, acceptance and the accepted observation sequences. `Ingress`:
 the interaction read inward, a link's frames with the timing erased, and acceptance as it bears on ingress. `Schedule`:
-the Program's logical schedule and clock-sync advice, and the constant-rate Program they define. `Premises`: the one
-premise a property of the network certifier takes, that the certifier device runs as built (`DeviceIntact`).
+the Program's logical schedule and clock-sync advice, and the constant-rate Program they define.
 `SampledAudit`, which the root `Definitions` imports rather than this module, so the protocol's own importers don't take
 sampling's vocabulary: what an accepted sampled audit of the computation's program says about its egress, `Accepted` by
 the circuit's Program at `δ`, on `Definitions.Claims.Sampling`; its guarantee's statement is `Guarantees/SampledAudit`.

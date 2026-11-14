@@ -18,7 +18,7 @@ for tensors: what the CPU tests hold to the reference.
 
 The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
 until the producer's stream waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it
-has added them: their memory goes back to its stream at the read, not at the side stream's tail, and at the HBM cap its
+has added them: their memory goes back to its stream at the read, not at the side stream's tail, and at the HBM limit its
 next allocations find it there without the allocator's retry (which frees the cache and waits on every stream).
 
 With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
@@ -62,7 +62,7 @@ __all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepComm
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
 LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
-                      # tables alive at the producer's next allocation than it holds itself (at the HBM cap, 2 ran out)
+                      # tables alive at the producer's next allocation than it holds itself (at the HBM limit, 2 ran out)
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time

@@ -42,8 +42,9 @@ if args[1:2] == ["rehearse"]:
     run = args[args.index("--out") + 1]
     os.makedirs(run)
     form = os.environ.get("STUB_FORM") or ("id" if "--ids" in args else "bytes")
-    json.dump({{"upstream": ["127.0.0.1", {front}], "listen": ["127.0.0.1", {relay}], "params": {{"egress": form}}}},
-              open(os.path.join(run, "deployment.json"), "w"))
+    json.dump({{"upstream": ["127.0.0.1", {front}], "listen": ["127.0.0.1", {relay}]}},
+              open(os.path.join(run, "endpoints.json"), "w"))
+    json.dump({{"params": {{"egress": form}}}}, open(os.path.join(run, "deployment.json"), "w"))
 else:
     print("the reader's table")
 """

@@ -39,7 +39,6 @@ members = [
     "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
-    "verity-core-periods",
     "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-exact-kit",
@@ -50,7 +49,6 @@ members = [
     "verity-machine-model",
     "verity-native-peak",
     "verity-network-e2e",
-    "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
     "verity-ops",
@@ -2502,23 +2500,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "verity-core-periods"
-version = "0.0.0"
-source = { virtual = "verity/periods" }
-dependencies = [
-    { name = "hypothesis" },
-    { name = "verity" },
-    { name = "verity-difftest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "tools/difftest" },
-]
-
-[[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
 source = { virtual = "verity/protocols/proofs/spot/verifier/lean" }
@@ -2645,17 +2626,6 @@ provides-extras = ["torch"]
 name = "verity-network-e2e"
 version = "0.0.0"
 source = { virtual = "benchmarks/network_e2e" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "." }]
-
-[[package]]
-name = "verity-network-sim"
-version = "0.0.0"
-source = { virtual = "benchmarks/network_sim" }
 dependencies = [
     { name = "verity" },
 ]

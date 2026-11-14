@@ -126,7 +126,7 @@ def _moe_C_op(name: str) -> set:
         import vllm  # noqa: F401
         return {getattr(torch.ops._moe_C, name).default}
     except Exception as e:  # noqa: BLE001 — vLLM not importable: no targets
-        logger.debug_once("no rule targets torch.ops._moe_C.%s: %s", name, repr(e))
+        logger.debug_once("vLLM's `_moe_C` ops are not here (%s): no rule targets them", type(e).__name__)
         return set()
 
 

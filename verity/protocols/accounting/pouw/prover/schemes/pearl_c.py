@@ -4,7 +4,7 @@ Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on
 The design is Pearl's H100 product and its output tickets, plus Pearl v4's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
 and no part of the clean-up can be skipped at a degenerate input.  The gap rests on the named conjecture TT_OUT(ρ) at the device
-record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
+record's inert-work bound ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl's certificate-v4 code and its ``zk-pow``
 verifier.
 
@@ -55,7 +55,7 @@ peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fm
 ~~~
 
 Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
-with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``: 68 units per element, 64 of them credited
+with PoUW off), and the accounting is Lean's ``Costs.adopted``: 68 units per element, 64 of them credited
 (the noise atom and the cast), at the H100's prices.  Every price is a device's (`Prices`): `H100_PRICES` (sm_90) for
 the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings sample the same seeds.
 
@@ -65,12 +65,14 @@ exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most 
 whole 64-wide tiles (a narrower edge tile's words can be guessed whole), and rows in whole 16 x 16 ticket subtiles, so
 the last row tile may be partial (decode's 32 x 64 tile): `PearlC.check`.
 
-**Why -h3 seeds each row of A.**  A seed that doesn't read A's rows (h0's seed_A, over the unit's roots and index) tells
-the prover each row's noise before it chooses the row, so it can form every row onto a few shared A′ rows, compute their
-C̃ once per weight and copy it, while every row passes every rule.  Keyed on its own digest, each candidate row costs an
-oracle query again, and forming waits on that row's digest alone.  -h3 also caps each credited row's debit at ρ times
+**Why -h3 seeds each row of A.**  A seed over the coins and the unit's index alone tells the prover each row's noise
+before it chooses the row, so it can form every row onto a few shared A′ rows, compute their C̃ once per weight and copy
+it, while every row passes every rule.  h0's seed_A reads A's root as well (`unit_seed_a`), which commits every row of
+the unit first and closes that attack, but forming then waits on the whole unit's tree.  Keyed on its own digest, each
+candidate row costs an oracle query, and forming waits on that row's digest alone.
+-h3 also bounds each credited row's inert work at ρ times
 its cells' credit (4ρ at a census k, `row_cap_at`) beside the tile's: that is (C2), under which
-`Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate cap
+`Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate bound
 doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
@@ -96,6 +98,7 @@ from verity.commitments.crypto.blake3 import blake3, keyed
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.circuits.silicon import fp32
 
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, activation_binding, rows_domain, transcript_domain, weight_binding
 from verity.protocols.accounting.pouw.verifier.protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from verity.protocols.accounting.pouw.verifier.registration import check_registration
 from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS
@@ -103,7 +106,6 @@ from . import pearl_kw as P
 from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
 
 NAME = "pearl-c-h100-v0"
-NAME_V1 = "pearl-c-h100-v1"
 R = P.R
 WINDOW = P.WINDOW                  # 128 products: four k32 atoms per promotion
 SLICE = 32
@@ -122,9 +124,9 @@ HASHINGS = ("h0", "h3")
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
-#: the per-row cap at a census k, as a multiple of ρ: there each credited row's debit
+#: the per-row inert-work bound at a census k, as a multiple of ρ: there each credited row's inert work
 #: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; the gap rests on
-#: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's cap is ρ, (C2)'s
+#: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's bound is ρ, (C2)'s
 CENSUS_ROW_CAP = 4
 
 
@@ -172,6 +174,12 @@ def seed_b(salt: bytes, root_b: bytes, hashing: str = "h3") -> bytes:
 def line_key(seed: bytes) -> bytes:
     """The key a seed's noise lines are sampled under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
     return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
+
+
+def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
+    """A unit's key block, `hash_h3.cuh`'s `s512_seeds` p3: salt ‖ root_B (64 bytes) ‖ index u64 LE, `unit_seed_a`'s message
+    without root_A."""
+    return salt + root_b + index.to_bytes(8, "little")
 
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
@@ -468,9 +476,9 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h3") -> list[bytes]
 
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
-    and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
+    and -h3 the device record's `census_ks` below it (each row bounded at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
     the default (h0, Pearl's keyed-BLAKE3 seeds, lines and tickets, is taken by name), names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
-    `row_digest`), the work sampling design checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
+    `row_digest`), the work sampling design checking the inert-work bound per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the count of inert work read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
@@ -489,10 +497,10 @@ class PearlC:
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
         #: the ks below k_min the domain takes: the device record's census-passed ks, whose census ran §5's forming (v1)
-        #: under a row-capped format (-h3), where a row's cap there is `CENSUS_ROW_CAP`·ρ (`row_cap_at`)
+        #: under a row-bounded format (-h3), where a row's inert-work bound there is `CENSUS_ROW_CAP`·ρ (`row_cap_at`)
         self.census_ks = (tuple(k for k in device.census_ks if k < k_min)
                           if forming == "v1" and HASH_FORMATS[hashing].row_cap else ())
-        #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`clear_work`)
+        #: ρ, the device record's: the tile rule's inert-work bound and the credit's (1 − ρ) (`clear_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
@@ -537,8 +545,8 @@ class PearlC:
         )
 
     def row_cap_at(self, k: int) -> Fraction:
-        """A credited row's debit cap at depth ``k``, as a share of its cells' credit: `CENSUS_ROW_CAP`·ρ at a census k,
-        else ρ.  The tile's cap is ρ at every k.  Only a row-capped format (`HashFormat.row_cap`) applies it."""
+        """A credited row's inert-work bound at depth ``k``, as a share of its cells' credit: `CENSUS_ROW_CAP`·ρ at a census k,
+        else ρ.  The tile's bound is ρ at every k.  Only a row-bounded format (`HashFormat.row_cap`) applies it."""
         return CENSUS_ROW_CAP * self.cap if k in self.census_ks else self.cap
 
     def check(self, matmul: Matmul) -> None:
@@ -658,3 +666,14 @@ class PearlC:
         value = P.bf16_to_f32 if self.forming == "v0" else P.f32_of_bits
         return [[P.f32_of_bits(w) / (value(ops.a.alpha[i]) * value(ops.b.alpha[j]))
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
+
+
+def keys_of(scheme: PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
+    """A unit's key inputs to the device pipeline (`run.Pipeline`'s `keys`) but the prover's salt key and the hm96 constants,
+    which the caller adds: E_B's line key, the domains in the scheme's tree hash, and the unit's key block."""
+    s, salt, h = matmul.shape, epoch.salt, scheme.commitment_hash
+    return {"line_b": line_key(seed_b),
+            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
+            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
+            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
+            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}

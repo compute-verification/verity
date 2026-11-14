@@ -22,7 +22,7 @@ project = ["vy"]
 H = 3600
 
 
-def test_a_line_takes_a_daily_cap_a_total_cap_or_both_and_needs_one():
+def test_a_line_takes_a_daily_limit_a_total_limit_or_both_and_needs_one():
     b = B.parse(POOL)
     assert (b.lines["vy-coord-"].cap_usd, b.lines["vy-coord-"].cap_usd_per_day) == (None, 10.0)
     assert (b.lines["vy-both-"].cap_usd, b.lines["vy-both-"].cap_usd_per_day) == (100.0, 10.0)
@@ -54,7 +54,7 @@ def test_the_rolling_window_trips_the_line_and_clears_by_itself_as_it_moves():
     assert B.gate("vy-coord-4", 1, {**state, "budgets": B.parse(POOL).view()}, T0 + 27 * H) is None
 
 
-def test_a_steady_rate_under_the_daily_cap_never_trips_over_days():
+def test_a_steady_rate_under_the_daily_limit_never_trips_over_days():
     api = FakeRunPod([pod("a", "vy-coord-1", 0.4, 5)])            # $9.60 a day
     state, lines = G.new_state(T0), []
     for m in range(0, 4 * 24 * 60 + 1, 10):
@@ -66,7 +66,7 @@ def test_a_steady_rate_under_the_daily_cap_never_trips_over_days():
     assert len(t["window"]) <= 24 * 3600 // G.BUCKET_S + 1
 
 
-def test_a_line_with_both_caps_trips_on_either_and_clears_only_when_both_allow(tmp_path):
+def test_a_line_with_both_limits_trips_on_either_and_clears_only_when_both_allow(tmp_path):
     api = FakeRunPod([pod("a", "vy-both-1", 5, 5)])
     state, lines = G.new_state(T0), []
     step(api, POOL, state, T0, lines)
@@ -74,7 +74,7 @@ def test_a_line_with_both_caps_trips_on_either_and_clears_only_when_both_allow(t
     assert state["lines"]["vy-both-"]["tripped"]["kind"] == "per_day" and api.deleted == ["a"]
     raised_day = POOL.replace('cap_usd = 100, cap_usd_per_day = 10', 'cap_usd = 5, cap_usd_per_day = 100')
     step(api, raised_day, state, T0 + 2 * H + 60, lines)
-    assert state["lines"]["vy-both-"]["tripped"]["kind"] == "cap", "under the new daily cap, over the total: tripped on the total"
+    assert state["lines"]["vy-both-"]["tripped"]["kind"] == "cap", "under the new daily limit, over the total: tripped on the total"
 
 
 def test_the_window_survives_a_restart(tmp_path, monkeypatch):

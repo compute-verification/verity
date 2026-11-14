@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# it reads the served run of record's verifier side from the evidence store, so any CPU node with a --store-read key runs it
+[[metric]]
+id = "compute-accounting/verified-compute-share"
+title = "Llama 3.2 1B's verified compute share: the multiply-adds the Pearl+ verifier credits over those the served model computes, on a served run of record"
+owner = "compute-accounting"
+unit = "share of the served model's multiply-adds"
+better = "higher"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/compute/run.py --from r20261106-165116-614b"
+every = "7d"
+goal = "compute-accounting/compute-share-climb"

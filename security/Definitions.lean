@@ -39,6 +39,7 @@ public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.WindowCharge
 public import Definitions.NetworkCertifier.Warden
 public import Definitions.NetworkCertifier.ResponseCap
+public import Definitions.NetworkCertifier.ResponseTie
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.MonitoringPeriod
@@ -57,6 +58,7 @@ public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingTwoRegX
+public import Definitions.Claims.SamplingTwoServedX
 public import Definitions.Claims.SamplingServed
 public import Definitions.Claims.SamplingTable
 public import Definitions.Claims.Guarantees.SamplingTwo
@@ -110,6 +112,8 @@ public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.ResponseCap
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
+public import Definitions.NetworkCertifier.Guarantees.PooledReg
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity

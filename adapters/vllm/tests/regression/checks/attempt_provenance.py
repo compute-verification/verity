@@ -4,7 +4,7 @@ model id + revision, dtype, hw family, tp, batch, input / output lengths, arriva
 id -- and the stages chain: the Match Attempt names the Build artifact it consumed, the Commit names both, and those are the artifacts
 the earlier Attempts published.
 
-Expected = lifted from the fixture (`fixtures.toml` row key + `tp` / `batch`, the in-repo row file's model / engine.revision,
+Expected = lifted from the fixture (`fixtures.toml` row key + `tp` / `batch`, the row's workload's model / engine.revision,
 the query id default).  Actual = read from the candidate Attempts' manifests (`params` restricted to `key_params`).  Applies only in
 candidate mode with attempt ids (`VERITY_REGRESSION_CANDIDATE=r2026…,…`); a directory candidate has no Attempts to cite.
 """
@@ -18,7 +18,7 @@ __all__ = ["DEFAULT_QUERY"]
 NAME = "attempt_provenance"
 TIER = "T0"
 STRENGTH = "strong"
-INPUTS = ("workloads/<row>.json (in-repo)", "the candidate Attempt manifests (research data show <run-id> --json)")
+INPUTS = ("workloads/<row>.json", "the candidate Attempt manifests (research data show <run-id> --json)")
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 ROW_FIELDS = ("model_tag", "dtype", "hw", "tp", "batch", "input", "output", "arrivals", "sampling", "exec")

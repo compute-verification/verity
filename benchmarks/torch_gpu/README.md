@@ -33,8 +33,8 @@ that only moves one leaves each cubin they compile with it as it was. The progra
 so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
 `#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
 nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
-which it isn't builds no ship. A library a job builds off the card outside a ship (`j10r_sm90/job.sh`'s, and
-`benchmarks/hash/dither/job.sh`'s) compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
+which it isn't builds no ship. A library a job builds off the card outside a ship (`benchmarks/hash/dither/job.sh`'s)
+compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
 doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
@@ -47,10 +47,6 @@ doesn't follow its place either, and nothing holds a rebuild to the same bytes f
   The served path loads through it.
 - `s8_linear/`: the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate.
   `run.sh "run.py"` holds every cell to the twin, on an H200.
-- `j10r_sm90/`: J10-R's proof blocks on the H200: fixtures from the Definition, a check that holds a build to them bit
-  for bit, a bench and an exact fallback kernel. `job.sh cpu` computes the fixtures, then `job.sh gpu` runs the check
-  and the bench on an H200.
-
 ## Interface
 
 What code outside `benchmarks/torch_gpu` loads. Nothing else here is an interface: any other file may change or go
@@ -62,7 +58,7 @@ without a word to another directory.
 | `p2_stage/layout.py` | `StoreLayout`, `open_store`, `segment_rows`, `R`, `ROW` | the same two |
 | `p2_stage/full.py` | `Segments`, `sync`, `DEVICE` | `benchmarks/pous/p2_v1/bandwidth.py` |
 | `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
-| `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `benchmarks/pous/p2_v1/store.py` |
+| `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `verity/protocols/accounting/pous/prover/p2/p2_store/store.py` |
 | `commit_slots/slots.py` | the commit call's layout, domains and trees: `CommitShape`, `Group`, `Part`, `Row`, `ROW_SCHEMA`, `layout_digest`, `row_salts`, `slot_domain`, `step_domain`, `unit_domain`, `step_tree` | `benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py` |
 
 That bundle check also reads two private names of `slots.py`, `_unit_tree` and `_strings`; a private name is not an

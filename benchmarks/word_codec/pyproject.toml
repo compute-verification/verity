@@ -1,6 +1,7 @@
-# The word codec's benchmarks and their tests. Not a package: `kv.cu` and `kv_bench.py` run on a GPU node (`run.sh`), and
-# the byte-exact references (`codec.py`, `wide.py`, `kv.py`) with the kernels' arithmetic twins (`twin.py`, `kv_twin.py`)
-# run here as a suite (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
+# The word codec's benchmarks and their tests. Not a package: PoUB's prover's `kv.cu` and `kv_bench.py`
+# (`verity/protocols/accounting/poub/prover/word_codec/`) run on a GPU node (`run.sh`), and the byte-exact references (`codec.py`,
+# `wide.py`, the prover's `kv.py`) with the kernels' arithmetic twins (`twin.py`, `kv_twin.py`) run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -9,7 +10,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # tests/ checks kv.py's row prefix against verity.commitments' sha512/row/v2, which reads verity.errors and
 # verity.commitments.crypto; kv.py, codec.py and wide.py take PoUB's codec, on verity.commitments, at the codecs a
 # registration names.
-inputs = ["verity/__init__.py", "verity/errors.py", 
+inputs = ["verity/protocols/accounting/poub/prover/word_codec/kv.py", "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py", "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
+          "verity/protocols/accounting/poub/prover/word_codec/kv.cu",  # PoUB's prover, which the references and twins here are held to
+          "verity/protocols/accounting/poub/prover/word_codec/kv_vectors.json",  # and the vectors that pin it
+          "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
