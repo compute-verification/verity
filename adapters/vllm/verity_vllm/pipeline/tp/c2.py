@@ -17,6 +17,7 @@ from typing import Any
 from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.records import replay_codes as RC
 from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
 
 __all__ = ["DEFER_WORLDS"]
@@ -181,8 +182,6 @@ def tp_form_b(cblock: dict) -> dict | None:
 def unreplayable_reasons(entries: list[dict]) -> tuple[dict[str, int], dict[str, dict]]:
     """`population.not_evaluable` and its codes, read off a replay record's `unreplayable` families, for a record that carries those
     alone: a family with no identity (structure, an interior composed into its consumer) is no gap; the rest keep their why class."""
-    from verity_vllm.check.replay import replay_codes as RC
-
     not_ev: dict[str, int] = {}
     codes: dict[str, dict] = {}
     for u in entries:
@@ -202,7 +201,6 @@ def no_evaluator_gate(cblock: dict, sr_: dict, *, rank: int, xrank_families: fro
     """[`NO_EVALUATOR_RULE`] The rank's no-evaluator families into its verdict: (record block, FAIL text | None).  ``xrank_families``:
     the cross-rank families of the world while the Commit's cross-rank collectives pass runs, else None (nothing is waived by it)."""
     from verity_vllm.check.c2_rules import _complete_replay_population_gap
-    from verity_vllm.check.replay import replay_codes as RC
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
 
     pop = sr_.get("population")

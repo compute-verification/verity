@@ -191,7 +191,7 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
     the other port's as registered: Lean is to refuse the altered read by its reason, not a port the reads leave out. The
     last leaves its last port out of both the header's registered rows and the reads, a port committed afresh, which Lean
     refuses at `Registered.checkComplete`; the honest member's own public file is left as it was."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
              for j in AT.RANKS}
@@ -238,7 +238,7 @@ def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(
     its first bound port at another root and that port left out, each with every other port as honest: Lean is to refuse
     the one port the negative changes, by its reason. The port committed afresh keeps the bound ports, and with no
     record declaring it registered its reason is the complete check's."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
              for j in AT.RANKS}
@@ -269,7 +269,7 @@ def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bou
     and domain, and leave it out, each beside the other registered port, under the record (`--interface`); the file that
     binds ports is verified without the record too. Each is to be refused by its reason; the port committed afresh is
     that declared port here, so its reason is the declared check's, which Lean makes first."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     ports = {p: {"value": f"v-{p}", "root": f"{i}" * 128, "leaves": T, "reads": list(range(T))}
              for i, p in enumerate(("domain", "o1"))}

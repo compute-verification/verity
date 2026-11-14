@@ -25,7 +25,6 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.records.schema_ids import PHI_SCHEMA
@@ -103,10 +102,6 @@ def _prompt_len(r: dict) -> int:
 def _cap(r: dict) -> int:
     params = r.get("sampling_params")   # where a request may state its `max_tokens` instead; one that states it nowhere has 0
     return int(r.get("max_tokens") or (params.get("max_tokens") if params else None) or 0)
-
-
-def load_phi(path: str | Path) -> Phi:
-    return Phi.from_json(json.loads(Path(path).read_text()))
 
 
 #: the engine args a served engine's φ carries from its engine record: the ones class G states (`engine_classes.CLASS_G_LIMITS`,
@@ -219,7 +214,3 @@ def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int 
     dtype = checkpoint_dtype(hf_config)
     return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": dict(hf_config), **({"dtype": dtype} if dtype else {})},
                target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
-
-
-def save_phi(phi: Phi, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(phi.to_json(), indent=1, sort_keys=True) + "\n")

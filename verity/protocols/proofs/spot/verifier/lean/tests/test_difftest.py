@@ -11,7 +11,7 @@ one, `coins.law_problem`), for the `select` piece the challenger's sample from a
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
-`service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check`) on the
+`service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check_twin`) on the
 second-stage sessions' statements over one and two templates' interiors, for the `fits` piece v2's refusal of a length
 a session's statement can't hold (`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece
 (a registration's whole run, `Run.run`) those references in a `Stream`'s order.
@@ -64,9 +64,18 @@ from verity.protocols.accounting.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum, work_k
 from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                  link_points as LP, partition as P, produced as PD, proofs as PF,
-                                                  registered as G, registration as R)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as DR,
+    hello as H,
+    hidden_draw as HD,
+    link_points as LP,
+    partition as P,
+    produced as PD,
+    proofs as PF,
+    registered as G,
+    docket as R,
+)
 from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.protocols.proofs.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
                                               coins_within, draw_coins, draw_first, law_problem)
@@ -523,7 +532,8 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
+                               "certified")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -608,6 +618,13 @@ def decode_params(j) -> dict:
             R._binding(j["binding"])
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    if "certified" in j:
+        if not isinstance(j["certified"], dict):
+            raise D.Reject("certified entries are not an object")
+        try:
+            R._certified(j["certified"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     try:
         window, fixed = R._window(j.get("window_root"), j.get("held"), j["registered"] or {},
                                   G.sources(j.get("supplied", {})), j.get("pinned") or {}, j.get("outputs") or {})
@@ -677,7 +694,7 @@ def _registration_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
-                   compiler=p.get("compiler", R.UNREAD))
+                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -740,7 +757,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
-                             audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec))
+                             audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec),
+                             sorted(p.get("certified") or ()))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
             return "reject", "checks"
@@ -766,7 +784,9 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
 
 def covered_params(j) -> dict:
     """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli sampling design refused, at any p
-    (`service.bernoulli`)."""
+    (`service.bernoulli`), as are parameters that name certified entries."""
+    if isinstance(j, dict) and "certified" in j:
+        raise D.Reject("the parameters name certified entries: the sampled audit takes none")
     p = decode_params(j)
     if service.bernoulli(p["law"]):
         raise D.Reject(service.BERNOULLI)
@@ -1059,7 +1079,8 @@ def select_second(j):
 def template_circuits(j):
     """A two-stage run's params naming each template's circuit file and its statements' reference header and registered
     reads (`service.template_circuits`), in the order the check's template query names the templates, and the templates
-    they record as table reads, each with its table's rows (`service.template_reads`); a missing `proofs` names none."""
+    they record as table reads, each with its table's rows (`service.template_reads`), and the registered tables they
+    pin (`service.pinned_tables`); a missing `proofs` names none."""
     j = _json(j)
     proofs, query = (j.get("proofs"), j.get("query")) if isinstance(j, dict) else (None, None)
     try:
@@ -1067,7 +1088,8 @@ def template_circuits(j):
     except ValueError as e:
         raise D.Reject(str(e)) from None
     return {"circuits": [[t, c, h, r] for t, c, h, r in named],
-            "reads": [[t, v] for t, v in service.template_reads(proofs)]}
+            "reads": [[t, v] for t, v in service.template_reads(proofs)],
+            "tables": [[p, e] for p, e in service.pinned_tables(proofs)]}
 
 
 def slots(j):
@@ -1448,9 +1470,12 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 
 def _record_input(j) -> Fraction:
-    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
+    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `certified` a list of
+    strings when given; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
-    _exactly(j, RECORD_INPUT_KEYS, "the record's input")
+    _exactly(j, RECORD_INPUT_KEYS | ({"certified"} & set(j) if isinstance(j, dict) else set()), "the record's input")
+    if not (isinstance(j.get("certified", []), list) and all(isinstance(v, str) for v in j.get("certified", []))):
+        raise D.Reject("certified is not a list of strings")
     reg, draw_ = j["registration"], j["draw"]
     if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
             and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
@@ -1478,12 +1503,12 @@ def _record_input(j) -> Fraction:
 def audit_record_of(j) -> dict:
     """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
     roots the verdicts' own for the registration's values less those of its own ports at their own roots
-    (`Record.lessOwnReads`)."""
+    (`Record.lessOwnReads`), and with `certified` each of those values held to have a reported read."""
     delta = _record_input(j)
     opened = audit.less_own_reads(audit.session_registered(j["verdicts"], j["registration"]), j["registration"])
     return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
                               j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
-                              opened)
+                              opened, j.get("certified", ()))
 
 
 def record(j):
@@ -1527,7 +1552,7 @@ def run(j):
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front. Under a two-stage rule the
     registration's query is its grain (`grain`), `select` is the first stage, then `interiors` and `second`
     (`_interior_steps`) before `deliver`, and the interior registration's audit record over the second stage's sample,
-    with round 2's statement check of the interior's `statements` (`second_stage.check` under `second_stage.FORM`), is
+    with round 2's statement check of the interior's `statements` (`second_stage.check_twin` under `second_stage.FORM`), is
     under `interior`, the symbol accepting when both do."""
     j = _json(j)
     if not isinstance(j, dict):
@@ -1621,7 +1646,7 @@ def run(j):
     out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
                            "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
                            "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
-                           "verdicts": verdicts})
+                           "verdicts": verdicts, "certified": sorted(p.get("certified") or ())})
     accepted = out["accepted"] is True
     staged = {}
     if inner is not None:
@@ -1642,7 +1667,7 @@ def run(j):
                      SS.replay_wires(p["program"], it["replay"]["program_fn"]),
                      SS.replay_rows(p["program"], it["replay"]["program_fn"]),
                      SS.replay_returns(p["program"], it["replay"]["program_fn"], rec))
-        out2 = SS.attach(out2, SS.check(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
+        out2 = SS.attach(out2, SS.check_twin(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
         accepted = accepted and out2["accepted"] is True
         staged = {"interior": {"audit": codec.canonical_json(out2).decode(), "draw": inner["draw"], "read": inner["read"],
                                "receipt": inner["receipt"]}}
@@ -1692,6 +1717,8 @@ def _interior_of(it) -> dict:
         raise D.Reject("an interior names no rows: the verifier derives them from the replay block's Definition")
     if "returns" in it:
         raise D.Reject("an interior names no returns: the verifier derives them from the replay block's Definition")
+    if "certified" in params:
+        raise D.Reject("an interior's params name no certified entries: its registered values are its program's own")
     return {**it, "decoded": decoded, "replay_program": PROGRAMS[sha], "values": values, "proved_units": proved,
             "instances": instances, "served": it.get("served"), "session_roots": it.get("session_roots"),
             "record": it.get("record"), "coins": it.get("coins"), "statements": it.get("statements"),
@@ -2400,6 +2427,57 @@ def _tied(a: dict, x: int) -> None:
 
 #: One change each to the run Inputs the verifier names tied (`_tied`), or its program's parameters left out.
 TIED = [_tied, _tied, lambda a, x: (_tied(a, x), a["params"].pop("parameters"))]
+#: A value a verifier holds a certified entry for, none of these programs' parameters (a link's certified rows), and the
+#: entry it built from the registration it read under the deployment's key.
+CERTIFIED_VALUE = "link-0/in/7"
+CERTIFIED_ENTRY = {"domain": "c4" * 64, "leaves": 3, "root": "c5" * 64, "words": 64}
+
+
+def _certify(mine=None, entry=None):
+    """The verifier holding a certified entry for `CERTIFIED_VALUE` (`mine`: its change to the parameter) and the
+    record, as a v2 record, registering the value beside its others (`entry`: its change to that entry, None for no
+    entry)."""
+    def change(a, x):
+        held = {CERTIFIED_VALUE: dict(CERTIFIED_ENTRY)}
+        a["params"]["certified"] = mine(held, x) if mine else held
+        e = {"value": CERTIFIED_VALUE, **CERTIFIED_ENTRY}
+        e = entry(e, x) if entry else e
+        if e is not None:
+            a["record"]["registered"] = [*a["record"].get("registered", []), e]
+            a["record"]["format"] = R.FORMAT_V2
+    return change
+
+
+def _uncertified(a: dict, x: int) -> None:
+    """The record registers the certified value, and the verifier holds no entry for it."""
+    _certify()(a, x)
+    del a["params"]["certified"]
+
+
+#: One change each to the certified entries a verifier holds and the record's entry for the certified value: held and
+#: registered alike, at 16 bits and at 32; the record's entry changed or left out; the verifier's entry in another form;
+#: its entries in another form or of other values, a parameter it expects registered among them; and an entry the
+#: record registers that the verifier holds none for.
+CERTIFIED = [
+    _certify(),
+    _certify(entry=lambda e, x: [None, {**e, "root": "c6" * 64}, {**e, "leaves": 4}, {**e, "words": 32},
+                                 {**e, "domain": "c7" * 64}, {**e, "word_bits": 32}, {**e, "word_bits": 16},
+                                 {**e, "root": "xy"}, {**e, "leaves": "3"}, {**e, "extra": 1}, {**e, "value": "W"},
+                                 {k: v for k, v in e.items() if k != "root"}][x % 12]),
+    _certify(mine=lambda c, x: {CERTIFIED_VALUE: {**c[CERTIFIED_VALUE], **[
+        {"root": "c6" * 64}, {"leaves": 4}, {"word_bits": 32}, {"word_bits": 16}, {"word_bits": 8}, {"word_bits": "16"},
+        {"root": "C5" * 64}, {"root": "c5"}, {"root": 5}, {"leaves": -1}, {"leaves": True}, {"leaves": "3"},
+        {"words": "64"}, {"domain": 5}, {"extra": 1}][x % 15]}}),
+    _certify(mine=lambda c, x: [{}, {"W": c[CERTIFIED_VALUE]}, {"x": c[CERTIFIED_VALUE]}, {"S": c[CERTIFIED_VALUE]},
+                                {**c, "link-0/out/7": c[CERTIFIED_VALUE]}, None, [], "x", {CERTIFIED_VALUE: None},
+                                {CERTIFIED_VALUE: []},
+                                {CERTIFIED_VALUE: {k: v for k, v in c[CERTIFIED_VALUE].items() if k != "root"}}][x % 11]),
+    _certify(mine=lambda c, x: {CERTIFIED_VALUE: {**c[CERTIFIED_VALUE], "word_bits": 32}},
+             entry=lambda e, x: {**e, "word_bits": 32}),
+    _uncertified,
+]
+
+
 #: the name a wired port takes in `_wired`
 WIRED_PORT = "in"
 
@@ -3280,6 +3358,8 @@ REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits([SEED_SALTS], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([REGISTERED_PARAMS], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([ENTRIES, RECORD], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([CERTIFIED], 1, 1).map(_REGISTRATION_OF),
+    changed_audits([CERTIFIED, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     st.builds(lambda a, r: {"params": a["params"], "record": r}, changed_audits(most=0), JSON)), package=PACKAGE)
 
 
@@ -3705,7 +3785,25 @@ _PARAMS_CHANGES = {
     "another version": lambda p, q: (p, {**q, "version": 1}),
     "no version": lambda p, q: (p, {k: v for k, v in q.items() if k != "version"}),
     "no query": lambda p, q: (p, None),
+    "a pinned table": lambda p, q: ({**p, "tables": {"w": _PINNED}}, q),
+    "a pinned table of other words": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "word_bits": 8}}}, q),
+    "a pinned table of 0-bit words": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "word_bits": 0}}}, q),
+    "a pinned table under another parameter": lambda p, q: ({**p, "tables": {"v": _PINNED}}, q),
+    "a pinned table without its domain": lambda p, q: ({**p, "tables": {"w": {
+        k: v for k, v in _PINNED.items() if k != "domain"}}}, q),
+    "a pinned table with another key": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "rows": 8}}}, q),
+    "a pinned table's root uppercase": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "root": "AA" * 64}}}, q),
+    "a pinned table's root short": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "root": "aa" * 32}}}, q),
+    "a pinned table of no leaves": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "leaves": 0}}}, q),
+    "a pinned table's words a boolean": lambda p, q: ({**p, "tables": {"w": {**_PINNED, "words": True}}}, q),
+    "a pinned table a list": lambda p, q: ({**p, "tables": {"w": [_PINNED]}}, q),
+    "pinned tables a list": lambda p, q: ({**p, "tables": [_PINNED]}, q),
+    "pinned tables empty": lambda p, q: ({**p, "tables": {}}, q),
 }
+
+
+#: A registered table's entry the auditor pins (`service._table_entry`): the tables' registration's for parameter ``w``.
+_PINNED = {"value": "w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}
 
 
 @st.composite
@@ -3731,6 +3829,9 @@ def template_circuit_cases(draw) -> dict:
     recorded = draw(st.lists(st.sampled_from(_READ_RECORDS), min_size=len(ids), max_size=len(ids)))
     proofs = {"templates": [{"template": t, "circuit": c, "header": h, "registered": r, **x}
                             for t, c, h, r, x in zip(ids, circuits, headers, reads, recorded)]}
+    if draw(st.booleans()):
+        proofs["tables"] = {"w": _PINNED, **({"x": {**_PINNED, "value": "x", "root": "ef" * 64}} if draw(st.booleans())
+                                              else {})}
     if draw(st.booleans()):
         proofs, query = _PARAMS_CHANGES[draw(st.sampled_from(sorted(_PARAMS_CHANGES)))](proofs, query)
     return {"query": query} if proofs is None else {"proofs": proofs, "query": query}
@@ -4109,6 +4210,19 @@ def _own_reads_case(a: dict, x: int) -> dict:
     return c
 
 
+def _certified_case(a: dict, x: int) -> dict:
+    """`_record_case` with `certified` (or one not a list of strings): names among the registration's registered
+    values, the values its verdicts report reads of and one neither names, some twice."""
+    c = _record_case(a, "1/4")
+    reg, vs = c["registration"], c["verdicts"]
+    listed = reg.get("registered") if isinstance(reg, dict) and isinstance(reg.get("registered"), list) else []
+    read = [e for v in (vs.values() if isinstance(vs, dict) else ()) if isinstance(v, dict)
+            and isinstance(v.get("registered"), dict) for e in v["registered"].values()]
+    names = ["unlisted"] + [e["value"] for e in listed + read if isinstance(e, dict) and isinstance(e.get("value"), str)]
+    pick = [names[(x // 9 + i) % len(names)] for i in range(x % 4)]
+    return {**c, "certified": [pick, pick, pick + pick[:1], pick, pick, "unlisted", [1], None, {"unlisted": 1}][x % 9]}
+
+
 #: δ as the exact ratio of a double (`str(Fraction(delta))`), as the switch passes it.
 EXACT_DELTA = st.floats(2 ** -40, 1 - 2 ** -40).map(lambda f: str(Fraction(f))) | st.sampled_from(
     [str(Fraction(f)) for f in (0.5, 0.25, 0.1, 0.05, 0.01, 1e-6, 2 ** -20, 0.999)])
@@ -4116,6 +4230,8 @@ RECORD_PORT = D.Port(PIECES, "record", record, st.one_of(
     st.builds(_record_case, changed_audits(most=0), EXACT_DELTA),
     st.builds(_own_reads_case, changed_audits(most=0), st.integers(0, 63)),
     st.builds(_own_reads_case, changed_audits([REGISTERED_EVIDENCE], 1, 0, REGISTERED_SETUPS), st.integers(0, 63)),
+    st.builds(_certified_case, changed_audits(most=0), st.integers(0, 63)),
+    st.builds(_certified_case, changed_audits([REGISTERED_EVIDENCE], 1, 0, REGISTERED_SETUPS), st.integers(0, 63)),
     st.builds(_record_case, changed_audits([EVIDENCE, DRAW_CHANGES, VERDICTS_OF, REGISTERED_EVIDENCE], 1, 1), EXACT_DELTA),
     st.builds(_record_case, changed_audits([RECORD, ENTRIES, REGISTERED_EVIDENCE], 1, 1, REGISTERED_SETUPS), EXACT_DELTA),
     st.builds(_record_case, changed_audits(most=2, least=2), EXACT_DELTA),
@@ -4652,10 +4768,10 @@ def _returns_of(j):
 
 
 def second_statements(j):
-    """`Pieces.secondStatements`: round 2's statement check (`second_stage.check`) of `statements` (null for none), the
+    """`Pieces.secondStatements`: round 2's statement check (`second_stage.check_twin`) of `statements` (null for none), the
     two-stage form allowed when `allow`, over what `_second_own` reads of `j`."""
     allow, own, statements = _second_own(j)
-    return SS.check(allow, own, statements).to_json()
+    return SS.check_twin(allow, own, statements).to_json()
 
 
 def second_interior_reads(j):
@@ -4677,8 +4793,9 @@ def _second_own(j):
     null for none, null for no template's), and its own copies of the interior registration's values it fills, with
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
     record (`fixed`), each null for none, the templates the auditor's params record as table reads with their
-    tables' rows (`reads`, `{template: V}`, null for none), and the words of the rows each wire joins (`widths`, null
-    for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
+    tables' rows (`reads`, `{template: V}`, null for none), the registered tables they pin (`tables`,
+    `{parameter: entry}`, `service.pinned_tables`, null for none), and the words of the rows each wire joins (`widths`,
+    null for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
         raise D.Reject("allow is not a boolean")
@@ -4722,13 +4839,16 @@ def _second_own(j):
     reads = j.get("reads")
     if not (reads is None or (isinstance(reads, dict) and all(map(_nat, reads.values())))):
         raise D.Reject("reads is null or an object of naturals")
+    tables = j.get("tables")
+    if not (tables is None or (isinstance(tables, dict) and all(isinstance(e, dict) for e in tables.values()))):
+        raise D.Reject("tables is null or an object of entries, each an object")
     widths = () if j.get("widths") is None else SS.widths_of(j["widths"])
     if widths is None:
         raise D.Reject("widths is null or a list of {template, port, reads, writes}, two strings and two naturals")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()), tuple((reads or {}).items()), widths)
+                 tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())), widths)
     return j["allow"], own, statements
 
 
@@ -5261,7 +5381,7 @@ OPENING_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
 
 #: How many cases `_read_opening` has.
-OPENINGS = 36
+OPENINGS = 41
 #: The roots and domain ids of the two tables `_read_opening` has round 1's record register.
 OPENING_TABLES = {"t": ("a1" * 64, "a2" * 64), "u": ("b1" * 64, "b2" * 64)}
 
@@ -5285,7 +5405,9 @@ def _read_opening(c: dict, x: int) -> dict:
     differently; its root and domain are of two tables, filled alike row by row; round 1's record registers neither
     table; its root is left as a table's name, which is none of the verifier's bytes; round 1's record registers
     the root under another domain; the params record no read, the read at another count of rows, or another template
-    alone as one; or round 1's record registers the table at another count of leaves."""
+    alone as one; round 1's record registers the table at another count of leaves; or the auditor's params pin the
+    tables (`Own.tables`, the tables' registration's entries) and round 1's record registers none, or both do, or the
+    pin's root, domain id or count of leaves is another than the one the verifier fills."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))
     b = c.get("boundary")
     if not (isinstance(rec, dict) and isinstance(links, list) and isinstance(wires, list) and isinstance(rows, list)
@@ -5301,6 +5423,9 @@ def _read_opening(c: dict, x: int) -> dict:
     tables = [{**like, "port": f"{OPENING}/table-{n}", "root": r, "domain": d, "leaves": OPENING_ROWS}
               for n, (r, d) in OPENING_TABLES.items()]
     recorded: dict | None = {OPENING: OPENING_ROWS}
+    pins = {f"{OPENING}/table-{n}": {"value": f"{OPENING}/table-{n}", "root": r, "leaves": OPENING_ROWS, "words": 2,
+                                     "domain": d} for n, (r, d) in OPENING_TABLES.items()}
+    pinned: dict | None = c.get("tables") if isinstance(c.get("tables"), dict) else None
     mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"bytes": t_root}]],
             names["domain"]: [[{"bytes": t_domain}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
     linked = [{"template": OPENING, "port": p, "value": v} for p, v in names.items()]
@@ -5388,12 +5513,19 @@ def _read_opening(c: dict, x: int) -> dict:
         recorded = {"other": OPENING_ROWS}
     elif kind == 35:
         tables = [{**e, "leaves": 2 * OPENING_ROWS} for e in tables]
+    elif kind == 36:
+        tables, pinned = [], pins
+    elif kind == 37:
+        pinned = pins
+    elif kind in (38, 39, 40):
+        k = {38: "root", 39: "domain", 40: "leaves"}[kind]
+        tables, pinned = [], {v: {**e, k: 2 * OPENING_ROWS if k == "leaves" else "c3" * 64} for v, e in pins.items()}
     supplied = c.get("supplied") if isinstance(c.get("supplied"), dict) else {}
     entries = [{**INTERIOR_VALUES[0], "value": v} for v in registered]
     return {**c, "interior": {**rec, "registered": [*held, *entries]}, "links": [*links, *linked], "wires": wired,
             "boundary": {**b, "roots": [*b["roots"], *tables]},
             "rows": [*rows, *placed], "supplied": {**supplied, **mine}, "fixed": fixed,
-            "ref_reads": {**(refs or {}), **more, at: ref}, "reads": recorded}
+            "ref_reads": {**(refs or {}), **more, at: ref}, "reads": recorded, "tables": pinned}
 
 #: A change to a second_statements input, its `x` sampled: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot sampled more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
@@ -5478,7 +5610,7 @@ def second_statement_runs(draw) -> dict:
             ("ref_reads", "r"), ("supplied", []), ("supplied", {"v": 5}), ("supplied", {"v": [5]}),
             ("supplied", {"v": [[5]]}), ("supplied", {"v": [[{"bytes": 5}]]}),
             ("supplied", {"v": [[{"bytes": "00", "port": "x"}]]}), ("supplied", {"v": [[{}]]}), ("fixed", 5),
-            ("fixed", [5]), ("fixed", "v"), (None, None)]))
+            ("fixed", [5]), ("fixed", "v"), ("tables", 5), ("tables", []), ("tables", {"v": 5}), (None, None)]))
         drop = draw(st.sampled_from(sorted(c)))
         c = {k: v for k, v in c.items() if k != drop} if key is None else {**c, key: value}
     return c
@@ -6685,7 +6817,7 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",
-            "R7-supplied"}
+            "R7-supplied", "R7-certified"}
 
 
 def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
@@ -6717,7 +6849,7 @@ def test_every_r7_code_is_reached(pieces):
             honest = registration(_REGISTRATION_OF(a))
             assert honest["codes"] == []
             assert D.replay(REGISTRATION, _REGISTRATION_OF(a), pieces) == ("output", D.canonical(honest))
-            for change, x in ((c, x) for c in ENTRIES + REGISTERED_PARAMS + SUPPLIED for x in range(8)):
+            for change, x in ((c, x) for c in ENTRIES + REGISTERED_PARAMS + SUPPLIED + CERTIFIED for x in range(8)):
                 b = copy.deepcopy(a)
                 try:
                     change(b, x)
@@ -6726,6 +6858,73 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_r7_takes_the_verifiers_certified_entries(pieces, server):
+    """Lean and Python agreeing, on a program none of whose parameters is registered and on one with a value registered:
+    a record that registers a certified value beside the verifier's own is accepted by a verifier holding the entry for
+    it, at 16 bits and at 32, and refused by one holding none (by its keys where it expects nothing registered, else
+    `R7-values`); the verifier's entry with no entry in the record is refused (by the record's keys, else `R7-values`
+    and `R7-certified`), an entry at another root is `R7-certified`, and one of other leaves, words, domain or width
+    R7's code for that key. A certified value the verifier expects a parameter registered under, or an entry in
+    another form, refuses its inputs. The sampled audit refuses parameters that name certified entries, on an audit
+    its own checks would accept. A run of record whose parameters name the entry accepts the record that registers the
+    certified value and refuses it at its register step without (`R7-values`), and a two-stage run whose interior's
+    parameters name certified entries, even none, is no run's."""
+    def codes(a, change, x=0):
+        b = copy.deepcopy(a)
+        change(b, x)
+        kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    alike, entry, mine, forms, wide, uncertified = CERTIFIED
+    lone, own = _v1_audit("all", SETUPS[0]), _v2_audit(REGISTERED_SETUPS[0], {"W": 2})
+    for a, unheld, unregistered in ((lone, ["keys"], ["keys"]), (own, ["R7-values"], ["R7-values", "R7-certified"])):
+        assert codes(a, lambda b, x: None) == []
+        assert codes(a, alike) == [] and codes(a, wide) == []
+        assert codes(a, uncertified) == unheld and codes(a, forms, 0) == unheld
+        assert codes(a, entry, 0) == unregistered
+        for x, want in ((1, ["R7-certified"]), (2, ["R7-leaves"]), (3, ["R7-words"]), (4, ["R7-domain"]),
+                        (5, ["R7-word_bits"]), (6, ["R7-word_bits"]), (7, ["R7-root", "R7-certified"]),
+                        (8, ["R7-leaves"]), (9, ["R7-registered"]), (11, ["R7-registered", "R7-certified"])):
+            assert codes(a, entry, x) == want, x
+        for x, want in ((0, ["R7-certified"]), (1, ["R7-leaves"]), (2, ["R7-word_bits"]), (3, [])):
+            assert codes(a, mine, x) == want, x
+        for x in range(4, 15):
+            assert codes(a, mine, x) == "reject", x
+        for x in range(5, 11):
+            assert codes(a, forms, x) == "reject", x
+    assert codes(own, forms, 1) == "reject" and codes(lone, forms, 1) == ["R7-values", "R7-certified"]
+
+    full = copy.deepcopy(own)
+    alike(full, 0)
+    full["evidence"].update(receipt=R.receipt(full["record"], "v", received=RECEIVED), verdicts={
+        "lean": {"accepted": True, "of_record": True, "registered": reads(full["record"])}})
+    case = _json(_case(full))
+    parsed = (decode_params(case["params"]), decode_commitment(PR.unhex(case["commitment"])),
+              decode_evidence(PR.unhex(case["evidence"])))
+    assert check(*parsed)[0] == "accept"
+    assert D.replay(ONE_STAGE, case, server)[0] == "reject"
+    assert D.replay(ONE_STAGE, _json(_case(own)), server)[0] == "accept"
+
+    ran = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
+    alike(ran, 0)
+    ran["evidence"]["verdicts"] = {"lean": {"accepted": True, "of_record": True, "registered": reads(ran["record"])},
+                                   "upstream": {"accepted": True, "of_record": False}}
+    _, case = _from_challenger(_run_case(ran, "", 2, ["credited"]), random.Random("run/certified"))
+    case = {**case, "values": [*case["values"], {"name": CERTIFIED_VALUE, "registered": True}],
+            "public": [*case["public"], *(f"{k}:{CERTIFIED_VALUE}" for k in ("leaves", "domain", "words", "word_bits"))]}
+    bare = {**case, "params": {k: v for k, v in case["params"].items() if k != "certified"}}
+    for c, want in ((case, ("accept", None, None)), (bare, (None, "register", ["R7-values"]))):
+        out = run(copy.deepcopy(c))
+        assert (out.get("symbol"), out.get("step"), out.get("codes")) == want, out
+        assert D.replay(RUN, c, pieces) == ("output", D.canonical(out)), out
+    two = _two_stage_case()
+    for held in ({}, {CERTIFIED_VALUE: CERTIFIED_ENTRY}):
+        named = _inner_params(certified=held)(two, 0)
+        assert D.replay(RUN, named, pieces)[0] == "reject"
+        with pytest.raises(D.Reject):
+            run(copy.deepcopy(named))
 
 
 def test_every_produced_code_is_reached(pieces):
@@ -7223,26 +7422,94 @@ def test_every_public_items_code_is_reached(pieces):
     assert seen == {"keys", "unsalted", "query", "roots", "undeclared", "reject"}, sorted(seen)
 
 
+def _reported(a: dict, v: str) -> dict:
+    """The reads a v2 audit's verdict of record reports, changed, by name: all of them (`all`); with a value the
+    registration doesn't name (`unnamed`); less `v`'s (`unread`); none (`empty`) or no report (`none`); one of `v`'s
+    ports at another root (`one-port`) or all of them (`another-root`); with a root port's value at its own root
+    (`root-port`) or at another (`root-port-elsewhere`)."""
+    opened = a["evidence"]["verdicts"]["lean"]["registered"]
+    p = next(k for k in sorted(opened) if opened[k]["value"] == v)
+    return {"all": opened, "unnamed": {**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}},
+            "unread": {k: e for k, e in opened.items() if e["value"] != v}, "empty": {}, "none": None,
+            "one-port": {**opened, p: {**opened[p], "root": "12" * 64}},
+            "another-root": {k: {**e, "root": "12" * 64} if e["value"] == v else e for k, e in opened.items()},
+            "root-port": {**opened, "x.0": {"root": ROOTS["x"], "value": "x"}},
+            "root-port-elsewhere": {**opened, "x.0": {"root": "12" * 64, "value": "x"}}}
+
+
+def _reporting(a: dict, got) -> dict:
+    lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
+    return {**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}
+
+
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
-    """A v2 audit of each program accepts when the verifier reports the sessions' registered reads opened against
-    the registered roots (and a value the registration doesn't name is not its to read, and a root port's read at that
-    port's own root is its own), and rejects them opened against another root, a value's reads missing, a root port's
-    read at another root, or none reported. Where the registration also registers a value under a root port's name, a
-    read at the port's root in place of one of that value's is rejected: the value's reads no longer agree."""
+    """A v2 audit of each program accepts when each read the verifier reports of the record's own values, less a root
+    port's read at that port's own root (its own), is of a registered value, opened against its registered root: every
+    value's reads, a value's reads missing, none reported, and a value the registration doesn't name beside them (not
+    its to read). It rejects a read opened against another root, by one port of a value or by all of them, and a root
+    port's read at another root. Where the registration also registers a value under a root port's name, a read at the
+    port's root in place of one of that value's is rejected: the value's reads no longer agree."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
-        opened = a["evidence"]["verdicts"]["lean"]["registered"]
-        p = sorted(opened)[0]
-        v = opened[p]["value"]
+        v = sorted(e["value"] for e in a["record"]["registered"])[0]
         own = "reject" if "x" in s.values[1] else "accept"
-        for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
-                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
-                          ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
-                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, own),
-                          ({**opened, "x.0": {"root": "12" * 64, "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
-            lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
-            case = _json(_case({**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}))
-            assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, got)
+        for name, want in (("all", "accept"), ("unnamed", "accept"), ("unread", "accept"), ("empty", "accept"),
+                           ("none", "accept"), ("one-port", "reject"), ("another-root", "reject"), ("root-port", own),
+                           ("root-port-elsewhere", "reject")):
+            case = _json(_case(_reporting(a, _reported(a, v)[name])))
+            assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, name)
+
+
+def test_the_record_fails_a_read_not_of_a_registered_root_and_no_missing_read(pieces):
+    """The record of a v2 audit of each program, Lean's and Python's the same: accepted, with no `registered` check,
+    when a registered value has no reported read, by its reads missing or none reported, or a root port's one read is at
+    that port's own root; and failing `registered`, naming the value read, when all of a value's reads are opened
+    against another root, a root port's read is at another root, or a root port's read at its own root disagrees with
+    the reads of a value registered under its name."""
+    for s in REGISTERED_SETUPS:
+        a = _v2_audit(s, s.values[1])
+        named = sorted(e["value"] for e in a["record"]["registered"])
+        v = named[0]
+        own = ["x"] if "x" in s.values[1] else None
+        for name, wrong, opened in (("unread", None, None), ("empty", None, None), ("none", None, None),
+                                    ("another-root", [v], named), ("root-port", own, named),
+                                    ("root-port-elsewhere", ["x"], sorted({*named, "x"}))):
+            case = _record_case(_reporting(a, _reported(a, v)[name]), str(Fraction(0.1)))
+            kind, line = D.replay(RECORD_PORT, case, pieces)
+            assert kind == "output", line
+            rec = json.loads(json.loads(line))
+            assert codec.canonical_json(rec["checks"]) == codec.canonical_json(audit_record_of(copy.deepcopy(case))["checks"])
+            assert rec["accepted"] is (wrong is None), (s.program.fn.id, name)
+            assert rec["checks"].get("registered") == (None if wrong is None else {
+                "ok": False, "codes": ["registered"],
+                "detail": {"registered": named, "opened": opened, "wrong": wrong}}), (s.program.fn.id, name)
+
+
+def test_the_record_holds_a_certified_value_to_a_reported_read(pieces):
+    """The record of a v2 audit of each program whose verifier holds a certified entry for one of its registered values,
+    Lean's and Python's the same: accepted when the verdict of record reports a read of the value at its root; failing
+    `certified`, naming the value, when it reports none: its reads missing, none reported, or its ports reported under a
+    value the registration does not list and at another root, a read the registration's own names drop. The same
+    records without the certified names are accepted: a registered value needs no reported read."""
+    for s in REGISTERED_SETUPS:
+        a = _v2_audit(s, s.values[1])
+        v = sorted(e["value"] for e in a["record"]["registered"])[0]
+        got = _reported(a, v)
+        renamed = {k: {"root": "12" * 64, "value": "unlisted"} if e["value"] == v else e for k, e in got["all"].items()}
+        for name, reads, unread in (("all", got["all"], None), ("unread", got["unread"], [v]), ("empty", {}, [v]),
+                                    ("none", None, [v]), ("renamed", renamed, [v])):
+            bare = _record_case(_reporting(a, reads), str(Fraction(0.1)))
+            for case in ({**bare, "certified": [v]}, bare):
+                kind, line = D.replay(RECORD_PORT, case, pieces)
+                assert kind == "output", line
+                rec = json.loads(json.loads(line))
+                assert codec.canonical_json(rec["checks"]) == codec.canonical_json(
+                    audit_record_of(copy.deepcopy(case))["checks"])
+                failed = "certified" in case and unread is not None
+                assert rec["accepted"] is not failed, (s.program.fn.id, name)
+                assert rec["checks"].get("certified") == ({
+                    "ok": False, "codes": ["certified"], "detail": {"certified": [v], "unread": unread}}
+                    if failed else None), (s.program.fn.id, name)
 
 
 def _accepted_record_case(kind: str, delta: float) -> dict:
@@ -7963,7 +8230,7 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
         assert got == want, (want, got)
     _, own, statements = _second_own(_read_interior(honest, 0))
-    v = SS.check(True, own, statements)
+    v = SS.check_twin(True, own, statements)
     assert v.ok and SS.attach({"checks": {}}, v, SS.interior_reads(own, statements))["interior_reads"] == [h]
     assert "interior_reads" not in SS.attach({"checks": {}}, v)
 

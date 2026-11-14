@@ -317,11 +317,11 @@ theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending 
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
     rcases hf with rfl | rfl <;> exact True.intro), List.tail_cons]
   show wd (encs [.label _root_.Flock.Zk.LABEL_INNER.toUTF8, .one v] ++ (Frame.sq 1 1).enc)
-    ((_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) = v
+    ((_root_.Flock.ZkServer.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) = v
   refine wd_drop (rest := (Frame.sq 1 1).enc) ?_
   have hl : ((Frame.label _root_.Flock.Zk.LABEL_INNER.toUTF8).enc ++
       (_root_.Flock.Transcript.header 3 1 1).data.toList).length =
-      (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16 := by
+      (_root_.Flock.ZkServer.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16 := by
     rw [List.length_append, FlockSoundness.Refine.Frame.header_length, ← labelFrame_data, Array.length_toList]
     rfl
   rw [← hl]
@@ -332,26 +332,26 @@ theorem finalCOf_inner (v : F128) {t : _root_.Flock.Transcript} (hp : t.pending 
   rw [e, List.drop_left]
 
 /-- **The value a rep's frame took at `final_c`'s pad** (`valsOf`): `final_c'` plus its pad. -/
-theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.Firewall.Frame.MaskSlot)
+theorem valsOf_fc (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (M : Array F128) (fc : F128) :
-    (Loop.valsOf (_root_.Flock.Firewall.Frame.Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
-      fc + (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[lay.fc]! := by
+    (Loop.valsOf (_root_.Flock.ZkServer.Frame.Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[lay.fc]! =
+      fc + (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[lay.fc]! := by
   have hlt : lay.fc < lay.zp 64 := by
     unfold _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
     omega
-  have hih : lay.fc < (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.size := by
+  have hih : lay.fc < (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h.size := by
     rw [ofBytes_h_size]
     unfold _root_.Flock.Zk.PadLayout.len _root_.Flock.Zk.PadLayout.tw _root_.Flock.Zk.PadLayout.hab
       _root_.Flock.Zk.PadLayout.zp _root_.Flock.Zk.PadLayout.lc
     omega
-  have hcl : (_root_.Flock.Firewall.Frame.Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
-  have hch : (_root_.Flock.Firewall.Frame.Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).h =
-      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h := rfl
+  have hcl : (_root_.Flock.ZkServer.Frame.Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
+  have hch : (_root_.Flock.ZkServer.Frame.Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).h =
+      (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h := rfl
   unfold Loop.valsOf
   simp only [hcl, hch]
   rw [set!_hit]
   · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hih, Option.getD_some,
-      getElem!_pos (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h lay.fc hih]
+      getElem!_pos (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h lay.fc hih]
   · rw [← Array.foldl_toList, foldl_set_size _ (fun v e => by cases e; exact Array.size_set! _ _ _) _ _,
       Array.size_replicate]
     exact hlt
@@ -411,7 +411,7 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f)
     {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras)
@@ -437,7 +437,7 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked
         (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc =
       q.vals[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc]! +
-        (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog
           tb.sch.k0).fc]! := by
   obtain ⟨e, L, t₄, hp4, hLs, hrun⟩ := hin
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -528,10 +528,10 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     unfold streamAt roundsOf FlockComplete.repStartZk
     rw [take_map_range _ (by omega)]
     omega
-  have hI : _root_.Flock.Firewall.Frame.INNER_ROUNDS = 4 := rfl
+  have hI : _root_.Flock.ZkServer.Frame.INNER_ROUNDS = 4 := rfl
   have hround : ((seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val)).getD
       ((seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val)).length -
-        _root_.Flock.Firewall.Frame.INNER_ROUNDS) (.empty, 0, #[])).1 =
+        _root_.Flock.ZkServer.Frame.INNER_ROUNDS) (.empty, 0, #[])).1 =
       ⟨(dropDom (0 :: Claims.toMsg (_root_.Flock.Transcript.framed (FlockComplete.Replay.InZ.t₁
         (((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked lay.fc) t₄)
         1 1))).tail.toArray⟩ := by
@@ -548,9 +548,9 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
   cases hq'
   dsimp only
   rw [valsOf_fc, hround, finalCOf_inner _ hp4,
-    show (_root_.Flock.Firewall.Finish.padsOf (_root_.Flock.Firewall.Frame.Draws.ofBytes lay
+    show (_root_.Flock.ZkServer.Finish.padsOf (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay
       (L₀.draws (ν, t) (2 * j.val + r.val)))).toC.h =
-      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay (L₀.draws (ν, t) (2 * j.val + r.val))).h from rfl,
+      (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay (L₀.draws (ν, t) (2 * j.val + r.val))).h from rfl,
     add_pad_pad]
 
 end Loop

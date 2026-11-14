@@ -670,11 +670,11 @@ def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
 def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_is_refused():
     from types import SimpleNamespace
 
-    from verity_vllm.pipeline.c2_replay import draw_of
+    from verity_vllm.pipeline.c2_replay import sampling_design_of
 
-    assert [draw_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
+    assert [sampling_design_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
         "family", "family", "uniform"]
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"} for fam in ("Gemm_v1", "RoPE_v1") for i in range(3)]
-    assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
+    assert family_strata(vus, 4, draw=sampling_design_of(SimpleNamespace())) == family_strata(vus, 4)
     with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
         family_strata(vus, 4, draw="stratified")

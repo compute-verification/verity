@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import config as K
+from verity.commitments.domains import LMS_SHA512_N64_W1_H20
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
@@ -55,7 +56,7 @@ CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
 ONSITE = "verity/onsite/v0"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
-WORKERS, FIREWALL, PROVER, VERIFIER = SP.WORKERS, SP.FIREWALL, WP.PROVER, SP.VERIFIER
+WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
@@ -148,22 +149,32 @@ ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwi
 PROTOCOLS = ONSITE_COMPONENTS
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
-PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
+PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
-          "machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the deploy",
-          "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
+#: the memory challenger's keys the auditor pinned, one for each subprotocol whose sessions it signs: the SHA-512 of
+#: each public key
+PINS = {"pous": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb",
+        "wipe": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
+          "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
+          "FILE` (demos/onsite_served/README.md); the deploy bindings hold every host and address, this file none.",
+          "`verity run THIS --dry-run` resolves it all.")
 
 
 def configuration(commit: str) -> dict[str, Any]:
     """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated."""
+    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and the memory challenger's
+    `PINS`."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
         p["machine"] = PLACEMENT[p["name"]]
+    cfg["pin"] = [{"party": MEMORY_CHALLENGER, "protocol": c, "scheme": LMS_SHA512_N64_W1_H20, "key-sha512": h}
+                  for c, h in sorted(PINS.items())]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
     return cfg
 
@@ -277,14 +288,14 @@ def _certifier_piece(cfg, params, bound):
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
-              "(C-Flock --zk behind the Lean firewall, the Lean verifier) and each listed component's piece",
+              "(C-Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
         CHALLENGER: Piece("sampled-proofs", CHALLENGER, GATE, "the gate: the auditor's live challenger, whose coins "
                           "draw the proof blocks after the window's commitment"),
-        FIREWALL: Piece("sampled-proofs", FIREWALL, SERVED_WINDOW, "the Lean firewall every outer proof goes through, "
+        ZK_SERVER: Piece("sampled-proofs", ZK_SERVER, SERVED_WINDOW, "the Lean ZK server every outer proof goes through, "
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
                        "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "

@@ -18,24 +18,8 @@ uv run tools/verity/check/suites.py benchmarks/torch_gpu/DIR
 ```
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
-`gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`s8_linear` and `p2_stage`) source `ship.sh`, the one statement of a
-ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). nvcc's PTX can depend on its
-heap layout, on the lengths of the paths it reads and on how long its passes take, so they build with address randomization
-off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
-(`ship_clock.c`), and the manifest names each shared library's cubins: a rebuild at the same commit, from any checkout,
-with the same toolkit at the same path and the same host compiler (a `research run --cwd source` on a node with
-`/usr/local/cuda-13.0`), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
-nvcc with the three things its device compiler reads that follow a file's place in the tree fixed (the file names in the
-preprocessed text's line markers, the source's path, and its directory and environment): wherever a source or a header
-it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit
-that only moves one leaves each cubin they compile with it as it was. The program's own text is compiled as written,
-so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
-`#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
-nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
-which it isn't builds no ship. A library a job builds off the card outside a ship (`benchmarks/hash/dither/job.sh`'s)
-compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
-doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
+`gpu-lease`, and an `OUT` directory for what it writes. `p2_stage` builds on a CPU node first, into a ship the GPU run
+unpacks, with the ship frame `benchmarks/kernels/ship.sh` (`benchmarks/kernels/README.md` states it).
 
 - `commit_slots/`: what measures the serve-time commit call (`verity/commitments/cuda/commit_slots/`). `gpu.sh` holds
   the GPU's roots to the CPU reference's and times the call.
@@ -45,8 +29,6 @@ doesn't follow its place either, and nothing holds a rebuild to the same bytes f
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
   The served path loads through it.
-- `s8_linear/`: the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate.
-  `run.sh "run.py"` holds every cell to the twin, on an H200.
 ## Interface
 
 What code outside `benchmarks/torch_gpu` loads. Nothing else here is an interface: any other file may change or go
@@ -60,4 +42,3 @@ without a word to another directory.
 | `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
 | `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `benchmarks/pous/p2_v1/store.py` |
 
-A test of `benchmarks/pouw` loads `s8_linear/sass_gate.py` by file, which fixes its path, nothing more.

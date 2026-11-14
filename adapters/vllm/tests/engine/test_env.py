@@ -97,10 +97,12 @@ def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
         assert not used & pinning, (p.name, sorted(used & pinning))
 
 
-def test_the_engine_profile_reads_this_table() -> None:
+def test_the_engine_profile_reads_this_table(clean, tmp_path) -> None:
     from verity_vllm.engine import engine_profile as prof
 
-    assert prof.DECLARED_ENV is env.ENGINE
+    clean.setattr(prof, "checkpoints_hf_home", lambda: str(tmp_path))
+    assert prof.apply_env() == env.ENGINE
+    assert {k: os.environ[k] for k in env.ENGINE} == env.ENGINE and os.environ["HF_HOME"] == str(tmp_path)
     assert env.ENGINE == {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_USE_FLASHINFER_SAMPLER": "0",
                           "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1", RBLOCK: "0"}
     assert set(env.REASONS) == set(env.ENGINE) and all(env.REASONS.values())
@@ -231,7 +233,8 @@ def test_an_inherited_dynamic_tiling_is_refused_by_name_before_anything_is_pinne
         env.apply_engine(None)
     with pytest.raises(RuntimeError, match=f"inherited {RBLOCK}"):
         env.pin({**env.ENGINE, "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1"})
-    assert not (set(env.ENGINE) - set(env.FIXED)) & set(os.environ)
+    pinned = sorted(k for k in set(env.ENGINE) - set(env.FIXED) if k in os.environ)
+    assert pinned == []
     assert "HF_HUB_OFFLINE" not in os.environ
 
 

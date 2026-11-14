@@ -474,6 +474,7 @@ loads = [
     "verity/circuits",
     "verity/commitments",
     "verity/commitments/crypto",
+    "verity/commitments/windows",
 ]
 
 [[place]]

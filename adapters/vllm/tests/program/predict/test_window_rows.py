@@ -26,7 +26,7 @@ from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols.accounting.certifier.verifier.active import id_request
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
