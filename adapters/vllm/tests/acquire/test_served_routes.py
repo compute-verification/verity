@@ -1,0 +1,156 @@
+"""`verity_vllm.acquire.served.probe_routes` on CPU, against a stand-in for the GPU that computes one cuBLAS route's words.
+
+The stand-in takes the place of what the probe asks of the device: `torch.mm(x, w.t(), out=y)` at a shape (M, K, N) is the twin
+(`bf16_gemm_check.cublas_route_rows`) of the route the test gives that shape, and what the probe makes on the device or moves to
+it stays on the host.  So the device computes exactly one route at each shape, and the test holds the probe: the products it asks
+for, the words it reads of them and the route it names.  That a twin computes a GPU's words is not held here; a card's capture
+shows it.
+
+It catches a probe that names another route than the device's, at each kind of route a split count leaves; a product asked at
+another shape than the one probed, where cuBLAS may take another route, or of an operand left on the host; and a route answered
+rather than refused, with the words each route missed, for a device that no route models (a pin's aligned grid, a split count
+past the candidates), for one that leaves its route in one row of one product, and where two routes compute every word."""
+from __future__ import annotations
+
+import ast
+import json
+from typing import Any
+
+import numpy as np
+import pytest
+import torch
+from verity.definitions.registry import bf16_gemm_check as BC
+
+from verity_vllm.acquire import served as SV
+from verity_vllm.acquire.inductor_templates import Unmodelled
+
+Shape = tuple[int, int, int]
+Route = dict[str, Any]
+
+#: the device's route at each shape (M, K, N): one of each kind `cublas_routes_at` leaves
+ROUTES: dict[Shape, Route] = {
+    (4, 1024, 64): {"kernel": "splitk", "SPLIT_K": 3},
+    (3, 512, 300): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
+    (2, 2048, 128): {"kernel": "serialk", "SPLIT_K": 5},
+    (5, 512, 64): {"kernel": "nosplit"},
+    (1, 2048, 128): {"kernel": "gemv", "LANES": 16},
+    (1, 1024, 64): {"kernel": "gemv", "LANES": 32},
+}
+
+#: routes whose twin `cublas_route_rows` has and `cublas_routes_at` never lists
+UNNAMED: list[Route] = [
+    {"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16},
+    {"kernel": "serialk", "SPLIT_K": 3, "align": 8, "tile_k": 16},
+    {"kernel": "splitk", "SPLIT_K": BC.SPLITK_CANDIDATES[-1] + 1},
+]
+
+#: the shape the refusals are read at, and its route
+SHAPE: Shape = (4, 1024, 64)
+ROUTE = ROUTES[SHAPE]
+
+
+def _words(t: torch.Tensor) -> np.ndarray:
+    return t.contiguous().view(torch.int16).numpy().view(np.uint16)
+
+
+class Gpu:
+    """What the test gives the stand-in: a shape's route (`routes`) and where the device leaves it (`off`: the route of one row of
+    a shape's n-th product, by (n, row)).  What the stand-in was asked: the shape of each product (`products`)."""
+
+    def __init__(self) -> None:
+        self.routes: dict[Shape, Route] = {}
+        self.off: dict[tuple[int, int], Route] = {}
+        self.products: list[Shape] = []
+        self._storages: set[int] = set()
+
+    def holds(self, t: torch.Tensor) -> torch.Tensor:
+        self._storages.add(t.untyped_storage().data_ptr())
+        return t
+
+    def mm(self, x: torch.Tensor, wt: torch.Tensor, *, out: torch.Tensor) -> None:
+        shape = (x.shape[0], x.shape[1], wt.shape[1])
+        assert shape in self.routes, f"the probe asked the device for a product at {shape}, a shape it was not given to probe"
+        assert tuple(out.shape) == (shape[0], shape[2])
+        assert all(t.untyped_storage().data_ptr() in self._storages for t in (x, wt, out)), "an operand of the product is on the host"
+        nth = self.products.count(shape)
+        self.products.append(shape)
+        xs, ws = _words(x), _words(wt.t())
+        y = np.ascontiguousarray(BC.cublas_route_rows(self.routes[shape], xs, ws))
+        for (n, row), route in self.off.items():
+            if n == nth:
+                y[row] = BC.cublas_route_rows(route, xs[row:row + 1], ws)[0]
+        out.copy_(torch.from_numpy(y.view(np.int16)).view(torch.bfloat16))
+
+
+@pytest.fixture
+def gpu(monkeypatch: pytest.MonkeyPatch) -> Gpu:
+    """The stand-in in the GPU's place: its `mm`, and on the host what `zeros`, `empty` and `.cuda()` put on the device."""
+    gpu = Gpu()
+
+    def cuda(t: torch.Tensor) -> torch.Tensor:
+        return gpu.holds(t)
+
+    def on_host(make: Any) -> Any:
+        def made(*a: Any, device: Any = None, **kw: Any) -> torch.Tensor:
+            t = make(*a, **kw)
+            return gpu.holds(t) if str(device).startswith("cuda") else t
+        return made
+
+    monkeypatch.setattr(torch.Tensor, "cuda", cuda)
+    monkeypatch.setattr(torch, "zeros", on_host(torch.zeros))
+    monkeypatch.setattr(torch, "empty", on_host(torch.empty))
+    monkeypatch.setattr(torch, "mm", gpu.mm)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda: "a stand-in")
+    return gpu
+
+
+def _refused() -> dict[str, int]:
+    """The probe of `SHAPE` refuses; what its refusal says each route missed, by the route's JSON."""
+    with pytest.raises(Unmodelled) as why:
+        SV.probe_routes([list(SHAPE)])
+    said, head, tail = str(why.value), "cuBLAS at M=4 K=1024 N=64: words missed by each route ", ": no one route models it"
+    assert said.startswith(head) and said.endswith(tail), said
+    missed: dict[str, int] = ast.literal_eval(said[len(head):-len(tail)])
+    return missed
+
+
+def test_the_probe_names_the_devices_route_at_each_shape(gpu: Gpu) -> None:
+    """Each kind of route is read back from the device's words alone, under its shape's key, beside what the device reports of
+    itself; the probe asks three products a shape (the split counts' rows, then the spread and the cancelling rows), each at the
+    shape whole and of operands on the device."""
+    gpu.routes.update(ROUTES)
+    got = SV.probe_routes([list(shape) for shape in ROUTES])
+    assert got == {"device": "a stand-in", "versions": {"torch": torch.__version__, "cuda": torch.version.cuda},
+                   "routes": {",".join(map(str, shape)): route for shape, route in ROUTES.items()}}
+    assert gpu.products == [shape for shape in ROUTES for _ in range(3)]
+
+
+@pytest.mark.parametrize("route", UNNAMED, ids=json.dumps)
+def test_a_device_on_a_route_the_probe_has_no_name_for_is_refused(gpu: Gpu, route: Route) -> None:
+    """No route is answered for a device that none computes: the refusal names the shape and, for each route the split counts
+    left, how many of the words read it missed, none of them zero."""
+    gpu.routes[SHAPE] = route
+    missed = _refused()
+    assert [json.loads(named) for named in missed][:3] == BC.cublas_routes_at([])
+    assert all(n > 0 for n in missed.values()), missed
+
+
+@pytest.mark.parametrize("row", [0, SHAPE[0] // 2, SHAPE[0] - 1], ids=["first", "middle", "last"])
+@pytest.mark.parametrize("product", [1, 2], ids=["spread", "cancelling"])
+def test_a_device_off_its_route_in_one_row_of_one_product_is_refused(gpu: Gpu, product: int, row: int) -> None:
+    """The route named computes every word read: both of a shape's products that tell the routes apart, at its first, middle
+    and last rows.  A device that computes its route everywhere else is given no route."""
+    gpu.routes[SHAPE] = ROUTE
+    gpu.off[product, row] = {"kernel": "serialk", "SPLIT_K": ROUTE["SPLIT_K"]}
+    missed = _refused()
+    assert missed[json.dumps(ROUTE)] > 0 and all(n > 0 for n in missed.values()), missed
+
+
+def test_two_routes_that_compute_every_word_are_refused(gpu: Gpu, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A split-K route is one function with its ``partial`` left to the default or named "f32".  Were both spellings left as
+    candidates, each computing every word, the probe names neither."""
+    spelled = {**ROUTE, "partial": "f32"}
+    routes_at = BC.cublas_routes_at
+    monkeypatch.setattr(BC, "cublas_routes_at", lambda fits: [*routes_at(fits), spelled])
+    gpu.routes[SHAPE] = ROUTE
+    assert [json.loads(named) for named, n in _refused().items() if n == 0] == [ROUTE, spelled]
