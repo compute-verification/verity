@@ -78,12 +78,12 @@ def KnowledgeSound (εks : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : 
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))) ≤ εks R τ
 
-/-- **The binding error** (named hypothesis `δ_link`, which may depend on the prover's state):
+/-- **The binding error** (named hypothesis `ε_bind`, which may depend on the prover's state):
 likewise, with `Pr[accept ∧ extraction succeeds but disagrees with the committed transcript]`. -/
-def BindSound (δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
+def BindSound (εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
     avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => A.link (L.draw ω) R (τ ω) u (A.committed R τ)) ≤
-      δlink R τ
+      εbind R τ
 
 end ExtractionAnalysis
 
@@ -120,8 +120,8 @@ theorem KnowledgeSound.toExtraction {A : Analysis L Reg session} {εks : ℝ≥0
   le_of_eq_of_le (congrArg avg (funext fun ω =>
     atTgt_toExtraction (L.draw ω) R (τ ω) (tgt ω) (A.ksFail (L.draw ω) R (τ ω)))) (h R τ tgt)
 
-theorem BindSound.toExtraction {A : Analysis L Reg session} {δlink : ℝ≥0∞}
-    (h : A.BindSound δlink) : A.toExtraction.BindSound fun _ _ => δlink := fun R τ tgt =>
+theorem BindSound.toExtraction {A : Analysis L Reg session} {εbind : ℝ≥0∞}
+    (h : A.BindSound εbind) : A.toExtraction.BindSound fun _ _ => εbind := fun R τ tgt =>
   le_of_eq_of_le (congrArg avg (funext fun ω =>
     atTgt_toExtraction (L.draw ω) R (τ ω) (tgt ω)
       fun u => A.linkFail (L.draw ω) R (τ ω) u (A.committed R τ))) (h R τ tgt)
@@ -130,19 +130,19 @@ end Analysis
 
 /-- **The one-stage audit bound, with a randomized extractor.** -/
 theorem extraction_audit_le (A : ExtractionAnalysis L Reg session)
-    {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (E : A.Tr → Finset (Fin n) → Prop)
+    {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (E : A.Tr → Finset (Fin n) → Prop)
     (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ E (A.committedOf σ) o.2) (audit L Reg session) σ ≤
       prCoin (fun ω => E (A.committedOf σ) (L.draw ω) ∧
         Disjoint (L.draw ω) (A.incorrect (A.committedOf σ))) +
-      εks (reg σ) (cont σ) + δlink (reg σ) (cont σ) := by
+      εks (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
   classical
   obtain ⟨R, τ'⟩ := σ
   set τ : Cont L Reg session R := cont ⟨R, τ'⟩
   set X := A.committed R τ with hX
   show prob _ (audit L Reg session) ⟨R, τ'⟩ ≤
-    prCoin (fun ω => E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.incorrect X)) + εks R τ + δlink R τ
+    prCoin (fun ω => E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.incorrect X)) + εks R τ + εbind R τ
   let tgt : L.Ω → Option (Fin n) := fun ω =>
     if h : ∃ u, u ∈ L.draw ω ∧ u ∈ A.incorrect X then some (Classical.choose h) else none
   let ks : L.Ω → ℝ≥0∞ := fun ω => atTgt (L.draw ω) (tgt ω) (A.ks (L.draw ω) R (τ ω))
@@ -179,12 +179,12 @@ theorem extraction_audit_le (A : ExtractionAnalysis L Reg session)
     _ ≤ _ := add_le_add (add_le_add (avg_ite_eq_prCoin _).le (hks R τ tgt)) (hlink R τ tgt)
 
 /-- **The count curve, with a randomized extractor**:
-`Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + δ_link(σ)`. -/
+`Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
-    {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (K : ℕ) (σ : Strategy (audit L Reg session)) :
+    {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.incorrect (A.committedOf σ)).card) (audit L Reg session) σ ≤
-      L.miss K + εks (reg σ) (cont σ) + δlink (reg σ) (cont σ) := by
+      L.miss K + εks (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
   refine (extraction_audit_le A hks hlink (fun X _ => K ≤ (A.incorrect X).card) σ).trans ?_
   gcongr
   by_cases hB : K ≤ (A.incorrect (A.committedOf σ)).card
@@ -192,12 +192,12 @@ theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans
       (prCoin_false.le.trans (zero_le))
 
-/-- **Sampled proof blocks, with a randomized extractor**, are correct up to `ε_ks(σ) + δ_link(σ)`. -/
+/-- **Sampled proof blocks, with a randomized extractor**, are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_sampled (A : ExtractionAnalysis L Reg session)
-    {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (σ : Strategy (audit L Reg session)) :
+    {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.incorrect (A.committedOf σ)) o.2) (audit L Reg session) σ ≤
-      εks (reg σ) (cont σ) + δlink (reg σ) (cont σ) := by
+      εks (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
   refine (extraction_audit_le A hks hlink (fun X S => ¬ Disjoint (A.incorrect X) S) σ).trans ?_
   have : prCoin (fun ω => ¬ Disjoint (A.incorrect (A.committedOf σ)) (L.draw ω) ∧
       Disjoint (L.draw ω) (A.incorrect (A.committedOf σ))) = 0 :=

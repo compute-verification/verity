@@ -31,7 +31,7 @@ verity-verify-proof's on every sampling block of the server-time block, and the 
 sampling blocks'.
 
 `IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
-`δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`, `IntegrityBlockCarried`'s: the coins model's per-period
+`δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t) + Σ_ℓ δ_carry,ℓ,b`, `IntegrityBlockCarried`'s: the coins model's per-period
 guarantee, which the one theorem's SPOT target couples into the causal game (`Accounting.PeriodLive`).
 
 With no carried leaf the monitoring period's run is `Flock.Guarantees.ServerBlocks.run`
@@ -107,7 +107,7 @@ and `ecr/sha-512` (`LinkCRZC`) at every strategy the node plays a sampling block
 whose share `ε` of the block's units is at least `ln(1/δ)/q`, the period's sampled audit has its per-period guarantee
 (`PeriodRun.Sound`) at error
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,b},$$
-`Flock.Guarantees.IntegrityBlockCarried`'s, when `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)` is finite. -/
+`Flock.Guarantees.IntegrityBlockCarried`'s, when `δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t)` is finite. -/
 def IntegrityOfIntegrityBlock : Prop :=
   ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
     [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (S : Flock.Guarantees.CarriedBlocks) (b : ℕ)

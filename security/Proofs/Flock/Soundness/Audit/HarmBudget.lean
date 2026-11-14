@@ -26,7 +26,7 @@ work (`work_design`) sampling designs meet it.
 coin, `coin` nodes are the session's other coins, and `stop acc` ends the session. `Play n N` has at
 most `N` rounds, and the prover may stop after any of them. `Drawn err` is the per-round drawn-unit
 bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_sampled` gives with
-`err_t = ε_ks,t + δ_link,t` (`HarmBudgetLife`).
+`err_t = ε_ks,t + ε_bind,t` (`HarmBudgetLife`).
 
 **The theorem** (`harm_budget`): for harms `h ≥ 0` and any `λ ≥ 0` with `λ h_u ≤ π_u`, in
 particular `λ = min_{h_u > 0} π_u / h_u` (`harmRate`, `harm_budget_rate`),

@@ -253,13 +253,16 @@ FLAGS = ["--build", "--closure"]
 #: read of one fails the audit
 NOT_READ = {
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
+    "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
+    "posture.py": "each deployed guarantee's premises against the trust list, a command of its own on the locks",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",
+    "trust-list.json": "Daniel's trust list, which `posture.py` and the repository suite's `test_trust_list.py` read",
     "trusted_size.py": "the size of a package's trusted text, a command of its own on a records run's facts document",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",

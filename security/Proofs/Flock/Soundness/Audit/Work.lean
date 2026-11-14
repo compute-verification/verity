@@ -29,7 +29,7 @@ for every floor `f ≥ 1`:
 * `work_escape_le`: **the work bound**. A set of units doing `W_B` of the work escapes with probability at most
   `((W − W_B)/W)^K`, so incorrect proof blocks doing a fraction `ε` of the work missProb with at most `(1 − ε)^K`.
 * `audit_work`, `extraction_audit_work`: the audit accepts while its incorrect proof blocks do at least `T` of the work with
-  probability at most `((W − T)/W)^K + ε_ks + δ_link`.
+  probability at most `((W − T)/W)^K + ε_ks + ε_bind`.
 * `record_sizing`, `audit_work_of_record`: at the sizing of record (`δ = 2^-40`, `ε = 0.1%`), `K = 27,713` suffices;
   `record_sizing_one_fewer`: `K = 27,712` does not, under this bound.
 
@@ -502,27 +502,27 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → �
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- **The work audit** (oracle layer): the audit accepts while its incorrect proof blocks do at least `T` of the work with
-probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+probability at most `((W − T)/W)^K + ε_ks + ε_bind`. -/
+theorem audit_work (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.workOf σ w (A.incorrect (A.committedOf σ')))
         (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
-      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
+      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.workOf σ w B) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.work_escape_le_of_le σ w f K hf hW hB
 
 /-- **The work audit** (compiled layer, randomized extractor): at most
-`((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
+`((W − T)/W)^K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_work (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+    {εks εbind : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.workOf σ w (A.incorrect (A.committedOf σ')))
         (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
       (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K +
-        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+        εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.workOf σ w (A.incorrect X)) σ').trans ?_
   gcongr
   by_cases hB : T ≤ SamplingDesign.workOf σ w (A.incorrect (A.committedOf σ'))
@@ -530,56 +530,56 @@ theorem extraction_audit_work (A : ExtractionAnalysis (SamplingDesign.work σ w 
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The work audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks do at least
-0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
-theorem audit_work_of_record (A : Analysis (SamplingDesign.work σ w f 27713) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
+0.1% of the work with probability at most `2^-40 + ε_ks + ε_bind`. -/
+theorem audit_work_of_record (A : Analysis (SamplingDesign.work σ w f 27713) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
     (σ' : Strategy (audit (SamplingDesign.work σ w f 27713) Reg session)) :
     prob (fun o => o.1 = true ∧ SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.workOf σ w (A.incorrect (A.committedOf σ')))
-        (audit (SamplingDesign.work σ w f 27713) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
+        (audit (SamplingDesign.work σ w f 27713) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.workOf σ w B) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.work_escape_of_record σ w f hf hW hB
 
 /-- **The integrity floor, audited** (oracle layer): a wholly incorrect non-empty stratum, one that does no PoUW work
-included, is caught: the audit accepts while all of it is incorrect with probability at most `ε_ks + δ_link`. -/
-theorem audit_work_whole_stratum (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : 1 ≤ f s)
+included, is caught: the audit accepts while all of it is incorrect with probability at most `ε_ks + ε_bind`. -/
+theorem audit_work_whole_stratum (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (s : Fin m) (hf : 1 ≤ f s)
     (hs : (SamplingDesign.stratum σ s).Nonempty) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ'))
-        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤ εks + δlink :=
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤ εks + εbind :=
   audit_whole_stratum A hks hlink s (SamplingDesign.one_le_workK hf hs) σ'
 
-/-- **The integrity floor, audited** (compiled layer, randomized extractor): at most `ε_ks(σ) + δ_link(σ)`. -/
+/-- **The integrity floor, audited** (compiled layer, randomized extractor): at most `ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_work_whole_stratum (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : 1 ≤ f s)
+    {εks εbind : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (s : Fin m) (hf : 1 ≤ f s)
     (hs : (SamplingDesign.stratum σ s).Nonempty) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ'))
-        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤ εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') :=
   extraction_audit_whole_stratum A hks hlink s (SamplingDesign.one_le_workK hf hs) σ'
 
 /-- **The per-stratum floor, audited** (oracle layer): the audit accepts while at least `b` units of a non-empty stratum
-`s` are incorrect with probability at most `((n_s − b)/n_s)^(f_s) + ε_ks + δ_link`. -/
-theorem audit_work_floor (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (SamplingDesign.stratum σ s).Nonempty) (b : ℕ)
+`s` are incorrect with probability at most `((n_s − b)/n_s)^(f_s) + ε_ks + ε_bind`. -/
+theorem audit_work_floor (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (s : Fin m) (hs : (SamplingDesign.stratum σ s).Nonempty) (b : ℕ)
     (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ b ≤ ((A.incorrect (A.committedOf σ')).filter (σ · = s)).card)
         (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
-      ((((SamplingDesign.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((SamplingDesign.stratum σ s).card : ℝ≥0∞)) ^ (f s) + εks + δlink := by
+      ((((SamplingDesign.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((SamplingDesign.stratum σ s).card : ℝ≥0∞)) ^ (f s) + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => b ≤ (B.filter (σ · = s)).card) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.work_escape_floor_le_of_le σ w f K s hs hB
 
 /-- **The per-stratum floor, audited** (compiled layer, randomized extractor): at most
-`((n_s − b)/n_s)^(f_s) + ε_ks(σ) + δ_link(σ)`. -/
+`((n_s − b)/n_s)^(f_s) + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_work_floor (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (SamplingDesign.stratum σ s).Nonempty) (b : ℕ)
+    {εks εbind : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (s : Fin m) (hs : (SamplingDesign.stratum σ s).Nonempty) (b : ℕ)
     (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ b ≤ ((A.incorrect (A.committedOf σ')).filter (σ · = s)).card)
         (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
       ((((SamplingDesign.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((SamplingDesign.stratum σ s).card : ℝ≥0∞)) ^ (f s) +
-        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+        εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => b ≤ ((A.incorrect X).filter (σ · = s)).card) σ').trans ?_
   gcongr
   by_cases hB : b ≤ ((A.incorrect (A.committedOf σ')).filter (σ · = s)).card
@@ -589,14 +589,14 @@ theorem extraction_audit_work_floor (A : ExtractionAnalysis (SamplingDesign.work
 /-- **Floors at the count sampling design's sizes keep its profile, audited** (oracle layer): when every stratum that does no work has
 a floor of at least the count sampling design's size at `C`, for any family `𝓑`, the audit accepts while the incorrect proof blocks in those
 strata form a set in `𝓑` with probability at most the stratified sampling design's `sup_{B ∈ 𝓑} missProb B` at `C`, plus
-`ε_ks + δ_link`. -/
+`ε_ks + ε_bind`. -/
 theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDesign.countK σ C s ≤ f s)
-    (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
+    (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.incorrect (A.committedOf σ')).filter fun u => w (σ u) = 0))
         (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
       (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).missProb B) +
-        εks + δlink := by
+        εks + εbind := by
   refine (audit_profile A hks hlink (fun B => 𝓑 (B.filter fun u => w (σ u) = 0)) σ').trans
     (add_le_add (add_le_add ?_ le_rfl) le_rfl)
   exact iSup₂_le fun B hB => (SamplingDesign.work_escape_le_count σ w f K C hf B).trans
@@ -604,16 +604,16 @@ theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDesign.countK
       (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).missProb B) _ hB le_rfl)
 
 /-- **Floors at the count sampling design's sizes keep its profile, audited** (compiled layer, randomized extractor): the same with
-`ε_ks(σ) + δ_link(σ)`. -/
+`ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDesign.countK σ C s ≤ f s)
     (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop)
+    {εks εbind : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (𝓑 : Finset (Fin n) → Prop)
     (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.incorrect (A.committedOf σ')).filter fun u => w (σ u) = 0))
         (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
       (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).missProb B) +
-        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+        εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => 𝓑 ((A.incorrect X).filter fun u => w (σ u) = 0)) σ').trans ?_
   gcongr
   by_cases hB : 𝓑 ((A.incorrect (A.committedOf σ')).filter fun u => w (σ u) = 0)

@@ -30,13 +30,13 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 variable {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
   {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
   {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
-  {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)}
+  {a : Fin C.N → Bool} {εks εbind δin : ℝ≥0∞} {D : Finset (Fin C.N)}
 
 /-- **Exfiltration, at most what is delivered**: `audit_exfiltration` with its first term at most `2^|D| / |M|` as
 well, since the influence set is a set of values on `D`. The bound to charge is the smaller of `H + log₂ ∑_{j ≤ k}
 C(n, j)` and `|D|` bits. -/
 theorem audit_exfiltration_delivered {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
-    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound εbind)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
     {δ : ℝ≥0∞} {H k : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) (hk : L.miss (k + 1) < δ)
@@ -44,7 +44,7 @@ theorem audit_exfiltration_delivered {M : Type} [Fintype M] [Nonempty M] [Decida
     avg (fun m => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ m)) (cont (σ m)))) = m)
         (audit L Reg session) (σ m)) ≤
       ((min (2 ^ H * ∑ j ∈ range (k + 1), n.choose j) (2 ^ D.card) : ℕ) : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) +
-        (δ + εks + δlink + δin) := by
+        (δ + εks + εbind + δin) := by
   classical
   refine (P.audit_exfiltration_influenceSet hks hlink hin δ σ g).trans ?_
   have hcount := (P.card_influenceSet_le_harm (a := a) hD hb K hK hsep hw hH).trans

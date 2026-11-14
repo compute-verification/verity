@@ -80,7 +80,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     later = G.supplied_rows(prog, C.POSITIONS, sup[C.POSITIONS], {**rec, "window": {**WINDOW, "row": 2}}, sorted(sup), [rec])
     assert later == [SD.position_leaves(p, True) for p in c.positions(rec["population"])]
     rec["registered"] = [w.entry()] + [mine[v].entry() for v in sorted(sup)]
-    check = {"program": prog, "query": q, "law": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "partition": part,
+    check = {"program": prog, "query": q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "partition": part,
              "registered": {"w": 512, **words}, "supplied": sources(c), "pinned": {"w": w.root.hex()},
              "binding": BINDING}
     assert R.check(rec, **check).ok
