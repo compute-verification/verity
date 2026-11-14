@@ -368,7 +368,7 @@ def lessOwnReadsFast (reg : Json) (opened : Option (Array (String × Json))) : O
 
 @[csimp] theorem lessOwnReads_eq_lessOwnReadsFast : @lessOwnReads = @lessOwnReadsFast := by
   funext reg opened
-  simp only [lessOwnReads, lessOwnReadsFast, find?_byPort, Option.any_map, Function.comp_def]
+  simp only [lessOwnReads, lessOwnReadsFast, find?_byPort, Option.any_map]
 
 def record (i : Input) : V Json := do
   let reg := i.registration
