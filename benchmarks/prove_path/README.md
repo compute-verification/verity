@@ -255,7 +255,18 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
   unchanged digests is refused (`circuit`). Of `verity_vllm` it loads only a catalog package
   (`verity.circuits.defs.catalog_package`), where a served template's Definition is registered, and nothing else of the
-  adapter.
+  adapter. Its sampled members' sessions run one at a time
+  (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time (default 1), each starting
+  only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`), an
+  estimate that admits a start and limits nothing a running check holds;
+  without the flag that memory is what is free, read as the sessions start and again as the negatives' workers and the
+  registered reads' pool are made, the least of the node's `MemAvailable` and
+  the room under each cgroup memory limit over the audit (the lesser of `memory.high` and `memory.max`), a cgroup's
+  file cache counted free less its dirty, writeback and mapped pages, and its shared memory not
+  (`a5.available_memory`); each pool prints the two terms and which binds, and once what held a start back.
+  Its negatives after the audit record run one after another, or `--negative-workers` at a time, each in a worker process
+  forked from the audit with its own Lean verifier process, started only while its memory estimate, read then, fits
+  (`a5.NegativeWorkers`); the negatives' file is the same either way, and nothing is retried.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to

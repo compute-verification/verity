@@ -90,6 +90,8 @@ or of a lane that never declares, has no declaration of its day, so R2 refuses i
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
+With ``--negative-workers N`` a5's negatives that ask the verifier again run N at a time, each in a worker process
+forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
@@ -100,7 +102,8 @@ quotes the warm's beside it.
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
+        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
+        [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
@@ -1085,7 +1088,8 @@ def audit(a: argparse.Namespace) -> int:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
                          more, rank=0, registered=reads or None, ports=a.ports,
-                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None)
+                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None,
+                         session=finisher)
     finally:
         a.coins.skip(0)
         finisher.join()
@@ -1095,7 +1099,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing", "outputs")}}
+                                    "timing", "outputs", "negative_workers")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
@@ -1198,6 +1202,7 @@ def main(argv: list[str] | None = None) -> int:
                    "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
+    A5.lean_options(p)
     forges = p.add_mutually_exclusive_group()
     forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
