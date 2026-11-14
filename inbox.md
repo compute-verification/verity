@@ -214,3 +214,52 @@ DEVICEKEYS to network-accounting (lead), Sat 14 Nov 1:15 AM PST. **NET-442's pul
 
 TIMER: none.
 
+[2026-11-14T09:16Z] 43d71a7c64ce
+network-accounting FIVEFILES to the lead, Sat 14 Nov 1:20 AM PST: the reading of step 5.2's six parts
+
+**None of the six parts can be written at this head. Each one is still read by a file that stays. I have deleted nothing and opened no pull request. Below, for each part, is the reader that holds it and the step that frees it.** [read: `git grep` over the whole tree at the head]
+
+Heads [ran: rev-parse]. Branch `cursor/na-older-form-python-f5f1`, cut at #9869's head `bfe2adaa5ceebde16fa85c8cdfdb8b146159c9be`; its merge base with `main` is `main`'s tip `f28bdad2463685ab94923f1a5652d8ea10b51bc6`. DEVICEGONE's head: `884413a06502b3bac07dee389af1649a6c97d4d4`.
+
+1. **`capacity.py`: held. `calibration.py` imports it, and `calibration.py` stays.** `calibration.py` line 39 is `from ...verifier import capacity`, and lines 292, 307, 381, 427 and 429 call `ingress_rate`, `envelope_bits` and `k_share`. These things read `calibration.py` and stay: the root `pyproject.toml` script `network-certifier-calibrate`, and runners under `benchmarks/` (`certifier_serve.py`, `active_replay.py`, `replay.py`, `leak_bounds.py`, `network_sim/workload/lab_run.py`, plus seven tests there). So deleting `capacity.py` takes an edit in `calibration.py`, which is STAMPS2's file. The other six functions are read only by tests, but those tests are `test_network_certifier_capacity.py` and `test_network_certifier_grid.py`, which tests `grid.py`, a file that stays. On top of that, DEVICEGONE's branch edits `capacity.py` and `test_network_certifier_capacity.py`, and its new prose points at `capacity.accepted_bound_bits`. I have not asked STAMPS2: the edit only helps if `calibration.py` gives up the three functions, and whether it should is your call (see the questions at the end).
+
+2. **The clock certificate in `certificate.py`: held for step 5.4. A Lean difftest holds `NetworkCheck/Clocks.lean` to it.** The definitions: `CLOCK_TAG`, `clock_digest`, `clock_commitment`, `CertifiedClock`, `_named`, `_why`, `SignedClocks`, `Issuer.salted_clock` and `Issuer.clock_salts`.
+   - `lean_audit.signed_clocks` runs `certificate.SignedClocks` as the reference beside the Lean `NetworkCheck.Period.signedSyncs` (`lean_audit.py` lines 53 and 369–396).
+   - `network/tests/test_lean_audit.py` holds the two together in 20 lines, among them `test_the_signed_syncs_are_the_references` and `test_clock_refusals_are_compared_by_opening_and_link_window`.
+   - `period_case.py`, the period check's case generator, keeps its own copy of `clock_commitment`.
+   - Other readers: the runners `certifier_serve.py` (11 lines) and `chain_record.py` (3), the test `test_client_certificates.py`, and the domain strings in `verity/commitments/domains.py` and `Identity/Domains.lean`.
+   - DEVICEGONE's branch deletes the device issuer's difftest (`issuer_vectors.py`, `test_network_certifier_issuer_lean_difftest.py`) and edits `certificate.py`'s docstring.
+   - **Answer to your first question: yes.** The Lean clock form is held to the Python clock certificate, so part 2 goes in step 5.4's change.
+
+3. **The `plain` and `served` kinds of `service.LinkWindows`: held for steps 5.1 and 5.4.**
+   - Runners build both kinds: `certifier_serve.py` line 1331, `chain_record.py` line 231, `n2_zk.py` line 135, `negatives.py` line 693 (all with `occupancy=` and `served=`), and `network_sim/workload/lab_run.py` line 640 (`served=`).
+   - `network/tests/test_lean_audit.py` line 179 builds a `plain` link to hold the Lean verdict to `python_verdict`.
+   - On the Lean side, `NetworkCheck/TransferBlocks.lean` (lines 182–184) parses `"plain"` and `"served"` into its `Kind`. `security/Properties/NetworkCertifier/Check/TransferBlocks.lean` line 71 (`ExecutionPhaseSynced`) cases on that kind. `NetworkCheck/Period.lean`'s clock form is a period of N2's link-windows (lines 27, 56 and 130).
+   - **Answer to your third question.**
+     - Deployed: no deployed guarantee names `TransferBlocks` (`security/lean-audit.json`'s `deployed` list) [read]. The onsite composite (`CoreOnsite.lean` line 13) does read `NetworkCheck.Period.protocol`, whose clock form is over these link-windows.
+     - Remote composite: it reads no link-window. The `"served"` in `CoreRemote.lean` is PoUW's served-window kind, not a link kind.
+     - PoUS: no reader (`git grep` over `verity/protocols/accounting/pous`).
+     - A caution for whoever cuts this part: `LinkWindows.provenance` writes `{"kind": "served", ...}` on every kind of link, the warden kind included, so that string stays.
+
+4. **`served.circuit-check.py` and `.json`: held until `served.py` goes.** `served.gate` reads its pin from `PINS = served.circuit-check.json` (`served.py` lines 456–468). `service.py` calls `SV.gate` for the served kind, and the circuit-check suite requires a sidecar for every Definition that stays. The gated-digest test's example has a problem of its own: `IoTieRequest_v1{B=4096,L=1,R=1}` has a `digests` pin but is **not** `gated`. Only `served.NetworkServedCounts` and `head_check.NetworkHeadCheck` are. If the example becomes the IoTie Definition, the test's `.gated` assertion and the gated branch of `checks.py` line 1429 lose their only test, and the test repeats `test_any_definition_holding_a_digests_pin_is_held_to_it`. The swap that keeps what the test checks is `NetworkHeadCheck_v2` at a small pinned class (`{L=9,T=4,COUNTS=0}`), but its digest takes a trace whose cost I have not measured. I made neither swap, since `served.py` stays.
+
+5. **The five files' own tests: held.** All five files are imported by code that stays:
+   - `online.py`: 3 runners and `active.py`.
+   - `served.py`: 4 runners and `service.py`.
+   - `active.py`: about 30 files, among them `adapters/vllm/.../serve_protocol.py`, `verity/commitments/crypto/aead.py`, three `prover/` files, and `content_rows.py`, `continuation.py`, `io_request.py` and `warden.py`.
+   - `calibration.py`: the runners in part 1.
+
+   Deleting their tests would take checks off code that still runs, so each test goes with its file. DEVICEGONE deletes `test_network_certifier_device_lean_difftest.py`.
+
+6. **`PROTOCOL.md`'s sections for `active.py`: held.** The sections are "The active certifier (`active`)" at line 1709 and "Sealed pair links (`active.Pair`, ...)" at line 1942, plus "Capacity", "Calibration" and "A served link". They describe code still on `main`, so deleting them would make the tree say less than what is true. DEVICEGONE's branch also edits `PROTOCOL.md` at lines 942–1069, 1229, 1748 and 1888.
+
+**Your second question:** no. Deleting `capacity.py` leaves `calibration.py` unimportable.
+
+**What I need from you, one of these:**
+- (a) This is a stop: 5.2 waits on 5.1 (the runners), 5.4 (the clock certificate and the Lean kinds) and STAMPS2's `calibration.py`, and I end here.
+- (b) I ask STAMPS2 whether `calibration.py` gives up `ingress_rate`, `envelope_bits` and `k_share`. If it inlines them, that is code moved, not deleted. If it drops what reads them, its report changes. Then `capacity.py` could go after DEVICEGONE lands, since its branch edits the same two files.
+
+I would choose (a).
+
+Nothing was run but `git` and reading. Least sure of: whether STAMPS2 counted "the five files' own 20 test files" as tests of deleted code. I found none that are.
+
