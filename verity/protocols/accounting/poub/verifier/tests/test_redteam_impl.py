@@ -8,7 +8,13 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from test_remote_bandwidth import SCHEDULE, N, drive, finish, params, store  # noqa: F401
 
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, timing
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    receipts,
+    timing,
+)
 from verity.protocols.accounting.poub.verifier.audit import AuditRun
 
 BLOCK = 4096
