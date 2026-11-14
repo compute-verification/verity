@@ -70,7 +70,7 @@ ln -s "$TREE/verity" "$B/base/verity"
 BASE=$B/base/$RS/session.cu
 { [ -n "$BASE_REV" ] && git -C "$TREE" show "$BASE_REV:$RS/session.cu" > "$BASE" 2> /dev/null; } || rm -f "$BASE"
 "$NVCC" "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-"$NVCC" "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+"$NVCC" "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 M=
 [ -f "$BASE" ] && { "$NVCC" "${FLAGS[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }
 wait $S || { grep -n -m 40 -A 3 'error' "$O/session.ptxas"; say "BUILD: session.cu does not compile for sm_$ARCH"; exit 4; }

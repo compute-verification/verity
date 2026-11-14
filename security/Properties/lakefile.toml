@@ -113,4 +113,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
   "Properties.Flock.Nets", "Properties.Remote", "Properties.Nci.Record", "Properties.Pous.WipeSigned",
   "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet",
-  "Properties.Assumptions"]
+  "Properties.Assumptions", "Properties.Nci.Opening"]

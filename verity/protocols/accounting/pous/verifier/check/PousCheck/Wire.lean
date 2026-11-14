@@ -10,7 +10,7 @@ public import PousCheck.Prim.PyJson
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
 
-P2 v4's wire format and audit, as the reference verifier (`benchmarks/pous/p2_v1/wire.py`,
+P2 v4's wire format and audit, as the reference verifier (`verity/protocols/accounting/pous/verifier/p2_v1/wire.py`,
 `verify_audit`) reads them. A frame is `"P2AU" ‖ 0x04 ‖ type ‖ u32be(len body) ‖ body`, and a session is
 SETUP_COMMIT, SETUP_SALT, SETUP_BLOCK*, SETUP_ROOT, AUDIT_OPEN, then CHALLENGE and RESPONSE alternating. `verifyAudit`
 returns the `FINAL` frame the verifier sends, byte for byte, with its verdict, failure code, the transcript's hash and one

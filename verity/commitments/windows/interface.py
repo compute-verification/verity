@@ -672,7 +672,8 @@ class TableOpening:
     holds: ``ports`` are the opening (the row, its salt, its path), and ``verdict`` the output row whose bit is 1 exactly
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
     and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the window's root for
-    the table's parameter is the pinned root (`input_count`)."""
+    the table's parameter is the pinned root (`input_count`). ``row``, where the opening declares one: the output row that
+    returns the row opened; nothing is filled by it, and a record names it only where it is declared."""
     reader: str
     table: str
     key: str
@@ -680,10 +681,11 @@ class TableOpening:
     verdict: str
     at: int
     units: int
+    row: str | None = None
 
     def doc(self) -> dict[str, Any]:
         return {"reader": self.reader, "table": self.table, "key": self.key, "ports": list(self.ports), "verdict": self.verdict,
-                "at": self.at, "units": self.units}
+                "at": self.at, "units": self.units, **({} if self.row is None else {"row": self.row})}
 
 
 #: a registered value's row format (`Registered.formats`): its rows' schema and its leaves' width in bits, of `WIDTHS`
@@ -1046,6 +1048,8 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
+        if o.row is not None and o.row not in dict(templates[o.reader][0].outs):
+            raise ValueError(f"opening {o.doc()}: the row it declares is an output of its reader")
         for p in o.ports:
             rects.append((o.reader, p, o.at, o.at + o.units, 0, port(o.reader, p, o.doc())[1], o.doc()))
     for g in ingress:
@@ -1822,7 +1826,8 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
     ``hm96-sha512/row-seg/v1`` rows of its words and its runs tiling its positions over the writer's units; a table read
     (`TableRead`) fills a 64-byte input row no wire or row table fills
     with its table's root or domain id; an opening (`TableOpening`) holds its ``ports``, input rows no wire or row table
-    fills, to its table's row at its ``key``, an input row (wired or not), by its ``verdict``, an output. Refused
+    fills, to its table's row at its ``key``, an input row (wired or not), by its ``verdict``, an output, as the ``row`` it
+    may declare is. Refused
     (ValueError) otherwise, or where two declarations, or one and the window's ``ingress``, meet: every input row is wired,
     registered, window ingress or free, at most one of them. The work is per declaration and per member it covers, never
     per unit. `circuit_record`, `window_of_record` and `input_count` each refuse a listed record whose declarations this
@@ -1919,6 +1924,8 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
             if o.key not in dict(m.rows) or o.verdict not in dict(m.outs):
                 raise ValueError(f"{what}: {m.key} has no input row {o.key} or no output {o.verdict}; an opening's key is "
                                  "an input row and its verdict an output")
+            if o.row is not None and o.row not in dict(m.outs):
+                raise ValueError(f"{what}: {m.key} has no output {o.row}; the row an opening declares is an output")
             for p in o.ports:
                 unfilled(i, p, what)
                 out[(i, p)] = tables[o.table].param

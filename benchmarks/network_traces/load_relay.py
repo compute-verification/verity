@@ -285,7 +285,7 @@ class StoreTensor:
 
 
 def store_tensors(shape: Shape, params: P2.P2Params) -> tuple[StoreTensor, ...]:
-    """Interface 2's layout (``benchmarks/pous/p2_v1/store.py``'s `build`) over interface 1's values: per layer
+    """Interface 2's layout (``verity/protocols/accounting/pous/prover/p2/p2_store/store.py``'s `build`) over interface 1's values: per layer
     ``qkv_proj`` (``wq ‖ wk ‖ wv``), ``o_proj``, ``up_proj`` and ``down_proj``, then ``lm_head`` as layer L, each from a
     block boundary and ⌈size / payload⌉ blocks."""
     by = {v.name: v for v in manifest(shape)}
