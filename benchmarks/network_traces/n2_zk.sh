@@ -4,8 +4,8 @@
 # frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, as a job of 96 GB whose
 # input is the run's tarball n2-run.tar.gz:
 #   env N2_MEM_GB=96 N2_RUN=n2-run.tar.gz bash benchmarks/network_traces/n2_zk.sh
-# The run: an active network certifier's (`warden_serve.py`'s directory, or the gate's warden-rehearse's out/), from
-# N2_RUN, a tarball sent with `--send` holding it at its top.
+# The run: an active network certifier's directory, as its server writes it, from N2_RUN, a tarball sent with `--send`
+# holding it at its top.
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUN (the tarball's name under the run's inputs/)
 #      N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
