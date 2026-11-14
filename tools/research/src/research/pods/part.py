@@ -14,6 +14,7 @@ The tolerance (12 %) is `tables.device_variant`'s: driver-reported totals differ
 from __future__ import annotations
 
 import json
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Callable
@@ -54,7 +55,8 @@ def parse_probe(text: str) -> dict[str, Any]:
     sku = rows[0][0] if rows and rows[0][0] else None
     try:
         vram = int(float(rows[0][1])) if rows and len(rows[0]) > 1 else None
-    except ValueError:
+    except ValueError as e:
+        print(f"part: the probe's VRAM {rows[0][1][:40]!r} is not a number, read as unknown ({e})", file=sys.stderr)
         vram = None
     cpu = (model.split(":", 1)[1].strip() if ":" in model else model) or None
     load = loadavg.split()[0] if loadavg.split() else None

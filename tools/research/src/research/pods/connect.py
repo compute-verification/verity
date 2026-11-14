@@ -211,7 +211,7 @@ def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | 
             for rel in files:
                 tf.add(src / rel, arcname=rel, recursive=False)
     except BrokenPipeError:
-        pass # the far side died; its stderr says why
+        print(f"connect: the tar on {dest} closed its input before every file was sent; its stderr says why", file=sys.stderr)
     finally:
         p.stdin.close()
     err = p.stderr.read().decode(errors="replace")

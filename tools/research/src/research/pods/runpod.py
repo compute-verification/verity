@@ -131,10 +131,10 @@ def ssh_key() -> Path:
         raw += b"\n"
     path = _env_dir() / f"ssh-key-{hashlib.sha256(raw).hexdigest()[:16]}"
     try:
-        if path.read_bytes() == raw and (path.stat().st_mode & 0o077) == 0:
+        if path.exists() and path.read_bytes() == raw and (path.stat().st_mode & 0o077) == 0:
             return path
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"runpod: {path} unread, so it is written again ({type(e).__name__})", file=sys.stderr)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")     # threads of one process resolve it at once
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
