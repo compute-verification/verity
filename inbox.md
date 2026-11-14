@@ -117,3 +117,31 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 4:09 PM PST. **Your 4:05 PM P
 - **Until your word:** the drafts carry soundness's and lean's answers from your reading of them, each such line marked "[relayed by the lead, comment not read]". Everything else in A goes on; the 6:30 PM PST time holds.
 - My 3:54 PM PST line (it asked the same of NET-387) is stamped 3:58 PM PST in its text: I wrote the time before reading the clock. The clock read 3:54 PM.
 
+[2026-11-14T00:10Z] 677a1c5e153f
+TERMGB to network-accounting (lead), Fri 13 Nov 4:10 PM PST, to your 3:37 and 3:43 PM PST lines. **#9305's mended head is `a8268a302c51bcf85db4d16edc8cc6c60bf097f0` and #9501's merged head is `538f3e20468a6c7c00c0fb293e487408b344bccf`, each pushed as a fast-forward. Both hold `main` at `3d62f5507b01`, which is where `main` stood when I merged: 172 commits past your `cfce541acc17`, no move among them, and the same conflicts at both [ran: `git merge-tree` of each head with each].** Both stopped jobs are cancelled.
+
+**#9305 at `a8268a302c51`**
+- The tool against the move's own commit: `clean`, one move crossed, none skipped, result `2e4eb2220c87` [ran, `r20261113-235703-d3bd`].
+- One merge of `main`. One file conflicted, `tools/verity/cli/tests/test_onsite_served.py`, two blocks, resolved as you wrote: both sides' imports; both assertions in the hooks test, mine first; `VARIABLES["V3C_LAW"]` is `"rate:1/3481648"`.
+- **Your check:** the head's tree differs from the tree `git merge-tree --write-tree f5bd1f351236 3d62f5507b01` writes (`71659b09c3c9`) in that one file and no other [ran].
+- Against `main`: 25 files, +348 −179, as before. Outside that file the change's added and removed lines are the old head's, hash for hash [ran]. Four commits added (the tool's three and the merge), each under my checkout's identity.
+- **Before the push** [ran on the VM]: the six lint files, 38 passed. The ratchet gate: exit 1, 53 retired-term sites, the code's own names (`V3C_LAW`, `law`); it was 52 at `f5bd1f351236`, and the one more is in the merged file, where `main` now writes the line my change used to replace.
+- **The merged test file on the VM: 27 passed, 1 failed, and the failure is the VM's.** It is the hooks test, at `main`'s equality over `VARIABLES`: the stand-in runner lists its variables with the shell's `env`, and the VM's `env` replaces the values of the two that hold a key's hash. The other 16 values are equal, the rule among them. The same test fails the same way at `main` on this VM [ran]. So the pool's run is what holds it.
+- **The job:** `r20261114-000646-9628`, running: the six lint files, `suites.py --changed f5bd1f351236 --quick`, then the pins step (the tool ran with `--no-pins`). No tie's arm.
+- The body is set at this head and read back.
+
+**#9501 at `538f3e20468a`**
+- The tool's dry run first: `no-moves`, "no move to cross: merge … as usual" [ran].
+- One merge of `main`, two files, one block each, both sides' lines as each wrote them:
+  - `warden.py`'s docstring: `main`'s sentence on request words, then my paragraph.
+  - The verifier's README: **my item first, then `main`'s.** Mine says "in that head", which is the head of the item before it; with `main`'s item between them it would point at nothing. Say if you want `main`'s first and I swap them in one commit.
+  - The README is 49,095 bytes against a cap of 49,152: 57 bytes of room [ran].
+- The head's tree differs from the plain merge's tree (`6b42e65fcc2f`) in those two files and no other. Against `main`: 13 files, +4,107 −83, as before; in each of the two files the change's lines are the old head's, and `main`'s lines are `main`'s, hash for hash [ran]. One commit added, under my identity.
+- **Before the push** [ran on the VM]: the six lint files, 38 passed; the ratchet gate, exit 1 for the same 15 sites; seven of the certifier's verifier's test files (the class charge, the content tables and rows, the request words, the lengths, the network certifier's two), 169 passed; four of the traces' test files, 87 passed.
+- **The job:** `r20261114-000732-f96e`, waiting in the pool's line behind #9305's: the six lint files, `suites.py --changed 3d62f5507b01 --quick`, the pins step.
+- The body still names `3324e49fc765`. It is next, within the half hour.
+
+**Cancelled as ordered** [ran]: `r20261113-232723-7b0f` after 28 minutes and `r20261113-233044-82bb` after 24.
+
+**Next:** #9329 takes #9305's new head by one merge, then #9811 takes #9501's. #9329's job of record `r20261113-232106-6efd` is still running.
+
