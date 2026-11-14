@@ -217,7 +217,7 @@ theorem wins_inj {wins : Array Win}
 
 /-- `read`'s session of the ledger's window `w`: one where `w`'s open is a v2 entry of the lane numbered from `start`
 up to `stop`, with `reserves` the lane's reserves and `periods` the ledger's periods. -/
-def sessionAt (p : Params) (periods : Array MonitoringPeriod) (reserves : Array String) (start stop : Nat)
+def sessionAt (p : Params) (periods : Array PeriodRecord) (reserves : Array String) (start stop : Nat)
     (w : Win) : Option Session :=
   let e := w.opened
   if e.schema == LEDGER_SCHEMA && laneOf e.body == p.lane && start ≤ e.seq && e.seq < stop then
@@ -227,7 +227,7 @@ def sessionAt (p : Params) (periods : Array MonitoringPeriod) (reserves : Array 
             period := (periods.find? (·.windows.contains e.session)).map (·.name) } : Session)
   else none
 
-theorem sessionAt_some {p : Params} {periods : Array MonitoringPeriod} {reserves : Array String} {start stop : Nat}
+theorem sessionAt_some {p : Params} {periods : Array PeriodRecord} {reserves : Array String} {start stop : Nat}
     {w : Win} {s : Session} (h : sessionAt p periods reserves start stop w = some s) :
     (w.opened.schema = LEDGER_SCHEMA ∧ laneOf w.opened.body = p.lane ∧ start ≤ w.opened.seq ∧
         w.opened.seq < stop) ∧
@@ -237,7 +237,7 @@ theorem sessionAt_some {p : Params} {periods : Array MonitoringPeriod} {reserves
   obtain ⟨hc, rfl⟩ := ite_some h
   exact ⟨keep_of hc, rfl, rfl, rfl, rfl⟩
 
-theorem sessionAt_of {p : Params} {periods : Array MonitoringPeriod} {reserves : Array String} {start stop : Nat}
+theorem sessionAt_of {p : Params} {periods : Array PeriodRecord} {reserves : Array String} {start stop : Nat}
     {w : Win} (h1 : w.opened.schema = LEDGER_SCHEMA) (h2 : laneOf w.opened.body = p.lane)
     (h3 : start ≤ w.opened.seq) (h4 : w.opened.seq < stop) :
     ∃ s, sessionAt p periods reserves start stop w = some s := by
@@ -268,7 +268,7 @@ theorem read_spec (p : Params) (ledger : Json) :
 /-! ## What `runsIn` returns -/
 
 /-- The ledger's periods that list one of the sessions `sampled`. -/
-def heldOf (r : Read) (sampled : Array Session) : Array MonitoringPeriod :=
+def heldOf (r : Read) (sampled : Array Session) : Array PeriodRecord :=
   r.periods.filter fun mp => sampled.any (·.period == some mp.name)
 
 /-- Whether the ledger opens the session `ses`. -/
@@ -991,7 +991,7 @@ theorem decodedMeans : DecodedMeans := by
 -- `mvcgen` splits `auditedIn` into one goal per check it makes of the window and its `end`
 set_option maxHeartbeats 4000000 in
 /-- `auditedIn` reads the session of the first of the ledger's windows whose root is the one the caller names. -/
-theorem auditedIn_ok {wins : Array Win} {periods : Array MonitoringPeriod} {window : Json} {a : Audited × Json}
+theorem auditedIn_ok {wins : Array Win} {periods : Array PeriodRecord} {window : Json} {a : Audited × Json}
     (h : auditedIn wins periods window = .ok a) :
     ∃ win, wins.find? (fun w => w.root == strOf (getD window "root")) = some win ∧
       a.1.session = win.opened.session := by
@@ -1003,7 +1003,7 @@ theorem auditedIn_ok {wins : Array Win} {periods : Array MonitoringPeriod} {wind
   all_goals exact ⟨_, by assumption, rfl⟩
 
 /-- `auditedIn` on a root reads the session of one of the ledger's windows on that root. -/
-theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {root : String} {a : Audited × Json}
+theorem auditedIn_root {wins : Array Win} {periods : Array PeriodRecord} {root : String} {a : Audited × Json}
     (h : auditedIn wins periods (Json.mkObj [("root", Json.str root)]) = .ok a) :
     ∃ win ∈ wins, win.root = root ∧ a.1.session = win.opened.session := by
   obtain ⟨win, hfind, hses⟩ := auditedIn_ok h
