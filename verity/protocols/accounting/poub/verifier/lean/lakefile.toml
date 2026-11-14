@@ -1,4 +1,4 @@
-# The remote bandwidth audit's verifier as executable Lean (`verity/remote-bandwidth/v0`), its definition: a window's
+# PoUB's verifier as executable Lean (`verity/remote-bandwidth/v0`), its definition: a window's
 # receipt checks (`RemoteAudit.verifyWindow`), the session's bookkeeping (`RemoteAudit.Session`) and the verifier's
 # registrations (`RemoteAudit.Registry`), which `audit.py` is held to by the difftest (`remote-audit-difftest`), and the
 # verifier's process the driver runs (`remote-audit-verifier`, `RemoteAudit.Verifier`), the session as a core
