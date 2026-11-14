@@ -1862,8 +1862,8 @@ def certifier_prompts(req: dict, data: bytes) -> bytes:
 
 
 #: each verb the rehearsal unit runs, its request parser: the two rehearsals, the load (a warden rehearsal with its
-#: load first), the store's write and the relay session (the relay of a warden rehearsal, kept up for clients that
-#: aren't its own)
+#: load first), the store's write and the relay session (the relay of a network certifier rehearsal, kept up for
+#: clients that aren't its own)
 REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden,
               "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights,
               "relay-session": lambda argv, host: parse_warden(argv, host, session=True)}
@@ -2704,9 +2704,9 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                   command: Callable[..., list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
     """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
-    load") or relay session ("A relay session": a warden rehearsal's relay alone, where the same ssh also brings the
-    peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that ssh exits),
-    as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
+    load") or relay session ("A relay session": a network certifier rehearsal's relay alone, where the same ssh also
+    brings the peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that
+    ssh exits), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
     end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
