@@ -91,7 +91,8 @@ class is charged below on every execution phase, the reader's own lines, the ver
 handed with the superseded ones. The print gives the reader's lines as they are, under a line that names the runs.
 
 With no run carrying the record the reader is not asked, and the calculator's rows are as with no record read: each
-connection charged its whole schedule, `design` equal to `design, no stop block`, and the row of record the scan's.
+connection charged its whole schedule, `design` equal to `design, no stop block`, and the network certifier's
+figure in the headline the `scan` row's.
 
 ### The output count's mark
 

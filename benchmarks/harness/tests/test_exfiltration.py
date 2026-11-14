@@ -1478,8 +1478,8 @@ def digests(doc: dict) -> dict:
 def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
     """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
     pinned (`NO_VERDICTS`): the stop verdicts' reader is not asked and the calculator's rows are as with no record
-    read, the design as the design before its stop block and the row of record the scan's. The output count is
-    assumed as it was, and no sum takes it at 0, so the inputs list none."""
+    read, the design as the design before its stop block and the network certifier's figure in the headline the
+    `scan` row's. The output count is assumed as it was, and no sum takes it at 0, so the inputs list none."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     assert "stop_class" not in doc and E.VERDICTS not in E.render(doc)
