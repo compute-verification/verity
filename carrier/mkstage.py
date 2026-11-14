@@ -1,6 +1,9 @@
 """Write the job that carries one branch across the moves of a main commit, stopping where a move's base conflicts.
 
-    python3 mkstage.py OUT.sh MAIN_SHA NAME=SHA [BASE_SHA=TAKE_SHA ...]
+    python3 mkstage.py OUT.sh MAIN_SHA[,MAIN_SHA...] NAME=SHA [BASE_SHA=TAKE_SHA ...]
+
+Several MAIN_SHA, in order, are several carries, each from the last one's result: two moves made on two pull requests'
+branches, neither holding the other, are crossed one main at a time, in the order main took them.
 
 The job is mkpass.py's for one branch, with one more thing: where tools/move/restack.py stops in step 1 of a move (the
 move's base conflicts with the branch), it crosses the moves before it by name (the tool's own command, which gives the
@@ -12,32 +15,35 @@ the bundle holds the branch as far as it came. It pushes nothing: a node's clone
 """
 import sys
 
-out, main, pair, *takes = sys.argv[1:]
+out, mains, pair, *takes = sys.argv[1:]
+mains = mains.split(",")
 name, head = pair.split("=", 1)
-for n, s in [("main", main), (name, head), *[x for t in takes for x in zip(("base", "take"), t.split("=", 1))]]:
+for n, s in [*[("main", m) for m in mains], (name, head), *[x for t in takes for x in zip(("base", "take"), t.split("=", 1))]]:
     if len(s) != 40 or any(c not in "0123456789abcdef" for c in s):
         raise SystemExit(f"{n}: a full commit id, not {s!r}")
 
 JOB = r'''set -u
 # One branch carried across the moves of a main commit, in stages. It pushes nothing.
-MAIN_SHA=@MAIN@
+MAINS="@MAINS@"
 NAME=@NAME@
 HEAD_SHA=@HEAD@
 TAKES="@TAKES@"
 echo "node $(hostname) cores $(nproc) $(python3 -V) git $(git --version | cut -d' ' -f3) uv $(uv --version 2>/dev/null | cut -d' ' -f2)"
 : "${GIT_AUTHOR_NAME:?the launch names the git identity of the launching checkout, env GIT_AUTHOR_NAME=... ahead of bash}" "${GIT_AUTHOR_EMAIL:?}" "${GIT_COMMITTER_NAME:?}" "${GIT_COMMITTER_EMAIL:?}"
 echo "identity of every commit this job makes: $GIT_AUTHOR_NAME <$GIT_AUTHOR_EMAIL> | $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL>"
-for s in $MAIN_SHA $HEAD_SHA $(echo $TAKES | tr '=' ' '); do git cat-file -e "$s^{commit}" 2>/dev/null || { echo "REFUSED: the clone has no commit $s"; exit 2; }; done
+for s in $MAINS $HEAD_SHA $(echo $TAKES | tr '=' ' '); do git cat-file -e "$s^{commit}" 2>/dev/null || { echo "REFUSED: the clone has no commit $s"; exit 2; }; done
 TMPDIR="$(mktemp -d -p /workspace/research/scratch restack-pass-XXXXXXXX)" || { echo "REFUSED: no scratch under /workspace/research/scratch"; exit 2; }
 export TMPDIR
 trap 'rm -rf "$TMPDIR"' EXIT
 trap 'exit 143' TERM INT HUP   # a cancel or a timeout still runs the line above
 free() { echo "free: $(df -h --output=avail "$TMPDIR" | tail -1 | tr -d ' ') under the scratch, $(df -h --output=avail / | tail -1 | tr -d ' ') on the root disk ($1)"; }
 echo "scratch $TMPDIR"; free "at the start"
-git branch -f pass/main "$MAIN_SHA" >/dev/null || exit 2
+I=0; PASS_MAINS=""
+for m in $MAINS; do I=$((I + 1)); git branch -f "pass/main$I" "$m" >/dev/null || exit 2; PASS_MAINS="$PASS_MAINS pass/main$I"; done
+export PASS_MAINS
 git branch -f "pass/$NAME" "$HEAD_SHA" >/dev/null || exit 2
 
-# 1. Each move's check first, three at a time: the move's script on the move's base in one scratch worktree, no pins step.
+# 1. Each move's check first, five at a time: the move's script on the move's base in one scratch worktree, no pins step.
 cat > "$TMPDIR/moves.py" <<'PY'
 import json, sys
 sys.path.insert(0, "tools/move")
@@ -45,7 +51,13 @@ import restack as rs
 why = rs.drivers(sys.executable)
 if why:
     raise SystemExit(f"restack: {why}")
-moves = [[m, script, list(a)] for m, script, a in rs.moves_on("pass/main", sys.argv[2], None)]
+import os
+moves, seen = [], set()
+for main in os.environ["PASS_MAINS"].split():
+    found = [[m, script, list(a)] for m, script, a in rs.moves_on(main, sys.argv[2], None) if m not in seen]
+    print(f"moves of {main} ({rs.rev(main, None)[:12]}) to cross: {len(found)}")
+    seen.update(m for m, *_ in found)
+    moves += found
 json.dump(moves, open(sys.argv[1], "w"))
 print(f"moves to cross: {len(moves)}")
 PY
@@ -65,7 +77,7 @@ PY
 python3 "$TMPDIR/moves.py" "$TMPDIR/moves.json" "pass/$NAME" || exit 2
 N=$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))))" "$TMPDIR/moves.json")
 if [ "$N" -gt 0 ]; then
-  seq 0 $((N - 1)) | xargs -P 3 -I{} sh -c 'python3 "$0" "$1" {} 2>&1 | tail -n 1' "$TMPDIR/check.py" "$TMPDIR/moves.json"
+  seq 0 $((N - 1)) | xargs -P 5 -I{} sh -c 'python3 "$0" "$1" {} 2>&1 | tail -n 1' "$TMPDIR/check.py" "$TMPDIR/moves.json"
 fi
 echo "CHECKS DONE at ${SECONDS}s"; free "after the checks"
 
@@ -78,6 +90,8 @@ import restack as rs
 out, name = os.environ["OUT"], sys.argv[1]
 takes = dict(t.split("=", 1) for t in sys.argv[2:])
 keep, tip, stage = [], f"pass/{name}", 0
+mains = os.environ["PASS_MAINS"].split()
+main, carried = mains[0], 0
 
 def tool(branch, *args):
     t = time.time()
@@ -105,21 +119,27 @@ def branch(ref, commit):
     subprocess.run(["git", "branch", "-f", ref, commit], check=True)
     keep.append(ref)
 
-while stage < 6:
+while stage < 8:
     stage += 1
-    r = tool(tip, "--main", "pass/main")
+    r = tool(tip, "--main", main)
     if r is None:
         break
-    if r.get("result") and r["status"] in ("clean", "clean-skipped", "locks-stale", "pins-stale", "stale-words", "up-to-date"):
-        branch(f"carried/{name}", r["result"])
-        print(f"CARRIED {name}: {r['result']} status {r['status']}")
-        break
+    if r.get("result") and r["status"] in ("clean", "locks-stale", "pins-stale", "stale-words", "up-to-date"):
+        carried += 1
+        branch(f"carried/{name}-{carried}", r["result"])
+        print(f"CARRIED {name} across {main} ({rs.rev(main, None)[:12]}): {r['result']} status {r['status']}", flush=True)
+        if r["status"] not in ("clean", "up-to-date"):
+            print(f"NOTE {name}: the carry across {main} ended {r['status']}, not clean: read it before the result is used", flush=True)
+        if carried == len(mains):
+            break
+        tip, main = r["result"], mains[carried]
+        continue
     if not (r["status"] == "conflicted" and r.get("step") == "base"):
         print(f"STOPPED {name}: status {r['status']} at step {r.get('step')}")
         break
     base, crossed = r["base"], r.get("crossed", [])
     if crossed:
-        c = tool(tip, *[x for m in crossed for x in ("--move-commit", m)], "--main", "pass/main")
+        c = tool(tip, *[x for m in crossed for x in ("--move-commit", m)], "--main", main)
         if c is None or not c.get("result") or c["status"] not in ("clean", "stale-words"):
             print(f"STOPPED {name}: the moves before the stop, by name, are not clean")
             break
@@ -158,7 +178,7 @@ while stage < 6:
     branch(f"took/{name}-{take[:12]}", tip)
     print(f"TOOK {take[:12]}: the branch is now {tip}")
 if keep:
-    p = subprocess.run(["git", "bundle", "create", os.path.join(out, "carried.bundle"), *keep, "--not", "pass/main", f"pass/{name}", *takes.values()],
+    p = subprocess.run(["git", "bundle", "create", os.path.join(out, "carried.bundle"), *keep, "--not", *mains, f"pass/{name}", *takes.values()],
                        capture_output=True, text=True)
     print("BUNDLE", keep, "exit", p.returncode, p.stderr.strip().splitlines()[-1:] if p.returncode else "")
     if not p.returncode:
@@ -171,6 +191,6 @@ free "at the end"
 echo "left in the scratch: $(ls -d "$TMPDIR"/restack-* 2>/dev/null | wc -l) restack directories"
 echo "DONE at ${SECONDS}s"
 '''
-text = JOB.replace("@MAIN@", main).replace("@NAME@", name).replace("@HEAD@", head).replace("@TAKES@", " ".join(takes))
+text = JOB.replace("@MAINS@", " ".join(mains)).replace("@NAME@", name).replace("@HEAD@", head).replace("@TAKES@", " ".join(takes))
 open(out, "w").write(text)
-print(f"written {out}: main {main[:12]}, {name} at {head[:12]}, takes {takes}")
+print(f"written {out}: mains {[m[:12] for m in mains]}, {name} at {head[:12]}, takes {takes}")
