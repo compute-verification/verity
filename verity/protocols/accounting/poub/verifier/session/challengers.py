@@ -130,6 +130,8 @@ class Serve:
             key = Ch.ChallengerKey.from_json(json.loads((out / remote.KEY).read_text()))
             files = remote.session_files(out)
             signed, received, _ = Ch.session_of(key, files["record"], files["log"], files["close"], self.verify)
+        except coins.Undecided as e:
+            return {**doc, "reason": str(e), "undecided": True}
         except (Ch.CoinError, OSError, ValueError) as e:
             return {**doc, "reason": f"the challenger's session is not readable or not signed: {e}"}
         released = {label: len(received.get(label, ())) for label, _ in signed.families}
@@ -254,13 +256,16 @@ class ChallengerGate:
 
 
 def of(kind: str, out: Path, key: Path | None, params: str | None, *, verify: Ch.Verify | None = None,
-       serve: Sequence[str] | None = None, ssh: str | None = None, peer: str | None = None, pin: str | None = None,
+       served_verify: Ch.Verify | None = None, serve: Sequence[str] | None = None, ssh: str | None = None,
+       peer: str | None = None, pin: str | None = None,
        period: str | None = None, main: Path | None = None, minutes: int = 120) -> Local | Serve | ChallengerGate:
     """`--challenger KIND`'s source; `serve` needs its key directory and the challenger's process (`serve`, its
     command), `gate` the host's ssh, this machine's peer name there, the challenger key's pin, the audit's period and
     the auditor's first-parent list of main, read here so a missing or unreadable one refuses the run before its first
-    session. Both check the challenger's signatures with `verify`, which the process's entry hands in
-    (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`)."""
+    session. Both check the challenger's signatures with what the process's entry hands in
+    (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`): the gate with `verify`, the
+    Python's LMS, under the Lean's answers for the ledger and the session; `serve` with `served_verify`, which asks the
+    Lean's LMS where the Python's holds, and whose session is undecided until that is written."""
     if kind == "local":
         return Local()
     if kind in ("serve", "gate") and verify is None:
@@ -274,8 +279,12 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, verify: Ch
         if serve is None:
             raise ValueError("--challenger serve starts the challenger's process its entry hands in, and this process "
                              "was handed none: run verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py")
+        if served_verify is None:
+            raise ValueError("--challenger serve reads its session with the LMS verify that asks the Lean, which its "
+                             "process's entry hands in, and this process was handed none: run "
+                             "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py")
         out.mkdir(parents=True, exist_ok=True)
-        return Serve(out, key, params, command=serve, verify=verify)
+        return Serve(out, key, params, command=serve, verify=served_verify)
     if kind == "gate":
         if ssh is None or peer is None or pin is None or period is None or main is None:
             raise ValueError("--challenger gate needs --challenger-ssh WORDS (ssh's -i KEY and the host), "

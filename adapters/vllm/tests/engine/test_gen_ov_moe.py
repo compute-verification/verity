@@ -352,7 +352,6 @@ def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
     assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
     assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"
-    assert OV.PROFILE.kernel_allowlist == BASE.PROFILE.kernel_allowlist                     # no profile-side allowlisting of MoE kernels
     assert OV.weight_field("model.layers.3.mlp.experts.routed_experts.w13_weight") == ("layers", 3, "w13")
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts)
 

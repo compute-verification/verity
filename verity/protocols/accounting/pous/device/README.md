@@ -28,8 +28,8 @@ From Python there are five modules, each imported by its path.
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
 (`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
 the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`),
-the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's calls (`salt`,
-`session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
+the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's salt request (`salt`)
+and the setups the host keeps (`setup_of`, `SETUPS`); the prover's side is `pous/prover/challenger_prover.py`.
 `challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `accepted`,
@@ -90,6 +90,8 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `wipe_challenger.py`: the streamed wipe's memory challenger as a party of the party runtime (`verity/runtime`), over
   `verity/protocols/accounting/pous/verifier/wipe_parties.py`'s messages; the prover's party is
   `verity/protocols/accounting/pous/prover/wipe_prover.py`.
+- `onsite.py`: the memory challenger's key as a deployment starts it (`ProtocolDef.starts`, `challenger_party.start`,
+  `wipe_challenger.start`), refused unless the configuration pins it for the protocol it signs for.
 - `verity/protocols/accounting/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`;
   `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host.
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.

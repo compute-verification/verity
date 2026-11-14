@@ -35,7 +35,7 @@ stays registered as the labelled ALTERNATIVE the OLMoE rows of record were built
 
 Weights enter as lifted `Input<17>` words checked Active at the boundary (pad's `LServe` convention, `check_boundary(prescribed=True)`);
 an `Input` owns no enable (it is the Program's boundary, produced by no body).  The block returns the whole small assignment (y, ids,
-weights, s_e, g_e, every slot's z_e, the selected u_j, and the E slot enables a_e) so the reference evaluator exposes it, as Stage 1 asks;
+weights, s_e, g_e, every slot's z_e, the selected u_j, and the E slot enables a_e) so the reference evaluator exposes it, as phase 1 asks;
 a Program that composes the block uses `LMoeFfn_v1` (y only).  Both take the enable as their LAST parameter (`lifted.ENABLE_PARAM`), so
 `lifted.has_enable` holds and `replay_lifted` / `emit_lifted_node` thread a caller's enable to them like any lifted callee.
 """
@@ -53,7 +53,7 @@ from verity_vllm.definitions.registry.prims import BF16, F32
 
 SEMANTIC_ID = "moe/PaddedFixedSlots@v1"
 LABEL = "padded-fixed-slots"          # the baseline representation; the indexed-read rows keep their "alternative" label
-STAGE = 2                             # Stage 2: the complete small padded MoE (E=4, top-1 and top-2)
+STAGE = 2                             # phase 2: the complete small padded MoE (E=4, top-1 and top-2)
 
 
 def V(w: int) -> Value:
@@ -244,7 +244,7 @@ HAND_LIFT = L.register_hand_lift(MoeFfnFixed, LMoeFfn)
 # `MoeFfnFixedL_v1(x, logits, w13, w2)` is `MoeFfnFixed_v1` minus its router GEMM (the same `_fixed_core`, node for node), and its lift
 # of record is the hand-authored `LMoeFfnL_v1` = `LMoeBlockL_v1[0]` (the same `_lifted_core` as `LMoeBlock_v1`: the E slots with their
 # enables, the routed weights produced inside the slots, the fixed-select combine, the registered sum).  `LMoeBlock_v1` / `LMoeFfn_v1` /
-# `MoeFfnFixed_v1` stay registered unchanged (Stage 2, route A (1)(2)) as the router-owning form of the same block.
+# `MoeFfnFixed_v1` stay registered unchanged (phase 2, route A (1)(2)) as the router-owning form of the same block.
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -297,7 +297,7 @@ def block(E: int, TOPK: int, VPT: int, H: int, I: int):
 
 def admitted_routes(E: int, TOPK: int) -> list[tuple[int, ...]]:
     """Every ordered route the router can emit: TOPK DISTINCT expert ids (the winner of each argmax round is masked to -10000.f),
-    in selection order.  E=4: 4 routes at top-1, 12 at top-2 -- the Stage 2 population every test walks in full."""
+    in selection order.  E=4: 4 routes at top-1, 12 at top-2 -- the phase-2 population every test walks in full."""
     from itertools import permutations
     return [tuple(p) for p in permutations(range(E), TOPK)]
 

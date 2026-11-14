@@ -88,15 +88,15 @@ commitment only once the session has its outcome (§4). The windows' PRF advanta
 sample's third term, which nothing prices and no guarantee assumes: named with their claim (`prf/sha-512`,
 `ledger.PRF_CLAIM`) beside every δ, with no value and in none. The memory line's \(\delta\) carries the
 binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
-(\(n \cdot 2^{-191}\) over \(n\) windows for all but a \(2^{-64}\) fraction of keys, `ledger.hiding`), beside its
-\(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts'
-sketch (`SketchBound`), which adds at most \(Q \cdot 2^{-95.12}\) a session at 16 rows for a prover of
-\(Q = 2^{80}\) SHA-512 compressions, its budget on any hardware it reaches (`QUERIES_LOG2`), and
-\((Q + P) N \cdot 2^{-512}\) for a receipt right without its hash, and \((Q + P)^2 \cdot 2^{-257}\) for the keys'
-distance from uniform (two seeds whose 256-bit sign keys collide share their signs; `timing.sketch_failure`, §4):
-\(2^{-15.12}\) a session (`Accounting.Guarantees.Remote.SketchBoundRun` at \(r = 12\)). At 64 rows, under 512-bit
-sign keys, it is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-513}\) beside the receipt-right term, the deployed
-statement (`Accounting.Guarantees.Remote.SketchBoundDeployed`, at \(r = 27\)): \(2^{-135.85}\) at \(Q = 2^{80}\).
+(\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
+receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`), which adds at most
+\(Q \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(Q = 2^{80}\) SHA-512 compressions, its budget on any
+hardware it reaches (`QUERIES_LOG2`), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its hash, and
+\((Q + P)^2 \cdot 2^{-257}\) for the keys' distance from uniform (two seeds whose 256-bit sign keys collide share
+their signs; `timing.sketch_failure`, §4): \(2^{-15.12}\) a session (`Accounting.Guarantees.Remote.SketchBoundRun` at
+\(r = 12\)). At 64 rows, under 512-bit sign keys, it is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-513}\) beside the
+receipt-right term, the deployed statement (`Accounting.Guarantees.Remote.SketchBoundDeployed`, at \(r = 27\)):
+\(2^{-135.85}\) at \(Q = 2^{80}\).
 block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
@@ -575,9 +575,8 @@ pass's seed, so like the seed they exist only once the root before it does.
 **The rows.** sketch-sha512's \(k_s\) is a registration parameter (`receipts.ROWS`: 16 or 64), bound in the digest
 (§3) and in the signs' key (`"k"`), so 64-row signs are not 16-row signs and 48 more, and a session's `Params.rows`
 must be the registration's. 16 is the default. 64 rows read the bound at \(r^* = 27\), \(2^{-215.85}\) a compression
-(below), so no session is long enough to need a cap. On the stand-alone device reader (`benchmarks/codec_tensor`, one
-card) they cost τ = 1.226 a pass in one kernel with an L2 hint, below 16 rows' 1.258 on that reader; neither is a
-session's pass on the node. In
+(below), so no session is long enough to need a cap. On the device reader they cost τ = 1.226 a pass in one kernel
+with an L2 hint, below 16 rows' 1.258. In
 the fused GEMM they cost more: at 70B and B = 8, its step cost d is 3.49 / 4.00 at k = 2 / 3 against 16 rows'
 2.40 / 3.18, since the two sketch warps bind there. So 16 stays the
 default, and a registration names 64 to use it.
@@ -1011,8 +1010,8 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one execution phase's transfer blocks as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
-  for all but a \(2^{-64}\) fraction of keys (`ledger.hiding`, which `LineHeld` states while it reads the prover's
-  records through the commitment), plus the receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
+  (`ledger.hiding`, which `LineHeld` states while it reads the prover's records through the commitment), plus the
+  receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
   bounds (`ledger.binding`, §1; it takes the gap `binding-split` as closed),
   plus the sketch's (`timing.sketch_failure`) plus the sample's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`),
   at the receipts each sample requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it took: a sample

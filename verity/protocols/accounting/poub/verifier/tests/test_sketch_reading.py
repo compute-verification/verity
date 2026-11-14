@@ -156,10 +156,10 @@ def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> au
 def test_the_sketch_charges_the_provers_budget() -> None:
     """Grinding reads no block, so `sketch_failure` charges the prover's budget, Q = 2^`audit.QUERIES_LOG2`
     compressions, whatever the node computes.  At a session of P = 2,118 one-pass windows over N = 97,517,568 blocks
-    in 226.9 s, 48 openings a window, 16 rows read 2^-15.12 at Q = 2^80, and 64 rows (512-bit sign keys) 2^-135.85.
-    The memory line's δ of a record of those counts is the ledger's: every `Line.delta` of `ledger.memory` is the sum of
-    `ledger.delta_parts`, the windows' profile δ at `audit.DELTA`, AuditRO's slack at `audit.SLACK_LOG2` a pass and the
-    sketch at Q, the largest."""
+    in 226.9 s, 48 openings a window, 16 rows read 2^-15.12 at Q = 2^80, and 64 rows, under 512-bit sign keys,
+    2^-135.85.  The memory line's δ of a record of those counts is the ledger's: every `Line.delta` of
+    `ledger.memory` is the sum of `ledger.delta_parts`, the windows' profile δ at `audit.DELTA`, AuditRO's slack at
+    `audit.SLACK_LOG2` a pass and the sketch at Q, the largest."""
     p, n, span_ns, samples = 2118, 97_517_568, 226_932_412_222, 48
     q = 2 ** audit.QUERIES_LOG2
     assert audit.QUERIES_LOG2 == 80
@@ -171,12 +171,11 @@ def test_the_sketch_charges_the_provers_budget() -> None:
     parts = ledger.delta_parts(record)
     assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == "sketch"
     assert parts["profile"] == audit.DELTA
-    assert parts["slack"] == p * 2.0 ** -audit.SLACK_LOG2
-    assert parts["sketch"] == ledger.sketch(record) == float(timing.sketch_failure(p, blocks=n))
-    assert parts["hiding"] == 2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys)
-    total = 0.0
-    for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
-        total += parts[name]
+    assert parts["slack"] == Fraction(p, 2 ** audit.SLACK_LOG2)
+    assert parts["sketch"] == ledger.sketch(record) == timing.sketch_failure(p, blocks=n)
+    assert parts["hiding"] == pytest.approx(
+        2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys), rel=1e-12)
+    total = sum(parts.values(), Fraction(0))
     assert [x.delta for x in ledger.memory(record, ledger.Node.stated(timing.RTX_PRO_6000_NODE))] == [total] * 3
     assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
     for bad in (0, -1, 1.5, 2.0 ** 80):
@@ -188,7 +187,7 @@ def test_the_keys_distance_from_uniform_is_charged() -> None:
     """Two of the `Q + P` candidate seeds whose sign keys collide share their signs, so the keys are within
     `(Q + P)²/2^(b+1)` of uniform, not uniform (`SketchHashRandom`'s ε), b the key's bits, and `sketch_failure` charges
     it: 256-bit keys at 16 rows, 512-bit at 64 (`receipts.sign_key_bits`).  At 16 rows it is 2^-97.00 at the prover's
-    budget of 2^80 compressions and 2^-169.94 at 12,708,215,084,432; at 64 rows and Q = 2^80 it is 2^-353.00."""
+    budget of 2^80 compressions and 2^-169.94 at 12,708,215,084,432; at 64 rows, 2^-353.00 at 2^80."""
     p, n = 2118, 97_517_568
     for rows, r, bits in ((16, 12, 256), (64, 27, 512)):
         assert receipts.sign_key_bits(rows) == bits

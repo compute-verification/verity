@@ -11,7 +11,7 @@
 # its period committed the verifier that ran it, it and its period closed complete, the Lean accepted it, the host's pins
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
 # on NoOutsideCompute. That store, what a pinned
-# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
+# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are PoUB's own
 # (`verity/protocols/accounting/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -73,7 +73,7 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
-          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py",
           "verity/protocols/compose/__init__.py", "verity/protocols/compose/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/protocols/compose/device/live_challenger/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

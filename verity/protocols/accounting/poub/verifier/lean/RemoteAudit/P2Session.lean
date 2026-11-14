@@ -8,7 +8,7 @@ public import RemoteAudit.Session
 /-!
 # A session over a P2 store, of record: `p2_parties.py`
 
-The verifier's side of a remote bandwidth session over PoUS's P2 store (`p2.Session`, as `p2_parties.session` drives
+The verifier's side of a PoUB session over PoUS's P2 store (`p2.Session`, as `p2_parties.session` drives
 it), read from the bytes it holds and the prover sends, and decided here:
 
 * the auditor's registration file (`heldOf`, `p2_parties.registration_json`'s bytes): its fields' registration, its

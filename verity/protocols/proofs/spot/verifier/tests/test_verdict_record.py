@@ -238,6 +238,7 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     builds its stop stream again as the stop audit does, and takes `stop_audit.summary_of`'s own summary: the record
     names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
     No session is proved and Lean is not called."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "device" / "tests"))
     T = importlib.import_module("test_two_stage_driver")
     SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
     pubs = [json.loads(json.dumps(T._stop_class().public()))]
