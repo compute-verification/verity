@@ -489,23 +489,29 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The deployment's records before ``rec``, oldest first, on a serve whose window record is Pearl+'s: walked back
-    from the record ``rec`` names as its ``previous`` to one whose ``previous`` is null, each taken by the digest the
-    record after it names, however many there are. On the harness's serve that is the record W Pearl+'s passes are held
-    to, which ``rec`` is chained right after (the tie `Core.Remote.V1.window` checks), and before it the serve's first
-    registration record where W is chained after one. The records it walks among are the W Pearl+'s case's parts hold
-    (``parts``, `pearlplus_of`) and the ones ``serve`` holds: its first (`DEPLOYMENT`) and each window's W and R
-    (`RECORDS`), which is all a copy of the compose hand-off holds of them. A file there that is no record of the
-    digest a later one names is no part of the log, and a link no record answers is refused, saying the log doesn't
-    reach the deployment's first record. Empty when ``rec`` names no previous record."""
+    """The deployment's records before ``rec``, oldest first, on any serve dir without an H1 log, Pearl+'s or not:
+    walked back from the record ``rec`` names as its ``previous`` to one whose ``previous`` is null, each taken by the
+    digest the record after it names, however many there are. On the harness's serve tied to Pearl+ that is the record
+    W Pearl+'s passes are held to, which ``rec`` is chained right after (the tie `Core.Remote.V1.window` checks), and
+    before it the serve's first registration record where W is chained after one. The records it walks among are the W
+    Pearl+'s case's parts hold (``parts``, `pearlplus_of`) and the ones ``serve`` holds: its first (`DEPLOYMENT`, which
+    must parse where it is there) and each window's W and R (`RECORDS`), which is all a copy of the compose hand-off
+    holds of them. A file under `RECORDS` that doesn't parse, or that is no record of the digest a later one names, is
+    no part of the log, and a link no record answers is refused, saying the log doesn't reach the deployment's first
+    record. Empty when ``rec`` names no previous record."""
     held: dict[str, dict[str, Any]] = {}
     if parts is not None:
         w = (_json(parts / "parts.json").get("window") or {}).get("record")
         if isinstance(w, dict):
             held[R.digest(w)] = w
     if serve is not None:
-        for f in [serve / DEPLOYMENT, *sorted(f for pattern in RECORDS for f in serve.glob(pattern))]:
-            r = _json(f) if f.is_file() else None
+        found = [_json(serve / DEPLOYMENT)] if (serve / DEPLOYMENT).is_file() else []
+        for f in sorted(f for pattern in RECORDS for f in serve.glob(pattern) if f.is_file()):
+            try:
+                found.append(json.loads(f.read_text()))
+            except (OSError, ValueError):
+                continue
+        for r in found:
             if isinstance(r, dict):
                 held[R.digest(r)] = r
     log: list[dict[str, Any]] = []
