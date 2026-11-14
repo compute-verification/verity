@@ -112,11 +112,11 @@ def halves (ws : Array Nat) : Option ByteArray :=
 
 /-- The supplied values the verifier gives each statement's audit (`Spot.Supplied.sources`' form): `pub` and `signs`,
 row k each sample k's, its words' `halves` as one `bytes` source; `none` where a row's words are odd. -/
-def supplied (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) : Option Json := do
+def supplied (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) : Option Json := do
   let row (ws : Array Nat) : Option Json := do
     pure (.arr #[Json.mkObj [("bytes", .str (Flock.hexOf (← halves ws)))]])
-  let pub ← drawn.mapM fun (i, p) => row (publicWords reg w i p)
-  let signs ← drawn.mapM fun (i, _) => row (signWords reg w i)
+  let pub ← sampled.mapM fun (i, p) => row (publicWords reg w i p)
+  let signs ← sampled.mapM fun (i, _) => row (signWords reg w i)
   pure (Json.mkObj [("pub", .arr pub), ("signs", .arr signs)])
 
 /-- A row's `b ‖ c` as the proof system commits a unit's row: hm96-sha512 over the `sha512/row/v2` digest of the row of
@@ -160,8 +160,8 @@ def Layout.port? (l : Layout) (name : String) : Option (Nat × Nat) :=
   (l.ports.findIdx? (·.1 == name)).map fun q => (q, l.ports[q]!.2)
 
 /-- The first sample that is no unit's (`sampleOk`), if any. -/
-def firstNoUnit (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) : Option (Nat × Nat) :=
-  drawn.find? fun (i, p) => !sampleOk reg w i p
+def firstNoUnit (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) : Option (Nat × Nat) :=
+  sampled.find? fun (i, p) => !sampleOk reg w i p
 
 /-- Unit k's `o0` row's `b ‖ c` as the public file holds it, and what the prover sends of the unit. -/
 structure Held where
@@ -178,9 +178,9 @@ def unitFails (verdictBits : Nat) (u : Held) : Option Failure :=
 unit's (`firstNoUnit`); `malformed` at no sample for a layout with no `o0`, a file that isn't one `b ‖ c` a port an
 instance, another count of instances than its statement sends, or units that are not the population's 0, 1, … one a
 sample; else the first sample whose unit fails (`unitFails`), there, or accept. -/
-def spanHeld (l : Layout) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
+def spanHeld (l : Layout) (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat))
     (held : Array (ByteArray × Array Instance)) : Verdict := Id.run do
-  if let some ip := firstNoUnit reg w drawn then return .reject .malformed (some ip)
+  if let some ip := firstNoUnit reg w sampled then return .reject .malformed (some ip)
   let some (qo, verdictBits) := l.port? "o0" | return .reject .malformed none
   let np := l.ports.size
   let mut units : Array Held := #[]
@@ -193,9 +193,9 @@ def spanHeld (l : Layout) (reg : Registration) (w : WindowRecord) (drawn : Array
       for u in [0:n] do
         units := units.push ⟨bcs[u * np + qo]!, insts[u]!⟩
     | _, _ => return .reject .malformed none
-  if units.size ≠ drawn.size || indices != Array.range drawn.size then return .reject .malformed none
-  for k in [0:drawn.size] do
-    if let some f := unitFails verdictBits units[k]! then return .reject f (some drawn[k]!)
+  if units.size ≠ sampled.size || indices != Array.range sampled.size then return .reject .malformed none
+  for k in [0:sampled.size] do
+    if let some f := unitFails verdictBits units[k]! then return .reject f (some sampled[k]!)
   return .accept
 
 /-- A statement's public file, once its one-stage audit accepts at the auditor's parameters, with the statement's public
@@ -218,17 +218,17 @@ def accepted (a : Auditor) (sup : Json) (st : Statement) (bs : Core.Blobs) : V B
 
 /-- **Window `w`'s verdict from the span**: `malformed` at the first sample that is no unit's; else `malformed` at no
 sample unless every statement is `accepted` with the window's `supplied` rows; else `spanHeld` on their public files. -/
-def checkSpan (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (sp : Span) :
+def checkSpan (a : Auditor) (reg : Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) (sp : Span) :
     Verdict := Id.run do
-  if let some ip := firstNoUnit reg w drawn then return .reject .malformed (some ip)
-  let some sup := supplied reg w drawn | return .reject .malformed none
+  if let some ip := firstNoUnit reg w sampled then return .reject .malformed (some ip)
+  let some sup := supplied reg w sampled | return .reject .malformed none
   let bs := Core.Blobs.ofArray sp.blobs
   let mut held := #[]
   for st in sp.statements do
     match accepted a sup st bs with
     | .ok pubB => held := held.push (pubB, st.instances)
     | .error _ => return .reject .malformed none
-  return spanHeld a.layout reg w drawn held
+  return spanHeld a.layout reg w sampled held
 
 end Poub.Span
 
