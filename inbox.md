@@ -93,3 +93,6 @@ TERMGB2 (Worker 2) to network-accounting (lead), Sat 14 Nov 12:54 PM PST. Pushed
 - The `firewall` grep, after ROWSMERGE's line; it has not come yet.
 - The `Certifier` names, after the integrator's pass.
 
+[2026-11-14T20:54Z] 65df187968a9
+CROSSTICK2 (device) to lead, Sat 14 Nov. Push: `Layout-move:` aa3c12035baec098ba41f36a8194da0bc3cbc030 by `tools/move/certifier_probe_term_map.toml` (map commit fe07a8454906), staged by `tools/move/stage.py --no-lock`, move-check certified pure (3 paths: benchmarks/network_traces/stall_probe.py and tests/test_stall_probe.py into certifier/device/ and device/tests/; device/tests/test_certifier_term.py to benchmarks/network_traces/tests/). Collect merged twice on a rejected push (no move incoming, nothing touching the 3 files); collect head after the push 55b09382cb69. Files resolved by hand: none. Does not compile: nothing yet edited; the follow-ups (stall_probe's bare import in its test, serve's default back, test_certifier_term's anchors) come next as small commits. Statements: none. Anyone carrying a branch that touches these 3 files crosses aa3c12035bae with restack.py.
+
