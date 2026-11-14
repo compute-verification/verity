@@ -57,7 +57,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     outcomes each run by the Lean verifier: the only test that takes a row-table window's record through a Stream, so a
     `row-table` root the service can't register or the verifier refuses shows here and not on a served window."""
     program, query = CS.population_program([(DEFN, UNITS)], several=True)
-    c, _s, _got = committed(monkeypatch, law=S.selection_sampling_design(RULE, UNITS, D.strata_sizes(program, query)),
+    c, _s, _got = committed(monkeypatch, sampling_design=S.selection_sampling_design(RULE, UNITS, D.strata_sizes(program, query)),
                             work_table=S.selection_table(RULE, program, query, None))
     mine = c.window
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}
@@ -84,7 +84,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     units = audit["draw"]["units"]
     assert out.accepted and honest._entries[0].read and (audit["draw"]["population"], len(units)) == (UNITS, 2)
     assert all(m.links for m in mine.members for u in units if m.base <= u < m.base + m.n)
-    bare = stream(_spec(mine, table=False), sampler=lambda law, n: [0, 1])
+    bare = stream(_spec(mine, table=False), sampler=lambda sampling_design, n: [0, 1])
     rec = CS.registration(c, {"row": 100}, registrar=R)
     assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS}))
     with pytest.raises(ValueError, match="over"):

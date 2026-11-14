@@ -5,7 +5,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 /-!
 # A requirement's execution, placement and store (trusted)
 
-The objects a declared circuit's requirement (`Definitions/Accounting/Requirement.lean`) is read against, which every
+The objects a registered circuit's requirement (`Definitions/Accounting/Requirement.lean`) is read against, which every
 resource audit shares:
 
 * **Execution.** A scheduled execution is the values it produces (`ran`: the executed prefix, a request's rows up to

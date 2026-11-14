@@ -36,7 +36,7 @@ PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
 FIXED=${FIXED:-} WINDOW_STEPS=${WINDOW_STEPS:-}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
 PRIV=$ROOT/runs/${RESEARCH_RUN_ID:-local}; mkdir -p "$PRIV"; export PRIV

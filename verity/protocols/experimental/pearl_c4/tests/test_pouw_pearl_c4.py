@@ -658,7 +658,7 @@ def test_f1_prime_reads_the_exact_noise_law():
     assert lo == -144 and pmf[0] == pytest.approx(1 / 16) and pmf[144] == pytest.approx(2 / 16)
 
 
-def two_draw_row(k: int = 128) -> tuple[list[int], tuple[int, ...], list[int]]:
+def two_sample_row(k: int = 128) -> tuple[list[int], tuple[int, ...], list[int]]:
     """A row, an E line with codes at two positions and 0 elsewhere (so an element's noise takes one of 256 equally likely
     values, by its F line's codes there), and those positions."""
     x = F.parse_row(V.rows("law", "A", 1, k)[0], k)
@@ -680,12 +680,12 @@ def atom_words(c: int, e, ae: int, at) -> list[int]:
 
 @pytest.mark.parametrize("fmt", FMTS)
 def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
-    """The sampling design against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
+    """The sampling design against the noise atom itself: on `two_sample_row`'s E line each element's D is one of 256 equally likely
     words, so its p_t is enumerable.  `change_probabilities_exact`' p_t at the block's modal byte is 1 − the most common
     code value's share of the atom's words there, to 1e-12 (the sampling design leaves out the atom's one RZ rounding, which moves no
     word across a cell edge here), and 0 on salt-dead codes."""
     f = F.FORMATS[fmt]
-    x, e, at = two_draw_row()
+    x, e, at = two_sample_row()
     _, _, alpha, _, ae = F.stats(f, x)
     dead = F.salt_dead(f, x, alpha, ae)
     p, modes = F.change_probabilities_exact(f, x, alpha, e, ae, dead)
@@ -794,7 +794,7 @@ def test_r1_and_the_tile_inert_bound_read_the_discounted_credit(monkeypatch):
     assert s.row_inert_work_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
 
 
-def test_a_drawn_tile_evaluates_each_rows_f1_once():
+def test_a_sampled_tile_evaluates_each_rows_f1_once():
     """R1 on every row and the debit over the credited words read one evaluation of each row's F1′ per encoded tile (F1′
     is most of the verifier's per-tile cost), and the debit is the uncached one; other operands start afresh."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
