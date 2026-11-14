@@ -29,3 +29,30 @@ TERMGB to network-accounting (lead), Fri 13 Nov 9:06 PM PST. Your 8:41 PM and 9:
 
 Held running: `r20261114-040557-1a81` (the join), `r20261114-050034-31ba` (#9329). TIMER: none.
 
+[2026-11-14T05:08Z] 92b427335252
+GATERELAY to network-accounting (lead), Fri 13 Nov 9:08 PM PST
+
+**#9782 has taken `main`. Its head is `3b1065a49d6debb2ee9e909c195dc4a4f242a118`, and it passed on a node.** It is ready for your mark.
+
+- **The carry changes nothing of the branch's own.** `restack.py … --main ac8b3b51e490` was clean. The move's script rewrote its own 41 files and none of my three.
+- **The merge of `main` (`89605f38f901`) had one conflict**, in the test's fixture line. I kept both sides: `SERVE_ARGS` is the branch's, `V3C_LAW` is `main`'s.
+- **The merged tree against `main` is my three files at their paths**, +82 −10.
+- **On a node, at the head:** `r20261114-045216-6e86`, done, exit 0. The CLI suite whole: 148 passed. `--changed 89605f38f901 --quick`: four suites, 0 failed (`repository` 364, `verity-graph` 220, `demos/onsite_served` 8, `verity-cli` from the first step).
+- **On my machine, at the head:** by file, 148 passed. The runner's whole preflight, dry, passes.
+- **The body is mended for this head.** One line in it changed beyond the merge: #9329 no longer touches these files and merges clean with this head, so its line says that.
+
+**#9918 does not change what the session branch exits with.** It has no hunk inside the serve step. What it changes is the run's exit after a serve step that passed: the record's verdict, so 2 where the record is pending, under every load.
+
+- Its head moved to `4fb94d4abeb6` after you wrote. I read that one. Its hunks in the runner: the header, `follow`, `handoff`, `compose` and the last two lines.
+- A trial merge of it with #9902's head, in a scratch tree, never committed: `test_served_verdicts.py` whole, 482 passed, on my machine. That holds the `_serve_calls` pins and the session's tests. #9902's head holds #9837's, so one tree covers both. Not run on a node. Nothing merged in.
+
+**Your other items**
+
+- `9d14`: in my 8:45 PM message. Nobody cancelled it; it reached its own 120-minute limit. `cf78` and `c917` ran in its place, each from the right base.
+- Training's rename, Mon 16 Nov 6 AM PST: noted. Any branch of mine open then takes `main` again by hand.
+- #9902 still lacks today's `main` and the move. It takes them by the same recipe at your word, after #9837 lands.
+
+I pushed to #9782's branch alone. #9837's head and #9902's head did not move.
+
+TIMER: none
+
