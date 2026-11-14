@@ -53,6 +53,13 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
   at every instance (`Instance.opensAt`, `Instance.registeredFiles`), `SessionAt` by `sessionAt_of_registered` at the
   deployment's session on the registered files, and the device's log opening only the record's rounds by v2's record
   check (`Instance.logOpensRecorded`).
+* `spotSound_deployedReady`: **SPOT's target at the deployed vocabulary, at any composite** (`spotSound_of_targets` at
+  the deployment's constructions), from `SessionRegistered` at that composite's verdict, the openings and the
+  registered files discharged as for remote.
+* `onsite_soundness_deployedReady`: **`Verity.Soundness` at the deployed vocabulary**, onsite's seven targets with
+  SPOT's discharged by `spotSound_deployedReady`; the other six are the base's, each a premise.
+* `onsite_soundness_deployedReady_honest`, `onsite_soundness_deployedReady_nontrivial`: its premises hold at the idle
+  deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
 -/
 
 @[expose] public section
@@ -480,5 +487,91 @@ theorem remote_soundness_deployedReady_honest :
 fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_deployedReady_nontrivial : ¬ Verity.Idle.exact.SoundnessFor .remote fun _ => True :=
   Verity.remote_soundness_of_subprotocols_nontrivial
+
+/-- **SPOT's target at the deployed vocabulary, at composite `k`**: `spotSound_of_targets` at the constructions the
+deployment assembles at `k` (`Instance.constructionsAt`), whose read finder and forger are the binding's by
+definition. `Deployed` is `Instance.deployed` at the openings every instance has (`Instance.opensAt`), `Covers` is
+`Instance.covers` from the registered files' check (`Instance.registeredFiles`) and `sessionAt_of_registered` at
+`SessionRegistered`, and the
+coupling at each session is `couplingTarget_at`'s, its log premise discharged by v2's record check
+(`Instance.logOpensRecorded`). -/
+theorem spotSound_deployedReady (I : Instance d α) (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
+    (reg : (A : Live) → Option Claims.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (hSr : I.SessionRegistered k) :
+    (I.vocab (I.constructionsAt K₀ k reg record recordDigest)).SpotSound k :=
+  spotSound_of_targets (I.vocab (I.constructionsAt K₀ k reg record recordDigest)) k
+    (I.deployed (I.constructionsAt K₀ k reg record recordDigest) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl)
+      I.opensAt)
+    (I.covers (I.constructionsAt K₀ k reg record recordDigest) k I.registeredFiles (I.sessionAt_of_registered k hSr))
+    fun θ F A h => I.couplingTarget_lift (I.constructionsAt K₀ k reg record recordDigest) k
+      (I.couplingTarget_at K₀ k reg record recordDigest (I.logOpensRecorded k) θ F A h)
+
+/-- **A target of the base, at a subprotocol other than SPOT, is the deployed vocabulary's**: the deployed
+vocabulary changes only SPOT's names and the extractor (`Instance.stage`, `Instance.vocab`), which no other
+subprotocol's verdict, claim or error reads. -/
+theorem Instance.target_of_base (I : Instance d α) (K : Constructions I.base) (k : Verity.Registration.Composite) :
+    ∀ a : Subprotocol, a ≠ .sampled → I.base.Target k a → (I.vocab K).Target k a
+  | .sampled, ha, _ => absurd rfl ha
+  | .pouw, _, h => h
+  | .inferenceOnly, _, h => h
+  | .pous, _, h => h
+  | .poub, _, h => h
+  | .network, _, h => h
+  | .wipe, _, h => h
+
+/-- **`Verity.Soundness` at the deployed vocabulary, SPOT's target discharged**: onsite's compiled verifier accepts
+files that passed the commit phase's check while one of the period's seven claims fails with probability at most the
+seven errors at that strategy summed, at the vocabulary `Instance.vocab` builds from the deployment and the
+constructions `Instance.constructionsAt` assembles at onsite. It is `soundness_of_subprotocols` with SPOT's target
+proved (`spotSound_deployedReady`, from Flock's live chain through `spotSound_of_targets`) from the one premise about
+the deployment's sessions that `remote_soundness_deployedReady` takes, here at onsite's verdict (`SessionRegistered`).
+
+The other six targets are the base's (`Instance.target_of_base`), each a premise no proof here discharges: PoUW's
+(`PouwSound`), the inference-only policy's (`InferenceOnlySound`), PoUS's (`PousSound`), PoUB-P2's
+(`BandwidthAuditSound`), the network certifier's (`NetworkCertifierSound`) and the wipe's (`WipeSound`). Of the
+network certifier's: its period check takes each of SPOT's answers in its evidence as given
+(`NetworkCheck`'s `answered` holds an answer to one-stage's id and its registration's digest, then reads its verdict
+and profile), and verifies no proof behind one, so the `K` it publishes rests on answers no check of the
+composite has verified; the premise stands for that until the period check reads verified outcomes. Of the wipe's: the
+bits that leave the device during the wipe are the vocabulary's (`Verity.Wipe.egress`), which no statement yet ties
+to the network certifier's count over the wipe's span. -/
+theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
+    (reg : (A : Live) → Option Claims.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (hSr : I.SessionRegistered .onsite)
+    (hW : I.base.PouwSound .onsite) (hI : I.base.InferenceOnlySound .onsite)
+    (hP : I.base.PousSound .onsite) (hB : I.base.BandwidthAuditSound .onsite)
+    (hN : I.base.NetworkCertifierSound .onsite) (hX : I.base.WipeSound .onsite) :
+    (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)).SoundnessAt .onsite :=
+  Verity.soundness_of_subprotocols ι α d (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest))
+    (spotSound_deployedReady I K₀ .onsite reg record recordDigest hSr)
+    (I.target_of_base _ .onsite .pouw (by decide) hW) (I.target_of_base _ .onsite .inferenceOnly (by decide) hI)
+    (I.target_of_base _ .onsite .pous (by decide) hP) (I.target_of_base _ .onsite .poub (by decide) hB)
+    (I.target_of_base _ .onsite .network (by decide) hN) (I.target_of_base _ .onsite .wipe (by decide) hX)
+
+open scoped ENNReal in
+/-- **`onsite_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
+reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
+premise speaks of the sessions the deployment runs, and the base's six targets hold at `⊤`. -/
+theorem onsite_soundness_deployedReady_honest :
+    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.PousSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.BandwidthAuditSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.NetworkCertifierSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.WipeSound .onsite :=
+  ⟨Instance.Honest.sessionRegistered_none ⊤ .onsite,
+    Instance.Honest.target_top .onsite .pouw, Instance.Honest.target_top .onsite .inferenceOnly,
+    Instance.Honest.target_top .onsite .pous, Instance.Honest.target_top .onsite .poub,
+    Instance.Honest.target_top .onsite .network, Instance.Honest.target_top .onsite .wipe⟩
+
+/-- **`onsite_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at onsite's compiled verifier,
+fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/
+theorem onsite_soundness_deployedReady_nontrivial : ¬ Verity.Idle.exact.SoundnessFor .onsite fun _ => True :=
+  Verity.soundness_of_subprotocols_nontrivial
 
 end Verity.Sampled
