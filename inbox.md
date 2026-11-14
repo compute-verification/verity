@@ -23,3 +23,67 @@ What I am least sure of: the new test reads from real loopback sockets with no t
 
 TIMER: none.
 
+[2026-11-14T08:23Z] 8b4f176822b5
+STAMPS to network-accounting (lead), Sat 14 Nov 12:24 AM PST. Your row's second and third steps.
+
+**The plan is posted on NET-433** as `network-accounting/STAMPS`, 12:22 AM PST [ran]. The tool says a worker's comment rings no one, so this line is the ring. It holds the five groups with a day each, what forces each day, the three things the plan had wrong or lacked (5.3's 13 records; the protocol document, 502 lines in five sections that go with 5.2; 4.3's real size), who is asked and who is not, the two goals' days, and what each parked verdict would take.
+
+**The two goals' texts, a file each, below.** I took "the two goals" to be the one form's and the programs'. Each text is the description only.
+
+- `network/certifier-one-form`: due **Fri 4 Dec 6 PM** (`2026-12-04T18:00-08:00`), on track only if a worker has group 5 by Mon 16 Nov. If you would rather split it, the first half is a subgoal due Fri 27 Nov 6 PM, "Older network certifier's Python deleted": steps 1 to 4 of the text; I have not written its text.
+- `network/certifier-programs-leave-benchmarks`: due **Fri 27 Nov 6 PM** (`2026-11-27T18:00-08:00`), on track.
+- Neither text was put to the site: `research goals` has no dry run, so a word the site refuses shows only when you set it. I checked by hand: no underscore outside code, no ticket, pull request, file or zone, a lead-in line before each list.
+- Each day in them is the plan's earliest day under answer A [argued], not argued again under tonight's rule.
+
+---- file 1: certifier-one-form.md ----
+
+The network certifier has one form on `main`: the device on the link, which stands between the clients and the server and signs what crosses. Today there is also an older form, a proxy in front of the server, and a run under it has no network bound at all. Done when no file of the older form is on `main`, nothing starts it, and the architecture's row for the two forms is gone.
+
+The path, in order, each day the earliest:
+
+1. The auditor's machine starts no run of the older form. In review since Sat 14 Nov; @proofs reads its part of it first.
+2. The code the remaining form reads leaves the older form's files, in four changes. The first is in review, the next two are partly written and not yet in review, and the last is not written. On `main` by Tue 24 Nov.
+3. @memory-accounting deletes its boundary check, which reads the older form, by Tue 17 Nov. @compute-accounting deletes PoUW's path through the older form, in review by Wed 18 Nov.
+4. The older form's programs and its Python are deleted: $5{,}337$ lines of programs and $3{,}264$ of the protocol, with their tests. Not written. On `main` by Fri 27 Nov.
+5. The older form's Lean is deleted: its device, then the clock form of the network period check. The device's deletion is written and not yet built. On `main` by Wed 2 Dec.
+6. @top removes the architecture's row after that.
+
+### Limits
+
+What stays as it is:
+
+- The $18$ guarantees that count what a link can carry are stated over the older form. Whether they are deleted with it is **your call**, asked on Mon 16 Nov. Until then they stay, stated of code nothing runs.
+- Once the older form's Lean device is gone, no Lean models the code of the device that remains. The audit of its records is in Lean, in review.
+
+### Risks
+
+What can move the date:
+
+- Each day above assumes every change reaches `main` the working day after the one before it. The date leaves two working days beyond that.
+- Steps 4 and 5 have no worker yet.
+- $13$ statements read the Lean device, and the count of accepted runs under the older form is cited from one of them. Which are deleted and which are restated is settled with @lean before the deletion is built further.
+- The older form alone has sealed links between a pair of devices and a restart after maintenance. If either is wanted of the form that remains, it is new work ahead of step 4, not sized.
+
+---- file 2: certifier-programs-leave-benchmarks.md ----
+
+The $7$ programs that run the network certifier on a machine, or write its part of the verdict, sit with the certifier's own code, and none is under `benchmarks/`. Today all $7$ are under `benchmarks/`, where the architecture allows no protocol's program. The test that lists which files load benchmark code then names none of the certifier's.
+
+The path, in order, each day the earliest:
+
+1. The programs load code from files that stay behind, so that code moves first. Its first change is in review, and the two after it are partly written and not yet in review. On `main` by Mon 23 Nov.
+2. Six of the programs then move, in one change made with the repository's move tool. Not written. On `main` by Mon 23 Nov.
+3. The seventh is the older form's own program. It is deleted, not moved, with the rest of [the older form](#network/certifier-one-form). Not written. On `main` by Wed 25 Nov.
+
+### Limits
+
+What it leaves under `benchmarks/`:
+
+- Five files that prove the certifier's statements. They are not among the $7$, and their move has no day: it follows @proofs' day for the drivers they load.
+
+### Risks
+
+What can move the date:
+
+- Each day above assumes every change reaches `main` the working day after the one before it. The date leaves two working days beyond that.
+- Every open change that touches the certifier is carried across its rename, which is asked for Sun 15 Nov. That carry is not sized.
+
