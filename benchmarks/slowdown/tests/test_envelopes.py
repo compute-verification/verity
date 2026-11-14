@@ -8,7 +8,7 @@ from slowdown import envelopes, hardware, lean
 from slowdown.envelopes import Certifier, Context, Detection, Onsite, Remote, Wipe
 from slowdown.params import Param, Registry
 from slowdown.scenario import build, evaluate_named
-from slowdown.theorem import Budget, multiple_bound, overhead
+from slowdown.theorem import Budget, multiple_bound, slowdown
 
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 
@@ -98,10 +98,10 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     remote = envelopes.regime(reg, "remote")
     part = remote.partition(ctx)
     s, u = part.eps_unreg, remote.uncertified(ctx)
-    o = overhead(part, lambda b: 0.0, 0.6)
+    o = slowdown(part, lambda b: 0.0, 0.6)
     assert o.padded == pytest.approx(multiple_bound(1.0, s, (1 - s) * u), rel=1e-12) and o.padded > 10
-    assert o.rho == o.multiple(1.0) == pytest.approx(o.padded, rel=1e-12)
-    assert overhead(part, lambda b: 0.0, 0.6, mfu=0.4).rho == o.multiple(0.4) == pytest.approx(
+    assert o.value == o.multiple(1.0) == pytest.approx(o.padded, rel=1e-12)
+    assert slowdown(part, lambda b: 0.0, 0.6, mfu=0.4).value == o.multiple(0.4) == pytest.approx(
         multiple_bound(0.4, s, (1 - s) * u), rel=1e-12)
     ctx = tiers_context()
     s, u = ctx.fleet.eps_unreg, envelopes.regime(REG, "remote").uncertified(ctx)
@@ -341,7 +341,7 @@ def test_without_pouw_only_the_serving_cut_bounds():
     assert serving.name == "serving"
 
 
-def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_one():
+def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_the_slowdown_stays_near_one():
     """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 9.894e14
     MACs/s (the ACCEL card table: 4,096 a SM-clock, 132 SMs, at the tensor clock's 1,830 MHz ceiling; 1.0705e15 at the
     1,980 MHz SM clock) over its 12.60 s (served 3.78, its commit 0.42, PoUW's units 5.59 and their commit 2.81). J10-R
