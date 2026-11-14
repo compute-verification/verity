@@ -53,7 +53,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
       challenger's stream rebuilds (the stream's own window tests use toy templates, never `scan_root`);
     - a port of a staged member left out of its registered reads, which Lean's `checkComplete` refuses, so that every
       session fails Lean's verify.
-    The test class is the smallest, the group is one link-window, and the sample is one more than the three strata: the
+    The test class is the smallest, the group is one execution phase, and the sample is one more than the three strata: the
     sessions are stubbed, so a smaller sample saves nothing."""
     setup, k = sz.TEST, 4
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)

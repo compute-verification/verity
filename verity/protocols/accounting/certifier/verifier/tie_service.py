@@ -1,4 +1,4 @@
-"""The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
+"""The ingress tie through the proof system: each bucket row of an ingress execution phase of the warden's cells proved as
 `io_request.IoTieRequest`, and the verifier that builds `IoTieVerdict`, the tie of a link's requests to its
 certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
 tie").
@@ -143,7 +143,7 @@ def _unit(check) -> CompositeDefinition:
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
-        doc="the proof block of the ingress tie: one bucket row of the warden's ingress link-window, its "
+        doc="the proof block of the ingress tie: one bucket row of the warden's ingress execution phase, its "
             "`io_request.IoTieRequest` on the row the registered read holds to the warden's root and the verifier's "
             "lanes")
 
@@ -259,7 +259,7 @@ def prompt_lens(advice: LinkAdvice) -> tuple[int, ...]:
 
 @dataclass(frozen=True)
 class Delivered:
-    """An ingress link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
+    """An ingress execution phase's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
     circuit file the auditor's own lowering of the unit), and for each sampled proof block, by its index, the salts of its
     public row and its output row (``pub``, ``o0``, the known values' public salts, `IngressTie.known_tree`) and its
     output word, which the verifier opens against the public file's commitments to those rows. Never a witness row's
@@ -414,7 +414,7 @@ class IngressTie:
 
     def known_tree(self, head: WR.CellsHead, port: str, rows: Sequence[bytes]) -> G.Registered:
         """Port `port`'s rows (one a unit, each its bytes) as the value the verifier registers at known content on
-        `head`'s link-window (`known`): row t under its public salt (`registered.supplied_salts`) in a tree whose
+        `head`'s execution phase (`known`): row t under its public salt (`registered.supplied_salts`) in a tree whose
         domain binds the registered Program and the warden's root. The prover commits its own rows of `port` the same
         way, so they open the verifier's root only where they are its rows."""
         if port not in KNOWN or len(rows) != self.T:
@@ -425,7 +425,7 @@ class IngressTie:
                                    window=head.root.hex())
 
     def known(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None) -> dict[str, G.Registered] | None:
-        """The values the verifier registers at known content on `head`'s link-window (`known_tree`): ``pub``, row t
+        """The values the verifier registers at known content on `head`'s execution phase (`known_tree`): ``pub``, row t
         the public row of bucket t's `lanes` (`public_arguments`), and ``o0``, every row the output word 1. None
         without a public row for every bucket."""
         args = None if lanes is None or len(lanes) != self.T else [self.public_arguments(ln) for ln in lanes]

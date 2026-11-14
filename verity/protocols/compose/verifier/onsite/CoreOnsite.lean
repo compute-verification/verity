@@ -10,7 +10,7 @@ budgets), work by proof of useful work over the period (`PouwCheck.Period.protoc
 period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network certifier over the period
-(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound
+(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's execution phases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others

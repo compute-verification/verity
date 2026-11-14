@@ -7,13 +7,13 @@ round's: honest accepted with every output 1, its state and view chains wires th
 ingress member refused at unit A's o1, as is any state tree that skips, repeats or alters a transition, and
 tampered's egress member at the re-signed row ("does not open"); unread's one ingress unit, at a request's anchor
 with its slot entry unread, every read held and
-its output 0, its state and view the honest ones. A group of link-windows (IO-TIE's) is one registration, a member a
-template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
+its output 0, its state and view the honest ones. A group of execution phases (IO-TIE's) is one registration, a member a
+template and execution phase, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
 ``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
 challenger's coins (``--challenger``): its flags refused by name where they can't sample, the group's root bound to the
-warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
+warden's signed execution phases, and its Spec what the round's registration shows (`service.check_public`) over the units
 its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
 egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 from __future__ import annotations
@@ -179,10 +179,10 @@ def test_a_state_tree_that_skips_or_alters_a_transition_is_refused_where_its_uni
     assert all(m.refused is None for m in honest) and sz.wired(honest) == []
 
 
-def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
-    """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
+def test_a_group_of_phases_is_one_registration_a_member_a_window(tmp_path):
+    """The I/O tie's group (``--group G``) at the test class: execution phases 0 and 1 in one registration, the state and
     view trees G·T leaves (the state tree the group's window state, from bucket 0) and the slot entries NR a boundary of
-    the group, each member's warden port its own link-window's registration, the group's last ingress unit a member of
+    the group, each member's warden port its own execution phase's registration, the group's last ingress unit a member of
     its own, and the chains running across the windows."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)
@@ -210,7 +210,7 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
     assert [m.name for m in h.rounds["chain"] if m.refused] == sz.targets(at, "chain") == ["ingress-0"]
     assert [m.name for m in h.rounds["tampered"] if m.refused] == sz.targets(at, "tampered")
     assert [(m.name, m.buckets, m.outputs) for m in h.rounds["unread"]] == [("ingress-0", [4], [0])]
-    with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
+    with pytest.raises(SystemExit, match="a group is 1 or more execution phases"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
 
@@ -575,7 +575,7 @@ def _cells(run: Path) -> dict[tuple[str, int], dict]:
             for d in map(json.loads, (run / "cells.jsonl").read_text().splitlines()) if "registration" in d}
 
 
-def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp_path):
+def test_the_registration_names_each_phases_warden_rows_its_ports_read(tmp_path):
     """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
     and domain): a G = 2 group's honest round names, as ``rows/<direction>/<w>``, each of the four row registrations
     of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them); the tampered round,
@@ -648,7 +648,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
         "registered reads: the statement names port o9 registered, and the verifier's registered reads do not")
 
 
-def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
+def test_each_phases_answer_is_one_stages_on_the_groups_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
     stratified over the three templates, its bound 0, for the group's registration, and the tied values R8 let through
@@ -677,14 +677,14 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog0", "prog1"]}
     (level,) = CC.integrity(a["profile"])["levels"]
     assert level["draw"]["law"] == "stratified" and sum(s["k"] for s in level["draw"]["strata"]) == N == level["size"]
-    why = "the scan's audit of link-windows [0, 1] refused: egress-1: registered reads: table row 3 does not open"
+    why = "the scan's audit of execution phases [0, 1] refused: egress-1: registered reads: table row 3 does not open"
     r = SA.window_answer(reg, None, sz.Fraction(1, 100), why)
     assert CC.answer_of(r)["verdict"] == "reject" and r["reason"] == why and r["commitment"] == a["commitment"]
     with pytest.raises(SystemExit, match="another registration"):
         SA.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
 
 
-def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming_its_failed_checks(tmp_path):
+def test_an_audit_refused_with_every_member_held_answers_each_phase_naming_its_failed_checks(tmp_path):
     """`answers` of a round whose members Lean all held but whose audit refused (a check of the record's own, say its
     registered reads): each execution phase's answer is the reject of the round's registration, its reason the failed
     checks and their codes, and its registrations its own two."""
@@ -695,7 +695,7 @@ def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming
     (out / "registration.json").write_text(json.dumps(reg))
     res = {"window_accepted": False, "why": {"lean-verify/egress-0": None}, "failed": {"registered": ["registered"]}}
     got = sz.answers(h.at, out.parent, res, sz.Fraction(1, 100))
-    why = "the scan's audit of link-windows [0, 1] refused: check registered: registered"
+    why = "the scan's audit of execution phases [0, 1] refused: check registered: registered"
     assert got == {"verdict": "reject", "bound": None, "reason": why, "commitment": R.digest(reg)}
     doc = json.loads((out.parent / "answers.json").read_text())
     assert [x["window"] for x in doc["windows"]] == [0, 1] and all(x["answer"]["reason"] == why for x in doc["windows"])
@@ -733,7 +733,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 
 
 @pytest.mark.slow
-def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
+def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkCheck.Period`; its Lean checks
     the case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase
     0, and its schedule (its integer fields, the id egress form's), the registered Program and its
@@ -971,7 +971,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         got = PC.reference(SP.rows_case(run, scan))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {why}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
-    with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
+    with pytest.raises(SystemExit, match="a group of 2 execution phases .* scan_zk.py --group 1"):
         SP.rows_case(run, scan)
     (run / "deployment.json").write_text(json.dumps({**dep, "params": {**dep["params"], "egress": "bytes"}}))
     with pytest.raises(SystemExit, match="the period check's schedule is the id egress form's, not 'bytes''s"):
@@ -1139,7 +1139,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     grid[t][j] = bytes(frame)
     _rewrite(run / "responses.records", [RF.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
-    with pytest.raises(SystemExit, match="egress link-window 0's record under cells.salts isn't the rows whose root "
+    with pytest.raises(SystemExit, match="egress execution phase 0's record under cells.salts isn't the rows whose root "
                                          "the warden signed"):
         sz.host(tmp_path / "h1", run)
 
@@ -1148,7 +1148,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     dep = json.loads((run / "deployment.json").read_text())
     dep["key"] = json.loads((other / "deployment.json").read_text())["key"]
     (run / "deployment.json").write_text(json.dumps(dep))
-    with pytest.raises(SystemExit, match="ingress link-window 0's registration doesn't verify under the deployment's "
+    with pytest.raises(SystemExit, match="ingress execution phase 0's registration doesn't verify under the deployment's "
                                          "key and session"):
         sz.host(tmp_path / "h2", run)
 
@@ -1188,7 +1188,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (["--challenger", "gate:research@h", "--draw", "16", "--main", "m.txt", "--peer", "p"],
      "needs --peer and --challenger-key"),
     (["--challenger", "local", "--draw", "16"], "needs --main"),
-    (["--group", "0"], "--group is 1 or more link-windows"),
+    (["--group", "0"], "--group is 1 or more execution phases"),
 ])
 def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
     with pytest.raises(SystemExit):
@@ -1196,7 +1196,7 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
 
 
-def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
+def test_the_window_root_is_the_wardens_signed_phases(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
     read from its published registrations alone, and a group's covers each of its execution phases."""
     syn = sz.link(tmp_path / "syn")

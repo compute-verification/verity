@@ -12,13 +12,13 @@ and its Lean.
   `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `relay_check.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
-  the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
+  the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits an execution phase, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
   (``cells.jsonl``, as ``answers.json`` carries them), and the listed entry's session's signed start
   (``deployment.json``'s ``start``, which the period check reads for each listed entry: a run whose deployment holds
-  none is refused). The rows form reads a registration of one link-window's 2T
+  none is refused). The rows form reads a registration of one execution phase's 2T
   units, so a group of more is refused, the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
   and its ``scan/state`` that audit's, and that audit must run the class circuit, the parameters' ``circuit``
   (`heldChecks`): the stand-in block audit's own Program here.
@@ -86,14 +86,14 @@ def certificates(run: Path, w: int) -> list[dict]:
         link, d = RC.CERTIFIED[name]
         got = [c for c in docs if (c["link"], c["direction"], c["window"]) == (link, d.value, w)]
         if len(got) != 1:
-            raise SystemExit(f"{run}: link-window {w}'s {name} record has {len(got)} certificates, not 1")
+            raise SystemExit(f"{run}: execution phase {w}'s {name} record has {len(got)} certificates, not 1")
         out.append({k: got[0][k] for k in CERTIFICATE_KEYS})
     return out
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
               circuit: str | None = None, answers: Path | None = None) -> dict:
-    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    """The rows form's case (module docstring) of the warden run ``run``'s execution phase, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
@@ -117,8 +117,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     elif circuit is None and doc.get("audits"):
         circuit = doc["audits"][0]["registration"]["program"]
     if len(doc["windows"]) != 1:
-        raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
-                         "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
+        raise SystemExit(f"{scan}: a group of {len(doc['windows'])} execution phases is one registration over all their "
+                         "units, and the rows form reads one execution phase's 2T: prove each with scan_zk.py --group 1")
     (x,) = doc["windows"]
     if round_ in ("honest", "forged"):
         reg, answer = doc["registration"], x["answer"]

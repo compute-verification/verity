@@ -65,7 +65,7 @@ def test_a_period_answer_is_the_block_records_certifier_leg():
                                                             "1/1000000": _not_held("1/500000", "1/1000000")}
     answer = ANSWERS[ROWS_RUN]["answers"]["1/100"]
     with pytest.raises(ValueError, match="certifies no K"):
-        BC.block_leg(answer | {"verdict": "reject", "reason": "certificates: a link-window"}, server="n",
+        BC.block_leg(answer | {"verdict": "reject", "reason": "certificates: an execution phase"}, server="n",
                      runs=[ROWS_RUN])
     with pytest.raises(ValueError, match="not verity/certifier/v0"):
         BC.block_leg(answer | {"protocol": "verity/sampled-proofs/one-stage/v1"}, server="n", runs=[ROWS_RUN])

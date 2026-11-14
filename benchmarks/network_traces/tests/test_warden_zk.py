@@ -95,7 +95,7 @@ def test_the_programs_units_read_the_egress_cells_after_the_delay(at):
     assert at.reads == list(at.units.cells)
     q, first, k = next(c for c in at.opening.wiring.connections if c[0] == at.connection)
     assert k == max(c[2] for c in at.opening.wiring.connections) and k >= pads + UNITS
-    assert at.window == 0 or first > 0, "admitted in the link-window, so its first D·r cells are its delay's pads"
+    assert at.window == 0 or first > 0, "admitted in the execution phase, so its first D·r cells are its delay's pads"
     cells = [wz.cell_of(at, at.opening.rows[t], i) for i, t in enumerate(at.positions)]
     assert all(HEADER.unpack_from(c)[1] == at.connection for c in cells)
     assert at.data_rows == sum(c[0] in (DATA, END) for c in cells) == UNITS

@@ -147,7 +147,7 @@ def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_m
 
 def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hour(host):
     """The gate's most requests, 1700, at height 13 (8192 one-time keys) take 60 minutes, a scan rehearsal's on its own
-    prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 link-windows and more
+    prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 execution phases and more
     (`wipe_gate.sh`)."""
     assert A.WARDEN_REQUESTS[1] == A.WARDEN_PROMPT_REQUESTS[1] == 1700 and A.warden_minutes(1700, 13) == 60
     for token, argv in (("ab12", []), ("cd34", ["--scan", "--prompts", "--tokens", "24"])):
@@ -158,7 +158,7 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
             {"requests": 1700, "minutes": 60, "height": 13}
 
 
-def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
+def test_a_warden_key_signs_five_a_phase_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
     """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     after one for the session's start, so height 12's 4096 sign the start and 819 windows, exactly, and 1031 (55 minutes
     of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next
@@ -176,7 +176,7 @@ def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_an
         {"requests": 1559, "minutes": 55, "height": 13}
     rc, out = gate(host, long + ["12"], stdin=b"[[1]]", started=[], token="cd34")
     assert rc == 3 and json.loads(out)["refused"] == (
-        "--height 12: 1559 requests take 1031 link-windows, 5156 one-time signatures (the session's start and 5 a "
+        "--height 12: 1559 requests take 1031 execution phases, 5156 one-time signatures (the session's start and 5 a "
         "window), past the key's 4096: give --height 13 or more, or fewer --requests")
     assert not (host.certifier / "c20261024T110000Z-cd34").exists()
     rc, out = gate(host, REQUEST[:-1] + ["60", "--scan", "--requests", "1700", "--height", "12"], started=[],

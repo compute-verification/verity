@@ -12,7 +12,7 @@ import all Init.Data.Array.DecidableEq
 # The record's encodings are injective
 
 Each string the check hashes determines what it encodes: a record head's encoding its head (`encode_inj`), a tagged
-input its payload (`taggedInput_inj`), a certificate message's input its key identifier, session, link-window and
+input its payload (`taggedInput_inj`), a certificate message's input its key identifier, session, execution phase and
 digest (`messageInput_inj`), a leaf's input its frame (`leafInput_inj`), a node's input its two children
 (`nodeInput_inj`); and a payload's bytes its bits, for whole bytes of bits (`bitsOfBytes_bytesOfBits`). Byte strings are read as their
 lists of bytes (`bs`, with the generic byte lemmas, in `Proofs.Flock.Bytes`), and an encoding is parsed field by field,

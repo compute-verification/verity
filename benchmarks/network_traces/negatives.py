@@ -27,14 +27,14 @@ verifier); the code is what the verifier establishes:
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
 - ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
-  (`certificate.Issuer`, which lists the link-window in `refused`), so the window has no certified record and the
+  (`certificate.Issuer`, which lists the execution phase in `refused`), so the window has no certified record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
-  row of the warden's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
+  row of the warden's ingress execution phase at selection All, `io_request.reference`: each lane's cells, read from its
   carry-in, are its connection's pads and canonical id-request cells, leaving its carry-out, on the verifier's lanes
   from the advice's prompt lengths and the warden's release; its verdict on every window, under the advice's digest
   and with the release giving `received`, is the tie, `tie_service.IoTieVerdict`),
-  ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection All over one egress link-window,
+  ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection All over one egress execution phase,
   `io_tie.reference_parts`: the network certifier's cells open under their root, the Commit's port rows of sampled ids
   open at each bucket's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0
   and the network certifier's admissions: a `PAD` or the `END` on its request's stream, B zero bytes in a slot no
@@ -172,7 +172,7 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
         return {"negative": "frame", "window": w, "row": t, "slot": j, "rows": len(rows), "cell_bytes": B,
                 "row_bytes": len(rows[t]), "code": WARDEN_READ, "honest_reads": honest, "tampered_reads": tampered,
                 "ok": honest and not tampered}
-    raise NotApplicable(f"{run}: no registered egress link-window with a data cell")
+    raise NotApplicable(f"{run}: no registered egress execution phase with a data cell")
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------

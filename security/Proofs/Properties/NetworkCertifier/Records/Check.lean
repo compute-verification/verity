@@ -46,11 +46,11 @@ import Proofs.Properties.NetworkCertifier.Records.Program
 import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
-# What the records check decides, link-window by link-window
+# What the records check decides, execution phase by execution phase
 
-A link-window's records are `recordsAt`'s (`found_toList`). An egress link-window with no violation has one complete
+An execution phase's records are `recordsAt`'s (`found_toList`). An egress execution phase with no violation has one complete
 record, an admitted sync, and a record that is the Program's (`egress_none`); an ingress one has one complete record,
-and a certified one's head is of the ingress grid (`ingress_none`). Conversely each such link-window has no violation
+and a certified one's head is of the ingress grid (`ingress_none`). Conversely each such execution phase has no violation
 (`egress_none_of`, `ingress_none_of`).
 -/
 
@@ -149,7 +149,7 @@ theorem mem_toLinks {e : Records.ByteEvidence} {link : Records.ByteLink} (h : li
   simp only [Records.ByteEvidence.toEvidence, Array.toList_map]
   exact List.mem_map.mpr ⟨link, h, rfl⟩
 
-/-- The Program's grid of an egress link-window, as `verdicts` reads it, under the syncs the link declares. -/
+/-- The Program's grid of an egress execution phase, as `verdicts` reads it, under the syncs the link declares. -/
 theorem expected_eq {p : Params} {link : Records.ByteLink} {syncs : Fin p.windows → ClockSync}
     (h : Declares link.toLink syncs) {w : Nat} (hw : w < p.windows) :
     (Records.expectedGridsOfBytes p.grid p.windows link).getD w #[] = programGrid p syncs link.toLink.frames w := by
@@ -158,7 +158,7 @@ theorem expected_eq {p : Params} {link : Records.ByteLink} {syncs : Fin p.window
         some (Check.expectedGrid p.grid p.windows link.toLink w) from
       expectedGridsOfBytes_eq _ _ _ ⟨w, hw⟩, Option.getD_some, expectedGrid_eq h]
 
-/-- **An egress link-window with no violation has its one complete record, the Program's.** -/
+/-- **An egress execution phase with no violation has its one complete record, the Program's.** -/
 theorem egress_none {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg : ByteArray} {l : String}
     {link : Records.ByteLink} {w : Nat} (hfit : EvidenceFits p e.toEvidence) (hl₀ : link ∈ e.links.toList)
     (hw : w < p.windows)
@@ -238,7 +238,7 @@ theorem egress_none {p : Params} {c : Records.Commitment} {e : Records.ByteEvide
       · cases hv
   | _ :: _ :: _, _, hv => simp at hv
 
-/-- **An ingress link-window with no violation has its one complete record**, and a certified one's head is of the
+/-- **An ingress execution phase with no violation has its one complete record**, and a certified one's head is of the
 ingress grid. -/
 theorem ingress_none {p : Params} {c : Records.Commitment} {ig : ByteArray} {l : String} {w : Nat}
     (hv : Records.ingressVerdict p c ig l w = none) : IngressRecord p c ig l w := by
@@ -258,7 +258,7 @@ theorem ingress_none {p : Params} {c : Records.Commitment} {ig : ByteArray} {l :
   | [.committed l' w' st dg], hR, hv => exact ⟨_, hR, statusViolation_none.mp hv, trivial⟩
   | _ :: _ :: _, _, hv => simp at hv
 
-/-- An egress link-window whose record is the Program's has no violation. -/
+/-- An egress execution phase whose record is the Program's has no violation. -/
 theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg : ByteArray} {l : String}
     {link : Records.ByteLink} {w : Nat} (hfit : EvidenceFits p e.toEvidence) (hl₀ : link ∈ e.links.toList)
     (hw : w < p.windows) (h : EgressRecord p c e.toEvidence eg l link.toLink w) :
@@ -303,7 +303,7 @@ theorem egress_none_of {p : Params} {c : Records.Commitment} {e : Records.ByteEv
     simp only [hb, hcv.1]
     rw [ite_eq_left (ba_beq.mpr rfl)]
 
-/-- An ingress link-window with its one complete record, a certified one's head of the ingress grid, has no
+/-- An ingress execution phase with its one complete record, a certified one's head of the ingress grid, has no
 violation. -/
 theorem ingress_none_of {p : Params} {c : Records.Commitment} {ig : ByteArray} {l : String} {w : Nat}
     (h : IngressRecord p c ig l w) : Records.ingressVerdict p c ig l w = none := by

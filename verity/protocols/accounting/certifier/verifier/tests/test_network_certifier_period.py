@@ -1,4 +1,4 @@
-"""N2's period sample (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
+"""N2's period sample (`TransferBlocks.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
 period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
 proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample

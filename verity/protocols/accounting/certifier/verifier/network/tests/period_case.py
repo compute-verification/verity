@@ -18,7 +18,7 @@ phase (`scan_ok.constants` and `held`), and the scan's terms read off its Progra
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
 check reads: parameters naming a `sync_set` (the clock form's) are refused before anything else is read. Public is `K`
-and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' scans, all at one δ), each with its
+and its terms over `MonitoringPeriodLeakAccepted`'s windows (the execution phases' scans, all at one δ), each with its
 `delta`, and `eps`, the union of those deltas as an exact ratio string, and the schedule's response cap
 (`max_tokens_cap`) when it has one.
 
@@ -41,15 +41,15 @@ first listed entry and the next for each later one. `restart` lists the signer's
 holding some of the period, and is accepted. Refused: that list with the second session's base another
 (`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
-shows a start too few or too many, or none (`start-count`). The link-windows of one link from the execution phase
-`first`, each link-window's ingress and egress rows committed and registered under a small sampled schedule
+shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
+`first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
 connection), and
 the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
-and domain of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1`
+and domain of chunk j's entries port of that execution phase's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1`
 at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan
 slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
@@ -72,7 +72,7 @@ sample (a work sampling design's) and its bound on incorrect proof blocks, every
 `prog` is tied to, or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part
 (`tied-partial`, a stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`,
 `subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`,
-`tied-slots-sampled`), and a link-window whose scan's state is not its
+`tied-slots-sampled`), and an execution phase whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`), as is one whose units read their state off the chain
 (`state-misindexed`, `MISREADS`) and one whose row 0 isn't opened to the empty state (`state-unpinned`, `UNPINS`).
@@ -275,7 +275,7 @@ class Params:
 @dataclasses.dataclass(frozen=True)
 class Scan:
     """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
-    entries, `_wired`, whose free inputs a link-window's term counts, `_tied_audits`), the bits one ingress and one
+    entries, `_wired`, whose free inputs an execution phase's term counts, `_tied_audits`), the bits one ingress and one
     egress instance commit, and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
     steps: int
     free: int
@@ -286,7 +286,7 @@ class Scan:
 
 @dataclasses.dataclass(frozen=True)
 class Commitment:
-    """One-stage's registration records of the audits and the link-windows, as they decode."""
+    """One-stage's registration records of the audits and the execution phases, as they decode."""
     audits: list[dict]
     windows: list[dict]
     bytes: bytes
@@ -609,7 +609,7 @@ def _audit(a, ctx: str) -> Audit:
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
-    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
+    form of the schedule's execution phase in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
     with a row among its parameters (the checker form) refused first, and an ingress return that is not a u16, a
     state of `sin`'s leaves and a view of the egress `state`'s (`_ingress_return`), the rows the scan's two ties
     equate. Then what `NetTiming.BoundaryGates.Fits` asks: the
@@ -786,7 +786,7 @@ def params(j) -> Params:
     scan = _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
-        raise D.Reject("windows: a period has at least one link-window")
+        raise D.Reject("windows: a period has at least one execution phase")
     if not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
     if list(cells) != schedule.rows_cells(windows):
@@ -812,7 +812,7 @@ def commitment(b: bytes) -> Commitment:
     j = P.canonical_json(b)
     _exactly(j, ["audits", "windows"], "the object")
     return Commitment([_registration(x, "an audit's registration") for x in _of(j["audits"], list, "audits")],
-                      [_registration(x, "a link-window's registration") for x in _of(j["windows"], list, "windows")], b)
+                      [_registration(x, "an execution phase's registration") for x in _of(j["windows"], list, "windows")], b)
 
 
 def _answer(j, ctx: str) -> dict:
@@ -872,7 +872,7 @@ def evidence(b: bytes) -> tuple[list[dict], list[Window], list[CertifiedStart]]:
     if not shown:
         _exactly(j, ["audits", "windows"], "the object")
     answers = [_answer(a, "an audit's answer") for a in _of(j["audits"], list, "audits")]
-    windows = [_window(x, "a link-window") for x in _of(j["windows"], list, "windows")]
+    windows = [_window(x, "an execution phase") for x in _of(j["windows"], list, "windows")]
     starts = [_start(x, "a start") for x in _of(j["starts"], list, "starts")] if shown else []
     if shown and not starts:
         raise D.Reject('starts: none: evidence that shows no session\'s start has no "starts"')
@@ -1243,12 +1243,12 @@ def _prog_tied(audits: list[dict], reg: dict) -> bool:
 
 
 def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
-    """`tiedIn`: some link-window's `prog` is audit `i`'s output (`_tied_audits`)."""
+    """`tiedIn`: some execution phase's `prog` is audit `i`'s output (`_tied_audits`)."""
     return any(i in _tied_audits(audits, reg) for reg in windows)
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
-    """The rows form's certified records of a link-window (`relay_check.CERTIFIED`): requests, responses, fails."""
+    """The rows form's certified records of an execution phase (`relay_check.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
@@ -1376,9 +1376,9 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
 
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], charged: list[Facts] = ()) -> dict:
-    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the link-windows' scans (`scans`, each its facts,
+    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the execution phases' scans (`scans`, each its facts,
     its tied audits' free inputs and its `β_w`), where a compute audit's own terms are in none, a tied audit's free
-    inputs are in its link-window's `free` and its incorrect proof blocks in its `faulty_entries`, and the δ of a tied
+    inputs are in its execution phase's `free` and its incorrect proof blocks in its `faulty_entries`, and the δ of a tied
     audit sampled in part (`charged`) is in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     s = p.scan
@@ -1396,11 +1396,11 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], c
 def check(p: Params, c: Commitment, e) -> tuple:
     audits, windows, starts = e
     if len(c.windows) != p.windows:
-        return REJECT, "the commitment registers another number of link-windows"
+        return REJECT, "the commitment registers another number of execution phases"
     if len(c.audits) != len(p.audits):
         return REJECT, "the commitment registers another number of audits"
     if len(windows) != len(c.windows):
-        return REJECT, "evidence: another number of link-windows"
+        return REJECT, "evidence: another number of execution phases"
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts, scans = _start_checks(p, starts), [], []
@@ -1575,7 +1575,7 @@ def _refused(answer: dict, verdict: str) -> dict:
 
 #: The schedule's fields that leave its rows' shape (B, S, T) as it is: a change to one changes only its digest.
 SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "queue")
-#: The orders of a link-window's three records' certificates other than their own.
+#: The orders of an execution phase's three records' certificates other than their own.
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
@@ -1832,7 +1832,7 @@ UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
 #: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,
 #: `RENAMED_SELECT_ENTRY`)
 UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
-#: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
+#: How `rows-state-untied` breaks its execution phase's tie of the scan's state to its wired audit's `SCAN_STATE` while its
 #: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, beside a second, or
@@ -2054,9 +2054,9 @@ def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[
 
 def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, untie: str | None,
                     unwire: str | None = None, hit: int = 0) -> list[dict]:
-    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, each lane's chunk's entries port
+    """Audit `i`'s registration's `roots`: for each execution phase's `prog` tied to it, each lane's chunk's entries port
     its tie names at the chunk's root and domain (`nb` leaves, a timestep's row each), and an input port's entry at
-    another root; at link-window `aimed`, every chunk's broken as `untie` says, or lane `hit`'s as `unwire` says."""
+    another root; at execution phase `aimed`, every chunk's broken as `untie` says, or lane `hit`'s as `unwire` says."""
     out = []
     for w, x in ties.items():
         if x["audit"] != i or (w == aimed and untie == "scan"):
@@ -2143,7 +2143,7 @@ def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few link-windows
+    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few execution phases
     and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
@@ -2164,7 +2164,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a link-window's own audit, and at times one no link-window ties, which may leave units unsampled
+    # an execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1)))
     first = r.choice([0, 0, r.randrange(1, 6)])
     if m in SECOND and first == 0:
@@ -2229,9 +2229,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     if untie == "untyped":
         for c in ties[first + t]["chunks"]:
             c["root"] = rp.choice([None, 7, False])
-    # the lane whose wiring the aimed link-window's `unwire` breaks
+    # the lane whose wiring the aimed execution phase's `unwire` breaks
     hit = rp.randrange(lanes) if lanes else 0
-    # the changes that sample the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
+    # the changes that sample the aimed execution phase's audit stratified by its templates, its slot entries' and scan slots'
     # whole (`tied-partial`) or one of them in part
     by_template = m in ("tied-partial", "tied-entries-sampled", "tied-slots-sampled")
     if m in ("tied-sampled", "tied-oversampled", "tied-stratum-oversampled", "tied-strata-sizes") or by_template:
@@ -2987,7 +2987,7 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0) -> dict:
-    """A small period (`build(..., small=True)`: the toy key, as few link-windows and audits as its change needs) aimed
+    """A small period (`build(..., small=True)`: the toy key, as few execution phases and audits as its change needs) aimed
     at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)

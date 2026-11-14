@@ -40,7 +40,7 @@ Where each part is stated in Lean:
 
 N2's count check reads the head leaf of N2's commitment and holds the head to the network certifier's grid and digest. Another
 check that reads the same leaf is tied to N2's only under three conditions, each of which holds:
-1. The root is registered before either check's coins or samples (the ZK server's registration, `LinkWindows.commit`).
+1. The root is registered before either check's coins or samples (the ZK server's registration, `TransferBlocks.commit`).
 2. The leaf index, 2 + d, is fixed by the execution phase's direction (`service.HEADS`), which is public structure, not
    something the prover chooses.
 3. SHA-512 is collision resistant, as hiding commitments in frame-v3-sha512 trees already assume.
@@ -61,7 +61,7 @@ The certificate's signature reads no hash of witness. The certifier signs
   the head alone);
 - each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
 - the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window) and
-  `D`, a hiding commitment to `R`. The in-the-clear check (`LinkWindows.clear`, a debug comparison) also checks `D`
+  `D`, a hiding commitment to `R`. The in-the-clear check (`TransferBlocks.clear`, a debug comparison) also checks `D`
   against the head and `salt_c` over the opening (`CertifiedRecord.verify`).
 
 ## The certifier (`grid`)
@@ -173,7 +173,7 @@ on the signature's unforgeability, and on an honest certifier.
 ## Through the proof system (`service`)
 
 One execution phase's certificates are registered through the proof system
-(`verity.protocols.proofs.spot.verifier.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
+(`verity.protocols.proofs.spot.verifier.service`) as a `Spec` of its own (`service.TransferBlocks`, one per link):
 - **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress certified records,
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
   certificate), and their heads,
@@ -184,15 +184,15 @@ One execution phase's certificates are registered through the proof system
   certificate, a certifier's salt or a head.
 - **Selection:** `All`. A registration is one execution phase, one proof block, so an accepted outcome is the exhaustive
   fact. The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
-  registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the execution phase.
-- **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε
+  registration's order (`TransferBlocks.register`): the receipt keeps the order, and the order is the execution phase.
+- **The network verdict of record** is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε
   or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
-  the link (`LinkWindows.windows`), the w-th registration is window w and its outcome of
+  the link (`TransferBlocks.windows`), the w-th registration is window w and its outcome of
   record accepted. A rejected or late window,
   a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
   run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
   their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
-  Python model, not the verifier) builds no `LinkWindows` outcomes, so its account doesn't read this
+  Python model, not the verifier) builds no `TransferBlocks` outcomes, so its account doesn't read this
   aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
   charged at its link's line rate (`refused_bits`).
 - **Public** (`service.PUBLIC`): the population, the window, the value's leaf count, domain and salted root, the
@@ -200,15 +200,15 @@ One execution phase's certificates are registered through the proof system
   the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A
   rejected execution phase shows only the service's `reject`; the violation's kind stays in the verifier. A registration
   with any other field, a second root, a root entry with another key, or anything more in `window` is refused.
-- **The check** is `LinkWindows.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, over the two certificates' signed
+- **The check** is `TransferBlocks.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, over the two certificates' signed
   digests (``egress``, ``ingress``) and each end's head check's other parameters but its direction, which the proof
   block fixes (egress 0, ingress 1). Its output is two bits: ``verdict``, the AND of the two head checks, and
   ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the verifier
-  checks them on their public fields (`LinkWindows.certified`: each verifies under the certifier's key in its session,
-  `LinkWindows.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
+  checks them on their public fields (`TransferBlocks.certified`: each verifies under the certifier's key in its session,
+  `TransferBlocks.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
   states the proof block on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
-  certifier's salt) and the output row ``o0``, one u16 word (`LinkWindows.layout`, `service.OUT_BITS`), its circuit
-  `LinkWindows.proof_block`. The head check is a Boolean Definition,
+  certifier's salt) and the output row ``o0``, one u16 word (`TransferBlocks.layout`, `service.OUT_BITS`), its circuit
+  `TransferBlocks.proof_block`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
   root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and window are the
@@ -237,14 +237,14 @@ One execution phase's certificates are registered through the proof system
 - **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
-- **Its verifier** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
+- **Its verifier** is `TransferBlocks.verify`, which decides on the delivered proof (`service.Delivered`) and
   public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered proof block (every
   gate names a pinned digest and every session names the registered Program, the partition object's `program`,
-  `LinkWindows.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the
-  verifier's own copy (`LinkWindows.public_arguments`: the registered root, the execution phase's public fields and both
+  `TransferBlocks.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the
+  verifier's own copy (`TransferBlocks.public_arguments`: the registered root, the execution phase's public fields and both
   signed digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
-  certificates verify (`LinkWindows.certified`); and the window's declared sync is one of Σ_sync. It receives the
+  certificates verify (`TransferBlocks.certified`); and the window's declared sync is one of Σ_sync. It receives the
   registration, the sample, the certificates' public fields and signatures (from the certifier, beside the proof
   system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
@@ -254,11 +254,11 @@ One execution phase's certificates are registered through the proof system
   claim is the heads' only: both are the network certifier's, on its grid under its parameters digest. The egress grid
   is the head's counts filled with its frames in order, and the head's digest binds both, so the frames are the rest of
   the grid, and nothing in this protocol holds them (the scan does).
-- **The in-the-clear check** is `LinkWindows.clear`, over the opening: the opening reproduces the registered root,
+- **The in-the-clear check** is `TransferBlocks.clear`, over the opening: the opening reproduces the registered root,
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), the opening's two
-  certificates hold under the certifier's key in its session (`LinkWindows.certified`), and both heads met their
+  certificates hold under the certifier's key in its session (`TransferBlocks.certified`), and both heads met their
   deadline. It is a debug comparison (`verify(…, opening=…)`, off by default, which
-  decides nothing) and the tests' reference. `LinkWindows.unproved_outcome` decides a run that proves nothing (a
+  decides nothing) and the tests' reference. `TransferBlocks.unproved_outcome` decides a run that proves nothing (a
   rehearsal, the simulator) on it, its verdict ``"decided_by": "clear"``, never zero-knowledge.
 
 What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered proof
@@ -2190,7 +2190,7 @@ to the verifier: the network certifier's named gap "The cells' wiring is open to
 closes it.
 
 **How the other readers of the certifier's rows differ:**
-- N2's head checks: the prover commits each record head as one row (`LinkWindows.commit`: one-stage's served domain,
+- N2's head checks: the prover commits each record head as one row (`TransferBlocks.commit`: one-stage's served domain,
   fresh salts). The proof block opens it in-circuit (`FrameV3Read`) and recomputes the certificate's salted digest
   in-circuit.
 - The I/O tie's prototype (`io_tie.py`): these rows (`window_rows`), the network certifier's own cells, with a `PAD` on the

@@ -4,11 +4,11 @@ here. It is the manifest alone: the device's party and the `ProtocolDef` are `..
 
 ~~~text
 network-certifier -> workers    out-opening {link, window}, the output value's witness its body (private)
-                                records {link, window, record}, a link-window's packed record its body (private)
-                                cells-salts {link, window}, the link-window's rows' salts and wiring's its body (private)
+                                records {link, window, record}, an execution phase's packed record its body (private)
+                                cells-salts {link, window}, the execution phase's rows' salts and wiring's its body (private)
 network-certifier -> verifier   out-record {link, window}, the output value's record its body
-                                certificate {link, window}, a link-window's certificate its body
-                                registration {link, window}, the link-window's rows' registration its body
+                                certificate {link, window}, an execution phase's certificate its body
+                                registration {link, window}, the execution phase's rows' registration its body
                                 load {}, the load's signed registrations its body
                                 deployment {}, the run's key, session, schedule and origin its body (structure)
                                 groups {}, a grouped run's requests and execution phases its body (structure)
@@ -36,10 +36,10 @@ execution phase ``(link, window)`` their heads name:
 
 The device's run hands out the rest, each a message of its kind on the same two channels:
 
-- ``certificate`` carries a line of the run's ``certified.jsonl``: a link-window's record certified under the link's
+- ``certificate`` carries a line of the run's ``certified.jsonl``: an execution phase's record certified under the link's
   name and direction, or that execution phase refused. Public, as ``out-record`` is: what it signs is a hiding
   commitment.
-- ``registration`` carries a line of ``cells.jsonl``: the link-window's rows' signed head (`warden_rows.registration`),
+- ``registration`` carries a line of ``cells.jsonl``: the execution phase's rows' signed head (`warden_rows.registration`),
   or that execution phase refused, and its cost (the rows and a row's bytes). Public: its root is a hiding commitment.
   It carries no device timing, which varies with what was committed: the device keeps those with its witness.
 - ``load`` carries ``load.json``: the load's registrations, one a value of its shape, under the key and session that
@@ -49,8 +49,8 @@ The device's run hands out the rest, each a message of its kind on the same two 
   address: where the device listened and what it relayed to are a local file beside it, which no party is handed.
 - ``groups`` carries a ``--window-per-group`` run's ``groups.json``: each group's request indices and its execution
   phases, which the schedule and the requests' public counts fix. Protocol structure, so public.
-- ``records`` carries one of a link-window's three records (``record``: ``requests``, ``responses`` or ``fails``), packed
-  as the device keeps it, and ``cells-salts`` the link-window's rows' salts and the wiring's (`warden_rows.read_witness`).
+- ``records`` carries one of an execution phase's three records (``record``: ``requests``, ``responses`` or ``fails``), packed
+  as the device keeps it, and ``cells-salts`` the execution phase's rows' salts and the wiring's (`warden_rows.read_witness`).
   Both are the prover's witness: private.
 
 A head's ``link`` is the link's name as the certificate signs it and its ``window`` the window's index, a u64
@@ -74,7 +74,7 @@ NETWORK_CERTIFIER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIF
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"
 CERTIFICATE, REGISTRATION, LOAD, RECORDS, CELLS_SALTS = "certificate", "registration", "load", "records", "cells-salts"
 DEPLOYMENT, GROUPS = "deployment", "groups"
-#: a link-window's three records, by the name its ``records`` message's head gives
+#: an execution phase's three records, by the name its ``records`` message's head gives
 RECORD_NAMES = ("requests", "responses", "fails")
 #: a frame's largest body (`channel.HEADER`: a u32 length) in whole salts: the most rows one opening carries
 MAX_OPENING = ((1 << 32) - 1) // O.SALT_BYTES * O.SALT_BYTES
@@ -83,9 +83,9 @@ MAX_RECORD = 1 << 20
 #: a load's document: a registration (a head and one certificate, at most `MAX_RECORD`) for each value of its shape,
 #: room for 1,024
 MAX_LOAD = 1 << 30
-#: a frame's largest body (`channel.HEADER`: a u32 length): a link-window's packed record
+#: a frame's largest body (`channel.HEADER`: a u32 length): an execution phase's packed record
 MAX_PACKED = (1 << 32) - 1
-#: a link-window's rows' salts and the wiring's, a whole number of the wiring's salt bytes, which a row's are a multiple of
+#: an execution phase's rows' salts and the wiring's, a whole number of the wiring's salt bytes, which a row's are a multiple of
 MAX_SALTS = MAX_PACKED // WR.WIRING_SALT_BYTES * WR.WIRING_SALT_BYTES
 _HEAD = {"link": Str(255), "window": Int(0, (1 << 64) - 1)}
 MANIFEST = Manifest(

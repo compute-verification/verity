@@ -1,5 +1,5 @@
 """The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
-`verity.protocols.accounting.certifier.verifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
+`verity.protocols.accounting.certifier.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
 residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
@@ -8,7 +8,7 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
-* **Bits per link-window** (`bits`), T the honest run's egress window in buckets: v0's (I1's
+* **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
   `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
   trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
@@ -21,7 +21,7 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   run's windows are bound to it (each window opened to its registered root, every certified request admitted in
   exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
   chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
-  (`endpoint_config`), its bits placed in the run's link-windows.
+  (`endpoint_config`), its bits placed in the run's execution phases.
 * **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
@@ -218,7 +218,7 @@ def _first_steps(recs: list[dict]) -> dict[int, float]:
 def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: int, eos: list[int]) -> tuple[dict, dict]:
     """The endpoint's own advice for the honest run, as `advice` and `bits` report one: ``adv_dir`` is `verity-vllm
     advice`'s over the endpoint's records ``ep`` (`ENDPOINT`), one window advice (`window_advice`) a closed Commit
-    window. The run's windows are those whose first step falls in its link-windows (``deployment``'s origin and span,
+    window. The run's windows are those whose first step falls in its execution phases (``deployment``'s origin and span,
     `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
     I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
     registered advice closed them, never its own string's, so each request and step is charged once. The advice is
@@ -228,7 +228,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
     config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
     window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
-    the link-windows of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
+    the execution phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
     window's row."""
     recs = _jsonl(ep / "advice_trace.jsonl")
     serve = json.loads((ep / "serve.json").read_text())
@@ -313,7 +313,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
                               else None for k in COUNTS})
     missing, twice = [u for u, n in seen.items() if n == 0], [u for u, n in seen.items() if n > 1]
     if not rows:
-        problems.append("no Commit window of the endpoint's opened in the run's link-windows")
+        problems.append("no Commit window of the endpoint's opened in the run's execution phases")
     if missing:
         problems.append(f"{len(missing)} certified requests are in none of the run's Commit windows ({', '.join(missing[:3])})")
     if twice:
@@ -609,7 +609,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
     if not varied_client:
         out.append("Varied traffic: no varied plan (Poisson arrivals, prompts as ids, real EOS) ran.")
     if r.get("profile") == ADVICE:
-        out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no link-window has N2's verdict "
+        out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no execution phase has N2's verdict "
                    "and nothing is proved by n2_zk; the rehearsal's own check (certified I/O, audit, salt) is the "
                    "verdict.")
     a, b = c.get("advice"), c.get("bits") or {}
@@ -746,7 +746,7 @@ def markdown(c: dict) -> list[str]:
     if served:
         lines += ["", "## Advice", "",
                   (f"The endpoint's own ({b['served']}): `verity-vllm advice` over its records, one window advice a "
-                   f"closed Commit window, at {a['file']}. The run's Commit windows (those opening in its link-windows): "
+                   f"closed Commit window, at {a['file']}. The run's Commit windows (those opening in its execution phases): "
                    f"{a['windows']}, with {a['requests']} requests, {a['steps']} steps, {a['outputs']} kept outputs, "
                    f"{a['bits']} bits in v0." if a else "The endpoint's own: none.")
                   + f" Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'every window opened to its registered root under its Commit, every advice request a certified one, each admitted in one window'})."
@@ -755,7 +755,7 @@ def markdown(c: dict) -> list[str]:
                      + ", ".join("–".join(map(str, c)) for c in b["chains"]) + "): each chain's v0 and derived bits "
                      "are on its first window's row, the committed bits each window's own string's."
                      if b.get("chains") else ""),
-                  "", "| Commit window | Commit run id | opens at s | link-window | requests admitted | carried in | "
+                  "", "| Commit window | Commit run id | opens at s | execution phase | requests admitted | carried in | "
                   "steps | committed bits | v0 bits | derived bits | derived, shaped | forced | opened | bound | rebuilt |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         lines += [f"| {x['window']} | refused: {x['refused']} |" + " — |" * 13 if "refused" in x else
@@ -771,7 +771,7 @@ def markdown(c: dict) -> list[str]:
                   f"{a['v0_sha512'][:16]}…. Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'by the certified I/O'})."]
     if b is not None:
         cfg = b["config"]
-        lines += ["", "## Advice bits per link-window", "",
+        lines += ["", "## Advice bits per execution phase", "",
                   f"T = {b['T']} buckets a window. v0: I1's `bits_by_window` ({b['v0_total']} bits in all). Derived: "
                   "the derived rules' residual at its least widths, charged by I1's rule, with the release sent "
                   "(unshaped) and derived (shaped); forced: the residual's fields only witness fixes. "
@@ -859,9 +859,9 @@ def markdown(c: dict) -> list[str]:
             lines += ["`negatives.tie_run` on each run: `io_tie`'s reference in the clear, the sampled ids from "
                       f"{t['from']}. Required on the advice profile: the report is OK only when the tie accepts the "
                       "honest run, its ids covering every certified request. Owed: honest accepted, token refused by "
-                      "content at exactly the link-windows its changed ids fall in, drop refused by content; late and "
+                      "content at exactly the execution phases its changed ids fall in, drop refused by content; late and "
                       "extra owe nothing here. Window -1: committed outputs no certified cell carries.", "",
-                      "| run | verdict | ok | codes | refused link-windows (parts) | changed ids' link-windows | requests "
+                      "| run | verdict | ok | codes | refused execution phases (parts) | changed ids' execution phases | requests "
                       "| outputs | placed | unplaced | frames held egress/ingress | why |",
                       "|---|---|---|---|---|---|---|---|---|---|---|---|"]
             for name, x in t["runs"].items():

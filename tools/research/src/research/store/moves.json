@@ -2464,6 +2464,11 @@
         "verity/protocols/accounting/certifier/verifier/device_needs.py": "verity/protocols/accounting/certifier/device/device_needs.py",
         "verity/protocols/accounting/certifier/verifier/device_party.py": "verity/protocols/accounting/certifier/device/device_party.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_link_window_lean.py": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py"
+      }
     }
   ]
 }

@@ -200,7 +200,7 @@ def _closed_heads(closed) -> dict:
 
 def _unsalted(out: Path) -> list[dict]:
     """`certified.jsonl` line by line without what the certifier's fresh `salt_c` decides (the salt, the salted digest
-    and the signature over it), with the signature's LMS leaf q kept, and a link-window the issuer refused as it is."""
+    and the signature over it), with the signature's LMS leaf q kept, and an execution phase the issuer refused as it is."""
     out_ = []
     for line in (out / "certified.jsonl").read_text().splitlines():
         doc = json.loads(line)

@@ -108,7 +108,7 @@ def released(allocation: int, enqueued: Sequence[int], queue: int = 0) -> list[i
 
 @dataclass(frozen=True, slots=True)
 class BlockGrid:
-    """W5: the network certificate of one link-window is exactly the grid and one status."""
+    """W5: the network certificate of one execution phase is exactly the grid and one status."""
 
     link: str
     window: int

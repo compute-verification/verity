@@ -1,13 +1,13 @@
 """`prove_path.kept_scan`: a served window's scan state and slots off the network certifier's run the certifier front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
-boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `warden_serve.Publisher` publishes a served one
+boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `warden_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
-2, so link-window 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
-fourth, admitted at bucket 5 and released in link-window 0, is anchored at 32, so link-window 1's Program 6 starts it.
-Each window's state rows are the scan's state tree's for its link-window. A window whose requests start in two
-link-windows, a request the network certifier didn't certify, a class whose window isn't its link-window or whose scan
+2, so execution phase 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
+fourth, admitted at bucket 5 and released in execution phase 0, is anchored at 32, so execution phase 1's Program 6 starts it.
+Each window's state rows are the scan's state tree's for its execution phase. A window whose requests start in two
+execution phases, a request the network certifier didn't certify, a class whose window isn't its execution phase or whose scan
 doesn't serve it, and a prompt past the class's prompt cap are refused by name; so are a kept run that won't read, one
-whose certified I/O isn't accepted or whose ingress link-windows aren't 0, 1, …, and certified I/O read with a request
+whose certified I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and certified I/O read with a request
 that has no END or without a request the scan starts. A serve dir with no kept run gives None, and the unpacked fetch
 is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they were (`prove_path.network_traces`),
 so a5's ``import replay`` still finds one_stage's where it did before. `prove_path.place_slots` places the window's
@@ -61,7 +61,7 @@ SESSION = bytes(range(32))
 
 def _served(users: Sequence[str] = USERS) -> ST.Served:
     """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at `ARRIVALS` and answered `RESPONSES`,
-    served through the network certifier over 2 link-windows at `CLASS`'s scan schedule."""
+    served through the network certifier over 2 execution phases at `CLASS`'s scan schedule."""
     scan = CLASS.scan
     params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
@@ -123,8 +123,8 @@ def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
 
 def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
     """The rows window-commit registers as the window's `SCAN_STATE` are the ones the network certifier's scan puts in
-    its state tree for the link-window (`scan_traffic.chain` over its own rows, then `ingress_scan.window_state`, as
-    scan_zk's `link` builds it), in link-window 0 and in link-window 1: what a period's check needs before it can tie
+    its state tree for the execution phase (`scan_traffic.chain` over its own rows, then `ingress_scan.window_state`, as
+    scan_zk's `link` builds it), in execution phase 0 and in execution phase 1: what a period's check needs before it can tie
     the two to one root."""
     served, T = _served(), CLASS.buckets
     states = ST.chain(CLASS.scan, *served.rows(), served.outputs).states[1:]
@@ -137,7 +137,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     """window-commit's `SCAN_STATE` (`window_rows.state_value` of the kept scan's rows, on NumPy, the reference)
     opened whole, prover only (`prove_path.scan_state_opening`), is the tree ``scan_zk.py --v3c`` reads as its state:
     `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's; another
-    link-window's rows are refused by name."""
+    execution phase's rows are refused by name."""
     from verity_vllm.program.predict import window_circuit as WC, window_rows as WRS
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
@@ -153,16 +153,16 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
     late, _ = PP.kept_scan(serve_dir, CLASS, USERS[3:])
-    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another warden run or link-window"):
+    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another warden run or execution phase"):
         SZ.v3c_state(tmp_path, rec, [list(r) for r in late])
 
 
 def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_path):
-    with pytest.raises(ValueError, match=r"start in the scan's link-windows \['0', '1'\], not one"):
+    with pytest.raises(ValueError, match=r"start in the scan's execution phases \['0', '1'\], not one"):
         PP.kept_scan(serve_dir, CLASS, USERS)
     with pytest.raises(ValueError, match="1 of the window's 2 requests are no certified request"):
         PP.kept_scan(serve_dir, CLASS, ["user-0", "user-9"])
-    with pytest.raises(ValueError, match="link-windows are 32 buckets, not a window of class .*'s 16"):
+    with pytest.raises(ValueError, match="execution phases are 32 buckets, not a window of class .*'s 16"):
         PP.kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="doesn't serve the warden at these parameters"):
         PP.kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
@@ -171,10 +171,10 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
     assert PP.kept_scan(tmp_path, CLASS, USERS) is None
 
 
-def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_refused_by_name(serve_dir, tmp_path):
+def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_by_name(serve_dir, tmp_path):
     """The kept run edited before it's packed: two kept runs, or a deployment.json whose digest isn't its parameters',
-    don't read; two requests naming one user leave its certified I/O unaccepted; and its second link-window's ingress
-    record kept as link-window 2 leaves its ingress link-windows 0 and 2."""
+    don't read; two requests naming one user leave its certified I/O unaccepted; and its second execution phase's ingress
+    record kept as execution phase 2 leaves its ingress execution phases 0 and 2."""
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
     with pytest.raises(ValueError, match="the certifier front's kept run: 2 warden runs kept"):
@@ -187,7 +187,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_re
         PP.kept_scan(twice, CLASS, USERS[:3])
     skipped = _kept(tmp_path / "skipped", _served(),
                     records=lambda kind, rec: replace(rec, window=2) if kind == "ingress" and rec.window == 1 else rec)
-    with pytest.raises(ValueError, match=r"the kept run's ingress records are link-windows \[0, 2\], not 0, 1, …"):
+    with pytest.raises(ValueError, match=r"the kept run's ingress records are execution phases \[0, 2\], not 0, 1, …"):
         PP.kept_scan(skipped, CLASS, USERS[:3])
     assert not list((tmp_path / "skipped" / "serve" / CP.PRIVATE / "RUN").glob("unpacked-*"))
 

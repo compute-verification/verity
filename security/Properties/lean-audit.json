@@ -2400,7 +2400,7 @@
   "Properties.NetworkCertifier.Check": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's execution phase verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Core.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],

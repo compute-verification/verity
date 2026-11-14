@@ -53,18 +53,18 @@ offset t0 − 1, with row −1, the first execution phase's, the empty state's, 
 `entry_bits`: `read` (1 bit), n (u32) and KO output ids of IDB bits (`entry_layout`), then zeros to a whole 16-bit word
 (71 words at w63's class), the row `SlotEntry_v1` writes. Entry j is the outputs of the
 Program in slot j of the boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and
-occupied (anchored at t, `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so a
-link-window's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n and
+occupied (anchored at t, `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so an
+execution phase's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n and
 `out` zero: an empty slot's outputs are masked by its occupancy word and never reach the egress. An occupied slot whose
 entry is absent (`read` 0) is refused: a request no Program reads would reach the server with no Program's outputs
 counting it. It is the form the Programs' outputs are tied to: a Program gives all its outputs at its anchor, and the
-slot holds them in `out` through its last egress bucket, past the link-window's end where that is later (a group's scan
-carries its state across its link-windows). In a link-window of nb = T / EVERY boundaries, bucket t's `prog<j>` reads
+slot holds them in `out` through its last egress bucket, past the execution phase's end where that is later (a group's scan
+carries its state across its execution phases). In an execution phase of nb = T / EVERY boundaries, bucket t's `prog<j>` reads
 row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of slot j at boundary
 ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
 its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
 these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
-absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
+absent entry holds against an honest prover only, and the period check refuses such an execution phase (`wired`), and one
 whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the
 window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and the next reads (its
 sin), both registered reads, so each row a Program reads is the one the scan's step computed from the row before.
@@ -606,10 +606,10 @@ def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: in
     of `rows` (S_0, S_1, … as the proof blocks register them), row −1 the empty state's. ValueError, naming the fix,
     unless the execution phase is whole slot strides and `rows` reach its last."""
     if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
-        raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
+        raise ValueError(f"an execution phase starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
                          f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")
     if t0 + buckets - 1 > len(rows):
-        raise ValueError(f"the link-window from {t0} reads state rows up to {t0 + buckets - 2}: register "
+        raise ValueError(f"the execution phase from {t0} reads state rows up to {t0 + buckets - 2}: register "
                          f"{t0 + buckets - 1} rows, not {len(rows)}")
     if any(len(rows[t]) != state_bits(cls) for t in range(max(t0 - 1, 0), t0 + buckets - 1)):
         raise ValueError(f"a state row is {state_bits(cls)} bits")

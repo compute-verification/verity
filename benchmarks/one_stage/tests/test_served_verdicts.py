@@ -377,7 +377,7 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
     said = json.loads(capsys.readouterr().out)
     assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
-    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one execution phase"}))
     assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
     assert "64" not in capsys.readouterr().out
     assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1

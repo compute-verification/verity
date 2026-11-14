@@ -124,7 +124,7 @@ A spec-level reference for network accounting's timing channel:
   the network certifier's (`service.WardenProfile`), and its claim is the heads' only: on every execution phase both
   are the network certifier's, on its grid under its parameters digest, so the link's timing is its schedule's.
   Nothing here holds the frames, the rest of the egress grid (the scan does). The network verdict of record is
-  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
+  `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
   link registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
 - one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
@@ -417,20 +417,20 @@ Every protocol is to be zero-knowledge. The network audit's claim is the heads' 
 execution phase to the network certifier's grid and parameters digest, so each window's per-bucket counts are its
 schedule's, beside the proved timing bound (provisional).
 
-N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
+N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkTransferBlocks` v5) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
-output row's verdict and deadline bits are 1, and the certificates verify on their public fields (`LinkWindows.certified`).
+output row's verdict and deadline bits are 1, and the certificates verify on their public fields (`TransferBlocks.certified`).
 It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
 certifier-serve run's execution phases this way through the link's own stream, and scans what the verifier received. The
-in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
+in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds, not a fifth kind.
-- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
+- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
+`TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/protocols/accounting/certifier/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
@@ -458,8 +458,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`), as `head_check.circuit-check.json` pins it and circuit-check holds the
-pin to the Definition. So the proof block's Program, which the spec and each registration bind, binds its circuit, and `LinkWindows.verify` refuses a proof that names any
-other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
+pin to the Definition. So the proof block's Program, which the spec and each registration bind, binds its circuit, and `TransferBlocks.verify` refuses a proof that names any
+other Program, or a proof block of a size class no sidecar pins (`TransferBlocks.proved`).
 
 The certificate signs no hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record

@@ -74,7 +74,7 @@ LINK, SESSION = "responses", bytes(range(32))
 SEED, CONNECTIONS, LONGEST, WINDOWS = 6, 14, 15, 6
 #: each member's outcome: accepted, or refused by Lean's registered reads
 MEMBERS = {"honest": "accepted", "lying": "does not open", "moved": "reads position"}
-#: the name under which the verifier registers its own values on a link-window (`known_o0`)
+#: the name under which the verifier registers its own values on an execution phase (`known_o0`)
 VERIFIER = "egress-zk/verifier"
 #: a ``--registered`` port's known content (Lean's `Registered.KNOWN_KEY`)
 KNOWN_KEY = "known"
@@ -102,7 +102,7 @@ def link(out: Path) -> SimpleNamespace:
                               out / "signer-state.json")
     cells, cert = WR.attest(Issuer(signer, SESSION), served.records[w], PARAMS, Direction.EGRESS)
     if cert is None:
-        raise SystemExit("the test signer refused the link-window")
+        raise SystemExit("the test signer refused the execution phase")
     registration = WR.registration(cells.head, cert, PARAMS)
     head, dom = WR.check_registration(registration, signer.public_key(), SESSION, PARAMS, LINK, Direction.EGRESS, w)
     window = states[w * T:w * T + T]
@@ -159,7 +159,7 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | 
 
 def known_o0(program: str, head: WR.CellsHead, words: list[int]) -> G.Registered:
     """Each unit's ``o0`` row, its one word, as the value the verifier registers at known content on `head`'s
-    link-window: row t under its public salt (`registered.supplied_salts`), in a tree whose domain binds the statement's
+    execution phase: row t under its public salt (`registered.supplied_salts`), in a tree whose domain binds the statement's
     Program (its SHA-512, `program`) and the network certifier's root. The verifier's own is every word 1
     (`EG.ACCEPT`); the prover commits its units' words the same way, so its rows open the verifier's root only where
     each is 1."""
@@ -287,7 +287,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's link-window {at.window} "
+    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's execution phase {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": f"registered: port o1 reads {at.head.value} at the warden's signed root, unit base + t row t; "

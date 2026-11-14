@@ -142,7 +142,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
+  registered value's (a warden execution phase's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
   table's (below). `a5_warden.py` is their stand-in.

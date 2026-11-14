@@ -72,7 +72,7 @@ def ExecutionPhaseSynced (c : Case) : Prop :=
   | .warden _ => True
   | _ => ∃ s, c.syncs[c.window]? = some s ∧ s.delta ∈ c.deltas ∧ ∃ r ∈ c.rhos, s.num * r.2 = r.1 * s.den
 
-/-- An accepted link-window's public outputs: `verdict` 1 and `deadline` 1. -/
+/-- An accepted execution phase's public outputs: `verdict` 1 and `deadline` 1. -/
 def acceptedOutputs : Json :=
   Json.mkObj [("verdict", toJson (1 : Nat)), ("deadline", toJson (1 : Nat))]
 

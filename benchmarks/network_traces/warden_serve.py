@@ -605,7 +605,7 @@ class Publisher:
             self.attest(record, link, direction, withheld)
 
     def attest(self, record: BlockGrid, link: str, direction: Direction, withheld: bool = False) -> None:
-        """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
+        """The execution phase's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
         line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost: its rows and a
         row's bytes), the salts to `cells.salts` and the commit's and signature's milliseconds to `CELLS_TIMING`
         (witness both)."""
@@ -1139,12 +1139,12 @@ def table(result: dict) -> str:
     return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {load}{s['ended']}/{s['requests']} ended, "
             f"{s['refused']} refused or turned away ({s['turned_away']} turned away), failed {s['failed']}; "
             f"{s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
-            f"link-windows "
+            f"execution phases "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
             f"cells {s['cells']}; start at {s['start']['base_ms']} ms of the key's life; tick lateness "
             f"{s['tick_lateness_ms']}; wall time against the clock {s.get('clocks') or 'not read'}; ticker D episodes "
             f"{s.get('ticker_stalls') or 'not probed'}; cell rows {s['cell_rows']['registered']}/"
-            f"{s['cell_rows']['of']} link-windows registered, {s['cell_rows']['rows']} rows a window")
+            f"{s['cell_rows']['of']} execution phases registered, {s['cell_rows']['rows']} rows a window")
 
 
 # The rehearsal.

@@ -1,5 +1,5 @@
 """The chain's stages (`chain.py`) on fakes: the advice read in each of its forms (I1 v0's JSON and bytes, and a prove-path
-stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per link-window, v0's
+stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per execution phase, v0's
 summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
 whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
 advice, with a forged arm that passes only when Lean refused its unit; and the endpoint's own advice, bound to the
@@ -421,7 +421,7 @@ def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_
     """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
     mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
-    not bound when a window falls outside the run's link-windows, holds a request the run didn't certify, opens another
+    not bound when a window falls outside the run's execution phases, holds a request the run didn't certify, opens another
     root or names another Commit, or has no advice; not rebuilt when a certified output breaks the stop rule."""
     io = json.loads((EP / "io.json").read_text())["requests"]
     first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))

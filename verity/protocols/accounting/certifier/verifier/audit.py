@@ -31,7 +31,7 @@ the id the challenger sampled for it); a certificate that fails, one from anothe
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
 under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
-every certificate verifies, and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid
+every certificate verifies, and the verdicts are those of the raw records. N2 (`service.TransferBlocks`) makes no grid
 comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the
 head's status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds
 the frames.
@@ -46,7 +46,7 @@ is a `mismatch`.
 
 A client holds its copy of one window's certificates, as a reveal endpoint served them, to the key and the session
 (`certificate_refusals`, whose Lean is `NetworkCheck.TransferBlocks.refusals`): it refuses a certificate of another key or
-link-window, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
+execution phase, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
 of its direction, and a clock certificate signing a digest that an earlier kept one signs, whose salt was reused.
 """
 
@@ -203,7 +203,7 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
                          clocks: Sequence[Certificate], seen: Collection[bytes] = ()
                          ) -> tuple[list[str | None], list[str | None]]:
     """Each certificate's refusal in one window's answer, then each clock certificate's, None where the client keeps
-    it, each read against those kept before it: another key's (``key``), another link-window's than `link`'s window
+    it, each read against those kept before it: another key's (``key``), another execution phase's than `link`'s window
     `window` (``link-window``), a clock certificate that isn't egress (``clock``), a signature that doesn't verify under
     `key` in certifier session `session` (``signature``), a second of its direction (``second``), or a clock certificate
     signing a digest that a kept one signs, earlier in the window or among `seen`'s (``reused``)."""

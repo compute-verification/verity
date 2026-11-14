@@ -26,7 +26,7 @@ namespace Core
 open Lean (Json)
 open Flock (V)
 
-/-- `undecided` does not reject the prover. The evidence doesn't settle the question (a link-window with no
+/-- `undecided` does not reject the prover. The evidence doesn't settle the question (an execution phase with no
 certificate yet), and nothing is made public. -/
 inductive Verdict where
   | accept

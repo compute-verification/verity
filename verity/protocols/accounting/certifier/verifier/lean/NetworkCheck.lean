@@ -26,7 +26,7 @@ which `lean_audit.Audit` runs, with the egress grid compared or, for `check_link
 by `tests/test_network_records_protocol.py`; `NetworkCheck.RecordsGrid` proves that its linear Program grid is
 `NetworkCheck.Check`'s, and `NetworkCheck.RecordsBytes` that its evidence, payloads kept
 as bytes, is v4's read as bits. `NetworkCheck.Period` is onsite's communication component
-(`verity/certifier/v0`, the `network-period` executable): a period's link-windows, the network certifier's own rows,
+(`verity/certifier/v0`, the `network-period` executable): a period's execution phases, the network certifier's own rows,
 registered under its one schedule and read by the scan (the rows form), beside its compute audits, and the bound `K` on
 what left the site, held to its Python mirror by `tests/test_network_period_protocol.py`. `NetworkCheck.ScanOk` is the
 rows form's constants: each scan member's ok bits' root, computed from the schedule's T, which the period check holds
@@ -41,7 +41,7 @@ certifier program and the LMS port.
 @[expose] public section
 
 /-!
-`NetworkCheck.TransferBlocks` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
+`NetworkCheck.TransferBlocks` is N2's verdict of record on one execution phase from its proof (`service.TransferBlocks.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
 -/

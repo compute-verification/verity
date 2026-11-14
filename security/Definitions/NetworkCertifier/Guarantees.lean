@@ -86,9 +86,9 @@ def EncardIngressDecodableLeContents : Prop :=
     (dec : List Wire → Msg) (hdec : ∀ m ∈ Ms, dec (I.wireRun m n) = m),
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
-/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress link-window.** `EncardIngressObsDecodableLe` over the
+/-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress execution phase.** `EncardIngressObsDecodableLe` over the
 monitoring period's first `m` whole windows of `T` buckets, its first `n = m·T` steps: for one content assignment `c`,
-at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its
+at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each execution phase contributes the factor `(r ℓ + 1)^T`, its
 `T·log2(r ℓ + 1)` bits, and each window `D^T` of jitter, 1 under J. -/
 def EncardIngressObsDecodableLePerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
