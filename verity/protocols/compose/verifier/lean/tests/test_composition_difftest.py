@@ -24,7 +24,9 @@ session's proofs granted (R7's domains and outputs, R6's previous) and that remo
 finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
 composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite for
 their subprotocols and refuses every other set: the same two composites a configuration may list
-(`verity.config.COMPOSITES`)."""
+(`verity.config.COMPOSITES`). Onsite's development composite with the wipe's count held (`onsite-counted serve`) is held
+to the same reference with the count over the wipe's span and the counted wipe in its subprotocols
+(`test_onsite_counted_agrees`); its wipe's ties are `test_wipe_count_ties.py`'s."""
 
 from __future__ import annotations
 
@@ -189,6 +191,13 @@ PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "cas
 #: The inference-only policy's changes by the verdict they aim at: none, or one that rejects. It is never undecided.
 INFERENCE_CASES = {v: tuple(m for m, (x, _) in R.INFERENCE.EXPECT.items() if x == v) for v in (R.ACCEPT, R.REJECT)}
 
+#: The count over a wipe's span's changes by the verdict they aim at (`span_case.EXPECT`): on the registered hardware
+#: with the link the host's one link (`alone`) to accept; that hardware with a second link, none, or a change the count
+#: itself rejects, to reject (`case` breaks the line `serve` reads, as the period's does).
+SPAN_CASES = {R.ACCEPT: ("registered",),
+              R.REJECT: ("registered", "honest",
+                         *(m for m, x in R.SPAN_CASES.EXPECT.items() if x == R.REJECT and m != "case"))}
+
 #: A recorded subprotocol's kinds of case (`periods.build`), accepted ones first and thrice.
 KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", periods.OTHER_STORE, "broken-params", "broken-evidence"]
 
@@ -201,9 +210,9 @@ def kinds(C) -> list[str]:
         return list(INFERENCE_CASES)
     if C is R.SAMPLED_PROOFS:
         return [R.REJECT]
-    if C is R.WIPE:
+    if C in (R.WIPE, R.COUNTED_WIPE):
         return list(R.WIPE_CASES.KINDS)
-    if C is R.POUW_PERIOD:
+    if C in (R.POUW_PERIOD, R.HOST_SPAN):
         return [R.ACCEPT, R.REJECT]
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
 
@@ -224,8 +233,11 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.INFERENCE_ONLY:
         case = draw(R.INFERENCE.drawn(draw(st.sampled_from(INFERENCE_CASES[kind]))))
-    elif C is R.WIPE:
+    elif C in (R.WIPE, R.COUNTED_WIPE):
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
+    elif C is R.HOST_SPAN:
+        case = R.SPAN_CASES.build(draw(st.sampled_from(SPAN_CASES[kind])), draw(st.integers(0, 1 << 16)),
+                                  alone=kind == R.ACCEPT)
     else:
         case = draw(SAMPLED_CASES)
     return as_component(C, case)
@@ -450,14 +462,17 @@ def ids(product: R.Product) -> str:
     return ",".join(C.id for C in product.components)
 
 
-SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
+SEEN = {"onsite": collections.Counter(), "remote": collections.Counter(), "onsite-counted": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
+#: `onsite-counted serve`, onsite's development composite with the wipe's count held (`Core.Onsite.counted`)
+ONSITE_COUNTED = port("onsite-counted", R.ONSITE_COUNTED, SEEN["onsite-counted"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
 #: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
 #: no product)
 PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
+onsite_counted_server = D.server_fixture(ONSITE_COUNTED)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
 
@@ -917,6 +932,16 @@ def test_onsite_agrees_on_fewer_cases(onsite_server, recorded):
     cases the generator samples often."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], FEWER, (R.REJECT, "reject, a component undecided", "one record",
                                                          "two records", "one store", "two stores"))
+
+
+@pytest.mark.slow
+def test_onsite_counted_agrees(onsite_counted_server, recorded):
+    """`onsite-counted serve` (`Core.Onsite.counted`) against `ONSITE_COUNTED` on 50 cases. What only whole cases through
+    it hold, which `test_wipe_count_ties.py` can't: its eight subprotocols, with the count over the wipe's span on its
+    host's one link and the counted wipe, decode a case and reject it as the reference does. No case here reaches its
+    wipe's ties: sampled proofs' cases all reject, and a rejection stands before any tie is read."""
+    _agree(ONSITE_COUNTED, onsite_counted_server, SEEN["onsite-counted"], 50,
+           (R.REJECT, "reject, a component undecided", "one record"))
 
 
 @pytest.mark.slow
