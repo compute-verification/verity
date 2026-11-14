@@ -35,13 +35,13 @@ ALLOWED: dict[str, str] = {
     "verity/circuits/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
-    "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Desc.lean":
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Desc.lean":
         "InferenceOnlyCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
         "which refuses past its limit",
-    "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/DescFuzz.lean":
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/DescFuzz.lean":
         "InferenceOnlyCheck.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyCheck.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
-    "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Check.lean":
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean":
         "InferenceOnlyCheck.check, the gate-by-gate reference InferenceOnlyCheck.Desc is difftested against (runs InferenceOnlyCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
     "verity/circuits/lean/Circuits/AnnotExpand.lean":
