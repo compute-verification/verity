@@ -44,3 +44,7 @@ READY #10140 c75a9462e2a707029e524f521c861e53ca385fa0
 ## 2026-11-14T16:53:08Z
 
 After the turn was cut at about 16:28Z I relaunched nothing. #9835: r20261114-154809-ebb4 (verity-flock part 3/3) passed: 950 passed, 43 skipped. 8a4b and d405 are running and c616 is waiting. #10140: 9460, 0603, cbca, 4bcf and 5289 are running. Change 5: r20261114-161626-315f is waiting. The VM restart lost its verity-flock thirds' run ids, so I wait on them blind and launch them again only if no pass shows. Model: Claude Opus 5.5. No subagent, timer or subscription.
+
+## 2026-11-14T17:32:08Z
+
+#9835: 8a4b and d405 are running. c616 (verity-flock 2/3) has waited for a check slot since 15:48Z with 11 checks ahead and no asker, since its launching VM is gone, so it will not move by itself; its wait cap is 4 h. #10140: cbca passed; 9460, 0603, 4bcf and 5289 are running. Change 5: 315f is waiting. Nothing relaunched.
