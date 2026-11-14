@@ -138,7 +138,7 @@ def test_zk_takes_no_coins_flag(zk):
 
 
 @pytest.mark.slow
-def test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
+def test_a_sample_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
     """The sampled session passes every check and, verified without the verifier's program (the fixture's circuit is no
     Program's), is refused for that alone; the sessions of two tables and of one m = 26 table, which have no sample, pass
     every check and are refused for that alone."""

@@ -479,7 +479,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
         exact ⟨by simpa using hn, by simpa using ht, ss, s, hss, hj, hname, hpop, checkFile_ok hf, ho, hfl⟩
       · cases h
 
--- walking `HmRow.loadPublic`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
+-- walking `HmRow.loadPublic`'s do block branch by branch (`walk_step`, as `Layout.setupH_sampled`) exceeds the default
 set_option maxHeartbeats 2000000 in
 /-- **A loaded public file is a population, not a sample**: `loadPublic` records no population. -/
 theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}
@@ -493,10 +493,10 @@ theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArra
     subst h
     rfl
 
--- walking `HmRow.drawn`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
+-- walking `HmRow.drawn`'s do block branch by branch (`walk_step`, as `Layout.setupH_sampled`) exceeds the default
 set_option maxHeartbeats 2000000 in
 /-- **A sampled public file records its population's size**: the registered file's instance count. -/
-theorem drawn_population {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.Json}
+theorem sampled_population {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.Json}
     (h : HmRow.drawn c pop d = .ok pub) :
     pub.population.map (·.1) = some pop.n := by
   unfold HmRow.drawn at h
@@ -523,7 +523,7 @@ theorem population_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coi
     have hp : st.pub = pop := hnone rfl
     simp [hp, loadPublic_population (Hidden.loadPublic_nil hl), hs.n]
   | some d =>
-    rw [drawn_population (hsome d rfl)]
+    rw [sampled_population (hsome d rfl)]
     rfl
 
 /-- **A raw session that passes the statement check at untemplated tags sets up a first table**, whatever the record's

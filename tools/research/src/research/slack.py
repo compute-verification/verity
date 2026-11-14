@@ -124,7 +124,7 @@ except ImportError:                                                 # run as a s
     def slack_dates(text: str, now: Any = None) -> str:
         return text
 
-    class waitcap:  # research/waitcap.py's cap, which a single file carries itself
+    class waitcap:  # research/waitcap.py's limit, which a single file carries itself
         WAIT_LIMIT_S, STILL_GOING = 1200, 79
 
         @staticmethod
@@ -216,7 +216,7 @@ AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-
                          r"|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")                 # a desktop agent's, a bare UUID
 WORKER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")      # `linear comment --worker NAME`: shows as LANE/NAME
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
-CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
+LIMIT_PER_HOUR = 20                                              # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
@@ -1731,15 +1731,15 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                    and (not reminder or f": reminder ({reminder}): " in (m.get("text") or "")) for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src, where) and _from(m.get("text") or "", author) for m in rung)
-            if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
-                if n == CAP_PER_HOUR:
+            if n >= LIMIT_PER_HOUR:                                      # a loop is one author; a roll call is many, once each
+                if n == LIMIT_PER_HOUR:
                     if where is None:                                    # a person's channel gets no router notes
                         api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
-                                 text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
+                                 text=f"routing @{author} to {to} paused here for the hour ({LIMIT_PER_HOUR} doorbells) {QUIET}")
                     api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                              text=f"from router, {'#' + where + ' ' if where else ''}thread {src}: paused @{author} here "
-                                  f"for the hour ({CAP_PER_HOUR} doorbells)")
-                lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
+                                  f"for the hour ({LIMIT_PER_HOUR} doorbells)")
+                lines.append(f"@{to}: paused (limit of {LIMIT_PER_HOUR} an hour from @{author} in this thread)")
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
@@ -4297,7 +4297,7 @@ def _decided(out: dict) -> bool:
 
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
     """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_LIMIT_S run
-    out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    out; a card still pending at the limit exits STILL_GOING with the command that reads it later (research.waitcap)."""
     follow = page_follower(ns, reg)
     out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
                            polls=polls, max_s=waitcap.WAIT_LIMIT_S, clock=_clock)

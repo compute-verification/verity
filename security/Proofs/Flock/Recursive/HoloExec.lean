@@ -146,11 +146,11 @@ def metaRegistration (st : Flock.Stmt) : Option String :=
   | _ => none
 
 /-- **`bcs` are `cap`'s commit strings**: `2^capDepth lv` of them, node `i`'s the hm96 commit string of its row
-(`Firewall.topRows`) under `salt`, the salts the prover's workers committed R's level-0 top rows under, which they hold
+(`ZkServer.topRows`) under `salt`, the salts the prover's workers committed R's level-0 top rows under, which they hold
 (`registrant-holds-openings`): a guarantee that reads `TopOf` is applied at the held salts. -/
 def TopOf (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray) (bcs : Array ByteArray) : Prop :=
   bcs.size = 2 ^ capDepth lv ∧ ∀ i (h : i < bcs.size),
-    bcs[i] = Flock.Hm96.Default512.commitString (Flock.Firewall.rowDigest ((Flock.Firewall.topRows (cap i).1).headD #[]))
+    bcs[i] = Flock.Hm96.Default512.commitString (Flock.ZkServer.rowDigest ((Flock.ZkServer.topRows (cap i).1).headD #[]))
       (salt i)
 
 /-- **`cap` is R's registered top at explicit commit strings `bcs`**: the registration record `reg`

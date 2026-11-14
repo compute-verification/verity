@@ -40,13 +40,13 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
       cross-stream-order   Lean's verdict on the read across the two streams (`across`: the Lean verifier's piece
                            ``across``, `Record.across`), never the hand-off's ``order``: the stop record's
                            ``previous`` is a record of the boundary stream's log, and the challenger's signed log
-                           shows the coins released after the boundary registration, at least one and in
-                           whatever family, all before the first released after the stop registration, and the
+                           shows the coins released after the boundary docket, at least one and in
+                           whatever family, all before the first released after the stop docket, and the
                            stop sample read whole the stop stream's family of coins, every one of them released
-                           after the stop registration
+                           after the stop docket
       boundary-audit       the boundary stream's outcome on that record (``--boundary-outcome``, a record of that
                            stream's `Stream.records`): null when none is handed; refused when it is not that
-                           registration's accept, or Lean's verdict on its audit record refuses it; null, with
+                           docket's accept, or Lean's verdict on its audit record refuses it; null, with
                            its reason, when that audit record accepted and is not complete (it accepted with
                            entries that did not run, and is no audit of those); accepted when it accepted and
                            is complete
@@ -58,7 +58,7 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   or did not accept; 4 when they do and that audit record accepted and is not complete. A record whose boundary
   stream's audit record is missing (case 3) or accepted and is not complete (case 4) has no verdict on it: it can
   accept, and is not complete, so no record is complete on a boundary stream's audit record that is not.
-  That audit record is the one the driver hands. Lean checks its format and its registration and reads its
+  That audit record is the one the driver hands. Lean checks its format and its docket and reads its
   ``accepted`` and ``complete``, and nothing holds it to the record the boundary stream's verifier wrote, so case 1
   says no more than the record handed says. The two entries that read it, ``boundary-audit`` and
   ``cross-stream-order`` (its ``case``), name that as their premise.
@@ -66,8 +66,20 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   response's length is held (``length_held``) only when the record accepted and is complete.
 * **The answer** (`answer_of`, ``answer.json`` beside ``audit.json``, one canonical line) is the stop stream's, in
   one-stage's form (`audit.answer`): an accept of a record that accepted, whose public ``complete`` is that record's
-  own, so it is false while any entry above is null; else a reject of the stop registration. A reader that wants a
+  own, so it is false while any entry above is null; else a reject of the stop docket. A reader that wants a
   complete audit of the stop population reads `audit.answer_complete` of it, never the verdict alone.
+* **The reason** (`reason`): ``summary.json``'s ``reason`` is one word for what Lean's verdict of record refused, read
+  from that verdict and from nothing else. It is ``stop_word`` where Lean's own verdict on the stop blocks' session
+  refused the proof it read at its inner check's batched constraint (`UNSATISFIED`), the check that holds a proof to
+  the statement's constraints: the stop relation does not hold of the rows the session opened. It is null for every
+  other outcome: an accept; Lean's refusal at setup, for a file of the session that was not there, or at any other
+  of its checks; a run with no verdict line of Lean's; a refusal by another entry of the record or by the stream; and
+  a command that stopped before a verdict. The word names the relation Lean refused, whose one output row is the stop
+  word. Lean's verdict does not say which of the statement's three rows is wrong, and neither does the word: it is the
+  changed stop word's only on the negative control, ``--forge``, which changes the stop word alone. There the two
+  parameters' rows are the class's own under the boundary record's roots and the output row's tree is the one over
+  the class's stop words with those spans' bit 0 flipped (`opens`, held before any session), so the relation can fail
+  only at the stop word.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
   stage's: nothing here holds the time between the two commands.
 
@@ -99,7 +111,7 @@ from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
-from verity.commitments.windows import rows as CS, tables as TB  # noqa: E402
+from verity.commitments.periods import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
@@ -113,6 +125,9 @@ ANSWER = "answer.json"
 MEMBER, OUT = "stop", "o0"
 
 LEAN, M0, READS = f"lean-verify/{MEMBER}", f"m0-verifier/{MEMBER}", "registered-reads"
+#: the word of a refusal of the stop relation (module docstring, **The reason**), and how Lean's reason opens where its
+#: inner check finds that the proof it read does not satisfy the statement's constraints (`Zk.verifyInner`, Flock/Zk.lean)
+STOP_WORD, UNSATISFIED = "stop_word", "zk inner: the batched constraint fails"
 ORDER, BOUNDARY_AUDIT, REQUEST_ROW, STOP_RULE = TS.ORDER_REFUSED, "boundary-audit", "request-row", "stop-rule"
 #: the tool of an entry that is the Lean verifier's piece ``across``'s verdict
 ACROSS = f"{V.EXE} across"
@@ -230,7 +245,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
                                               sort_keys=True))
     env = {**a0.prover_env(zk_server, st), **({"FC_ZK_SELF_CHECK": "skip"} if forged else {})}
     t = time.time()
-    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", PL.free_port(), out, draw_file=out / "sample.json",
+    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", PL.free_port(), out, sample_file=out / "sample.json",
                               zk=True, env=env, prove_timeout=timeout)
     seconds = round(time.time() - t, 1)
     lv = a0.lean_verify(lean, st, n, out, zk=True)
@@ -253,7 +268,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
 @dataclass
 class Resumed:
     """A stop class's two streams again at the end of its first stage: the boundary stream's (`two_stage.resume`), and
-    the stop stream on the record of its log the stop record names, with the stop record's registration, the copies it
+    the stop stream on the record of its log the stop record names, with the stop record's docket, the copies it
     was held to and its sample."""
 
     first: TS.First
@@ -286,7 +301,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     ``main``, which every coin evidence of the hand-off is read under (none: every evidence is refused). `Unlogged`
     when that
     log holds no such record; ValueError when the first stage sampled no stop block, or
-    the Spec, the record, its registration or the sample isn't the hand-off's, or the hand-off names another family
+    the Spec, the record, its docket or the sample isn't the hand-off's, or the hand-off names another family
     for the stop sample than its place's, or another session root than its record's (`two_stage.first_root`);
     `service.Refused` as the streams refuse."""
     s = handoff.get("stop")
@@ -323,7 +338,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
 
 def reads(r: Resumed) -> dict[str, Any]:
     """The verifier's own ``--registered`` file for the stop blocks' statement: each parameter's port as the stop
-    registration gives it (`boundary_stop.stop_registration`: the boundary record's value, root and domain, unit i at
+    docket gives it (`boundary_stop.stop_registration`: the boundary record's value, root and domain, unit i at
     row i), and the output row's, the stop record's `b.stop` at its registered root, leaves and domain, unit i at row
     i, read as `rows.own_value` names a record's own port. Lean refuses a statement that leaves a port out."""
     L = r.layout
@@ -355,8 +370,9 @@ def across(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, An
     """Lean's verdicts on the stop record's read across the class's two streams (`Record.across`, the Lean verifier's
     piece ``across``, on `link`'s read): ``logged``, ``order`` and ``audit``, each ``{"accepted", "why"}``, ``audit``
     with ``complete`` too (whether the boundary stream's audit record says every one of its entries ran), with
-    ``case``, the boundary record's index in the log (``received``) and the two registrations' digests (``earlier``,
-    ``later``). ``{"refused": reason}`` where Lean refuses the input or can't run."""
+    ``case``, the boundary record's index in the log (``received``) and the two dockets' digests (``earlier``,
+    ``later``). ``{"refused": reason}`` where Lean refuses the input, and that with ``"answered": False`` where it
+    can't run (`verifier.lean`)."""
     return V.lean("across", link(handoff, first, outcome))
 
 
@@ -381,8 +397,8 @@ def across_all(boundary: str, links: Sequence[Mapping[str, Any]], last: Mapping[
 
 def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -> dict[str, Any]:
     """The ``cross-stream-order`` entry from Lean's answer ``lean`` (`across`'s): accepted when its ``logged`` and its
-    ``order`` both are and it decided on this stream's own registrations: its ``earlier``, ``later`` and ``received``
-    are the boundary record's digest, the stop registration's and the boundary record's index in the boundary stream's
+    ``order`` both are and it decided on this stream's own dockets: its ``earlier``, ``later`` and ``received``
+    are the boundary record's digest, the stop docket's and the boundary record's index in the boundary stream's
     log, as ``r`` holds them. ``case`` is Lean's, and reads the boundary stream's audit record as the driver hands it:
     the entry names that record's premise (`BOUNDARY_PREMISE`), as the ``boundary-audit`` entry does. ``audit``: the
     boundary stream's audit record's SHA-512."""
@@ -402,11 +418,11 @@ def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -
 
 def boundary_audit(boundary: str, outcome: Mapping[str, Any] | None) -> dict[str, Any]:
     """What the driver itself reads of the boundary stream's outcome record ``outcome`` on the class's boundary
-    registration ``boundary`` (an entry of that stream's `Stream.records`: it names the registration and holds the
+    docket ``boundary`` (an entry of that stream's `Stream.records`: it names the docket and holds the
     audit record): ``accepted``, ``complete`` and, where it did not accept, ``why``, as `Record.across`'s ``audit``
     gives them of the audit record inside. ``accepted``: none when no outcome is handed; false when it is no outcome
-    record, is another registration's, or its audit record did not accept. ``complete``: none unless it is that
-    registration's outcome record with an audit record, and then whether that audit record says every one of its
+    record, is another docket's, or its audit record did not accept. ``complete``: none unless it is that
+    docket's outcome record with an audit record, and then whether that audit record says every one of its
     entries ran."""
     if outcome is None:
         return {"accepted": None, "complete": None}
@@ -424,9 +440,9 @@ def boundary_audit(boundary: str, outcome: Mapping[str, Any] | None) -> dict[str
 
 
 def boundary_entry(boundary: str, outcome: Mapping[str, Any] | None, lean: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """The ``boundary-audit`` entry, from the boundary stream's outcome record on the class's boundary registration
+    """The ``boundary-audit`` entry, from the boundary stream's outcome record on the class's boundary docket
     ``boundary`` (`boundary_audit`): null when none is handed; refused when it is no outcome record, is another
-    registration's, or its audit record did not accept; null again, with its ``why``, when that audit record accepted
+    docket's, or its audit record did not accept; null again, with its ``why``, when that audit record accepted
     and is not complete, so that the stop stream's record can accept and is then not complete either; accepted when
     it accepted and is complete. ``lean``: Lean's verdict on that audit record (`across`'s ``audit``), which the entry
     then needs too, its ``accepted`` and its ``complete``, and holds. ``complete``: whether the audit record is
@@ -480,7 +496,7 @@ def decide(r: Resumed, handoff: Mapping[str, Any], file: Mapping[str, Any], prov
            outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop stream's outcome of its sample: the sessions delivered (`Stream.deliver`), then `Stream.outcome` on the
     verdicts (`verdicts_of`) with the stop sample's coin evidence. The audit record's own checks hold the roots Lean's
-    accepting verdict opened the session's rows under to the stop registration's: the two parameters as its registered
+    accepting verdict opened the session's rows under to the stop docket's: the two parameters as its registered
     values, and the output row as the session's root of `b.stop` (none when the verdict did not accept, which fails
     ``roots``). -> ``accepted``, the outcome's record and symbol and the audit record; or ``refused``, with no audit
     record, when the stream refuses the delivery or the outcome."""
@@ -498,10 +514,31 @@ def decide(r: Resumed, handoff: Mapping[str, Any], file: Mapping[str, Any], prov
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"], "audit": body["audit"]}
 
 
+def opens(roots: Mapping[str, str], file: Mapping[str, Any]) -> list[str]:
+    """The statement's ports whose tree, as the prover opens it (``roots``, `staged`'s, by value), is not the one the
+    verifier's own ``--registered`` file (``file``, `reads`'s) reads the port under: none where every row of the
+    statement is proved under the root its record registers. On the negative control that is what holds the change
+    to the stop word alone (module docstring, **The reason**)."""
+    return [p for p, v in {**BS.STOP_READS, OUT: BR.STOP}.items() if roots.get(v) != file["ports"][p]["root"]]
+
+
+def reason(verdicts: Mapping[str, Any]) -> str | None:
+    """The word for what Lean's verdict of record refused (module docstring, **The reason**), from the audit record's
+    ``verdicts`` and of them `LEAN`'s entry alone: `STOP_WORD` where it is of record, is Lean's own verdict line, and
+    refused the proof at its inner check's batched constraint (`UNSATISFIED`); None for anything else, an accept, a
+    refusal at setup or for a missing file, and a record that holds no such entry among them. It weighs nothing: a
+    record another entry refused too gets the same word, and one only another entry refused gets none."""
+    lean = verdicts.get(LEAN)
+    if not isinstance(lean, Mapping) or lean.get("of_record") is not True or not a0.lean_refused(dict(lean), UNSATISFIED):
+        return None
+    return STOP_WORD if lean["why"].startswith(UNSATISFIED) else None
+
+
 def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -> dict[str, Any]:
     """What a run reports of an outcome (`decide`'s): the audit record's ``accepted`` and ``complete`` as they are, each
-    verdict, why one did not accept or gives a reason for having none, Lean's ``case`` of the read across the streams,
-    every entry's premise, and whether the response's length is held: only by a record that accepted and is complete."""
+    verdict, why one did not accept or gives a reason for having none, the word for what Lean's verdict of record
+    refused (`reason`), Lean's ``case`` of the read across the streams, every entry's premise, and whether the
+    response's length is held: only by a record that accepted and is complete."""
     L, audit = r.layout, got.get("audit") or {}
     verdicts = audit.get("verdicts") or {}
     accepted, complete = audit.get("accepted") is True and got.get("accepted") is True, audit.get("complete") is True
@@ -515,6 +552,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
             "verdicts": {k: v.get("accepted") for k, v in verdicts.items()},
             "why": {k: v.get("why") for k, v in verdicts.items()
                     if v.get("accepted") is False or (v.get("accepted") is None and v.get("why"))},
+            "reason": reason(verdicts),
             "not_run": sorted(k for k, v in verdicts.items() if v.get("accepted") is None),
             "premises": sorted({v["premise"] for v in verdicts.values() if "premise" in v})}
 
@@ -523,7 +561,7 @@ def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
     """The stop stream's answer of an outcome (`decide`'s), in one-stage's form. Of an audit record that accepted it is
     `audit.answer` at the stream's δ: its public ``complete`` is the record's own, true only when every entry has a
     verdict, so an accept whose record left an entry null says so and `audit.answer_complete` refuses it. Else a
-    reject of the stop registration, naming the record's checks that failed and its verdicts that did not accept, or
+    reject of the stop docket, naming the record's checks that failed and its verdicts that did not accept, or
     that the stream refused the outcome and wrote no record."""
     audit = got.get("audit") or {}
     if got.get("accepted") is True and audit.get("accepted") is True:
@@ -572,10 +610,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     forge = [int(i) for i in a.forge.split(",") if i]
 
     def done(code: int, summary: Mapping[str, Any]) -> int:
+        summary = {"reason": None, **summary}  # a command that stopped before a verdict states none
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str) + "\n")
         print("STOP " + json.dumps({k: summary.get(k) for k in ("accepted", "complete", "length_held", "case", "refused",
-                                                                "error", "sample", "failed", "verdicts", "why", "premises")},
-                                   sort_keys=True, default=str))
+                                                                "error", "sample", "failed", "verdicts", "why", "reason",
+                                                                "premises")}, sort_keys=True, default=str))
         return code
     try:
         check, stop = TS.template_fn(handoff["commit"]["check"]), TS._stop(a.stop)
@@ -593,9 +632,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         st = staged(BR.reopen(Path(a.boundary), check, stop=stop), out / "prover", forge)
         if (st["pin"], a0.sha512_file(st["dir"] / "circuit.txt")) != (own["pin"], own["circuit_sha512"]):
             raise ValueError("the prover's circuit file is not the one the verifier's own stop block lowers to")
-        if st["roots"][BR.STOP] != file["ports"][OUT]["root"]:
+        off = opens(st["roots"], file)
+        if off == [OUT]:
             raise ValueError("the prover's b.stop tree is not the one the stop record registers"
                              + ("" if forge else ": a class forged at registration is proved with --forge"))
+        if off:
+            raise ValueError(f"the prover's trees of {', '.join(off)} are not the ones the class's records register"
+                             + (": --forge changes the stop word alone" if forge else ""))
         proved = session({**st, **mine}, r.sample.units, out / "session", bin_=a.bin, lean=a.lean, zk_server=a.zk_server,
                          forged=bool(forge), timeout=a.session_timeout)
         got = decide(r, handoff, file, proved, outcome)

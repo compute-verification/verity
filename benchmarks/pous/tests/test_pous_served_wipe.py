@@ -33,8 +33,8 @@ DEMO = WRAPPER.parent / "demo.sh"
 FAKE_DEMO = Path(__file__).resolve().parent / "served_wipe_demo.py"
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
-#: who decided, as the summary and the headline name it: the stand-in demo.sh's Python, on this host
-DECIDED = {"program": "python", "host": socket.gethostname()}
+#: who decided, as the summary and the headline name it: the stand-in demo.sh's judge, on this host
+DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
 #: the SHA-512 of the public key of vy-auditor-2's wipe party: the pin of a run that sets none of its own
@@ -81,6 +81,11 @@ def _exe(path: Path, text: str) -> Path:
     path.write_text(text)
     path.chmod(0o755)
     return path
+
+
+def _judge(tmp_path: Path) -> str:
+    """A Lean judge built already (WIPE_PROTOCOL_EXE), so the wrapper builds none; the stand-in demo.sh never runs it."""
+    return str(_exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n"))
 
 
 @pytest.fixture
@@ -138,7 +143,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
     composite's piece beside it (served_case.py's `CASE` line before the headline), and DIR keeps none of it."""
     d = tmp_path / "pieces" / "wipe"
-    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d, "--no-lean")
+    judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
+    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
     assert r.returncode == 0, r.stdout + r.stderr
     answer = json.loads((d / "answer.json").read_text())
     _is_core_answer(answer)
@@ -170,10 +176,10 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     key, = case["params"]["trusted"]
     assert summary["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest() == PINNED and summary["key_pinned"]
     demo = json.loads((d / "demo-argv.json").read_text())
-    assert demo["lease"] == f"{CARD},GPU-other" and "--wipe-protocol" not in demo["argv"]
+    assert demo["lease"] == f"{CARD},GPU-other"
     assert demo["argv"] == ["--node", "vy-dc-h200", "--challenger", "vy-auditor-2", "--challenger-address",
                             "10.96.0.36:47611", "--challenger-command", node["WIPE_COMMAND"], "--trusted-sha512", PINNED,
-                            "--reads", str(W.READS), "--no-lean"]
+                            "--reads", str(W.READS), "--wipe-protocol", str(judge)]
     *_, built, last = r.stdout.strip().splitlines()
     assert json.loads(built.removeprefix("CASE ")) == {"piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept"}
     assert last.startswith("WIPE {")
@@ -232,7 +238,8 @@ def test_a_card_that_isnt_idle_is_refused(node, tmp_path, apps, used) -> None:
     d = tmp_path / "wipe"
     d.mkdir()
     (d / "answer.json").write_text("{}")
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "FAKE_SMI_APPS": apps, "FAKE_SMI_USED": used}, d, "--no-lean")
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "FAKE_SMI_APPS": apps, "FAKE_SMI_USED": used,
+                      "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
     assert r.returncode == 3, r.stdout + r.stderr
     refused = (d / "refused.txt").read_text()
     assert refused.startswith(f"WIPE REFUSED: the card {CARD} isn't idle: ") and "kills nothing" in refused
@@ -259,7 +266,7 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node
     carries the key the session came with and that it isn't the pinned one."""
     d = tmp_path / "pieces" / "wipe"
     other = hashlib.sha512(b"another key").hexdigest()
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "WIPE_KEY_SHA512": other}, d, "--no-lean")
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "WIPE_KEY_SHA512": other, "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
     assert r.returncode == 1, r.stdout + r.stderr
     _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
     assert (answer["verdict"], answer["reason"]) == ("reject", UNTRUSTED)
@@ -277,8 +284,9 @@ def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(nod
     vy-auditor-2's wipe party: demo.sh gets it as `--trusted-sha512`, and the stand-in challenger's session, signed
     under another key, is rejected as any other key's is, by a case that trusts no key."""
     d = tmp_path / "pieces" / "wipe"
-    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | {"GPU_LEASE_UUID": CARD}
-    r = _wipe(env, d, "--no-lean")
+    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | {"GPU_LEASE_UUID": CARD,
+                                                                        "WIPE_PROTOCOL_EXE": _judge(tmp_path)}
+    r = _wipe(env, d)
     assert r.returncode == 1, r.stdout + r.stderr
     argv = json.loads((d / "demo-argv.json").read_text())["argv"]
     assert argv[argv.index("--trusted-sha512") + 1] == AUDITOR_PIN != PINNED
@@ -315,14 +323,17 @@ def test_with_no_key_pinned_the_wipe_is_refused(node, tmp_path, pin, why) -> Non
     assert not any((d / f).exists() for f in ("answer.json", "demo-argv.json", "served.json", "lake-build.log"))
 
 
-def test_demo_sh_takes_the_wrappers_options(tmp_path) -> None:
+@pytest.mark.parametrize("unknown", ["--bogus", "--no-lean"])
+def test_demo_sh_takes_the_wrappers_options(tmp_path, unknown) -> None:
     """The wrapper's default demo.sh is beside it and knows every option the wrapper gives it: an unknown one after them
-    is the first it refuses, before it writes or builds anything."""
+    is the first it refuses, before it writes or builds anything. `--no-lean` is unknown: no period of demo.sh's runs
+    without the Lean judge."""
     r = subprocess.run(["bash", str(DEMO), "--node", "n", "--challenger", "c", "--challenger-address", "h:1",
                         "--challenger-command", "x", "--trusted-sha512", PINNED, "--reads", "5500", "--wipe-protocol", "e",
-                        "--no-lean", "--bogus"],
+                        unknown],
                        env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
-    assert r.returncode == 2 and r.stdout.strip() == "demo.sh: unknown option --bogus (see the header)", r.stdout + r.stderr
+    assert r.returncode == 2 and r.stdout.strip() == f"demo.sh: unknown option {unknown} (see the header)", (
+        r.stdout + r.stderr)
 
 
 @pytest.mark.parametrize("pin, said", [
@@ -344,9 +355,19 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
     bin_.mkdir()
     for tool in ("dirname", "basename", "mkdir", "hostname"):
         (bin_ / tool).symlink_to(shutil.which(tool))
-    r = subprocess.run(["/bin/bash", str(DEMO), "--no-lean"], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
+    r = subprocess.run(["/bin/bash", str(DEMO)], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
                        capture_output=True, text=True)
     assert r.returncode == 3 and r.stdout == "", r.stdout + r.stderr
     assert r.stderr.strip() == ("demo.sh: this host has no `ip` (iproute2), which names the node's links: apt-get "
                                 "install iproute2")
     assert not any((tmp_path / "out").iterdir())
+
+
+def test_the_start_file_demo_sh_runs_starts() -> None:
+    """`wipe_on_node.py`, which demo.sh runs on the card and no CPU test runs whole, imports what it starts and answers
+    `--help` with `wipe_period.main`'s options."""
+    start = WRAPPER.parent / "wipe_on_node.py"
+    assert f"python {start.relative_to(ROOT)} --period" in DEMO.read_text()
+    r = subprocess.run([sys.executable, str(start), "--help"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert all(f"--{o}" in r.stdout for o in ("period", "out", "node", "expect")), r.stdout

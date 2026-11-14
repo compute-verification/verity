@@ -78,7 +78,7 @@ structure SessionVerdict (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array Str
     (s : _root_.Spot.OneStageZk.RunFiles) (record : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup)
     (rest : Json × Json) (proofs : Array ByteArray) (units : Array ℕ) : Prop where
   blob : ∃ B, bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record
-  fits : _root_.Spot.OneStageZk.drawFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none
+  fits : _root_.Spot.OneStageZk.sampleFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none
   setup : _root_.Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest)
   files : _root_.Spot.OneStageZk.filesOf bs s (.ok (spec, tabs, rest)) = .ok proofs
   fresh : ∀ key, _root_.Spot.OneStageZk.coinKeyOf record (.ok (spec, tabs, rest)) = some key →
@@ -220,7 +220,7 @@ theorem step_iff {a : StepAt} {bs : _root_.Core.Blobs} {r r' : _root_.Spot.OneSt
       rw [hf] at hv
       refine ⟨hr, record, spec, tabs, rest, proofs, units,
         ⟨⟨B, hB, hu⟩, ?_, hst, hf, fun key hk => verdictOf_fresh hv hk, hver, hv, hp, hus⟩, hr'⟩
-      cases hd : _root_.Spot.OneStageZk.drawFitsWhy _root_.Spot.OneStageZk.WORD
+      cases hd : _root_.Spot.OneStageZk.sampleFitsWhy _root_.Spot.OneStageZk.WORD
           (Flock.Witness.recordDraw record) with
       | none => rfl
       | some w => rw [hd] at hfit; cases hfit

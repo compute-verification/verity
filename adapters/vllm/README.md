@@ -19,7 +19,7 @@ Verity itself knows nothing of vLLM.
   flag and record.
 - **`verity demo vllm`** (`demos/vllm/run.sh`) starts the served-verdicts launcher,
   `benchmarks/one_stage/served_verdicts.sh`, on the node `demos/vllm/placement.toml` names. It runs the Build of
-  record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:
+  record, then the endpoint with `--seal` under a GPU lease, and a load. Then come SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network certifier follow where each has its piece,
   and it ends with one record of every verdict. The launcher's header gives each step, and `demos/vllm/README.md`
@@ -142,7 +142,6 @@ verity_vllm/
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
-  properties/        property harnesses: admission difftests, the quarantine lint, the kernel allowlist
   records/           typed stage records, one for each kind one stage writes and another reads
   ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device
@@ -161,7 +160,7 @@ regression, skipped unless `VERITY_REGRESSION=1`.
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
 vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. Tests and tools read fixtures
 relative to this directory, so run them from here. The suite runs remotely like every suite
-(`tools/verity/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
+(`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
 
 ## Vocabulary
 

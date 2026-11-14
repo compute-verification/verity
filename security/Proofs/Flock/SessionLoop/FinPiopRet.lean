@@ -183,8 +183,8 @@ theorem piopCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}
     (hs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs)
-    (j : Fin (Masked.jOf x)) (r : Fin 2) {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
-    {q : _root_.Flock.Firewall.Finish.RepIn} {f : ByteArray}
+    (j : Fin (Masked.jOf x)) (r : Fin 2) {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
+    {q : _root_.Flock.ZkServer.Finish.RepIn} {f : ByteArray}
     (hRep : RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f)
     {extras : Array _root_.Flock.Claim}
     (hex : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras)
@@ -204,7 +204,7 @@ theorem piopCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
     have := r.isLt
     omega
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
-  obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.Firewall.Finish.proofFile_ok hRep.2.2
+  obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.ZkServer.Finish.proofFile_ok hRep.2.2
   have hcut := finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hk tb hi q _ hRep ic' p tr
     hic' hfw l hl
   obtain ⟨htb, -⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hs hk hRep
@@ -212,10 +212,10 @@ theorem piopCut_views_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
   rw [← htb] at hcut
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hk extras
     (by rw [hk2]; exact hex) tb hi q _ hRep
-  have hcx := congrArg Array.size (_root_.Flock.Firewall.Finish.claimsOf_map_x q.xs)
+  have hcx := congrArg Array.size (_root_.Flock.ZkServer.Finish.claimsOf_map_x q.xs)
   have hex' := congrArg Array.size hxs
   rw [Array.size_map] at hcx hex'
-  have hes : extras.size = (_root_.Flock.Firewall.Finish.claimsOf q.xs).size := by omega
+  have hes : extras.size = (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size := by omega
   have hst := Masked.tabsOf_stAt x j
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
   have hsm : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m = (Masked.stsOf x)[j.val]!.m := by
@@ -272,7 +272,7 @@ theorem swSrcE_l0_views (vs : finS.SwVals)
           (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f)
     {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras)
@@ -287,7 +287,7 @@ theorem swSrcE_l0_views (vs : finS.SwVals)
     ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked k =
       FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch tb.g
           (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j) tb.extra r.val k +
-        (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]! := by
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[k]! := by
   obtain ⟨res, tr₁, l₁, hpiop⟩ := piopCut_views_ret L₀ src wk x w hsc hR hServe hF hsx hs j r hRep hext
     (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0)

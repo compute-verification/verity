@@ -1,5 +1,5 @@
 # `verity bench served_errors` (`run.py`). Not a package: the suite holds the runner's Pearl+ gap to the Lean lemma's
-# literals and runs it (`uv run tools/verity/check/suites.py benchmarks/served_errors`).
+# literals and runs it (`uv run tools/check/suites.py benchmarks/served_errors`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

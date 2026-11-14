@@ -1,7 +1,7 @@
 module
 
-public import Flock.Firewall.Frame
-meta import Flock.Firewall.Frame
+public import Flock.ZkServer.Frame
+meta import Flock.ZkServer.Frame
 
 /-!
 `Frame.step`, the frame's answer to one request and its state after it, and `Frame.run`, its fold: a round squeezing two
@@ -13,7 +13,7 @@ rep's coins after the first round are refused; and `run` ends at the first answe
 
 namespace Flock.Test.FrameStep
 
-open Flock.Firewall.Frame
+open Flock.ZkServer.Frame
 open Flock.Transcript (header)
 
 def c : Cfg := default

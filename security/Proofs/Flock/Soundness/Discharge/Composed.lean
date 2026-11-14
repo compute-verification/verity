@@ -22,7 +22,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Custody
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
-public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 public import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJA
 
@@ -33,7 +33,7 @@ The soundness half is in `Composed/Sound.lean`, its pieces in `Composed/Defs.lea
 `Composed/Headline.lean`, the sample's `Coined` tables in `Composed/Coined.lean`. At `J` tables the soundness half is
 `Composed/SoundJ.lean`, its pieces in `Composed/DefsJ.lean`. `Composed/Custody.lean` and `Composed/CustodyJ.lean` restate
 them under `live-verifier`, and `Composed/CustodyJJson.lean` the latter with the sample file `verity-verify-proof draw` printed;
-`Composed/PublicJ.lean` restates `CustodyJ`'s with "wrong" measured against the public file, and `Composed/DrawnJ.lean`
+`Composed/PublicJ.lean` restates `CustodyJ`'s with "wrong" measured against the public file, and `Composed/SampledJ.lean`
 bounds the sampled proof blocks' correctness at verity-verify-proof's acceptance.
 `Composed/NonVacuousJ.lean` proves the `J`-table statements' reference setup and sample hypotheses satisfiable together.
 `Composed/DefsJA.lean` states `DefsJ`'s session and runs pieces at any acceptance and setup.

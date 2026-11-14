@@ -8,7 +8,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   query (`Partition.strata`, which `population-order` holds to the population's units, template by template), each one
   range of `Q·n_t` slots from `off_t`, `Q` the replay sample's size (`parts`). Template `t`'s cell in the sample's
   `i`-th replay block `S[i]` is its `n_t` slots from `off_t + i·n_t` (`Part.span`). One template's cells are
-  `Select.secondLaw`'s strata.
+  `Select.secondSamplingDesign`'s strata.
 * **A statement** (`Stmt`) is one second-stage session's, as its files state it: the template its circuit is an
   instance of (its stratum's name), its public file's header, its session record's sample (`unit_draw`), and the
   registered reads it was verified against (`--registered`), null for none.
@@ -21,7 +21,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
     `Checked`, `verifiedOf`). So the checks below read only a header, reads and a sample that were verified;
   - `second-tables`: an accepted verdict of record naming its header, registered reads and sample set its session up as
     other than one Flock table (`session_tables`, `tablesOk`): round 2 reads one session of one table for each part, so
-    a session split across tables (Flock's `tableDraw`) is refused, as one split across statements is
+    a session split across tables (Flock's `tableSample`) is refused, as one split across statements is
     (`second-template`);
   - `second-header`: its header is not the reference header the auditor's params give its template (`Own.refs`, the
     registered reference statement's, fixed before the run) placed in the run (`atRun`), both with the run's fields
@@ -43,7 +43,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second sample's units in its part as a subset of its slots
-    (`ownDraw`); or, for a statement of only its part's sampled proof blocks, not every unit of the statement
+    (`ownSample`); or, for a statement of only its part's sampled proof blocks, not every unit of the statement
     (`wholeSample`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
@@ -141,7 +141,8 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
   `second-cover` for each part no statement is for (every part has one, sampled by the second sample or not), and
   `second-reported` when the `{value: root}` the verifiers report the sessions read (`Record.sessionRegistered`)
-  is not the statements' (`statementReads`). A passing check (`check_ok`) holds the interior record to the replay
+  is not the statements' (`statementReads`), and `second-table-rows` for each registered read that lists `table_rows`:
+  a read whose key is wired lists none (`KEY_ROWS_WHY`), and round 2 reads none yet (`tableRowsWhy`). A passing check (`check_ok`) holds the interior record to the replay
   sample in its order (`interiorOrderOk_sample`), the statements to the parts, one each by position, every header to
   its template's reference placed in the run but for the run's fields (`check_ok_header`), every port a header shares
   rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
@@ -219,8 +220,8 @@ def INPUTS_WHY : String :=
   "the interior registration registers a value that is neither one the verifier holds without the prover (one " ++
   "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a " ++
   "read the auditor's params record, whose root and domain it fills from one table of the read's rows that " ++
-  "round 1's record registers, whose key is a port of round 1's record or a value it holds, and whose " ++
-  "verdict it holds to 1"
+  "round 1's record registers or its params pin, whose key is a port of round 1's record or a value it holds, " ++
+  "and whose verdict it holds to 1"
 
 def KEY_WHY : String :=
   "the interior registration registers the opened row of a read at a key the block computes (the read's key is " ++
@@ -269,11 +270,8 @@ place of the table's name (`HistoryTable.resolve`). A `port` or a `value` source
 the prover's after the sample, and a `position` or a `window` source the interior record's population or window. -/
 def OWN_SOURCES : List String := ["bytes"]
 
-/-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
-def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
-
-/-- `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
-(`Supplied.halfLeaves`). `openedRow` doesn't read it until `halfLeaves` is written. -/
+/-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1 as one 16-bit half, one
+leaf of the verdict's one word (`Supplied.halfLeaves`). -/
 def VERDICT_ONE_LEAF : Array (String × String) := #[("bytes", "0001")]
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
@@ -465,8 +463,9 @@ of the values the interior registration registers, the verifier's own copies of 
 each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
 of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); the
 templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`); the
-words of the rows each wire joins (`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no
-executable of record sets otherwise. -/
+registered tables the auditor's params pin before any coin (`tables`: `Registration.Verifier.tables`),
+`(parameter, entry)` each, the entry the tables' registration names; the words of the rows each wire joins
+(`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no executable of record sets otherwise. -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -484,6 +483,7 @@ structure Own where
   supplied : Array (String × Array (Array (String × String))) := #[]
   fixed : Array String := #[]
   reads : Array (String × Nat) := #[]
+  tables : Array (String × Json) := #[]
   widths : Array Width := #[]
   wiredKey : Bool := WIRED_KEY
 
@@ -991,7 +991,7 @@ def rootsOk (named : Bool) (rec : Json) (t : String) (h : Json) (reads : Array S
 
 /-- **The verifier's own sample** for part `p`'s session: the second sample's units among its slots, counted from its
 first, as `unit_draw` writes a subset of its population. -/
-def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
+def ownSample (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
   let units := (drawn.filter (p.holds q)).map (· - p.lo)
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson (q * p.n)), ("k", Lean.toJson units.size),
     ("units", natsJson units)]
@@ -1231,7 +1231,7 @@ def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List 
    ("second-header", headerOk own named k s.template s.header),
    ("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
-   ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
+   ("second-sample", jeq s.draw (ownSample q p own.drawn)),
    ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads &&
      wiredRead own p.template reads),
    ("second-refs", refsOk s),
@@ -1334,6 +1334,36 @@ def interiorReads (own : Own) (ss : List Json) : Array Json :=
 def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
   if Record.sameDict (own.reported.getD #[]) (statementReads ss) then [] else [("second-reported", Json.str REPORTED_WHY)]
 
+/-- A read's ports a key reads at: its key, its row's ports and its verdict. -/
+def KEYED_PORTS : List String := OPENING_KEY :: OPENING_ROW ++ [OPENING_VERDICT]
+
+def KEY_ROWS_WHY : String :=
+  "a read whose key is wired lists table_rows at a port of its opening: the rows it reads are a function of a " ++
+  "committed value, never public positions, so it lists none"
+
+def TABLE_ROWS_WHY : String :=
+  "a registered read lists table_rows, which round 2 does not read yet: a read lists every row"
+
+/-- Why template `t`'s registered read at `port`, entry `e`, is refused for the `table_rows` it lists; none where it
+lists none. A read whose key is wired lists none at a port of its opening (`KEYED_PORTS`): `KEY_ROWS_WHY`. Round 2
+reads no `table_rows` yet, so every other one listed is refused too (`TABLE_ROWS_WHY`), until the change that reads
+them. -/
+def tableRowsWhy (own : Own) (t port : String) (e : Json) : Option String :=
+  match getD e "table_rows" with
+  | .null => none
+  | _ => some (if KEYED_PORTS.contains port && (wireOf own t OPENING_KEY).isSome then KEY_ROWS_WHY else TABLE_ROWS_WHY)
+
+/-- `second-table-rows` for each registered read of statements `ss` that lists `table_rows` (`tableRowsWhy`), naming
+the statement, its template, the port and why. -/
+def tableRowsFailures (own : Own) (ss : List Json) : List (String × Json) :=
+  (List.range ss.length).flatMap fun i =>
+    match Stmt.ofJson? (ss.getD i .null) with
+    | some s => (entries (getD s.registered "ports")).toList.filterMap fun (port, e) =>
+      (tableRowsWhy own s.template port e).map fun why =>
+        ("second-table-rows", Json.mkObj [("statement", Lean.toJson i), ("template", .str s.template),
+          ("port", .str port), ("why", .str why)])
+    | none => []
+
 /-- **The interior record's order**: the replay sample the interior record names (`window.replay_sample`, which the
 proof server writes) is the verifier's own, `own.sample`, in its order, each entry a natural number (`nat?`, never a
 boolean). -/
@@ -1379,35 +1409,38 @@ def bytesOf (row : Array (String × String)) : Option String :=
 template's first); none for a template they record none for. -/
 def readSize (own : Own) (t : String) : Option Nat := (own.reads.find? (·.1 == t)).map (·.2)
 
-/-- Values `root` and `domain`, which template `t`'s root and domain ports read, are one table's of round 1's record
-at every unit, a table of as many leaves as the read has rows. `t` is a read of `V` rows (`readSize`). Each value has
-at least one row and as many as the other; row `i` of each is one `bytes` source (`bytesOf`), and some port of round
-1's record (`Record.byPort`) registers row `i` of `root` as its root under row `i` of `domain` as its domain id, at
-`V` leaves; and the two ports' rows place each unit alike (`Own.rows`: one `per` and the same runs). So a unit reads
-the root and the domain id of one table of `V` leaves that round 1's record registers. -/
+/-- Values `root` and `domain`, which template `t`'s root and domain ports read, are one table's at every unit, of
+round 1's record or of the tables the auditor's params pin (`Own.tables`), a table of as many leaves as the read has
+rows. `t` is a read of `V` rows (`readSize`). Each value has at least one row and as many as the other; row `i` of each
+is one `bytes` source (`bytesOf`), and some port of round 1's record (`Record.byPort`) or some pinned table's entry
+names row `i` of `root` as its root and row `i` of `domain` as its domain id, at `V` leaves; and the two ports' rows
+place each unit alike (`Own.rows`: one `per` and the same runs). So a unit reads the root and the domain id of one
+table of `V` leaves that round 1's record registers or the auditor pinned before any coin. -/
 def oneTable (own : Own) (mine : Array (String × Array (Array (String × String)))) (t root domain : String) : Bool :=
   let a := ((ownRows mine root).getD #[]).map bytesOf
   let b := ((ownRows mine domain).getD #[]).map bytesOf
-  let ports := Record.byPort own.boundary
   let size := readSize own t
   let place := fun (p : String) => (rowsOf own t p).map fun r => (r.per, r.runs)
+  let isTable := fun (e : Json) (r d : String) => match getD e "root", getD e "domain" with
+    | .str x, .str y => x == r && y == d && nat? (getD e "leaves") == size
+    | _, _ => false
   size.isSome && !a.isEmpty && a.size == b.size &&
     (a.zip b).all (fun (r, d) => match r, d with
-      | some r, some d => ports.any fun (_, e) => (match getD e "root", getD e "domain" with
-        | .str x, .str y => x == r && y == d && nat? (getD e "leaves") == size
-        | _, _ => false)
+      | some r, some d => (Record.byPort own.boundary).any (fun (_, e) => isTable e r d) ||
+          own.tables.any (fun (_, e) => isTable e r d)
       | _, _ => false) &&
     (place OPENING_ROOT).isSome && place OPENING_ROOT == place OPENING_DOMAIN
 
 /-- **An opened row**: link `x` names the opened row of a read against a root round 1 committed. Its template is a
 read (`readSize`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
 (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
-of round 1's record at every unit, of the read's rows (`oneTable`); its key (`OPENING_KEY`) is either no wire, and
+of round 1's record or of the tables its params pin at every unit, of the read's rows (`oneTable`); its key
+(`OPENING_KEY`) is either no wire, and
 linked at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
 `second-links`) or the verifier holds (`own.fixed`, `mine`), or, where the wired key's switch is on (`Own.wiredKey`),
 one wire, whole (`keyFailure`), the key at each sampled unit its writer unit's committed output row (`second-read`'s
 `readOk`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads (`Own.refReads`,
-the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE`. With the switch off, a
+the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE_LEAF`. With the switch off, a
 key the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/
 def openedRow (own : Own) (registered : Array String) (mine : Array (String × Array (Array (String × String))))
     (x : Link) : Bool :=
@@ -1429,7 +1462,7 @@ def openedRow (own : Own) (registered : Array String) (mine : Array (String × A
       | some _ => own.wiredKey && (keyFailure own t).isNone) &&
     match verdict with
     | some v => (match ownRows mine v with
-      | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE)
+      | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE_LEAF)
       | none => false)
     | none => false
 
@@ -1449,7 +1482,7 @@ from its own bytes (`ownValues`). Any other passes only as the opened row of a r
 at least one link names it, each link that does is such a row's (`openedRow`), and no template's reference statement
 reads it at a port no link names it at (`readUnlinked`), so nothing reads the row but its opening. So every input of
 a replay block the prover gives after the first stage's sample is a row a read opens under the root of a table round
-1's record registers, at a key round 1's record or the verifier fixes, and the prover's choice of it is SHA-512's
+1's record registers or the auditor's params pin, at a key round 1's record or the verifier fixes, and the prover's choice of it is SHA-512's
 collision: the links at round 1's ports, the wires and the values the verifier holds are the block's other inputs,
 none the interior registration's to choose. That the circuit a session proves under a read's id is the read's is the
 template check's (`Flock.ReadNet.check`). -/
@@ -1490,11 +1523,11 @@ def interiorFailures (own : Own) : List (String × Json) :=
     | some v => [("second-inputs", Json.mkObj [("value", Json.str v), ("why", Json.str (inputsWhy own v))])]
     | none => []
 
-/-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, then,
-when there is none and the form isn't allowed, its refusal. -/
+/-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, the
+`table_rows` they list last (`tableRowsFailures`), then, when there is none and the form isn't allowed, its refusal. -/
 def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   let found := interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
-    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- The design is derived over parts `ps`: its links (`linksOk`) and its wires (`wiresOk`). -/
@@ -1552,7 +1585,7 @@ def sampledFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : L
 /-- `failures` over `sampledFailures`. -/
 def failuresSampled (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   let found := interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
-    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot
@@ -1779,7 +1812,7 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
     · rename_i hne
       simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
       simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
-      obtain ⟨hint, hst, hord, hcov, hrep⟩ := h
+      obtain ⟨hint, hst, hord, hcov, hrep, -⟩ := h
       refine ⟨by simpa using hne, interiorFailures_nil hint, ps, hp, hl, hw, ?_, ?_, ?_⟩
       · intro i hi
         have hi' : i < ss.toList.length := by simpa using hi
@@ -1842,7 +1875,7 @@ theorem stmtCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt}
     verifiedOk own s = true ∧ tablesOk own s = true ∧
       headerOk own named k s.template s.header = true ∧ populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
-      jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
+      jeq s.draw (ownSample own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
       linkedRead own p.template (entries (getD s.registered "ports")) = true ∧
       wiredRead own p.template (entries (getD s.registered "ports")) = true ∧ refsOk s = true ∧
@@ -2100,7 +2133,7 @@ theorem tablesOk_one {own : Own} {s : Stmt} {c : Checked} (h : tablesOk own s = 
 /-- A passing statement of only its part's sampled proof blocks: `stmtCodes_nil`'s checks, with its header its
 template's reference's placed at the part's sampled slots (`sampledHeaderOk`), its population those slots
 (`sampledOk`) and its session's sample every unit of it (`wholeSample`) where `stmtCodes_nil` has `headerOk`,
-`populationOk` and `ownDraw`. -/
+`populationOk` and `ownSample`. -/
 theorem sampledCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt}
     (h : sampledCodes own named k p s = []) :
     verifiedOk own s = true ∧ tablesOk own s = true ∧
@@ -2196,7 +2229,7 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
       · rename_i hne
         simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
         simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
-        obtain ⟨hint, hst, hord, hcov, hrep⟩ := h
+        obtain ⟨hint, hst, hord, hcov, hrep, -⟩ := h
         refine ⟨by simpa using hne, interiorFailures_nil hint, ps, by first | rfl | exact hp, hl, hw, ?_, ?_, ?_⟩
         · intro i hi
           have hi' : i < ss.toList.length := by simpa using hi

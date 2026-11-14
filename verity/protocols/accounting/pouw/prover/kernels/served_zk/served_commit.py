@@ -65,7 +65,7 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
-  before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
+  before it served the pass (`state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
   Python's generator.  An execution phase's registration names its
   pass, and the challenger re-starts the pass's execution phase from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
@@ -143,6 +143,7 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
@@ -825,9 +826,31 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
 
 
 def _pd():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[7] / "benchmarks" / "pouw" / "pearl_c_vllm"))
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD
     return PD
+
+
+def state_entropy(path: str):
+    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
+    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the serving controller and for
+    the challenger process that later samples the execution phase's units (`challenger --state`), so named by the Lean's
+    claim instance (`verifier.CLAIM`)."""
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import COIN_BYTES, HM96, LABELS
+    p = Path(path)
+    if not p.exists():
+        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
+        p.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(entropy)
+    data, at = p.read_bytes(), [0]
+
+    def take(n: int) -> bytes:
+        at[0] += n
+        return data[at[0] - n:at[0]]
+    take.claim = verifier.CLAIM
+    return take
 
 
 class Challenger:
@@ -985,16 +1008,18 @@ class Challenger:
         return out["how"]
 
     def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
-        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
-        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
+        """One-stage's R1-R6 against the challenger's own copies, then where they pass the caller's check
+        (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
+        runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
-        codes = self._of_record(name, self.record.registration,
-                                OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
-                                dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
-                                                          None, None))
+        params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])
+        args = (rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
+        codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
+        if not codes:
+            codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
@@ -1447,8 +1472,6 @@ def cmd_challenger(a) -> int:
     if a.state:
         if not Path(a.state).is_file():
             raise SystemExit(f"no challenger state at {a.state}")
-        sys.path.insert(0, str(Path(__file__).resolve().parents[7] / "benchmarks" / "pouw" / "pearl_c_vllm"))
-        from e2e import state_entropy
         entropy = state_entropy(a.state)
     else:
         entropy = PV.coins

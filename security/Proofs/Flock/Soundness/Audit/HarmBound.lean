@@ -45,7 +45,7 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal NNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n m : ℕ}
 
@@ -256,7 +256,7 @@ theorem work_isHarmBound_fill (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : 
   stratified_isHarmBound_fill σ (workK σ w f K) (workK_le σ w f K) (fun s => (w s : ℝ)) x hδ hτ hfull hempty hspent
 
 /-- Harm in whole bits: the floor of a harm bound is one. -/
-theorem _root_.FlockSoundness.Audit.IsHarmBound.natFloor {L : Law n} {b : Fin n → ℕ} {δ : ℝ≥0∞} {H : ℝ}
+theorem _root_.FlockSoundness.Audit.IsHarmBound.natFloor {L : SamplingDesign n} {b : Fin n → ℕ} {δ : ℝ≥0∞} {H : ℝ}
     (hH : IsHarmBound L (fun u => (b u : ℝ)) δ H) : IsHarmBound L (fun u => (b u : ℝ)) δ (⌊H⌋₊ : ℕ) := by
   intro B hB
   have h : ((∑ u ∈ B, b u : ℕ) : ℝ) ≤ H := by
@@ -319,7 +319,7 @@ theorem stratified_isHarmBound_exact (σ : Fin n → Fin m) (k : Fin m → ℕ) 
           (mul_le_mul_of_nonneg_left hrisk hτ)
     _ = _ := add_comm _ _
 
-end Law
+end SamplingDesign
 
 namespace Partition
 
@@ -330,25 +330,25 @@ bits `b_s` per unit of stratum `s`. A prover that picks its strategy from a unif
 what is delivered on `D` succeed together with probability at most
 `2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + δ_link + δ_in`, where `miss (j + 1) < δ`. -/
 theorem audit_exfiltration_stratified {σs : Fin n → Fin m} {k : Fin m → ℕ}
-    {hk : ∀ s, k s ≤ (Law.stratum σs s).card} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
-    {X : (R : Reg) → Cont (Law.stratified σs k hk) Reg session R → (Fin C.N → Bool)}
+    {hk : ∀ s, k s ≤ (SamplingDesign.stratum σs s).card} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+    {X : (R : Reg) → Cont (SamplingDesign.stratified σs k hk) Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
     {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
     [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (b : Fin m → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, b (σs u))
     (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ)
-    (hfull : ∀ s, τ * k s / (Law.stratum σs s).card < b s → x s = (((Law.stratum σs s).card - k s : ℕ) : ℝ))
-    (hempty : ∀ s, (b s : ℝ) < τ * k s / (Law.stratum σs s).card → x s = 0)
-    (hspent : τ = 0 ∨ ∑ s, (k s : ℝ) * x s / (Law.stratum σs s).card = Real.log δ.toReal⁻¹)
-    {j : ℕ} (hj : (Law.stratified σs k hk).miss (j + 1) < δ)
-    (σ : M → Strategy (audit (Law.stratified σs k hk) Reg session)) (g : (D → Bool) → M) :
+    (hfull : ∀ s, τ * k s / (SamplingDesign.stratum σs s).card < b s → x s = (((SamplingDesign.stratum σs s).card - k s : ℕ) : ℝ))
+    (hempty : ∀ s, (b s : ℝ) < τ * k s / (SamplingDesign.stratum σs s).card → x s = 0)
+    (hspent : τ = 0 ∨ ∑ s, (k s : ℝ) * x s / (SamplingDesign.stratum σs s).card = Real.log δ.toReal⁻¹)
+    {j : ℕ} (hj : (SamplingDesign.stratified σs k hk).miss (j + 1) < δ)
+    (σ : M → Strategy (audit (SamplingDesign.stratified σs k hk) Reg session)) (g : (D → Bool) → M) :
     avg (fun msg => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ msg)) (cont (σ msg)))) = msg)
-        (audit (Law.stratified σs k hk) Reg session) (σ msg)) ≤
+        (audit (SamplingDesign.stratified σs k hk) Reg session) (σ msg)) ≤
       ((2 ^ ⌊∑ s, (b s : ℝ) * x s⌋₊ * ∑ i ∈ range (j + 1), n.choose i : ℕ) : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) +
         (δ + εks + δlink + δin) :=
   P.audit_exfiltration hks hlink hin hD (fun u => b (σs u)) K hK hsep hw
-    (Law.stratified_isHarmBound_bits σs k hk b x hδ hτ hfull hempty hspent) hj σ g
+    (SamplingDesign.stratified_isHarmBound_bits σs k hk b x hδ hτ hfull hempty hspent) hj σ g
 
 end Partition
 

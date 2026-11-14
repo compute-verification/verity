@@ -1,6 +1,6 @@
 # The DRAM-free filler beside the decode step: its kernels (dcap.cu, pfill.cuh, flin.cuh, comm/tpcomm.cu) run on a GPU
 # node through research run; the scorer, the arms and the kernels' host references run here as a suite
-# (`uv run tools/verity/check/suites.py benchmarks/pouw/filler`).
+# (`uv run tools/check/suites.py benchmarks/pouw/filler`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # the directory's modules and the harness's ledger, which the tests import by name; no name is in both

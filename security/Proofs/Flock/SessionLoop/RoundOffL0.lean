@@ -57,7 +57,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace LeanRelease
 
@@ -136,17 +136,17 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
   have hex := (Loop.Level0Src.realOf_lanes hS0 ν t j r hre').1
   -- the frame's pads are the tape's
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds
-  have hzD := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+  have hzD := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
   have hH : ((ofLoop Masked.dataE (withFiles (withLink L₀ src) src) real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h =
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h := by
-    have e := (cfg_tapeOfDraws (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
+    have e := (cfg_tapeOfSamples (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
       Loop.frepOf j.val r.val hrep hzD).1
-    rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+    rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
       (Masked.UE.tapeZk t)] at e
     exact e
   -- the openings' words are the opened coins
-  have hCM : _root_.Flock.Firewall.Frames.COIN_MAX = 65536 := rfl
-  have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.Firewall.Frames.COIN_MAX →
+  have hCM : _root_.Flock.ZkServer.Frames.COIN_MAX = 65536 := rfl
+  have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.ZkServer.Frames.COIN_MAX →
       (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]! = Masked.slotAt (Loop.finS.pad (K := refK x) cs) p e := by
     intro p e hp he
     have hw := wordsAt_slot Masked.dataE x ops hlt.le (s := ops.length) (p := p) (e := e) hp le_rfl
@@ -232,7 +232,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     rfl
   have htabst : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = tr.st := htabj.trans hT1.symm
   have hbasis : FlockComplete.basisVals (FlockComplete.Replay.Rs.sws
-        (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf xs)
+        (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf xs)
         ⟨fun k e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2) (Masked.rankSlot x j.val r.val + k))[e]!,
           fun e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2)
             (Masked.rankSlot x j.val r.val + (2 + xs.size)))[e]!⟩) (tr.st.m - 7) =
@@ -271,7 +271,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     (FlockComplete.LigLock.l0BodyAt_congr_lt ?_ ?_ ?_)
   · intro _ e he
     exact hW (Masked.ligP0 x j r) e (by omega) (by
-      rw [hn0, Nat.min_eq_left (show (Masked.zkTab x j).sch.n ≤ _root_.Flock.Firewall.Frames.COIN_MAX by
+      rw [hn0, Nat.min_eq_left (show (Masked.zkTab x j).sch.n ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by
         rw [hCM]; omega)]
       exact he)
   · intro hi2
