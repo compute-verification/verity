@@ -132,9 +132,9 @@ def test_split_keeps_weight_nonces(window, without):
 
 @pytest.mark.slow
 def test_split_beside_expert_tables():
-    """Over an MoE layer with the sparse families, whose expert blocks' tables are in the window too, the split keeps both
-    kinds of table apart: the plain weights and their nonces are the same with and without the shard's tables, and handed
-    unsplit all but the first would take another nonce."""
+    """Over an MoE layer with the sparse families, whose expert blocks' tables and absorbed weights' entries are in the window
+    too, the split keeps all three apart: the plain weights and their nonces are the same with and without the shard's
+    tables, and handed unsplit all but the first would take another nonce."""
     from verity_vllm.program.predict import node_window_sparse as NS
 
     fn = glm_request(LP, 1, moe=True).program.fn
@@ -143,7 +143,7 @@ def test_split_beside_expert_tables():
     (plain, tables), (plain0, tables0) = NE.split(params), NE.split(before)
     assert plain == plain0 and WW.weight_nonces(plain) == WW.weight_nonces(plain0)
     assert set(tables) - set(tables0) == {NE.shard_param(LABEL, NE.WIDTH, b) for b in range(BLOCKS)}
-    assert all(t.endswith("/table") for t in tables0) and tables0
+    assert all(t.endswith(("/table", "/bnk")) for t in tables0) and {t.rsplit("/", 1)[1] for t in tables0} == {"table", "bnk"}
     moved = WW.weight_nonces(params)
     assert sum(moved[p] != n for p, n in WW.weight_nonces(plain0).items()) == len(plain0) - 1
 
