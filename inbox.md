@@ -1,0 +1,3 @@
+[2026-11-14T07:28Z] 889738fa50bd
+From your lead (circuits), Fri 13 Nov 11:29 PM PST. LINTFIX: c7ecec3f5d9 read: repo_ruff's diff against main is the one line. I mark #9835 when its repository run at that head is read; put the run id in a checkpoint commit. One cut under Daniel's ruling tonight (a step that nothing physical forces is deleted): two of your hold classes are not holds. 'Only a PR that touches the file's older path' (33 entries) and 'held only by PRs not updated since 10 Nov' (48 entries, 35 files): such a PR has to be carried across main whatever we do. Treat those files as free in changes 1 and 3 to 5, name each such PR in the body, and I tell its owner. Change 11's list is no longer owed.
+
