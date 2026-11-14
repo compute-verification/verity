@@ -43,6 +43,7 @@ from p2_store import store as S
 
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
@@ -198,7 +199,7 @@ Step = Callable[[Engine, int, p2.Sketcher], tuple[int, dict[int, bytes]]]
 
 def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_window: int, step_ns: int = 1000,
           samples: int | None = None, entropy: Callable[[int], bytes] | None = None, step: Step | None = None,
-          open_: Callable[[p2.Prover], Open] | None = None) -> Served:
+          open_: Callable[[p2_prover.Prover], Open] | None = None) -> Served:
     """Serve `windows · per_window` steps from `prompt` under one audit session over `store` (the prover's `C*`, the
     engine's), one pass a step, each window `per_window` steps on the session's clock, `samples` openings a window
     (every receipt by default). `step` and `open_` replace the honest step and opening, to fault them."""
@@ -210,7 +211,7 @@ def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_win
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
     session = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0,
                              clock=clock)
-    prover = p2.Prover(store, entropy=entropy)
+    prover = p2_prover.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)
     out, token, previous = Served(), prompt, reg.digest
     challenge, t, i, closed, passes = session.start(), 0, 0, 0, {}

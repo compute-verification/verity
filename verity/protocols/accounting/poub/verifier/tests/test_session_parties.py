@@ -13,6 +13,7 @@ from test_verifier_party import STORE, Entropy, dropping
 from verity.runtime import sources as S
 from verity.protocol import ProtocolDef
 from verity.runtime.runner import run
+from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import audit
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.poub.verifier import session_parties as SP
@@ -24,7 +25,7 @@ MS = 1_000_000
 
 
 def simulated(state, request=None, cheat=None, prover=SPP.Prover, verifier=SP.Verifier, **kw):
-    store = P.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts"))
+    store = PP.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts"))
     proto = ProtocolDef(SP.MANIFEST, {SP.VERIFIER: verifier, SP.PROVER: prover})
     return run({"protocol": SP.ID, "params": request or SP.request_of("n0")}, BOTH, "simulated", state,
                protocols={SP.ID: proto}, seed=SEED, authenticate=False, capabilities={SP.PROVER: {"store": store}}, **kw)
@@ -70,7 +71,7 @@ def test_the_parties_session_is_the_periods(tmp_path, monkeypatch, cheat, verdic
     coins, nonce = entropy[:SP.SECRET_BYTES], entropy[SP.SECRET_BYTES:]
     monkeypatch.setattr(audit, "register", functools.partial(audit.register, nonce=nonce))
     c = Readings([got["params"]["not_before_ns"]] + [now or 0 for _, now in log])
-    period = P.session("n0", P.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts")), coins, clock=c,
+    period = P.session("n0", PP.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts")), coins, clock=c,
                        sleep_until=c.sleep_until)
     assert (period.answer, period.case) == (out["outcome"]["answer"], got)
 

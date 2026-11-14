@@ -14,6 +14,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -70,7 +71,7 @@ def drive(store: p2.Store, p: audit.Params, run=None):
     reg = store.registration
     s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins")), not_before_ns=0,
                        clock=clock)
-    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
+    prover = p2_prover.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest

@@ -23,6 +23,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 from ra_cases import Entropy
 
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_party, receipts
 from verity.protocols.accounting.poub.verifier.codec import P2_EXPANDER, P2_POINT, P2Codec
 from verity.protocols.accounting.poub.verifier.receipts import Plan
@@ -248,7 +249,7 @@ def opening_inputs(take) -> dict:
     order = take(st.permutations(range(reg.blocks)))[:take(st.integers(1, reg.blocks))]
     plan = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
     seed, i, p = expand(take(st.binary(max_size=8)), 64), take(st.integers(0, 3)), take(st.integers(0, plan.length - 1))
-    prover = p2.Prover(store, entropy=Entropy(b"salts %d" % k))
+    prover = p2_prover.Prover(store, entropy=Entropy(b"salts %d" % k))
     edit = fault(take, 16)
     if edit == 1:
         sk, unit = p2.Sketcher(seed, rows), store.unit(plan.block(p))
@@ -427,13 +428,13 @@ def p2_bad_openings(os: list[dict], pick: int) -> bytes:
 def p2_events(store: p2.Store, plan: Plan, params, committed: list[bytes], not_before: int, edit: int = 0,
               at: tuple[int, int] = (0, 0), pick: int = 0) -> list[dict]:
     """A session's events as `p2_party.session` drives it, the prover's lines an honest prover's over `store`
-    (`p2.Prover`), each step `P2_STEP_NS`, but for deviation `edit` at pass `at` = (t, i), its variant from `pick`:
+    (`p2_prover.Prover`), each step `P2_STEP_NS`, but for deviation `edit` at pass `at` = (t, i), its variant from `pick`:
     3 a unit's reads skipped (its receipt from zeros), 4 window t's openings line near its form (`p2_bad_openings`), 5
     window t's last pass missing, 6 the pass's root line near its form (`p2_bad_root`) and 7 the pass's root after
     window t's deadline. The events end once the session has its outcome."""
     b = p2_party.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
                        plan, not_before)
-    prover = p2.Prover(store, entropy=Entropy(b"p2 session"))
+    prover = p2_prover.Prover(store, entropy=Entropy(b"p2 session"))
     events: list[dict] = []
     passes: dict[tuple[int, int], object] = {}
 
@@ -636,7 +637,7 @@ def test_the_committed_store_s_registration_digest_is_the_leans(server, committe
 def test_an_honest_opening_of_each_committed_unit_checks_in_lean(server, committed) -> None:
     reg = committed.registration
     plan, seed = Plan.whole(reg.blocks), hashlib.sha512(b"a pass seed").digest()
-    prover = p2.Prover(committed, entropy=Entropy(b"committed"))
+    prover = p2_prover.Prover(committed, entropy=Entropy(b"committed"))
     ps = prover.pass_under(0, 0, seed, plan)
     for p in range(plan.length):
         v = {"registration": registration_json(reg), "seed": seed.hex(), "runs": [list(r) for r in plan.runs],

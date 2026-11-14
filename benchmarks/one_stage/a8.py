@@ -64,6 +64,7 @@ sys.path.insert(0, str(HERE.parent / "network_traces"))
 import a0  # noqa: E402
 import a7  # noqa: E402
 import leak_scan as LS  # noqa: E402
+from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -105,7 +106,7 @@ def window(store: audit.Store, L: int, samples: int, delta: float, secret: bytes
     clock = a7.Clock()
     s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []
     for i in range(N // L):
         runs = ((L * i, L),)

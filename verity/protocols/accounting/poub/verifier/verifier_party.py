@@ -8,28 +8,27 @@ its value and the root it was opened after (`{"run": {"challenge", "i", "previou
 `coins.Released`, answered `{"root"}`), and each window's samples (`{"open": {"draws", "t"}}`, answered `{"openings":
 hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and `{"end": {"commitment",
 "openings"}}` last, once the session has its outcome: the coin commitment and every released coin's opening, which
-the prover checks each challenge it was sent against (`audit.Prover.end`), or `{"end": {}}` for a session left
-undecided. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one `period.run`
-makes in one process.
+the prover checks each challenge it was sent against (`audit_prover.Prover.end`), or `{"end": {}}` for a session
+left undecided. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one
+`period_prover.run` makes in one process. The prover's end of these lines is `verity/protocols/accounting/poub/prover/period_prover.py`'s
+(`prove`, and `period_with`, one session with this side wherever `period.json` puts it).
 
 `python -m verity.protocols.accounting.poub.verifier.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
 prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `command()` is the argv that
-starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts it,
-and `period_with(side, request, store)` one session with it, playing the prover (`prove`).
+starts that side on this machine.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import secrets
 import socket
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, BinaryIO, Protocol, TypeVar
+from typing import Any, BinaryIO
 
 from . import audit, wire
 from . import coins as C
@@ -91,31 +90,6 @@ class Remote:
             self.ended = True
 
 
-def prove(f: BinaryIO, prover: P.Local) -> int:
-    """The prover's side over the connection `f`, `prover` holding the store: each message answered until the verifier
-    ends the session, whose coins it checks then if the end discloses them; the passes run."""
-    blocks, root = prover.register()
-    _send(f, {"register": {"blocks": blocks, "payload_root": root.hex()}})
-    passes = 0
-    while True:
-        (kind, m), = _recv(f).items()
-        if kind == "hold":
-            prover.hold(P.registration_of(m["registration"]))
-        elif kind == "run":
-            root = prover.run(C.Released.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
-            _send(f, {"root": root.hex()})
-            passes += 1
-        elif kind == "open":
-            _send(f, {"openings": wire.encode_openings(prover.open(m["t"], [tuple(d) for d in m["draws"]])).hex()})
-        elif kind == "end":
-            if m:
-                prover.end(C.LiveCommitment.from_json(m["commitment"]),
-                           [C.LiveOpening.from_json(o) for o in m["openings"]])
-            return passes
-        else:
-            raise ValueError(f"no message {kind!r}")
-
-
 def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Callable[[], int] = time.monotonic_ns,
           sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Run:
     """The verifier's side of one session over the connection `f` (`period.session` against `Remote`), ended with its
@@ -126,19 +100,6 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Calla
                     clock=clock, sleep_until=sleep_until)
     remote.end()
     return out
-
-
-T = TypeVar("T")
-
-
-class Side(Protocol):
-    """The verifier's side as what starts a run hands it over (the runtime's `Side` is one): the machine it runs on,
-    and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the side's
-    report back with what `drive` returned."""
-
-    host: str
-
-    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
 
 
 def command() -> tuple[str, ...]:
@@ -156,22 +117,9 @@ def placement(node: str, host: str) -> dict[str, Any]:
 
 def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
                window_ns: int = 100_000_000, deadline_ns: int = 500_000_000) -> dict[str, Any]:
-    """The session's request, `period.run`'s defaults unless given."""
+    """The session's request, `period_prover.run`'s defaults unless given."""
     return {"deadline_ns": deadline_ns, "node": node, "passes": passes, "samples": samples, "window_ns": window_ns,
             "windows": windows}
-
-
-def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
-                entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Run, dict[str, Any]]:
-    """One session with the verifier's side `side` starts and this process the prover of `store`: the period, and the
-    side's report (`host`, `passes`)."""
-
-    def drive(s: socket.socket) -> int:
-        with s.makefile("rwb") as f:
-            return prove(f, P.Local(request["node"], store, entropy=entropy))
-
-    got, passes = side.talk(request, drive)
-    return P.Run(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -190,7 +138,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PREMISE", "Remote", "command", "main", "period_with", "placement", "prove", "request_of", "serve"]
+__all__ = ["PREMISE", "Remote", "command", "main", "placement", "request_of", "serve"]
 
 if __name__ == "__main__":
     sys.exit(main())

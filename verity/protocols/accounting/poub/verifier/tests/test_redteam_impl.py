@@ -8,6 +8,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from test_remote_bandwidth import SCHEDULE, N, drive, finish, params, store  # noqa: F401
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -103,7 +104,7 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     sessions = [AuditRun(p, store.registration, None,
                          coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
                          not_before_ns=0, clock=clock) for k in (0, 1)]
-    provers = [audit.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
+    provers = [audit_prover.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
     challenges = [s.start() for s in sessions]
     previous = [store.registration.digest] * 2

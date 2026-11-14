@@ -14,6 +14,7 @@ from types import ModuleType
 
 import pytest
 
+from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_party
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -109,7 +110,7 @@ def cases(tmp_path_factory) -> dict[str, dict]:
                      **kw)
     reads = p2_case.case_of(p2_party.registration_json(reg, None), REQUEST | {"node": reg.node.hex()}, 10 ** 9, [])
     c = Clock()
-    generic = P.session("n0", P.Local("n0", hashlib.shake_256(b"a tiny MLP's weights").digest(2 * 4032 - 17),
+    generic = P.session("n0", PP.Local("n0", hashlib.shake_256(b"a tiny MLP's weights").digest(2 * 4032 - 17),
                                       entropy=_entropy(b"salts")), COINS, windows=1, clock=c, sleep_until=c.sleep_until)
     assert generic.answer["verdict"] == "accept"
     return {"space": space.case, "other-space": other.case, "reads": reads, "generic": generic.case}

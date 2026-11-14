@@ -63,7 +63,7 @@ reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside
 [[distribution]]
 directory = "verity/protocols/accounting/poub/prover"
 owner = "memory-accounting"
-reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; and the session's prover party (`session_prover.py`), which only tests load by name"
+reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers and the period's prover side (`audit_prover.py`, `p2_prover.py`, `period_prover.py`), which tests and `benchmarks/` load by name"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/prover/p2"

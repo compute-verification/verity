@@ -24,6 +24,7 @@ import pytest
 
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_lean, p2_party, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -95,7 +96,7 @@ class Prover:
         if p2_party.registration_of(registration) != self.store.registration:
             raise ValueError("not this store's registration")
         self.plan = p2_party.plan_of({} if self.whole else registration, self.store.registration)
-        self.held = p2.Prover(self.store, entropy=Entropy(b"p2-party-test/leaf-salts"))
+        self.held = p2_prover.Prover(self.store, entropy=Entropy(b"p2-party-test/leaf-salts"))
 
     def run(self, challenge, t, i, previous) -> bytes:
         self.held.received.setdefault(t, challenge)

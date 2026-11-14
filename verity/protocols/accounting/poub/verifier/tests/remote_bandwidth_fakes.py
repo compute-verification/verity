@@ -8,7 +8,7 @@ import hashlib
 
 class Clock:
     """The verifier's clock in nanoseconds from `now`, each reading `step` after the last (at `step = 0` time moves only
-    when a test sets `now`); waiting until `t` (`period.run`'s `sleep_until`) moves it there."""
+    when a test sets `now`); waiting until `t` (`period_prover.run`'s `sleep_until`) moves it there."""
 
     def __init__(self, now: int = 0, step: int = 0) -> None:
         self.now, self.step = now, step
