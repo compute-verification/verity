@@ -155,6 +155,11 @@ KEY_BOUNDS_WHY = ("a read's key is wired, and its rows give a unit a writer row 
 #: A read's ports (`gates.embedding.EmbeddingRead`, `Flock.ReadNet.readTmpl`): its key, the table's root and domain
 #: id, the opened row with its salt and its path, and its verdict (`SecondStage.OPENING_KEY` and the names after it).
 OPENING_KEY, OPENING_TABLE, OPENING_ROW, OPENING_VERDICT = "tok", ("root", "domain"), ("row", "salt", "path"), "o1"
+#: A read's ports a key reads at: its key, its row's ports and its verdict (`SecondStage.KEYED_PORTS`).
+KEYED_PORTS = (OPENING_KEY, *OPENING_ROW, OPENING_VERDICT)
+KEY_ROWS_WHY = ("a read whose key is wired lists table_rows at a port of its opening: the rows it reads are a function "
+                "of a committed value, never public positions, so it lists none")
+TABLE_ROWS_WHY = "a registered read lists table_rows, which round 2 does not read yet: a read lists every row"
 OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, among
 #: them the root and the domain id it computed for a table, which `Own.supplied` holds in place of the table's name
@@ -1609,7 +1614,31 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
     found += [("second-cover", {"template": p.template}) for p in ps if p.template not in covered]
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
+    found += table_rows_failures(own, ss)
     return found if found or allow else [("two-stage-form", FORM_WHY)]
+
+
+def table_rows_why(own: Own, t: str, port: str, e: Any) -> str | None:
+    """`SecondStage.tableRowsWhy`: why template `t`'s registered read at `port`, entry `e`, is refused for the
+    ``table_rows`` it lists; None where it lists none. A read whose key is wired lists none at a port of its opening
+    (`KEYED_PORTS`): `KEY_ROWS_WHY`. Round 2 reads no ``table_rows`` yet, so every other one listed is refused too
+    (`TABLE_ROWS_WHY`), until the change that reads them."""
+    if _get(e, "table_rows") is None:
+        return None
+    return KEY_ROWS_WHY if port in KEYED_PORTS and _wire_of(own, t, OPENING_KEY) is not None else TABLE_ROWS_WHY
+
+
+def table_rows_failures(own: Own, ss: Sequence[Any]) -> list[tuple[str, Any]]:
+    """`SecondStage.tableRowsFailures`: ``second-table-rows`` for each registered read of statements `ss` that lists
+    ``table_rows`` (`table_rows_why`), naming the statement, its template, the port and why, ports in key order."""
+    out = []
+    for i, j in enumerate(ss):
+        s = _stmt(j)
+        for port, e in sorted(_entries(_get(s.registered, "ports")), key=lambda x: x[0]) if s is not None else ():
+            why = table_rows_why(own, s.template, port, e)
+            if why is not None:
+                out.append(("second-table-rows", {"statement": i, "template": s.template, "port": port, "why": why}))
+    return out
 
 
 def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
@@ -1648,4 +1677,5 @@ __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KE
            "interior_reads", "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_widths",
            "replay_wires", "returns_ok", "row_at", "rows_of",
-           "set_name", "statement_reads", "supplied_of", "verified_of", "widths_of", "wire_runs", "wires_of"]
+           "set_name", "statement_reads", "supplied_of", "table_rows_failures", "table_rows_why", "verified_of",
+           "widths_of", "wire_runs", "wires_of"]

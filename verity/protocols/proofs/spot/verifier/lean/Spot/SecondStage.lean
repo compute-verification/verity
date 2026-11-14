@@ -141,7 +141,8 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
   `second-cover` for each part no statement is for (every part has one, sampled by the second sample or not), and
   `second-reported` when the `{value: root}` the verifiers report the sessions read (`Record.sessionRegistered`)
-  is not the statements' (`statementReads`). A passing check (`check_ok`) holds the interior record to the replay
+  is not the statements' (`statementReads`), and `second-table-rows` for each registered read that lists `table_rows`:
+  a read whose key is wired lists none (`KEY_ROWS_WHY`), and round 2 reads none yet (`tableRowsWhy`). A passing check (`check_ok`) holds the interior record to the replay
   sample in its order (`interiorOrderOk_sample`), the statements to the parts, one each by position, every header to
   its template's reference placed in the run but for the run's fields (`check_ok_header`), every port a header shares
   rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
@@ -1331,6 +1332,36 @@ def interiorReads (own : Own) (ss : List Json) : Array Json :=
 def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
   if Record.sameDict (own.reported.getD #[]) (statementReads ss) then [] else [("second-reported", Json.str REPORTED_WHY)]
 
+/-- A read's ports a key reads at: its key, its row's ports and its verdict. -/
+def KEYED_PORTS : List String := OPENING_KEY :: OPENING_ROW ++ [OPENING_VERDICT]
+
+def KEY_ROWS_WHY : String :=
+  "a read whose key is wired lists table_rows at a port of its opening: the rows it reads are a function of a " ++
+  "committed value, never public positions, so it lists none"
+
+def TABLE_ROWS_WHY : String :=
+  "a registered read lists table_rows, which round 2 does not read yet: a read lists every row"
+
+/-- Why template `t`'s registered read at `port`, entry `e`, is refused for the `table_rows` it lists; none where it
+lists none. A read whose key is wired lists none at a port of its opening (`KEYED_PORTS`): `KEY_ROWS_WHY`. Round 2
+reads no `table_rows` yet, so every other one listed is refused too (`TABLE_ROWS_WHY`), until the change that reads
+them. -/
+def tableRowsWhy (own : Own) (t port : String) (e : Json) : Option String :=
+  match getD e "table_rows" with
+  | .null => none
+  | _ => some (if KEYED_PORTS.contains port && (wireOf own t OPENING_KEY).isSome then KEY_ROWS_WHY else TABLE_ROWS_WHY)
+
+/-- `second-table-rows` for each registered read of statements `ss` that lists `table_rows` (`tableRowsWhy`), naming
+the statement, its template, the port and why. -/
+def tableRowsFailures (own : Own) (ss : List Json) : List (String × Json) :=
+  (List.range ss.length).flatMap fun i =>
+    match Stmt.ofJson? (ss.getD i .null) with
+    | some s => (entries (getD s.registered "ports")).toList.filterMap fun (port, e) =>
+      (tableRowsWhy own s.template port e).map fun why =>
+        ("second-table-rows", Json.mkObj [("statement", Lean.toJson i), ("template", .str s.template),
+          ("port", .str port), ("why", .str why)])
+    | none => []
+
 /-- **The interior record's order**: the replay sample the interior record names (`window.replay_sample`, which the
 proof server writes) is the verifier's own, `own.sample`, in its order, each entry a natural number (`nat?`, never a
 boolean). -/
@@ -1487,11 +1518,11 @@ def interiorFailures (own : Own) : List (String × Json) :=
     | some v => [("second-inputs", Json.mkObj [("value", Json.str v), ("why", Json.str (inputsWhy own v))])]
     | none => []
 
-/-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, then,
-when there is none and the form isn't allowed, its refusal. -/
+/-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, the
+`table_rows` they list last (`tableRowsFailures`), then, when there is none and the form isn't allowed, its refusal. -/
 def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   let found := interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
-    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- The design is derived over parts `ps`: its links (`linksOk`) and its wires (`wiresOk`). -/
@@ -1549,7 +1580,7 @@ def sampledFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : L
 /-- `failures` over `sampledFailures`. -/
 def failuresSampled (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   let found := interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
-    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
   if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
 
 /-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot
@@ -1776,7 +1807,7 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
     · rename_i hne
       simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
       simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
-      obtain ⟨hint, hst, hord, hcov, hrep⟩ := h
+      obtain ⟨hint, hst, hord, hcov, hrep, -⟩ := h
       refine ⟨by simpa using hne, interiorFailures_nil hint, ps, hp, hl, hw, ?_, ?_, ?_⟩
       · intro i hi
         have hi' : i < ss.toList.length := by simpa using hi
@@ -2193,7 +2224,7 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
       · rename_i hne
         simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
         simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
-        obtain ⟨hint, hst, hord, hcov, hrep⟩ := h
+        obtain ⟨hint, hst, hord, hcov, hrep, -⟩ := h
         refine ⟨by simpa using hne, interiorFailures_nil hint, ps, by first | rfl | exact hp, hl, hw, ?_, ?_, ?_⟩
         · intro i hi
           have hi' : i < ss.toList.length := by simpa using hi
