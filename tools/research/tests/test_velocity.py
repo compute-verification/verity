@@ -37,6 +37,136 @@ def offline(monkeypatch, tmp_path):
     monkeypatch.setattr(V, "pod", no_pod)
     monkeypatch.setattr(V, "landing", no_landing)
     monkeypatch.setattr(V, "read_asks", lambda now: pytest.fail("a window that ended is not read from Linear"))
+    monkeypatch.delenv("STORE_PRIVATE_READER_URL", raising=False)
+
+
+def machine(monkeypatch, tmp_path: Path, name: str) -> Path:
+    """`name`'s own store, on the one bucket every machine pushes to: what `open_store()` opens from here on."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "bucket"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / name))
+    return tmp_path / name
+
+
+def build_index(tmp_path: Path, store: Path) -> None:
+    """`research data index` of the bucket, built where `store`'s machine reads it (`bucket_index.default_path`)."""
+    from research.store import bucket_index as BI
+    from research.store.remote import FsRemote
+
+    assert BI.index(FsRemote(tmp_path / "bucket"), BI.default_path(store), now=NOW)["errors"] == []
+
+
+def test_every_dump_in_the_store_is_known_from_its_index_whatever_machine_saved_it(offline, monkeypatch, tmp_path, capsys):
+    machine(monkeypatch, tmp_path, "pod")
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and why == ""
+    here = machine(monkeypatch, tmp_path, "vm")                 # another machine: its own store has never held the dump
+    build_index(tmp_path, here)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert [n for n in notes if "index" in n] == [f"the store's dumps were found from its index ({here / 'index.sqlite'}, "
+                                                  "complete as of 2026-11-10T02:00:00Z) and this machine's store"]
+    assert V.main(["--since", "2026-11-09T12:00-08:00", "--to", str(B), "--json"], now=NOW) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert r["dumps"]["earlier"]["source"] == art and r["goals"]["hand"]["window"]["finished"] == 1
+
+
+def store_notes(notes: list[str]) -> list[str]:
+    return [n for n in notes if n.startswith(("the store's", "this machine's store"))]
+
+
+def test_where_the_index_cant_be_asked_every_dump_is_known_from_its_label_on_the_stores_remote(offline, monkeypatch, tmp_path):
+    machine(monkeypatch, tmp_path, "pod")
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and why == ""
+    machine(monkeypatch, tmp_path, "vm")                         # an agent's machine: the store's keys, no index
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert store_notes(notes) == [
+        "the store's index not read: $STORE_PRIVATE_READER_URL is unset and this machine has no `research data index` build",
+        f"the store's dumps were found from their labels on its remote ({V.dumps_target()}, 1 dumps) and this machine's store"]
+
+
+def test_with_neither_the_index_nor_a_remote_the_dumps_are_this_machines_stores_and_the_reading_says_so(offline, monkeypatch, tmp_path):
+    machine(monkeypatch, tmp_path, "pod")
+    elsewhere, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    here = machine(monkeypatch, tmp_path, "vm")
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "no-store.toml"))
+    from research.store.local import LocalStore
+
+    mine = LocalStore(here).put_artifact(V.KIND, {"taken": "20261110T0200Z", "what": V.WHAT}, file=B)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW: mine} and elsewhere != mine
+    assert store_notes(notes) == [
+        "the store's index not read: $STORE_PRIVATE_READER_URL is unset and this machine has no `research data index` build",
+        "the store's labels not read: this machine's store has no remote (the store's R2_* keys, or a store.toml): the store's "
+        "dumps are this machine's store's alone"]
+
+
+def test_a_failing_index_query_is_said_and_the_dumps_are_still_found_from_their_labels(offline, monkeypatch, tmp_path):
+    from research.store import bucket_index as BI
+
+    machine(monkeypatch, tmp_path, "pod")
+    art, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    build_index(tmp_path, machine(monkeypatch, tmp_path, "vm"))
+
+    def down(idx, kind):
+        raise RuntimeError("the index is down")
+    monkeypatch.setattr(BI, "select_artifacts", down)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert store_notes(notes)[0] == "the store's index not read: RuntimeError: the index is down"
+    assert store_notes(notes)[1].startswith("the store's dumps were found from their labels on its remote")
+
+
+def test_one_bad_record_in_the_index_is_left_out_and_said_and_the_index_still_answers_for_the_rest(offline, monkeypatch, tmp_path):
+    from research.store.local import LocalStore
+
+    machine(monkeypatch, tmp_path, "pod")
+    art, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    st = LocalStore()
+    bad = st.put_artifact(V.KIND, {"taken": "yesterday", "what": V.WHAT}, file=B)
+    assert st.push(bad, preserve=True)["preserved"]
+    here = machine(monkeypatch, tmp_path, "vm")
+    build_index(tmp_path, here)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert store_notes(notes)[0].startswith(f"the store's index: {bad!r} at 'yesterday' left out (")
+    assert store_notes(notes)[1].startswith("the store's dumps were found from its index")
+
+
+def test_a_push_that_isnt_verified_is_not_preserved_and_puts_no_label(offline, monkeypatch, tmp_path):
+    from research.store.remote import FsRemote
+
+    machine(monkeypatch, tmp_path, "pod")
+    create = FsRemote.create
+    monkeypatch.setattr(FsRemote, "create", lambda r, key, path: {**create(r, key, path), "etag": "0" * 32})
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and "remote ETag 00000000000000000000000000000000 != local MD5" in why   # the service's word: other bytes
+    assert not (tmp_path / "bucket" / "labels").exists()
+
+
+def test_two_saves_of_one_copy_are_one_dump_in_the_store_and_one_known_dump(offline, monkeypatch, tmp_path):
+    from research.store import bucket_index as BI
+    from research.store import ids
+
+    here = machine(monkeypatch, tmp_path, "pod")
+    taken = NOW - timedelta(hours=6)
+    first = V.save(goals(A), taken)                                  # the hourly sweep's save of its copy
+    machine(monkeypatch, tmp_path, "vm")
+    again = V.save(goals(A), taken + timedelta(seconds=40))          # a person's save of that copy, read within the minute
+    assert first == again and first[1] == ""
+    assert len(list((tmp_path / "bucket" / "labels" / ids.target_dirname(V.dumps_target())).iterdir())) == 1
+    build_index(tmp_path, here)
+    idx = BI.reader(here)
+    try:
+        assert [i for i, _ in BI.select_artifacts(idx, kind=V.KIND)] == [first[0]]
+    finally:
+        idx.close()
+    assert V.known_dumps([]) == {taken: first[0]}
+    machine(monkeypatch, tmp_path, "pod")
+    assert V.known_dumps([]) == {taken: first[0]}
 
 
 def test_what_finished_and_what_moved_between_two_dumps_by_scope():

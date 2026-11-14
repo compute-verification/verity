@@ -263,7 +263,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     runner then checks the run, the unit closes the ssh, publishes and writes `end.json`; `status RUN` then carries
     `end` and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its
     first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
-    failed run, as a rehearsal's.
+    failed run, as a rehearsal's, and so is one whose unit is stopped (`systemctl stop`, its `RuntimeMaxSec`): the
+    unit's SIGTERM goes to `certifier-run` alone (`KillMode=mixed`), which passes it to the runner and, once the runner
+    has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`).
   - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
     and schedule and each execution phase's certificates and registrations, and in `end.json` the check's verdict and
     counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
@@ -330,6 +332,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import functools
 import hashlib
 import io
 import json
@@ -2487,6 +2490,43 @@ def _stop_with(tunnel: subprocess.Popen, proc: subprocess.Popen) -> None:
             os.killpg(proc.pid, signal.SIGTERM)
 
 
+#: why a run ended whose unit was stopped (a SIGTERM: `systemctl stop`, or the unit's `RuntimeMaxSec`)
+STOPPED = "stopped by its unit (SIGTERM)"
+
+
+class Stopped(Exception):
+    """The unit was stopped while the run waited for its tunnels, before its runner started."""
+
+
+class _Stop:
+    """`certifier_run`'s SIGTERM handler, which the unit's stop sends to this process alone (`KillMode=mixed`). While
+    `armed` (the tunnels coming up, no runner yet) it ends the run there (`Stopped`); once the runner is started
+    through `start`, it goes to the runner's process group, as `--minutes` does, so the run ends as at its minutes: the
+    runner exits, then the tunnels close, then a session's listener, and the end is written. A signal while neither
+    is only recorded (`signalled`)."""
+
+    def __init__(self) -> None:
+        self.proc: subprocess.Popen | None = None
+        self.armed = self.signalled = False
+
+    def __call__(self, *_) -> None:
+        self.signalled = True
+        if self.proc is not None:
+            with suppress(ProcessLookupError):
+                os.killpg(self.proc.pid, signal.SIGTERM)
+        elif self.armed:
+            self.armed = False
+            raise Stopped
+
+    def start(self, popen: Callable[[], subprocess.Popen]) -> subprocess.Popen:
+        """The runner, `popen()`, which a signal from here on reaches, one that came while it started included."""
+        self.armed = False
+        self.proc = popen()
+        if self.signalled:
+            self()
+        return self.proc
+
+
 def _local_ports(n: int) -> list[int]:
     ports: list[int] = []
     while len(ports) < n:
@@ -2495,12 +2535,26 @@ def _local_ports(n: int) -> list[int]:
     return ports
 
 
+def _on_stop(run: Callable[..., dict]) -> Callable[..., dict]:
+    """`run` (`certifier_run`) given its unit's stop, a `_Stop` that is this process's SIGTERM handler while it runs."""
+    @functools.wraps(run)
+    def stoppable(*args, **kwargs) -> dict:
+        stop = _Stop()
+        previous = signal.signal(signal.SIGTERM, stop)
+        try:
+            return run(*args, stop=stop, **kwargs)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+    return stoppable
+
+
+@_on_stop
 def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
                   tunnel_argv: Callable[..., list[str]] | None = None,
                   sink_argv: Callable[[list[str], int, int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
-                  wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
+                  wait: Callable[[subprocess.Popen, float], int] | None = None, stop: _Stop) -> dict:
     """Run the requested rehearsal (the module docstring's "A warden rehearsal" and "The load") or relay session ("A
     relay session": a rehearsal's relay alone, where the same ssh also brings the peer's clients to its listener,
     `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
@@ -2508,7 +2562,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
     end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
-    the store's record."""
+    the store's record. A SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`)."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
@@ -2522,7 +2576,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         raise Refused(f"certifier rehearsal {run} has run already")
     out.mkdir(mode=0o755)
     if weights:
-        return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait)
+        return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait, stop=stop)
     work = d / WITNESS
     work.mkdir(mode=0o700, exist_ok=True)
     sys.path.insert(0, str(HERE))
@@ -2546,6 +2600,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             for s in sinks:
                 tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
                                                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+        stop.armed = True
         if not up(tunnels[0], local):
             why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
         elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
@@ -2553,18 +2608,24 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         else:
             to = {"sinks": [("127.0.0.1", s) for s in sinks], "store": host.store} if load else {}
             with open(out / "rehearse.log", "wb") as log:
-                proc = subprocess.Popen(command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL,
-                                        stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
-                                        start_new_session=True, pass_fds=(held.fileno(),) if kept else ())
+                proc = stop.start(lambda: subprocess.Popen(
+                    command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL, stdout=log,
+                    stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True,
+                    pass_fds=(held.fileno(),) if kept else ()))
             if kept:
                 threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
             rc = (wait or _wait)(proc, req["minutes"] * 60)
-            if rc == -signal.SIGTERM:
-                why = f"stopped at --minutes {req['minutes']}"
-            if kept and tunnels[0].poll() is not None:
+            if stop.signalled:
+                why = STOPPED
+            elif kept and tunnels[0].poll() is not None:
                 rc, why = rc or 2, (f"the tunnel to {req['peer']} closed before the session ended, and with it the "
                                     "clients' way to the relay and the relay's to the endpoint (tunnel.log)")
+            elif rc == -signal.SIGTERM:
+                why = f"stopped at --minutes {req['minutes']}"
+    except Stopped:
+        why = f"{STOPPED} before its runner started"
     finally:
+        stop.armed = False
         for tunnel in tunnels:
             tunnel.terminate()
             tunnel.wait()
@@ -2589,15 +2650,18 @@ def _end(d: Path, rc: int, why: str | None, outcome: dict, *, pinned: str, now: 
 
 def _weights_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[], datetime],
                  command: Callable[[dict, Path, Path], list[str]],
-                 wait: Callable[[subprocess.Popen, float], int] | None) -> dict:
+                 wait: Callable[[subprocess.Popen, float], int] | None, stop: _Stop) -> dict:
     """A `weights-write` run: `command` (`weights_command`) for at most `WEIGHTS_MINUTES`, its end the store's record
     (`out/store.json`: written, present or refused)."""
     out, why = d / "out", None
     with open(out / "rehearse.log", "wb") as log:
-        proc = subprocess.Popen(command(req, out, host.store), stdin=subprocess.DEVNULL, stdout=log,
-                                stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True)
+        proc = stop.start(lambda: subprocess.Popen(command(req, out, host.store), stdin=subprocess.DEVNULL, stdout=log,
+                                                   stderr=subprocess.STDOUT, env=certifier_env(),
+                                                   start_new_session=True))
     rc = (wait or _wait)(proc, req["minutes"] * 60)
-    if rc == -signal.SIGTERM:
+    if stop.signalled:
+        why = STOPPED
+    elif rc == -signal.SIGTERM:
         why = f"stopped at {req['minutes']} minutes"
     try:
         store = json.loads((out / "store.json").read_text())

@@ -66,6 +66,7 @@ import math
 import re
 import shlex
 import subprocess
+import sys
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -336,7 +337,9 @@ def share_cpus(source: Path) -> str | None:
     """The CPUs of AUTO_PROJECT's share on AUTO_NODE in the source tree's cluster description, None when it says none."""
     try:
         desc = tomllib.loads((Path(source) / DESCRIPTION).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research run: {Path(source) / DESCRIPTION} unread, so {AUTO_PROJECT} has no share on {AUTO_NODE} "
+              f"({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return next((s["cpus"] for s in desc.get("shares", []) if s.get("project") == AUTO_PROJECT and s.get("node") == AUTO_NODE
                  and isinstance(s.get("cpus"), str)), None)

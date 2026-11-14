@@ -2,18 +2,20 @@
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
 rehearsal while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
 warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment, registrations and
-certificates, and writes its end; `fetch` gives `witness/` to the run's own lane and vy-admin alone."""
+certificates, and writes its end, a stop of its unit included; `fetch` gives `witness/` to the run's own lane and
+vy-admin alone."""
 
 from __future__ import annotations
 
 import io
 import json
+import os
 import shlex
 import signal
 import socket
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -22,8 +24,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
-T0 = datetime(2026, 10, 24, 11, 0, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 24, 11, 20, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 24, 11, 0, 0, tzinfo=UTC)
+T1 = datetime(2026, 10, 24, 11, 20, 0, tzinfo=UTC)
 PIN = "c" * 40
 REQUEST = ["warden-rehearse", "--peer", "vy-nebius-1", "--port", "8011", "--minutes", "20"]
 TUNNEL = [sys.executable, "-c", "import signal; signal.pause()"]
@@ -724,6 +726,63 @@ def test_a_relay_sessions_listener_is_the_units_own_from_before_its_ssh_until_th
     assert (d / A.WITNESS / "first").read_bytes() == b"early" and early[0].recv(6) == b"served"
     early[0].close()
     assert mark.read_text() == "yes" and held[0].fileno() == -1
+
+
+def test_a_relay_session_whose_unit_is_stopped_stops_its_runner_then_its_ssh_then_its_listener_and_writes_its_end(
+        host, tmp_path, monkeypatch, stop_held):
+    """The unit's stop (`systemctl stop`, its `RuntimeMaxSec`) sends `certifier-run` alone a SIGTERM
+    (`KillMode=mixed`). It goes to the runner, which here ends only on a signal; once the runner has exited the ssh is
+    still up and the listener still listens when the ssh is stopped, the listener is closed after, and the end says
+    the unit stopped the session. The handler is this process's only while the run runs."""
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+    held, mark = [], tmp_path / "listened-at-the-sshs-end"
+    monkeypatch.setattr(A, "held_listener", lambda make=A.held_listener: held.append(make()) or held[0])
+
+    def tunnel_argv(ssh, local, back):
+        return [sys.executable, "-c",
+                "import pathlib, signal, socket, sys\n"
+                "def stopped(*_):\n"
+                f"    socket.create_connection(('127.0.0.1', {back[1]})).close()\n"
+                f"    pathlib.Path({str(mark)!r}).write_text('yes')\n"
+                "    sys.exit(0)\n"
+                "signal.signal(signal.SIGTERM, stopped)\n"
+                f"socket.create_connection(('127.0.0.1', {back[1]})).sendall(b'up')\n"
+                "signal.pause()\n"]
+
+    def up(tunnel, port):  # the ssh's stand-in holds its SIGTERM handler
+        conn, _ = held[0].accept()
+        with conn:
+            return conn.recv(2) == b"up"
+
+    def wait(proc, seconds):
+        os.kill(os.getpid(), signal.SIGTERM)
+        rc = proc.wait()
+        assert not mark.exists() and held[0].fileno() != -1
+        return rc
+
+    before = signal.getsignal(signal.SIGTERM)
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=tunnel_argv, up=up,
+                          command=session("import signal; signal.pause()", []), wait=wait)
+    assert end["rc"] == -signal.SIGTERM and end["ended"] == A.STOPPED
+    assert mark.read_text() == "yes" and held[0].fileno() == -1
+    assert json.loads((host.certifier / run / "end.json").read_text()) == end
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_nothing_and_writes_its_end(
+        host, stop_held):
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+
+    def up(tunnel, port):
+        os.kill(os.getpid(), signal.SIGTERM)
+        pytest.fail("the stop didn't end the wait for the tunnel")
+
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: TUNNEL, up=up,
+                          command=lambda *a, **k: pytest.fail("ran after its unit was stopped"))
+    assert end["rc"] == 2 and end["ended"] == f"{A.STOPPED} before its runner started" and end["verdict"] is None
+    assert set(end["files"]) == {"tunnel.log"}
 
 
 PROMPTS = [[70001, 3], [5], [7]]

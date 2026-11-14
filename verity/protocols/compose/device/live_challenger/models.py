@@ -38,7 +38,7 @@ import os
 import stat
 import struct
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Callable, Iterator
 
 import numpy as np
 
