@@ -3836,6 +3836,36 @@ def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_state
     assert _audited(tmp_path, ("--law",)) == {"--law": stated}
 
 
+@pytest.mark.parametrize("law, held", [
+    (None, False), ("", False), (RULE, False), ("stratified:1", False), ("stratified-rate:0/977", False),
+    ("stratified-rate:978/977", False), ("stratified-rate:1/977", True), ("stratified-rate:977/977", True)])
+def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(tmp_path, law, held):
+    """`rehearsal.sh settings FILE`, what `rehearsal.sh serve` holds its settings to before the harness runs, refuses a
+    Pearl+-tied serve's settings that state no V3C_LAW, or one that is no ``stratified-rate:NUM/DEN`` with 0 < NUM <= DEN:
+    the tied window's rule has no default, and the harness's preflight refuses such a launch (`NO_PEARL_RULE`), which the
+    rehearsal would learn only on the serve node. The refusal names V3C_LAW and the form in the preflight's words;
+    settings that state one are held, and the line names the rule."""
+    for name in ("main.txt", "key.json", "day-params.json"):
+        (tmp_path / name).write_text("x\n")
+    settings = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "ROW": "stand-in",
+                "PP_CHALLENGER": "gate:nobody@gate.invalid", "PP_PEER": "stand-in", "MAIN_FILE": tmp_path / "main.txt",
+                "PP_CHALLENGER_KEY": tmp_path / "key.json", "ALPHA": "1/2", "GAMMA": "4", "LIMITS_UNIT": "a unit",
+                "LIMITS_PROVE": "what they prove", "DAY": "0", "DAY_PROGRAM": "00" * 64, "DAY_LOG": tmp_path / "day-log.json",
+                "DAY_PARAMS": tmp_path / "day-params.json", **({} if law is None else {"V3C_LAW": law})}
+    (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
+    run = subprocess.run(["bash", str(HERE.parent / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
+                         env={"PATH": os.environ["PATH"]}, capture_output=True, text=True, check=False)
+    said = run.stdout.splitlines()
+    if held:
+        assert run.returncode == 0 and len(said) == 1, (run.returncode, said, run.stderr)
+        assert said[0].startswith(f"SETTINGS held: Pearl+ tied to the window at class 4,32,4, its rule {law}, "), said
+    else:
+        assert (run.returncode, said) == (3, [
+            f"SETTINGS refused: V3C_LAW is {law or 'unset'}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch "
+            "states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
+            "proof block of each template while none holds more than DEN"]), (run.returncode, said, run.stderr)
+
+
 def _no_transfer_gates(part: str, law: str, templates: list[str]) -> str:
     return (f"PREFLIGHT: unsloth/Llama-3.2-1B's compiler of record lists ['RoPEHead_v1{{D=64}}'] as transfer gates "
             f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work:K of the rest, and PP_PARTITION "

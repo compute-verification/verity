@@ -11,7 +11,8 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
-#                         its own PP_PARTITION: its window has no step 1); `serve` around a stand-in
+#                         its own PP_PARTITION: its window has no step 1; the tied window's rule is stated, V3C_LAW a
+#                         stratified-rate:NUM/DEN, which the harness gives no default); `serve` around a stand-in
 #                         harness (the deferral's copy asked once, only after a serve that exited 0 or 2, pending,
 #                         and never after one that exited 1 or any other status); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
@@ -115,8 +116,18 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     # `check` builds and profiles the settings' class and no other
     [ -z "${WANT_CLASS-}" ] || [ "$WANT_CLASS" = "$cls" ] \
       || no "CLASS is $WANT_CLASS and the settings serve $cls: name the class in the settings (V3C_CLASS and CLASSES)"
-    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, product remote, limits $ALPHA and" \
-      "$GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
+    # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
+    # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
+    if [ -n "${PEARLPLUS_TIE-}" ]; then
+      num='' den=''
+      [[ ${V3C_LAW-} =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
+      [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
+        || no "V3C_LAW is ${V3C_LAW:-unset}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch states it, a" \
+          "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
+          "each template while none holds more than DEN"
+    fi
+    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, its rule $V3C_LAW, product remote," \
+      "limits $ALPHA and $GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
     exit "$bad"
   )
 }
