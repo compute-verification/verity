@@ -36,7 +36,7 @@ untraced = ["tests/test_bench.py", "tests/test_spot_status.py", "tests/test_stea
 # the bandwidth audit's arms read and build from sources that exist, and the breakdown's arms are its `BandwidthArm`s, which
 # a test builds (it imports the spans module). served_commit's arm gates on the run phases
 # the runner names, which a test checks with a fake committer; it and its stock profiling arm read only the public
-# names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
+# names of the engine the harness builds, which a test checks on its local-checkpoint engine; its profiling arms
 # write each run's records after its timed run, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
 # experimental Pearl-C arm's call check, which a test runs on a fake device run; `served_passes.py arm` writes a spec's
@@ -114,6 +114,8 @@ inputs = [
     "benchmarks/census/hardware.json",
     "benchmarks/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
+    # a card the door measures on reads its SMs and L2 from its card file through verity.device
+    "hardware/cards",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs

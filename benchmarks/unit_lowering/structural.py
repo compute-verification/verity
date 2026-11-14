@@ -78,8 +78,8 @@ def _h1unit(form: str):
 
 def refusal(unit: str, k: int, r: int, c: int) -> str | None:
     """Why the R × C leaf at K has no ``unit`` statement, decided before anything is lowered; None when it has one."""
-    from verity.protocols.accounting.pouw.verifier import weights as W
     from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+    from verity.protocols.accounting.pouw.verifier import weights as W
     if unit not in UNITS:
         return f"a leaf's statement is one of {', '.join(UNITS)}, not {unit!r}"
     if r <= 0 or c <= 0 or r % 4 or c % 8 or k < 64 or k % 32:
@@ -101,11 +101,11 @@ def refusal(unit: str, k: int, r: int, c: int) -> str | None:
 def leaf_statement(U: ModuleType, unit: str, k: int, r: int, c: int) -> tuple:
     """``unit``'s Definition (`h1zy.lane` or `h1zy.combine` over the leaf's tile, as `h1window.leaf_unit` derives it at a
     K of whole lanes) and its input rows, as `h1_lanes`' ``stager`` stages them."""
-    from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
-    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
     t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if U.tile() == "v3" else None)
     wp = 2 * LL.words(k)
     if unit == "lane":
@@ -268,9 +268,9 @@ def check(args: argparse.Namespace) -> int:
     `partition.partition`'s of the leaf Program); and the circuit files with their leaf Programs in the lanes form
     (`lanes_files`, `form_of`)."""
     U = _h1unit("structural")
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.protocols.accounting.pouw.verifier import credit as Cr
     from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
-    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     t0 = time.time()
     win = window(U, args.k, args.r, args.c)
