@@ -426,8 +426,8 @@ def found() -> Counter:
 
 
 def say(f: str, run: Run, fig: Figure) -> str:
-    where = f"{f}:{run.line}" if run.line else f"{f} {run.text.split(' ')[0]}"
-    token = run.text.split(" ", 1)[1] if not run.line else run.text
+    key, token = run.text.rsplit("] ", 1) if not run.line else ("", run.text)
+    where = f"{f}:{run.line}" if run.line else f"{f} {key}]"
     return f"    {where}: {token} equals {fig.what}. Read it, {fig.read}, or take it as a parameter."
 
 
@@ -516,6 +516,8 @@ def test_what_is_a_figure_and_what_is_not() -> None:
         "[a.sms] 132", "[a.mhz] 1980"]
     assert [r.text for r, _ in sites('{"x": [1830, 1.597], "bw": 4.916736e12}', "d.json", figs)] == [
         "[x[0]] 1830", "[bw] 4.916736e12"]
+    [(run, fig)] = sites('{"r 7168 64": [1830]}', "d.json", figs)
+    assert say("d.json", run, fig).startswith("    d.json [r 7168 64[0]]: 1830 equals g clock.tensor (MHz).")
     assert holds("benchmarks/x.py") and not holds("hardware/cards/g.toml") and not holds("a/tests/b.py")
     assert not holds("README.md") and holds("security/A.lean")
 
