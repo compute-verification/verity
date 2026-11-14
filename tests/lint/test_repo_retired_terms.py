@@ -25,9 +25,9 @@ what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/
 key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds no list of goal ids, so the same id
 elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
 nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``), by the code around it (hypothesis's ``draw``) and by the
-file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live proof block's caps).  Sites are
-counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file with more fails, and
-``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
+file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live proof block's caps, a PoUW
+session's cap).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
+with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
 it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
 base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 
@@ -100,17 +100,22 @@ OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|
                           r"|cublasLt\w*Cap\w*|CUBLASLT_\w*CAP\w*"
                           r"|(?i:(?<!\w)cap_(?:sys_ptrace|sys_admin|dac_read_search|dac_override|chown|fowner|ipc_lock)(?!\w))")
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
-#: ``caps`` with ports ``cap_<i>``, and in capitals the table's role ``CAPS`` and the request's index ``CAP``
+#: ``caps`` with ports ``cap_<i>``, and in capitals the table's role ``CAPS`` and the request's index ``CAP``; and the
+#: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
 LIVE_CAPS = ("verity/protocols/accounting/pouw/prover/circuit/live.py",
              "verity/protocols/accounting/pouw/verifier/live_reads.py",
-             "verity/protocols/accounting/pouw/verifier/tests/test_circuit_live.py")
+             "verity/protocols/accounting/pouw/verifier/tests/test_circuit_live.py",
+             "verity/protocols/accounting/pouw/verifier/tests/test_pouw_window.py",
+             "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py")
 #: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there, and
 #: ``PEARL_CAP`` too outside ``LIVE_CAPS``
 OWN_CAPS = {
     "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
     "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
     "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
-    **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`"),
+    "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
+    "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
@@ -646,6 +651,26 @@ def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spe
     credit = "verity/protocols/accounting/pouw/verifier/credit.py"
     assert said(live + pearls, credit) == [(1, "CAPS"), (1, "caps"), (2, "CAP"), (3, "cap"), (3, "CAPS"), (3, "cap"),
                                            *pearl]
+
+
+def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() -> None:
+    """A PoUW session's cap, the most tile instances one session holds, in ``window.py`` and its Lean port, and ``CAP``
+    too in its two tests, which name no Pearl term; Pearl's other spellings there still count, a ``CAP`` outside those
+    tests does, and so does every "cap" of the same text in ``credit.py``."""
+    session = ("def sessions(k: int, cap: int) -> int:  # S sessions of `cap` instances: session_cap, sessionCap?\n"
+               "CAP = 2\nWd.public_inputs(reg, SAMPLED, s, V.CAP, domain_h3)\n")
+    pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
+    pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
+    window = "verity/protocols/accounting/pouw/verifier/"
+    for path in ("tests/test_pouw_window.py", "tests/window_vectors.py"):
+        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of LIVE_CAPS with it"
+        assert said(session + pearls, window + path) == pearl
+    for path in ("window.py", "lean/window/PouwWindow/Inputs.lean", "lean/window/PouwWindow/Difftest.lean",
+                 "lean/window/README.md", "lean/window/tests/test_difftest.py"):
+        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of OWN_CAPS with it"
+        assert said(session + pearls, window + path) == [(2, "CAP"), (3, "CAP"), *pearl]
+    assert said(session + pearls, window + "credit.py") == [(1, "cap"), (1, "cap"), (1, "cap"), (1, "Cap"), (2, "CAP"),
+                                                            (3, "CAP"), *pearl]
 
 
 def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:

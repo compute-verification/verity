@@ -1,5 +1,5 @@
 """`verity_vllm.protocols.interface.Context`: what an adapter reads of its own settings, and of the settings the built
-engine will supply, where the run's settings or its fills leave the protocol out."""
+engine will supply, where the run's settings or its fills leave the protocol out; and the stages a context has."""
 from __future__ import annotations
 
 from typing import Any
@@ -46,3 +46,15 @@ def test_an_entry_that_holds_an_empty_or_a_zero_value_reads_as_an_absent_one(emp
     ctx = Context(stage="serve", enabled=ENABLED, settings=held, filled=held)
     assert ctx.settings_of("pouw") == {}
     assert ctx.filled_of("pouw") == ()
+
+
+@pytest.mark.parametrize("stage", ["serve", "capture", "commit"])
+def test_a_context_is_of_one_of_the_three_stages(stage: str) -> None:
+    assert Context(stage=stage, enabled=ENABLED).stage == stage
+
+
+@pytest.mark.parametrize("stage", ["build", "Serve", "", None], ids=repr)
+def test_a_stage_that_is_none_of_the_three_is_refused_by_name(stage: Any) -> None:
+    with pytest.raises(ValueError) as e:
+        Context(stage=stage, enabled=ENABLED)
+    assert str(e.value) == f"stage must be one of ('serve', 'capture', 'commit'), got {stage!r}"

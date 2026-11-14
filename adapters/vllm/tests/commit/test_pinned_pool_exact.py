@@ -32,8 +32,8 @@ def _rss_bytes() -> int:
     raise RuntimeError("no VmRSS")
 
 
-@pytest.mark.parametrize(("value", "exact"), [(None, True), ("", True), ("1", True), ("0", False), (" 0", True), ("false", True),
-                                              ("no", True), ("OFF", True), ("x", True)])
+@pytest.mark.parametrize(("value", "exact"), [(None, True), ("", True), ("1", True), ("0", False), (" 0", True), ("0 ", True),
+                                              ("00", True), ("false", True), ("no", True), ("OFF", True), ("x", True)])
 def test_exact_mode_is_off_at_zero_alone_and_no_value_is_refused_at_import(value, exact):
     """`VERITY_PINNED_EXACT` is read when the module is imported, so in a fresh interpreter a value: "0" is off, every other string
     is on, and a string that is no flag is no exception in the module and in the ones that import it."""

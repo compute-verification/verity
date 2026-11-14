@@ -8,7 +8,14 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm import config
-from verity_vllm.pipeline import advice, cli, commit_plan, research_tools, serve_seal, source_identity
+from verity_vllm.pipeline import (
+    advice,
+    cli,
+    commit_plan,
+    research_tools,
+    serve_seal,
+    source_identity,
+)
 from verity_vllm.pipeline.row_driver import RESEARCH
 from verity_vllm.pipeline.tp import commit as tp_commit
 
@@ -41,7 +48,7 @@ ENTRIES = {
 def test_the_refusal_names_its_entry_point(no_run_store, entry):
     with pytest.raises(config.UsageError) as e:
         ENTRIES[entry]()
-    assert str(e.value).startswith(f"{entry}") and " is refused: " in str(e.value) and "leaves out the run store" in str(e.value)
+    assert str(e.value).startswith(f"{entry}") and " is refused: " in str(e.value) and "needs the run store" in str(e.value)
 
 
 def test_the_source_identity_command_is_refused_not_skipped(no_run_store, capsys):
