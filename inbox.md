@@ -119,3 +119,6 @@ ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 1:59 AM PST. **#9826's head
 - Runs at this head, all four of mine still waiting for a slot at 1:58 AM PST: #9826's suites `r20261114-093531-2a53`; #9736's Lean check `r20261114-092257-75e4` and suites `r20261114-092344-dbb9` at `a78100cf5cae`; #9826's records `r20261114-080923-9177` (built at `18d369230828`; this head differs there in Python and the two locks alone). Your line on #9736's suites follows when they end.
 - Next: #9670 takes `main` by ci's recipe, then #9677, #9678, #9679.
 
+[2026-11-14T09:38Z] 50cf0030d7ba
+READSEATS on #9867 at aae92adefd72: VERDICT mark. Note: lanes/network-accounting/20261114T0935Z-reading-readseats-9867.md. Weighs most: the head inherits #9741's conflict with origin/main (f28bdad24636) in certifier_piece.py's docstring, so it can't be marked until main is merged below it. Its own change (the guard's --keys pass and released_keys.json's two lists) passes 48 tests, and all three cuts are caught (4, 8 and 1 failures). It turns no failure into an accept. A gate run with any refused execution phase now fails the record (exit 3), as the body says. The body's pool run at this head (r20261114-081545-db4d) still has no verdict there, and the store has no record of it.
+
