@@ -648,6 +648,19 @@ def test_a_footprint_takes_each_step_the_worker_absorbs_with_its_bytes_by_value_
         assert kept == ("none", 0, None, None)
 
 
+def test_a_footprints_step_begin_holds_the_device_arenas_bytes_and_its_free_blocks(monkeypatch, tmp_path):
+    """Each `begin_step` event carries the device arena's bytes, every block it holds, and the size of each block free when the
+    step begins. The windowed worker stages into its window ring, so the step's own block is 0 bytes and no step takes one."""
+    com = committer(monkeypatch)
+    free = [torch.empty(n, dtype=torch.uint8) for n in (4096, 1024)]
+    com.arena.all, com.arena.free = [*free, torch.empty(512, dtype=torch.uint8)], list(free)
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    run(com, schedule(40, 2))
+    begins = [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "begin_step"]
+    assert [(e["arena_block_bytes"], e["arena_total_bytes"], e["arena_free_blocks"]) for e in begins] == [(0, 5632, [4096, 1024])] * 2
+
+
 def test_a_footprints_step_end_holds_the_resident_set_or_says_why_it_has_none(monkeypatch, tmp_path):
     """Each `end_step` event carries the process's resident set beside the pinned pool's bytes, read from `/proc/self/statm`.
     Where that file cannot be opened the event has no resident set and says what the read met, under `rss_unreadable`, and the
