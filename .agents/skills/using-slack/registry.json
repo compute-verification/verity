@@ -856,7 +856,6 @@
         "tests/",
         "fixtures/",
         "demos/README.md",
-        "demos/lifecycle/",
         "benchmarks/tree/",
         "benchmarks/communication/",
         "pyproject.toml",
