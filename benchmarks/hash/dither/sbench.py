@@ -456,7 +456,7 @@ def build(arm: str, scratch: Path, gpu_mem: float) -> LLM:
     if arm in ("stock", "stock-humming", "stock-cutlass"):
         return LLM(model=str(stock_checkpoint(PIN, scratch)), **stock_args(gpu_mem))
     if arm == "stock-percall":
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "exactlin"))
         import percall
         percall.install()
         llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **stock_args(gpu_mem))

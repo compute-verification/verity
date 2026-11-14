@@ -138,10 +138,10 @@ esac
 # --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
-    -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
@@ -275,7 +275,7 @@ elif [ -n "${DITHER_NCU:-}" ]; then
 fi
 # an exact-fused arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
-export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
+export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/kernels/exactlin/kgate.py
 # SBENCH_LEASE_AT (a UTC time) holds the lease request until then, the builds done, so a timed lease (GPU_LEASE_TIMED=1)
 # starts inside its clean window; SBENCH_ON (e.g. 4,5,6,7) is the GPUs it may take
 if [ -n "${SBENCH_LEASE_AT:-}" ]; then
@@ -331,7 +331,7 @@ if [ -f "$S/gate.nsys-rep" ]; then
     || echo "sbench: nsys stats rc $?"
   "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
   # the prof op's ranges: each arm's kernels a decode step (exactlin/steps.py); the report kept when under 200 MB
-  "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
+  "$PY" "$ROOT/benchmarks/kernels/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
   "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" "$S/gate.sqlite" > "$OUT/stepprof.json" \
     && "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
     || echo "sbench: stepprof.py rc $?"

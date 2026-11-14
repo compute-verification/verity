@@ -5,23 +5,24 @@ layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext l
 on that buffer.
 
 - `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
-  layout JSON (memory-accounting's `p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
+  layout JSON (memory-accounting's `p2_store/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's load buffer. `Weights` is the plaintext, the seeded
   weights stream (`benchmarks.torch_gpu.p2_stage.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
-  rows to it by P2's reference decode of one label (`p2_v1/store.py`'s `decode_block`), the check's ground truth.
-  `open_store` takes the store: memory-accounting's encoded store (`p2_v1/store.py encode`'s segment files, read by
+  rows to it by P2's reference decode of one label (`p2_store/store.py`'s `decode_block`), the check's ground truth.
+  `open_store` takes the store: memory-accounting's encoded store (`p2_store/store.py encode`'s segment files, read by
   `segment_rows`), under `store_salt`, `setup.draw_salt` of the coin and commitment its `setup.json` is held to; or a
   development store under a public test salt. An encoded store is refused unless its `setup.json`'s `program` is the
   weights manifest's name of its weights (`weights_name`: the generator's `model`), and a manifest that gives no name
   is refused; only a caller that holds nothing to a weights manifest passes none.
 - `stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
-  built on `libp2v1.so` through `p2_v1.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
+  built on `libp2v1.so` through `p2_store.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
   block nonzero past its tensor's end, 0 for the library's own flag. `timed` is the one timer the drivers below use.
-  `StoreLayout`, `EncodedRows`, its screen and `scatter` are the store's own (`benchmarks/pous/p2_v1/load.py`), defined
-  there and read through these two modules. `EncodedRows.decode_into` by W offset is also the GPU decode of
-  `verity_vllm`'s PoUS store, which loads it from `p2_v1` alone, under a layout of no tensors.
+  `StoreLayout`, `EncodedRows`, its screen and `scatter` are the store's own
+  (`verity/protocols/accounting/pous/prover/p2/p2_store/load.py`), defined there and read through these two modules.
+  `EncodedRows.decode_into` by W offset is also the GPU decode of `verity_vllm`'s PoUS store, which loads it from
+  `p2_store` alone, under a layout of no tensors.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
@@ -50,5 +51,5 @@ on that buffer.
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded
   store in place, read only. Each script's header gives its command line.
 
-The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the
+The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/kernels/s8_linear/int_mm.py`, the
 exact W8A8 linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.

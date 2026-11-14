@@ -370,6 +370,7 @@
         "verity/protocols/accounting/pous/device/",
         "verity/protocols/accounting/pous/",
         "verity/protocols/accounting/pous/prover/",
+        "verity/protocols/accounting/poub/prover/",
         "verity/protocols/accounting/poub/verifier/",
         "verity/circuits/requirement/",
         "security/Definitions/Accounting/Bandwidth.lean",
@@ -719,6 +720,7 @@
       "linear": "HASH",
       "owns": [
         "benchmarks/hash/",
+        "benchmarks/kernels/",
         "benchmarks/moe_align/",
         "benchmarks/torch_gpu/"
       ],
