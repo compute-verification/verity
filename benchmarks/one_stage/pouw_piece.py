@@ -10,9 +10,10 @@
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
 window's registration, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
 system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
-(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name}`` (the challenger key
-it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its copy of main's
-first-parent history, ``--main``, one commit a line; the period, ``--name``), its commitment the auditor's ledger
+(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
+challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its
+copy of main's first-parent history, ``--main``, one commit a line; the period, ``--name``; the sessions the ledger's
+close of the period lists, `close_sessions`), its commitment the auditor's ledger
 (``--ledger``, its lines), its evidence ``{pins, windows}`` (the host's pins log, ``--pins``, its lines; each window's
 evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s form). Windows carrying their
 statements' proof files instead (`credit.PERIOD_KEYS`, the sampled calls' ``statements`` and the live ``statements``) are
@@ -222,10 +223,11 @@ def proved(key: Any, ledger: list[str], pins: list[str], main: list[str], name: 
 
 def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Path, statements: Path | None,
                   live: Path | None) -> tuple[dict, list[str], list[str], list[dict]]:
-    """Period ``verity/pouw/period/v1``'s params, ledger, pins log and windows (`credit.PERIOD_KEYS`, statements) from a
-    served run's kept records (module docstring), or Missing naming the first record or leg it lacks: the closed
-    period ``period.json`` names holding window `k` alone, its record, the session, ledger and pins PoUW's served piece
-    fetched (`pouw`), the declared Program, and the sampled calls' `statements` and the `live` evidence."""
+    """Period ``verity/pouw/period/v1``'s params (with the close's sessions), ledger, pins log and windows
+    (`credit.PERIOD_KEYS`, statements) from a served run's kept records (module docstring), or Missing naming the
+    first record or leg it lacks: the closed period ``period.json`` names holding window `k` alone, its record, the
+    session, ledger and pins PoUW's served piece fetched (`pouw`), the declared Program, and the sampled calls'
+    `statements` and the `live` evidence."""
     h1 = _window(serve_dir, k).get("pouw_h1")
     if not h1:
         raise Missing(f"window {k} served no PoUW (its line has no pouw_h1: served without --protocols)")
@@ -256,9 +258,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
             raise Missing(f"no {p.relative_to(pouw)} in {pouw}: PoUW's served piece (served_verdicts.py pouw) fetches "
                           "the gate's ledger, pins log and the window's session and its sample's after the period's close")
     ledger = lines(pouw / "ledger.jsonl")
-    close = next((json.loads(x)["body"] for x in ledger if json.loads(x).get("kind") == "period-close"
-                  and json.loads(x)["body"].get("period") == name), None)
-    listed = [w.get("session") for w in (close or {}).get("windows") or ()]
+    listed = close_sessions(ledger, name)
     if listed != [sid, dsid]:
         raise Missing(f"period {name}'s close in the ledger lists the sessions {listed}, and this piece is built for a "
                       f"period of one served window, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
@@ -277,7 +277,20 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
                              json.loads(live.read_text()), draw_directory=draw)
-    return {"key": key.to_json(), "main": lines(main), "name": name}, ledger, lines(pouw / "pins.jsonl"), [ev]
+    return ({"key": key.to_json(), "main": lines(main), "name": name, "sessions": listed},
+            ledger, lines(pouw / "pins.jsonl"), [ev])
+
+
+def close_sessions(ledger: list[str], name: str) -> list[Any]:
+    """The sessions the auditor's ledger `ledger` lists in period `name`'s close, in its order, read past any line that
+    isn't an entry object (the check refuses that ledger); the empty list when it closes no period `name`. A line that
+    isn't JSON raises: the ledger is the auditor's own, so a broken one is a failed run, not a period to ask about."""
+    for x in ledger:
+        e = json.loads(x)
+        body = e.get("body") if isinstance(e, dict) else None
+        if isinstance(body, dict) and e.get("kind") == "period-close" and body.get("period") == name:
+            return [w.get("session") if isinstance(w, dict) else None for w in body.get("windows") or ()]
+    return []
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -322,9 +335,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not all(getattr(a, f) is not None for f in given):
         ap.error(f"{a.protocol} takes --serve-run and --window, or {', '.join('--' + f for f in given)}")
     if protocol == PERIOD:
-        params = {"key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main), "name": a.name}
-        return period_piece(a.out, params, lines(a.ledger), lines(a.pins), json.loads(a.windows.read_text()), a.exe,
-                            run)
+        ledger = lines(a.ledger)
+        params = {"key": challenger_key(json.loads(a.key.read_text())), "main": lines(a.main), "name": a.name,
+                  "sessions": close_sessions(ledger, a.name)}
+        return period_piece(a.out, params, ledger, lines(a.pins), json.loads(a.windows.read_text()), a.exe, run)
     params = json.loads(a.params.read_text())
     commitment = canonical(json.loads(a.registration.read_text()))
     evidence = canonical(json.loads(a.answer.read_text()))

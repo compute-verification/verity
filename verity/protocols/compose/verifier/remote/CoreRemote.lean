@@ -300,9 +300,12 @@ private def sampledOn (log : Array Json) (outputs : Option Json) (rec : Json) : 
   { id := VStar.Recursive.Sampled.protocol.id, params := textOf (sampledParams log outputs),
     commitment := (textOf rec).toUTF8, evidence := (textOf (sampledEvidence rec)).toUTF8 }
 
+/-- The period's parameters: period `p`, naming no session. -/
+private def periodParams : String := r#"{"key":null,"main":[],"name":"p","sessions":[]}"#
+
 /-- A period of one window per record of `recs`, each naming it as its Commit record, under an empty ledger. -/
 private def monitoringPeriodNaming (recs : List Json) : Case :=
-  { id := PouwCheck.Period.protocolId, params := r#"{"key":null,"main":[],"name":"p"}"#, commitment := "[]".toUTF8,
+  { id := PouwCheck.Period.protocolId, params := periodParams, commitment := "[]".toUTF8,
     evidence := (textOf (Json.mkObj [("pins", Json.arr #[]), ("windows", Json.arr (recs.map fun r =>
       Json.mkObj [("commit", Flock.hexOf (textOf r).toUTF8)]).toArray)])).toUTF8 }
 
@@ -419,14 +422,14 @@ private def credited : Core.Protocol where
   Params := PouwCheck.Period.Params
   Commitment := PouwCheck.Period.Commitment
   Evidence := PouwCheck.Period.Evidence
-  Public := PouwCheck.Credit.PeriodCredit
+  Public := PouwCheck.Period.Published
   Profile := PouwCheck.Period.Profile
   params := PouwCheck.Period.paramsOf
   commitment := PouwCheck.Period.commitmentOf
   evidence := PouwCheck.Period.evidenceOf
   digest := PouwCheck.Period.Commitment.digest
-  check p _ _ := .accept ⟨[[0]], [0], 1, PouwCheck.Credit.DELTA, [none]⟩ ⟨p.name, 1⟩
-  publicJson := PouwCheck.Credit.PeriodCredit.toJson
+  check p _ _ := .accept ⟨⟨[[0]], [0], 1, PouwCheck.Credit.DELTA, [none]⟩, p.key, [], 0, 1⟩ ⟨p.name, 1⟩
+  publicJson := PouwCheck.Period.Published.toJson
   profileJson := PouwCheck.Period.profileJson
 
 /-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and sampled proofs' coins and
