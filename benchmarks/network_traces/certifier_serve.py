@@ -579,16 +579,23 @@ def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temp
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
-def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
+def bearer(api_key_env: str | None) -> str | None:
+    """The endpoint's bearer key: the value of the environment variable `api_key_env` names, which must be set; None
+    when it names none. The one place the key is read."""
+    return os.environ[api_key_env] if api_key_env else None
+
+
+def _call(url: str, path: str, body: dict | None = None, key: str | None = None) -> dict:
     """The JSON the endpoint at `url` (`http(s)://HOST[:PORT][/PREFIX]`) answers at `path`: to a GET, or to a POST of
-    `body` as JSON. A `url` of any other form is refused by name before anything is opened, so only HTTP is spoken.
-    An answer that isn't a 2xx raises `OSError`, as a connection that fails does; a redirect is such an answer."""
+    `body` as JSON, sent `key` as the bearer key when there is one. A `url` of any other form is refused by name
+    before anything is opened, so only HTTP is spoken. An answer that isn't a 2xx raises `OSError`, as a connection
+    that fails does; a redirect is such an answer."""
     u = urllib.parse.urlsplit(url)
     if u.scheme not in ("http", "https") or not u.hostname:
         raise SystemExit(f"an endpoint is http(s)://HOST[:PORT][/PREFIX], not {url!r}")
     headers = {"content-type": "application/json", "connection": "close"}
-    if api_key_env:
-        headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
+    if key:
+        headers["authorization"] = f"Bearer {key}"
     connect = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
     connection = connect(u.hostname, u.port, timeout=60)
     try:
@@ -602,9 +609,9 @@ def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None
         connection.close()
 
 
-def served_model(url: str, api_key_env: str | None = None) -> str:
-    """The one model the endpoint serves (`/v1/models`)."""
-    ids = [m["id"] for m in _call(url, "/v1/models", api_key_env=api_key_env)["data"]]
+def served_model(url: str, key: str | None = None) -> str:
+    """The one model the endpoint serves (`/v1/models`), asked with the bearer key `key` when there is one."""
+    ids = [m["id"] for m in _call(url, "/v1/models", key=key)["data"]]
     if len(ids) != 1:
         raise SystemExit(f"{url} serves {ids}: name the model (--model)")
     return ids[0]
@@ -613,7 +620,7 @@ def served_model(url: str, api_key_env: str | None = None) -> str:
 def prompt_tokens(url: str, model: str, n: int, api_key_env: str | None = None) -> list[int]:
     """A prompt of exactly `n` tokens of the endpoint's tokenizer (vLLM's `/tokenize`): `PROMPT` padded with
     `FILLER`, cut at `n`."""
-    tokens = _call(url, "/tokenize", {"model": model, "prompt": PROMPT + FILLER * n}, api_key_env)["tokens"]
+    tokens = _call(url, "/tokenize", {"model": model, "prompt": PROMPT + FILLER * n}, bearer(api_key_env))["tokens"]
     if len(tokens) < n:
         raise SystemExit(f"{url}'s tokenizer makes {len(tokens)} tokens of the padded prompt, fewer than {n}")
     return tokens[:n]
@@ -635,8 +642,8 @@ def probe(url: str, body: dict, n: int = 3, api_key_env: str | None = None, cloc
     counted: each response's raw count of canonical events, as the shim cuts them (`active_replay.canonical_events`)
     before it pads (`events`), and its seconds to the first and to the last."""
     headers = {"content-type": "application/json"}
-    if api_key_env:
-        headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
+    if key := bearer(api_key_env):
+        headers["authorization"] = f"Bearer {key}"
 
     def one(_) -> dict:
         request = urllib.request.Request(url.rstrip("/") + ar.LIVE_PATH.decode(), json.dumps(body).encode(), headers)
@@ -794,7 +801,7 @@ def served_profile(plan: dict) -> ServedProfile | None:
 # The varied plan.
 
 def tokenize(url: str, model: str, text: str, api_key_env: str | None = None) -> list[int]:
-    return _call(url, "/tokenize", {"model": model, "prompt": text}, api_key_env)["tokens"]
+    return _call(url, "/tokenize", {"model": model, "prompt": text}, bearer(api_key_env))["tokens"]
 
 
 def varied_fields(model: str, q: dict) -> dict:
@@ -848,8 +855,8 @@ def probe_varied(url: str, model: str, requests: list[dict], api_key_env: str | 
     `UPSTREAM_FIELDS`: each response's tokens, the seconds from its send to each token (`token_s`), its finish reason
     and its last token's id."""
     headers = {"content-type": "application/json"}
-    if api_key_env:
-        headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
+    if key := bearer(api_key_env):
+        headers["authorization"] = f"Bearer {key}"
     t0, base = clock(), min((q["at_ms"] for q in requests), default=0.0)
 
     def one(q: dict) -> dict:
@@ -1513,7 +1520,7 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
     `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range` or
     `--prompts-file`'s prompts, `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed
     at their arrival times."""
-    model = args.model or served_model(url, args.api_key_env)
+    model = args.model or served_model(url, bearer(args.api_key_env))
     prompts_file = getattr(args, "prompts_file", None)
     if getattr(args, "traffic", TRAFFIC[0]) == "varied":
         lo, _, hi = args.prompt_range.partition(":")
