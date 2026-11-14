@@ -4180,9 +4180,14 @@ class RouteError(SlackError):
         self.status, self.error = status, error
 
 
-def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+def http_open(method: str, url: str, data: bytes | None, headers: dict[str, str]):
+    """One request to a site route, following no redirect, in 30 s: the response, open, for the caller to read or not."""
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+    return urllib.request.build_opener(_NoRedirect).open(req, timeout=30)
+
+
+def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+    with http_open(method, url, data, headers) as r:
         return json.load(r)
 
 
