@@ -16,7 +16,8 @@ challenger writes them.
 with q below 2^H, as `lms.verify` decides: ``LmsVerify_v1{N, W, H}`` over q's low H bits, and q's top 32 − H bits zero
 (``PousEqual_v1{32 − H}`` against zeros, ANDed in).  A q at or past 2^H is no leaf of the key's tree, and `lms.verify`
 refuses it; `LmsVerify_v1` reads q's low H bits only.  ``m`` is ``lms.memory_challenger_message(I, session, record)``,
-the digest the memory challenger's signature signs (`memory_challenger.LmsSigner`).  The bytes are rewired into
+the digest the memory challenger's signature signs (`memory_challenger.LmsSigner`); the registered row ``m`` is its 64
+bytes in byte order, which is how the unit that computes ``m`` must output it.  The bytes are rewired into
 `gates.lms`' words (each word's bytes big-endian, its bits least significant first) without a gate.  At the deployed
 scheme, ``lms-sha512/n64-w1-h20/v0`` (`lms.DEPLOYED`), it is ``PousSessionSig_v1{64,1,20}``: rows of 640, 512 and
 278,048 bits and one output bit, 12 ANDs beside the verifier's.
