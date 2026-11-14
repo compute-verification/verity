@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Properties.Compose.Remote.Subprotocol
+public import Properties.Compose.Remote.HonestLog
 public import Proofs.Compose.RemoteHeld.Subprotocol
 public import Proofs.Compose.RemoteHeld.Sample
 public import Proofs.Pouw.Prob
@@ -36,7 +38,11 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
   record, the bound fails on a node whose four passes read its one block once (`lineHeld_nontrivial`,
   `lineHeldAtSubprotocol_nontrivial`); and the line credits only what the passes read: on one record and summary its
   claim holds of a trace with the store in memory and fails of the same trace with memory emptied at tick 10
-  (`lineHeldAtSubprotocol_bites`).
+  (`lineHeldAtSubprotocol_bites`). The guarantees `Line.SecurityProofs.lineHeld` and
+  `Subprotocol.SecurityProofs.lineHeldAtSubprotocol` carry their own witnesses under their namespaces: the nontrivial
+  ones closed at the toy summary (`Toy.sm`, in the properties tree, which their statements read), and the honest ones at
+  the honest one-window log, taking that the deployed check accepts it (`HonestLogAccepted`): its session decodes and
+  `Shared.run` accepts it (`lineHeld_honest`), and the check accepts it (`lineHeldAtSubprotocol_honest`).
 * **QBytesAtSubprotocol** (`QBytesAtSubprotocolBy`, `qBytesAtSubprotocolBy_iff`), which takes the samples' three of those
   premises. Honest: at the same honest node and schedule they hold, and at `Poub.Protocol.DELTA` the
   distinguishers' advantage and the hiding terms are 0 (`qBytesAtSubprotocolBy_honest`). Nontrivial: at a verifier that
@@ -351,27 +357,6 @@ def reg : Poub.Registration where
   rows := 0
   key := ⟨codec, #[], 0, none, .empty⟩
 
-def win : Poub.Session.WindowSummary where
-  lengths := #[1]
-  steps := #[]
-  post := #[]
-  heads := #[]
-  stale := #[]
-  arrivedNs := #[]
-  releasedNs := 0
-  deadlineNs := 0
-  openedNs := 0
-  drawn := 1
-
-def sm : Poub.Session.Summary where
-  windows := #[win, win, win, win]
-  blocks := 1
-  appended := 0
-  released := 0
-  lifetime := 1
-  pace := none
-  appends := none
-
 def seen : Array _root_.Poub.Line.Seen :=
   #[⟨0, 5, 1, 0, 1, 0⟩, ⟨10, 15, 1, 0, 1, 0⟩, ⟨20, 25, 1, 0, 1, 0⟩, ⟨30, 35, 1, 0, 1, 0⟩]
 
@@ -630,9 +615,8 @@ summary recorded for every record, the toy node (no sample, one block, held in n
 passes reading it once) meets every premise at `δs = δnet = 0`, while its line credits `4 · 1` blocks read at every
 outcome where the certifiers count nothing else entering, which is every outcome: the event has probability 1 and the
 bound is `δ = 1/2`. -/
-theorem lineHeld_nontrivial : ∃ sm : Poub.Session.Summary,
-    ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some sm) := by
-  refine ⟨Toy.sm, fun h => ?_⟩
+theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial :
+    ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some Toy.sm) := fun h => by
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (noOutside _) (quietIngress _) (toy_paced _)
     (toy_covers _) (toy_sketch _ _) (covered_noOutside _ _) (ingressCounted_quiet _)
@@ -642,13 +626,16 @@ theorem lineHeld_nontrivial : ∃ sm : Poub.Session.Summary,
   · norm_num [binding_empty, toy_delta]
   · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
 
+theorem lineHeld_nontrivial : ∃ sm : Poub.Session.Summary,
+    ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some sm) :=
+  ⟨Toy.sm, Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial⟩
+
 /-- **`LineHeldAtSubprotocol` fails at a verifier that accepts everything.** With an acceptance and a verdict that hold
 of every record and one summary recorded for every record, the toy node meets every premise at `δs = δnet = 0`, while
 its line credits `4 · 1` blocks read where its passes read one: the event has probability 1 and the bound is
 `δ = 1/2`. -/
-theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : Poub.Session.Summary,
-    ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some sm) := by
-  refine ⟨Toy.sm, fun h => ?_⟩
+theorem SecurityProofs.lineHeldAtSubprotocol_nontrivial :
+    ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some Toy.sm) := fun h => by
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
     (noOutside _) (quietIngress _) (toy_paced _) (toy_covers _) (toy_sketch _ _)
@@ -658,6 +645,10 @@ theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : Poub.Session.Summary,
   rw [Pouw.pr_eq_one]
   · norm_num [binding_empty, toy_delta]
   · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
+
+theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : Poub.Session.Summary,
+    ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some sm) :=
+  ⟨Toy.sm, SecurityProofs.lineHeldAtSubprotocol_nontrivial⟩
 
 /-- **The line credits only what the passes read**: on one node, record and summary, the line's bits-read claim holds
 of a trace whose four passes each read the store in node memory, and fails of the same trace with node memory emptied
@@ -811,5 +802,44 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
         rfl, rfl, rfl⟩
     have h0 := lt_of_lt_of_eq (sampleTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
+
+/-! ## The honest one-window log -/
+
+/-- **`LineHeld`'s honest witness**: the honest one-window log's registration decodes, and its parameters and log
+decode to a session that `Shared.run` runs to an accepted state, given that the deployed check accepts it
+(`HonestLogAccepted`, witnessed outside Lean). -/
+theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_honest (h : HonestLogAccepted) :
+    ∃ (reg : Poub.Registration) (params : Poub.Session.Params) (g : ℕ) (coins appendCoins : Array ByteArray)
+      (notBeforeNs : ℕ) (events : Array Poub.Session.Event) (rs : Array Poub.Session.Result)
+      (s : Poub.Session.State),
+      Poub.Difftest.registrationOf HonestLog.registration = .ok reg ∧
+      Poub.Protocol.sessionOf HonestLog.params HonestLog.evidence =
+        .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
+      Poub.Shared.run g (Poub.Session.State.init params reg coins appendCoins notBeforeNs) events =
+        .ok (rs, s) ∧
+      s.outcome = some "accepted" := by
+  obtain ⟨reg, pub, prof, hreg, hc⟩ := h
+  obtain ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, -, hs, hr, ho, -⟩ :=
+    acceptIsVerified _ _ _ _ _ hc
+  exact ⟨reg, params, g, coins, appendCoins, notBeforeNs, events, rs, s, hreg, hs, hr, ho⟩
+
+/-- **`LineHeldAtSubprotocol`'s honest witness**: the deployed check accepts the honest one-window log
+(`HonestLogAccepted`, witnessed outside Lean), whose parameters and log decode to a session that `Shared.run` runs to
+an accepted state. -/
+theorem SecurityProofs.lineHeldAtSubprotocol_honest (h : HonestLogAccepted) :
+    ∃ (reg : Poub.Registration) (pub : Poub.Protocol.Public) (prof : Lean.Json) (params : Poub.Session.Params)
+      (g : ℕ) (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ) (events : Array Poub.Session.Event)
+      (rs : Array Poub.Session.Result) (s : Poub.Session.State),
+      Poub.Difftest.registrationOf HonestLog.registration = .ok reg ∧
+      Poub.Protocol.check HonestLog.params reg HonestLog.evidence = .accept pub prof ∧
+      Poub.Protocol.sessionOf HonestLog.params HonestLog.evidence =
+        .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
+      Poub.Shared.run g (Poub.Session.State.init params reg coins appendCoins notBeforeNs) events =
+        .ok (rs, s) ∧
+      s.outcome = some "accepted" := by
+  obtain ⟨reg, pub, prof, hreg, hc⟩ := h
+  obtain ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, -, hs, hr, ho, -⟩ :=
+    acceptIsVerified _ _ _ _ _ hc
+  exact ⟨reg, pub, prof, params, g, coins, appendCoins, notBeforeNs, events, rs, s, hreg, hc, hs, hr, ho⟩
 
 end Properties.Poub.Subprotocol

@@ -310,4 +310,32 @@ def HonestSchedule {Ω Cm : Type} (node : Node) (passes : ℕ) (tick : Ω → �
       ∀ g < node.windows, ∀ p, firstPass gs g ≤ p → p < firstPass gs (g + 1) →
         released gs node.windows g ≤ tick ω p ∧ tick ω (p + 1) ≤ ended gs g
 
+namespace Toy
+
+/-- A window of one receipt over one block, which it sampled. -/
+def win : Poub.Session.WindowSummary where
+  lengths := #[1]
+  steps := #[]
+  post := #[]
+  heads := #[]
+  stale := #[]
+  arrivedNs := #[]
+  releasedNs := 0
+  deadlineNs := 0
+  openedNs := 0
+  drawn := 1
+
+/-- The record the nontrivial witnesses' verifier that accepts everything reads of every record: four windows of `win`
+over one block, nothing appended or released, a lifetime of one window, unpaced. -/
+def sm : Poub.Session.Summary where
+  windows := #[win, win, win, win]
+  blocks := 1
+  appended := 0
+  released := 0
+  lifetime := 1
+  pace := none
+  appends := none
+
+end Toy
+
 end Properties.Poub.Subprotocol
