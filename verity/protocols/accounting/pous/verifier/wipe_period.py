@@ -43,10 +43,9 @@ count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing
 is real and its quantity isn't. The leg's record says `trusted-host` holds only for a session signed under the challenger host's key
 that `wipe_party.AUDITOR_KEYS` pins, never from the hosts' names: a session accepted under a key the run pinned itself
 is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
-session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), what the prover's store
-leaves out by tier (`store_gaps`: a GPU's driver reserve when NVML gave no total, what its disks leave outside the
-boundary, `disk_gaps`) and each link leaving the node that no network certifier counts (`wipe_party.link`). The
-answer's placement names no device: what the prover measured of its store stays in its own record.
+session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
+leave outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts
+(`wipe_party.link`).
 `main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
 """
 
