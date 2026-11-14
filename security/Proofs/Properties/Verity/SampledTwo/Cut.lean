@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Binding
 public import VStarRecursive.SampledTwo
 
 /-!
-# The cut of the two-stage leg: the log the form's check read is the device's, or a break
+# The cut of the two-stage subprotocol: the log the form's check read is the device's, or a break
 
 `ProjectionOf` reads, beside the verdict, a `Good` on each play: the log the form's check read is the device's. This
 module defines it for the two-stage form (`LogIsDevice`) and bounds the accepted plays where it fails (`CutBound`) by

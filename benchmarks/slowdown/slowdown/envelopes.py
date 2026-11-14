@@ -321,7 +321,7 @@ class Certifier:
     bits: the head's fields the ingress scan leaves free (`REQUEST_HEAD`), then `K0` prompt ids in its first cell after
     the head and `K` in each other cell (the grammar of `verity/protocols/accounting/certifier/verifier/io_request.py`, which
     `ingress_scan.py` scans). A bucket adds `lanes ⌈log₂(r + 2)⌉` bits, each lane's block absent or `d ≤ r` data cells
-    then padding. A slot is held `D + 1` buckets from its admission, so a link-window of `T = window_buckets` buckets
+    then padding. A slot is held `D + 1` buckets from its admission, so an execution phase of `T = window_buckets` buckets
     holds at most `lanes ⌈T / (D + 1)⌉` requests, and
 
         r_in ≤ windowBits / (T τ_b) = (lanes ⌈T / (D + 1)⌉ requestBits + T lanes ⌈log₂(r + 2)⌉) / (T τ_b)
@@ -329,7 +329,7 @@ class Certifier:
 
     (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the draft statement
     `draft:per-server-ingress`, not yet in Lean; the egress at the same requests). The
-    bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
+    bound is stated per execution phase, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
     `incorrect_block_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
@@ -360,7 +360,7 @@ class Certifier:
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
-    #: `T`, buckets a link-window (the network certifier's `window`), the length the per-server bound is stated per
+    #: `T`, buckets an execution phase (the network certifier's `window`), the length the per-server bound is stated per
     window_buckets: float = math.nan
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
@@ -417,20 +417,20 @@ class Certifier:
         return self.outputs * self.id_bits + math.ceil(math.log2(self.outputs + 1))
 
     def window_bits(self, buckets: float) -> tuple[float, float]:
-        """`(ingress_bits, egress_bits)` of one server in a link-window of `buckets` buckets (`windowBits`), at the most
+        """`(ingress_bits, egress_bits)` of one server in an execution phase of `buckets` buckets (`windowBits`), at the most
         requests it anchors, `windowRequests = lanes ⌈buckets / (D + 1)⌉`, and each bucket's `bucket_in` in. A period of
-        `W` link-windows is `W` times it (`ingressBits`), not one ceiling over all its buckets."""
+        `W` execution phases is `W` times it (`ingressBits`), not one ceiling over all its buckets."""
         n = self.lanes * math.ceil(buckets / (self.hold + 1))
         return n * self.request_in + buckets * self.bucket_in, n * self.request_out
 
     @property
     def r_in(self) -> float:
-        """One server's declared ingress, bit/s: a link-window's `windowBits` over its `T τ_b` seconds."""
+        """One server's declared ingress, bit/s: an execution phase's `windowBits` over its `T τ_b` seconds."""
         return self.window_bits(self.window_buckets)[0] / (self.window_buckets * self.bucket_s)
 
     @property
     def r_out(self) -> float:
-        """One server's declared egress, bit/s, at a link-window's requests."""
+        """One server's declared egress, bit/s, at an execution phase's requests."""
         return self.window_bits(self.window_buckets)[1] / (self.window_buckets * self.bucket_s)
 
     @property
