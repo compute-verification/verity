@@ -175,7 +175,7 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         shim.outcome = "end" if shim.arrivals and END in [k for _, k in shim.arrivals] else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    return {"warden": network_certifier, "closed": closed, "failed": failed, "close_error": close_error}
+    return {"network_certifier": network_certifier, "closed": closed, "failed": failed, "close_error": close_error}
 
 
 def _heads(out: Path) -> dict:
@@ -254,7 +254,7 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, kill_at=PARAMS.window + 10)
-    network_certifier = run["warden"]
+    network_certifier = run["network_certifier"]
     assert max(network_certifier.lateness) <= network_certifier.slack
     for error in (run["failed"], run["close_error"]):
         assert type(error) is RuntimeError

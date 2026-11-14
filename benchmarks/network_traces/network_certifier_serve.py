@@ -1179,7 +1179,7 @@ def rehearse(args) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="network-certifier-serve-"))
     procs: list[subprocess.Popen] = []
     try:
-        cs.load_key(scratch / "warden", args.height)
+        cs.load_key(scratch / "network_certifier", args.height)
         if load:
             try:
                 lr.relay_load(args.load_store, lr.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
@@ -1212,7 +1212,7 @@ def rehearse(args) -> int:
             windows = max(windows, closing_windows(params, traffic[-1]["at"]))
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
-                                             "--out", str(out), "--key", str(scratch / "warden"), "--session",
+                                             "--out", str(out), "--key", str(scratch / "network_certifier"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
                                              str(args.paced_ms), *_flags(args), *crr.flags_of(params),
