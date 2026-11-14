@@ -33,6 +33,11 @@ outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challen
 its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
 (`verity.protocols.accounting.poub.verifier.p2_party --pous-record`).
 
+A deployment starts the two parties from its configuration (`verity.protocol.ProtocolDef.starts`), where PoUS is
+`COMPONENT`: each with the session's request (`deployed_request`), the prover with its store (`start_prover`) and the
+challenger with its pinned key (`challenger_party.start`). The request and the store are setup's over the served store
+and the card's, which no configuration states; until those are read they raise `NotImplementedError(ONSITE_GOAL)`.
+
 `Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
 `command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
 `session(side, request, respond)` is PoUS's: one session with the side, each index answered with `respond(index)`
@@ -51,7 +56,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.commitments.randomness import derive
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, Role, Start
 from verity.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 from verity.channel import Body, Int, Message, Schema
 from verity.protocols.accounting.pous.verifier import run as R
@@ -67,6 +72,10 @@ PREMISE = "trusted-device"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
+#: PoUS's name in a deployment configuration: in its `protocols`, a `[[pin]]`'s `protocol` and a binding's table
+COMPONENT = "pous"
+#: the goal under which a start that reads the served store or the card is still to be written
+ONSITE_GOAL = "memory-accounting/onsite-memory-verdicts"
 SESSION_ID_TAG = b"verity-pous/memory-challenger/session-id/v1\0"
 AUDIT_BYTES = 64
 MAX_BLOCK = 1 << 24
@@ -318,6 +327,20 @@ def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None
     return out
 
 
+def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any]) -> dict[str, Any]:
+    """The session's request (`request_of`) as a deployment starts it: `k` the configuration's `challenges`, `node` the
+    prover's node from its deploy bindings (`bound`), and `binding`, `blocks`, `block_bytes`, `audit` and `published`
+    from setup over the served store and `limit_ns` from the card's point, which no configuration states."""
+    raise NotImplementedError(ONSITE_GOAL)
+
+
+def start_prover(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The prover's start on its node (`ProtocolDef.starts`): the session's request (`deployed_request`), and its store
+    (`capabilities["store"]`), each index answered with its block of the served `C*` on the card
+    (`verity/protocols/accounting/pous/prover/p2/p2_store`)."""
+    raise NotImplementedError(ONSITE_GOAL)
+
+
 def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     """Setup's published outputs with P2's parameters, as a request naming its audit carries them (`request_of`), None
     for a request without them; ValueError unless their root is the session's binding, their blocks the request's,
@@ -346,7 +369,7 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     return s | {"params": p}
 
 
-__all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
+__all__ = ["CHALLENGER", "COMPONENT", "END", "ID", "MANIFEST", "MODULE", "ONSITE_GOAL", "PARAMS", "PREMISE", "PROVER",
            "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "Prover", "answer",
-           "coin_session_id", "command", "placement", "request_of", "run", "salt", "session", "session_id", "setup_of",
-           "sleep_until"]
+           "coin_session_id", "command", "deployed_request", "placement", "request_of", "run", "salt", "session",
+           "session_id", "setup_of", "sleep_until", "start_prover"]
