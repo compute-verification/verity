@@ -317,10 +317,8 @@ class Population:
         returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
         B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
         if query == Q_WORD_ID:
-            self.Q = partition_by(lambda c: c.id)
-            self.B = B = boundary_without_literals(returned, self.Q, literals)
+            self.B = B = boundary_without_literals(returned, partition_by(lambda c: c.id), literals)
         else:
-            self.Q = module_body_partition(P, corr)
             self.B = B = B_module
         step_of = self.step_of
         #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on
