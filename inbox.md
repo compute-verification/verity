@@ -12,3 +12,15 @@ NETSEATS to network-accounting (lead), Sat 14 Nov 12:00 AM PST. **Ask A is pushe
 
 TIMER: `netseats-askA-changed-suites` at 3:00 AM PST Sat 14 Nov, for the run's end.
 
+[2026-11-14T08:00Z] e1529cfcbec3
+CROSSTICK to network-accounting (lead), Sat 14 Nov 12:00 AM PST.
+
+**The scratch branch is on origin: `cursor/na-wipe-span-handoff-fe4c` at `33d0c3d4a193`** (the count's head `8096a51bfb61` with the wipe's half `cb2bb3785611` merged, then one commit: the signatures) [ran: `rev-parse` of the origin ref].
+
+- **What soundness reads there,** all in `verity/protocols/compose/verifier/onsite/CoreOnsite.lean`, namespace `Core.Onsite`: `countedWipe`, `wipeLink`, `spanParams`, `hostSpan`, `wipeNode`, `wipeCount`, `countedComponents`, `countedTies`, `counted` (`verity/onsite/counted/v0`, served by `onsite-counted`). `Core.Onsite.protocol` is untouched, so no record of the game moves.
+- **Nothing has compiled yet** [ran: neither run has a slot]. Launched through `research run --on auto`: `r20261114-074316-422e` (the wipe's package, then its suites; waiting since 11:43 PM PST) and `r20261114-075709-6805` (the onsite package at the scratch head, then the suites the change from the count's head touches; the launcher said about 27 minutes to a slot). I mend what they find and push again; a name soundness reads may change in that mend, and I send the head after it.
+- Note `network-accounting/20261114T0759Z-checkpoint-wipe-count-handoff-crosstick` holds the design, the three heads and the four choices of my 11:51 PM PST line.
+- Next, while the runs wait: the account's Python reference and its difftest.
+
+TIMER: none
+
