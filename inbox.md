@@ -83,3 +83,64 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 9:36 PM PST. P1's report, ahe
 
 TIMER: none
 
+[2026-11-14T05:37Z] e3a93d144e54
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 9:37 PM PST. **Monday's line, early, and step 2 by file. Leaf 0's tie is the copy unit; one Program holds; the run needed no card, 12 min and 9 GB; nothing of proofs' had to change.** Every [ran] is `r20261114-045505-f26a` (exit 0) unless another is named. Every [read] is `NetworkCheck/Period.lean` at the branch's base `245da271367f` unless a file is named.
+
+**1. Leaf 0's tie: the copy unit** [built, ran]
+- `IngressScanStart`, its own template `start`, one unit a link-window: it reads the carried start (`sin`, one registered row) and commits it as leaf 0 of the link-window's state tree.
+- Why not a third output on the first ingress unit:
+  - **The reads rule.** With the copy unit, bucket 0's ingress unit reads state leaf 0 as every later bucket reads the leaf before it. Every bucket is then one Definition and one template.
+  - **The width.** `Scan.terms` charges each wrong block the wider of the ingress and egress returns (`:1276-1278`, `:815`). A state-wide third output would add the state's width to the ingress return at every bucket [argued].
+
+**2. One Program for every link-window holds** [ran]
+- Both link-windows' records name one Program of three templates, 2T + 1 = 33 units. The first start is the empty state's row, committed and pinned by the verifier.
+- What moves at the flip, in step 2:
+  - the scan's Program digest, for every link-window;
+  - every kept run's Program, partition and registration pins;
+  - the unit count the period check holds, 2T + 1 for 2T (`:1180`);
+  - `IngressScanFirst` and its pins go.
+- The gate's schedule does not move: the schedule's digest holds no Program (`:489-496`) [read].
+
+**3. What the run needs on a node** [ran]
+- No card. 12 min with the runner's builds cached, 9 GB peak resident, largest prover process 2.8 GB. 8 CPUs and 16 GB would do [argued from the peak]. w63k4's class in this shape: not run.
+
+**4. Of proofs': nothing for the run** [ran]
+- One-stage took `pinned`, the window-history form on a log, and the reads file's `domains` as they stand, Lean and Python agreeing.
+- For step 2 we need their `verdicts` parameter, which is their open change.
+
+**5. Where the explicit form's refusal goes, and what it reads**
+- **The period check cannot read which form was used** [read]. `{"port": P}` or `{"record": D, "port": P}` is a parameter of one-stage's check, not a field of the record. The period check reads the parameters, the records and the answers, and calls no one-stage check (`:921-931`).
+- **So it holds what the window-history form gives, on the records themselves.** One more finding a link-window, beside `wiredCheck` and `stateCheck` (`:1200-1221`):
+  - a later link-window: its record's `previous` is the digest of the record before, and its `0.sin` entry is at the root, domain and leaf count of `last/o1` in that record's `roots`;
+  - the run's first link-window: no `previous`, and the entry's root is the empty start's, which the check computes;
+  - anything else is refused by name: the start is not the end of the link-window before.
+- **What tells a carried start:** the `registered` entry named `0.sin`. It is the scan's only registered value in this shape [ran].
+- **Why that refuses the explicit form** [argued]: a start read from an older record sits at that record's root. Two frame ports share a root and a domain only as one commitment, so an entry at the record before's `last/o1` is that record's end whatever one-stage was handed. [ran]: one-stage accepts the explicit form at the older record, so without this finding it passes.
+
+**6. `verdicts`: three answers** [read, not built]
+1. **Which program hands it:** the scan's driver alone, in `scan_zk.audit` at its registration check, whose parameters `carry_of` builds. The period step (`scan_period.py`) calls no one-stage registration check.
+2. **What the log names:** every record a start is read from, with the verdict the verifier's own record check gave it (`audit_record`, Lean of record). `prove_carried` holds that verdict for a link-window before it builds the next one's check. Today it adds a record to its log whenever the registration check passed, whatever the audit said. Nothing comes from the prover's files.
+3. **What holds that it was handed:** the period check reads the answers as given. `answered` holds an answer's protocol and that its digest is the record's, and takes its verdict from the evidence. A period accepts only if every link-window's answer accepts. So with section 5's finding, inside one period, no accepted period's start is read from a refused record. That is your default, and one-stage's check is the second line.
+   - **It stops at a period's first link-window when the run began earlier.** That record's `previous` is in the period before, whose answer this check does not hold. There one-stage's check is the only line, unless the parameters carry the earlier period's accept with its end head.
+- **The second case's cost, once proofs' branch is up** [argued]: as a changed form of the registration check (the log names the record before refused), one entry and about five lines, no proving. As a first link-window the verifier itself refused, then the second's start refused: one more round kind and a link-window's proving, 30 to 50 lines and about 4 min.
+
+**7. Condition 3: what the sum charges for a wrong start unit**
+- **One wrong block, at the width every wrong block is charged, in its own link-window's term** [read]. The period's bound is already a sum over link-windows, and its error the sum of their δ (`:1276-1278`, `:1297-1303`). The unit count becomes 2T + 1, so the term for which blocks are wrong grows by one unit's choice.
+- **The width is not more, by the period check's count** [ran, constants]. It charges a wrong block the wider return: 16,400 bits at the test class, 146,384 at w63k4's. The start returns the state: 7,184 and 145,568.
+- **It is more by one-stage's count** [ran]. One-stage counts the distinct gates a unit returns: the start 7,184, an ingress bucket 7,110, an egress bucket 186 at the test class. So there the start is the scan's widest template, by 74 bits. w63k4's: not computed.
+- **What changes is where the bits land** [argued]. A wrong start or a wrong last unit sets the state every later link-window starts from, so its bits can leave in any later link-window. They are charged once, in the sum. No link-window's own figure stands without the link-windows before it.
+- **A period that does not begin the run** [argued; yours and soundness's]: everything earlier periods can do to it passes through its first start, one state row. Charging that row once as free input, at the state's width, would bound the period without naming the earlier periods' accepts. The other way is your pick: the chain from the run's first link-window.
+
+**Step 2 by file** [argued; sizes as on NET-436 at 6:15 PM PST, less what job 1 built]
+1. `NetworkCheck/Period.lean`, 90 to 180 lines: `scanOf` reads a start unit, T ingress buckets and T egress buckets; 2T + 1; section 5's finding; leaf 0 of the state tree is the start's output, and the empty row only at the run's first link-window.
+2. The mirror (`network/tests/period_case.py`, its cases, `test_network_period_protocol.py`), 145 to 330.
+3. `scan_zk.py`, the flip: the older shape and the flag go, `prove_carried` becomes `prove`, the chain and tampered rounds move off the link-windows' log, V3c's trees in this shape, and the `verdicts` hand. `scan_period.py`: one record and one answer a link-window, 30 to 60.
+4. `ingress_scan.py`: `IngressScanFirst`, its binding and its pins go. The kept runs' pins and their callers follow.
+5. `security/Properties/NetworkPeriod.lean` and its proofs: the start's property, 100 to 170.
+6. `security/Properties/NetworkScan.lean` and `Proofs/Properties/NetworkScan/` (`Accept`, `Causal`, `Fits`, `Walk`): the template form, 100 to 300. Least grounded.
+7. `security/Definitions/NetworkCertifier/MonitoringPeriod*.lean` and the accounting bridge: condition 3's statement, and the lock's records.
+8. The certifier's `PROTOCOL.md`.
+- **It waits on:** #9736 and SCANCOUNT's change in `Period.lean`; LAYOUTREAD's renames in `scan_zk.py`; proofs' `verdicts` change; soundness's answer on a period that does not begin the run.
+
+**Least sure of:** section 5's "one commitment" argument, which I read in the domains' derivation and did not see proved; and the scan's proofs' size.
+
