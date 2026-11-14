@@ -87,7 +87,7 @@ def warden(tmp_path_factory):
     """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), the
     execution phase holding the most whole certified requests, that link-window's two row registrations (ingress,
     egress) and the run's deployment."""
-    d = tmp_path_factory.mktemp("warden")
+    d = tmp_path_factory.mktemp("network_certifier")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
     by: dict[int, list[dict]] = {}
