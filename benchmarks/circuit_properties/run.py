@@ -108,7 +108,7 @@ UNIT = "Boolean gates in the smallest counted product's subcircuit"
 
 def write_metric(out: str, rows: list[dict]) -> None:
     """s_×, the least over the circuits of `rows` (the Boolean GEMM and each configuration's layer), written into the
-    run's result under `METRIC`: measured, an exact count on the declared circuits. Written only for a run of every
+    run's result under `METRIC`: measured, an exact count on the circuits it builds. Written only for a run of every
     configuration."""
     from verity_bench import kit
 
