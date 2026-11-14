@@ -5,8 +5,7 @@ Rules (AST, no import of the checked modules):
   - forbidden imports: os, sys, time, datetime, random, secrets, pathlib, io, json, pickle, subprocess, socket, urllib,
     requests, torch, triton, numpy.random, verity_vllm.{observe,acquire,commit,check} (any), importlib, ctypes, threading, multiprocessing;
   - forbidden calls/names: open, eval, exec, compile, input, __import__, globals, locals, vars, getattr-with-string-env;
-  - no `global` / `nonlocal` statements; no module-level mutable state mutated in functions (best effort: assignments to
-    module names inside functions);
+  - no `global` / `nonlocal` statements, so no function rebinds a module-level name;
   - every module that defines a definition (`CompositeDefinition(`, `@composite(`, `@primitive(`, `PrimitiveDefinition(`)
     has a module-level `SEMANTIC_ID = "<area>/<Name>@v<k>"` and every definition's version argument is an int >= 1;
   - `*_difftest.py` adapters are exempt from the import rule for `torch` INSIDE functions only (module-level torch import
@@ -21,7 +20,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.program import quarantine as _quarantine
-from verity_vllm.records.property_record import seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 ROOT = Path(_quarantine.__file__).parent
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
@@ -70,11 +69,6 @@ def lint_file(path: Path) -> dict[str, Any]:
             problems.append("no module-level SEMANTIC_ID = \"<area>/<Name>@v<k>\"")
         elif not SEMANTIC_ID_RE.match(semantic_id):
             problems.append(f"SEMANTIC_ID {semantic_id!r} does not match <area>/<Name>@v<k>")
-    # module-level names assigned inside functions (mutable module state)
-    for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
-        for n in ast.walk(fn):
-            if isinstance(n, (ast.Assign, ast.AugAssign)) and n.lineno > fn.lineno:
-                pass  # locals are fine; module mutation needs `global`, caught above
     rel = str(path.relative_to(REPO)) if path.is_relative_to(REPO) else str(path)
     return {"file": rel, "semantic_id": semantic_id, "definitions": n_defs, "adapter": is_adapter,
             "status": "pass" if not problems else "fail", "problems": problems}
@@ -99,6 +93,6 @@ def lint(root: Path = ROOT) -> dict[str, Any]:
     ids = [r["semantic_id"] for r in reports if r["semantic_id"] and not r["adapter"]]
     dup = sorted({i for i in ids if ids.count(i) > 1})
     ok = all(r["status"] == "pass" for r in reports) and not dup
-    return seal({"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
+    return seal({"schema": REGISTRY["quarantine_lint"].schema, "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
                  "duplicate_semantic_ids": dup, "files": reports}, ok)
 

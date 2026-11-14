@@ -9,12 +9,14 @@ verifier refuses every form its soundness doesn't cover.
 `Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
 
 * **params**: `{"form": "one-stage" | "recursive" | "two-stage", ...}`, the rest that form's params. The auditor fixes
-  the form with the rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; the
-  recursive form is refused before its rest is read; the two-stage form reads the whole object, its `form` included
+  the form with the rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; those
+  naming one are v2's, the one statement's or the per-member form's (`OneStageZk.paramsEitherOfJson`); the recursive form
+  is refused before its rest is read; the two-stage form reads the whole object, its `form` included
   (`SampledTwo.paramsOfJson`);
 * **commitment**: the registration record (`OneStage.commitmentOf`), as every form reads it;
 * **evidence**: `{"form", ...}`, the rest that form's evidence; the two-stage form reads the evidence's whole bytes
-  (`SampledTwo.evidenceOf`). One-stage evidence naming no `proofs` is v1's, and refused;
+  (`SampledTwo.evidenceOf`). One-stage evidence naming no `proofs` is v1's, and refused; evidence naming one is v2's, in
+  either of its forms (`OneStageZk.evidenceEitherOf`);
 * **check**: that form's check on the blobs; evidence of another form than the params' rejects, so with the recursive
   params refused only one-stage v2's check and the two-stage form's run, and the two-stage form's refuses every audit
   while its switch is off.
@@ -67,7 +69,7 @@ def paramsOfJson (j : Json) : V Params := do
   let (form, rest) ← split j "parameters"
   if form == ONE_STAGE then
     if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
-    return .inl (← OneStageZk.paramsOfJson rest)
+    return .inl (← OneStageZk.paramsEitherOfJson rest)
   if form == RECURSIVE then throw RECURSIVE_REFUSED
   if form == SampledTwo.TWO_STAGE then return .inr (.inr (← SampledTwo.paramsOfJson j))
   throw s!"the parameters' form {form} is not {FORMS}"
@@ -77,7 +79,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   if form == SampledTwo.TWO_STAGE then return .inr (.inr (← SampledTwo.evidenceOf b))
   if form == ONE_STAGE && (field? rest "proofs").isNone then throw s!"the evidence names no proofs: {V1_REFUSED}"
   let rest := (← Flock.canon rest).toUTF8
-  if form == ONE_STAGE then return .inl (← OneStageZk.evidenceOf rest)
+  if form == ONE_STAGE then return .inl (← OneStageZk.evidenceEitherOf rest)
   if form == RECURSIVE then return .inr (.inl (← Recursive.evidenceOf rest))
   throw s!"the evidence's form {form} is not {FORMS}"
 

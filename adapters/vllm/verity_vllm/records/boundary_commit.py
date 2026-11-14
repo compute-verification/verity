@@ -42,6 +42,7 @@ class BoundaryCommit:
     tables: Mapping[str, Any] | None = None           # its history tables' layers and capacity, when it has any
     verdicts: bool | None = None                      # that its values hold the replay block's return (`Layout.verdicts`)
     ids: bool | None = None                           # that its values hold the replay block's return (`Layout.ids`)
+    logits: bool | None = None                        # that its values hold the select's inputs as served (`Layout.logits`)
 
     @classmethod
     def of(cls, doc: Any, where: str) -> BoundaryCommit:
@@ -66,4 +67,4 @@ KINDS: dict[str, type | tuple[type, ...]] = {"window": int, "run": str, "prompt"
                                              "values": Mapping, "index": str, "index_rule": str, "seconds": (int, float)}
 #: what a writer writes only where it holds one
 OPTIONAL: dict[str, type | tuple[type, ...]] = {"stop": Mapping, "stopped": bool, "tables": Mapping, "verdicts": bool,
-                                                "ids": bool}
+                                                "ids": bool, "logits": bool}

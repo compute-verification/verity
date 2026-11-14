@@ -66,7 +66,7 @@ theorem ofNever_finderCR {D β : Type} (H : List UInt8 → D) {G : Game β} {S :
       (StrictCR.TreeRewind.ofNever (H := H) (G := G) (S := S) h).finder.g
       (StrictCR.TreeRewind.ofNever (H := H) (G := G) (S := S) h).finder.s = 0 := by
     simp [StrictCR.TreeRewind.finder, StrictCR.TreeRewind.ofNever, StrictCR.twoRuns, StrictCR.conflictPick,
-      StrictCR.onePick, StrictCR.collOf, Game.bind, Game.map, prob]
+      StrictCR.collOf, Game.bind, Game.map, prob]
   rw [h0, ENNReal.toReal_zero]
   positivity
 

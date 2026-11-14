@@ -16,6 +16,8 @@ is what the Lean is checked against; after, the Python is held to the Lean.
   and `INPUTS`, the files a calling suite declares), and `tests/test_annot.py` holds it to `query_ast` on small Programs.
   `flock-json-difftest` is the JSON parser's port: `Flock.JsonParse.parse` (`Base.JsonParse`)
   and Lean core's `Lean.Json.parse` against one Python mirror, value and refusal text alike (`tests/test_flock_json_port.py`).
+  `tests/test_canonical_json_port.py` holds `Core.canonicalJson`'s answer under each of the two to one Python mirror the
+  same way; its port, `core-canonical-json-difftest`, is in the interface's package (`verity/protocols/interface`).
   The package requires the base and the circuit format (`core_base`, `core_circuits`) and nothing of Flock's package:
   the port of the honest worker's requests, which reads the ZK server, is in `verity/protocols/proofs/recursion/verifier/firewall`.
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`

@@ -47,7 +47,7 @@ __all__ = [
 ]
 
 HERE = Path(__file__).resolve().parent
-HARNESS_GATE = HERE.parents[2] / "verity/protocols/accounting/pouw/prover/sass_gate.py"
+HARNESS_GATE = HERE.parents[1] / "sass_gate.py"
 
 
 def _load(name: str, path: Path):

@@ -165,7 +165,7 @@ def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
 
 
 def gate(out: Path, bins: list[Path]) -> int:
-    G = _load("gpu_kit_sass_gate", HERE.parent / "gpu_kit" / "sass_gate.py")
+    G = _load("gpu_kit_sass_gate", HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "gpu_kit" / "sass_gate.py")
     verdicts, loops_rec, refused = {}, {}, 0
     for b in bins:
         g = re.search(r"_g(\d+)$", b.name).group(1)

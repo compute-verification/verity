@@ -47,7 +47,7 @@ def _load(name: str, path: Path):
 
 _derive = _load("floored_gemm_derive", HERE.parent / "floored_gemm" / "derive.py")
 NCT, key_mul, tile_receipts = _derive.NCT, _derive.key_mul, _derive.tile_receipts
-cs = _load("checked_strip", HERE.parent / "theory" / "checked_strip.py")
+cs = _load("checked_strip", HERE.parents[6] / "benchmarks" / "pouw" / "theory" / "checked_strip.py")
 
 T = 128
 DITHER_TAG, C_TAG, Z_TAG, BETA_TAG, HBETA_TAG = 7, 8, 9, 10, 11

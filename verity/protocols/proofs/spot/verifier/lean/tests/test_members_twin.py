@@ -1,11 +1,11 @@
-"""`one_stage.members.members_run`, the Python of `OneStageZk.membersRun`, held to Lean's refusal of the per-member
-form (`members.refusal`, the executable's ``refusal``) on a window of two members whose sessions' trees the challenger
+"""`one_stage.members.members_run`, the Python of `OneStageZk.membersRun`, held to Lean's check of the per-member
+form (`members.check`, the executable's ``check``) on a window of two members whose sessions' trees the challenger
 session opens one after another, each closed after its session's evidence.
 
 The files are stand-ins, so no member's files are held: an audit with nothing else wrong ends at its first member's
 circuit, which does not parse, on both sides and before any session, and each other row changes one thing and reads
-Lean's reason off the twin. A case every session accepts, which Lean refuses for its form alone
-(`members.ALL_PASSED`), is a whole audit's, which `benchmarks/one_stage` runs with the twin beside it.
+Lean's reason off the twin. A case every session accepts, which Lean accepts, is a whole audit's, which
+`benchmarks/one_stage` runs with the twin beside it.
 
 The twin decides the sessions' trees by `challenger.members_tree_reason` (with `member_tree_reason`, `closes` and
 `members_order`), and the rows hold it to Lean's `Challenger.membersTreeReason` on each refusal of its own: a tree
@@ -65,16 +65,20 @@ class Audit:
     its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
     the per-member parameters and evidence, and the files. Only
     the members of `closed` have their tree's closing round opened, and with `together` those rounds are opened after
-    every tree's other rounds."""
+    every tree's other rounds. The sample holds a unit of exactly the members of `sampled`: the challenger session is
+    one whose coins give such a sample."""
 
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
-                 closed: tuple[str, ...] = (A, B), together: bool = False):
+                 closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B)):
         rng = random.Random(seed)
         s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
-        ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+        held = None
+        while held != set(sampled):
+            ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+            held = {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])}
         self.files: dict[str, bytes] = {}
         sessions = {}
 
@@ -131,8 +135,8 @@ class Audit:
                 (at / d[:16]).write_bytes(b)
                 paths.append(at / d[:16])
         p, e = _json(self.params if params is None else params), _json(self.evidence if evidence is None else evidence)
-        why, decided = M.refusal(p, D.canonical(self.rec).encode(), D.canonical(e).encode(), paths)
-        assert decided, why
+        verdict_, why = M.check(p, D.canonical(self.rec).encode(), D.canonical(e).encode(), paths)
+        assert verdict_ == "reject", (verdict_, why)
         return why, M.members_run(p, _json(self.rec), e, M.blobs_of(paths), program=self.s.program, verify=lms_verify,
                                   verdict=verdict)
 
@@ -237,6 +241,30 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     why, (run, refused) = a.ask(tmp_path / "no-statement")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
+
+
+def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(tmp_path):
+    """A window audited with a statement of its second member alone: the first member, which no statement names, is
+    held to its own circuit's lookup tables among the blobs as a sampled one is (`OneStageZk.ownTables`, the first read
+    of every member's files), before any session. With its circuit looking up ``rcp`` where the blobs hold no table,
+    both refuse it for the tables. The other way, blobs holding a file under ``rcp``'s pinned digest where its circuit
+    looks up none: the twin does not refuse it for the table, and answers as it does without it, at the member's
+    circuit, a stand-in that does not parse. Lean's check finds a blob by the SHA-512 of its bytes, so its side of that
+    row needs the table's own bytes, which this suite does not load: both sides on the table itself are
+    `benchmarks/one_stage`'s (``tests/test_members_tables.py``)."""
+    a = Audit("members-twin-no-statement-tables", opened=(B,))
+    assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [B]
+    looks = a.put(b"a circuit\nMETA " + json.dumps({"lookups": {"rcp": {}}}).encode() + b"\n")
+    why, (run, refused) = a.ask(tmp_path / "looks", params=a.members(A, circuit=looks))
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert why == f"proofs: member {A}: {PF.NO_TABLES}: the circuit looks up rcp, the blobs hold none", why
+
+    _, plain = a.ask(tmp_path / "holds")
+    blobs = M.blobs_of(sorted((tmp_path / "holds").iterdir()))
+    held = M.members_run(_json(a.params), _json(a.rec), _json(a.evidence),
+                         blobs | {PF.MUFU_SHA512["rcp"]: next(iter(blobs.values()))}, program=a.s.program,
+                         verify=lms_verify, verdict=_never)
+    assert held == plain and held[0] is None and held[1].startswith(f"member {A}: {M.UNREAD[0]}"), (held, plain)
 
 
 def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_roots(tmp_path):

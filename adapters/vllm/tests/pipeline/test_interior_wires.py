@@ -82,10 +82,12 @@ def _boundary_window() -> CS.Binding:
 
 
 def _first(members):
-    """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage sampled (spans 0 and 2)."""
+    """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage sampled (spans 0 and 2).
+    Its values are every row port of every member, as the windows' layout names them (`rows.expected_ports`): the wired
+    ``idx``, which has no tree of its own, under its reader too."""
     names: dict[str, tuple] = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(members, CELLS, "00", [0], WIRES))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p, _w in m.all_rows}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -114,10 +116,12 @@ def _refused(f) -> tuple[str, ...]:
 def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challengers_ports():
     """Round 2 derives one wire, `T`'s ``idx`` from `W`'s output, the interior's row of that name (`named`). The
     interior commits `W`'s Q tokens once: `T`'s ``idx`` has no tree, its table `W`'s Q output rows, unit u of span s
-    reading `W`'s unit s, round 2's wired read. It registers on the challenger's ports derived with the wire, after a
-    copy without it is refused, and a device commitment of the same roots holds the same refs. A replay whose ``idx``
-    rows aren't `W`'s tokens, and a wire to a template the interior lacks, are refused before any commitment."""
-    assert (SS.Wire(P.template_id(T), "idx", P.template_id(W), "o0"),) == WIRES
+    reading `W`'s unit s, round 2's wired read. It registers on the challenger's ports derived with the wire, ``idx``
+    under its reader's name with `W`'s root, after a copy without the wire is refused at ``idx``'s domain (its own tree's)
+    and a copy naming the wired port otherwise is refused at R3's ports; a device commitment of the same roots holds the
+    same refs. A replay whose ``idx`` rows aren't `W`'s tokens, and a wire to a template the interior lacks, are refused
+    before any commitment."""
+    assert WIRES == (SS.Wire(P.template_id(T), "idx", P.template_id(W), "o0"),)
     per = [_spans(s) for s in (0, 2)]
     members = [s.member for s in per[0]]
     stream, reg, first = _first(members)
@@ -125,11 +129,14 @@ def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challenger
     w = it.committed.window
     mw, mt, _mx = w.members
     assert (mt.wired, mt.wired_trees, dict(mt.tables)["idx"]) == ((("idx", "o0", (0, 1)),), False, Q)
-    assert w.held(mt, "idx") == mw.port("o0") and mt.port("idx") not in it.ports and mw.port("o0") in it.ports
+    assert w.held(mt, "idx") == mw.port("o0") and mw.port("o0") in it.ports
+    assert it.ports[mt.port("idx")] == {**it.ports[mw.port("o0")], "wired": mw.port("o0")}
     assert it.committed.refs[1][:, 2].tolist() == [0, 1]
     assert it.ports == IR.interior_ports(members, CELLS, reg.digest, first.units, WIRES)
     assert _refused(lambda: IR.register(stream, first, it, ports=IR.interior_ports(members, CELLS, reg.digest,
-                                                                                   first.units))) == ("R3-ports",)
+                                                                                   first.units))) == ("R3-domain",)
+    renamed = {(p + "-other" if p == mt.port("idx") else p): v for p, v in it.ports.items()}
+    assert _refused(lambda: IR.register(stream, first, it, ports=renamed)) == ("R3-ports", "R3-wired")
     assert IR.register(stream, first, it).record["population"] == Q * sum(CELLS)
     c = it.committed
     device = IR.DeviceCommit(c.roots, {q: c.bc[q] for q in c.roots}, {q: c.salts[q] for q in c.roots})
