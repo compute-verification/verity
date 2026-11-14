@@ -15,7 +15,7 @@ sampling design's alone, at the analysis the extractor defines (`Extractor.analy
   the sample (`Extractor.ksAvg`);
 * `Trials.errOf_plur_le`: at the plurality, a trial's binding error is at most its finder's collision term,
   `2·E[cost]/2^256 + 1/(eM)` (`LinkFinder.link_mass_le`, with the finder's output from two openings,
-  `LinkFinder.outOf_spec`);
+  `LinkFinder.outOf_listed_spec`);
 * `Trials.link_le_bindErr`: so the binding error at the committed trace is at most `ε_bind` (`Trials.Transfers`);
 * `GenericSampledKS`, `GenericSampledKSPa`, `GenericSampledKSEscape`, `GenericSampledKSCount`.
 -/
@@ -91,7 +91,7 @@ theorem errOf_plur_le {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (
   split_ifs with h
   · exact link_mass_le (Tr.T R τ c h) (Tr.sT R τ c h) (Tr.rd R τ c) Hc (Tr.finderOut R τ c) (Tr.cost R τ)
       (hwf.1 R τ) M hM
-      (fun x hS => outOf_spec (Tr.rd R τ c) (Tr.op R τ c) B.collide (fun o => B.com o = B.cs R c) B.val
+      (fun x hS => outOf_listed_spec (Tr.rd R τ c) (Tr.op R τ c) B.collide (fun o => B.com o = B.cs R c) B.val
         (fun e v hv => hop R τ c e v hv) (fun o o' h h' hv => B.collide_spec o o' (h.trans h'.symm) hv) x hS)
       (hCR c h) (hX R τ c h)
   · simp only [mul_zero, zero_div, zero_add]

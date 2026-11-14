@@ -236,8 +236,8 @@ theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he : ∀ i, Function.I
     (hcol : ∀ i j o o', G i o → G j o' → e i (val i o) ≠ e j (val j o') →
       (col i j o o').1 ≠ (col i j o o').2 ∧ Hc (col i j o o').1 = Hc (col i j o o').2)
     (x : (Σ i, τ i) × List (Σ i, τ i)) (hS : Succ (rdMix rd e) x) :
-    Coll Hc (outOf (rdMix rd e) (opMix e op) (colMix col) x) :=
-  outOf_spec (rdMix rd e) (opMix e op) (colMix col) (fun o => G o.1 o.2) (fun o => e o.1 (val o.1 o.2))
+    Coll Hc (outOf (rdMix rd e) (listed (rdMix rd e) (opMix e op)) (colMix col) x) :=
+  outOf_listed_spec (rdMix rd e) (opMix e op) (colMix col) (fun o => G o.1 o.2) (fun o => e o.1 (val o.1 o.2))
     (fun x w hw => by
       obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hw
       obtain ⟨hg, hval⟩ := hop x.1 x.2 v hv

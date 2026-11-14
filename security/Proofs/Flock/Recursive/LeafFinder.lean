@@ -52,26 +52,26 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg :
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
 
-/-- **A record's candidates off the table's leaves**, under the registration `R` through `path`: at each position `p`,
-the pair of the session's opening and the registrant's (`TwoOpenings.pair`), with the test that `p` is a registered
-read and the two openings conflict. -/
-noncomputable def ReadsX.leafCands (rd : ReadsX lay rs) (R : Reg) (path : lay.Pos → ByteArray) :
+/-- **A record's candidates off the table's leaves**, under the registration `R` through `path`: at each position `p`
+of the list `ps`, in its order, the pair of the session's opening and the registrant's (`TwoOpenings.pair`), with the
+test that `p` is a registered read and the two openings conflict. -/
+noncomputable def ReadsX.leafCands (rd : ReadsX lay rs) (R : Reg) (path : lay.Pos → ByteArray) (ps : List lay.Pos) :
     List (Prop × (List UInt8 × List UInt8)) :=
-  (Finset.univ : Finset lay.Pos).toList.map fun p =>
-    (rd.isRead p ∧ (rd.openings R path p).Conflict, (rd.openings R path p).pair)
+  ps.map fun p => (rd.isRead p ∧ (rd.openings R path p).Conflict, (rd.openings R path p).pair)
 
 /-- **Two conflicting openings are a collision**: a candidate whose test passes is one (`TwoOpenings.collides`). -/
-theorem ReadsX.leafCands_spec {rd : ReadsX lay rs} {R : Reg} {path : lay.Pos → ByteArray}
-    {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.leafCands R path) (h : c.1) :
+theorem ReadsX.leafCands_spec {rd : ReadsX lay rs} {R : Reg} {path : lay.Pos → ByteArray} {ps : List lay.Pos}
+    {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.leafCands R path ps) (h : c.1) :
     Hash.Collision H512 c.2.1 c.2.2 := by
   obtain ⟨p, -, rfl⟩ := List.mem_map.1 hc
   have hw : rd.isRead p ∧ (rd.openings R path p).Conflict := h
   exact TwoOpenings.collides _ hw.2
 
-/-- A registered read whose openings conflict is a candidate whose test passes. -/
-theorem ReadsX.leafCands_mem {rd : ReadsX lay rs} {R : Reg} {path : lay.Pos → ByteArray} {p : lay.Pos}
-    (hp : rd.isRead p) (h : (rd.openings R path p).Conflict) : ∃ c ∈ rd.leafCands R path, c.1 :=
-  ⟨_, List.mem_map.2 ⟨p, Finset.mem_toList.2 (Finset.mem_univ p), rfl⟩, hp, h⟩
+/-- A listed registered read whose openings conflict is a candidate whose test passes. -/
+theorem ReadsX.leafCands_mem {rd : ReadsX lay rs} {R : Reg} {path : lay.Pos → ByteArray} {ps : List lay.Pos}
+    {p : lay.Pos} (hps : p ∈ ps) (hp : rd.isRead p) (h : (rd.openings R path p).Conflict) :
+    ∃ c ∈ rd.leafCands R path ps, c.1 :=
+  ⟨_, List.mem_map.2 ⟨p, hps, rfl⟩, hp, h⟩
 
 end FlockSoundness.Registered
 
@@ -95,13 +95,15 @@ def LeafColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin 
     (regPathsHJ (zs R ω t R₂ j).I (Vs j).c (zs R ω t R₂ j).pub (o j).2.2 (zs R ω t R₂ j).rd.port) p).Conflict
 
 /-- **An outcome's candidates**: each session's record's (`ReadsX.leafCands`), under the registration its outcome
-records and through its outcome's public file header's paths. -/
+records and through its outcome's public file header's paths, at the session's commit strings in their written-out
+order (`ZkOuterD.posList`). -/
 noncomputable def leafCands (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg)
     (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂)
     (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) :
     List (Prop × (List UInt8 × List UInt8)) :=
   (List.finRange S).flatMap fun j => (zs R ω t R₂ j).rd.leafCands (o j).1
     (regPathsHJ (zs R ω t R₂ j).I (Vs j).c (zs R ω t R₂ j).pub (o j).2.2 (zs R ω t R₂ j).rd.port)
+    (zs R ω t R₂ j).posList
 
 /-- **A read off the table's leaf is a collision**: a candidate whose test passes is one. -/
 theorem leafCands_spec {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
@@ -117,7 +119,7 @@ theorem LeafColl.cand {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → 
     {o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript} (h : LeafColl zs R ω t R₂ o) :
     ∃ c ∈ leafCands zs R ω t R₂ o, c.1 := by
   obtain ⟨j, p, hp, h⟩ := h
-  obtain ⟨c, hc, hc1⟩ := Registered.ReadsX.leafCands_mem hp h
+  obtain ⟨c, hc, hc1⟩ := Registered.ReadsX.leafCands_mem ((zs R ω t R₂ j).mem_posList p) hp h
   exact ⟨c, List.mem_flatMap.2 ⟨j, List.mem_finRange j, hc⟩, hc1⟩
 
 /-- **The table leaves' finder**: one run of the recursive audit against the prover `σ`, output the pair of the first

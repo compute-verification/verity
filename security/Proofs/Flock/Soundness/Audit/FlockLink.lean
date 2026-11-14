@@ -197,10 +197,12 @@ noncomputable def opOf (c : vb.Pos) (e : TrialOut L D) (v : vb.Val) : vb.Opening
     ∃ bs, firsts (accω plan R e.1) e.2.2 = some bs ∧ P.OpensAt H E plan tab vb R τ e.1 bs c v o
 
 /-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
-the trials its cost charges. -/
+the trials its cost charges. The trial's readings are listed by `LinkFinder.listed`, with the opening `opOf` gives each:
+an order and openings taken by choice. -/
 noncomputable def outC (c : vb.Pos) (x : TrialOut L D × List (TrialOut L D)) :
     Option (List UInt8 × List UInt8) :=
-  outOf (P.rdT H E plan tab vb R τ c) (P.opOf H E plan tab vb R τ c) vb.collide x
+  outOf (P.rdT H E plan tab vb R τ c) (listed (P.rdT H E plan tab vb R τ c) (P.opOf H E plan tab vb R τ c))
+    vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -262,7 +264,7 @@ theorem opOf_spec {c : vb.Pos} {e : TrialOut L D} {v : vb.Val}
 theorem outC_spec (c : vb.Pos) (x : TrialOut L D × List (TrialOut L D))
     (hS : Succ (P.rdT H E plan tab vb R τ c) x) :
     ∃ a b, P.outC H E plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec (P.rdT H E plan tab vb R τ c) (P.opOf H E plan tab vb R τ c) vb.collide
+  outOf_listed_spec (P.rdT H E plan tab vb R τ c) (P.opOf H E plan tab vb R τ c) vb.collide
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => P.opOf_spec H E plan tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 

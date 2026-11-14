@@ -127,10 +127,12 @@ noncomputable def opOfVZC (c : vb.Pos) (e : TrialOutZC F L D Sl) (v : vb.Val) : 
     ∃ bs, firsts (accωZC planZ R e.1) e.2.2 = some bs ∧ OpensAtZC A Hs P planZ tab vb R τ e.1 bs c v o
 
 /-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
-the trials its cost charges. -/
+the trials its cost charges. The trial's readings are listed by `LinkFinder.listed`, with the opening `opOfVZC` gives
+each: an order and openings taken by choice. -/
 noncomputable def outCZC (c : vb.Pos) (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl)) :
     Option (List UInt8 × List UInt8) :=
-  outOf (rdTZC A Hs P planZ tab vb R τ c) (opOfVZC A Hs P planZ tab vb R τ c) vb.collide x
+  outOf (rdTZC A Hs P planZ tab vb R τ c)
+    (listed (rdTZC A Hs P planZ tab vb R τ c) (opOfVZC A Hs P planZ tab vb R τ c)) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -190,7 +192,7 @@ theorem opOfVZC_spec {c : vb.Pos} {e : TrialOutZC F L D Sl} {v : vb.Val}
 theorem outCZC_spec (c : vb.Pos) (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl))
     (hS : Succ (rdTZC A Hs P planZ tab vb R τ c) x) :
     ∃ a b, outCZC A Hs P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec (rdTZC A Hs P planZ tab vb R τ c) (opOfVZC A Hs P planZ tab vb R τ c) vb.collide
+  outOf_listed_spec (rdTZC A Hs P planZ tab vb R τ c) (opOfVZC A Hs P planZ tab vb R τ c) vb.collide
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfVZC_spec A Hs P planZ tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 

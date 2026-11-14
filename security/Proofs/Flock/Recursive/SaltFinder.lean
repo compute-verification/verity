@@ -80,12 +80,12 @@ def ReadsX.SaltClash (rd : ReadsX lay rs) (rows : Array (Array ℕ)) (salt : ℕ
   ∃ p, rd.isRead p ∧ Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p)
     (FlockC3.RegLevels.rowInV rows[rd.readAt p]!) (salt (rd.readAt p)).data.toList)
 
-/-- **A record's candidates against `rows` under `salt`**: at each position `p`, the hm96 pair of the registrant's row
-bytes and salt against row `readAt p` of `rows` under `salt (readAt p)`, with the test that `p` is a registered read and
-the pair collides. -/
-noncomputable def ReadsX.saltCands (rd : ReadsX lay rs) (rows : Array (Array ℕ)) (salt : ℕ → ByteArray) :
-    List (Prop × (List UInt8 × List UInt8)) :=
-  (Finset.univ : Finset lay.Pos).toList.map fun p =>
+/-- **A record's candidates against `rows` under `salt`**: at each position `p` of the list `ps`, in its order, the
+hm96 pair of the registrant's row bytes and salt against row `readAt p` of `rows` under `salt (readAt p)`, with the test
+that `p` is a registered read and the pair collides. -/
+noncomputable def ReadsX.saltCands (rd : ReadsX lay rs) (rows : Array (Array ℕ)) (salt : ℕ → ByteArray)
+    (ps : List lay.Pos) : List (Prop × (List UInt8 × List UInt8)) :=
+  ps.map fun p =>
     (rd.isRead p ∧ Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p)
         (FlockC3.RegLevels.rowInV rows[rd.readAt p]!) (salt (rd.readAt p)).data.toList),
       hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (FlockC3.RegLevels.rowInV rows[rd.readAt p]!)
@@ -93,18 +93,20 @@ noncomputable def ReadsX.saltCands (rd : ReadsX lay rs) (rows : Array (Array ℕ
 
 /-- **A clash with the held salts is a collision**: a candidate whose test passes is one. -/
 theorem ReadsX.saltCands_spec {rd : ReadsX lay rs} {rows : Array (Array ℕ)} {salt : ℕ → ByteArray}
-    {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.saltCands rows salt) (h : c.1) :
+    {ps : List lay.Pos} {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.saltCands rows salt ps) (h : c.1) :
     Hash.Collision H512 c.2.1 c.2.2 := by
   obtain ⟨p, -, rfl⟩ := List.mem_map.1 hc
   have hw : rd.isRead p ∧ Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p)
       (FlockC3.RegLevels.rowInV rows[rd.readAt p]!) (salt (rd.readAt p)).data.toList) := h
   exact hw.2
 
-/-- A record that clashes with `rows` under `salt` has a candidate whose test passes. -/
+/-- A record that clashes with `rows` under `salt` has a candidate whose test passes, at a list that holds every
+position. -/
 theorem ReadsX.SaltClash.cand {rd : ReadsX lay rs} {rows : Array (Array ℕ)} {salt : ℕ → ByteArray}
-    (h : rd.SaltClash rows salt) : ∃ c ∈ rd.saltCands rows salt, c.1 := by
+    {ps : List lay.Pos} (h : rd.SaltClash rows salt) (hps : ∀ p, p ∈ ps) :
+    ∃ c ∈ rd.saltCands rows salt ps, c.1 := by
   obtain ⟨p, hp, h⟩ := h
-  exact ⟨_, List.mem_map.2 ⟨p, Finset.mem_toList.2 (Finset.mem_univ p), rfl⟩, hp, h⟩
+  exact ⟨_, List.mem_map.2 ⟨p, hps p, rfl⟩, hp, h⟩
 
 end FlockSoundness.Registered
 
@@ -124,11 +126,13 @@ def SaltColl (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig) (salt
   ∃ j, (zs R ω t R₂ j).rd.SaltClash (FlockC3.RegLevels.capRows lv cap) salt
 
 /-- **A history's candidates against R's level-0 top under the held salts**: each session's registrant record's
-(`ReadsX.saltCands`, at `cap`'s rows). -/
+(`ReadsX.saltCands`, at `cap`'s rows), at the session's commit strings in their written-out order
+(`ZkOuterD.posList`). -/
 noncomputable def saltCands (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg) (ω : L.Ω)
     (t : List (Cm × I.Coin)) (R₂ : Reg₂) : List (Prop × (List UInt8 × List UInt8)) :=
-  (List.finRange S).flatMap fun j => (zs R ω t R₂ j).rd.saltCands (FlockC3.RegLevels.capRows lv cap) salt
+  (List.finRange S).flatMap fun j =>
+    (zs R ω t R₂ j).rd.saltCands (FlockC3.RegLevels.capRows lv cap) salt (zs R ω t R₂ j).posList
 
 /-- **A session's clash with the held salts is a collision**: a candidate whose test passes is one. -/
 theorem saltCands_spec {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
@@ -144,7 +148,7 @@ theorem SaltColl.cand {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.D
     {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : SaltColl lv cap salt zs R ω t R₂) :
     ∃ c ∈ saltCands lv cap salt zs R ω t R₂, c.1 := by
   obtain ⟨j, h⟩ := h
-  obtain ⟨c, hc, hp⟩ := h.cand
+  obtain ⟨c, hc, hp⟩ := h.cand (zs R ω t R₂ j).mem_posList
   exact ⟨c, List.mem_flatMap.2 ⟨j, List.mem_finRange j, hc⟩, hp⟩
 
 /-- **The held salts' finder**: one run of the recursive audit against the prover `σ`, output the pair of the first of

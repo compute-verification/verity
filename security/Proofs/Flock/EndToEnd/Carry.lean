@@ -225,7 +225,7 @@ the leaf's sessions, open one leaf. -/
 theorem out_spec (z : (Σ _ : x.Ses, TrialAt W) × List (Σ _ : x.Ses, TrialAt W))
     (hS : Succ (rdSig fun _ => x.rd) z) :
     ∃ a b, outOf (rdSig fun _ => x.rd) x.op x.col z = some (a, b) ∧ a ≠ b ∧ H512 a = H512 b := by
-  refine outOf_spec (rdSig fun _ => x.rd) x.op x.col (Hc := H512) x.Opens x.valOf ?_ ?_ z hS
+  refine outOf_listed_spec (rdSig fun _ => x.rd) x.opAt x.col (Hc := H512) x.Opens x.valOf ?_ ?_ z hS
   · rintro ⟨i, _ | ⟨t, τ, o⟩⟩ v hv
     · exact absurd hv (Finset.notMem_empty v)
     · by_cases ht : t ∈ x.sessions
