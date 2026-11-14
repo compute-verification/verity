@@ -6,13 +6,13 @@ from __future__ import annotations
 import ast
 import operator
 import re
+import tomllib
 from fractions import Fraction
 from pathlib import Path
 
-from verity.device import load_card, number
-
 ROOT = Path(__file__).resolve().parents[3]
 SHEET = ROOT / "security/Proofs/Core/Accel/Sheet.lean"
+CARD = ROOT / "hardware/cards/h200-sxm-141gb.toml"
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 WORD = 4
 CLOCKS = {"sheetClock": ("clock", "sm"), "sheetTensorClock": ("clock", "tensor")}
@@ -22,6 +22,17 @@ UNITS = {("sm", "count"): "SM", ("clock", "sm"): "MHz", ("clock", "tensor"): "MH
          ("model", "instruction_bytes"): "B/instruction"}
 PER_SM = {("size", "reg"), ("size", "smem")} | {("ρ", r) for r in
                                                 ("tensor", "issue", "alu", "imad", "f64", "shfl", "smem", "sfu", "l2")}
+
+
+def load_card() -> dict:
+    """The card file as parsed TOML. Read here rather than through ``verity.device``, a trusted place no new file
+    loads (``tests/import_order.toml``)."""
+    return tomllib.loads(CARD.read_text(encoding="utf-8"))
+
+
+def number(entry: dict) -> Fraction:
+    """A card entry's value as an exact rational, read from its decimal text, as ``verity.device.number`` reads it."""
+    return Fraction(str(entry["value"]))
 
 
 def parse(expr: str) -> ast.AST:
@@ -137,7 +148,7 @@ def disagreements(card: dict, text: str) -> list[str]:
 def test_sheet_card_agrees_with_the_card_file() -> None:
     """Both clocks, the four sizes, the ten rates, the twelve weights, ``exact`` and the code size, each the value the
     card file's keys give, and the SM count each per-SM size and rate opens with."""
-    found = disagreements(load_card("h200-sxm-141gb"), SHEET.read_text(encoding="utf-8"))
+    found = disagreements(load_card(), SHEET.read_text(encoding="utf-8"))
     assert not found, ("Sheet.lean's sheetCard and hardware/cards/h200-sxm-141gb.toml disagree; change the one that's "
                        "wrong\n" + "\n".join(found))
 
@@ -146,7 +157,7 @@ def test_the_card_file_units_the_sheet_reads() -> None:
     """``GemmFigures.weight_s8`` (``weight .s8 = 1``) rests on the card file's tensor unit being one ``s8`` MAC: its
     ``rate.tensor`` counts ``s8`` MACs and ``weight.s8`` is one tensor unit a MAC. The other keys' units are the ones
     the conversions above assume (bytes over 4 to words, MHz to Hz)."""
-    card = load_card("h200-sxm-141gb")
+    card = load_card()
     assert card["rate"]["tensor"]["unit"] == "s8 MAC/SM-clock"
     assert card["weight"]["s8"]["unit"] == "tensor unit/MAC" and number(card["weight"]["s8"]) == 1
     assert {key: card[key[0]][key[1]]["unit"] for key in UNITS} == UNITS
