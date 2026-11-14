@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest
-from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
+from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean, _ports, _record, _spec, _stream
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
@@ -108,6 +108,39 @@ def test_the_declared_day_is_held_by_both():
         with pytest.raises(ValueError, match="declar"):
             R.check(rec, program, QUERY, law, S.SCHEME, _ports(6), day=change.get("day"),
                     declarations=change.get("declarations"))
+
+
+def _window(law: dict, counts=(2, 18)) -> tuple:
+    """A registration under `law` of a window of two templates, `counts` proof blocks of PAIR then of OTHER: the record,
+    its program, its query and its ports."""
+    program = P.mixed_population_program(list(zip((PAIR, OTHER), counts)))
+    query = P.template_instances_query((PAIR, OTHER))
+    part, n = P.partition(program, query), sum(counts)
+    ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
+             for p, leaves in (("x", n), ("out", 2 * n))}
+    roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
+    return (R.record(program, query, law, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0}), program, query,
+            ports)
+
+
+def test_the_per_member_forms_link_points_are_held_by_both():
+    """`link-points` by the verifier (`registration.check`'s ``members``, `Registration.linkRefused`), after R8, on a
+    window of two members at one unit a proof block: PAIR's two proof blocks and OTHER's eighteen. Under `subset:9` a
+    sample that ends holds seven to nine of OTHER's, and its session opens 3 link points at seven or eight and 4 at
+    nine, so the Lean and the Python both refuse the registration, for `link-points` alone. Under `stratified:10` each
+    member holds a stratum whole, PAIR's sampled once and OTHER's nine times, one count each, and both pass it. With
+    no members, the one-statement form's, both pass either record, and a member with a unit past the population is
+    refused by both under either."""
+    members, past = [([[0, 2]], 1), ([[2, 20]], 1)], [([[0, 2]], 1), ([[2, 21]], 1)]
+    for law, codes in (({"law": "subset", "k": 9}, ("link-points",)), ({"law": "stratified", "k": 10}, ())):
+        rec, program, query, ports = _window(law)
+        for ms, want in ((members, codes), ((), ()), (past, ("link-points",))):
+            v = V.check(rec, program, query, law, S.SCHEME, ports, members=ms)
+            side = {"ok": not want, "codes": list(want)}
+            assert v.codes == want and v.verifiers == {"of_record": "lean", "lean": side, "python": side}, (law, ms)
+        py = R.check(rec, program, query, law, S.SCHEME, ports, members=members)
+        assert py.codes == codes and py.detail == ({"link-points": {"members": [1]}} if codes else {})
+    assert [s["k"] for s in rec["law"]["strata"]] == [1, 9]
 
 
 def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():

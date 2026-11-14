@@ -10,7 +10,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
   walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
-* `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query;
+* `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query,
+  and `link-points` after them where it is handed the per-member form's members;
 * `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
@@ -240,9 +241,14 @@ def fanout (j : Json) : V Json := do
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the
-record. -/
+record. With `"members"` (`LinkPoints.membersOfJson`), the per-member form's members, the check holds them to
+`link-points` after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. -/
 def registration (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
+  let members ← match field? j "members" with
+    | some ms => LinkPoints.membersOfJson ms
+    | none => pure #[]
+  let v := { v with members }
   let cs := (Registration.check (getD j "record") v).map Json.str
   let through := Registration.tiedThrough v
   return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList

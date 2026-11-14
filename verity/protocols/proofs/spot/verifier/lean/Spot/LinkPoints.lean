@@ -108,19 +108,24 @@ def lawOf (p : Program) (query law : Json) (table : Option Json) : V (Flock.Draw
   | some l => pure (l, population)
   | none => pure (← Draw.flockLaw law population, population)
 
-/-- `{"law", "population", "members"}` (the sampling design as `Draw.flockLaw` reads it, each member `{"units", "vus_per_block"}`) to
-`{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a sampling design no sample of which ends
-(`NEVER_ENDS`), is refused. -/
-def piece (j : Json) : V Json := do
-  let some population := nat? (getD j "population") | throw "the population is not a natural number"
-  let law ← Draw.flockLaw (getD j "law") population
-  let .arr ms := getD j "members" | throw "the members are not a list"
-  let ms ← ms.mapM fun m => do
+/-- The members a difftest piece is handed (`piece`, `Pieces.registration`): a list, each `{"units", "vus_per_block"}`,
+its units' `[lo, hi)` ranges and its circuit's units a proof block. -/
+def membersOfJson (j : Json) : V (Array (Array (Nat × Nat) × Nat)) := do
+  let .arr ms := j | throw "the members are not a list"
+  ms.mapM fun m => do
     let some g := nat? (getD m "vus_per_block") | throw "a member's vus_per_block is not a natural number"
     let some us := (Draw.ranges? (getD m "units")).bind fun rs =>
         rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
       | throw "a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
     pure (us, g)
+
+/-- `{"law", "population", "members"}` (the sampling design as `Draw.flockLaw` reads it, the members as `membersOfJson`
+reads them) to `{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a sampling
+design no sample of which ends (`NEVER_ENDS`), is refused. -/
+def piece (j : Json) : V Json := do
+  let some population := nat? (getD j "population") | throw "the population is not a natural number"
+  let law ← Draw.flockLaw (getD j "law") population
+  let ms ← membersOfJson (getD j "members")
   let bs ← bounds law population ms
   let pair : Option (Nat × Nat) → Json
     | some (a, b) => Json.arr #[Lean.toJson a, Lean.toJson b]

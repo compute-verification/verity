@@ -832,7 +832,10 @@ def partition(j):
 
 def registration(j):
     j = _json(j)
-    v = _registration_verdict(_params_of(j), j.get("record") if isinstance(j, dict) else None)
+    p = _params_of(j)
+    if "members" in j:
+        p = {**p, "link_members": _link_members(j["members"])}
+    v = _registration_verdict(p, j.get("record"))
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
             **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
 
@@ -1115,6 +1118,23 @@ def public_units(j):
     return {"exactly": PF.units_exactly(units, indices)}
 
 
+def _link_members(ms) -> list:
+    """The members a piece is handed (`LinkPoints.membersOfJson`), as `link_points`' functions and `registration.check`
+    read them: each its units' ranges and its circuit's units a proof block."""
+    if not isinstance(ms, list):
+        raise D.Reject("the members are not a list")
+    members = []
+    for m in ms:
+        if not (isinstance(m, dict) and _nat(m.get("vus_per_block"))):
+            raise D.Reject("a member's vus_per_block is not a natural number")
+        us = m.get("units")
+        if not (isinstance(us, list) and us and all(isinstance(r, list) and len(r) == 2 and all(map(_int, r))
+                                                    and 0 <= r[0] < r[1] for r in us)):
+            raise D.Reject("a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
+        members.append((us, m["vus_per_block"]))
+    return members
+
+
 def link_points(j):
     """Each member's fewest and most sampled proof blocks under the sampling design over the population when the sample ends (None where none
     does), and the members whose link points differ (`link_points.bounds`, `refused`; Lean `LinkPoints.piece`)."""
@@ -1124,17 +1144,7 @@ def link_points(j):
     law, n = j.get("law"), j["population"]
     if not isinstance(law, dict) or (why := law_problem(law, n)):
         raise D.Reject(f"the law: {why}" if isinstance(law, dict) else "the law is not an object")
-    if not isinstance(j.get("members"), list):
-        raise D.Reject("the members are not a list")
-    members = []
-    for m in j["members"]:
-        if not (isinstance(m, dict) and _nat(m.get("vus_per_block"))):
-            raise D.Reject("a member's vus_per_block is not a natural number")
-        us = m.get("units")
-        if not (isinstance(us, list) and us and all(isinstance(r, list) and len(r) == 2 and all(map(_int, r))
-                                                    and 0 <= r[0] < r[1] for r in us)):
-            raise D.Reject("a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
-        members.append((us, m["vus_per_block"]))
+    members = _link_members(j.get("members"))
     try:
         return {"bounds": [None if b is None else list(b) for b in LP.bounds(law, n, members)],
                 "refused": LP.refused(law, n, members)}
@@ -3663,12 +3673,23 @@ def _cut(population: int, cuts: list[int], owners: list[int]) -> list[list[list[
     return list(out.values())
 
 
+def _cut_members(population: int, members: tuple, gs: list[int], bad: int, k: int) -> list[dict]:
+    """Members as a piece is handed them (`LinkPoints.membersOfJson`): `[0, population)` cut by `members` (`_cut`), each
+    `gs` units a proof block; `bad` from 1 to 4 breaks the `k`-th: a unit past the population, two of its ranges
+    meeting, no unit a proof block, or no range."""
+    ms = [{"units": us, "vus_per_block": gs[i % len(gs)]} for i, us in enumerate(_cut(population, *members))]
+    if 1 <= bad <= 4 and ms:
+        m = ms[k % len(ms)]
+        m |= [{"units": [*m["units"], [population, population + 1]]}, {"units": [*m["units"], m["units"][0]]},
+              {"vus_per_block": 0}, {"units": []}][bad - 1]
+    return ms
+
+
 def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[int], members: tuple, gs: list[int],
                bad: int) -> dict:
     """A `link_points` input: a `kind` law of `k` over `population` units, a stratified or work sampling design's strata cut by
     `strata` (`_cut`) with each stratum's k its rule's (work `works`, floor 1), and members cut by `members`, each `gs`
-    units a proof block; `bad` from 1 to 4 breaks one member: a unit past the population, two of its ranges meeting, no
-    unit a proof block, or no range."""
+    units a proof block, one of them broken where `bad` says (`_cut_members`)."""
     n_k = k % population + 1 if population else k
     if kind == "subset":
         law = {"k": k % (population + 2), "law": kind}
@@ -3683,12 +3704,7 @@ def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[in
         total = sum(t["work"] * LP.size(t["units"]) for t in ss)
         law = {"k": n_k, "law": kind, "strata": [{**t, "k": work_k(n_k, t["work"], LP.size(t["units"]), total, 1)}
                                                  for t in ss] if total else ss}
-    ms = [{"units": us, "vus_per_block": gs[i % len(gs)]} for i, us in enumerate(_cut(population, *members))]
-    if 1 <= bad <= 4 and ms:
-        m = ms[k % len(ms)]
-        m |= [{"units": [*m["units"], [population, population + 1]]}, {"units": [*m["units"], m["units"][0]]},
-              {"vus_per_block": 0}, {"units": []}][bad - 1]
-    return {"law": law, "members": ms, "population": population}
+    return {"law": law, "members": _cut_members(population, members, gs, bad, k), "population": population}
 
 
 CUTS = st.tuples(st.lists(st.integers(0, 60), max_size=6), st.lists(st.integers(0, 3), min_size=1, max_size=4))
@@ -3699,6 +3715,29 @@ LINK_POINTS = D.Port(PIECES, "link_points", link_points, st.one_of(
     st.builds(lambda law, n, ms: {"law": law, "members": ms, "population": n}, JSON, st.integers(-1, 9), JSON),
     JSON), package=PACKAGE)
 
+#: Windows a member of which can hold nine sampled proof blocks or eight, which open 4 link points and 3 at one unit a
+#: proof block: one template's 24 proof blocks, and PAIR's two with TRIPLE's eighteen, a stratum each.
+LINK_SETUPS = [Setup(P.population_program(PAIR, 24), P.template_instance_query(PAIR.id)),
+               Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 18)]), P.template_instances_query([PAIR.id, TRIPLE.id]))]
+PROGRAMS.update({s.sha512: s.program for s in LINK_SETUPS})
+
+
+def _registration_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
+    """The `registration` piece's input of the audit `a` with the per-member form's members: the record's population
+    cut in two at `cut`, or whole where it holds under two units, each `gs` units a proof block, one broken where
+    `bad` says (`_cut_members`)."""
+    n = a["record"].get("population") if isinstance(a["record"], dict) else None
+    n = n if _nat(n) else 0
+    return {**_REGISTRATION_OF(a),
+            "members": _cut_members(n, ([cut % (n - 1) + 1] if n > 1 else [], [0, 1]), gs, bad, cut)}
+
+
+#: `registration` inputs with members: audits of `LINK_SETUPS`' windows and of the small ones, with at most one change.
+REGISTRATIONS_WITH_MEMBERS = st.one_of(
+    *[st.builds(_registration_members, changed_audits(most=1, setups=setups), st.integers(0, 60),
+                st.lists(st.sampled_from([1, 1, 2]), min_size=1, max_size=2), st.integers(0, 20))
+      for setups in (LINK_SETUPS, LINK_SETUPS, LINK_SETUPS, SETUPS)],
+    st.builds(lambda a, ms: {**_REGISTRATION_OF(a), "members": ms}, changed_audits(most=0), JSON))
 
 _FITS_HEX = st.binary(max_size=6).map(bytes.hex)
 _FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
@@ -5769,6 +5808,40 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
+    """The registration's `link-points` on the per-member form's members, Lean's answers the Python's (the piece's
+    ``members``, which `Registration.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
+    case's parameters; `registration.check`'s ``members``). A window of PAIR's two proof blocks and TRIPLE's eighteen,
+    a member each at one unit a proof block: under `subset:9` a sample that ends holds seven to nine of TRIPLE's, whose
+    session opens 3 link points at seven or eight and 4 at nine, and the registration is refused for `link-points`
+    alone; under `stratified:10` each member holds a stratum whole, sampled once and nine times, one count each, and
+    the registration passes. With no members, the one-statement form's, both records pass. Then registrations of
+    such windows and of small ones, their members cut at random and some broken, agree, a share of them refused for
+    their link points and a share passed."""
+    s = LINK_SETUPS[1]
+    members = [{"units": [[0, 2]], "vus_per_block": 1}, {"units": [[2, 20]], "vus_per_block": 1}]
+    for law, codes in (({"k": 9, "law": "subset"}, ["link-points"]), ({"k": 10, "law": "stratified"}, [])):
+        rec = _record_of(s, None, law, WINDOW, leaf_layer=LEAF)
+        given = {"params": {"anchors": [], "delta": "1/1000", "law": law, "leaf_layer": LEAF, "log": [],
+                            "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
+                            "scheme": SCHEME, "work_table": None}, "record": rec}
+        for case, want in (({**given, "members": members}, codes), (given, []), ({**given, "members": []}, [])):
+            reg = registration(case)
+            assert reg["codes"] == want, (law, case.get("members"))
+            assert D.replay(REGISTRATION, case, pieces) == ("output", D.canonical(reg))
+    assert [t["k"] for t in rec["law"]["strata"]] == [1, 9]
+    seen: dict[bool, int] = {}
+
+    def counted(j):
+        out = registration(j)
+        refused = "link-points" in out["codes"]
+        seen[refused] = seen.get(refused, 0) + 1
+        return out
+    stats = D.run(D.Port(PIECES, "registration", counted, REGISTRATIONS_WITH_MEMBERS, package=PACKAGE), examples=400,
+                  server=pieces)
+    assert stats.outputs > 100 and stats.rejects > 0 and min(seen.get(True, 0), seen.get(False, 0)) > 20, (stats, seen)
 
 
 def test_r8_reads_the_readers_python_does(pieces):
