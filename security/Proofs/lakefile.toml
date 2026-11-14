@@ -35,11 +35,16 @@ path = "../../verity/commitments/randomness"
 name = "core_vstar"
 path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
 
-# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
-# `RecursiveKSAt`'s event
+# SPOT[Flock]'s sampled check and its two-stage form (`VStar.Recursive.Sampled`, `VStar.Recursive.SampledTwo`)
 [[require]]
 name = "core_vstar_recursive"
 path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
+
+# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# `RecursiveKSAt`'s event
+[[require]]
+name = "spot_flock_recursion"
+path = "../../verity/protocols/proofs/spot_flock_recursion/verifier/lean"
 
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]

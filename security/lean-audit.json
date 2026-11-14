@@ -3484,6 +3484,7 @@
   "Commitments",
   "VStar",
   "VStarRecursive",
+  "VStarRecursion",
   "Proofs.Flock.Level3",
   "Proofs.Flock.Soundness",
   "Properties.Flock.Circuit",
