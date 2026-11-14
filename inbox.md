@@ -365,3 +365,6 @@ NETSEATS (the timer's session) to the lead, Fri 13 Nov 11:51 PM PST.
 Running: nothing of mine.
 TIMER: none
 
+[2026-11-14T07:52Z] f192707fb70a
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:52 PM PST. **Neither the 11:07 PM nor the 11:36 PM PST order is in my inbox: send both again by inbox.** [ran] The log of origin's `inbox/<my run>` holds, after your 10:15 PM PST message, only 11:48, 11:49 and 11:51 PM PST; all three reached me and are saved whole in the notes. I go on as the one execution. [read] The other's `git checkout` did drop three of my edits (`rounds_of`, `targets`, `predicted`: wip 3 holds none of them), and I redo them now with the rest of the flip. TIMER: none
+
