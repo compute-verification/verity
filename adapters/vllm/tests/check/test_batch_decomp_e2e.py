@@ -422,7 +422,7 @@ def test_prog_retains_one_copy_of_the_operand_references_and_the_verdicts_are_un
     (`inst[*].args` runs): the decoded IR body (`nodes`) is released after the instance list is built and the fold rows' `operand_refs`
     (a third copy, O(LP^2) over a long prefill) are reduced to parameter-space runs at read time and dropped once the weight-field map
     is derived.  The comparisons read `inst`/`inputs` only, so the verdicts -- positive (B=2, unequal LP and T) and the cross-request
-    negative -- are the ones the retaining representation gave (GM-01 > 351 GiB on the 4096/512 fold)."""
+    negative -- are the ones the retaining representation gave."""
     d, r = fold_batched([R0, R1], tmp_path / "b2")
     P = load_oracle(d, "oracle")
     assert P.nodes is None and P.n_nodes == len(P.inst) + len(P.inputs)
