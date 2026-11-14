@@ -378,18 +378,24 @@ VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
     "verity/protocols/proofs/spot/verifier/lean/tests/fixtures", "verity/protocols/proofs/spot/verifier/tests/fixtures"))
 
 
+def _has_float(v) -> bool:
+    if isinstance(v, dict):
+        return any(_has_float(x) for x in v.values())
+    if isinstance(v, list):
+        return any(_has_float(x) for x in v)
+    return isinstance(v, float)
+
+
 def _fixture_texts(p: Path) -> list[str]:
-    """A fixture's JSON texts: the file, or each line of a `.jsonl`, each also in canonical form where it has one."""
+    """A fixture's JSON texts: the file, or each line of a `.jsonl`, each also in canonical form where it has one (a
+    text holding a float has none)."""
     data = gzip.decompress(p.read_bytes()) if p.suffix == ".gz" else p.read_bytes()
     texts = data.decode().splitlines() if ".jsonl" in p.suffixes else [data.decode()]
     out = []
     for t in texts:
         out.append(t)
-        try:
-            c = D.canonical(json.loads(t))
-        except (ValueError, TypeError):
-            continue
-        if c != t:
+        v = json.loads(t)
+        if not _has_float(v) and (c := D.canonical(v)) != t:
             out.append(c)
     return out
 
