@@ -71,7 +71,7 @@ from typing import Any
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
+HERE = Path(__file__).resolve().parent
 #: a run's file of verdict records, one JSON object a line
 FILE = "verdicts.jsonl"
 #: the negative controls: a run on the same path with one thing changed (null on the honest run)
