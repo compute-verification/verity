@@ -65,7 +65,8 @@ record first, and the digest of the run's own record. `params` is not read.
     templates and cuts, or two declarations (wires among them) fill one row (`RecordText.inputsOf`). A registered
     read is a wire's record with `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
 11. `formats`: a registered parameter's leaf width (`RecordText.widthOf`: its format's, 16 without one) is not the one
-    the registration log registers it in (`formatsHeld`, "Formats" below).
+    the registration log registers it in, or the run's own record registers it under another root than it commits or
+    in other than its bits (`formatsHeld`, "Formats" below). So a record with no `formats` key can be refused here.
 12. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
     class's radix (`RecordText.gridsOf`).
 13. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
@@ -162,17 +163,19 @@ deployment, before the run, and no earlier run's output is θ.
 
 ## Formats
 
-A registered parameter's rows are 16-bit leaves unless the record's `registered.formats` declares another width for
-it, 32 bits (`RecordText.widthOf`, b(p)). The record's counts do not read the width: a row is 16 bits a word under
-any. θ does (`isTheta`), and so does the stage `formats` (`formatsHeld`), which holds the width to the registration
-log. Of each registered parameter the run's own record registers (its last entry of that name), that entry's root is
-the one the run's record commits the parameter under, its `word_bits` (16 where absent) is b(p), and its leaves of
-b(p) bits hold the record's 16-bit leaves for the parameter. Each parameter with a format that the run's record does
-not register is θ, at its width. So a format the log does not state for its value, a 32-bit value the record declares
-no format for, and a format on a weight registered in 16-bit leaves are each refused. A format's row schema is read
-and held to the set of its two names (`RecordText.formatsOk`), to nothing registered: no registration entry states
-it. The schema is held where a row is opened: Flock's verifier holds a registered port's schema to the circuit's
-port (`Flock.Registered.checkPort`) and climbs to the registered root from a leaf framed under it
+A registered parameter's rows are leaves of b(p) bits (`RecordText.widthOf`): its format's width where the record's
+`registered.formats` declares a format for it, 32 bits or 16 in segment rows, and 16 where it declares none. The
+record's counts do not read the width: a row is 16 bits a word under any. θ does (`isTheta`), and so does the stage
+`formats` (`formatsHeld`), which holds the width to the registration log. Of each registered parameter the run's own
+record registers (its last entry of that name), that entry's root is the one the run's record commits the parameter
+under, its `word_bits` (16 where absent) is b(p), and its `leaves` of `words` words of b(p) bits are as many bits as the
+record's 16-bit leaves for the parameter. Each parameter with a format that the run's record does not register is θ, at
+its width. So a format the log does not state for its value, a value the run's own record registers in 32-bit leaves
+with no format, and a 32-bit format on a weight registered in 16-bit leaves are each refused; a weight only the first
+record registers in 32-bit leaves, with no format, is taken and its rows are fresh. A format's row schema is read and
+held to the set of its two names (`RecordText.formatsOk`), to nothing registered: no registration entry states it. The
+schema is held where a row is opened: Flock's verifier holds a registered port's schema to the circuit's port
+(`Flock.Registered.checkPort`) and climbs to the registered root from a leaf framed under it
 (`Flock.Registered.opensLeaf`). The form counts no row by its schema.
 
 ## The layout
@@ -587,9 +590,9 @@ def isTheta (T : Baseline.Trusted) (leaves b : Nat) (p : String) : Bool :=
 `params` (each with its 16-bit leaves) and the record's text `doc`. Of each parameter `p` that the run's own record
 registers (its last entry named `p`): the entry's root is the one the run's record commits `p` under (its
 `window.registered_roots`), its `word_bits` (16 where it has none) is `p`'s width b(p) (`RecordText.widthOf`), and its
-leaves of `words` words of b(p) bits hold `p`'s 16-bit leaves. And each parameter with a format that the run's record
-does not register is θ (`isTheta`, at its width). The format's row schema is held to nothing here (`RecordText.formatsOk`
-holds its name to the two it may be; Flock's verifier holds a row's schema where it opens it). -/
+`leaves` of `words` words of b(p) bits are as many bits as `p`'s 16-bit leaves. And each parameter with a format that
+the run's record does not register is θ (`isTheta`, at its width). The format's row schema is held to nothing here
+(`RecordText.formatsOk` holds its name to the two it may be; Flock's verifier holds a row's schema where it opens it). -/
 def formatsHeld (T : Baseline.Trusted) (doc : Json) (params : List (String × Nat)) : Bool :=
   let run := T.log[T.run]!
   let roots := Baseline.getD (Baseline.getD run "window") "registered_roots"
