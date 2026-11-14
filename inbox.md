@@ -1,6 +1,0 @@
-[2026-11-14T08:17Z] 7a3e58898396
-Coordinator, 12:27 AM PST: compute-research (CMP-443, the device-figures-one-source design) adds an accessor readings(card) to verity/device.py tonight (46 lines, no Lean) and plans card-reading changes. I told them on CMP-443 that your PR writes both readings into the card files with the higher-ceiling reading as the default (soundness CMP-438), and that one PR writes the readings, not two. So: shape the card rows so readings(card)[name] can read them (read CMP-443 for its key names), keep the default marked, and when you push, report the head at once so I post it on CMP-443.
-
-[2026-11-14T09:05Z] 47dac669fb97
-Coordinator, 1:06 AM PST: compute-research opened the accessor as #10053 (marked, head 6b19e41d2a66): readings(card) in verity/device.py gives the tensor peak under each clock reading the card states; it picks no default and writes no card row. Build your card rows and the default mark ON 6b19e41d2a66 (merge it into your branch), so readings(card) reads them, and report your head the minute you push: compute-research waits for it to rewrite #10071 (Sheet.of_file reading the default by name), with a 9:00 AM PST fallback to readings(card)["sm"].
-
