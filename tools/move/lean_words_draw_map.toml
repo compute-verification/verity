@@ -1,0 +1,2899 @@
+# The retired word "draw" in the Lean's names, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/lean_words_draw_map.toml` renames. GLOSSARY.md: "draw", "drawn proof block", "drawn unit", "sampled unit"
+# -> the sample, a sampled proof block; to sample, and coins are flipped. It runs after `lean_names_map.toml` and
+# `lean_words_firewall_map.toml` in the chain, so its olds are spelled as those maps leave them. A name that holds the
+# word and more is renamed by word ([words]), or in the files that spell it where its new name stands elsewhere
+# ([[words_in]]); the word alone (`draw`, `Draw`, `drawn`, `draws`) only in the `.lean` files that spell it and not its
+# new word, as a whole word. A draw of coins is a flip (`drawCoins` -> `flipCoins`); a name an earlier move already gave
+# keeps it (`DrawnUnit` -> `SampledBlock`). Record keys, reason codes, domain tags and other one-token string literals
+# keep their bytes ([keep]). Declarations keep their place in the locks' records: `rename.py --moves` prints the renames
+# that `check.py --update --moved` takes.
+# Left by this map: the bare word in the files that spell its new word (in a commit of their own, by hand, with a
+# build); prose outside the Lean (a prose map's).
+
+[words]
+"Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk" = "Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk"
+"Proofs/Flock/Soundness/Discharge/ZkHidden/SoundDrawOk" = "Proofs/Flock/Soundness/Discharge/ZkHidden/SoundSampleOk"
+"Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson" = "Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson"
+"Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson" = "Proofs/Flock/Soundness/Discharge/ZkLink/SampleOkJson"
+"Proofs.Flock.Soundness.Discharge.Composed.DrawnJ" = "Proofs.Flock.Soundness.Discharge.Composed.SampledJ"
+"Proofs/Flock/Soundness/Discharge/Composed/DrawnJ" = "Proofs/Flock/Soundness/Discharge/Composed/SampledJ"
+"Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk" = "Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk"
+"Proofs/Flock/Soundness/Discharge/ZkLink/DrawOk" = "Proofs/Flock/Soundness/Discharge/ZkLink/SampleOk"
+"Definitions.Accounting.Assumptions.RemoteDraw" = "Definitions.Accounting.Assumptions.RemoteSample"
+"Definitions/Accounting/Assumptions/RemoteDraw" = "Definitions/Accounting/Assumptions/RemoteSample"
+"Proofs.Flock.Soundness.Discharge.Exec.LawDraw" = "Proofs.Flock.Soundness.Discharge.Exec.LawSample"
+"Proofs.Flock.Soundness.Discharge.Layout.Drawn" = "Proofs.Flock.Soundness.Discharge.Layout.Sampled"
+"Proofs/Flock/Soundness/Discharge/Exec/LawDraw" = "Proofs/Flock/Soundness/Discharge/Exec/LawSample"
+"Proofs/Flock/Soundness/Discharge/Layout/Drawn" = "Proofs/Flock/Soundness/Discharge/Layout/Sampled"
+"Definitions.Accounting.Guarantees.RemoteDraw" = "Definitions.Accounting.Guarantees.RemoteSample"
+"Definitions/Accounting/Guarantees/RemoteDraw" = "Definitions/Accounting/Guarantees/RemoteSample"
+"Proofs.Flock.Claims.Sampling.Select.DrawLaw" = "Proofs.Flock.Claims.Sampling.Select.SampleLaw"
+"Proofs.Properties.Verity.Sampled.RecordDraw" = "Proofs.Properties.Verity.Sampled.RecordSample"
+"Proofs/Flock/Claims/Sampling/Select/DrawLaw" = "Proofs/Flock/Claims/Sampling/Select/SampleLaw"
+"Proofs/Properties/Verity/Sampled/RecordDraw" = "Proofs/Properties/Verity/Sampled/RecordSample"
+"Proofs.Flock.Claims.Complete.Json.UnitDraw" = "Proofs.Flock.Claims.Complete.Json.UnitSample"
+"Proofs/Flock/Claims/Complete/Json/UnitDraw" = "Proofs/Flock/Claims/Complete/Json/UnitSample"
+"Proofs.Flock.Claims.Sampling.EndToEndDraw" = "Proofs.Flock.Claims.Sampling.EndToEndSample"
+"Proofs.Flock.Recursive.ZkReg.DrawnRefines" = "Proofs.Flock.Recursive.ZkReg.SampledRefines"
+"Proofs/Flock/Claims/Sampling/EndToEndDraw" = "Proofs/Flock/Claims/Sampling/EndToEndSample"
+"Proofs/Flock/Recursive/ZkReg/DrawnRefines" = "Proofs/Flock/Recursive/ZkReg/SampledRefines"
+"Proofs.Properties.Accounting.Remote.Draw" = "Proofs.Properties.Accounting.Remote.Sample"
+"Proofs/Properties/Accounting/Remote/Draw" = "Proofs/Properties/Accounting/Remote/Sample"
+"Proofs.Accounting.RemoteHeld.DrawMeets" = "Proofs.Accounting.RemoteHeld.SampleMeets"
+"Proofs.Flock.Claims.KS.PlainDrawRColsE" = "Proofs.Flock.Claims.KS.PlainSampleRColsE"
+"Proofs/Accounting/RemoteHeld/DrawMeets" = "Proofs/Accounting/RemoteHeld/SampleMeets"
+"Proofs/Flock/Claims/KS/PlainDrawRColsE" = "Proofs/Flock/Claims/KS/PlainSampleRColsE"
+"zk_session_soundHJR_custody_drawn_regI" = "zk_session_soundHJR_custody_sampled_regI"
+"Proofs.Flock.Claims.KS.PlainDrawAccJK" = "Proofs.Flock.Claims.KS.PlainSampleAccJK"
+"Proofs.Flock.Claims.KS.PlainDrawDecJK" = "Proofs.Flock.Claims.KS.PlainSampleDecJK"
+"Proofs.Flock.Claims.KS.PlainDrawJCols" = "Proofs.Flock.Claims.KS.PlainSampleJCols"
+"Proofs.Flock.Claims.KS.PlainDrawJMove" = "Proofs.Flock.Claims.KS.PlainSampleJMove"
+"Proofs.Flock.Claims.KS.PlainDrawKDefs" = "Proofs.Flock.Claims.KS.PlainSampleKDefs"
+"Proofs.Flock.Claims.KS.PlainDrawRCols" = "Proofs.Flock.Claims.KS.PlainSampleRCols"
+"Proofs.Properties.Pouw.PearlPlus.Draw" = "Proofs.Properties.Pouw.PearlPlus.Sample"
+"Proofs/Flock/Claims/KS/PlainDrawAccJK" = "Proofs/Flock/Claims/KS/PlainSampleAccJK"
+"Proofs/Flock/Claims/KS/PlainDrawDecJK" = "Proofs/Flock/Claims/KS/PlainSampleDecJK"
+"Proofs/Flock/Claims/KS/PlainDrawJCols" = "Proofs/Flock/Claims/KS/PlainSampleJCols"
+"Proofs/Flock/Claims/KS/PlainDrawJMove" = "Proofs/Flock/Claims/KS/PlainSampleJMove"
+"Proofs/Flock/Claims/KS/PlainDrawKDefs" = "Proofs/Flock/Claims/KS/PlainSampleKDefs"
+"Proofs/Flock/Claims/KS/PlainDrawRCols" = "Proofs/Flock/Claims/KS/PlainSampleRCols"
+"Proofs/Properties/Pouw/PearlPlus/Draw" = "Proofs/Properties/Pouw/PearlPlus/Sample"
+"zk_session_soundHJ_custody_drawn_regI" = "zk_session_soundHJ_custody_sampled_regI"
+"Proofs.Flock.Claims.KS.PlainDrawAccK" = "Proofs.Flock.Claims.KS.PlainSampleAccK"
+"Proofs.Flock.Claims.KS.PlainDrawDecK" = "Proofs.Flock.Claims.KS.PlainSampleDecK"
+"Proofs.Flock.Claims.KS.PlainDrawJRun" = "Proofs.Flock.Claims.KS.PlainSampleJRun"
+"Proofs.Flock.EndToEnd.Joint.MT.Drawn" = "Proofs.Flock.EndToEnd.Joint.MT.Sampled"
+"Proofs.Flock.EndToEndDrawn.Statement" = "Proofs.Flock.EndToEndSampled.Statement"
+"Proofs.Flock.Soundness.Audit.RegDraw" = "Proofs.Flock.Soundness.Audit.RegSample"
+"Proofs.Properties.Verity.SampledDraw" = "Proofs.Properties.Verity.SampledSample"
+"Proofs/Flock/Claims/KS/PlainDrawAccK" = "Proofs/Flock/Claims/KS/PlainSampleAccK"
+"Proofs/Flock/Claims/KS/PlainDrawDecK" = "Proofs/Flock/Claims/KS/PlainSampleDecK"
+"Proofs/Flock/Claims/KS/PlainDrawJRun" = "Proofs/Flock/Claims/KS/PlainSampleJRun"
+"Proofs/Flock/EndToEnd/Joint/MT/Drawn" = "Proofs/Flock/EndToEnd/Joint/MT/Sampled"
+"Proofs/Flock/EndToEndDrawn/Statement" = "Proofs/Flock/EndToEndSampled/Statement"
+"Proofs/Flock/Soundness/Audit/RegDraw" = "Proofs/Flock/Soundness/Audit/RegSample"
+"Proofs/Properties/Verity/SampledDraw" = "Proofs/Properties/Verity/SampledSample"
+"zk_session_soundHJ_custody_drawn_reg" = "zk_session_soundHJ_custody_sampled_reg"
+"Proofs.Flock.Claims.KS.PlainDrawAcc" = "Proofs.Flock.Claims.KS.PlainSampleAcc"
+"Proofs.Flock.Claims.KS.PlainDrawDec" = "Proofs.Flock.Claims.KS.PlainSampleDec"
+"Proofs.Flock.Claims.KS.PlainDrawSim" = "Proofs.Flock.Claims.KS.PlainSampleSim"
+"Proofs.Flock.EndToEnd.Joint.MT.Draw" = "Proofs.Flock.EndToEnd.Joint.MT.Sample"
+"Proofs/Flock/Claims/KS/PlainDrawAcc" = "Proofs/Flock/Claims/KS/PlainSampleAcc"
+"Proofs/Flock/Claims/KS/PlainDrawDec" = "Proofs/Flock/Claims/KS/PlainSampleDec"
+"Proofs/Flock/Claims/KS/PlainDrawSim" = "Proofs/Flock/Claims/KS/PlainSampleSim"
+"Proofs/Flock/EndToEnd/Joint/MT/Draw" = "Proofs/Flock/EndToEnd/Joint/MT/Sample"
+"pearlCSampledDrawDevRev1RowCapAtTol" = "pearlCSampledSampleDevRev1RowCapAtTol"
+"zk_session_soundHJ_custody_drawn_at" = "zk_session_soundHJ_custody_sampled_at"
+"zk_session_soundJ_custody_drawn_reg" = "zk_session_soundJ_custody_sampled_reg"
+"Definitions.Accounting.Remote.Draw" = "Definitions.Accounting.Remote.Sample"
+"Definitions/Accounting/Remote/Draw" = "Definitions/Accounting/Remote/Sample"
+"EndToEndRegisteredDrawn_nontrivial" = "EndToEndRegisteredSampled_nontrivial"
+"Proofs.Flock.Claims.Sampling.Draws" = "Proofs.Flock.Claims.Sampling.Samples"
+"Proofs.Properties.Challenger.Drawn" = "Proofs.Properties.Challenger.Sampled"
+"Proofs/Flock/Claims/Sampling/Draws" = "Proofs/Flock/Claims/Sampling/Samples"
+"Proofs/Properties/Challenger/Drawn" = "Proofs/Properties/Challenger/Sampled"
+"Proofs.Accounting.RemoteHeld.Draw" = "Proofs.Accounting.RemoteHeld.Sample"
+"Proofs.Flock.Claims.KS.PlainDrawJ" = "Proofs.Flock.Claims.KS.PlainSampleJ"
+"Proofs.Flock.Claims.KS.PlainDrawK" = "Proofs.Flock.Claims.KS.PlainSampleK"
+"Proofs.Flock.EndToEnd.Joint.Drawn" = "Proofs.Flock.EndToEnd.Joint.Sampled"
+"Proofs.Flock.Soundness.ExecDrawOS" = "Proofs.Flock.Soundness.ExecSampleOS"
+"Proofs/Accounting/RemoteHeld/Draw" = "Proofs/Accounting/RemoteHeld/Sample"
+"Proofs/Flock/Claims/KS/PlainDrawJ" = "Proofs/Flock/Claims/KS/PlainSampleJ"
+"Proofs/Flock/Claims/KS/PlainDrawK" = "Proofs/Flock/Claims/KS/PlainSampleK"
+"Proofs/Flock/EndToEnd/Joint/Drawn" = "Proofs/Flock/EndToEnd/Joint/Sampled"
+"Proofs/Flock/Soundness/ExecDrawOS" = "Proofs/Flock/Soundness/ExecSampleOS"
+"gapSampledDrawTolThreshold_of_tol" = "gapSampledSampleTolThreshold_of_tol"
+"member_accepted_drawnIncorrect_le" = "member_accepted_sampledIncorrect_le"
+"Definitions.Pouw.PearlC.TileDraw" = "Definitions.Pouw.PearlC.TileSample"
+"Definitions/Pouw/PearlC/TileDraw" = "Definitions/Pouw/PearlC/TileSample"
+"Proofs.Flock.Claims.KS.PlainDraw" = "Proofs.Flock.Claims.KS.PlainSample"
+"Proofs.Flock.Soundness.KeyedDraw" = "Proofs.Flock.Soundness.KeyedSample"
+"Proofs/Flock/Claims/KS/PlainDraw" = "Proofs/Flock/Claims/KS/PlainSample"
+"Proofs/Flock/Soundness/KeyedDraw" = "Proofs/Flock/Soundness/KeyedSample"
+"drawOkZKHJ_of_accepts_stratified" = "sampleOkZKHJ_of_accepts_stratified"
+"pearlCSampledDrawDevRev1RowCapAt" = "pearlCSampledSampleDevRev1RowCapAt"
+"Definitions.Accounting.TS.Drawn" = "Definitions.Accounting.TS.Sampled"
+"Definitions/Accounting/TS/Drawn" = "Definitions/Accounting/TS/Sampled"
+"Proofs.Flock.Soundness.ExecDraw" = "Proofs.Flock.Soundness.ExecSample"
+"Proofs.Flock.Soundness.PlanDraw" = "Proofs.Flock.Soundness.PlanSample"
+"Proofs/Flock/Soundness/ExecDraw" = "Proofs/Flock/Soundness/ExecSample"
+"Proofs/Flock/Soundness/PlanDraw" = "Proofs/Flock/Soundness/PlanSample"
+"drawSetupZKH_whole_empty_16_2_1" = "sampleSetupZKH_whole_empty_16_2_1"
+"EndToEndRegisteredDrawn_honest" = "EndToEndRegisteredSampled_honest"
+"Proofs.Flock.Claims.KS.ZkDrawJ" = "Proofs.Flock.Claims.KS.ZkSampleJ"
+"Proofs.Pouw.PearlC.TileDrawGap" = "Proofs.Pouw.PearlC.TileSampleGap"
+"Proofs/Flock/Claims/KS/ZkDrawJ" = "Proofs/Flock/Claims/KS/ZkSampleJ"
+"Proofs/Pouw/PearlC/TileDrawGap" = "Proofs/Pouw/PearlC/TileSampleGap"
+"drawSetupZK_whole_empty_16_2_1" = "sampleSetupZK_whole_empty_16_2_1"
+"drawsInFull_of_checkFull_round" = "samplesInFull_of_checkFull_round"
+"Properties.Pouw.PearlPlusDraw" = "Properties.Pouw.PearlPlusSample"
+"Properties/Pouw/PearlPlusDraw" = "Properties/Pouw/PearlPlusSample"
+"accepted_drawnIncorrect_le_at" = "accepted_sampledIncorrect_le_at"
+"drawIsOnItsStreams_nontrivial" = "sampleIsOnItsStreams_nontrivial"
+"Proofs.Flock.Bridge.DrawnLaw" = "Proofs.Flock.Bridge.SampledLaw"
+"Proofs.Flock.SpotFlock.Drawn" = "Proofs.Flock.SpotFlock.Sampled"
+"Proofs/Flock/Bridge/DrawnLaw" = "Proofs/Flock/Bridge/SampledLaw"
+"Proofs/Flock/SpotFlock/Drawn" = "Proofs/Flock/SpotFlock/Sampled"
+"drawOkZKHJ_of_accepts_subset" = "sampleOkZKHJ_of_accepts_subset"
+"flock_e2e_drawn_classes_zero" = "flock_e2e_sampled_classes_zero"
+"groupedDrawMisses_nontrivial" = "groupedSampleMisses_nontrivial"
+"uprog_e2e_drawn_classes_zero" = "uprog_e2e_sampled_classes_zero"
+"EndToEndRegisteredDrawnFlat" = "EndToEndRegisteredSampledFlat"
+"GGapSampledDrawTolThreshold" = "GGapSampledSampleTolThreshold"
+"Proofs.Properties.Pouw.Draw" = "Proofs.Properties.Pouw.Sample"
+"Proofs/Properties/Pouw/Draw" = "Proofs/Properties/Pouw/Sample"
+"drawChallengePhase_withheld" = "sampleChallengePhase_withheld"
+"drawFileZK_of_toJson_subset" = "sampleFileZK_of_toJson_subset"
+"drawOS_stratified_escape_le" = "sampleOS_stratified_escape_le"
+"drawSetupHP_of_setupHiddenI" = "sampleSetupHP_of_setupHiddenI"
+"execRefinesZK_tables_drawnA" = "execRefinesZK_tables_sampledA"
+"flock_batched_drawn_linkedL" = "flock_batched_sampled_linkedL"
+"flock_batched_drawn_placedL" = "flock_batched_sampled_placedL"
+"flock_batched_drawn_publicL" = "flock_batched_sampled_publicL"
+"gapSampledDraw_of_threshold" = "gapSampledSample_of_threshold"
+"ofJson_toJson_drawOf_subset" = "ofJson_toJson_sampleOf_subset"
+"staged_coinTie_drawn_unique" = "staged_coinTie_sampled_unique"
+"Proofs.Accounting.TS.Drawn" = "Proofs.Accounting.TS.Sampled"
+"Proofs.Flock.EndToEndDrawn" = "Proofs.Flock.EndToEndSampled"
+"Proofs.Pouw.PearlPlus.Draw" = "Proofs.Pouw.PearlPlus.Sample"
+"Proofs/Accounting/TS/Drawn" = "Proofs/Accounting/TS/Sampled"
+"Proofs/Flock/EndToEndDrawn" = "Proofs/Flock/EndToEndSampled"
+"Proofs/Pouw/PearlPlus/Draw" = "Proofs/Pouw/PearlPlus/Sample"
+"accepted_drawnIncorrect_le" = "accepted_sampledIncorrect_le"
+"drawFileZK_printedDraw_law" = "sampleFileZK_printedSample_law"
+"drawOS_bernoulli_escape_le" = "sampleOS_bernoulli_escape_le"
+"drawSetupH_of_setupHiddenI" = "sampleSetupH_of_setupHiddenI"
+"drawSetupH_of_setupHiddenU" = "sampleSetupH_of_setupHiddenU"
+"drawSetupZKH_of_acceptsISt" = "sampleSetupZKH_of_acceptsISt"
+"execOS_subset_draw_card_le" = "execOS_subset_sample_card_le"
+"execRefinesZK_tables_drawn" = "execRefinesZK_tables_sampled"
+"flock_batched_drawn_linked" = "flock_batched_sampled_linked"
+"flock_batched_drawn_public" = "flock_batched_sampled_public"
+"flock_e2e_drawn_hm96_reads" = "flock_e2e_sampled_hm96_reads"
+"coupled_draw_coins_setsUp" = "coupled_flip_coins_setsUp"
+"drawChallengePhase_honest" = "sampleChallengePhase_honest"
+"drawFileZK_of_toJson_work" = "sampleFileZK_of_toJson_work"
+"drawIsOnItsStreams_honest" = "sampleIsOnItsStreams_honest"
+"drawSetupH_of_setupHidden" = "sampleSetupH_of_setupHidden"
+"expect_conflictG_drawGame" = "expect_conflictG_sampleGame"
+"flock_e2e_drawn_exec_hm96" = "flock_e2e_sampled_exec_hm96"
+"miss_eq_zero_of_draw_univ" = "miss_eq_zero_of_sample_univ"
+"ofJson_toJson_drawOf_work" = "ofJson_toJson_sampleOf_work"
+"Proofs.Flock.Bridge.Draw" = "Proofs.Flock.Bridge.Sample"
+"Proofs/Flock/Bridge/Draw" = "Proofs/Flock/Bridge/Sample"
+"drawCoins_challengePhase" = "flipCoins_challengePhase"
+"drawFileZK_of_toJson_law" = "sampleFileZK_of_toJson_law"
+"drawSetupH_of_acceptsDJK" = "sampleSetupH_of_acceptsDJK"
+"drawSetupZKH_of_acceptsI" = "sampleSetupZKH_of_acceptsI"
+"drawSetupZKH_of_acceptsU" = "sampleSetupZKH_of_acceptsU"
+"drawnByDevice_nontrivial" = "sampledByDevice_nontrivial"
+"drawsInFull_of_checkFull" = "samplesInFull_of_checkFull"
+"drawsIn_eq_of_acceptsTol" = "samplesIn_eq_of_acceptsTol"
+"exec_le_of_refines_drawn" = "exec_le_of_refines_sampled"
+"groupedDrawMisses_honest" = "groupedSampleMisses_honest"
+"EndToEndHiddenDrawnFlat" = "EndToEndHiddenSampledFlat"
+"EndToEndRegisteredDrawn" = "EndToEndRegisteredSampled"
+"coupled_draw_coins_tied" = "coupled_flip_coins_tied"
+"drawOS_subset_escape_le" = "sampleOS_subset_escape_le"
+"drawOkZKHJ_of_custodyJS" = "sampleOkZKHJ_of_custodyJS"
+"drawSetupH_of_acceptsDK" = "sampleSetupH_of_acceptsDK"
+"drawSetupZKH_of_accepts" = "sampleSetupZKH_of_accepts"
+"drawSetupZKH_whole_mPts" = "sampleSetupZKH_whole_mPts"
+"drawSetup_of_acceptsDJK" = "sampleSetup_of_acceptsDJK"
+"drawWith_stratified_run" = "sampleWith_stratified_run"
+"drawWithheld_nontrivial" = "sampleWithheld_nontrivial"
+"drawsUnder_of_drawnFrom" = "samplesUnder_of_sampledFrom"
+"flock_e2e_drawn_classes" = "flock_e2e_sampled_classes"
+"instIsEmptyFinDrawsNode" = "instIsEmptyFinSamplesNode"
+"notBernoulli_drawsUnder" = "notBernoulli_samplesUnder"
+"recordDraw_recordObjZkJ" = "recordSample_recordObjZkJ"
+"setupHidden_mPts_drawnP" = "setupHidden_mPts_sampledP"
+"uprog_e2e_drawn_classes" = "uprog_e2e_sampled_classes"
+"zk_headline_exec_drawnJ" = "zk_headline_exec_sampledJ"
+"checksC3_of_recordDraw" = "checksC3_of_recordSample"
+"drawFileZK_printedDraw" = "sampleFileZK_printedSample"
+"drawFileZK_proved_size" = "sampleFileZK_proved_size"
+"drawOkZKHJ_of_exec_one" = "sampleOkZKHJ_of_exec_one"
+"drawSetupH_of_acceptsU" = "sampleSetupH_of_acceptsU"
+"drawSetupZK_whole_mPts" = "sampleSetupZK_whole_mPts"
+"drawSetup_of_acceptsDK" = "sampleSetup_of_acceptsDK"
+"drawUnits_subset_runOS" = "sampleUnits_subset_runOS"
+"drawWith_bernoulli_run" = "sampleWith_bernoulli_run"
+"drawWithheld_acceptAll" = "sampleWithheld_acceptAll"
+"execRefinesZK_on_drawn" = "execRefinesZK_on_sampled"
+"extraction_audit_drawn" = "extraction_audit_sampled"
+"lawfulBEqByteArrayDraw" = "lawfulBEqByteArraySample"
+"recordDrawZk_ofFieldsJ" = "recordSampleZk_ofFieldsJ"
+"recordDraw_recordObjZk" = "recordSample_recordObjZk"
+"setupHidden_mPts_drawn" = "setupHidden_mPts_sampled"
+"value_drawKs_affine_le" = "value_sampleKs_affine_le"
+"value_drawKs_extras_le" = "value_sampleKs_extras_le"
+"zk_flock_drawnC_reg_at" = "zk_flock_sampledC_reg_at"
+"zk_headline_exec_drawn" = "zk_headline_exec_sampled"
+"Definitions.Core.Draw" = "Definitions.Core.Sample"
+"Definitions/Core/Draw" = "Definitions/Core/Sample"
+"Pr_exists_rerun_draws" = "Pr_exists_rerun_samples"
+"checkDrawFull_obj_nil" = "checkSampleFull_obj_nil"
+"coupled_draw_coins_v2" = "coupled_flip_coins_v2"
+"creditedDraw_withheld" = "creditedSample_withheld"
+"disjoint_tileDraw_iff" = "disjoint_tileSample_iff"
+"drawOS_work_escape_le" = "sampleOS_work_escape_le"
+"drawOkZKHJ_of_accepts" = "sampleOkZKHJ_of_accepts"
+"drawReadAll_coinsRead" = "sampleReadAll_coinsRead"
+"drawSetupH_of_accepts" = "sampleSetupH_of_accepts"
+"drawSetup_of_setupH_g" = "sampleSetup_of_setupH_g"
+"executionPhaseDrawnOf" = "executionPhaseSampledOf"
+"expect_runsG_drawGame" = "expect_runsG_sampleGame"
+"flock_batched_drawnEL" = "flock_batched_sampledEL"
+"flock_e2e_drawn_hm96L" = "flock_e2e_sampled_hm96L"
+"forall_mem_subsetDraw" = "forall_mem_subsetSample"
+"gapSampledDraw_of_tol" = "gapSampledSample_of_tol"
+"pearlCDrawRev1_nonneg" = "pearlCSampleRev1_nonneg"
+"readUnitDrawn_partsOf" = "readUnitSampled_partsOf"
+"recordDrawZk_ofFields" = "recordSampleZk_ofFields"
+"recordDrawn_of_subset" = "recordSampled_of_subset"
+"value_drawK_bind_mono" = "value_sampleK_bind_mono"
+"workIsTheCredit_drawn" = "workIsTheCredit_sampled"
+"zk_flock_regDrawnC_cr" = "zk_flock_regSampledC_cr"
+"Properties.Spot.Draw" = "Properties.Spot.Sample"
+"Properties/Spot/Draw" = "Properties/Spot/Sample"
+"RegisteredBeforeDraw" = "RegisteredBeforeSample"
+"drawFileZK_of_toJson" = "sampleFileZK_of_toJson"
+"drawOkZKHJP_of_count" = "sampleOkZKHJP_of_count"
+"drawOkZKHJ_of_fileSt" = "sampleOkZKHJ_of_fileSt"
+"drawSetup_of_accepts" = "sampleSetup_of_accepts"
+"drawUnits_of_accepts" = "sampleUnits_of_accepts"
+"flock_batched_drawnE" = "flock_batched_sampledE"
+"flock_batched_drawnL" = "flock_batched_sampledL"
+"flock_compiled_drawn" = "flock_compiled_sampled"
+"flock_e2e_drawn_exec" = "flock_e2e_sampled_exec"
+"flock_e2e_drawn_hm96" = "flock_e2e_sampled_hm96"
+"ofJson_toJson_drawOf" = "ofJson_toJson_sampleOf"
+"padAt_ofDraws_absPos" = "padAt_ofSamples_absPos"
+"padsRoot_tapeOfDraws" = "padsRoot_tapeOfSamples"
+"readUnitDrawn_layout" = "readUnitSampled_layout"
+"recordDraw_firstStop" = "recordSample_firstStop"
+"recordDraw_of_checks" = "recordSample_of_checks"
+"recordDraw_of_decide" = "recordSample_of_decide"
+"recordDraw_recordObj" = "recordSample_recordObj"
+"registeredBeforeDraw" = "registeredBeforeSample"
+"rowDrawn_satisfiable" = "rowSampled_satisfiable"
+"sampledOfGoodDrawTol" = "sampledOfGoodSampleTol"
+"staged_coinTie_drawn" = "staged_coinTie_sampled"
+"stratified_draw_full" = "stratified_sample_full"
+"unitIndices_drawnPub" = "unitIndices_sampledPub"
+"value_map_draw_false" = "value_map_sample_false"
+"zk_flock_drawnC_regC" = "zk_flock_sampledC_regC"
+"zk_flock_drawnC_rows" = "zk_flock_sampledC_rows"
+"zk_session_regDrawnR" = "zk_session_regSampledR"
+"EndToEndHiddenDrawn" = "EndToEndHiddenSampled"
+"PouwWindow.FullDraw" = "PouwWindow.FullSample"
+"PouwWindow/FullDraw" = "PouwWindow/FullSample"
+"Spot.ChallengerDraw" = "Spot.ChallengerSample"
+"Spot/ChallengerDraw" = "Spot/ChallengerSample"
+"coupled_draw_setsUp" = "coupled_sample_setsUp"
+"drawCalls_pair_true" = "sampleCalls_pair_true"
+"drawOkZKHJP_of_size" = "sampleOkZKHJP_of_size"
+"drawOkZKHJ_of_fileG" = "sampleOkZKHJ_of_fileG"
+"drawOkZKHJ_of_sizeG" = "sampleOkZKHJ_of_sizeG"
+"drawOkZKH_of_execSt" = "sampleOkZKH_of_execSt"
+"drawReadAll_logRead" = "sampleReadAll_logRead"
+"drawSetup_of_setupH" = "sampleSetup_of_setupH"
+"drawUnits_work_size" = "sampleUnits_work_size"
+"drawWith_subset_run" = "sampleWith_subset_run"
+"drawn_of_acceptsZKR" = "sampled_of_acceptsZKR"
+"execOS_draw_card_or" = "execOS_sample_card_or"
+"executionPhaseDrawn" = "executionPhaseSampled"
+"flock_batched_drawn" = "flock_batched_sampled"
+"fullDrawO_denseOnly" = "fullSampleO_denseOnly"
+"lawSized_drawsUnder" = "lawSized_samplesUnder"
+"prob_auditLive_draw" = "prob_auditLive_sample"
+"readUnitDrawn_check" = "readUnitSampled_check"
+"recordDraw_of_coins" = "recordSample_of_coins"
+"recordDraw_of_parse" = "recordSample_of_parse"
+"value_drawFin_le_or" = "value_sampleFin_le_or"
+"value_map_draw_true" = "value_map_sample_true"
+"zk_flock_drawnC_reg" = "zk_flock_sampledC_reg"
+"DrawIsOnItsStreams" = "SampleIsOnItsStreams"
+"Ex_fork_refDraw_le" = "Ex_fork_refSample_le"
+"GGapSampledDrawTol" = "GGapSampledSampleTol"
+"Pr_fork_refDraw_le" = "Pr_fork_refSample_le"
+"checkBlobsAt_drawn" = "checkBlobsAt_sampled"
+"checksAtJ_drawSome" = "checksAtJ_sampleSome"
+"coupled_draw_coins" = "coupled_flip_coins"
+"drawChallengePhase" = "sampleChallengePhase"
+"drawCoins_withheld" = "flipCoins_withheld"
+"drawFixed_deployOf" = "sampleFixed_deployOf"
+"drawFixed_of_first" = "sampleFixed_of_first"
+"drawIsOnItsStreams" = "sampleIsOnItsStreams"
+"drawMatchesZk_goal" = "sampleMatchesZk_goal"
+"drawOkZKHJ_of_exec" = "sampleOkZKHJ_of_exec"
+"drawOkZKHJ_of_file" = "sampleOkZKHJ_of_file"
+"drawOkZKHJ_of_size" = "sampleOkZKHJ_of_size"
+"drawOkZKH_of_execG" = "sampleOkZKH_of_execG"
+"drawRead_coinsRead" = "sampleRead_coinsRead"
+"drawnFrom_designAt" = "sampledFrom_designAt"
+"drawnFrom_drawnLaw" = "sampledFrom_sampledLaw"
+"expectedCR_of_draw" = "expectedCR_of_sample"
+"extendDraw_capFork" = "extendSample_capFork"
+"flock_oracle_drawn" = "flock_oracle_sampled"
+"fullDrawO_fullDraw" = "fullSampleO_fullSample"
+"innerDrawn_checked" = "innerSampled_checked"
+"meanDraws_restrict" = "meanSamples_restrict"
+"ofDraws_rowMu_size" = "ofSamples_rowMu_size"
+"padsOf_tapeOfDraws" = "padsOf_tapeOfSamples"
+"printedDraw_subset" = "printedSample_subset"
+"recordDraw_of_drew" = "recordSample_of_drew"
+"setupHidden_drawnP" = "setupHidden_sampledP"
+"sparseDrawnAt_holo" = "sparseSampledAt_holo"
+"unifMap_extendDraw" = "unifMap_extendSample"
+"value_draw_bind_le" = "value_sample_bind_le"
+"zk_flock_drawnC_cr" = "zk_flock_sampledC_cr"
+"GroupedDrawMisses" = "GroupedSampleMisses"
+"TicketsAreTheDraw" = "TicketsAreTheSample"
+"acc_draw_of_setup" = "acc_sample_of_setup"
+"acceptMeans_drawn" = "acceptMeans_sampled"
+"checks_recordDraw" = "checks_recordSample"
+"countRule_eq_draw" = "countRule_eq_sample"
+"coupled_draw_tied" = "coupled_sample_tied"
+"drawCalls_noCalls" = "sampleCalls_noCalls"
+"drawCalls_true_at" = "sampleCalls_true_at"
+"drawCoin_complete" = "flipCoin_complete"
+"drawCoin_instance" = "flipCoin_instance"
+"drawFixed_codeTwo" = "sampleFixed_codeTwo"
+"drawOfJ_recordObj" = "sampleOfJ_recordObj"
+"drawOkZKH_of_exec" = "sampleOkZKH_of_exec"
+"drawOkZKJ_of_exec" = "sampleOkZKJ_of_exec"
+"drawOkZKJ_of_file" = "sampleOkZKJ_of_file"
+"drawOkZKJ_of_size" = "sampleOkZKJ_of_size"
+"drawOrder_eq_some" = "sampleOrder_eq_some"
+"drawRead_deployed" = "sampleRead_deployed"
+"drawSize_deployed" = "sampleSize_deployed"
+"drawTied_of_scope" = "sampleTied_of_scope"
+"drawUnits_miss_le" = "sampleUnits_miss_le"
+"drawWith_work_run" = "sampleWith_work_run"
+"drawn_outputs_nil" = "sampled_outputs_nil"
+"drawsOfBytes_pads" = "samplesOfBytes_pads"
+"drawsWith_refuses" = "samplesWith_refuses"
+"fullDraw_some_rec" = "fullSample_some_rec"
+"gapSampledDrawTol" = "gapSampledSampleTol"
+"getD_draw_closure" = "getD_sample_closure"
+"groupedDrawMisses" = "groupedSampleMisses"
+"hmInDrawnWith_sim" = "hmInSampledWith_sim"
+"innerDrawn_record" = "innerSampled_record"
+"lawSized_drawnLaw" = "lawSized_sampledLaw"
+"ofDraws_rowH_size" = "ofSamples_rowH_size"
+"parse_drawTiedOne" = "parse_sampleTiedOne"
+"pearlCDrawRev1_le" = "pearlCSampleRev1_le"
+"proved_of_drawLaw" = "proved_of_sampleLaw"
+"recordDraw_subset" = "recordSample_subset"
+"repsDrawn_valsSrc" = "repsSampled_valsSrc"
+"setupH_mPts_drawn" = "setupH_mPts_sampled"
+"setupHidden_drawn" = "setupHidden_sampled"
+"ticketsAreTheDraw" = "ticketsAreTheSample"
+"toOption_drawStep" = "toOption_sampleStep"
+"unitDraw_of_setup" = "unitSample_of_setup"
+"zk_session_drawnR" = "zk_session_sampledR"
+"Commitments.Draw" = "Commitments.Sample"
+"Commitments/Draw" = "Commitments/Sample"
+"PouwCommit.Draws" = "PouwCommit.Samples"
+"PouwCommit/Draws" = "PouwCommit/Samples"
+"build_of_ofDraws" = "build_of_ofSamples"
+"coinsReason_draw" = "coinsReason_sample"
+"commitRead_drawn" = "commitRead_sampled"
+"drawK_productive" = "sampleK_productive"
+"drawLaw_deployOf" = "sampleLaw_deployOf"
+"drawLaw_of_slots" = "sampleLaw_of_slots"
+"drawMatches_goal" = "sampleMatches_goal"
+"drawOkZKHJ_empty" = "sampleOkZKHJ_empty"
+"drawOkZKH_execOS" = "sampleOkZKH_execOS"
+"drawOkZK_of_exec" = "sampleOkZK_of_exec"
+"drawOn_escape_le" = "sampleOn_escape_le"
+"drawRead_logRead" = "sampleRead_logRead"
+"drawSetupZHJP_of" = "sampleSetupZHJP_of"
+"drawUnits_append" = "sampleUnits_append"
+"drawWits_of_wits" = "sampleWits_of_wits"
+"draw_ne_proofKey" = "sample_ne_proofKey"
+"drawn_ofBindPlay" = "sampled_ofBindPlay"
+"drawn_population" = "sampled_population"
+"drawn_unrolledOf" = "sampled_unrolledOf"
+"draws_ofLoopLink" = "samples_ofLoopLink"
+"execOS_draw_card" = "execOS_sample_card"
+"expectN_drawGame" = "expectN_sampleGame"
+"flock_e2e_drawnL" = "flock_e2e_sampledL"
+"innerSetup_drawn" = "innerSetup_sampled"
+"lawOn_drawsUnder" = "lawOn_samplesUnder"
+"meanDraws_nonneg" = "meanSamples_nonneg"
+"mem_closure_draw" = "mem_closure_sample"
+"ofDraws_of_sizes" = "ofSamples_of_sizes"
+"oneStageZk_drawn" = "oneStageZk_sampled"
+"playsT_draw_bind" = "playsT_sample_bind"
+"rankStop_ofDraws" = "rankStop_ofSamples"
+"recordDraw_congr" = "recordSample_congr"
+"replayDraws_code" = "replaySamples_code"
+"secondDraws_code" = "secondSamples_code"
+"staged_rep_drawn" = "staged_rep_sampled"
+"tapeSim_drawWith" = "tapeSim_sampleWith"
+"tau_le_drawBytes" = "tau_le_sampleBytes"
+"value_drawFin_le" = "value_sampleFin_le"
+"workRule_eq_draw" = "workRule_eq_sample"
+"DRAW_CHALLENGER" = "SAMPLE_CHALLENGER"
+"DrawCoinAccepts" = "FlipCoinAccepts"
+"DrawCustodyZKHJ" = "SampleCustodyZKHJ"
+"DrawnByDeviceAt" = "SampledByDeviceAt"
+"GGapSampledDraw" = "GGapSampledSample"
+"PouwWindow.Draw" = "PouwWindow.Sample"
+"PouwWindow/Draw" = "PouwWindow/Sample"
+"RUN_DRAW_DOMAIN" = "RUN_SAMPLE_DOMAIN"
+"RecordDrawEquiv" = "RecordSampleEquiv"
+"Spot.HiddenDraw" = "Spot.HiddenSample"
+"Spot.WiresDrawn" = "Spot.WiresSampled"
+"Spot/HiddenDraw" = "Spot/HiddenSample"
+"Spot/WiresDrawn" = "Spot/WiresSampled"
+"advance_undrawn" = "advance_unsampled"
+"agrees_drawWith" = "agrees_sampleWith"
+"bc_drawnS_unpin" = "bc_sampledS_unpin"
+"bc_drawnW_unpin" = "bc_sampledW_unpin"
+"cfg_tapeOfDraws" = "cfg_tapeOfSamples"
+"descriptorDrawn" = "descriptorSampled"
+"drawCoinAccepts" = "flipCoinAccepts"
+"drawCoins_opens" = "flipCoins_opens"
+"drawEpochReason" = "sampleEpochReason"
+"drawEq_map_norm" = "sampleEq_map_norm"
+"drawJ_tableDraw" = "sampleJ_tableSample"
+"drawK_eq_drawOn" = "sampleK_eq_sampleOn"
+"drawList_length" = "sampleList_length"
+"drawOfJ_shaSubJ" = "sampleOfJ_shaSubJ"
+"drawOkZKJ_empty" = "sampleOkZKJ_empty"
+"drawOkZK_execOS" = "sampleOkZK_execOS"
+"drawSetupZHJ_of" = "sampleSetupZHJ_of"
+"drawWith_append" = "sampleWith_append"
+"draw_population" = "sample_population"
+"draw_uniform_lt" = "sample_uniform_lt"
+"drawnPub_tables" = "sampledPub_tables"
+"drawnSpec_shape" = "sampledSpec_shape"
+"drawn_le_weight" = "sampled_le_weight"
+"drawn_preserves" = "sampled_preserves"
+"drawn_roundPlay" = "sampled_roundPlay"
+"drawn_stagePlay" = "sampled_stagePlay"
+"draws_saltedTop" = "samples_saltedTop"
+"exec_recordDraw" = "exec_recordSample"
+"expect_drawGame" = "expect_sampleGame"
+"extendDraw_fork" = "extendSample_fork"
+"flock_e2e_drawn" = "flock_e2e_sampled"
+"getD_draw_units" = "getD_sample_units"
+"honest_drawTied" = "honest_sampleTied"
+"inDrawnWith_std" = "inSampledWith_std"
+"insOf_draw_norm" = "insOf_sample_norm"
+"ofDraws_inBytes" = "ofSamples_inBytes"
+"ofJson_partDraw" = "ofJson_partSample"
+"productive_draw" = "productive_sample"
+"readUnitDrawnCR" = "readUnitSampledCR"
+"recordDrawEquiv" = "recordSampleEquiv"
+"recordDraw_norm" = "recordSample_norm"
+"setupAt_drawLaw" = "setupAt_sampleLaw"
+"uprog_e2e_drawn" = "uprog_e2e_sampled"
+"value_bind_draw" = "value_bind_sample"
+"verdictOf_drawn" = "verdictOf_sampled"
+"weightedDraw_eq" = "weightedSample_eq"
+"zeroCfg_ofDraws" = "zeroCfg_ofSamples"
+"DRAW_AFTER_TAG" = "SAMPLE_AFTER_TAG"
+"Ex_drawCost_le" = "Ex_sampleCost_le"
+"NOT_DRAW_EPOCH" = "NOT_SAMPLE_EPOCH"
+"WorkDrawMisses" = "WorkSampleMisses"
+"allInh_drawFin" = "allInh_sampleFin"
+"answer_ofDraws" = "answer_ofSamples"
+"bcChunk_drawnW" = "bcChunk_sampledW"
+"bern_meanDraws" = "bern_meanSamples"
+"colKeyed_drawn" = "colKeyed_sampled"
+"dead_not_drawn" = "dead_not_sampled"
+"div_of_drawWhy" = "div_of_sampleWhy"
+"drawCalls_true" = "sampleCalls_true"
+"drawCoinsPiece" = "flipCoinsPiece"
+"drawFixed_code" = "sampleFixed_code"
+"drawOkZKHJ_one" = "sampleOkZKHJ_one"
+"drawOk_of_okAt" = "sampleOk_of_okAt"
+"drawOrder_univ" = "sampleOrder_univ"
+"drawSetupZJ_of" = "sampleSetupZJ_of"
+"drawSetupZK_of" = "sampleSetupZK_of"
+"drawSlots_code" = "sampleSlots_code"
+"drawUnits_size" = "sampleUnits_size"
+"drawWidth_mono" = "sampleWidth_mono"
+"drawnLaw_cases" = "sampledLaw_cases"
+"drawn_contPlay" = "sampled_contPlay"
+"drawn_lifePlay" = "sampled_lifePlay"
+"drawn_of_error" = "sampled_of_error"
+"drawn_released" = "sampled_released"
+"fits_of_drawOk" = "fits_of_sampleOk"
+"fullDrawOk_iff" = "fullSampleOk_iff"
+"insO_draw_norm" = "insO_sample_norm"
+"lawOn_drawnLaw" = "lawOn_sampledLaw"
+"ligerito_drawn" = "ligerito_sampled"
+"logged_draw_v2" = "logged_sample_v2"
+"nextK_acc_draw" = "nextK_acc_sample"
+"nextR_acc_draw" = "nextR_acc_sample"
+"openKeys_drawn" = "openKeys_sampled"
+"padsOf_drawsAt" = "padsOf_samplesAt"
+"pearlCDrawRev1" = "pearlCSampleRev1"
+"prog_e2e_drawn" = "prog_e2e_sampled"
+"recordDraw_raw" = "recordSample_raw"
+"recordDraw_tr0" = "recordSample_tr0"
+"secondDraws_le" = "secondSamples_le"
+"takeAt_ofDraws" = "takeAt_ofSamples"
+"value_drawK_le" = "value_sampleK_le"
+"value_map_draw" = "value_map_sample"
+"workDrawMisses" = "workSampleMisses"
+"DRAW_FAMILIES" = "SAMPLE_FAMILIES"
+"DrawMatchesZk" = "SampleMatchesZk"
+"DrawSetupZHJP" = "SampleSetupZHJP"
+"DrawnByDevice" = "SampledByDevice"
+"EndToEndDrawn" = "EndToEndSampled"
+"SparseDrawnAt" = "SparseSampledAt"
+"accRead_drawn" = "accRead_sampled"
+"accepted_draw" = "accepted_sample"
+"afterDraw_inv" = "afterSample_inv"
+"allInh_drawKs" = "allInh_sampleKs"
+"bcChunk_drawn" = "bcChunk_sampled"
+"card_draws_le" = "card_samples_le"
+"checkDrawFull" = "checkSampleFull"
+"checkDraw_nil" = "checkSample_nil"
+"checks_drawEq" = "checks_sampleEq"
+"drawBytes_pos" = "sampleBytes_pos"
+"drawFin_exact" = "sampleFin_exact"
+"drawFin_plays" = "sampleFin_plays"
+"drawFirstRead" = "sampleFirstRead"
+"drawOf_filter" = "sampleOf_filter"
+"drawOf_proved" = "sampleOf_proved"
+"drawOrder_fin" = "sampleOrder_fin"
+"drawTiedB_iff" = "sampleTiedB_iff"
+"drawUnits_all" = "sampleUnits_all"
+"drawUnits_seq" = "sampleUnits_seq"
+"drawZ_mass_le" = "sampleZ_mass_le"
+"drawnByDevice" = "sampledByDevice"
+"drawnInstance" = "sampledInstance"
+"drawnWith_sim" = "sampledWith_sim"
+"drawnWith_std" = "sampledWith_std"
+"drawn_digestW" = "sampled_digestW"
+"drawn_noPorts" = "sampled_noPorts"
+"drawn_outputs" = "sampled_outputs"
+"drawn_stacked" = "sampled_stacked"
+"draws_salteds" = "samples_salteds"
+"fullDraw_some" = "fullSample_some"
+"keepW_undrawn" = "keepW_unsampled"
+"next_acc_draw" = "next_acc_sample"
+"ofDraws_gsize" = "ofSamples_gsize"
+"ofDraws_nPiop" = "ofSamples_nPiop"
+"ofDraws_order" = "ofSamples_order"
+"oneShot_drawn" = "oneShot_sampled"
+"padAt_ofDraws" = "padAt_ofSamples"
+"pieceDrawnRef" = "pieceSampledRef"
+"prob_drawMiss" = "prob_sampleMiss"
+"prob_drawn_le" = "prob_sampled_le"
+"readUnitDrawn" = "readUnitSampled"
+"recordDraw_eq" = "recordSample_eq"
+"setup_drawLaw" = "setup_sampleLaw"
+"tapeDraws_rep" = "tapeSamples_rep"
+"unbound_drawn" = "unbound_sampled"
+"undrawn_first" = "unsampled_first"
+"value_draw_pr" = "value_sample_pr"
+"AcceptedDraw" = "AcceptedSample"
+"DRAW_REFUSED" = "SAMPLE_REFUSED"
+"DrawSetupZHJ" = "SampleSetupZHJ"
+"DrawSetupZKH" = "SampleSetupZKH"
+"DrawWithheld" = "SampleWithheld"
+"EndToEndDraw" = "EndToEndSample"
+"SessionDraws" = "SessionSamples"
+"UnequalDraws" = "UnequalSamples"
+"acceptedDraw" = "acceptedSample"
+"allInh_drawK" = "allInh_sampleK"
+"canon_drawEq" = "canon_sampleEq"
+"cap_of_drawn" = "cap_of_sampled"
+"card_draw_le" = "card_sample_le"
+"coupled_draw" = "coupled_sample"
+"creditedDraw" = "creditedSample"
+"drawBytes_eq" = "sampleBytes_eq"
+"drawCalls_eq" = "sampleCalls_eq"
+"drawCoin_iff" = "flipCoin_iff"
+"drawCoins_ok" = "flipCoins_ok"
+"drawKs_exact" = "sampleKs_exact"
+"drawOn_congr" = "sampleOn_congr"
+"drawOn_units" = "sampleOn_units"
+"drawTerm_pos" = "sampleTerm_pos"
+"drawWhy_none" = "sampleWhy_none"
+"drawWithheld" = "sampleWithheld"
+"draw_closure" = "sample_closure"
+"draw_of_drew" = "sample_of_drew"
+"drawnFrom_eq" = "sampledFrom_eq"
+"drawnFrom_ok" = "sampledFrom_ok"
+"drawnHashed₀" = "sampledHashed₀"
+"drawn_digest" = "sampled_digest"
+"drawn_goPlay" = "sampled_goPlay"
+"drawn_header" = "sampled_header"
+"drawn_length" = "sampled_length"
+"draws_salted" = "samples_salted"
+"honest_drawJ" = "honest_sampleJ"
+"inVal_drawnP" = "inVal_sampledP"
+"ofDraws_mask" = "ofSamples_mask"
+"ofJson_drawW" = "ofJson_sampleW"
+"oracle_drawn" = "oracle_sampled"
+"outVal_drawn" = "outVal_sampled"
+"overCapDraws" = "overCapSamples"
+"pearlDraw_eq" = "pearlSample_eq"
+"pr_drawBytes" = "pr_sampleBytes"
+"recordDrawOf" = "recordSampleOf"
+"secondDrawAt" = "secondSampleAt"
+"setupH_drawn" = "setupH_sampled"
+"tab_of_drawn" = "tab_of_sampled"
+"unequalDraws" = "unequalSamples"
+"unitDraw_one" = "unitSample_one"
+"weightedDraw" = "weightedSample"
+"DRAW_ROUNDS" = "SAMPLE_ROUNDS"
+"DrawMatches" = "SampleMatches"
+"DrawOkZKHJP" = "SampleOkZKHJP"
+"DrawReadAll" = "SampleReadAll"
+"DrawSetupHP" = "SampleSetupHP"
+"DrawSetupZJ" = "SampleSetupZJ"
+"DrawSetupZK" = "SampleSetupZK"
+"Ex_draws_le" = "Ex_samples_le"
+"ReplayDraws" = "ReplaySamples"
+"SecondDraws" = "SecondSamples"
+"appendDrawn" = "appendSampled"
+"askOf_draws" = "askOf_samples"
+"blank_drawn" = "blank_sampled"
+"checks_draw" = "checks_sample"
+"claimedDraw" = "claimedSample"
+"creditDrawn" = "creditSampled"
+"drawChecked" = "sampleChecked"
+"drawEq_refl" = "sampleEq_refl"
+"drawFitsWhy" = "sampleFitsWhy"
+"drawHeld_of" = "sampleHeld_of"
+"drawHypsZHJ" = "sampleHypsZHJ"
+"drawIndices" = "sampleIndices"
+"drawK_exact" = "sampleK_exact"
+"drawKs_succ" = "sampleKs_succ"
+"drawMiss_le" = "sampleMiss_le"
+"drawOf_size" = "sampleOf_size"
+"drawTickets" = "sampleTickets"
+"drawW_model" = "sampleW_model"
+"draw_misses" = "sample_misses"
+"draw_strata" = "sample_strata"
+"drawnHashed" = "sampledHashed"
+"drawnLaw_ok" = "sampledLaw_ok"
+"drawnOk_iff" = "sampledOk_iff"
+"drawn_facts" = "sampled_facts"
+"drawn_frame" = "sampled_frame"
+"drawn_of_ok" = "sampled_of_ok"
+"drawn_setup" = "sampled_setup"
+"drawsInFull" = "samplesInFull"
+"exQ_drawOne" = "exQ_sampleOne"
+"exQ_drawVec" = "exQ_sampledVec"
+"expect_draw" = "expect_sample"
+"extend_draw" = "extend_sample"
+"frame_draws" = "frame_samples"
+"fullDraw_ok" = "fullSample_ok"
+"inner_drawn" = "inner_sampled"
+"logged_draw" = "logged_sample"
+"noInnerDraw" = "noInnerSample"
+"ofDraws_lay" = "ofSamples_lay"
+"ofDraws_lig" = "ofSamples_lig"
+"plain_drawW" = "plain_sampleW"
+"plays_drawK" = "plays_sampleK"
+"printedDraw" = "printedSample"
+"profileDraw" = "profileSample"
+"recordDrawn" = "recordSampled"
+"replayDraws" = "replaySamples"
+"sdraw_keeps" = "ssample_keeps"
+"secondDraws" = "secondSamples"
+"stmtOk_draw" = "stmtOk_sample"
+"strataDrawn" = "strataSampled"
+"tapeOfDraws" = "tapeOfSamples"
+"unitDraw_of" = "unitSample_of"
+"DRAW_BYTES" = "SAMPLE_BYTES"
+"DRAW_WORDS" = "SAMPLE_WORDS"
+"DrawAtMost" = "SampleAtMost"
+"DrawAtZKHJ" = "SampleAtZKHJ"
+"DrawDesign" = "SampleDesign"
+"DrawFileZK" = "SampleFileZK"
+"DrawOkZKHJ" = "SampleOkZKHJ"
+"DrawRecord" = "SampleRecord"
+"DrawSetupH" = "SampleSetupH"
+"DrawsUnder" = "SamplesUnder"
+"Ex_refDraw" = "Ex_refSample"
+"Flock.Draw" = "Flock.Sample"
+"Flock/Draw" = "Flock/Sample"
+"HiddenDraw" = "HiddenSample"
+"InnerDrawn" = "InnerSampled"
+"Pr_refDraw" = "Pr_refSample"
+"ReadsDrawK" = "ReadsSampleK"
+"ReadsDrawZ" = "ReadsSampleZ"
+"bc_drawnWP" = "bc_sampledWP"
+"card_tdraw" = "card_tsample"
+"df_undrawn" = "df_unsampled"
+"drawAll_eq" = "sampleAll_eq"
+"drawAtMost" = "sampleAtMost"
+"drawDivmod" = "sampleDivmod"
+"drawEq_iff" = "sampleEq_iff"
+"drawEvery?" = "sampleEvery?"
+"drawHypsZJ" = "sampleHypsZJ"
+"drawKs_any" = "sampleKs_any"
+"drawKs_two" = "sampleKs_two"
+"drawLaw_ok" = "sampleLaw_ok"
+"drawOS_def" = "sampleOS_def"
+"drawOf_mem" = "sampleOf_mem"
+"drawPos_lt" = "samplePos_lt"
+"drawReason" = "sampleReason"
+"drawWeight" = "sampleWeight"
+"draw_label" = "sample_label"
+"draw_slots" = "sample_slots"
+"drawnExtra" = "sampledExtra"
+"drawnSalts" = "sampledSalts"
+"drawnUnits" = "sampledBlocks"
+"drawnWrong" = "sampledWrong"
+"drawn_cost" = "sampled_cost"
+"drawn_full" = "sampled_full"
+"drawn_same" = "sampled_same"
+"drawn_spec" = "sampled_spec"
+"drawn_term" = "sampled_term"
+"drawn_ties" = "sampled_ties"
+"draws_full" = "samples_full"
+"draws_lift" = "samples_lift"
+"draws_mapM" = "samples_mapM"
+"draws_zero" = "samples_zero"
+"ex_drawOne" = "ex_sampleOne"
+"ex_drawVec" = "ex_sampledVec"
+"extendDraw" = "extendSample"
+"fullDrawOk" = "fullSampleOk"
+"guardDrawn" = "guardSampled"
+"innerDrawn" = "innerSampled"
+"leaf_drawn" = "leaf_sampled"
+"ofDraws_ok" = "ofSamples_ok"
+"pieceDrawn" = "pieceSampled"
+"push_draws" = "push_samples"
+"reach_draw" = "reach_sample"
+"secondDraw" = "secondSample"
+"strataDraw" = "strataSample"
+"value_draw" = "value_sample"
+"BlockDraw" = "BlockSample"
+"DRAW_ARGS" = "SAMPLE_ARGS"
+"DRAW_FORM" = "SAMPLE_FORM"
+"DRAW_NODE" = "SAMPLE_NODE"
+"DRAW_UNIT" = "SAMPLE_UNIT"
+"DrawAtZKJ" = "SampleAtZKJ"
+"DrawCoins" = "FlipCoins"
+"DrawExact" = "SampleExact"
+"DrawFixed" = "SampleFixed"
+"DrawMeets" = "SampleMeets"
+"DrawOkPHJ" = "SampleOkPHJ"
+"DrawOkZKH" = "SampleOkZKH"
+"DrawOkZKJ" = "SampleOkZKJ"
+"DrawSetup" = "SampleSetup"
+"DrawShape" = "SampleShape"
+"DrawSlots" = "SampleSlots"
+"DrawTiedS" = "SampleTiedS"
+"Ex_drawOf" = "Ex_sampleOf"
+"KeyedDraw" = "KeyedSample"
+"PlainDraw" = "PlainSample"
+"ReadsDraw" = "ReadsSample"
+"RepsDrawn" = "RepsSampled"
+"RowsDrawn" = "RowsSampled"
+"ShowsDraw" = "ShowsSample"
+"Spot.Draw" = "Spot.Sampling"
+"Spot/Draw" = "Spot/Sampling"
+"accK_draw" = "accK_sample"
+"accR_draw" = "accR_sample"
+"bc_drawnH" = "bc_sampledH"
+"bc_drawnS" = "bc_sampledS"
+"bc_drawnW" = "bc_sampledW"
+"checkDraw" = "checkSample"
+"drawAfter" = "sampleAfter"
+"drawBytes" = "sampleBytes"
+"drawCalls" = "sampleCalls"
+"drawCheck" = "sampleCheck"
+"drawCoins" = "flipCoins"
+"drawEq_ne" = "sampleEq_ne"
+"drawEvent" = "sampleEvent"
+"drawExact" = "sampleExact"
+"drawFirst" = "sampleFirst"
+"drawFixed" = "sampleFixed"
+"drawJ_one" = "sampleJ_one"
+"drawOf_of" = "sampleOf_of"
+"drawOrder" = "sampleOrder"
+"drawShape" = "sampleShape"
+"drawStrat" = "sampleStrat"
+"drawTiedB" = "sampleTiedB"
+"drawTiedS" = "sampleTiedS"
+"drawUnits" = "sampleUnits"
+"drawW_asc" = "sampleW_asc"
+"drawW_obj" = "sampleW_obj"
+"draw_none" = "sample_none"
+"drawnFrom" = "sampledFrom"
+"drawnInts" = "sampledInts"
+"drawnJson" = "sampledJson"
+"drawnNats" = "sampledNats"
+"drawnPads" = "sampledPads"
+"drawnSpec" = "sampledSpec"
+"drawnWith" = "sampledWith"
+"drawn_log" = "sampled_log"
+"drawn_pop" = "sampled_pop"
+"drawsFrom" = "samplesFrom"
+"drawsPads" = "samplesPads"
+"drawsWith" = "samplesWith"
+"fullDraw4" = "fullSample4"
+"fullDrawB" = "fullSampleB"
+"fullDrawO" = "fullSampleO"
+"good_draw" = "good_sample"
+"innerDraw" = "innerSample"
+"meanDraws" = "meanSamples"
+"ofDraws_h" = "ofSamples_h"
+"out_drawn" = "out_sampled"
+"pearlDraw" = "pearlSample"
+"tableDraw" = "tableSample"
+"tapeDraws" = "tapeSamples"
+"DrawExec" = "SampleExec"
+"DrawHeld" = "SampleHeld"
+"DrawOkPJ" = "SampleOkPJ"
+"DrawOkZK" = "SampleOkZK"
+"DrawRead" = "SampleRead"
+"DrawTied" = "SampleTied"
+"FragDraw" = "FragSample"
+"FullDraw" = "FullSample"
+"PlanDraw" = "PlanSample"
+"RowDrawn" = "RowSampled"
+"TreeDraw" = "TreeRound"
+"UnitDraw" = "UnitSample"
+"acc_draw" = "acc_sample"
+"bc_drawn" = "bc_sampled"
+"drawCoin" = "flipCoin"
+"drawCost" = "sampleCost"
+"drawGame" = "sampleGame"
+"drawHeld" = "sampleHeld"
+"drawKeys" = "sampleKeys"
+"drawList" = "sampleList"
+"drawMiss" = "sampleMiss"
+"drawSize" = "sampleSize"
+"drawTest" = "sampleTest"
+"drawView" = "sampleView"
+"drawWits" = "sampleWits"
+"draw_inj" = "sample_inj"
+"draw_law" = "sample_law"
+"drawnAll" = "sampledAll"
+"drawnLaw" = "sampledLaw"
+"ex_drawK" = "ex_sampleK"
+"forkDraw" = "forkSample"
+"fullDraw" = "fullSample"
+"ins_draw" = "ins_sample"
+"nodeDraw" = "nodeSample"
+"partDraw" = "partSample"
+"tileDraw" = "tileSample"
+"unitDraw" = "unitSample"
+"DrawInv" = "SampleInv"
+"DrawLaw" = "SampleLaw"
+"DrawOkH" = "SampleOkH"
+"DrawOkJ" = "SampleOkJ"
+"DrawnOf" = "SampledOf"
+"DrawnOn" = "SampledOn"
+"OJDraws" = "OJSamples"
+"PreDraw" = "PreSample"
+"drawAll" = "sampleAll"
+"drawCmd" = "sampleCmd"
+"drawFin" = "sampleFin"
+"drawInd" = "sampleInd"
+"drawKey" = "sampleKey"
+"drawLaw" = "sampleLaw"
+"drawLen" = "sampleLen"
+"drawOfJ" = "sampleOfJ"
+"drawOfU" = "sampleOfU"
+"drawVec" = "sampledVec"
+"drawWhy" = "sampleWhy"
+"draw_eq" = "sample_eq"
+"draw_wf" = "sample_wf"
+"drawnAt" = "sampledAt"
+"drawnOk" = "sampledOk"
+"drawn_n" = "sampled_n"
+"drawsAt" = "samplesAt"
+"ofDraws" = "ofSamples"
+"ownDraw" = "ownSample"
+"putDraw" = "putSample"
+"refDraw" = "refSample"
+"rx_draw" = "rx_sample"
+"spDraws" = "spSamples"
+"AtDraw" = "AtSample"
+"DrawOk" = "SampleOk"
+"ODraws" = "OSamples"
+"drawEq" = "sampleEq"
+"drawKs" = "sampleKs"
+"drawOS" = "sampleOS"
+"drawOf" = "sampleOf"
+"drawOk" = "sampleOk"
+"drawOn" = "sampleOn"
+"drawnN" = "sampledN"
+"draws₀" = "samples₀"
+"TDraw" = "TSample"
+"drawB" = "sampleB"
+"drawJ" = "sampleJ"
+"drawS" = "sampleS"
+"drawU" = "sampleU"
+"gDraw" = "gSample"
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/EndToEndRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicHJ.lean",
+]
+words = { "zk_session_soundHJR_custody_drawn_reg" = "zk_session_soundHJR_custody_sampled_reg" }
+
+[[words_in]]
+files = [
+    "adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py",
+    "benchmarks/pouw/served_zk/served_commit.py",
+    "benchmarks/pouw/tests/test_served_zk.py",
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/accounting/pouw/prover/circuit/anchors.py",
+    "verity/protocols/accounting/pouw/prover/circuit/plan.py",
+    "verity/protocols/accounting/pouw/prover/clear/clear_work.py",
+    "verity/protocols/accounting/pouw/verifier/core_check.py",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_pass_cases.py",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Draws.lean",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_cap.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc4.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_pc8.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_plan.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_core_check.py",
+]
+words = { "DRAW_DOMAIN" = "SAMPLE_DOMAIN" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
+    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/README.md",
+]
+words = { "audit_drawn" = "audit_sampled" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Pous/EndToEndAt.lean",
+]
+words = { "pr_draws_le" = "pr_samples_le", "pr_draw_le" = "pr_sample_le" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+    "security/Proofs/Properties/Pouw.lean",
+    "security/Properties/Pouw.lean",
+    "security/Properties/Spot/Draw.lean",
+    "security/Properties/lean-audit.json",
+]
+words = { "DrawMisses" = "SampleMisses" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/Sampling/Select/DrawLaw.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+    "security/Proofs/Flock/SamplingGeneric/TwoCode.lean",
+    "security/Proofs/Properties/Pouw.lean",
+    "security/Properties/lean-audit.json",
+]
+words = { "drawMisses" = "sampleMisses" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Verity/Sampled/Digest.lean",
+]
+words = { "draw_after" = "sample_after" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Accepts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+]
+words = { "draw_split" = "sample_split" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean",
+]
+words = { "draw_units" = "sample_units" }
+
+[[words_in]]
+files = [
+    "adapters/vllm/tests/protocols/pouw_h1_circuits.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py",
+    "benchmarks/numerical/bench-instances/v1/manifest.json",
+    "benchmarks/numerical/python/verity_numerical/bench/instances.py",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupSame.lean",
+    "tests/lint/allowlists/repo_retired_terms.json",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
+    "verity/protocols/proofs/flock/prover/tests/test_rec_link.py",
+    "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_in_difftest.py",
+]
+words = { "drawn_rows" = "sampled_rows" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Accounting/TS/GroupSound.lean",
+    "security/Proofs/Flock/Bridge/ScopeGate.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/C3/PubRows/Honest.lean",
+    "security/Proofs/Flock/C3/PubRows/Shape.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/Claims/Bridge/Custody.lean",
+    "security/Proofs/Flock/Claims/Bridge/CustodyPlain.lean",
+    "security/Proofs/Flock/Claims/Bridge/CustodyZkP.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Live.lean",
+    "security/Proofs/Flock/Claims/Complete/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/Verdict.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Json/Decode.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Complete.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Decode.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Goals.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Deploy.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDraw.lean",
+    "security/Proofs/Flock/Claims/KS/PlainFirst.lean",
+    "security/Proofs/Flock/Claims/KS/ZkAccepts.lean",
+    "security/Proofs/Flock/Claims/KS/ZkPlanJ.lean",
+    "security/Proofs/Flock/Claims/Recursion/BindsDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployChecked.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployOuter.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployScope.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerExtras.lean",
+    "security/Proofs/Flock/Claims/Recursion/IrDepSession.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsFull.lean",
+    "security/Proofs/Flock/Claims/Recursion/NextCs.lean",
+    "security/Proofs/Flock/Claims/Recursion/NextJ.lean",
+    "security/Proofs/Flock/Claims/Recursion/Scope.lean",
+    "security/Proofs/Flock/EndToEnd.lean",
+    "security/Proofs/Flock/EndToEndHidden.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Nontrivial.lean",
+    "security/Proofs/Flock/Recursive/AuditC3.lean",
+    "security/Proofs/Flock/Recursive/ValueChecked.lean",
+    "security/Proofs/Flock/Recursive/Witness.lean",
+    "security/Proofs/Flock/SoundAtBridge/ServedProof.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJA.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZL/Assemble.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZL/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Merkle.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Setup.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Tables.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegisteredTags.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec/Assemble.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/AcceptsP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Tables.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainReg/Checked.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/Place.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousSeg.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousV2.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/ParseStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Theorems.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/TablesAt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Checked.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/CheckedHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/NonVacuousHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/VBridge/Family/Pub.lean",
+    "security/Proofs/Properties/Spot/Credited.lean",
+    "security/Proofs/Properties/Spot/Units.lean",
+    "security/Proofs/Properties/Verity/Recursive.lean",
+    "security/Proofs/Properties/Verity/Recursive/Names.lean",
+    "security/Proofs/Properties/Verity/Recursive/PartVerdict.lean",
+    "security/Proofs/Properties/Verity/Recursive/SetupChecks.lean",
+    "security/Proofs/Properties/Verity/Sampled/Accepts.lean",
+    "security/Proofs/Properties/Verity/Sampled/CountsLayout.lean",
+    "security/Proofs/Properties/Verity/Sampled/Event.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/Properties/Verity/Sampled/Moves.lean",
+    "security/Proofs/Properties/Verity/Sampled/MovesReach.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Accepts.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Pass.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Session.lean",
+    "security/Proofs/Properties/Verity/Sampled/RecordDraw.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullDraw.lean",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_live.py",
+    "verity/protocols/proofs/flock/verifier/Flock/RecCoins.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Witness.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/WitnessZk.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean",
+    "verity/protocols/proofs/recursion/verifier/vstar_cli/VStarDifftest.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean",
+]
+words = { "recordDraw" = "recordSample" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+]
+words = { "step_drawn" = "step_sampled" }
+
+[[words_in]]
+files = [
+    "security/Definitions/Accounting/Compose.lean",
+    "security/Definitions/Pouw/Window.lean",
+    "security/Proofs/Accounting/Compose/CircuitWorkSeeded.lean",
+    "security/Proofs/Accounting/Compose/ServiceBudget.lean",
+    "security/Proofs/Accounting/Served.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10R/Stratum.lean",
+    "security/Properties/Accounting/Compose.lean",
+    "security/Properties/Accounting/Served.lean",
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/PlainHidden.lean",
+]
+words = { "subsetDraw" = "subsetSample" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/ZkAny/RelayEnv.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoop.lean",
+    "security/Proofs/Flock/ZkAny/RelayServes.lean",
+]
+words = { "AfterDraw" = "AfterSample" }
+
+[[words_in]]
+files = [
+    "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py",
+    "adapters/vllm/tests/protocols/test_credit_gate.py",
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/accounting/pouw/verifier/credit.py",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit.py",
+]
+words = { "DRAW_ROOT" = "SAMPLE_ROOT" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Verity/Sampled/Record/Law.lean",
+]
+words = { "card_draw" = "card_sample" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/C3/Compose/SparseEnds.lean",
+    "security/Proofs/Flock/C3/HoloValues/Shape.lean",
+    "security/Proofs/Flock/C3/RegLevels/LigWhole.lean",
+    "security/Proofs/Flock/C3/Sparse/Read.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Shape.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Shape.lean",
+]
+words = { "draw_bind" = "sample_bind" }
+
+[[words_in]]
+files = [
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/accounting/pouw/verifier/credit.py",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+]
+words = { "DRAW_TAG" = "SAMPLE_TAG" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pouw/PearlPlus/Draw.lean",
+]
+words = { "drawStep" = "sampleStep" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Bridge/Draw.lean",
+    "security/Proofs/Flock/Bridge/QsRows/FirstReads.lean",
+    "security/Proofs/Flock/Claims/Sampling/ExecBernoulli.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Prefix.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondCount.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondStrata.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondWitness.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Size.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Take.lean",
+    "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "security/Proofs/Flock/Soundness/Audit/README.md",
+    "security/Proofs/Flock/Soundness/ExecDrawOS.lean",
+    "security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md",
+    "security/Proofs/Properties/Verity/SampledDraw.lean",
+    "verity/commitments/lean/Commitments/Draw.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/spot/device/coins.py",
+    "verity/protocols/proofs/spot/verifier/README.md",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/proofs/spot/verifier/service.py",
+    "verity/protocols/proofs/spot/verifier/tests/test_coins.py",
+    "verity/protocols/proofs/spot/verifier/tests/test_service.py",
+]
+words = { "drawWith" = "sampleWith" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+]
+words = { "drawn_eq" = "sampled_eq" }
+
+[[words_in]]
+files = [
+    "benchmarks/one_stage/replay.py",
+    "security/Properties/lean-audit.json",
+    "security/lean-audit.json",
+    "verity/protocols/accounting/pouw/verifier/credit.py",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit.py",
+]
+words = { "NO_DRAW" = "NO_SAMPLE" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/PlaysInner.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/PlaysLig.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/PlaysReplay.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictInner.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictLane.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictLigModel.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictOpens.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictReplay.lean",
+    "security/Proofs/Flock/Soundness/Refine/HoloRefines.lean",
+    "security/Proofs/Flock/Soundness/Refine/Ligerito.lean",
+    "security/Proofs/Flock/Soundness/Refine/LigeritoRun.lean",
+    "security/Proofs/Flock/Soundness/Refine/Lincheck.lean",
+    "security/Proofs/Flock/Soundness/Refine/Plays.lean",
+    "security/Proofs/Flock/Soundness/Refine/Zerocheck.lean",
+    "security/Proofs/Flock/VBridge/Sparse/Plays.lean",
+]
+words = { "drawOne" = "sampleOne" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/SpotFlock/RevealAt.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean",
+]
+words = { "drawnOf" = "sampledOf" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Properties/Pouw/Credit.lean",
+    "security/Properties/lean-audit.json",
+]
+words = { "drawnOn" = "sampledOn" }
+
+[[words_in]]
+files = [
+    "security/Definitions/Pouw/Game/Defs.lean",
+    "security/Definitions/Pouw/PearlC/Tile.lean",
+    "security/Definitions/Pouw/PearlC/TileDraw.lean",
+    "security/Proofs/Pouw/PearlC/TileDrawGap.lean",
+    "security/Proofs/Pouw/PearlC/TileGapTol.lean",
+    "security/lean-audit.json",
+]
+words = { "drawsIn" = "samplesIn" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/Recursion/KSLinks.lean",
+    "security/Proofs/Flock/Recursive/LinksDeployed.lean",
+    "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Finish.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean",
+]
+words = { "drawsOf" = "samplesOf" }
+
+[[words_in]]
+files = [
+    "adapters/vllm/tests/check/test_stoch_draw_ledger.py",
+    "adapters/vllm/tests/pipeline/test_serve_h1.py",
+    "adapters/vllm/tests/protocols/challenger_host.py",
+    "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
+    "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py",
+    "adapters/vllm/tests/protocols/test_credit_gate.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_circuits.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_live.py",
+    "adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py",
+    "adapters/vllm/verity_vllm/check/replay/stoch_recompute.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/served_program.py",
+    "benchmarks/one_stage/served_verdicts.py",
+    "benchmarks/one_stage/served_verdicts.sh",
+    "benchmarks/one_stage/tests/test_served_verdicts.py",
+    "benchmarks/pouw/h1_prove/recorded.py",
+    "demos/vllm/placement.toml",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean",
+    "verity/protocols/accounting/pouw/verifier/credit.py",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/README.md",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit.py",
+    "verity/protocols/compose/device/live_challenger/auditor.py",
+    "verity/protocols/compose/device/live_challenger/tests/test_auditor_periods.py",
+]
+words = { "draw_k" = "sample_k" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/C3/Fork/CouplingInh.lean",
+    "security/Proofs/Flock/C3/Fork/CouplingInhGames.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondCount.lean",
+    "security/Proofs/Flock/Recursive/CompileRuns.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Binding.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Inh.lean",
+    "security/Proofs/Flock/Soundness/Refine/LiveCompiled.lean",
+    "security/Proofs/Flock/SpotFlock/ReadWays.lean",
+    "verity/commitments/lean/Commitments/Draw.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Verifier.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Lanes.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Verified.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Coins.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Draws.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullDraw.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Tags.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FullDraw.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Setup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Witness.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerCoins.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerDraw.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Stream.lean",
+]
+words = { "draw'" = "sample'" }
+
+[[words_in]]
+files = [
+    "security/Definitions/Flock/Compiled.lean",
+    "security/Definitions/Flock/Ligerito.lean",
+    "security/Definitions/Flock/LigeritoPad.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/SessionLDecisive.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/PlaysLig.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Shape.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictLane.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictLigModel.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/VerdictOpens.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Level0.lean",
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "security/Proofs/Flock/Soundness/LigeritoCoins.lean",
+    "security/Proofs/Flock/Soundness/LigeritoMCA.lean",
+    "security/Proofs/Flock/Soundness/LigeritoPadLevel0.lean",
+    "security/Proofs/Flock/Soundness/Refine/Ligerito.lean",
+    "security/Proofs/Flock/Soundness/Refine/LiveCompiled.lean",
+]
+words = { "drawK" = "sampleK" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Flock/EndToEndRegistered/Nontrivial.lean",
+]
+words = { "drawW" = "sampleW" }
+
+[[words_in]]
+files = [
+    "benchmarks/prove_path/e2e_chains/README.md",
+    "security/Proofs/Accounting/JointBridge/HonestH200.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/Claims/Bridge/Custody.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDecodeW.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDrawJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkRows.lean",
+    "security/Proofs/Flock/EndToEnd.lean",
+    "security/Proofs/Flock/EndToEndHidden.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/Recursive/Loads.lean",
+    "security/Proofs/Flock/Recursive/Raw.lean",
+    "security/Proofs/Flock/Recursive/Stage.lean",
+    "security/Proofs/Flock/Recursive/Transfer.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/Vals.lean",
+    "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/General.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Hidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/RunsLive.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/RunsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundRuns.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/View.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Guarded.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/NonVacuousHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/Soundness/assumption-notes/lock-listed-premises.md",
+    "security/Proofs/Pouw/MonitoringPeriod.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Honest.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10R.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10R/Honest.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10RStrata.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10RStrata/Honest.lean",
+    "security/Proofs/Pouw/ServedFreed.lean",
+    "security/Proofs/Pouw/ServedFreed/Honest.lean",
+    "security/Proofs/Pouw/ServedValues.lean",
+    "security/Proofs/Pouw/ServedValues/Honest.lean",
+    "security/Proofs/Pouw/ServedWork.lean",
+    "security/Proofs/Pouw/ServedWork/Honest.lean",
+    "security/lean-audit.json",
+]
+words = { "hDraw" = "hSample" }
+
+# the bare word `Draw`, in every `.lean` file that spells it and not `Sample`
+[[words_in]]
+files = [
+    "benchmarks/two_stage/tests/TwoGuard.lean",
+    "benchmarks/verifier_cost/whole_run/Main.lean",
+    "security/Definitions/Accounting/Assumptions/RemoteDraw.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteBinding.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteDraw.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteSketchLine.lean",
+    "security/Definitions/Accounting/RateAudit.lean",
+    "security/Definitions/Accounting/RateAuditSketch.lean",
+    "security/Definitions/Accounting/Remote.lean",
+    "security/Definitions/Accounting/Remote/Draw.lean",
+    "security/Definitions/Accounting/Remote/Fork.lean",
+    "security/Definitions/Accounting/Remote/SketchLine.lean",
+    "security/Definitions/Core.lean",
+    "security/Definitions/Core/Draw.lean",
+    "security/Definitions/Core/Guarantees/Challenger.lean",
+    "security/Definitions/Flock/Audit/Law.lean",
+    "security/Definitions/Pouw/Assumptions/Dither.lean",
+    "security/Definitions/Pouw/Assumptions/DitherInstance.lean",
+    "security/Definitions/Pouw/Assumptions/OnsiteFreed.lean",
+    "security/Definitions/Pouw/Assumptions/ShaRealize.lean",
+    "security/Definitions/Pouw/Dither.lean",
+    "security/Definitions/Pouw/DitherInstance.lean",
+    "security/Definitions/Pouw/Guarantees/Dither.lean",
+    "security/Definitions/Pouw/Window.lean",
+    "security/Definitions/Pouw/Witness.lean",
+    "security/Definitions/Spot/SamplePressure.lean",
+    "security/Proofs/Accounting.lean",
+    "security/Proofs/Accounting/JointBridge/HonestH200.lean",
+    "security/Proofs/Accounting/Lemmas/RemoteBinding.lean",
+    "security/Proofs/Accounting/RateAudit/DeployedSketch.lean",
+    "security/Proofs/Accounting/RateAudit/DeployedSketchSum.lean",
+    "security/Proofs/Accounting/RemoteHeld/Binding.lean",
+    "security/Proofs/Accounting/RemoteHeld/Draw.lean",
+    "security/Proofs/Accounting/RemoteHeld/DrawMeets.lean",
+    "security/Proofs/Accounting/RemoteHeld/Line.lean",
+    "security/Proofs/Accounting/RemoteHeld/SketchLine.lean",
+    "security/Proofs/Accounting/TS/CheckedSound.lean",
+    "security/Proofs/Accounting/TS/GroupSound.lean",
+    "security/Proofs/Flock/Bridge/Draw.lean",
+    "security/Proofs/Flock/Bridge/DrawnLaw.lean",
+    "security/Proofs/Flock/Bridge/PublicRows.lean",
+    "security/Proofs/Flock/Bridge/QsRows.lean",
+    "security/Proofs/Flock/Bridge/QsRows/FirstReads.lean",
+    "security/Proofs/Flock/Bridge/QsRows/RunsOut.lean",
+    "security/Proofs/Flock/Bridge/V5/Accepted.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Bridge/V5/QsRows.lean",
+    "security/Proofs/Flock/Bridge/V5/Statement.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Decode.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Json/Decode.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Decode.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/StmtOne.lean",
+    "security/Proofs/Flock/Claims/DeployInputs.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAcc.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAccJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAccK.lean",
+    "security/Proofs/Flock/Claims/Recursion/DecodeSame.lean",
+    "security/Proofs/Flock/Claims/Recursion/HonestVerdictJson.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerForm.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupSame.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsFull.lean",
+    "security/Proofs/Flock/Claims/Recursion/Scope.lean",
+    "security/Proofs/Flock/Claims/Recursion/SetupCount.lean",
+    "security/Proofs/Flock/Claims/Recursion/SetupValues.lean",
+    "security/Proofs/Flock/Claims/Sampling/ExecBernoulli.lean",
+    "security/Proofs/Flock/Claims/Sampling/Refused.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reg.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Bounds.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Code.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Design.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/DrawLaw.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Layout.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Prefix.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondCount.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondStrata.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/SecondWitness.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Size.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Steps.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Take.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Draw.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Drawn.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Member.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Nontrivial.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/Recursive/Witness.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
+    "security/Proofs/Flock/SamplingGeneric/TwoCode.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Public.lean",
+    "security/Proofs/Flock/SoundAtBridge/Served.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Zk.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/ZkP.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockWork.lean",
+    "security/Proofs/Flock/Soundness/Binding/E2E.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2E.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2EMore.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Custody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZL/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/HeadlineL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LawDraw.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Live.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LiveOn.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Pts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Design.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Exec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/General.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/PublicTies.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Hidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HdecCor/Headlines.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Committed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Checked.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/SegV2.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Shared.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/SharedP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/LiveOnP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SetupP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SiteH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SiteHP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Tables.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/TablesP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Sites.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/Drawn.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/KeyProg.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/OutSite.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/QSort.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/SharedRows.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/Site.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Accepts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/At.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/BindX.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Coin.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Compiled.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/BindInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/ParseStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundBind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundDrawOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Link.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/TablesAt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Bind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/BindH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Guarded.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "security/Proofs/Flock/Soundness/ExecDraw.lean",
+    "security/Proofs/Flock/Soundness/ExecDrawOS.lean",
+    "security/Proofs/Flock/Soundness/ExecStrataOf.lean",
+    "security/Proofs/Flock/Soundness/ExecStratified.lean",
+    "security/Proofs/Flock/Soundness/Headline.lean",
+    "security/Proofs/Flock/SpotFlock/Cap.lean",
+    "security/Proofs/Flock/SpotFlock/Code.lean",
+    "security/Proofs/Flock/SpotFlock/Drawn.lean",
+    "security/Proofs/Flock/SpotFlock/NoAlways.lean",
+    "security/Proofs/Flock/SpotFlock/RevealAt.lean",
+    "security/Proofs/Flock/SpotFlock/RevealsOpen.lean",
+    "security/Proofs/Flock/SpotFlock/Rooted.lean",
+    "security/Proofs/Flock/VBridge/Family/Pub.lean",
+    "security/Proofs/Flock/VBridge/Family/Rounds.lean",
+    "security/Proofs/Flock/VBridge/Full.lean",
+    "security/Proofs/Pous/EndToEnd.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Pouw/Credit/Lanes.lean",
+    "security/Proofs/Pouw/Dither.lean",
+    "security/Proofs/Pouw/DitherInstance.lean",
+    "security/Proofs/Pouw/DitherInstanceWitness.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Accept.lean",
+    "security/Proofs/Pouw/OnsiteFreed.lean",
+    "security/Proofs/Pouw/PearlPlus.lean",
+    "security/Proofs/Pouw/PearlPlus/Cap.lean",
+    "security/Proofs/Pouw/PearlPlus/Draw.lean",
+    "security/Proofs/Pouw/Pool.lean",
+    "security/Proofs/Pouw/PoolWitness.lean",
+    "security/Proofs/Pouw/SakLb.lean",
+    "security/Proofs/Pouw/ShaRealize.lean",
+    "security/Proofs/Pouw/ShaRealizeWitness.lean",
+    "security/Proofs/Properties/Accounting/Remote.lean",
+    "security/Proofs/Properties/Accounting/Remote/Coins.lean",
+    "security/Proofs/Properties/Accounting/Remote/Draw.lean",
+    "security/Proofs/Properties/Accounting/Remote/Pooled.lean",
+    "security/Proofs/Properties/Accounting/Remote/SharedLink.lean",
+    "security/Proofs/Properties/Accounting/Remote/SubprotocolWitnesses.lean",
+    "security/Proofs/Properties/Pouw.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Proofs/Properties/Pouw/Commit.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Draw.lean",
+    "security/Proofs/Properties/Pouw/Strata.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Spot/Credited.lean",
+    "security/Proofs/Properties/Verity/Recursive/Numbers.lean",
+    "security/Proofs/Properties/Verity/Sampled.lean",
+    "security/Proofs/Properties/Verity/Sampled/Deployed.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/Properties/Verity/Sampled/MemberForm/Evidence.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Law.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Nums.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Opens.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Pass.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Reg.lean",
+    "security/Proofs/Properties/Verity/Sampled/RecordDraw.lean",
+    "security/Proofs/Properties/Verity/SampledDraw.lean",
+    "security/Proofs/Properties/Verity/SampledRead.lean",
+    "security/Proofs/Spot/ChiPool.lean",
+    "security/Proofs/Spot/SamplePressure.lean",
+    "security/Proofs/WeightSecurity/Pressure.lean",
+    "security/Properties/Accounting/Compose.lean",
+    "security/Properties/Accounting/Remote/Line.lean",
+    "security/Properties/Accounting/Remote/Line/Record.lean",
+    "security/Properties/Accounting/Remote/Pooled.lean",
+    "security/Properties/Accounting/Remote/Subprotocol.lean",
+    "security/Properties/Accounting/Remote/SubprotocolDeployed.lean",
+    "security/Properties/Accounting/Served.lean",
+    "security/Properties/Pouw.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/Credit.lean",
+    "security/Properties/Pouw/PearlPlusDraw.lean",
+    "security/Properties/Pouw/Strata.lean",
+    "security/Properties/Spot.lean",
+    "security/Properties/Spot/Draw.lean",
+    "security/Properties/Spot/Second.lean",
+    "verity/commitments/lean/Commitments.lean",
+    "verity/commitments/lean/Commitments/Draw.lean",
+    "verity/commitments/randomness/Randomness.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Draws.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullDraw.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Json.lean",
+    "verity/protocols/interface/CoreProtocol/Profile.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Draw.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecCoins.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Record.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Registered.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/PlainHidden.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/TableCap.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Setup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Transcript.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/VerifyE.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Witness.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Hello.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Partition.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/PopOrder.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Rate.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Select.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Slots.lean",
+]
+words = { "Draw" = "Sample" }
+
+# the bare word `draw`, in every `.lean` file that spells it and not `sample`
+[[words_in]]
+files = [
+    "benchmarks/verifier_cost/whole_run/Main.lean",
+    "security/Definitions/Accounting/Compose.lean",
+    "security/Definitions/Accounting/ComposeMonitoringPeriod.lean",
+    "security/Definitions/Accounting/CoverageToy.lean",
+    "security/Definitions/Accounting/Slowdown.lean",
+    "security/Definitions/Accounting/TS/Drawn.lean",
+    "security/Definitions/Accounting/TS/Fixed.lean",
+    "security/Definitions/Core/Assumptions/Transport.lean",
+    "security/Definitions/Core/Blocks.lean",
+    "security/Definitions/Core/Draw.lean",
+    "security/Definitions/Core/Game.lean",
+    "security/Definitions/Core/Game/Seq.lean",
+    "security/Definitions/Core/Guarantees/Challenger.lean",
+    "security/Definitions/Core/Transport.lean",
+    "security/Definitions/Flock/Audit/Law.lean",
+    "security/Definitions/Flock/Compiled.lean",
+    "security/Definitions/Flock/Game.lean",
+    "security/Definitions/Flock/Holo.lean",
+    "security/Definitions/Flock/HoloCompiled.lean",
+    "security/Definitions/Flock/Ligerito.lean",
+    "security/Definitions/Flock/LigeritoPad.lean",
+    "security/Definitions/Flock/Piop.lean",
+    "security/Definitions/Flock/Session.lean",
+    "security/Definitions/Flock/Sparse.lean",
+    "security/Definitions/NetworkCertifier/Guarantees/Pooled.lean",
+    "security/Definitions/Pouw/Window.lean",
+    "security/Proofs/Accounting/Compose.lean",
+    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+    "security/Proofs/Accounting/JointLive.lean",
+    "security/Proofs/Accounting/ReadUnit/Binding.lean",
+    "security/Proofs/Accounting/ReadUnit/Guarantees.lean",
+    "security/Proofs/Accounting/ReadUnit/Witnesses.lean",
+    "security/Proofs/Accounting/TS/CheckedSound.lean",
+    "security/Proofs/Accounting/TS/FixedMeets.lean",
+    "security/Proofs/Accounting/TS/GroupSound.lean",
+    "security/Proofs/Accounting/TS/Keyed.lean",
+    "security/Proofs/Core/Blocks.lean",
+    "security/Proofs/Core/Challenger.lean",
+    "security/Proofs/Core/Game/Seq.lean",
+    "security/Proofs/Core/Transport.lean",
+    "security/Proofs/Flock/Bridge/Canon.lean",
+    "security/Proofs/Flock/Bridge/Draw.lean",
+    "security/Proofs/Flock/Bridge/EndToEndHiddenC.lean",
+    "security/Proofs/Flock/Bridge/Public.lean",
+    "security/Proofs/Flock/Bridge/PublicRows.lean",
+    "security/Proofs/Flock/Bridge/QsRows.lean",
+    "security/Proofs/Flock/Bridge/QsRows/FirstReads.lean",
+    "security/Proofs/Flock/Bridge/QsRows/RunsOut.lean",
+    "security/Proofs/Flock/Bridge/QsRows/Split.lean",
+    "security/Proofs/Flock/Bridge/Refused.lean",
+    "security/Proofs/Flock/Bridge/RightRegZc.lean",
+    "security/Proofs/Flock/Bridge/ScopeGate.lean",
+    "security/Proofs/Flock/Bridge/Statement.lean",
+    "security/Proofs/Flock/Bridge/V5/Accepted.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Bridge/V5/KSLive.lean",
+    "security/Proofs/Flock/Bridge/V5/QsRows.lean",
+    "security/Proofs/Flock/Bridge/V5/Rows.lean",
+    "security/Proofs/Flock/Bridge/V5/Statement.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/Compose/SparseEnds.lean",
+    "security/Proofs/Flock/C3/Compose/Tape.lean",
+    "security/Proofs/Flock/C3/Fork/CouplingInh.lean",
+    "security/Proofs/Flock/C3/Fork/CouplingInhGames.lean",
+    "security/Proofs/Flock/C3/Fork/OracleRep.lean",
+    "security/Proofs/Flock/C3/Fork/OracleTable.lean",
+    "security/Proofs/Flock/C3/Fork/SparseRounds.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/C3/RegLevels/TopLeaf.lean",
+    "security/Proofs/Flock/Claims/Bridge/Custody.lean",
+    "security/Proofs/Flock/Claims/Bridge/CustodyPlain.lean",
+    "security/Proofs/Flock/Claims/Bridge/DecodePlain.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/UnitDraw.lean",
+    "security/Proofs/Flock/Claims/Complete/Prover/Session.lean",
+    "security/Proofs/Flock/Claims/Complete/Ready.lean",
+    "security/Proofs/Flock/Claims/Complete/Shaped.lean",
+    "security/Proofs/Flock/Claims/Complete/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/Verdict.lean",
+    "security/Proofs/Flock/Claims/Complete/Walk.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Complete.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Json/Goals.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Json/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Layout.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Complete.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Goals.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Runs.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Scope.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/StmtOne.lean",
+    "security/Proofs/Flock/Claims/Deploy.lean",
+    "security/Proofs/Flock/Claims/DeployInputs.lean",
+    "security/Proofs/Flock/Claims/DeployOC.lean",
+    "security/Proofs/Flock/Claims/DeployTables.lean",
+    "security/Proofs/Flock/Claims/KS/DecodeDeploy.lean",
+    "security/Proofs/Flock/Claims/KS/DecodeHidden.lean",
+    "security/Proofs/Flock/Claims/KS/PlainAccPrR.lean",
+    "security/Proofs/Flock/Claims/KS/PlainAlign.lean",
+    "security/Proofs/Flock/Claims/KS/PlainCapsDep.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClash0.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClash0JK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClash0K.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClashLater.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClashLaterJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClashLaterK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClashRunK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDraw.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAccJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAccK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawDec.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawDecJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawDecK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawJCols.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawJRun.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawRCols.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawRColsE.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawSim.lean",
+    "security/Proofs/Flock/Claims/KS/PlainEvent.lean",
+    "security/Proofs/Flock/Claims/KS/PlainFirst.lean",
+    "security/Proofs/Flock/Claims/KS/PlainFork.lean",
+    "security/Proofs/Flock/Claims/KS/PlainForkClash.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafClash.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafClashJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafClashK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafClashRunK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafDec.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafDecJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafDecK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafFork.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafKS.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLeafKSK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainLiveK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainParts.lean",
+    "security/Proofs/Flock/Claims/KS/PlainPartsK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainRawL.lean",
+    "security/Proofs/Flock/Claims/KS/PlainRdRun.lean",
+    "security/Proofs/Flock/Claims/KS/PlainRdRunK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainRunR.lean",
+    "security/Proofs/Flock/Claims/KS/PlainSched.lean",
+    "security/Proofs/Flock/Claims/KS/PlainStep.lean",
+    "security/Proofs/Flock/Claims/KS/PlainWrP.lean",
+    "security/Proofs/Flock/Claims/KS/ZkAccepts.lean",
+    "security/Proofs/Flock/Claims/KS/ZkAlign.lean",
+    "security/Proofs/Flock/Claims/KS/ZkBatch.lean",
+    "security/Proofs/Flock/Claims/KS/ZkClash0.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDecJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDecodeW.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDrawJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkEvent.lean",
+    "security/Proofs/Flock/Claims/KS/ZkFirst.lean",
+    "security/Proofs/Flock/Claims/KS/ZkFork.lean",
+    "security/Proofs/Flock/Claims/KS/ZkFork0.lean",
+    "security/Proofs/Flock/Claims/KS/ZkForkClash.lean",
+    "security/Proofs/Flock/Claims/KS/ZkPadsPair.lean",
+    "security/Proofs/Flock/Claims/KS/ZkRows.lean",
+    "security/Proofs/Flock/Claims/KS/ZkSched.lean",
+    "security/Proofs/Flock/Claims/KS/ZkSim.lean",
+    "security/Proofs/Flock/Claims/KS/ZkSimW.lean",
+    "security/Proofs/Flock/Claims/KS/ZkTauFork.lean",
+    "security/Proofs/Flock/Claims/KS/ZkTauPair.lean",
+    "security/Proofs/Flock/Claims/KS/ZkXferJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkXferW.lean",
+    "security/Proofs/Flock/Claims/Recursion/Assumptions/PlainLeaves.lean",
+    "security/Proofs/Flock/Claims/Recursion/CallsClosed.lean",
+    "security/Proofs/Flock/Claims/Recursion/ComposeParts.lean",
+    "security/Proofs/Flock/Claims/Recursion/DecodeAt.lean",
+    "security/Proofs/Flock/Claims/Recursion/Deploy.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployChecked.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployHonest.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployInputs.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployScope.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployedCounts.lean",
+    "security/Proofs/Flock/Claims/Recursion/HonestAccR.lean",
+    "security/Proofs/Flock/Claims/Recursion/HonestVerdictFinal.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerForm.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupCount.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupSame.lean",
+    "security/Proofs/Flock/Claims/Recursion/IrDepSession.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsFull.lean",
+    "security/Proofs/Flock/Claims/Recursion/NextCs.lean",
+    "security/Proofs/Flock/Claims/Recursion/NextJ.lean",
+    "security/Proofs/Flock/Claims/Recursion/NextRRows.lean",
+    "security/Proofs/Flock/Claims/Recursion/NumsFixedR.lean",
+    "security/Proofs/Flock/Claims/Recursion/OpensReads.lean",
+    "security/Proofs/Flock/Claims/Recursion/PastIn.lean",
+    "security/Proofs/Flock/Claims/Recursion/PlainK.lean",
+    "security/Proofs/Flock/Claims/Recursion/PlainKSAbortDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/ResLowerDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/RestVerdictBases.lean",
+    "security/Proofs/Flock/Claims/Recursion/RestVerdictBasesHold.lean",
+    "security/Proofs/Flock/Claims/Recursion/Scope.lean",
+    "security/Proofs/Flock/Claims/Recursion/SetupCount.lean",
+    "security/Proofs/Flock/Claims/Recursion/SetupTagged.lean",
+    "security/Proofs/Flock/Claims/Recursion/SlotsCheck.lean",
+    "security/Proofs/Flock/Claims/Recursion/VStarCross.lean",
+    "security/Proofs/Flock/Claims/Recursion/VerdictRowG.lean",
+    "security/Proofs/Flock/Claims/Sampling/Draws.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reference/Complete.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Code.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/DrawLaw.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Steps.lean",
+    "security/Proofs/Flock/Claims/Scope/Readable.lean",
+    "security/Proofs/Flock/Claims/Scope/Setup.lean",
+    "security/Proofs/Flock/Claims/ZK/PrefixLive.lean",
+    "security/Proofs/Flock/EndToEnd/Blocks/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Carry/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Drawn.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Draw.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Drawn.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Member.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Session.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Period.lean",
+    "security/Proofs/Flock/EndToEnd/Period/Statement.lean",
+    "security/Proofs/Flock/EndToEnd/Statement.lean",
+    "security/Proofs/Flock/EndToEndDrawn/Statement.lean",
+    "security/Proofs/Flock/EndToEndHidden/Statement.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Statement.lean",
+    "security/Proofs/Flock/EndToEndRegisteredRows/Reduce.lean",
+    "security/Proofs/Flock/EndToEndRegisteredRows/Statement.lean",
+    "security/Proofs/Flock/RecGeneric/Sampled.lean",
+    "security/Proofs/Flock/Recursive/Audit.lean",
+    "security/Proofs/Flock/Recursive/AuditC3.lean",
+    "security/Proofs/Flock/Recursive/AuditC3Proof.lean",
+    "security/Proofs/Flock/Recursive/CompileRuns.lean",
+    "security/Proofs/Flock/Recursive/Finds.lean",
+    "security/Proofs/Flock/Recursive/Flock.lean",
+    "security/Proofs/Flock/Recursive/HPortTie.lean",
+    "security/Proofs/Flock/Recursive/InnerRows.lean",
+    "security/Proofs/Flock/Recursive/Loads.lean",
+    "security/Proofs/Flock/Recursive/OuterSessionZK.lean",
+    "security/Proofs/Flock/Recursive/OuterZK.lean",
+    "security/Proofs/Flock/Recursive/Property.lean",
+    "security/Proofs/Flock/Recursive/PublicAudit.lean",
+    "security/Proofs/Flock/Recursive/PublicAuditProof.lean",
+    "security/Proofs/Flock/Recursive/Raw.lean",
+    "security/Proofs/Flock/Recursive/Stage.lean",
+    "security/Proofs/Flock/Recursive/Transfer.lean",
+    "security/Proofs/Flock/Recursive/VStarCheck.lean",
+    "security/Proofs/Flock/Recursive/Written.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/Off.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/Vals.lean",
+    "security/Proofs/Flock/Recursive/ZkServer.lean",
+    "security/Proofs/Flock/Recursive/ZkServerZK.lean",
+    "security/Proofs/Flock/Sampled/Defs.lean",
+    "security/Proofs/Flock/Sampled/NonVacuity.lean",
+    "security/Proofs/Flock/Sampled/Proofs.lean",
+    "security/Proofs/Flock/Sampled/Statements.lean",
+    "security/Proofs/Flock/SampledGeneric/Compose.lean",
+    "security/Proofs/Flock/SampledGeneric/Defs.lean",
+    "security/Proofs/Flock/SampledGeneric/Flock.lean",
+    "security/Proofs/Flock/SampledGeneric/Joint.lean",
+    "security/Proofs/Flock/SampledGeneric/JointTransfers.lean",
+    "security/Proofs/Flock/SampledGeneric/Statements.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Inputs.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Regions.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Serves.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Stmt.lean",
+    "security/Proofs/Flock/SessionLoop/FinPoints.lean",
+    "security/Proofs/Flock/SoundAtBridge/Session.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/Custody.lean",
+    "security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean",
+    "security/Proofs/Flock/Soundness/Audit/Closure.lean",
+    "security/Proofs/Flock/Soundness/Audit/Extraction.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockLink.lean",
+    "security/Proofs/Flock/Soundness/Audit/FlockPublic.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudget.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
+    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "security/Proofs/Flock/Soundness/Audit/Law.lean",
+    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/FreeCompute.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/TwoStage.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Laws.lean",
+    "security/Proofs/Flock/Soundness/Audit/RegDraw.lean",
+    "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
+    "security/Proofs/Flock/Soundness/Audit/Work.lean",
+    "security/Proofs/Flock/Soundness/Binding/E2E.lean",
+    "security/Proofs/Flock/Soundness/Binding/Weights.lean",
+    "security/Proofs/Flock/Soundness/CROnly/E2E.lean",
+    "security/Proofs/Flock/Soundness/CROnly/Registered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Aliased/Copies.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Aliased/Keys.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Custody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DefsJA.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/DrawnJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Inner/Holds.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/PublicJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/RegWords.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZL/Assemble.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZL/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ/Assemble.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/BindingE2EL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockLinkL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/FlockPublicL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/HeadlineL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LawDraw.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Live.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/LiveOn.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Merkle.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Pts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Retained.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/SessionLDecisive.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Setup.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Shape.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/StrictCRL.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Design.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Exec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/General.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/PlainRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHiddenM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegistered.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Hidden.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HdecCor/Headlines.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Binding.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Commit.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Facts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/LayoutP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Public.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Spec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/SpecOf.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/SpecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Block.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Upv.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec/Assemble.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Accepts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/AcceptsP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/CopiesP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Flat.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Inst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/KeyHP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/LiveOnP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/PinnedCols.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Placed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/PlacedP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Setup.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SetupP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SiteH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SiteHP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Sites.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SitesP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hm/Bc.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hm/Site.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hm/Typed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Inst/Keys.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Inst/Prog.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Bridge.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/HmRegion.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/KeyProg.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/OutSite.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/Site.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Placed/Setup.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Placed/Typed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlaysCoin/Decodes.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlaysCoin/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Accepts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Session.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Zero/Uniform.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/At.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/BindX.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/Headline.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/Place.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Coin.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Live.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/LiveStatements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/PlaysLig.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Refines.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/RunsLive.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkExec/Shape.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/BindInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Count.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJJson.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/ParseStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/PublicJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/RunsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundBind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundDefs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundDrawOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundRuns.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Statements.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/View.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Compiled.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/CompiledLink.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOk.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Inh.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Link.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/OracleP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/Push.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/RowsSound.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Bind.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/BindH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Guarded.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicHJSt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJCustody.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Algebraic.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Inner.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Level0.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkSession/Table.lean",
+    "security/Proofs/Flock/Soundness/ExecDrawOS.lean",
+    "security/Proofs/Flock/Soundness/ExecFlatClass.lean",
+    "security/Proofs/Flock/Soundness/ExecFlatCopies.lean",
+    "security/Proofs/Flock/Soundness/ExecSetup.lean",
+    "security/Proofs/Flock/Soundness/ExecStratified.lean",
+    "security/Proofs/Flock/Soundness/ExecTemplate.lean",
+    "security/Proofs/Flock/Soundness/ExecTemplateSetup.lean",
+    "security/Proofs/Flock/Soundness/Game/LockLin.lean",
+    "security/Proofs/Flock/Soundness/Headline.lean",
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "security/Proofs/Flock/Soundness/OpeningPhase.lean",
+    "security/Proofs/Flock/Soundness/Refine/LiveCompiled.lean",
+    "security/Proofs/Flock/Soundness/Refine/LiveSim.lean",
+    "security/Proofs/Flock/Soundness/Refine/Lookups.lean",
+    "security/Proofs/Flock/Soundness/Refine/Opening.lean",
+    "security/Proofs/Flock/Soundness/Refine/Plays.lean",
+    "security/Proofs/Flock/Soundness/Refine/Setup.lean",
+    "security/Proofs/Flock/Soundness/Registered/E2E.lean",
+    "security/Proofs/Flock/Soundness/Soundness.lean",
+    "security/Proofs/Flock/Soundness/SoundnessPad.lean",
+    "security/Proofs/Flock/Soundness/StrictCR.lean",
+    "security/Proofs/Flock/Soundness/ZK/GK/Rand.lean",
+    "security/Proofs/Flock/SpotFlock/AddressFacts.lean",
+    "security/Proofs/Flock/SpotFlock/AddressesWired.lean",
+    "security/Proofs/Flock/SpotFlock/Frame.lean",
+    "security/Proofs/Flock/SpotFlock/FrameIsAt.lean",
+    "security/Proofs/Flock/SpotFlock/HeaderRoots.lean",
+    "security/Proofs/Flock/SpotFlock/Opens.lean",
+    "security/Proofs/Flock/SpotFlock/Placement.lean",
+    "security/Proofs/Flock/SpotFlock/RevealsWired.lean",
+    "security/Proofs/Flock/SpotFlock/Rooted.lean",
+    "security/Proofs/Flock/SpotFlock/RowsOpen.lean",
+    "security/Proofs/Flock/SpotFlock/SlotsAt.lean",
+    "security/Proofs/Flock/VBridge/Family/AccRows.lean",
+    "security/Proofs/Flock/VBridge/Family/Lig.lean",
+    "security/Proofs/Flock/ZkAny/Relay.lean",
+    "security/Proofs/Flock/ZkAny/RelayEnv.lean",
+    "security/Proofs/NetworkCertifier/Pooled.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Accept.lean",
+    "security/Proofs/Properties/NetworkPeriod.lean",
+    "security/Proofs/Properties/Pous/Wipe.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Proofs/Properties/Pouw/Commit.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Draw.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Verdict.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Spot/Credited.lean",
+    "security/Proofs/Properties/Verity/Recursive.lean",
+    "security/Proofs/Properties/Verity/Recursive/BaseSetup.lean",
+    "security/Proofs/Properties/Verity/Recursive/Names.lean",
+    "security/Proofs/Properties/Verity/Recursive/Numbers.lean",
+    "security/Proofs/Properties/Verity/Recursive/PartStatement.lean",
+    "security/Proofs/Properties/Verity/Recursive/PartVerdict.lean",
+    "security/Proofs/Properties/Verity/Recursive/Refusals.lean",
+    "security/Proofs/Properties/Verity/Recursive/SetupChecks.lean",
+    "security/Proofs/Properties/Verity/Sampled.lean",
+    "security/Proofs/Properties/Verity/Sampled/Accepts.lean",
+    "security/Proofs/Properties/Verity/Sampled/Assembled.lean",
+    "security/Proofs/Properties/Verity/Sampled/Event.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/Properties/Verity/Sampled/Link.lean",
+    "security/Proofs/Properties/Verity/Sampled/Moves.lean",
+    "security/Proofs/Properties/Verity/Sampled/MovesReach.lean",
+    "security/Proofs/Properties/Verity/Sampled/Project.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Accepts.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Inner.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Nums.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Opens.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Pass.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Session.lean",
+    "security/Proofs/Properties/Verity/Sampled/SpecTie.lean",
+    "security/Proofs/Properties/Verity/Sampled/Target.lean",
+    "security/Proofs/Properties/Verity/SampledDraw.lean",
+    "security/Proofs/Properties/Verity/SampledRead.lean",
+    "security/Proofs/WeightSecurity/Deployed.lean",
+    "security/Proofs/WeightSecurity/Pressure.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/Commit.lean",
+    "security/Properties/Pouw/Credit.lean",
+    "security/Properties/Pouw/MonitoringPeriodJ10R.lean",
+    "security/Properties/Pouw/PearlPlus.lean",
+    "security/Properties/Pouw/PearlPlusDraw.lean",
+    "security/Properties/Spot.lean",
+    "verity/commitments/identity/Identity/Domains.lean",
+    "verity/commitments/identity/Identity/Domains/Pouw.lean",
+    "verity/commitments/lean/Commitments/Draw.lean",
+    "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Difftest.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Line.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Protocol.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Session.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Shared.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Verifier.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Difftest.lean",
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Difftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Lanes.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Period.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Verified.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Coins.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Difftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Draws.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Coins.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Main.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullDraw.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Inputs.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Public.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Rounds.lean",
+    "verity/protocols/compose/verifier/remote/CoreRemote.lean",
+    "verity/protocols/interface/CoreProtocol/Example.lean",
+    "verity/protocols/interface/CoreProtocol/Profile.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecCoins.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecCompose.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Registered.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Tags.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/Full.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FullDraw.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/KsScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/Labels.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/LinkUnits.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/PlainHidden.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/TableCap.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Deployed.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Setup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/SetupEq.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/SimSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Witness.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Finish.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frames.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Hello.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean",
+    "verity/protocols/proofs/recursion/verifier/vstar_cli/VStarDifftest.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerCoins.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerDraw.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Json.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Produced.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Stream.lean",
+]
+words = { "draw" = "sample" }
+
+# the bare word `Draws`, in every `.lean` file that spells it and not `Samples`
+[[words_in]]
+files = [
+    "security/Proofs/Flock/Claims/Recursion/AbortWait.lean",
+    "security/Proofs/Flock/Claims/Sampling.lean",
+    "security/Proofs/Flock/Claims/Sampling/Escape.lean",
+    "security/Proofs/Flock/Claims/Sampling/Select/Bounds.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFrame.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameFree.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameInner.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameLoop.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameMask.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameOpen.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameProg.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameTape.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinChain.lean",
+    "security/Proofs/Flock/Claims/ZK/Os.lean",
+    "security/Proofs/Flock/Claims/ZK/PadsRoot.lean",
+    "security/Proofs/Flock/Claims/ZK/Refine.lean",
+    "security/Proofs/Flock/Claims/ZK/Release.lean",
+    "security/Proofs/Flock/Claims/ZK/SessionLean.lean",
+    "security/Proofs/Flock/Recursive/Loop.lean",
+    "security/Proofs/Flock/Recursive/ZkServerSteps.lean",
+    "security/Proofs/Flock/SamplingGeneric/TwoBernoulli.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkCut.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkFc.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerParts.lean",
+    "security/Proofs/Flock/SessionLoop/FinL0Vals.lean",
+    "security/Proofs/Flock/SessionLoop/FinRep.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedAt.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepFinal.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepMsgsFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepOpen.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepPads.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepTau.lean",
+    "security/Proofs/Flock/SessionLoop/Inner.lean",
+    "security/Proofs/Flock/SessionLoop/RepSrcSat.lean",
+    "security/Proofs/Flock/SessionLoop/RhoKeepRep.lean",
+    "security/Proofs/Flock/SessionLoop/RhoUnrefused.lean",
+    "security/Proofs/Flock/SessionLoop/RoundOff.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassInner0.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassLig.lean",
+    "security/Proofs/Flock/SessionLoop/Statement.lean",
+    "security/Proofs/Flock/ZkAny/RelayOut.lean",
+    "security/Proofs/Flock/ZkAny/RelayParams.lean",
+    "security/Proofs/NetworkCertifier/PooledLeak.lean",
+    "security/Proofs/Pous/Pooled.lean",
+    "security/Proofs/Pouw/Credit.lean",
+    "security/Proofs/Properties/Challenger.lean",
+    "security/Proofs/Properties/Challenger/Limits.lean",
+    "security/Proofs/Properties/Verity/Sampled/Assembled.lean",
+    "security/Proofs/Properties/Verity/Sampled/Binding.lean",
+    "security/Proofs/Properties/Verity/Sampled/Digest.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/Properties/Verity/Sampled/LinkFirst.lean",
+    "security/Proofs/Properties/Verity/Sampled/Moves.lean",
+    "security/Proofs/Properties/Verity/Sampled/RecordDraw.lean",
+    "security/Proofs/Properties/Verity/Sampled/SampleNamed.lean",
+    "security/Proofs/Properties/Verity/SampledDraw.lean",
+    "security/Proofs/Properties/Verity/SampledRead.lean",
+    "security/Properties/Challenger.lean",
+    "security/Properties/Pouw/Commit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Difftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Records.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Rounds.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Finish.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frame.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frames.lean",
+]
+words = { "Draws" = "Samples" }
+
+# the bare word `draws`, in every `.lean` file that spells it and not `samples`
+[[words_in]]
+files = [
+    "security/Definitions/Claims/Recursion.lean",
+    "security/Definitions/Claims/SamplingGeneric.lean",
+    "security/Proofs/Flock/Claims/Recursion/Scope.lean",
+    "security/Proofs/Flock/Claims/Witnesses/Recursion.lean",
+    "security/Proofs/Flock/Claims/Witnesses/SamplingGeneric.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishLive.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFc.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFrame.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwFw.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwInner.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwLig.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwLigE.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwRep.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwTau.lean",
+    "security/Proofs/Flock/Claims/ZK/FinishSwVals.lean",
+    "security/Proofs/Flock/Claims/ZK/FrameTape.lean",
+    "security/Proofs/Flock/Claims/ZK/L0PinChain.lean",
+    "security/Proofs/Flock/Claims/ZK/Os.lean",
+    "security/Proofs/Flock/Claims/ZK/Release.lean",
+    "security/Proofs/Flock/Recursive/LoopWitness.lean",
+    "security/Proofs/Flock/SamplingGeneric/Counter.lean",
+    "security/Proofs/Flock/SamplingGeneric/Deployed.lean",
+    "security/Proofs/Flock/SamplingGeneric/Fails.lean",
+    "security/Proofs/Flock/SamplingGeneric/Reg.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkCut.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkFc.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkLive.lean",
+    "security/Proofs/Flock/SessionLoop/FinHmkRet.lean",
+    "security/Proofs/Flock/SessionLoop/FinHonest.lean",
+    "security/Proofs/Flock/SessionLoop/FinInner.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerOwn.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerParts.lean",
+    "security/Proofs/Flock/SessionLoop/FinInnerRet.lean",
+    "security/Proofs/Flock/SessionLoop/FinL0Vals.lean",
+    "security/Proofs/Flock/SessionLoop/FinPiopRet.lean",
+    "security/Proofs/Flock/SessionLoop/FinRep.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepCm.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedAt.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedCut.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepErasedOf.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepFinal.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepLanesFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepMsgsFw.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepOpen.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepPads.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepRestart.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepRows.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepTarget.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepTau.lean",
+    "security/Proofs/Flock/SessionLoop/FinRepView.lean",
+    "security/Proofs/Flock/SessionLoop/FinRounds.lean",
+    "security/Proofs/Flock/SessionLoop/FinishParts.lean",
+    "security/Proofs/Flock/SessionLoop/InnerWitness.lean",
+    "security/Proofs/Flock/SessionLoop/LiveInnerOwn.lean",
+    "security/Proofs/Flock/SessionLoop/LiveOwn.lean",
+    "security/Proofs/Flock/SessionLoop/RepSrc.lean",
+    "security/Proofs/Flock/SessionLoop/RepSrcSat.lean",
+    "security/Proofs/Flock/SessionLoop/RoundL0Frame.lean",
+    "security/Proofs/Flock/SessionLoop/RoundOff.lean",
+    "security/Proofs/Flock/SessionLoop/RoundsPassL0.lean",
+    "security/Proofs/Flock/SessionLoop/RowsHonest.lean",
+    "security/Proofs/Flock/SessionLoop/Statement.lean",
+    "security/Proofs/Flock/SessionLoop/ZkAnyHonest.lean",
+    "security/Proofs/Flock/SessionLoop/ZkAnyNontrivial.lean",
+    "security/Proofs/Flock/ZkAny/RelayEnv.lean",
+    "security/Proofs/Flock/ZkAny/RelayLoopJ.lean",
+    "security/Proofs/Flock/ZkAny/RelayParams.lean",
+    "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedChecks.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Verdict.lean",
+    "security/Proofs/Properties/Verity/Sampled/Accepts.lean",
+    "security/Proofs/Properties/Verity/Sampled/CoinMap.lean",
+    "security/Proofs/Properties/Verity/Sampled/Device.lean",
+    "security/Proofs/Properties/Verity/Sampled/Digest.lean",
+    "security/Proofs/Properties/Verity/Sampled/Instance.lean",
+    "security/Proofs/Properties/Verity/Sampled/RecordDraw.lean",
+    "security/Proofs/Properties/Verity/Soundness.lean",
+    "security/Proofs/WeightSecurity/RegMonitoringPeriod.lean",
+    "security/Properties/Pouw/PearlPlus.lean",
+    "security/Properties/Pouw/PearlPlus/Witnesses.lean",
+    "security/Properties/Verity/Coupling.lean",
+    "security/Properties/Verity/Game.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Protocol.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Pooled.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Verifier.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Period.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Difftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Main.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecCoins.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/FullDraw.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Test/InnerStreams.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/Zk.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Finish.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frame.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frames.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Stream.lean",
+]
+words = { "draws" = "samples" }
+
+# the bare word `Drawn`, in every `.lean` file that spells it and not `Sampled`
+[[words_in]]
+files = [
+    "security/Definitions/Accounting/Remote/Draw.lean",
+    "security/Definitions/Accounting/TS.lean",
+    "security/Definitions/Accounting/TS/Fixed.lean",
+    "security/Definitions/Accounting/TS/Hashed.lean",
+    "security/Proofs/Accounting/Compose/BindingOfECR.lean",
+    "security/Proofs/Accounting/Compose/ServiceCovers.lean",
+    "security/Proofs/Accounting/RemoteHeld/Binding.lean",
+    "security/Proofs/Accounting/TS.lean",
+    "security/Proofs/Accounting/TS/Fixed.lean",
+    "security/Proofs/Accounting/TS/FixedMeets.lean",
+    "security/Proofs/Accounting/TS/Keyed.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/Claims/KS/PlainClash0JK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAccJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawAccK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawDecJK.lean",
+    "security/Proofs/Flock/Claims/KS/PlainDrawDecK.lean",
+    "security/Proofs/Flock/Claims/KS/ZkDrawJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkPlanHJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkPlanJ.lean",
+    "security/Proofs/Flock/Claims/KS/ZkRows.lean",
+    "security/Proofs/Flock/Claims/Recursion/CoinPos.lean",
+    "security/Proofs/Flock/Claims/Recursion/CoinTie.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerAtCoins.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerExtras.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerForm.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupCount.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupSame.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsFull.lean",
+    "security/Proofs/Flock/Claims/Recursion/NumsFixedR.lean",
+    "security/Proofs/Flock/Claims/Recursion/OpensReads.lean",
+    "security/Proofs/Flock/Claims/Recursion/RecRecord.lean",
+    "security/Proofs/Flock/Claims/Recursion/VStarCross.lean",
+    "security/Proofs/Flock/Claims/Recursion/VerdictParts.lean",
+    "security/Proofs/Flock/EndToEnd.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/Bound.lean",
+    "security/Proofs/Flock/EndToEnd/Joint/MT/Bound.lean",
+    "security/Proofs/Flock/EndToEndHidden.lean",
+    "security/Proofs/Flock/Recursive/InnerRows.lean",
+    "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
+    "security/Proofs/Flock/Recursive/ZkServerRun.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudget.lean",
+    "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegisteredTags.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Committed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Shared.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/SharedP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Integrate/Accepted.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/OutSite.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/QSort.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/SharedRows.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/Site.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainJ/Decode.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainReg/Checked.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/ParseStmt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/Theorems.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkLink/TablesAt.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Checked.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/CheckedHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/SpotFlock/Counts.lean",
+    "security/Proofs/Flock/SpotFlock/HeaderRoots.lean",
+    "security/Proofs/Flock/SpotFlock/Rooted.lean",
+    "security/Proofs/Flock/VBridge/Family/AccRows.lean",
+    "security/Proofs/Flock/VBridge/Family/Pub.lean",
+    "security/Proofs/Properties/Challenger/Drawn.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Verity/Recursive/Numbers.lean",
+    "security/Properties/Pous/Period.lean",
+    "security/Properties/Spot.lean",
+]
+words = { "Drawn" = "Sampled" }
+
+# the bare word `drawn`, in every `.lean` file that spells it and not `sampled`
+[[words_in]]
+files = [
+    "benchmarks/two_stage/tests/TwoGuard.lean",
+    "security/Definitions/Accounting/ReadUnit.lean",
+    "security/Definitions/Nci/Assumptions/Remote.lean",
+    "security/Definitions/Nci/Guarantees/RemoteMonitoringPeriod.lean",
+    "security/Proofs/Accounting/ReadUnit.lean",
+    "security/Proofs/Accounting/ReadUnit/Binding.lean",
+    "security/Proofs/Accounting/ReadUnit/Deployed.lean",
+    "security/Proofs/Accounting/ReadUnit/Guarantees.lean",
+    "security/Proofs/Accounting/TS/PeriodSound.lean",
+    "security/Proofs/Core/Blocks.lean",
+    "security/Proofs/Flock/C3/Compose/RowsReg.lean",
+    "security/Proofs/Flock/C3/PubRows/Check.lean",
+    "security/Proofs/Flock/C3/RegLevels/AccReads.lean",
+    "security/Proofs/Flock/Claims/Complete/Json/Stmt.lean",
+    "security/Proofs/Flock/Claims/Complete/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/Zk/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/Skeleton.lean",
+    "security/Proofs/Flock/Claims/Complete/ZkTables/StmtOne.lean",
+    "security/Proofs/Flock/Claims/DeployInputs.lean",
+    "security/Proofs/Flock/Claims/Recursion/DeployInputs.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerForm.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupCount.lean",
+    "security/Proofs/Flock/Claims/Recursion/InnerSetupSame.lean",
+    "security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean",
+    "security/Proofs/Flock/Claims/Recursion/NumsFixedR.lean",
+    "security/Proofs/Flock/Claims/Recursion/OpensReads.lean",
+    "security/Proofs/Flock/EndToEndRegistered/Nontrivial.lean",
+    "security/Proofs/Flock/Recursive/InnerRows.lean",
+    "security/Proofs/Flock/Recursive/VStarCheck.lean",
+    "security/Proofs/Flock/SessionLoop/Concrete/Public.lean",
+    "security/Proofs/Flock/SoundAtBridge/Served.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec/Pts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegisteredTags.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Committed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Facts.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Public.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Spec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/SpecOf.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/SpecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/Shared.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/Wide/SharedP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Setup.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SetupP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/Drawn.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/OutSite.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Layout/SharedRows.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainReg/Checked.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/CheckedHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/Defs.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsH.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/DefsHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/PublicInst.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "security/Proofs/Flock/Soundness/PlanDraw.lean",
+    "security/Proofs/Flock/SpotFlock/Code.lean",
+    "security/Proofs/Flock/SpotFlock/HeaderRoots.lean",
+    "security/Proofs/Flock/SpotFlock/Rooted.lean",
+    "security/Proofs/Flock/VBridge/Family/Pub.lean",
+    "security/Proofs/Flock/ZkAny/RelayEnv.lean",
+    "security/Proofs/Nci/RemoteMonitoringPeriod.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Accept.lean",
+    "security/Proofs/Properties/Accounting/Remote/Coins.lean",
+    "security/Proofs/Properties/Accounting/Remote/Draw.lean",
+    "security/Proofs/Properties/Accounting/Remote/Frozen.lean",
+    "security/Proofs/Properties/Accounting/Remote/Lifetime.lean",
+    "security/Proofs/Properties/Accounting/Remote/Live.lean",
+    "security/Proofs/Properties/Accounting/Remote/Released.lean",
+    "security/Proofs/Properties/Accounting/Remote/Run.lean",
+    "security/Proofs/Properties/Accounting/Remote/Shared.lean",
+    "security/Proofs/Properties/Accounting/Remote/SharedLink.lean",
+    "security/Proofs/Properties/Accounting/Remote/SubprotocolWitnesses.lean",
+    "security/Proofs/Properties/Accounting/Remote/Window.lean",
+    "security/Proofs/Properties/Challenger.lean",
+    "security/Proofs/Properties/Challenger/Drawn.lean",
+    "security/Proofs/Properties/NetworkPeriod.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Verdict.lean",
+    "security/Proofs/Properties/Verity/Recursive/Numbers.lean",
+    "security/Proofs/Properties/Verity/Sampled/Held.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Law.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Nums.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Opens.lean",
+    "security/Proofs/Properties/Verity/Sampled/Record/Pass.lean",
+    "security/Properties/Accounting/JointBridge/ServiceSoundOfSessions.lean",
+    "security/Properties/Accounting/Remote.lean",
+    "security/Properties/Accounting/Remote/Coins.lean",
+    "security/Properties/Accounting/Remote/Live.lean",
+    "security/Properties/Accounting/Remote/Shared.lean",
+    "security/Properties/NetworkPeriod.lean",
+    "security/Properties/Pouw.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/MonitoringPeriod.lean",
+    "security/Properties/Pouw/PearlPlus.lean",
+    "security/Properties/Spot.lean",
+    "verity/commitments/lean/Commitments/Draw.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Line.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Session.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Protocol.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Session.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Shared.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Verifier.lean",
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Window.lean",
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Keys.lean",
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/SetupProtocol.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Lanes.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Opening.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Verified.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Coins.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Open.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Difftest.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Inputs.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Public.lean",
+    "verity/protocols/compose/verifier/lean/CoreComposition/Cases.lean",
+    "verity/protocols/compose/verifier/lean/CoreComposition/Guards.lean",
+    "verity/protocols/interface/CoreProtocol/BlobsExample.lean",
+    "verity/protocols/interface/CoreProtocol/Example.lean",
+    "verity/protocols/interface/CoreProtocol/Profile.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProgramRead.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecAlgebra.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RecSetup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Setup.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/SetupEq.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Finish.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frames.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/SecondStage.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/SecondStageExamples.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Stream.lean",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/WiresDrawn.lean",
+]
+words = { "drawn" = "sampled" }
+
+# the bare word `DRAW`, in every `.lean` file that spells it and not `SAMPLE`
+[[words_in]]
+files = [
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Coins.lean",
+    "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Rounds.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+]
+words = { "DRAW" = "SAMPLE" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "GLOSSARY.md", ".agents/skills/friction/SKILL.md"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
+            'note:[\w./-]+',
+            'art:[0-9a-f]+',
+            'cursor/[\w./-]+',
+            'lanes/[\w.-]+',
+            '_@\.[\w.]+',
+            '"[a-z0-9_./-]*(?:draw|draws|drawn|drawing)[a-z0-9_./-]*"']
+
+[keep_paths]
+"verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean" = ["Draw"]
