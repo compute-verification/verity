@@ -30,7 +30,7 @@ def scenarios(draw) -> Scenario:
 
 @settings(derandomize=True, database=None, max_examples=300, deadline=None)
 @given(scenarios())
-def test_sound_and_live_on_drawn_scenarios(s: Scenario) -> None:
+def test_sound_and_live_on_generated_scenarios(s: Scenario) -> None:
     r = drive(s)
     assert not r.unsound, r.unsound[:2]
     assert not _live(r, exact=False), _live(r, exact=False)[:3]
