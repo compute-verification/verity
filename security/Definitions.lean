@@ -22,6 +22,7 @@ public import Definitions.Core.Game.InterleaveBridge
 public import Definitions.InferenceOnly
 public import Definitions.InferenceOnly.Reads
 public import Definitions.Slowdown.Dark
+public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
 public import Definitions.Slowdown.Capability
 public import Definitions.Slowdown.Cut

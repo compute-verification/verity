@@ -5,6 +5,7 @@ public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Partition
 public import Definitions.InferenceOnly
+public import Definitions.Slowdown.Factor
 
 /-!
 # The slowdown bound's lemmas
