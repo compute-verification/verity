@@ -17,7 +17,7 @@ from research.store.cli import main
 from research.store.index import flatten
 from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound, StoreError
 from research.store.model import ArtifactManifest, Payload, TreeFile, attempt_errors, validate_attempt_doc
-from research.store.remote import ConfigError, FsRemote, RemoteConflict, load_remote
+from research.store.remote import FsRemote, RemoteConflict, load_remote
 
 DRV = "drv:" + "a" * 64
 RK = "b" * 64
@@ -1146,7 +1146,7 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
     shutil.copyfile(big, tree / "big.bin")
     shutil.copyfile(small, tree / "small.bin")
     art = st.put_artifact("run-files/v1", {}, tree=tree)
-    m = st.get_manifest(art)
+    st.get_manifest(art)
     big_sha = hashlib.sha256(big.read_bytes()).hexdigest()
     key = f"objects/sha256/{big_sha}"
     rep = st.push(art, jobs=4)

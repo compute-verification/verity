@@ -258,7 +258,7 @@ def test_cancel_of_a_run_held_for_disk_ends_the_hold_and_records_it_withdrawn(tm
         assert cli.R.summarize(local)["state"] == "refused"
         out = capsys.readouterr().out
         assert f"withdrawn before it started: SIGTERM to its hold (research disk-hold pid {hold.pid})" in out
-        assert f"removed what its launch staged: " in out and str(mem) in out
+        assert "removed what its launch staged: " in out and str(mem) in out
         assert f"research cancel: withdrawn from its disk-hold (pid {hold.pid}): superseded" in (d / "launcher.log").read_text()
 
         assert cli.main(["cancel", str(local), "--reason", "again", "--runs-dir", str(local.parent)]) == 1

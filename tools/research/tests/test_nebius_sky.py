@@ -1081,7 +1081,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     unit_nodes = {n for f in files if f["path"] == "/etc/systemd/system/vy-store-evict-research.service" for n in f["nodes"]}
     assert set(src_conf[0]["nodes"]) == unit_nodes and "vy-nebius-cpu-12" in unit_nodes
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
-        assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
+        assert '"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
     assert deploy.count('path = "/usr/local/bin/vy-store-evict"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict.sh"\nmode = "755"\n') == 2, \
         "a fresh install gets the repository's mode (644), which systemd can't exec (203/EXEC)"
