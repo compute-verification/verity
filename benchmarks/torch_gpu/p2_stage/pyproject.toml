@@ -16,7 +16,7 @@ untraced = ["tests/test_sketch.py"]
 # spot and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
-inputs = ["verity/configuration/config/verity_config",
+inputs = ["tools/config/verity_config",
           "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/pous", "verity/protocols/interface",
           "verity/protocols/pous/prover",
