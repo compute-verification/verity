@@ -34,7 +34,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.errors import InvalidArtifact
-from verity.hardware.cards import WORD, load, number, rate, skus
+from verity.device import WORD, load_card, number, rate, skus
 
 #: The Lean module that declares ``Verity.Accel.Card``, which a card table imports.
 CARD = "Definitions.Core.Accel.Card"
@@ -48,7 +48,7 @@ COMMAND = "uv run python -m verity.hardware.lean --write"
 def root() -> Path:
     """The repository's root, which a card file's ``lean`` is a path from: the nearest directory above this file that
     holds the tree the first table is in."""
-    top = Path(load(tabled()[0])["lean"]).parts[0]
+    top = Path(load_card(tabled()[0])["lean"]).parts[0]
     for parent in Path(__file__).resolve().parents:
         if (parent / top).is_dir():
             return parent
@@ -57,14 +57,14 @@ def root() -> Path:
 
 def tabled() -> list[str]:
     """The GPU cards that name a Lean table."""
-    return [sku for sku in skus("gpu") if "lean" in load(sku)]
+    return [sku for sku in skus("gpu") if "lean" in load_card(sku)]
 
 
 def table(card: dict | str) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
     """The Lean table a card (or the card of a SKU) gives: its clocks in Hz (``tensorClock`` the card's ``clock.tensor``,
     its ``clock.sm`` where it has none), each store's words, each resource's units a second
-    (``verity.hardware.cards.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
-    card = load(card) if isinstance(card, str) else card
+    (``verity.device.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
+    card = load_card(card) if isinstance(card, str) else card
     sms, clock = number(card["sm"]["count"]), card["clock"]
     clocks = {"clock": number(clock["sm"]) * 10 ** 6, "tensorClock": number(clock.get("tensor", clock["sm"])) * 10 ** 6}
     store = card["store"]
@@ -118,7 +118,7 @@ def header(sku: str) -> str:
 def render(card: dict | str) -> str:
     """The Lean module of a card (or of a SKU's card) that names a Lean table: ``clock``, ``tensorClock`` where the
     card's ``clock.tensor`` is not its ``clock.sm``, and ``card``, in the shape the module's docstring gives."""
-    card = load(card) if isinstance(card, str) else card
+    card = load_card(card) if isinstance(card, str) else card
     sku = card["sku"]
     if "lean" not in card:
         raise KeyError(f"{sku} names no Lean table: its card file has no `lean`")
@@ -175,7 +175,7 @@ def render(card: dict | str) -> str:
 
 def modules() -> dict[str, str]:
     """Every generated Lean module: its path from the repository's root, and its text."""
-    return {load(sku)["lean"]: render(sku) for sku in tabled()}
+    return {load_card(sku)["lean"]: render(sku) for sku in tabled()}
 
 
 def stale(top: Path | None = None) -> list[str]:

@@ -9,7 +9,7 @@ import pytest
 
 from verity.protocols.accounting.certifier.verifier.release import (BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_END,
                                                      WATERMARK_PATH, read_watermark, release_head, release_of,
-                                                     watermark_chunk, watermark_head, with_release)
+                                                     to_watermark, watermark_chunk, watermark_head, with_release)
 
 BODY = b'{"prompt":"a\\r\\n\\r\\nb","max_tokens":4}'
 REQUEST = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
@@ -117,6 +117,72 @@ def test_the_watermark_stream_is_one_chunked_post_of_one_line_a_tick():
     for lost in ((10,), (3, 3), (5, 2), (-1,)):
         with pytest.raises(ValueError, match="rise below n|is a non-negative integer"):
             watermark_chunk(3, 10, lost)
+
+
+#: request lines a server routes to the watermark's path
+TO_WATERMARK = {
+    "the stream's own": b"POST /verity/watermark HTTP/1.1",
+    "a fourth word": b"POST /verity/watermark HTTP/1.1 x",
+    "a query string": b"POST /verity/watermark?x=1 HTTP/1.1",
+    "a fragment": b"POST /verity/watermark#x HTTP/1.1",
+    "another method": b"GET /verity/watermark HTTP/1.0",
+    "an escaped letter": b"POST /verity/%77atermark HTTP/1.1",
+    "an escaped slash": b"POST /verity%2Fwatermark HTTP/1.1",
+    "a scheme and authority": b"POST http://server/verity/watermark HTTP/1.1",
+    "a scheme, userinfo, port and query": b"POST HTTP://u@h:80/verity/watermark?x HTTP/1.1",
+    "line breaks first": b"\r\n\n\rPOST /verity/watermark HTTP/1.1",
+    "two spaces before the path": b"POST  /verity/watermark HTTP/1.1",
+    "no version": b"POST /verity/watermark",
+}
+#: request lines to another path, and bytes that open no request
+ELSEWHERE = {
+    "completions": b"POST /v1/completions HTTP/1.1",
+    "a longer path": b"POST /verity/watermarks HTTP/1.1",
+    "a trailing slash": b"POST /verity/watermark/ HTTP/1.1",
+    "two leading slashes": b"POST //verity/watermark HTTP/1.1",
+    "a dot segment": b"POST /verity/./watermark HTTP/1.1",
+    "upper case": b"POST /VERITY/WATERMARK HTTP/1.1",
+    "an escaped question mark": b"POST /verity/watermark%3Fx HTTP/1.1",
+    "an escape of an escape": b"POST /verity/%2577atermark HTTP/1.1",
+    "a path parameter": b"POST /verity/watermark;x HTTP/1.1",
+    "the path in a query string": b"POST /v1/completions?next=/verity/watermark HTTP/1.1",
+    "the path after another": b"POST /x/http://h/verity/watermark HTTP/1.1",
+    "the path as an authority": b"POST http://verity/watermark HTTP/1.1",
+    "the path in a header": b"POST /v1/completions HTTP/1.1\r\nx: /verity/watermark",
+    "the path on a later line": b"x" * 40 + b"\nPOST /verity/watermark HTTP/1.1",
+    "one word": b"/verity/watermark",
+    "nothing": b"",
+}
+
+
+@pytest.mark.parametrize("name", sorted(TO_WATERMARK))
+def test_a_request_to_the_watermarks_path_is_read_as_a_server_reads_its_line(name):
+    """The path is the second word of the first line, whatever the method and whatever follows it, less a scheme and
+    authority, a query string and a fragment, its escapes decoded, past any line breaks before the line: every form
+    one of the servers routes to the watermark, with the rest of the head or cut right after the path."""
+    line = TO_WATERMARK[name]
+    assert to_watermark(line) and to_watermark(line + b"\r\nhost: s\r\n\r\n0 1 0\n")
+    assert not to_watermark(line.replace(b"verity", b"verify"))
+
+
+@pytest.mark.parametrize("name", sorted(ELSEWHERE))
+def test_a_request_to_another_path_is_not_read_as_one_to_the_watermarks(name):
+    line = ELSEWHERE[name]
+    assert not to_watermark(line) and not to_watermark(line + b"\r\nhost: s\r\n\r\n")
+
+
+def test_the_watermarks_path_is_read_on_a_line_the_release_headers_pass_unchanged_and_only_in_the_bytes_given():
+    """A line with a fourth word is no request line to `with_release`, which passes it with the client's own release
+    headers, and one a server still routes by its second word; `to_watermark` reads it. It reads the bytes it is given
+    and no further: the path cut a byte short isn't the watermark's, and a second request after the first's body isn't
+    read."""
+    forged = TO_WATERMARK["a fourth word"] + b"\r\nx-verity-release: 0\r\nx-verity-release-run: 00\r\n\r\n0 1 0\n"
+    assert with_release(forged, 5, RUN, 2) == forged and release_of(forged) is None and to_watermark(forged)
+    assert to_watermark(watermark_head(RUN)) and to_watermark(with_release(watermark_head(RUN), 5, RUN, 2))
+    own = TO_WATERMARK["the stream's own"]
+    assert own.endswith(WATERMARK_PATH + b" HTTP/1.1")
+    assert to_watermark(own[:-9]) and not to_watermark(own[:-10])
+    assert not to_watermark(REQUEST + own + b"\r\n\r\n")
 
 
 def test_a_watermark_line_is_read_only_when_it_advances():

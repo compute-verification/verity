@@ -10,6 +10,11 @@ exit is 3 and the conflicted files are named.  Before anything is pushed, the ou
 material (`KEY_PATTERNS`, and the value of any secret-named environment variable); a hit refuses the push (exit 4), naming the
 file.  With no remote configured the commit is local and the report says so.
 
+A commit made here is the clone's own (`identity_env`: `sync`'s and its rebase's, the archive's, `snapshot`'s): where the
+configuration git reads in the clone names an author and a committer, git is not handed the calling shell's GIT_AUTHOR_NAME,
+GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL, so a name a script exported never reaches the notes.  A clone
+that names none commits as the variables say.  A commit the rebase replays keeps the author it was made with.
+
 A lane note (`lanes/**/*.md`) the sync would add or change stays out of the commit when its filename stamp `YYYYMMDDTHHMMZ` (a
 path new since HEAD) or its front matter's `created:` (new or changed since HEAD) is more than 5 minutes ahead of the sync's
 clock: one `SYNC-REFUSED <path>: ...` line each, with the value `date -u` gives now, the rest synced, exit 5 when nothing else
@@ -117,12 +122,32 @@ CITE_HINTS = {"run": "a run is in the store once its attempt is on the remote: `
               "art": "`research data push <art>` where it was put"}
 
 
+#: what names a commit's author and committer from a shell: git reads these before the repository's configuration
+IDENTITY_ENV = ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL")
+
+
+def identity_env(root: Path) -> dict[str, str] | None:
+    """The environment git commits in under `root`: the caller's less IDENTITY_ENV where the configuration git reads there
+    (the clone's, the user's, the machine's) names an author and a committer, each with an address, so a commit is theirs
+    whatever a shell exported; else None, the caller's as it is: a clone that names none commits as the variables say, and
+    without them as git guesses or refuses.  GIT_AUTHOR_DATE and GIT_COMMITTER_DATE stay."""
+    env = {k: v for k, v in os.environ.items() if k not in IDENTITY_ENV}
+    if len(env) == len(os.environ):
+        return None
+    r = subprocess.run(["git", "-C", str(root), "config", "--get-regexp", r"^(user|author|committer)\.(name|email)$"],
+                       capture_output=True, text=True, errors="replace", timeout=60, env=env)
+    named = {f[0] for f in (line.split(None, 1) for line in r.stdout.splitlines()) if len(f) == 2}
+    whole = all(f"{who}.{k}" in named or f"user.{k}" in named for who in ("author", "committer") for k in ("name", "email"))
+    return env if whole else None
+
+
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
-    """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters.
+    """git in `root`, as the clone's own author and committer (`identity_env`); output that is not UTF-8 (a diff of a binary
+    or Latin-1 file) is decoded with replacement characters.
     Commits are unsigned: the notes repo needs no signatures, and an agent VM's signing key is often missing from its agent,
     which would make every commit and rebase here fail."""
     return subprocess.run(["git", "-C", str(root), "-c", "commit.gpgsign=false", *args], capture_output=True, text=True,
-                          errors="replace", timeout=timeout, input=input)
+                          errors="replace", timeout=timeout, input=input, env=identity_env(root))
 
 
 def _out(root: Path, *args: str) -> str | None:
