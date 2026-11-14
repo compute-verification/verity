@@ -1690,7 +1690,7 @@ def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds
     (root / "fixtures" / "artifacts.json").write_text("{}\n")
     (tests / "test_registry.py").write_text(
         "import os, subprocess, sys\n\ndef test_registry():\n"
-        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures/artifacts.json')\n"
         "    open(p).read()\n"
         "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
     _git(root, "add", ".")
