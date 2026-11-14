@@ -317,8 +317,6 @@ def test_the_twins_keep_the_promotions_apart() -> None:
 
 # --- silu_and_mul_per_block_quant -------------------------------------------------------------------------------------------------
 
-F448 = 0x43E00000
-
 
 def act_result_model(gate: int, up: int) -> int:
     """fused_silu_mul_block_quant.cu:54-60 on finite words whose exponential is finite: e = expf(-g) (the math library's sequence),

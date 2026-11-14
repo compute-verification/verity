@@ -105,6 +105,3 @@ def all_reduce_sum_bf16_words(xs: list[list[int]]) -> list[int]:
             acc = P.F2fpBf16.evaluate(P.F32Add.evaluate(P.Bf16ToF32.evaluate(acc), P.Bf16ToF32.evaluate(xs[r][i])))
         out.append(acc)
     return out
-
-
-ALL = [AllReduceSumBf16Elem, AllReduceSumBf16]
