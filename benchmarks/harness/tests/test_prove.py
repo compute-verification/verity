@@ -1503,7 +1503,7 @@ def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_re
             f"not read: {nothing}\n") in text
     (none,) = R.measurements(bare, {"a/z": R.AT_RECORD})
     assert none == {"name": "a/z", "value": None, "unit": "prover GPUs a serving GPU", "mark": "modeled",
-                    "why": f"not read: {nothing}", "inputs": []}
+                    "why": f"not read: {nothing}", "inputs": [], "target": R.GPUS_PER_SERVING_GPU_TARGET}
     assert kit.writer(tmp_path / "bare-run").measurement(**none)["inputs"] == ["modeled"]
 
     designed(s, tmp_path)
@@ -1529,7 +1529,8 @@ def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_re
             "5.214% of total compute over 1 - its audit budget, 5.456%\n") in text
     (one,) = R.measurements(spot, {"a/z": R.AT_RECORD})
     assert one == {"name": "a/z", "value": got["gpus_per_serving_gpu"], "unit": "prover GPUs a serving GPU",
-                   "mark": "modeled", "inputs": [f"modeled: {R._design(got)}", DESIGN]}
+                   "mark": "modeled", "inputs": [f"modeled: {R._design(got)}", DESIGN], "target": 0.0545,
+                   "verdict": "misses"}
 
     s.label(DESIGN, R.SUPERSEDED_BY, "r20261114-000000-0000")
     gone = R.build("spot", "glm53", store=s.fresh("gone"), root=REPO)["at_record"]
@@ -2482,6 +2483,13 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     design = by["benchmarks/prover-gpus-per-serving-gpu-at-record"]
     assert design["value"] == pytest.approx(0.055147426108551965, rel=1e-12) and design["mark"] == "modeled"
     assert design["inputs"] == [f"modeled: {R._design(doc['at_record'])}", DESIGN] and "why" not in design
+    # goal benchmarks/proof-system-performance's target is on the two prover GPUs a serving GPU and on no other
+    # measurement; both are over it on these records
+    assert R.GPUS_PER_SERVING_GPU_TARGET == 0.0545
+    assert {m["name"]: (m["target"], m["verdict"]) for m in by.values()} == {
+        "benchmarks/prover-gpus-per-serving-gpu": (0.0545, "misses"), "benchmarks/prover-gpu-seconds-per-token": (None, None),
+        "benchmarks/lean-verifier-seconds-per-token": (None, None), "benchmarks/proof-bytes-per-token": (None, None),
+        "benchmarks/prover-gpus-per-serving-gpu-at-record": (0.0545, "misses")}
     t, targets = doc["totals"], [*dict.fromkeys(x for i in doc["inputs"] for x in i["targets"])]
     assert arts[R.SAMPLING] in targets
     head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
@@ -2560,6 +2568,28 @@ def test_the_prover_gpus_a_serving_gpu_take_the_weaker_of_provings_and_the_servi
         assert seconds["inputs"][0].startswith(own)
         w = kit.writer(tmp_path / f"{proving}-{len(missing)}-{serving}")
         assert w.measurement(**head)["inputs"] == head["inputs"] and w.measurement(**seconds)["mark"] == own
+
+
+def test_the_prover_gpus_a_serving_gpu_carry_the_goals_target_and_meet_it_at_or_under_it(tmp_path):
+    """Both prover GPUs a serving GPU carry the goal's target, lower being better: a value at or under it `meets` it,
+    one over it `misses` it, and a figure with no value carries the target and no verdict. The kit writes both."""
+
+    s, _ = recorded(tmp_path)
+    designed(s, tmp_path)
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/r": R.AT_RECORD, "a/y": "gpu_seconds_per_token"}
+    target = R.GPUS_PER_SERVING_GPU_TARGET
+    for value, verdict in ((target, "meets"), (0.9 * target, "meets"), (1.1 * target, "misses")):
+        given = doc | {"totals": doc["totals"] | {"gpus_per_serving_gpu": value},
+                       "at_record": doc["at_record"] | {"gpus_per_serving_gpu": value}}
+        head, design, seconds = R.measurements(given, metrics)
+        assert [(m["target"], m["verdict"]) for m in (head, design)] == [(target, verdict)] * 2, value
+        assert "target" not in seconds and "verdict" not in seconds
+        w = kit.writer(tmp_path / verdict / str(value))
+        assert [(m["target"], m["verdict"]) for m in (w.measurement(**head), w.measurement(**design))] == [(target, verdict)] * 2
+    unread = doc | {"at_record": doc["at_record"] | {"gpus_per_serving_gpu": None, "why": "no record"}}
+    (design,) = R.measurements(unread, {"a/r": R.AT_RECORD})
+    assert design["target"] == target and "verdict" not in design and design["value"] is None
 
 
 def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():
