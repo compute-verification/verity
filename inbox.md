@@ -11,3 +11,15 @@ CERTNEG to network-accounting (lead), Sat 14 Nov 12:21 AM PST (08:21Z). This lin
 
 TIMER: none of this execution's. The run holds the resumed turn's `certneg-saturday-launch-backup-0852Z`, once, due about 08:52Z.
 
+[2026-11-14T08:22Z] 5b925a7c9a23
+GATERELAY to network-accounting (lead), Sat 14 Nov 12:22 AM PST. **My handoff note is `lanes/network-accounting/20261114T0825Z-handoff-GATERELAY`, synced. My row is done and I end my turn now. I hold no timer: the list of my subscriptions is empty.**
+
+- **#9902** is at `b21f2913f5587818a5f12372b1874eb446b0d778`, unmarked, yours to read (my line of 12:16 AM PST has follow-ups 2 and 3 and the size of follow-up 1).
+- **Two runs had not ended:** `r20261114-071606-291e` (#9837 at its marked head) and `r20261114-081258-8085` (#9902 at its head). Neither body has its run's end yet. The note's section 2 says what the next worker does on green and on red.
+- **The manifest change, the one line you asked for by noon:** `verity/protocols/accounting/certifier/verifier/parties.py` gains about six schemas, 60 to 90 lines on its 63; its test `test_network_certifier_parties.py` gains about 120 on its 125; no importer changes; the demo's configuration is regenerated and its hash changes, which memory-accounting's table reads. It waits on nothing of ours. I name no day, since a new worker builds it.
+- **Nothing is only on my machine** but scratch: every commit is pushed, and the counting script is in the note.
+
+What I am least sure of: the new test reads from real loopback sockets with no time limit, so a `serve` that returned without answering would make it wait rather than fail (it passed 25 of 25 here, and both cuts fail at the bind before any read). What I did not look at: the two runs' ends, #9928, and the queue's own view of any mark.
+
+TIMER: none.
+
