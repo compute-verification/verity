@@ -351,6 +351,32 @@ def register(scheme: str, verify: Verify) -> None:
     _SCHEMES[scheme] = verify
 
 
+PREMISE = "trusted-host"
+AUDITOR_KEYS: Mapping[str, frozenset[str]] = MappingProxyType({
+    "vy-auditor-2": frozenset({"39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                               "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb"}),
+})
+"""Each auditor host's keys pinned for the memory challenger role, by the SHA-512 of the public key in 128 lowercase hex
+digits (its gate's `party_key`): the keys under which `trusted_host` says `PREMISE` holds for a challenger on that host.
+A run's own pin (`--trusted-sha512`) decides only which session the verifier accepts, never this."""
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+
+
+def trusted_host(host: str, key_sha512: str | None, names: str) -> str:
+    """`PREMISE` for a session signed under the key whose SHA-512 is `key_sha512`, its challenger named `host`: that the
+    memory challenger ran on a machine the developer doesn't control. It holds only when the key is one `AUDITOR_KEYS`
+    pins for `host`; under any other key, a run's own pin included, it reads `REHEARSAL`, whatever the names say.
+    `names` is what the run's names say of where each party ran, a label and never the reason."""
+    if key_sha512 is not None and key_sha512 in AUDITOR_KEYS.get(host, frozenset()):
+        return f"holds: the session is signed under {host}'s pinned key; {names}"
+    return f"{REHEARSAL}; {names}"
+
+
+def holds(where: Mapping[str, Any]) -> bool:
+    """Whether a placement's `PREMISE` holds: the session signed under a key pinned for the challenger's host."""
+    return where[PREMISE].startswith("holds: ")
+
+
 @dataclass(frozen=True, slots=True)
 class SignedSession:
     """A closed session: its commitment, how it ended, its round records, and the one signature over them."""

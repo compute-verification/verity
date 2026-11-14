@@ -161,21 +161,35 @@ bash benchmarks/pous/streamed_wipe/run.sh   # on an RTX PRO 6000 node, from the 
 window is served on, before its engine loads, with the memory challenger on vy-auditor-2. It writes the core answer
 (verity/wipe/v0) to `DIR/answer.json`, with demo.sh's outputs and `served.json` beside it.
 `benchmarks/one_stage/served_verdicts.sh` runs it as
-`WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
+`WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. Outside the serve's lease it takes a card
+of its own by the node's `gpu-lease`, else by the tree's `gpu_lease.sh`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
 SHA-512 of the wipe party's public key, by default vy-auditor-2's, `wipe_party.AUDITOR_KEYS`): a session signed under
 another is rejected, and with none pinned, the setting empty, the piece refuses before it asks for a card. A session
 accepted under any other pin is a rehearsal: its record says no bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
-`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights as `C*` on
-the card for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session over the same store
-(`held_bandwidth.py`), whose answer the bandwidth piece collects. Each of the two cases is answered by its Lean verifier,
+`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`), in two parts. On the card, under one lease (the
+node's `gpu-lease`, else the tree's `gpu_lease.sh`; none of its own only inside the caller's),
+`served_piece.py --sessions` holds the served weights (the decoder's linears as the model's pin has them, int8 with their
+scales or plain BF16) as `C*` for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session
+over the same store (`held_bandwidth.py`), and keeps what the two left in the window's private directory. Once that
+process and its lease have ended, `served_piece.py --answers` answers both with no card: each case by its Lean verifier,
 `pous-run-protocol` and `remote-audit-p2-protocol`, which the script builds in a scratch copy of `verity/` before it asks
 for the card; PoUS's must agree with the Python, and a verifier that doesn't build or doesn't answer leaves no accept.
-Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's `summary.json`) names the program that
-decided and the host it ran on under `decided_by`. `tests/test_pous_served_piece.py` runs the piece on a CPU, and
-`tests/test_pous_served_piece_sh.py` the script, with stand-ins for `lake`, the card and the piece.
+Before the card it also loads `libp2v1.so` once in the sessions' Python: a library that doesn't load ends the piece
+there, and so does a node that refuses `setarch -R`, where the library doesn't build and `P2_LIB` names one built
+elsewhere.
+PoUS's verdict trusts the one challenger key `--trusted-sha512` pins, by default one the tree pins for vy-auditor-2
+(`memory_challenger.AUDITOR_KEYS`). Its record says `trusted-host` holds only for a session signed under a key the
+tree pins for the host it names, whatever the names say; a run that pins its own key has its session accepted, and its
+record says so (`pous.json`'s `key_pin`, `run`) and is a rehearsal's, with no bound.
+The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is
+answered again from what the sessions kept (`--answers`), with no new session. Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's
+`summary.json`) names the program that decided and the host it ran on under `decided_by`; `pous.json` has the bytes of
+the case's line (`case_bytes`), and each piece's directory its timeline, `stamps.txt`: a UTC second and an event a line,
+from the piece's start through each build's end to each session and answer. `tests/test_pous_served_piece.py` runs the
+piece on a CPU, and `tests/test_pous_served_piece_sh.py` the script, with stand-ins for `lake`, the card and the piece.
 
 `served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
 served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
@@ -191,8 +205,8 @@ from the served snapshot at the kept salt and holds each kept output to the othe
 
 `big_case.py SIZE OUT` writes a synthetic run case of about SIZE bytes, streamed: an honest period at width 64 under a
 test signer, so `pous-run-protocol --test serve` answers it. It times the Lean at a served case's size: a 5.0 GiB case is
-accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_piece.sh`'s `MEM_GB` default
-allows for.
+accepted in under 8 minutes on 4 cores. The Lean works in a few times the case's line, which `served_piece.sh`'s
+`ANSWERS_MEM_GB` default allows for.
 
 `wipe_resume/` runs the red team's resume attack on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the

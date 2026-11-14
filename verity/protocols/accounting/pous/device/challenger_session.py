@@ -27,7 +27,8 @@ its own host under `SETUPS`, from which PoUB's verifier on the same host builds 
 `side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
 `salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
 side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
-party and whether `trusted-host`'s premise holds.
+party and whether `trusted-host`'s premise holds, which it does only for a session signed under a key the memory
+challenger role pins for the host named (`memory_challenger.trusted_host`).
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.protocols.accounting.pous.device.challenger_party"
-PREMISE = "trusted-host"
+PREMISE = mc.PREMISE
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
@@ -203,13 +204,16 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
     return Side.of(period, node, "pous", command(device))
 
 
-def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control, which is never the developer's node."""
-    held = host != node
-    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-            PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
-                      f"unmet: the memory challenger ran on the prover's node {node}")}
+def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None) -> dict[str, Any]:
+    """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
+    ``prover-node``), and `trusted-host`'s premise, `memory_challenger.trusted_host`'s for the session's key: the names
+    are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key the
+    session was signed under, pinned for `host`."""
+    kind = "own-host" if host != node else "prover-node"
+    names = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
+             f"the memory challenger ran on the prover's node {node}")
+    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
+            PREMISE: mc.trusted_host(host, key_sha512, names)}
 
 
 def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]:
