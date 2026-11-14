@@ -347,8 +347,13 @@ def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, 
     give, that every credited row is in a block the map holds (a block with none may be held too, and earns W nothing).
     Returns the live rows in incomplete blocks and the blocks held with no credited row, by step."""
     rows, block, held, arrive = session["rows"], session["block"], session["held"], session["arrive"]
-    born = lambda v: arrive[rows[v][0]] + rows[v][3].born  # noqa: E731
-    live = lambda t: {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}  # noqa: E731
+
+    def born(v: int) -> int:
+        return arrive[rows[v][0]] + rows[v][3].born
+
+    def live(t: int) -> set[int]:
+        return {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}
+
     uncredited, dead = {}, {}
     for t, s in enumerate(out["steps"]):
         assert s["live"] == s["reads"] == sorted(live(t)) and s["resident"] == sorted(held[t])
@@ -444,7 +449,10 @@ def deferred(value: dict, lag: int) -> dict:
                 freed[free[j]].remove(j)
             else:
                 written[t + lag].append(j)
-    resident = lambda t: set(chain(*written[:t])) - set(chain(*freed[:t]))  # noqa: E731
+
+    def resident(t: int) -> set[int]:
+        return set(chain(*written[:t])) - set(chain(*freed[:t]))
+
     return {**value, "encoded": [encoded.get(j, 0) for j in range(1 + max(encoded, default=-1))],
             "store": {**s, "written": written, "freed": freed},
             "plans": [sorted(set(p) & resident(t)) for t, p in enumerate(value["plans"])]}
