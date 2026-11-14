@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
-from verity.commitments.windows.interface import K_MAX, proof_block_k_log
+from verity.commitments.periods.interface import K_MAX, proof_block_k_log
 from verity.protocols.proofs.spot.prover.costfit import Observation
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS
 

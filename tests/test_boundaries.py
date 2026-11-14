@@ -1680,8 +1680,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     hold_distributions = functools.partial(_hold_distributions, neither=(check,))
     hold_distributions(tree.dirs, [x for x in loads if "package_above" not in x.loader], held)
     pair = ("verity/circuits", "verity/definitions")
-    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
-        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
+    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/periods -> tools'\]"):
+        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/periods", "tools"): {"verity/commitments/periods/rows.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):

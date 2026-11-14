@@ -99,7 +99,7 @@ from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
-from verity.commitments.windows import rows as CS, tables as TB  # noqa: E402
+from verity.commitments.periods import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402

@@ -170,7 +170,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
 from verity_vllm.pipeline import interior_links as IL, interior_rows as IR
 

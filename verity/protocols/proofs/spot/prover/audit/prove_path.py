@@ -211,7 +211,7 @@ from verity.protocols.proofs.spot.verifier.one_stage.records_audit import PORTS,
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.commitments.windows import interface as IF, rows as RW  # noqa: E402
+from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import edge as E  # noqa: E402

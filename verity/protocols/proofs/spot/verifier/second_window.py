@@ -1,6 +1,6 @@
 """Round 2's reader over the joined record and its ranks' check, as the verifier's `Spot.SecondWindow` and `Spot.Ranks`
 define them: a two-stage run's second-stage sessions held to the joined circuit's record (its ``ranks``, ``wires`` and
-``boundary_reads``, `verity.commitments.windows.interface`) and to each rank's registration, with no interior
+``boundary_reads``, `verity.commitments.periods.interface`) and to each rank's registration, with no interior
 registration. The rule, the codes and why the interior registration's checks go are the Lean's (its module docstrings).
 
 Nothing is built yet: each function raises naming the check it is to be, and nothing calls one.

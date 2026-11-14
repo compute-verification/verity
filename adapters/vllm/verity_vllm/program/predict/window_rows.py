@@ -55,7 +55,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.numerics.rows import ROWS
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry import io_shell as IO

@@ -27,7 +27,7 @@ from dataclasses import asdict
 from typing import Any
 
 import numpy as np
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 

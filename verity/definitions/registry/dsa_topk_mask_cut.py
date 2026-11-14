@@ -24,7 +24,7 @@ one whole output row of a unit before it (`Unit.wires`), each port's own: the pr
 the threshold's key and r_b.  The Call's mask is the mask units' outputs in block order.  Units a row: 5M + 4, M = ceil(N / `BLOCK`) blocks (44 at
 131,072 keys).
 
-Every port of a unit is whole u16 words, as a row of `verity.commitments.windows.interface.layout` is: a mask of n bits is
+Every port of a unit is whole u16 words, as a row of `verity.commitments.periods.interface.layout` is: a mask of n bits is
 `words`(n), Array<ceil(n/16), Array<16, BIT>>, bit j word j // 16's bit j mod 16, and a prefix or an r is `wide` of its bits.  A
 writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopKMaskWhole_v1{N,TOPK}`` is the counted mask up to
 `WHOLE_MAX` keys, a unit, in u16 words.

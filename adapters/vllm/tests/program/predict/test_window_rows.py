@@ -19,7 +19,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import io_shell as IO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
