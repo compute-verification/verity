@@ -53,7 +53,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     honest = h.rounds["honest-0"]
     at = honest.at
     M = sz.WZ._one_stage()
-    import a5_coins as AC
+    AC = sz.proof_drivers.drivers().a5_coins
 
     pg = sz.program(M, setup.cls, sz.TEMPLATES, h.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in honest.members]

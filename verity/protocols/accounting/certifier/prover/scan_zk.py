@@ -221,7 +221,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, warden_zk as WZ
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers, warden_zk as WZ
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json
@@ -1560,12 +1560,12 @@ def challenger(a, at: SimpleNamespace | None, out: Path):
     `records_audit.audit` starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out``;
     once the execution phase's rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the
     session's evidence is published, which the yielded namespace's ``published`` then holds. None without
-    ``--challenger``, and for no execution phase (``at`` None: the stale round, which has no honest round). Needs
-    `WZ._one_stage`'s path (a5_coins is one-stage's)."""
+    ``--challenger``, and for no execution phase (``at`` None: the stale round, which has no honest round). a5_coins
+    is one-stage's, and comes with the installed `proof_drivers`."""
     if not a.challenger or at is None:
         yield None
         return
-    import a5_coins as AC
+    AC = proof_drivers.drivers().a5_coins
 
     root = window_root(at)
     manager, turns, finisher = AC.start(a.challenger, root, [0], out, a.main, ssh_key=a.gate_key,

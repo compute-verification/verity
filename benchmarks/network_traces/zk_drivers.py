@@ -1,8 +1,8 @@
 """zk-drivers: the command line of the network certifier's zero-knowledge drivers, which live in the certifier's prover
 (`verity/protocols/accounting/certifier/prover/`) and take the proof system's benchmark drivers as one
-`proof_drivers.ProofDrivers`. This builds it from `benchmarks/one_stage/` (`a7`, `a8`, `prove_leg`), Flock's
-distribution (`verity_flock.circuit`, `verity_flock.class_statement`), Flock's proof-format reader (`redigest`) and the
-chain's reader (`warden_chain`), installs it, and runs the driver's `main`:
+`proof_drivers.ProofDrivers`. This builds it from `benchmarks/one_stage/` (`a0`, `a5_coins`, `a7`, `a8`, `prove_leg`),
+Flock's distribution (`verity_flock.circuit`, `verity_flock.class_statement`), Flock's proof-format reader (`redigest`)
+and the chain's reader (`warden_chain`), installs it, and runs the driver's `main`:
 
     python benchmarks/network_traces/zk_drivers.py scan_zk prove --bin flock-circuit --lean flock-verify --out DIR
     python benchmarks/network_traces/zk_drivers.py egress_zk|warden_zk|n2_zk|n2_tie_zk ARGS...
@@ -24,6 +24,8 @@ def proof_drivers() -> SimpleNamespace:
             sys.path.insert(0, str(d))
     if str(ROOT) not in sys.path:
         sys.path.append(str(ROOT))
+    import a0
+    import a5_coins
     import a7
     import a8
     import prove_leg
@@ -31,7 +33,7 @@ def proof_drivers() -> SimpleNamespace:
     from verity_flock import circuit, class_statement
     from benchmarks.network_traces import warden_chain
 
-    return SimpleNamespace(a7=a7, a8=a8, prove_leg=prove_leg, circuit=circuit, class_statement=class_statement,
+    return SimpleNamespace(a0=a0, a5_coins=a5_coins, a7=a7, a8=a8, prove_leg=prove_leg, circuit=circuit, class_statement=class_statement,
                            redigest=redigest, warden_chain=warden_chain)
 
 

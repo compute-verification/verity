@@ -58,23 +58,20 @@ import hashlib
 import json
 import os
 import socket
-import sys
 import time
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
-ONE_STAGE = Path(__file__).resolve().parents[5] / "benchmarks" / "one_stage"
-
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.service import LinkWindows  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.certifier.verifier import head_check as HC
+from verity.protocols.accounting.certifier.verifier import service as SVC
+from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
+from verity.protocols.accounting.certifier.verifier.service import LinkWindows
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 ENDS = ("egress", "ingress")
 #: the stream's δ, by default
@@ -229,14 +226,12 @@ public_pieces = functools.partial(LS.public_pieces, fields=True)
 # --- the statement ----------------------------------------------------------------------------------------------------
 
 def _one_stage():
-    sys.path.insert(0, str(ONE_STAGE))
-    import a0
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
     d = proof_drivers.drivers()
-    return SimpleNamespace(a0=a0, a8=d.a8, np=np, P=P, PF=PF, V2=V2, FC=d.circuit, CS=d.class_statement)
+    return SimpleNamespace(a0=d.a0, a8=d.a8, np=np, P=P, PF=PF, V2=V2, FC=d.circuit, CS=d.class_statement)
 
 
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:

@@ -15,10 +15,14 @@ from typing import Any, Protocol
 
 
 class ProofDrivers(Protocol):
+    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_draw``, ...
+    a0: Any
     #: the requirement audit's driver: ``M_MAX``, ``statement_checks``, ``frame_ports``, ``opens``, ``public_bcs``
     a7: Any
     #: the ZK server's session driver: ``session``, ``received``, ``PIECE``, ``needles``, ``find``, ``cost``
     a8: Any
+    #: the auditor's challenger's sessions: ``start``, ``RankCoins``, ``evidence``, ``negatives``, ``Replay``
+    a5_coins: Any
     #: the proof leg: ``frame_ports`` over a statement's tables
     prove_leg: Any
     #: Flock's circuit writer (``verity_flock.circuit``)

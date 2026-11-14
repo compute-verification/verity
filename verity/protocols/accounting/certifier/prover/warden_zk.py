@@ -56,23 +56,20 @@ import argparse
 import hashlib
 import json
 import os
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-ONE_STAGE = Path(__file__).resolve().parents[5] / "benchmarks" / "one_stage"
-
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.circuits import boolean as BL  # noqa: E402
-from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.circuits.types import Array  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate
+from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell
+from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
 
 #: the unit's ports: its input row and its output row
 PORTS = ("row", "o0")
@@ -233,12 +230,10 @@ def _statement():
 
 
 def _one_stage():
-    sys.path.insert(0, str(ONE_STAGE))
-    import a0
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
 
     d = proof_drivers.drivers()
-    return SimpleNamespace(**vars(_statement()), a0=a0, a7=d.a7, a8=d.a8, prove_leg=d.prove_leg, D=D, R=R, V=V)
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_leg=d.prove_leg, D=D, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:
