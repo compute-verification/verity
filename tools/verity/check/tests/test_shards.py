@@ -46,6 +46,10 @@ BESIDE_AUDIT = (VLLM[0], *(f"lean-suites:{s}" for s in ("verity/protocols/proofs
                 COMPOSITION[2], POUW[2], ONE_STAGE[1])
 BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
 WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], "lean-suites:*")
+#: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
+PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
+    "research", "verity/definitions", "verity/circuits/ops", "verity-graph",
+    "benchmarks/training_slowdown", "repository", "verity/protocols/accounting/pous/verifier"))
 
 
 @pytest.fixture(autouse=True)
@@ -66,8 +70,8 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 def test_the_plans_are_the_documented_ones():
     build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
-        3: ((*NAMED, "pytest", *BESIDE_AUDIT),
-            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement"),
+        3: ((*NAMED, "pytest:*", *BESIDE_AUDIT),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", *PYTEST_BESIDE_BUILD),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
@@ -104,12 +108,31 @@ def test_the_5_pod_plan_runs_pytest_in_two_shards_by_suite_and_the_others_run_it
     for k in (1, 4):
         [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
         assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[2 + len(held[k - 1])] == "--json", argv
-    for n in (3, 4):
+    for n in (4,):
         assert "pytest" in CHECK.shard(f"1/{n}")["all"] and not any(p.startswith("pytest:") for p in CHECK.shard(f"1/{n}")["all"])
     assert CHECK.shard("1/5")["all"] == D.all_parts(D.gated(CHECK.JOBS), _parts(n=5))
     assert "pytest" not in CHECK.shard("1/5")["all"] and "pytest" in CHECK.gated_parts(), "an unsharded check's parts are as they were"
     with pytest.raises(D.DeclarationError, match="pytest:nowhere, which this tree doesn't have"):
         D.resolve((("pytest:nowhere", "pytest:*"),), CHECK.JOBS, _parts(n=5))
+
+
+def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_build(tmp_path):
+    """Whole beside the security analysis's audit, pytest was the 3-pod plan's first shard's longest test step: its parallel
+    suites one at a time beside verity/commitments, its one-process suites nine at a time.  The plan names seven of its
+    suites beside lean-build, whose shard holds no build to share cores with (`check.groups`), and the rest (`pytest:*`)
+    beside the audit; the two cover every suite of pytest's once, and the second shard books pytest beside lean-suites' ask
+    (`check.SHARD_ASKS_GIB`), not lean-build's."""
+    names = [s.name for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN]
+    shards = [CHECK.shard(f"{k}/3")["parts"] for k in range(1, 4)]
+    held = [[p.partition(":")[2] for p in s if p.partition(":")[0] == "pytest"] for s in shards]
+    beside_build = [p.partition(":")[2] for p in PYTEST_BESIDE_BUILD]
+    assert sorted(held[1]) == sorted(beside_build) and not held[2]
+    assert sorted(held[0]) == sorted(n for n in names if n not in beside_build)
+    for k, jobs in ((1, "16"), (2, "16")):
+        [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
+        assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[argv.index("--jobs") + 1] == jobs, argv
+    assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 240
+    assert CHECK.shard_ask_gib(shards[1], []) == 240 and CHECK.shard_ask_gib(shards[1], ["lean-agreement"]) == 390
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -822,7 +845,7 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
                       (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 170),
                       (["--deferred", steps, "--shard", "2/5"], 200), (["--deferred", reused, "--shard", "2/5"], 200),
                       (["--deferred", steps, "--shard", "4/5"], 110),
-                      (["--deferred", steps, "--shard", "3/5"], 110), (["--deferred", steps, "--shard", "2/3"], 130),
+                      (["--deferred", steps, "--shard", "3/5"], 110), (["--deferred", steps, "--shard", "2/3"], 240),
                       (["--deferred", steps, "--shard", "3/3"], 290), (["--deferred", "lean-audit"], 330)):
         sent = env("--priority", *args)
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
