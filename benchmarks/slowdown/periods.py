@@ -437,8 +437,7 @@ def main() -> None:
 
 #: the metric's id (`metrics.toml` beside this file), the scenario whose lower bound it is, and its unit
 METRIC, METRIC_SCENARIO = "training/slowdown-onsite-h200", "reference-onsite-h200"
-UNIT = ("the slowdown's lower bound over a year of the world's compute: the adversary's GPU-hours to the target over "
-        "the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1")
+UNIT = "GPU-hours a reference GPU-hour"
 
 
 def write_metric(out: Path, rows: list[dict]) -> None:
