@@ -153,7 +153,9 @@ declare out of its directory. Split in two around V3c
 (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold.
+releases through its own hold. The check reads an audit's state entry among its `roots` and its `registered` alone,
+and a served window's registration holds its `SCAN_STATE` in its window's `activations.values` alone, so a served
+period's answer is a reject at the state tie.
 
 ## A cheating server
 

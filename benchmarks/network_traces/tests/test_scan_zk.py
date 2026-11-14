@@ -72,6 +72,16 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert last.ports["o1"]["root"] != st.root.hex() and last.ports["o1"]["reads"] == [0]
     assert last.made["o1"] == [at.chain.states[T]] and last.buckets == [T - 1] and last.framed == ["o0", "o1"]
     assert first.ports["o1"]["root"] == ing.ports["sin"]["root"] == last.ports["sin"]["root"] == st.root.hex()
+    # the registration's window states those reads, one run a port, and opens leaf 0, the empty state, under its salt
+    runs = {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}
+    assert sz.state_reads([m.ports for m in honest.values()]) == sz.state_reads(
+        [m.ports for m in chain.values()]) == runs
+    with pytest.raises(SystemExit, match="no one run"):
+        sz.state_reads([{"sin": {**ing.ports["sin"], "reads": ing.ports["sin"]["reads"][::-1]}}])
+    e, path = sz.state_empty(st), bytes.fromhex(sz.state_empty(st)["path"])
+    opened = sz.ADV.Opening(0, bytes(2 * e["words"]), bytes.fromhex(e["salt"]),
+                            tuple(path[i:i + 64] for i in range(0, len(path), 64)))
+    assert e["words"] * 16 == st.n_bits and sz.ADV.verify(st.root, T, st.n_bits, st.binding, opened)
     # the slot entries: lane j's tree, leaf b slot j's entry of the Programs' row at boundary b; the block a member a
     # lane (block-c<j>), its unit j·nb + b's o0 (no public word) lane j's leaf b, each lane's tree under its member's
     # o0 frame binding
@@ -727,10 +737,17 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
-    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), accepts it with the
-    answer naming what one-stage's registration check let through on the scan's own root (each lane's ``prog<j>``,
-    which `EVERY` units each read: `window_answer`'s ``rests``), or naming the first lane's alone or the lanes' in
-    another order, refuses by name an answer naming another Input (`period_case.TIE_UNHELD`), and refuses the
+    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), a stand-in for a
+    record whose state entry is among the audit's ``roots``, which the record check reads and which no served run
+    writes today, refuses that audit at
+    the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` as a served window's does, in
+    its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry; the runner
+    (`scan_period.main`) under ``--v3c`` expects of an honest round that refusal, by its name, where the audit's
+    registration has no state entry among its ``roots`` and ``registered``, an accept there unexpected, and the accept
+    where it has one; accepts it with the answer naming what one-stage's registration check let
+    through on the scan's own root (each lane's ``prog<j>``, which `EVERY` units each read: `window_answer`'s
+    ``rests``), or naming the first lane's alone or the lanes' in another order, refuses by name an answer naming
+    another Input (`period_case.TIE_UNHELD`), and refuses the
     forged case (a certificate's signature changed) at the certificates, a registration whose egress member's o0
     root is of a row that is not the ok row, or that names no o0 for a member or for any, at the ok bits
     (`period_case.UNOK`), the tampered case (another Program's
@@ -738,10 +755,13 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
     swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
     entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two execution phases, and a run in the bytes
-    egress form, are refused by name. Slow
-    (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
-    can stand for."""
+    that names none, at the state tie (`period_case.UNSTATED`), and a registration whose window states its units'
+    ``sin`` off the chain (`period_case.MISREAD`), or opens leaf 0 under another leaf's salt (`period_case.UNPINNED`),
+    each with its own answer; the honest registration's window states the members' reads (`state_reads`) and row 0's
+    opening (`state_empty`). A group of two execution phases' transfer blocks, and a run in the bytes egress form, are
+    refused by name.
+    Slow (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no
+    stand-in can stand for."""
     import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
@@ -768,8 +788,12 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
     law = sz.DR.parse_design(f"stratified:{2 * T}")
 
-    def registration(named: list[dict], layer: str = "ee") -> dict:
-        return R.record(program, query, law, sz.S.SCHEME, named, {"kind": "stand-in"}, leaf_layer=layer * 64)
+    reads, empty = sz.state_reads([m.ports for m in h.rounds["honest"]]), sz.state_empty(st)
+    assert reads == {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}
+    win = {"kind": "stand-in", "reads": {"scan/state": reads}, "empty": {"scan/state": empty}}
+
+    def registration(named: list[dict], layer: str = "ee", window: dict = win) -> dict:
+        return R.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64)
 
     reg, chain = (registration(roots, x) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -786,12 +810,14 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                        for j in range(cls.NR)]
 
     def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
-                    sampled: int | None = None) -> dict:
-        stated = [{"port": "scan/state", **scan_state}] if scan_state else []
+                    sampled: int | None = None, served: bool = False) -> dict:
+        stated = [{"port": "scan/state", **scan_state}] if scan_state and not served else []
         law = sz.DR.parse_design(f"subset:{sampled}") if sampled else blaw
+        held = {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **(scan_state or {})}
+        window = {"kind": "served", "activations": {"program": "c3" * 64, "values": {sz.SCAN_STATE: held}}}
         breg = R.record(block, bquery, law, sz.S.SCHEME,
-                        [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated], {"kind": "stand-in"},
-                        leaf_layer="cc" * 64)
+                        [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated],
+                        window if served else {"kind": "stand-in"}, leaf_layer="cc" * 64)
         units = list(range(sampled or E))
         bdraw = {**sz.DR.derive(block, bquery, law), "population": E, "units": units}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": units}
@@ -812,6 +838,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
+    cells = PC.params(p).schedule.rows_cells(1)
+    assert p["cells"] == cells == [sz.TEST.params.egress_cells] * (sz.TEST.params.lanes * T) and cells
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
     digest = PC.slot_entry_digest(encode_program(block), key)
@@ -837,11 +865,41 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert p["circuit"] == audit["registration"]["program"]
+    window_record = tmp_path / "window-circuit.json"
+    window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64))
+        assert (got["verdict"], got["reason"]) == ("reject", f"execution phase 0: {PC.UNHELD}"), got
+        (served := tmp_path / f"period-served-{k}.json").write_text(
+            json.dumps(block_audit(progs, sampled=k, served=True)))
+        assert json.loads(served.read_text())["registration"]["window"]["activations"]["values"][sz.SCAN_STATE] == {
+            "value": sz.SCAN_STATE, "words": st.n_bits // 16, **state}
+        got = PC.reference(SP.rows_case(run, scan, v3c=served, circuit=SP.circuit_of_record(window_record)))
+        assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
+    monkeypatch.setattr(SP, "mirror", lambda path: PC)
+    accepted = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
+    for name, period, lean, want, rc in (
+            ("served", served, PC.reference, "reject at the state tie", 0),
+            ("stated", v3c, PC.reference, "accept", 0),
+            ("served-accepted", served, lambda case: accepted, "reject at the state tie", 1),
+            ("stated-refused", v3c, lambda case: got, "accept", 1)):
+        monkeypatch.setattr(SP, "lean_check", lambda exe, case, d, lean=lean: lean(case))
+        argv = ["--mirror", str(PERIOD_CASE), "--lean", "unused", "--out", str(tmp_path / name), "--v3c", str(period),
+                "--circuit", str(window_record), f"honest={run},{scan}"]
+        assert SP.main(argv) == rc, name
+        ran = json.loads((tmp_path / name / "period.json").read_text())
+        assert (ran["ok"], ran["cases"]["honest"]["want"]) == (rc == 0, want), ran
+        assert (PC.UNSTATED in (ran["cases"]["honest"]["mirror"].get("reason") or "")) == (period == served), ran
+    with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
+        SP.rows_case(run, scan, v3c=v3c)
+    (unnamed := tmp_path / "no-circuit.json").write_text(json.dumps({"format": SP.CIRCUIT}))
+    with pytest.raises(SystemExit, match="record naming its program$"):
+        SP.circuit_of_record(unnamed)
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
     rests = R.check(reg, program, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64,
                     tied=sz.lane_kinds(cls)).rests_on_period_check
@@ -887,6 +945,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         (scan / "answers.json").write_text(json.dumps({**doc, "audits": [block_audit(progs, scan_state=scan_state)]}))
         got = PC.reference(SP.rows_case(run, scan))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
+    off = {**win, "reads": {"scan/state": {**reads, "sin": {**reads["sin"], "leaf": 2}}}}
+    unpinned = {**win, "empty": {"scan/state": {**empty, "salt": st.salts[1].hex()}}}
+    for window, why in ((off, PC.MISREAD), (unpinned, PC.UNPINNED)):
+        r = registration(roots, window=window)
+        a = sz.window_answer(r, {**record, "registration": r}, sz.Fraction(1, 100), "unused")
+        (scan / "answers.json").write_text(json.dumps({**doc, "registration": r, "windows": [
+            {"window": 0, "answer": a, "registrations": registrations}]}))
+        got = PC.reference(SP.rows_case(run, scan))
+        assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {why}"), got
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
         SP.rows_case(run, scan)
