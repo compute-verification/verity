@@ -31,7 +31,6 @@ import math
 import os
 from dataclasses import dataclass, field
 from importlib import resources
-from pathlib import Path
 from typing import Any
 
 from verity.definitions.registry.bf16_gemm_check import device_pin
@@ -320,7 +319,8 @@ def pin_of(build: dict[str, Any], inductor_dir: str, moe: dict[str, Any] | None,
     wrappers, kernels = prog["piece_wrappers"], {k: {} for k in KINDS}
     for p, rel in enumerate(wrappers):
         kind = KINDS[0] if p == 0 else KINDS[2] if p == len(wrappers) - 1 else KINDS[1]
-        src = T.kernel_sources(Path(inductor_dir, rel).read_text())
+        with open(os.path.join(inductor_dir, rel)) as f:
+            src = T.kernel_sources(f.read())
         got = {c["op"]: T.source_sha256(src[c["op"]]) for c in prog["calls"] if c["piece"] == p and c["op"] in src}
         if kernels[kind] and kernels[kind] != got:
             raise Unmodelled(f"piece {p} ({rel}) launches kernels {got}, another {kind} piece {kernels[kind]}")
@@ -362,18 +362,24 @@ class PinOptions:
 COMMANDS = {"compiled": Options, "compiled-pin": PinOptions}
 
 
+def _document(path: Any) -> Any:
+    """The JSON document of the file `open` finds by ``path`` as it is given: a name in a str or in bytes, or a descriptor."""
+    with open(path) as f:
+        return json.load(f)
+
+
 def main(a: Options | PinOptions) -> int:
     if isinstance(a, PinOptions):
-        build = json.loads(Path(a.build).read_text())
-        device = json.loads(Path(os.path.dirname(a.build), "routes.json").read_text())["device"]
-        pin = pin_of(build, a.inductor_dir, json.loads(Path(a.moe).read_text()) if a.moe else None, role=a.role, device=device, evidence=a.evidence)
+        build = _document(a.build)
+        device = _document(os.path.join(os.path.dirname(a.build), "routes.json"))["device"]
+        pin = pin_of(build, a.inductor_dir, _document(a.moe) if a.moe else None, role=a.role, device=device, evidence=a.evidence)
         with open(a.out, "w") as f:
             json.dump(pin, f, indent=1)
             f.write("\n")
         print(f"[predict compiled-pin] {a.role} on {device}: {sum(map(len, pin['kernels'].values()))} kernel launches, "
               f"{len(pin['artifact']['winners'])} winners -> {a.out}")
         return 0
-    wl = json.loads(Path(a.workload).read_text())
+    wl = _document(a.workload)
     steps = a.steps or int(wl.get("expected_engine_steps") or 0)
     if not steps:
         raise UsageError("--steps (or the workload's expected_engine_steps) is required")
@@ -387,7 +393,7 @@ def main(a: Options | PinOptions) -> int:
     print(f"[predict compiled] program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} artifact {m['artifact']['digest'][:16]} "
           f"identities {len(m['identities'])} complete {m['complete']} -> {a.out}")
     if a.compare:
-        diff = differences(m, json.loads(Path(a.compare).read_text()))
+        diff = differences(m, _document(a.compare))
         print(f"[predict compiled] against {a.compare}: " + ("equal" if not diff else "\n  ".join(["differs"] + diff)))
         return 5 if diff else 0
     return 0 if m["complete"] else 4

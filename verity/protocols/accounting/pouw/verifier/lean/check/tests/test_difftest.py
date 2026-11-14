@@ -7,12 +7,12 @@ The harness compares an outcome's verdict, commitment, public outputs and profil
 reasons too, `Core.Protocol.case`'s framing included, so this port compares the whole outcome: the reason names the rule
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
-`pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
+`pouw-check-difftest`'s `opening` against `core_check.opening_twin`: one `Port`, over the openings `pouw_opening_cases`
 generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
 mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
 reason.
 
-Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
+Its `pass` and `draw` against `core_check.pass_epoch_twin` and `core_check.draw_twin`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified window's and a live
 Pearl-C pass's, and honest samples, then one mutation each aimed at every refusal), compared output for output: how the
 salt was had, or the same refusal.
@@ -24,18 +24,18 @@ J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit
 one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
 the units a sampling coin selects from a window's layout and each of them proved, a served window whole with its layout read
-from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
+from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds_twin`) and
 to its A trees, a period of the
 auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its
 open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the sampled
 proof blocks, the weights' root or null, or the same refusal.
 
-Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
+Its `rounds` against `core_check.rounds_twin`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
-Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
+Its `salt` against `core_check.salt_of_record` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`). Its
-`live-salt` against `core_check.live_salt` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
+`live-salt` against `core_check.live_salt_twin` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
 salt-only session the auditor's ledger reserves, opens on the pass's salt epoch's root and ends complete, its commitment
 read from the session's own files, a sampled `pass_index` and call indices offset within the epoch), compared output for
 output: the salt, or the same refusal.
@@ -119,7 +119,7 @@ def _template(why: str) -> str:
     return re.sub(r"-?\d+", "#", why.replace("SHA-512", "SHA512"))
 
 
-#: `core_check.opening`'s reasons
+#: `core_check.opening_twin`'s reasons
 REASONS = {_template(r) for r in (
     "unit # is not drawn", "the registered window domain is not the window's served domain",
     "the registered window root is not a SHA-512 digest", "the opening names no entry",
@@ -146,7 +146,7 @@ OPENED: Counter[str] = Counter()
 
 
 def opening(case: dict) -> str | None:
-    why = CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
+    why = CC.opening_twin(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
                      case["unit"], bytes.fromhex(case["pub"]), case["opening"],
                      None if case.get("salt") is None else bytes.fromhex(case["salt"]))
     OPENED[_template(why) if why else "accept"] += 1
@@ -182,7 +182,7 @@ def registered_input(case) -> dict:
 def registered(x: dict) -> dict:
     if not ("params" in x and isinstance(x.get("commitment"), str)):
         raise CC.Refused("the input's params or commitment is malformed")
-    why = CC.registered(CC.params(x["params"]), CC.commitment(bytes.fromhex(x["commitment"])))
+    why = CC.registered_twin(CC.params(x["params"]), CC.commitment(bytes.fromhex(x["commitment"])))
     RULED[why.split(":")[0] if why else "holds"] += 1
     return {"reason": why}
 
@@ -211,13 +211,13 @@ PASSED: Counter[str] = Counter()
 
 
 def pass_epoch(case: dict) -> dict:
-    how, refused = CC.pass_epoch(*passes.pass_args(case))
+    how, refused = CC.pass_epoch_twin(*passes.pass_args(case))
     PASSED[how or f"{refused[0]}: {_template(refused[1])}"] += 1
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
 def draw(case: dict) -> dict | None:
-    refused = CC.draw(*passes.draw_args(case))
+    refused = CC.draw_twin(*passes.draw_args(case))
     PASSED["draw " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
     return None if refused is None else {"refused": list(refused)}
 
@@ -608,7 +608,7 @@ PIN_PARTS = ("which the host's pins log doesn't record as a commit of main's his
 
 
 def rounds(case: dict) -> dict | None:
-    refused = CC.rounds(*rounds_cases.rounds_args(case))
+    refused = CC.rounds_twin(*rounds_cases.rounds_args(case))
     ROUNDED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return None if refused is None else {"refused": list(refused)}
 
@@ -621,7 +621,7 @@ ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_reje
 
 def test_rounds(pass_server):
     """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
-    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
+    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds_twin`."""
     ROUNDED.clear()
     stats = D.run(ROUNDS, examples=600, server=pass_server)
     swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -649,7 +649,7 @@ SALTED: Counter[str] = Counter()
 
 
 def salt(case: dict) -> dict | None:
-    refused = CC.salt(*rounds_cases.salt_args(case))
+    refused = CC.salt_twin(*rounds_cases.salt_args(case))
     SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return None if refused is None else {"refused": list(refused)}
 
@@ -663,7 +663,7 @@ def test_salt(pass_server):
     """Generated live windows' salt coins, read through the challenger's signed session the auditor's signed ledger
     reserves, opens and ends for the window, then each mutation over a few seeds (`replay`): a session opened without a
     reserve, the open root under another session's id or of another window's weights or requests, H1's salt opened
-    after the weights' root, a log showing another root, and every other refusal of `core_check.salt`."""
+    after the weights' root, a log showing another root, and every other refusal of `core_check.salt_of_record`."""
     SALTED.clear()
     stats = D.run(SALT, examples=400, server=pass_server)
     swept = Counter(D.replay(SALT, rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -684,7 +684,7 @@ LIVE_SALTED: Counter[str] = Counter()
 
 
 def live_salt(case: dict) -> dict:
-    salt, refused = CC.live_salt(*passes.live_salt_args(case))
+    salt, refused = CC.live_salt_twin(*passes.live_salt_args(case))
     LIVE_SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
     return {"salt": salt.hex()} if refused is None else {"refused": list(refused)}
 
@@ -702,7 +702,7 @@ def test_live_salt(pass_server):
     seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
     on another root (W itself, another epoch's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
-    other refusal of `core_check.live_salt`."""
+    other refusal of `core_check.live_salt_twin`."""
     LIVE_SALTED.clear()
     stats = D.run(LIVE_SALT, examples=300, server=pass_server)
     swept = Counter(D.replay(LIVE_SALT, passes.live_salt_instance(random.Random(f"{name}/{seed}"), name),

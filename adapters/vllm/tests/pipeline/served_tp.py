@@ -49,7 +49,7 @@ def commit(root: Path, *, world: int = 2, inter: int = 256, law: str = "subset:2
     pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(inter)}}}"], "law": law}))
     ranks = []
     for r in range(world):
-        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=inter)
+        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", inter=inter)
         b = root / "build" / f"rank{r}"
         b.mkdir(parents=True)
         shutil.copyfile(c["row_dir"] / "build_request" / "instances.json.gz", b / "instances.json.gz")

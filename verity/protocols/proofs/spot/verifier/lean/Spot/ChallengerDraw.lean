@@ -1,4 +1,8 @@
-/-
+module
+
+public import Spot.ChallengerCoins
+
+/-!
 A sample's live coins as a component's check reads them (`drawCoins`), with the verifier's own key, window and family,
 never the evidence's, and as a stream's run holds the bytes it read to them (`coinsReason`): `coins.py`'s `draw_coins`,
 `seed_salt_of` and `coins_reason`, which `tests/test_challenger_difftest.py` holds to this, the verifier.
@@ -34,9 +38,6 @@ R6 holds the window's registrations to name (`Registration.Verifier.seedSalt`).
 The difftest's pieces (`Pieces.table`): `challenger_draw_coins` (`coins_reason`), `{"reason"}`, or `{"refused": why}`
 for a key `ChallengerKey.ofJson` refuses, and `challenger_seed_salt` (`seed_salt_of`).
 -/
-module
-
-public import Spot.ChallengerCoins
 
 @[expose] public section
 
