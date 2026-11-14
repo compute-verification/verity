@@ -1,7 +1,7 @@
 {
   "rule": "ruff (adapters/vllm/ruff.toml)",
   "entries": [
-    {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 4},
+    {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 3},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`tests.observe.test_patterns_synthetic.i64` imported but unused"},
     {"file": "tests/engine/test_gen_dense_gemma2_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.resolver.Compute` imported but unused"},
     {"file": "tests/engine/test_gen_dense_softcap.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 8},
@@ -26,7 +26,6 @@
     {"file": "tests/properties/glm53_tp8_allreduce_capture_gpu.py", "kind": "B008", "symbol": "CommTap.__enter__.tap", "detail": "Do not perform function call `getattr` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "tests/properties/router_tap_exactness_gpu.py", "kind": "F821", "symbol": "check_live.generate", "detail": "Undefined name `llm`"},
     {"file": "tests/protocols/pouw_h1_rehearsal.py", "kind": "F841", "symbol": "red_team", "detail": "Local variable `R` is assigned to but never used"},
-    {"file": "tools/migrate/superseded_quarantine.py", "kind": "BLE001", "symbol": "_digest", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "F401", "symbol": "<module>", "detail": "`sys` imported but unused"},
     {"file": "verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py", "kind": "F401", "symbol": "<module>", "detail": "`re` imported but unused"},
     {"file": "verity_vllm/acquire/served.py", "kind": "E731", "symbol": "probe_routes", "detail": "Do not assign a `lambda` expression, use a `def`"},

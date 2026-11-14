@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate, evaluate_batch
-from verity.circuits.call_scope import specialization
 
 from tests.acquire.call_boundary_programs import (
     DENSE,
@@ -33,6 +32,7 @@ from tests.acquire.call_boundary_programs import (
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
 from verity_vllm.query.manifest.format import spec_family
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
 if TYPE_CHECKING:

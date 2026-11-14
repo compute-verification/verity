@@ -25,6 +25,7 @@ from verity_vllm.check.replay import coverage
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query import program_view as PV
 
 GU, DN = "model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"
 
@@ -65,7 +66,7 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 def test_a_ragged_n_site_is_named_with_its_partial_block():
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 320, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=320,G=128}}", "calls": 3, "where": DN}
-    assert W_.check_calls([g], acquired=SP.TAP_WORDS)["acquired_interior_words"] == 3 * 3 * 2
+    assert W_.check_calls([g], acquired=SP.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 3 * 3 * 2
     rows = []
     pop = types.SimpleNamespace(P=types.SimpleNamespace(calls=[types.SimpleNamespace(id=i, family=g["family"], statics=g["statics"],
                                                                                      definition=g["definition"]) for i in range(3)]),
@@ -115,4 +116,4 @@ def test_the_family_is_in_every_vocabulary():
     assert OC._family_of(entry) == "hidden_stream"
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 384, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=384,G=128}}", "calls": 3, "where": DN}
-    assert W_.check_calls([g], acquired=SP.TAP_WORDS)["acquired_interior_words"] == 3 * 3 * 2
+    assert W_.check_calls([g], acquired=SP.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 3 * 3 * 2
