@@ -25,7 +25,9 @@ def test_every_rate_is_sourced_and_every_figure_holds(data):
 
 
 def test_d_by_route():
-    d = lambda data, reading: {r.name: round(r.d, 2) for r in T.routes(T.theta(data), reading)}
+    def d(data, reading):
+        return {r.name: round(r.d, 2) for r in T.routes(T.theta(data), reading)}
+
     two, imad = T.ADDING[0], T.ADDING[2]
     assert d(SM90, "sheet")[two] == 32 and d(SM90, "sheet")[imad] == 64
     assert d(SM90, "measured")[two] == 32.5
@@ -98,7 +100,9 @@ def test_every_unit_has_a_verdict_and_the_bounded_ones_a_share():
 
 
 def test_sha512_against_the_public_figures():
-    by = lambda data: {(s.public.card.split(" (")[0], s.public.form): s for s in T.sha(T.theta(data))}
+    def by(data):
+        return {(s.public.card.split(" (")[0], s.public.form): s for s in T.sha(T.theta(data))}
+
     rtx, h = by(SM120), by(SM90)
     server = rtx["RTX PRO 6000 Blackwell Server Edition", "generic"]
     assert server.per_clk == pytest.approx(7.894e9 / (188 * 2.43e9)) and server.c == 1

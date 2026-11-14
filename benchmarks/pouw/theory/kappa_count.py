@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Theorem C's per-opcode creation cap κ, from each device's census: an issue slot that writes d words per lane creates at
+"""Theorem C's per-opcode creation bound κ, from each device's census: an issue slot that writes d words per lane creates at
 most κ = 65·d incidences.
 
-The cap per word is Lean's: `Pouw.SecurityProofs.Eps1.ClassPSlots` (security/Proofs/Pouw/Eps1/ClassP.lean,
+The bound per word is Lean's: `Pouw.SecurityProofs.Eps1.ClassPSlots` (security/Proofs/Pouw/Eps1/ClassP.lean,
 `created_le_65`): a class-P tuple word creates only incidences of its fields' own entries, a field's range has at least
-128|E| + 1 values, and `Π_k (128 e_k + 1) ≤ 2^32` with `e_k ≤ 32` caps `Σ_k e_k` at 65 (two 32-entry fields and a
+128|E| + 1 values, and `Π_k (128 e_k + 1) ≤ 2^32` with `e_k ≤ 32` holds `Σ_k e_k` to 65 (two 32-entry fields and a
 one-entry field). The guarantee charges a slot of d words `65·d`, so a word costs at least `1 + (32 − w)/κ` slots when a
 writer creates at most w (the q* analysis takes 4; a writer that takes two segments' fields from one tuple creates 8).
 
@@ -26,7 +26,7 @@ from fractions import Fraction
 
 from verity_machine_model.model import census, device, devices, model
 
-WORD_CAP = 65
+WORD_BOUND = 65
 
 LANE = {"ALU": 1, "IMAD": 1, "FFMA": 1, "HFMA2": 1, "VIMNMX": 1, "F2FS": 1, "XU": 1, "SHFL": 1, "NOROW": 1, "SEL": 1,
         "IDP4A": 1, "LEA": 1, "FLO": 1, "VIADD": 1,
@@ -78,7 +78,7 @@ def count(name: str) -> dict:
     kinds = sorted(census(m, m.current, data))
     table = {k: dict(zip(("class", "words"), classify(k))) for k in kinds}
     for v in table.values():
-        v["kappa"] = WORD_CAP * v["words"] if v["class"] in ("lane", "load", "uniform") else None
+        v["kappa"] = WORD_BOUND * v["words"] if v["class"] in ("lane", "load", "uniform") else None
     vec = [k for k in m.cuda if k in table]
     missing = [k for k in m.cuda if k not in table]
     if missing:
@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     res = [count(d) for d in (a.device or devices())]
     for r in res:
-        print(f"{r['device']} ({r['epoch']}): κ = {WORD_CAP}·d")
+        print(f"{r['device']} ({r['epoch']}): κ = {WORD_BOUND}·d")
         for k, v in r["kinds"].items():
             if v["kappa"] is not None:
                 print(f"  {k:12s} {v['class']:8s} d = {v['words']}  κ = {v['kappa']}")

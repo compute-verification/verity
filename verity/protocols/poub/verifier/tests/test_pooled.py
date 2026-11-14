@@ -11,14 +11,14 @@ from fractions import Fraction
 
 import pytest
 
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 from verity.protocols.poub.verifier import audit, pooled
+from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 
 DELTA = Fraction(1, 2 ** 40)
 GATE_RUNS = {"5/0": (2118, 130023424, 48), "5/2": (96, 130023424, 232), "6/0": (2118, 113770496, 48),
              "6/2": (96, 113770496, 232), "7/0": (2118, 130023424, 48), "7/2": (96, 130023424, 232)}
 """Each accepted session of gate runs 5–7 as `gate_run/k`: its record's windows, all alike (n of them, U receipts
-drawn s times each), at δ = 2^-40."""
+sampled s times each), at δ = 2^-40."""
 RECORDED = {"5/0": 75094234.44840989, "5/2": 15529188.8879725, "6/0": 65707455.14235865, "6/2": 13588040.276975937,
             "7/0": 75094234.44840989, "7/2": 15529188.8879725}
 """Each one's W as its verifier.json recorded it (`ledger.paced.wrong`), the float greedy the exact one replaced."""

@@ -20,6 +20,9 @@ import json
 import sys
 from pathlib import Path
 
+#: what the tests read
+__all__ = ["EXIT_DIFF", "compare", "compare_dumps", "main"]
+
 HERE = Path(__file__).resolve().parent
 EXIT_DIFF = 9
 POISON_WORD = b"\xa5" * 4

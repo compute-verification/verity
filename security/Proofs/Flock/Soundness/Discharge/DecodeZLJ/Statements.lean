@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.DecodeZL
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
 public import Proofs.Flock.Soundness.Discharge.Tables.Statements
@@ -18,6 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.DecodeZL
 
 /-!
 # The decoder at `J` tables: statements

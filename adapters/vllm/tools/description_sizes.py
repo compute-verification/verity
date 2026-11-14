@@ -13,8 +13,11 @@ Definition it reaches, a traced body gate by gate, so its size is what a verifie
 
 ``update`` measures, one template a process, every named template the record has no entry for or records at most `SIZE`,
 keeps each recorded past `SIZE` as it stands unless ``--remeasure`` names it, drops what nothing names, and writes the
-record, each measured entry citing ``--run``.  Run it as a node job with ``--mem-gb`` stated: a template past `SIZE` is
-built only under ``--remeasure`` or when no entry has it yet, and a traced one can take far more memory than a laptop has."""
+record.  A measured template keeps its entry whole, with the run, seconds and gb it has, when its bytes and largest
+Definition come out as the entry has them and ``--remeasure`` does not name it (`entry`), so the record changes only
+where a description moved; every other measured entry is written from the measurement, citing ``--run``.  Run it as a
+node job with ``--mem-gb`` stated: a template past `SIZE` is built only under ``--remeasure`` or when no entry has it
+yet, and a traced one can take far more memory than a laptop has."""
 from __future__ import annotations
 
 import argparse
@@ -131,6 +134,15 @@ def write(rec: dict[str, dict]) -> None:
     RECORD.write_text('{"templates": {\n' + ",\n".join(rows) + "\n}}\n")
 
 
+def entry(old: dict | None, new: dict, run: str | None, remeasure: bool) -> dict:
+    """What `update` records for a template it measured as ``new``: ``old``, the entry the record has, itself when the
+    description has not moved (the same bytes and largest Definition) and ``--remeasure`` does not name the template;
+    else ``new`` citing ``run``."""
+    if old is not None and not remeasure and all(old.get(k) == new[k] for k in ("bytes", "largest")):
+        return old
+    return {**new, **({"run": run} if run else {})}
+
+
 def update(jobs: int, run: str | None, remeasure: set[str]) -> int:
     named = served()
     rec = {t: e for t, e in load().items() if t in named}
@@ -140,18 +152,22 @@ def update(jobs: int, run: str | None, remeasure: set[str]) -> int:
         r = subprocess.run([sys.executable, str(Path(__file__).resolve()), "one", t], capture_output=True, text=True)
         return t, json.loads(r.stdout.splitlines()[-1]) if r.returncode == 0 else None, r.stderr[-2000:]
 
-    failed = []
+    failed, written = [], 0
     with ThreadPoolExecutor(jobs) as pool:
         for t, e, err in pool.map(one, todo):
             if e is None:
                 failed.append(t)
                 print(f"FAILED {t}\n{err}", file=sys.stderr, flush=True)
                 continue
-            rec[t] = {**e, **({"run": run} if run else {})}
-            print(f"{e['bytes']:>14,} {e['seconds']:>7}s {e['gb']:>6}GB {t}", flush=True)
+            old = rec.get(t)
+            rec[t] = entry(old, e, run, t in remeasure)
+            written += rec[t] is not old
+            print(f"{e['bytes']:>14,} {e['seconds']:>7}s {e['gb']:>6}GB {'kept' if rec[t] is old else 'written':<7} {t}",
+                  flush=True)
     write(rec)
-    print(f"{len(todo) - len(failed)} measured, {len(rec) - len(todo) + len(failed)} kept, {len(failed)} failed; "
-          f"{sum(e['bytes'] > SIZE for e in rec.values())} of {len(rec)} past {SIZE:,} bytes", flush=True)
+    print(f"{len(todo) - len(failed)} measured, {written} of them written; {len(rec) - written} entries kept as they "
+          f"stood, {len(failed)} failed; {sum(e['bytes'] > SIZE for e in rec.values())} of {len(rec)} past {SIZE:,} bytes",
+          flush=True)
     return 1 if failed else 0
 
 
@@ -164,7 +180,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("update")
     p.add_argument("-j", "--jobs", type=int, default=4)
     p.add_argument("--run", help="the run this measures in, cited in each entry it writes")
-    p.add_argument("--remeasure", nargs="*", default=[], help="templates past SIZE to build again")
+    p.add_argument("--remeasure", nargs="*", default=[],
+                   help="templates whose entries to write again: one past SIZE is built again, and one at most SIZE, "
+                        "which is measured anyway, has its entry rewritten even when its description has not moved")
     a = ap.parse_args(argv)
     if a.cmd == "list":
         for t, where in served().items():

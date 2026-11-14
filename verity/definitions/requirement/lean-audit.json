@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["CircuitRequirement", "CircuitRequirement.Difftest"],
  "exempt": {
   "CircuitRequirement.DifftestMain": "the requirement-difftest server's entry point, one line: Difftest.serve of CircuitRequirement.Difftest.table, which tests/test_requirement_difftest.py drives against the Python reference; audited under CircuitRequirement.Difftest"
@@ -15,6 +16,7 @@
    "why": "the difftest's function reaches Lean only through the requirement, the harness and the base's canonical JSON"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "fec936bfc3065f35f26f422997e1681d36a48b4386cf9e31b18420381a0ad65c"
  }

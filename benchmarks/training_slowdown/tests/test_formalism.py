@@ -458,11 +458,11 @@ STATED = {"k": policy.CONSOLE[1], "he": stated(policy.CONSOLE[1])}
 
 def test_the_products_term_is_the_theorem_of_records_on_m():
     """The products kind's term is the theorem of record's ρ on M (the entry point's, on the products' `he`) and the record's
-    |C|, linear in c at a fixed k, and the published row rests on (H) at the β it took and (E) at its b_y, which
-    `products_rests_on` carries wherever the term is measured. It is unmeasured at a k the products weren't
-    classified at, on products that come without M (no rows), on rows that don't flag a gather's and where an
-    elementwise op fans out into an operand. The published row names the code that wrote the products' trace where
-    the trace records it, and None where it doesn't."""
+    |C|, linear in c at a fixed k, and the published row rests on (H) at the β it took, (E) at its b_y and the
+    premise on the batch (`work.P_BATCH`), which `products_rests_on` carries wherever the term is measured. It is
+    unmeasured at a k the products weren't classified at, on products that come without M (no rows), on rows that
+    don't flag a gather's and where an elementwise op fans out into an operand. The published row names the code
+    that wrote the products' trace where the trace records it, and None where it doesn't."""
     c, k = 1e11, policy.CONSOLE[1]
     stated = replace(one_part(), products=STATED)
     b = F.bound(stated, c, k)
@@ -478,7 +478,8 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert one["products_rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H)")
     assert all(x in one["products_rests_on"] for x in ("(H)", "β_w = 16 and β_x = 15.9 bits a word", calculator.BETA_K_LABEL,
                                                        "the casts of one value count as one word", "(E)",
-                                                       "b_y = 16 bits an output", "a single counterexample refutes"))
+                                                       "b_y = 16 bits an output", "a single counterexample refutes",
+                                                       work.P_BATCH))
     assert F.CODE_LABEL not in one["products_rests_on"]
     assert one["rests_on"] == (one["products_rests_on"] if one["binding_kind"] == "products" else
                                F.RESTS_ON_CELL[one["binding_kind"]])
@@ -491,8 +492,9 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     fans = F.bound(replace(stated, products=STATED | {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]}), c, k)
     assert fans["terms"]["products"] is None and "breaks the premise" in fans["unmeasured"]["products"]
     assert all(x in F.RESTS_ON["products"] for x in ("(H)", "(E)", "F = 2/√3", "β_eff", "K* = ½√(k/β)",
-                                                    calculator.BETA_K_LABEL, F.CODE_LABEL, "casts of one value"))
-    assert all(x in F.RESTS_ON_CELL["products"] for x in ("(H)", "(E)", "a single counterexample refutes"))
+                                                    calculator.BETA_K_LABEL, F.CODE_LABEL, "casts of one value",
+                                                    work.P_BATCH))
+    assert all(x in F.RESTS_ON_CELL["products"] for x in ("(H)", "(E)", "a single counterexample refutes", work.P_BATCH))
     assert F.CELL_SENSITIVITIES == ("reduction", "update")
 
 
@@ -692,12 +694,12 @@ CODE_NAME = __import__("re").compile(
 def test_no_published_string_names_the_code():
     """Every string a panel publishes is plain words, since a reader's page prints them: what the kind and each
     published ρ rest on, every reason the term is unmeasured (no product rows, no M, a retrace, another k, a broken
-    P-match, a trace of another program), the sensitivities' labels, the record's labels and the label. The code is
-    "training's slowdown code", and a premise is named in words beside its name."""
+    P-match, a trace of another program), the premise on the batch, the sensitivities' labels, the record's labels
+    and the label. The code is "training's slowdown code", and a premise is named in words beside its name."""
     c, k = 1e11, policy.CONSOLE[1]
     static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
               work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS, calculator.he_past(), work.HE_HEAD, work.OTHER_PROGRAM, F.STAND_IN,
-              F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
+              F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL, work.P_BATCH]
     strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
     other = {"shapes": 2, "unmatched": 1, "ran": 3, "largest": [[4, 512, 8]]}
     records = [one_part(), one_part(delta=500.0, decoder=5e10), replace(one_part(), products={"k": k})] + [
@@ -789,7 +791,8 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
 def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
     """Each fixture's product rows (the `.products.json` beside its circuit, training_slowdown.capture.products of the
-    step the circuit traces): the capture's version, the console's k, the circuit's tokens and |C|, P-match holding,
+    step the circuit traces): the version of the capture that took them, which traced the stored records and is
+    read still, the console's k, the circuit's tokens and |C|, P-match holding,
     and by kind every product the op log places. On the tiny start no product is fresh: every counted candidate has an
     operand read through a repeating view or a broadcast below its width (each view read at its own value's rate), so
     the products term is measured and far below 1, where the bound says nothing: M's operands are read far below
@@ -799,7 +802,7 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
 
     block = json.loads((FIXTURES / f"{name}.products.json").read_text())
     f = measure(StepCircuit.load(FIXTURES / f"{name}.npz"))
-    assert (block["capture"], block["k"]) == (products.CAPTURE, policy.CONSOLE[1])
+    assert (block["capture"], block["k"]) == (products.READS[0], policy.CONSOLE[1])
     assert (block["tokens"], block["gates"]) == (f["tokens"], f["gates"]) and block["p_match"] == []
     got = work.products_of_trace(block)
     ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())

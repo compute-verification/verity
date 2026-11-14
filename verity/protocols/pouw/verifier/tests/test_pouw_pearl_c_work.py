@@ -61,15 +61,61 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     tiles = {(t.rows[0], t.cols[0]): t for t in S.tiles(Shape(32, K, 32))}
     cell = CW.cell_wref(S, record())
     assert cell == Fraction(S.wref(Shape(1, K, 32)), 32) and CW.cell_credit(S, record()) == Fraction(S.credit_of(Shape(1, K, 32)), 32)
-    r = record(excluded_a=(3,), excluded_b=(20,))
-    assert CW.tile_weight(S, r, tiles[(0, 0)]) == cell * 15 * 16 and CW.tile_weight(S, r, tiles[(0, 16)]) == cell * 15 * 15
-    assert CW.tile_weight(S, r, tiles[(16, 16)]) == cell * 4 * 15 and CW.tile_weight(S, record(real=16), tiles[(16, 0)]) == 0
+    r = record(excluded_a=(3,))
+    assert CW.tile_weight(S, r, tiles[(0, 0)]) == cell * 15 * 16 and CW.tile_weight(S, r, tiles[(0, 16)]) == cell * 15 * 16
+    assert CW.tile_weight(S, r, tiles[(16, 16)]) == cell * 4 * 16 and CW.tile_weight(S, record(real=16), tiles[(16, 0)]) == 0
     wref, credit = CW.work(S, [r])
-    assert wref == cell * 19 * 31 and credit == (1 - S.cap) * CW.cell_credit(S, r) * 19 * 31
+    assert wref == cell * 19 * 32 and credit == (1 - S.cap) * CW.cell_credit(S, r) * 19 * 32
+    assert CW.work(S, [record(excluded_a=(3,), excluded_b=(20,))]) == (0, 0)  # B row 20's block of 64 holds all 32 columns
     assert CW.work(S, [record(kept=64)])[0] == Fraction(S.wref(Shape(20, 64, 32)))
     picks = CW.draw(S, [r], CW.draw_key(b"a coin", bytes(32), bytes(32), bytes(32)), 200)
     assert {(t.rows[0], t.cols[0]) for _, t in picks} == set(tiles) and all(r.credited(t)[0] for _, t in picks)
     assert CW.draw(S, [r], CW.draw_key(b"another coin", bytes(32), bytes(32), bytes(32)), 200) != picks
+
+
+def test_the_band_rule_a_voluntary_row_zeroes_its_band():
+    """The band rule (`UnitRecord.credited`): a voluntary A row takes the credit of its band of 64 A rows (``i // 64``),
+    on every tile of the band and on no other band, so it takes its tickets too; an excluded A row takes only its own
+    row's (the game's passing rows drop it already)."""
+    u = Matmul(0, Shape(192, K, 64), 0)
+    r = W.UnitRecord(u, 192, K, excluded_a=(130,), voluntary_a=(70,))
+    for t in S.tiles(u.shape):
+        assert r.credited(t) == ([] if t.rows[0] // 64 == 1 else [i for i in t.rows if i != 130], list(t.cols))
+    assert CW.work(S, [r])[0] == CW.cell_wref(S, r) * (128 - 1) * 64
+    assert {t.rows[0] // 64 for _, t, w in CW.tickets(S, [r]) if w == 0} == {1}
+    assert W.UnitRecord(u, 192, K, voluntary_a=(63, 64)).credited(S.tiles(u.shape)[-1])[0] == list(range(176, 192))
+
+
+def test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_ticket():
+    """Proofs' counterexample to a band rule in the cap alone: a 64 × K × 64 record with 64 real rows and voluntary A row 5
+    is one 64 × 64 tile, which a per-row rule credits 63 rows of and so draws, and the band rule credits none.  The band
+    rule is in `UnitRecord.credited`, which the ticket weight reads, so the tile has no ticket and is never drawn: every
+    draw lands on the other record's tile."""
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", hashing="h0")
+    r = W.UnitRecord(Matmul(0, Shape(64, K, 64), 0), 64, K, voluntary_a=(5,))
+    clean = W.UnitRecord(Matmul(1, Shape(64, K, 64), 1), 64, K)
+    (tile,) = s.tiles(r.matmul.shape)
+    assert r.credited(tile) == ([], list(range(64))) and CW.tile_weight(s, r, tile) == 0
+    key = CW.draw_key(b"a coin", bytes(32), bytes(32), bytes(32))
+    assert [(p, w) for p, _, w in CW.tickets(s, [r, clean])][0] == (0, 0) and CW.draw(s, [r], key, 50) == []
+    picks = CW.draw(s, [r, clean], key, 200)
+    assert len(picks) == 200 and {p for p, _ in picks} == {1}
+
+
+def test_the_band_rule_a_padding_row_zeroes_its_block():
+    """An excluded or voluntary B row takes the credit of its block of 64 columns (``j // 64``).  `pad_weight`'s padded
+    rows are voluntary, so a weight of 100 rows padded to 112 on 16-column tiles loses its block 64 … 111: the 32 real
+    columns in it with the 12 zero ones.  An excluded B row zeroes its block the same way."""
+    rows, padded = W.pad_weight([bytes(4 * K)] * 100, 16)
+    assert len(rows) == 112 and padded == tuple(range(96, 112))
+    u = Matmul(0, Shape(32, K, 112), 0)
+    r = W.UnitRecord(u, 32, K, voluntary_b=padded)
+    for t in S.tiles(u.shape):
+        assert r.credited(t) == (list(t.rows), [] if t.cols[0] >= 64 else list(t.cols))
+    assert CW.work(S, [r])[0] == CW.cell_wref(S, r) * 32 * 64
+    assert {t.cols[0] for _, t, w in CW.tickets(S, [r]) if w == 0} == {64, 80, 96}
+    e = W.UnitRecord(u, 32, K, excluded_b=(3,))
+    assert all(e.credited(t)[1] == [j for j in t.cols if j >= 64] for t in S.tiles(u.shape))
 
 
 def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
@@ -91,13 +137,18 @@ def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
         assert [CW.ticket_cell(s, rec) for rec in records] == [lean(1, n, k) / n for n, k in nks]
         own = {CW.cell_wref(s, rec) * n / lean(1, n, k) for rec, (n, k) in zip(records, nks)}
         assert len(own) == len(nks) and min(own) == CW.cell_wref(s, records[3]) * nks[3][0] / lean(1, *nks[3])
-    h = record(excluded_a=(3,), excluded_b=(20,))
+    h = record(excluded_a=(3,))
     assert all(CW.tile_weight(S, h, t) == CW.cell_wref(S, h) * len(h.credited(t)[0]) * len(h.credited(t)[1])
                for t in S.tiles(h.matmul.shape))
     mixed = [W.UnitRecord(Matmul(0, Shape(64, 4096, 128), 0), 64, 4096), W.UnitRecord(Matmul(1, Shape(64, 14336, 64), 1), 40, 14336)]
     tk = CW.tickets(s, mixed)
     weight = {(p, t.rows[0], t.cols[0]): w for p, t, w in tk}
     assert Fraction(weight[(1, 0, 0)], weight[(0, 0, 0)]) == Fraction(40 * 64, 64 * 64) * lean(1, 64, 14336) / 64 / (lean(1, 128, 4096) / 128)
+
+
+def formed(k: int) -> tuple[int, list[int], int]:
+    """A row's forming (α, x, β) at α = β = 1 and x = 0, whose elements are not salt-dead (the ends are ±e4m3(44·88))."""
+    return 0x3F800000, [0] * k, 0x3F800000
 
 
 def test_tile_cap_is_the_cells_share_of_the_units_credit():
@@ -112,17 +163,17 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         total = Fraction(0)
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
+            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows))
             assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
             assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
         assert total == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n))
     assert sm120.credit_of(Shape(32, K, 32)) < S.credit_of(Shape(32, K, 32))
-    r = record(excluded_a=(3,), excluded_b=(20,))
+    r = record(excluded_a=(3,))
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
-    assert (len(rows), len(cols)) == (15, 15)
-    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 15
+    assert (len(rows), len(cols)) == (15, 16)
+    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 16
 
 
 def test_records_bind_every_field_and_the_splits():
@@ -211,11 +262,12 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
 
 
 def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
-    """Where the work sampling design and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
-    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
-    `fixedOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
-    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
-    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
+    """A weight row that fails the per-row rules is excluded, and by the band rule it takes the credit of its whole block
+    of 64 columns, so no tile holding its column has a credited cell.  L3's `TileCheck.Accepts` asks `fixedOK` of each
+    of a tile's columns and refuses such a tile, and the game counts every column of a credited tile (`cols g`); the band
+    rule leaves such a tile neither a ticket nor credit, so the work sampling design no longer credits a tile the game refuses.  Here
+    the block holds all 16 columns: W and the credit are 0, the one exclusion tile (A row 3's and B row 5's) is opened and
+    accepted, and declaring the row credited fails its tile."""
     rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
     rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
@@ -228,8 +280,9 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (5,))]
     out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
     assert all(5 in t.cols for t in S.tiles(work.matmuls[0].shape))
-    assert out.audit.accepted and len(out.audit.verdicts) == 9
-    assert out.wref == CW.cell_wref(S, records[0]) * 19 * 15 and out.credit == (1 - S.cap) * CW.cell_credit(S, records[0]) * 19 * 15
+    assert out.audit.accepted and len(out.audit.verdicts) == 1 and CW.tickets(S, records) == [
+        (0, t, 0) for t in S.tiles(work.matmuls[0].shape)]
+    assert out.wref == out.credit == 0
     credited_b = W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())
     rejected = CW.audit(S, epoch, prover, tr, SPLITS, [credited_b], E.challenger(), 8)
     assert not rejected.audit.accepted and any(v.reason == "B row 5 is credited but fails the per-row rules"
@@ -242,9 +295,10 @@ def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
     check may see it (L3's `TileCheck.Accepts` asks `fixedOK` of every column): the padded tile's rows are voluntary,
     which leaves it no credited cell, so no sample lands on it and it opens no exclusion tile.  Here 500 rows padded to
-    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
-    under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their
-    exclusion tile is the padded one."""
+    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): by the band rule the padded rows take their block
+    of 64 columns, 448 … 503, so its 7 tiles have no ticket and the credit is the other blocks' 448 columns, under the
+    real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their exclusion
+    tile is the padded one."""
     s = C.PearlC(k_min=32, tile=(16, 8), forming="v1", hashing="h0")
     rows_a = CV.rows_f32("work-pad", "A", 16, K)
     real = [r for r in CV.rows_f32("work-pad", "B", 504, K) if CW.row_passes(C.parse_f32_row(r, K))][:500]
@@ -261,12 +315,12 @@ def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     tr = prover.prove(epoch, {3: rows_a})
     records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, padded_b={9: padded})
     assert records == [W.UnitRecord(work.matmuls[0], 16, K, (), (), (), padded)]
-    assert [t.cols for _, t, w in CW.tickets(s, records) if w == 0] == [padded]
+    assert [t.cols for _, t, w in CW.tickets(s, records) if w == 0] == [tuple(range(c, c + 8)) for c in range(448, 504, 8)]
     key = CW.draw_key(b"coin", b"root", b"records", epoch.salt)
-    assert all(t.cols != padded for _, t in CW.draw(s, records, key, 4096)) and CW.exclusion_tiles(s, records) == []
+    assert all(t.cols[0] < 448 for _, t in CW.draw(s, records, key, 4096)) and CW.exclusion_tiles(s, records) == []
     out = CW.audit(s, epoch, prover, tr, SPLITS, records, E.challenger(), 16)
     assert out.audit.accepted
-    assert out.credit == (1 - s.cap) * CW.cell_credit(s, records[0]) * 16 * 496
+    assert out.credit == (1 - s.cap) * CW.cell_credit(s, records[0]) * 16 * 448
     assert out.credit < (1 - s.cap) * s.credit_of(Shape(16, K, 500))
     only_voluntary = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, SPLITS, voluntary_b={9: padded})
     assert only_voluntary[0].excluded_b == tuple(range(500, 504))
@@ -386,14 +440,15 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
 
 
 def test_h3_caps_each_credited_row_as_well_as_the_tile():
-    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with the aligned spikes
-    among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the tile's.
-    h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and the audit then
-    accepts on the other 31 rows."""
+    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
+    72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's debit is under 3/4 of the
+    tile's (at 300 its forming elements alone put the tile over).
+    h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and by the band rule
+    that row takes its band of 64 rows, here the whole tile, so the audit then accepts with no credit."""
     k, m, n = 1024, 32, 4
     h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
     assert CW.row_cap(h3) and not CW.row_cap(h0) and not CW.row_cap(S)
-    rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
+    rows_a = spiked_rows(k, 1, 100, 72.0) + spiked_rows(k, m - 1, 200, None)
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
     splits = {1: W.Split(k)}
@@ -417,7 +472,7 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     assert (va, vb) == ({0: [0]}, {})
     given = CW.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
     again = CW.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
-    assert again.audit.accepted and again.credit == (1 - h3.cap) * CW.cell_credit(h3, given[0]) * (m - 1) * n
+    assert again.audit.accepted and again.credit == 0 and given[0].credited(tile) == ([], list(range(n)))
 
 
 def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
@@ -438,9 +493,9 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
 
 def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
     """At the H100 record's census k = 256, -h3 caps each credited row's debit at 4ρ of its
-    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.30ρ is
-    accepted (the ρ row cap refused it), a row at 10.4ρ is refused by the 4ρ row cap, and 16 rows each under 4ρ that
-    put the tile over ρ are refused by the tile cap."""
+    cells' credit (`pearlCTilesDevRev1RowCapAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
+    accepted (the ρ row cap refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row cap, and 16 rows each
+    under 4ρ that put the tile over ρ are refused by the tile cap."""
     m = 16
     h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
     assert h3.census_ks == (256,) and h3.row_cap_at(256) == 4 * h3.cap == Fraction(1, 100)
@@ -450,7 +505,7 @@ def test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho():
     row = CW._debit_cap(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert debit < cap / 2 and row[1] < row[0] < 4 * row[1]
     assert CW.check_opened(h3, rec, tile, a, b, ops) is None
-    rec, tile, a, b, ops = _census_tile(h3, [100.0] + [None] * (m - 1), 256)
+    rec, tile, a, b, ops = _census_tile(h3, [85.0] + [None] * (m - 1), 256)
     reason = CW.check_opened(h3, rec, tile, a, b, ops)
     assert reason.startswith("A row 0's replayed debit") and "(the row cap: 4ρ·its credited cells' credit)" in reason
     spikes = [50.0, 50.0, 50.0, 50.0, 30.0, 20.0, 20.0, 30.0, 30.0, None, 10.0, 20.0, 30.0, 20.0, None, 30.0]

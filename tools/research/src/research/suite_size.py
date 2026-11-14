@@ -1,5 +1,6 @@
 """`research run --on auto`'s size for a suites.py run, from what each suite it runs declares in its pyproject.toml's
-`[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run.
+`[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run, stretched
+as suites.py's `bound` stretches it for fewer workers than its `timeout_workers` (`_bound`).
 
 The run's memory is its test processes at the largest worker_gb, one per CPU (suites.py's `--jobs` is the CPUs it may use) or
 its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That is the budget suites.py divides among its test
@@ -120,8 +121,14 @@ def declared(source: Path) -> list[dict]:
         project = data.get("project", {})
         tests = data["tool"].get("verity", {}).get("tests", {})
         out.append({"name": "repository" if path == "." else _norm(project["name"]) if project.get("name") else path, "path": path,
-                    "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0))})
+                    "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0)),
+                    "timeout_workers": int(tests.get("timeout_workers", 0))})
     return out
+
+
+def _bound(s: dict, workers: int, undeclared: float) -> float:
+    """suites.py's `bound`: ``s``'s timeout_s (else ``undeclared``), times how many fewer than its timeout_workers ``workers`` is."""
+    return (s["timeout_s"] or undeclared) * max(1.0, s["timeout_workers"] / max(1, workers))
 
 
 def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
@@ -168,11 +175,11 @@ def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
     elif gb := max(s["worker_gb"] for s in chosen):
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
     if many:
-        ts = [s["timeout_s"] or UNDECLARED_S for s in chosen]
+        ts = [_bound(s, workers, UNDECLARED_S) for s in chosen]
         if (t := math.ceil(sum(ts) / workers + max(ts)) + SYNC_S) > AUTO_MAX_S:
             out["max_s"] = t
     elif any(s["timeout_s"] for s in chosen):
-        out["max_s"] = max(AUTO_MAX_S, int(sum(s["timeout_s"] or SUITE_TIMEOUT_S for s in chosen)) + SYNC_S)
+        out["max_s"] = max(AUTO_MAX_S, int(sum(_bound(s, workers, SUITE_TIMEOUT_S) for s in chosen)) + SYNC_S)
     return out if len(out) > 1 else None
 
 

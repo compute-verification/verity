@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import verity_difftest as D
+from replay_core import store_runs
 
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import window as Wd
@@ -271,7 +272,7 @@ class SideReplay:
         self.control("root-sibling", not up(0, leaf(0, rows[0], salts[0]), [sib, *paths[0][1:]]))
         self.control("root-index", not up(1, leaf(0, rows[0], salts[0], at=1), paths[1]))
 
-    def draw(self, rows: list[str]) -> None:
+    def sampled(self, rows: list[str]) -> None:
         if self.side != "request":
             return
         summary = load(self.out / "summary.json") if (self.out / "summary.json").is_file() else {}
@@ -296,7 +297,7 @@ class SideReplay:
             rows = list(base["rows"])
             self.breaks(base)
             self.root(rows)
-            self.draw(rows)
+            self.sampled(rows)
         return {"layout": "entry rows" if current else "older", "checks": self.checks, "controls": self.controls}
 
 
@@ -347,12 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        if a.runs is None:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
-            from replay_core import store_runs
-            runs = store_runs(Path(tmp) / "runs")
-        else:
-            runs = list(a.runs)
+        runs = store_runs(Path(tmp) / "runs") if a.runs is None else list(a.runs)
         runs = [*runs, *(r for r in a.add if r.name not in {x.name for x in runs})]
         sides = Sides()
         try:
@@ -363,6 +359,8 @@ def main(argv: list[str] | None = None) -> int:
     print(report["totals"]["line"])
     return 0 if passed(report) else 1
 
+
+__all__ = ["REASONS", "Sides", "passed", "replay"]
 
 if __name__ == "__main__":
     sys.exit(main())

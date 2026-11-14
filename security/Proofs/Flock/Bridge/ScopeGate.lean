@@ -103,12 +103,12 @@ open scoped ENNReal
 open Classical in
 /-- **`SampledKSLiveV2` with its statement, file and draw preconditions read off acceptance**: on the event that
 `verify --zk` accepts the transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`:
-`Bridge.LiveAcceptsKS`, whose ports are row/v1, row/v2 or row-seg/v1 rows of distinct names with no two registered roots
+`Bridge.LiveAcceptsKS`, whose ports are row/v1, row/v2 or row-seg/v1 rows of distinct published domains with no two registered roots
 one root under different domains, and `Flock.KsScope.check`), SPOT's run passes the registration's
 population (`Bridge.RunPopOk`),
 and the claims relation fails, at a statement, files and a draw in `Bridge.KsScoped` the bound is
 `Bridge.SampledKSLiveRoots`', and outside them the event has probability 0. It has none of V2's hypotheses `RowsOk`,
-`dupName = none`, `rootsColl = none` and `PopMatches`, nor `I.tags.typed = false`, `Built D.unroll.unit`,
+`dupId = false`, `rootsColl = none` and `PopMatches`, nor `I.tags.typed = false`, `Built D.unroll.unit`,
 `scopeOkH D.unroll = true`, `kd % nTab I = 0` and `TagsOkZHJ I`; the game's `n` is the public file's population
 (`pub.n = n`), and the public file has no shared rows (`pub.tables = none`), whose shared-row form is
 `SampledKSLiveV5`'s. Its finders' charges are V2's: `2(t' + v)` and `t' + v` for the knowledge finders and `t' + v` per
@@ -160,7 +160,7 @@ def SampledKSLiveV3 : Prop :=
           ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
       -- the registration's frame-v3 roots, over the public file's rows
       let roots := Bridge.rootsOf D.unroll pub n
-      let Cd := Bridge.commitDep Cc rows D.unroll n roots
+      let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
       -- the circuit's constants, public
       let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hs.built n g
       -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
