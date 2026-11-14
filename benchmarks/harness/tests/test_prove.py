@@ -620,7 +620,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
     reports = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
     out = P.report(PF.Flock(reports, SESSIONS, "art:card").table(P.Census.of(doc)), 1.0)
     t = out["totals"]
-    assert {s["source"]: s["block_types"] for s in out["sources"]} == {P.STEADY: 1, P.FAMILY: 0, P.SINGLE: 0, P.MODELED: 0, P.MISSING: 2}
+    assert {s["source"]: s["block_types"] for s in out["sources"]} == {P.STEADY: 1, P.WARM: 0, P.FAMILY: 0, P.SINGLE: 0, P.MODELED: 0, P.MISSING: 2}
     assert (t["steady_time_share"], t["gpu_seconds_per_token"], t["status"]) == (1.0, 1.0, "partial")
     assert t["missing"] == [
         {"block": "Unpriced_v1{N=1}", "per_token": 3.0, "block_share": 0.6, "mac_share": 0.1875},
@@ -1360,7 +1360,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert t["gpu_seconds_per_token_range"][0] == pytest.approx(27643.734264603525, rel=1e-12)
     assert t["status"] == "modeled" and t["proof_bytes_per_token"] is None
     by = {x["source"]: x for x in doc["sources"]}
-    assert [(k, x["block_types"]) for k, x in by.items()] == [(P.STEADY, 8), (P.FAMILY, 59), (P.SINGLE, 27), (P.MODELED, 56), (P.MISSING, 0)]
+    assert [(k, x["block_types"]) for k, x in by.items()] == [(P.STEADY, 8), (P.WARM, 0), (P.FAMILY, 59), (P.SINGLE, 27), (P.MODELED, 56), (P.MISSING, 0)]
     assert by[P.STEADY]["per_token"] == pytest.approx(10380036.348432057) and by[P.STEADY]["time_share"] == pytest.approx(
         0.23323941236103127)
     assert by[P.SINGLE]["per_token"] == pytest.approx(6132840.139372822) and by[P.SINGLE]["time_share"] == pytest.approx(
@@ -2068,6 +2068,81 @@ def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_f
     assert R.lean_verify({k: v for k, v in lean_record(runs[0]).items() if k != "label"}, runs[0]) == "its record lacks `label`"
     assert R.lean_verify(lean_record(runs[0]) | {"label": None}, runs[0]) == "its `label` (None) doesn't say what its accept holds"
     assert R.lean_verify([], runs[0]) == "its `out/lean-verify.json` isn't a `verity-bench/lean-verify/v1` record"
+
+
+def warm_statement(word: str | None, n: int, k_log: int, seconds: float, *, device: str = "gpu", timed: int = 4,
+                   accepted: tuple[bool, ...] = (True,) * 5) -> dict:
+    """A statement of `prove_time.py`'s summary as a `stage_prove.sh` group writes it, cut to what the table reads."""
+
+    return {"device": device, "word": word, "n": n, "k_log": k_log, "accepted": list(accepted), "timed": timed,
+            "prove_total_s": seconds}
+
+
+def warm_ran(s: Store, tmp: Path, run: str, statements: dict | None, config: str = "warm=1 runs=4") -> str:
+    """`run` in the store with one card's group (`out/gpu0/out/`) holding `statements` (None: a run that wrote none), a
+    warm-session run of record."""
+
+    files = tmp / "warm-files" / run
+    group = files / "out" / "gpu0" / "out"
+    group.mkdir(parents=True)
+    (files / "out" / "steps.txt").write_text("ran")
+    if statements is not None:
+        (group / "summary.json").write_text(json.dumps({"statements": statements}))
+        (group / "config.txt").write_text(f"device=gpu units=census:X@full ns=16 64 statements= {config}\n")
+    s.ran(run, files)
+    return s.record(run, R.WARMED)
+
+
+def test_a_warm_session_run_prices_its_own_types_under_its_own_label_with_its_warm_and_timed_sessions(tmp_path):
+    """A type with no steady-state row takes its own statement proved on one card from warm sessions: the fullest
+    statement's median GPU-seconds over its blocks, marked `warm` and named with the run's WARM and RUNS, never the
+    steady state's label. A type measured at steady state keeps that row, the totals stay modeled, and a statement or
+    run that measures nothing is listed with why."""
+
+    s, _ = recorded(tmp_path)
+    before = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    off = next(r for r in before["rows"] if r["source"] in (P.FAMILY, P.SINGLE) and r["k_log"])
+    on = next(r for r in before["rows"] if r["source"] == P.STEADY)
+    full = 2**35 >> off["k_log"]
+    run = warm_ran(s, tmp_path, "r20261115-000000-0001", {
+        "gpu/off-full": warm_statement(off["block"], full, off["k_log"], 100.0),
+        "gpu/off-half": warm_statement(off["block"], max(1, full // 2), off["k_log"], 1.0),
+        "gpu/on": warm_statement(on["block"], 2**35 >> on["k_log"], on["k_log"], 1e-6),
+        "cpu/on-cpu": warm_statement(on["block"], 1, on["k_log"], 1.0, device="cpu"),
+        "gpu/short": warm_statement(off["block"], full, off["k_log"], 1.0, timed=3, accepted=(True,) * 4),
+        "gpu/refused": warm_statement(off["block"], full, off["k_log"], 1.0, accepted=(True, True, False, True, True)),
+        "gpu/nameless": warm_statement(None, full, off["k_log"], 1.0),
+        "gpu/stray": warm_statement("Stray_v1{N=1}", 1, 27, 1.0)})
+    empty = warm_ran(s, tmp_path, "r20261115-000000-0002", None)
+    doc = R.build("flock", "glm53", store=s.fresh("second"), root=REPO)
+    rows = {r["block"]: r for r in doc["rows"]}
+
+    got = rows[off["block"]]
+    assert (got["source"], got["record"], got["statement_blocks"]) == (P.WARM, run, full)
+    assert got["seconds"] == pytest.approx(100.0 / full)
+    assert got["note"].startswith(f"`off-full`, {full} of a full statement's {full} blocks, on one card: after 1 warm "
+                                  "session, the median of 4 timed ones (WARM=1, RUNS=4)")
+    assert rows[on["block"]]["source"] == P.STEADY and rows[on["block"]]["seconds"] == on["seconds"]
+    by = {x["source"]: x["block_types"] for x in doc["sources"]}
+    assert by[P.WARM] == 1 and by[P.STEADY] == {x["source"]: x["block_types"] for x in before["sources"]}[P.STEADY]
+    assert doc["totals"]["status"] == "modeled"
+    assert doc["totals"]["steady_time_share"] == pytest.approx(sum(r["time_share"] for r in doc["rows"]
+                                                                   if r["source"] == P.STEADY))
+    assert doc["inputs"][-1] == {"slot": R.WARMED, "record": "prove-glm53-flock-warm", "targets": [run],
+                                 "what": "2 block type(s) proved on one card from warm sessions"}
+    assert [(x["target"], x["why"]) for x in doc["refused"]] == [
+        (empty, "holds no `out/gpu*/out/summary.json` with its `out/gpu*/out/config.txt`, which `stage_prove.sh` writes"),
+        (run, "`on-cpu`: not proved on a card"),
+        (run, "`nameless`: names no census type (`word`)"),
+        (run, "`refused`: not every session was accepted ([True, True, False, True, True])"),
+        (run, "`short`: 3 timed of 4 sessions, not RUNS=4 after WARM=1"),
+        (run, "`stray`: its block type, `Stray_v1{N=1}`, is no block type of the census under its cut")]
+
+    line = next(x for x in R.render(doc).splitlines() if x.startswith(f"| `{off['block']}`"))
+    assert f"| {P.SOURCES[P.WARM]} |" in line and "(WARM=1, RUNS=4)" in line and P.SOURCES[P.STEADY] not in line
+
+    assert R.warm_rows({"statements": {}}, "device=gpu units=x", run) == [
+        "its `out/gpu*/out/config.txt` states no `warm=W runs=R`, or its `out/gpu*/out/summary.json` no `statements`"]
 
 
 # ---- the Lean verifier's runner ------------------------------------------------------------------------------------------------

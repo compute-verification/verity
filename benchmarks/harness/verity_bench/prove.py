@@ -20,6 +20,10 @@ served token, the prover GPU-seconds a block and where that figure is from (`SOU
   doesn't. A type's rows at the same prover count and cores that timed statements of other sizes are carried beside
   the one that prices it (`Cost.sizes`, a row a size), so a reader can split a statement's fixed seconds from its
   seconds a block; they move no figure of the table;
+- `warm`: no steady-state row, but its own statements proved on one card from warm sessions (`Warm`): after a stated
+  count of warm sessions, the median of a stated count of timed ones (`WARM` and `RUNS`, which the row names), a
+  statement's GPU-seconds over its blocks. It is measured, not at steady state: the steady-state share and the measured
+  status count it as neither, and no other type is priced from it;
 - `family`: no row of its own, but a steady-state row of its Definition and K at other statics, chosen as above, at
   2^Δk its seconds a block (Δk between the two k_logs), the dearest such where there are several, named with the
   Definition its statements are of as a type's own row is. It is priced, not measured: the steady-state share and the
@@ -72,9 +76,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from verity_bench.prove_flock import LeanVerify, Steady
 
-STEADY, FAMILY, SINGLE, MODELED, MISSING = "steady", "family", "single", "k_log", "missing"
+STEADY, WARM, FAMILY, SINGLE, MODELED, MISSING = "steady", "warm", "family", "single", "k_log", "missing"
 #: where a block type's proving time is from, best first, as the table words it
-SOURCES = {STEADY: "measured at steady state", FAMILY: "steady state, its family's",
+SOURCES = {STEADY: "measured at steady state", WARM: "measured from warm sessions", FAMILY: "steady state, its family's",
            SINGLE: "measured in a single session", MODELED: "modeled from k_log", MISSING: "missing"}
 #: a full statement's witness bits: a block type's statement holds 2^35 / 2^k_log of its blocks
 STATEMENT_BITS = 2**35

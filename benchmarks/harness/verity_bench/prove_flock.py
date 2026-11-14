@@ -1,6 +1,6 @@
 """Flock's prover priced on a workload (`verity bench prove --system flock`): the measurements it reads, a block type's
-single session (`Session`), a row of the proof server's steady-state rate (`Steady`) and a statement the Lean
-verifier accepted (`LeanVerify`), and `Flock`, the proof system that turns a census into a table from them. The
+single session (`Session`), a row of the proof server's steady-state rate (`Steady`), a statement proved from warm
+sessions (`Warm`) and a statement the Lean verifier accepted (`LeanVerify`), and `Flock`, the proof system that turns a census into a table from them. The
 sources, the totals and the Lean figures' rules are `prove`'s.
 
 Standard library only: `prove_records` reads these measurements from the store's records.
@@ -25,6 +25,7 @@ from verity_bench.prove import (
     STATEMENT_BITS,
     STEADY,
     UNSTATED_CORES,
+    WARM,
     Block,
     Census,
     Cost,
@@ -48,6 +49,30 @@ class Session:
     seconds_per_block: float
     fixed_seconds: float
     statement_blocks: int
+
+
+@dataclass(frozen=True)
+class Warm:
+    """A statement of a block type proved on one card from warm sessions (`stage_prove.sh`, `window.py prove`): the
+    Definition of the block type it was staged for (`definition`, by its id), `blocks` blocks where a full statement
+    holds `full`, after `warm` warm sessions the median GPU-seconds of its `runs` timed ones (`seconds`), every session
+    accepted. `statement` is its name in the run, `run` the run that proved it."""
+
+    definition: str
+    k_log: int
+    blocks: int
+    full: int
+    seconds: float
+    warm: int
+    runs: int
+    run: str
+    statement: str
+
+    @property
+    def note(self) -> str:
+        return (f"`{self.statement}`, {self.blocks} of a full statement's {self.full} blocks, on one card: after "
+                f"{self.warm} warm session{'' if self.warm == 1 else 's'}, the median of {self.runs} timed ones "
+                f"(WARM={self.warm}, RUNS={self.runs})")
 
 
 @dataclass(frozen=True)
@@ -286,7 +311,8 @@ class Flock:
     the row of the pricing row's run where that run timed it, else the newest, and its note names them. A type those
     rows measured only at more cores takes the rows at the fewest cores
     above, by the same order, and its note says which; a row timed at fewer cores prices nothing, since the host's
-    share is the least a prover holds. Else it takes `card`'s single-session measurement: its own block's, or its
+    share is the least a prover holds. Else it takes its own statements proved from warm sessions (`warm`), the fullest
+    statement's, the newest run's among equals. Else it takes `card`'s single-session measurement: its own block's, or its
     Definition and K's at 2^Δk the seconds and 2^-Δk the statement, Δk between the two k_logs as the census holds
     them; else the k_log model fitted on the card's types. A type no row measured for it names its newest attempt at
     that prover count, the other prover counts that measured it, and the core counts under the host's that did. A row
@@ -308,6 +334,7 @@ class Flock:
     aliases: Sequence[tuple[str, str]] = ()
     lean: Sequence[LeanVerify] = ()
     boolean: Callable[[str, str], bool] | None = None
+    warm: Sequence[Warm] = ()
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
@@ -348,6 +375,10 @@ class Flock:
         for s in measured.values():
             families.setdefault(_family(s.definition), []).append(s)
         single = self._single(census)
+        warmed: dict[str, Warm] = {}
+        for w in self.warm:
+            if (kept := warmed.get(w.definition)) is None or (w.blocks, w.run) > (kept.blocks, kept.run):
+                warmed[w.definition] = w
         timed: dict[str, LeanVerify] = {}
         for v in self.lean:
             if v.definition in held and ((prior := timed.get(v.definition)) is None or v.run > prior.run):
@@ -368,7 +399,10 @@ class Flock:
                             sizes=tuple((x.blocks, x.seconds, x.record) for x in [m, *others]) if others else ())
             else:
                 kin = families.get(_family(spelled), [])
-                cost = _kin(b, kin, self.cores, form) if kin else single(b)
+                if proved := warmed.get(spelled):
+                    cost = Cost(WARM, proved.seconds / proved.blocks, proved.run, proved.note, blocks=proved.blocks)
+                else:
+                    cost = _kin(b, kin, self.cores, form) if kin else single(b)
                 why = []
                 if t := tried.get(spelled):
                     why.append(f"steady state tried as `{t.type}` at {t.at} in {t.run} ({t.held}): {t.refused}")
