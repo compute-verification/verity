@@ -121,10 +121,15 @@ def masked(fn: SpecializedDefinition) -> SpecializedDefinition:
     own id, at ``fn``'s statics, so its hash and its Lean verdict are its own, and ``fn`` stays for a class that always
     serves O ids. A step's units read its bit by wire (`class_window`).
 
+    A unit whose outputs include a verdict a registration holds (a table read's ``o1``, `interface.TableOpening`) is
+    not masked whole: its opening reads the table's row at the step's key (0 past the stop), and its verdict must hold
+    there too.
+
     NOT decided: whether each family's masked Definition is that family's next version in the catalog
     (`verity/definitions/registry`, with its circuit-check sidecar), or one combinator registered once over any
-    Definition, whose property check covers every family; nor how a template whose rows are near
-    `interface.MAX_ROWS` takes the bit's row (CIR-290's plan counts them)."""
+    Definition, whose property check covers every family; whether a unit whose Definition maps rows of zeros to rows
+    of zeros, word for word, and that reads nothing from outside its step but weights keeps its unmasked version
+    (CIR-290's plan counts both); and how a template whose rows are near `interface.MAX_ROWS` takes the bit's row."""
     raise NotImplementedError(TODO)
 
 
@@ -184,8 +189,9 @@ def class_check(V: int, N: int, O: int, stops: Sequence[int], max_model_len: int
     proof block (`interface.check_proof_block`), as in v1. It calls `StopClass_v1` (written, unregistered: its
     registration comes with this check), `GreedyCombine_v2` and the scalar ops v1 calls.
 
-    Its ids a row each, it has T + K + 2 rows and more, so near T = 240 it passes `interface.MAX_ROWS` (256): a larger
-    class reads its ids gathered first (`node_window.GATHER_ROWS`).
+    Its ids a row each, it has T + k + K + 2 rows: k its logits port's (cut as the combine's, 64 at GLM-5.3's select
+    at TP8) and K - 1 results. At GLM-5.3 it passes `interface.MAX_ROWS` (256) past T = 170, so its O = 128 class fits
+    and an O of 256 or more reads its ids gathered first (`node_window.GATHER_ROWS`).
 
     NOT decided (PRF-618, 10:58 AM PST, proofs' to say): what the bit asserts for a request the rule does not end
     within O (finish 0, ``live`` 1 after the last step), for a ``min_tokens`` other than 0, which the rule doesn't read
