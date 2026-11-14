@@ -71,3 +71,47 @@ STAMPS2 (MODEL: Claude Opus 5.5). Lost with the old machine: only my /tmp scratc
 - Training's three files: none of scan_zk.py, io_request.py or ingress_scan.py is deleted by 2.2–5.4. 2.2 moves only `_found` and `window_answer` from scan_zk.py to verifier/scan_answer.py, and W63, which benchmarks/rho/data/envelopes.toml cites, stays in scan_zk.py [read]. io_request.py and ingress_scan.py stay; 2.3 changed only their imports or prose [read].
 - Next: the cut rebuilt by the script on 2.3's 7a994f8a with 22b78b68 merged in.
 
+[2026-11-14T17:02Z] ba73ba56d78d
+CLOCKGONE to network-accounting (lead), Sat 14 Nov 9:03 AM PST. MODEL: Claude Opus 5.5. I held no timer or subscription.
+
+Branch `cursor/na-clock-form-gone-b51f`, head `9d40b06ee4915493000c0dff283b6f43c6e4f401` (pushed), over `6bef2f142fa4abd35d5c6a3ff16bf47debb5914d`. This VM's checkout had been reset to main. I fetched my pushed head back and checked it out; nothing was lost.
+
+**1. chain_record (`8c74537664fd3e13deefa0200c03937ea9f66a1a`; written, and the named test files ran locally).**
+- `period_binding(answer, case)` now only decodes the case and checks its commitment's digest. The `sync_set`, certificate, N2 and audit checks are gone.
+- `block_entry(answer, case, verdict)` writes no entry for any answer. In order, it gives the reasons: no answer, the chain not accepted, no case, the digest. Past those it gives `ROWS_FORM`: "the rows form's link-windows are the scan's registrations, which this chain does not hold, so no K is written".
+- Gone because nothing calls them any more: `decide_period`, `--server`, `report`'s `runs`, `main`'s `block.json` write and `markdown`'s entry line.
+- In `chain_record.sh`: the `network-period` build, `VERITY_NETWORK_PERIOD_EXE`, `CR_SERVER`, and the comment lines that described these.
+- `--period-answer` and `--period-case` stay: `block_entry` still reads them for its reasons.
+- `test_chain_record.py`: the clock-form test, which held l.365 and l.393, is gone. `test_no_block_entry_is_written_for_an_answer_the_period_check_accepts` replaces it. In that test, a rows-form case that the mirror accepts, on an accepted chain, gives `{"written": False, "why": ROWS_FORM}`, and `main` writes no `block.json`. It also holds the other case, a missing case, a missing answer, and the refused and scan-only chains. `_chain_of` no longer builds the chain from the case; the rows case's audit has a stratum drawn 0 times, which `audit_of` refuses.
+- No rows-form binding is written.
+- Body heading, to come: after this change no report writes `block.json`. Main `a116c5614312` already refused the rows form at `benchmarks/network_traces/chain_record.py` l.983–984: `if "sync_set" not in params: return "a rows-form answer: …"`.
+- `test_chain_record.py`, `test_block_certifier.py` and `test_certifier_piece.py` ran locally: 86 passed.
+
+**2. block_certifier (`75c94c1c24ebf248079fdd9f0dc4ff4473d36b1c`; ran locally).**
+- The clock run's entry is gone from `certifier-period-answers.json`.
+- `test_block_certifier.py` holds the four refusals (a rejected answer, another protocol, a source, no run) on the rows run, and the composed record on the rows run alone.
+- `block_leg`'s docstrings say "a period's accepted answer", with no form.
+- `block_certifier.check` lost its one caller (`decide_period`), so it goes, with its test. The network_traces README and `pyproject.toml` comment lines that described it are rewritten.
+- `tests/test_literal_addresses.py`'s count for the fixture goes 2 → 1 (the scan counts 1); both files passed locally, 4 tests.
+- `benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json` holds a clock-form answer: its certifier leg, from run `r20261025-210358-993e`, has no `scans` in `public`. The test I touched passes on it, so I left it.
+
+**3.** I left the N2 clock-sync pipeline as it is.
+
+**4. Statements changed: `Audit.bits` goes (`9d40b06ee4915493000c0dff283b6f43c6e4f401`).**
+- **The grep at `6bef2f14…`** (`git grep` for `.bits`, `Audit(` and the Audit literals over Lean, the twin, its callers, the difftests and the tests) found writers only, and no reader:
+  - Lean writes it at `NetworkCheck/Period.lean` l.600 and in the `#guard` literals at l.1326 and l.1384.
+  - The witnesses `slotAudit`, `selectAudit` and `renamedAudit` in `security/Proofs/Properties/NetworkPeriod.lean` (l.127, 145, 173) write it.
+  - The twin declares it at `period_case.py` l.163 and writes it at l.504.
+  - The tests construct it at `test_network_period_protocol.py` l.415, 660 and 672.
+  - `Public.K` reads `AuditTerms.bits`, which is another structure.
+- **Deleted:** the field and its docstring clause in Lean and the twin; `auditOf`'s `templates` now keeps members only. The three witness literals each lose that 0; that change is mechanical, and each witness still builds the same way (argued; the records run will show it). The three tests' constructions lose it too.
+- **Locally:** the verifier package built with the edit (the mirror test's server compiled `Period.lean`). Six tests passed, the mirror test among them.
+
+**Runs.**
+- `r20261114-160439-b238`: cancelled while still waiting for a slot; its check never started.
+- `r20261114-170012-ab08`, at `9d40b06e…`, runs b238's suites once: the network suite, `verity-core-composition` and `verity-network-traces`. It also runs the verifier's setup, `lake build`, and the try on `Period.lean`. Its verdict decides whether the twin and Lean agree and whether chain_record holds.
+- `r20261114-170009-cb10`, at `9d40b06e…`, is the records run (`lean_changed.py --records security --update`). It is owed because item 4 changed Lean. When it and c551 have both ended, I send every module digest and listed record that differs from c551's.
+- `r20261114-155205-c551` is still running at 9:02 AM PST; your 8:37 note had it as ended. `-155204-01f3` and `-161905-78fe` are still waiting. All three are untouched, and none of them has ended, so I have read nothing from them.
+
+TIMER: none.
+
