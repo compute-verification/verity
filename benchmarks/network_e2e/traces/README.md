@@ -36,7 +36,7 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   `honest` says whether a cut moved any request's output ids, and each edge's record (`raw/cut.PID.jsonl`) its hold,
   its cut set and its time.
 - `corpus.WARDEN`'s traces serve heavy's and small KV's loads through the network certifier as a relay
-  (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
+  (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor device). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
   twice more for the scheduler replay (`benchmarks/network_e2e/encodings/replay.py`'s `read_corpus_trace`): with the
   relay's admission order and with its release order as the certified ingress (`summary.warden_views`). The relay,

@@ -6,7 +6,7 @@
 #     bash benchmarks/pous/p2_v1/bw_session.sh      # on the demo card's node; RUN/inputs/ may hold store-layout.json, p2lib.tar
 #
 # The verifier is `p2_party` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
-# nothing. PARTY is the auditor's instead: the ssh command to the auditor host's gate verb that starts `p2_party --listen`
+# nothing. PARTY is the auditor's instead: the ssh command to the auditor device's gate verb that starts `p2_party --listen`
 # there, once a session (the honest one, then the cheat), whose port this host reaches at PARTY_HOST and whose stdout
 # ends with the verifier's own record of the answer (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
 # `p2_party --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with

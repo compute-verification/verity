@@ -2707,7 +2707,7 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
 
 def live_coin(after: bytes, entropy: int = 7):
     """A live session's coin commitment, Pearl-C's salt coin alone (`window.SALT_FAMILIES`), and that coin opened after
-    `after`, from a seeded in-process live challenger (the auditor host's session as `pouw_h1_window.open_session`
+    `after`, from a seeded in-process live challenger (the auditor device's session as `pouw_h1_window.open_session`
     returns it)."""
     ch = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(entropy).randbytes)
     return ch.commitment, ch.open(Wd.SALT, 0, after)

@@ -181,7 +181,7 @@ def test_a_second_session_signs_at_the_keys_next_leaves(tmp_path):
 
 
 def test_the_key_is_held_only_while_it_signs_so_the_hosts_other_signers_sign_during_a_session(tmp_path):
-    """On the auditor host every signer of the key takes `sign.lock` (`--sign-lock`) and the leaf state only to sign: a
+    """On the auditor device every signer of the key takes `sign.lock` (`--sign-lock`) and the leaf state only to sign: a
     session holds neither while it serves, so the ledger and the host's other sessions sign meanwhile, and its close
     signs at the next leaf after theirs."""
     lock = tmp_path / "sign.lock"

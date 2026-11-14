@@ -250,7 +250,7 @@ def test_a_served_type_reading_tables_is_staged_structurally_as_its_flat_stateme
     _structural_is_flat((fn, f"unit/struct-{name}", in_rows, outs), rows, tmp_path)
 
 
-#: the auditor's host runs the lowering on numpy and Flock's Python alone
+#: the auditor's device runs the lowering on numpy and Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
 class _Block(importlib.abc.MetaPathFinder):

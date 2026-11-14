@@ -179,7 +179,7 @@ the compiler listing none and under it less each one gate (`more_negatives`).
 **Coins**: each window's `service.Stream` samples on the auditor's challenger's coins, ``--challenger local|gate:USER@HOST --main
 FILE`` (`a5_coins`: the run root's one session, committed to each registration before any coin is
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
-history; ``gate:USER@HOST`` is the auditor host through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
+history; ``gate:USER@HOST`` is the auditor device through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
 a root once, ever, and a window's honest and forged commits share the run root, so only one of them samples there.
 `advice_before_draw` holds the advice to the receipt of the stream that sampled.

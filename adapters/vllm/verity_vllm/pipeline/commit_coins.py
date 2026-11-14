@@ -1,9 +1,9 @@
-"""The Commit's coins from the auditor host's challenger: one challenge phase a Commit, which samples its openings
+"""The Commit's coins from the auditor device's challenger: one challenge phase a Commit, which samples its openings
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `verity/protocols/compose/device/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
+  families(runs)``, `verity/protocols/compose/device/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
@@ -101,7 +101,7 @@ class ChallengerGate:
 
 
 class ChallengePhase:
-    """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
+    """The Commit's challenge phase on the auditor device's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
 
     def __init__(self, gate: ChallengerGate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
@@ -236,7 +236,7 @@ def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
 def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
            key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None,
            main: Sequence[str] | None) -> str | None:
-    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
+    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor device's
     challenger's, sampled after `roots` (each run's root of record as the verifier holds it); None when they are. The
     challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head
     published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
