@@ -143,13 +143,13 @@ inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_c
           "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16.json", "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json",
           "ruff.toml", "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
           "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py",
-          "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
-          "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
-          "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
-          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
-          "tools/research/src/research/treelock.py", "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
-          "tools/research/src/research/withdraw.py",
-          "tools/research/src/research/__main__.py",
+          "infra/research/src/research/__init__.py", "infra/research/src/research/cli.py", "infra/research/src/research/clone.py",
+          "infra/research/src/research/compare.py", "infra/research/src/research/env.py", "infra/research/src/research/pythonpath.py",
+          "infra/research/src/research/record.py", "infra/research/src/research/remote.py", "infra/research/src/research/result.py",
+          "infra/research/src/research/runs.py", "infra/research/src/research/secret_hint.py", "infra/research/src/research/timefmt.py", "infra/research/src/research/waitcap.py",
+          "infra/research/src/research/treelock.py", "infra/research/src/research/store", "infra/research/src/research/telemetry", "infra/research/tests/fixtures/run_v0.2",
+          "infra/research/src/research/withdraw.py",
+          "infra/research/src/research/__main__.py",
           "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
           "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py", "tools/difftest"]
 parallel = true
@@ -268,7 +268,7 @@ paths = ["adapters/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_circuit_db.py"]
-paths = ["tools/research/src/research"]
+paths = ["infra/research/src/research"]
 
 [[tool.verity.tests.reads]]
 tests = [

@@ -32,7 +32,7 @@ if [ -z "${CUDA_HOME:-}" ]; then
   for c in /usr/local/cuda-13.0 /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done
 fi
 export CUDA_HOME PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.local/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/infra/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export VLLM_BATCH_INVARIANT=1 VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}

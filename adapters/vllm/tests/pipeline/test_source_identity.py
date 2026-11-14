@@ -6,11 +6,11 @@ tree on sys.path ahead of the tree of record -- and require the precheck to fail
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh with a foreign $VERITY_TREE).
 
 Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from the root, `verity_vllm` from adapters/vllm,
-`research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
+`research` from infra/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
 `.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
 of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
 
-    cd adapters/vllm && PYTHONPATH=.:../..:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
+    cd adapters/vllm && PYTHONPATH=.:../..:../../infra/research/src python -m pytest -q tests/pipeline/test_source_identity.py
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/adapters/vllm
 REPO = INTEGRATION.parents[1]  # <repo>
 PY = sys.executable
 CORE_ENTRIES = [os.path.dirname(d) for d in research_tools.CORE_DIRS]   # each sys.path entry that ships core, relative to the repo root
-PP = os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES), str(REPO / "tools" / "research" / "src")])
+PP = os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES), str(REPO / "infra" / "research" / "src")])
 
 
 def _env(**extra: str) -> dict[str, str]:
@@ -90,7 +90,7 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
         assert p["git_sha"] == doc["requested"]["git_sha"], name
         assert p["sys_path_entry"] == p["expected_sys_path_entry"], name
     assert doc["packages"]["verity"]["sys_path_entry"] == os.pathsep.join(os.path.realpath(REPO / e) for e in CORE_ENTRIES)
-    assert doc["packages"]["research"]["sys_path_entry"] == os.path.realpath(REPO / "tools" / "research" / "src")
+    assert doc["packages"]["research"]["sys_path_entry"] == os.path.realpath(REPO / "infra" / "research" / "src")
     assert doc["sys_path0"] is not None
 
 
@@ -175,7 +175,7 @@ def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
 
 
 def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
-    """No sys.path hack for `research`: without tools/research/src on the path the module still imports, and the Commit's precheck
+    """No sys.path hack for `research`: without infra/research/src on the path the module still imports, and the Commit's precheck
     is refused by name with a message naming the fix."""
     probe = "\n".join([
         "import importlib.util, sys",
@@ -188,7 +188,7 @@ def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
     if r.returncode == 99:
         pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
     assert r.returncode != 0 and "UsageError: the Commit is refused" in r.stderr, r.stderr
-    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
+    assert "infra/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
 
@@ -209,7 +209,7 @@ def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatc
     monkeypatch.setenv("RESEARCH_TOOL_SNAPSHOT", "ab12")
     assert _from_harness_tool(shipped)
     assert not _from_harness_tool({"resolved_path": "/elsewhere/ab12/research/__init__.py"})
-    assert not _from_harness_tool({"resolved_path": str(REPO / "tools" / "research" / "src" / "research" / "__init__.py")})
+    assert not _from_harness_tool({"resolved_path": str(REPO / "infra" / "research" / "src" / "research" / "__init__.py")})
     assert not _from_harness_tool({"resolved_path": None})
 
 
@@ -253,16 +253,16 @@ def _shipped_tree(tmp_path: Path) -> Path:
     settings it reads) so the precheck under test runs from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in (*research_tools.CORE_DIRS, "adapters/vllm/verity_vllm", "adapters/vllm/verity_vllm/pipeline", "adapters/vllm/tests/pipeline",
-                "tools/research/src/research/telemetry"):
+                "infra/research/src/research/telemetry"):
         (t / rel).mkdir(parents=True)
         (t / rel / "__init__.py").write_text("")
-    (t / "tools" / "research" / "src" / "research" / "__init__.py").write_text("")
+    (t / "infra" / "research" / "src" / "research" / "__init__.py").write_text("")
     for member in ["", *rpp.import_roots_dir(REPO)["members"]]:
         (t / member).mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / member / "pyproject.toml", t / member / "pyproject.toml")
     (t / "uv.lock").write_text("")
-    shutil.copy(gsid.__file__, t / "tools" / "research" / "src" / "research" / "telemetry" / "source_identity.py")
-    shutil.copy(rpp.__file__, t / "tools" / "research" / "src" / "research" / "pythonpath.py")
+    shutil.copy(gsid.__file__, t / "infra" / "research" / "src" / "research" / "telemetry" / "source_identity.py")
+    shutil.copy(rpp.__file__, t / "infra" / "research" / "src" / "research" / "pythonpath.py")
     shutil.copy(sid.__file__, t / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "adapters" / "vllm" / "verity_vllm" / "config.py")
     shutil.copy(vcli.__file__, t / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
@@ -274,7 +274,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
 
 
 def _shipped_pp(t: Path) -> str:
-    return os.pathsep.join([str(t / "adapters" / "vllm"), *(str(t / e) for e in CORE_ENTRIES), str(t / "tools" / "research" / "src")])
+    return os.pathsep.join([str(t / "adapters" / "vllm"), *(str(t / e) for e in CORE_ENTRIES), str(t / "infra" / "research" / "src")])
 
 
 def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
@@ -324,14 +324,14 @@ def test_a_shipped_tree_with_core_split_across_members_passes_and_a_foreign_port
     t = _shipped_tree(tmp_path)
     for d in research_tools.CORE_DIRS:
         shutil.rmtree(t / d)
-    (t / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["core/upper", "core/lower", "adapters/vllm", "tools/research"]\n')
+    (t / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["core/upper", "core/lower", "adapters/vllm", "infra/research"]\n')
     for member, module in (("core/upper", "ml"), ("core/lower", "ir")):
         (t / member / "src" / "verity" / module).mkdir(parents=True)
         (t / member / "src" / "verity" / module / "__init__.py").write_text("")
         (t / member / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/verity"]\n')
     integ = t / "adapters" / "vllm"
     entries = [os.path.realpath(t / m / "src") for m in ("core/upper", "core/lower")]
-    pp = os.pathsep.join([str(integ), *entries, str(t / "tools" / "research" / "src")])
+    pp = os.pathsep.join([str(integ), *entries, str(t / "infra" / "research" / "src")])
     out = tmp_path / "sid.json"
     argv = [PY, "-S", "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)]
     r = subprocess.run(argv, cwd=integ, env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)

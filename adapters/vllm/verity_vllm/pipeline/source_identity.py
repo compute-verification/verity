@@ -5,7 +5,7 @@
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
 The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `.`,
-`tools/research/src` and `adapters/vllm`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
+`infra/research/src` and `adapters/vllm`.  It defaults to THIS FILE'S tree (never an environment default): the runner that imports this
 module IS the tree that must run.  `--tree` accepts the repo root or the integration root (`adapters/vllm`, what row_pod.sh passes) and
 normalises to the repo root.  `VERITY_TREE`, when set, must name the same tree (either form) -- a caller that exports another tree is the
 mixed-tree case and is refused by name.  `--out` writes the manifest record (schema research-infra/source-identity/v1); the same record goes
@@ -19,7 +19,7 @@ In-process: `precheck(stage)` is called by the Commit (commit_delta.main, before
 raises research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
 
 Import layout: the generic half is `research.telemetry.source_identity` and must be importable as such -- on a pod row_pod.sh exports
-PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  It is loaded by name when a check first needs it
+PYTHONPATH=<integration root>:<repo>:<repo>/infra/research/src.  It is loaded by name when a check first needs it
 (`config.run_store`), so importing this module needs no `research`; a check that can't load it is refused by name, naming the
 entry point (UsageError), never skipped.  No sys.path is manipulated here: a `research` that cannot be imported is a broken
 environment and is reported as one, not repaired silently (that repair is how mixed trees happen).
@@ -67,7 +67,7 @@ def precheck_entry(stage: str) -> str:
 # workspace roots that ship it (research.pythonpath.package_dirs)
 PACKAGE_ROOTS = {
     "verity_vllm": ("verity_vllm", ("adapters/vllm",)),
-    "research": ("research", ("tools/research/src",)),                 # the runner/telemetry package of the tree of record
+    "research": ("research", ("infra/research/src",)),                 # the runner/telemetry package of the tree of record
 }
 PACKAGES = ("verity", "verity_vllm", "research")
 ENV_SOURCE_SHA = "RESEARCH_SOURCE_SHA"

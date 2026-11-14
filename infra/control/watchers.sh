@@ -9,7 +9,7 @@ LOG=$D/supervisor.log
 exec 9> /root/watchers.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/watchers.lock" >> "$LOG"; exit 0; }
 while :; do
-  PYTHONPATH=$D/src/tools/research/src LC_ALL=C.UTF-8 /usr/local/bin/python3.12 -s $D/src/infra/control/watchers.py run \
+  PYTHONPATH=$D/src/infra/research/src LC_ALL=C.UTF-8 /usr/local/bin/python3.12 -s $D/src/infra/control/watchers.py run \
     --config $D/watchers.toml >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) supervisor exited rc=$?" >> "$LOG"
   sleep 10

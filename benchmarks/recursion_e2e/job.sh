@@ -53,7 +53,7 @@ MODES=${MODES:-zk_server}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
 [[ ,$MODES, == *,zk_server,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
 # V*'s statements one at a time, as the ZK server proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
-PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
+PYTHONPATH=$REPO/infra/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2

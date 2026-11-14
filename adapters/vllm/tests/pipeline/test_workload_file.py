@@ -101,7 +101,7 @@ def test_a_failed_fetch_names_the_workload_and_the_fix(tmp_path, monkeypatch):
         C.workload_file(repo / "w" / "a.json")
     (argv, kw), = seen
     assert argv[2:] == ["research", "data", "fetch-fixtures", "--repo", str(repo.resolve()), "--json", str(repo.resolve() / "w" / "a.json")]
-    assert kw["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(repo.resolve() / "tools" / "research" / "src")
+    assert kw["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(repo.resolve() / "infra" / "research" / "src")
 
 
 def test_row_file_finds_a_stored_row_that_is_not_here(tmp_path, monkeypatch):

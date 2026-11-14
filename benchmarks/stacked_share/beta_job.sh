@@ -21,7 +21,7 @@ d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 if [ -x /workspace/jobs/venv312/bin/python3 ]; then
   PY=/workspace/jobs/venv312/bin/python3
-  export PYTHONPATH=$ROOT/adapters/vllm:$ROOT:$ROOT/tools/research/src
+  export PYTHONPATH=$ROOT/adapters/vllm:$ROOT:$ROOT/infra/research/src
 else
   UV_PROJECT_ENVIRONMENT="$d/venv" uv sync -q --all-packages --extra torch-cpu > "$OUT/sync.log" 2>&1 || { tail -30 "$OUT/sync.log"; exit 4; }
   PY=$d/venv/bin/python

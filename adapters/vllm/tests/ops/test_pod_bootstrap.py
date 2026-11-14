@@ -102,7 +102,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     src = tmp_path / "readiness.py"
     src.write_text(_readiness_source())
     out = tmp_path / "readiness.json"
-    root, core, research = VLLM, TREE, TREE / "tools" / "research" / "src"
+    root, core, research = VLLM, TREE, TREE / "infra" / "research" / "src"
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research)),
                https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")   # the network probe fails fast, recorded as an error
     r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", str(research), "cpu"],

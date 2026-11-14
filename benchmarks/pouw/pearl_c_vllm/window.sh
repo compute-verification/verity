@@ -99,7 +99,7 @@ PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHI
 
 keep_passes() {
   local d=$WORK/passes/${RESEARCH_RUN_ID:?}
-  mkdir -p "$d" && PYTHONPATH=$PWD/tools/research/src python3 -m research keep "$d" --owner "${KEEP_OWNER:-@compute-accounting}" \
+  mkdir -p "$d" && PYTHONPATH=$PWD/infra/research/src python3 -m research keep "$d" --owner "${KEEP_OWNER:-@compute-accounting}" \
     --expires "${KEEP_EXPIRES:-never}" --priority "${KEEP_PRIORITY:-keep}" --why "retained passes of run $RESEARCH_RUN_ID" \
     ${RESEARCH_AGENT_URL:+--by "$RESEARCH_AGENT_URL"} > "$OUT/keep.json" || fail KEEP "no retention record on $d"
 }

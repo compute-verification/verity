@@ -70,7 +70,7 @@ ALLOWLIST = {
     "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
-    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
+    "infra/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
@@ -137,7 +137,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
     assert generated_output("adapters/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
     assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
-    assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
+    assert generated_output("infra/research/tests/fixtures/run_v0.2/out/result.json") is None
 
 
 def test_no_generated_output() -> None:
@@ -373,8 +373,8 @@ def test_tracked_data_within_budget() -> None:
 #: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
 #: outputs or archives matches.
 IGNORED_TRACKED = frozenset({
-    "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
-    "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
+    "infra/research/tests/fixtures/run_v0.2/out/proof.bin",
+    "infra/research/tests/fixtures/run_v0.2/out/verify.jsonl",
 })
 
 

@@ -17,7 +17,7 @@ cd "$ROOT" || exit 3
 mkdir -p "$OUT" && OUT=$(cd "$OUT" && pwd -P) || exit 3
 export WORK=/workspace/tmp/neutrality-vllm
 export VENV=$WORK/venv312 HF_HOME=$WORK/hf
-export PYTHONPATH=$ROOT:$TREE:$TREE/tools/research/src
+export PYTHONPATH=$ROOT:$TREE:$TREE/infra/research/src
 PY=$VENV/bin/python DRV=$WORK/cuda-driver
 mkdir -p "$WORK" "$HF_HOME" || exit 3
 fail() { echo "$1: $2" | tee "$OUT/setup.fail" >&2; exit 3; }
@@ -30,7 +30,7 @@ EOF
 ) || fail rows "manifests/records.json has no rows to read"
 echo "neutrality_tier: $TIER: $ROWS"
 for row in $ROWS; do
-  (cd "$TREE" && uv run -q --project tools/research research data fetch-fixtures --repo "$TREE" "adapters/vllm/workloads/$row.json") \
+  (cd "$TREE" && uv run -q --project infra/research research data fetch-fixtures --repo "$TREE" "adapters/vllm/workloads/$row.json") \
     >>"$OUT/fixtures.log" 2>&1 || fail fixtures "$row's workload ($OUT/fixtures.log)"
 done
 

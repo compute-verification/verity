@@ -16,8 +16,8 @@ untraced = [
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
 inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
           "benchmarks/network_traces/scan_zk.py", "benchmarks/network_traces/warden_zk.py",
-          "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
-          "tools/research/src/research/store", "tools/research/src/research/telemetry",
+          "infra/research/src/research/__init__.py", "infra/research/src/research/pythonpath.py",
+          "infra/research/src/research/store", "infra/research/src/research/telemetry",
           "benchmarks/census/deployments.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",

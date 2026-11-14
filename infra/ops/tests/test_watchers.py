@@ -75,7 +75,7 @@ def test_the_labels_pack_loop_republishes_hourly_from_a_store_on_the_pods_own_di
     (lp,) = [lp for lp in loops if lp.name == "labels-pack"]
     assert lp.argv == ["python3.12", "-s", "-m", "research", "data", "labels-pack", "--every", "3600"]
     assert lp.argv[5] in COMMANDS, "the loop's command is one `research data` has"
-    assert lp.env["PYTHONPATH"].split(":")[0] == "/data/watchers/src/tools/research/src", "`-m research` is the deployed tree's"
+    assert lp.env["PYTHONPATH"].split(":")[0] == "/data/watchers/src/infra/research/src", "`-m research` is the deployed tree's"
     assert lp.env_files == ["/root/.config/verity/r2.env"] and not lp.needs
     store = lp.env["RESEARCH_STORE"]
     assert store.startswith("/root/") and store not in {o.env.get("RESEARCH_STORE") for o in loops if o is not lp}, "a store of its own"
@@ -122,7 +122,7 @@ def test_a_watcher_imports_only_the_deployed_tree(tmp_path):
     """A hand edit that points agent-watch-relay's PYTHONPATH at another checkout (/data/infra/fixtures-export-repo), so
     the loop ran code no deploy named."""
     cfg = tmp_path / "w.toml"
-    head = f'dir = "{tmp_path}"\nsrc = "{tmp_path}/src"\n[env]\nPYTHONPATH = "{{src}}/tools/research/src"\n'
+    head = f'dir = "{tmp_path}"\nsrc = "{tmp_path}/src"\n[env]\nPYTHONPATH = "{{src}}/infra/research/src"\n'
     cfg.write_text(head + '[[loop]]\nname = "a"\nargv = ["true"]\nenv = { PYTHONPATH = "/data/infra/fixtures-export-repo/tools/research/src:{src}/x" }\n')
     with pytest.raises(ValueError, match="loop a: PYTHONPATH /data/infra/fixtures-export-repo/tools/research/src is outside"):
         W.load(cfg)
@@ -130,7 +130,7 @@ def test_a_watcher_imports_only_the_deployed_tree(tmp_path):
     key.write_text("A=b\nPYTHONPATH=/elsewhere\n")
     cfg.write_text(head + f'[[loop]]\nname = "a"\nargv = ["true"]\nenv_files = ["{key}"]\n')
     _, (lp,) = W.load(cfg)
-    assert W.loop_env(lp)["PYTHONPATH"] == f"{tmp_path}/src/tools/research/src" and W.loop_env(lp)["A"] == "b"
+    assert W.loop_env(lp)["PYTHONPATH"] == f"{tmp_path}/src/infra/research/src" and W.loop_env(lp)["A"] == "b"
 
 
 def test_exec_runs_a_command_in_one_loops_environment_and_refuses_before_its_credential_is_placed(tmp_path, capfd):

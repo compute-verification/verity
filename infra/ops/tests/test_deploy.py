@@ -1019,8 +1019,8 @@ def test_every_node_that_runs_the_lease_loop_gets_the_loop_and_the_stop_command_
         assert on(path) and not sorted(on(path) - loop), path
     for name in sorted(loop):
         entries = {e.path: e for e in nodes[name].entries}
-        assert entries[LEASE_SH].src == "tools/research/src/research/pods/sh/lease.sh", name
-        assert entries[LEASE_STOP].src == "tools/research/src/research/pods/nebius/vm_stop.sh", name
+        assert entries[LEASE_SH].src == "infra/research/src/research/pods/sh/lease.sh", name
+        assert entries[LEASE_STOP].src == "infra/research/src/research/pods/nebius/vm_stop.sh", name
         assert entries[LEASE_SH].run == ["systemd:vy-lease"], "what drift names to restart once the file is installed"
 
 
@@ -1299,7 +1299,7 @@ def test_a_manifest_entry_needs_exactly_one_of_src_and_by_and_a_known_node(tmp_p
 
 
 # the Lean sandbox, its setup and the daily cache units (test_nebius_lean_sandbox.py tests what they do)
-_N = "tools/research/src/research/pods/nebius"
+_N = "infra/research/src/research/pods/nebius"
 LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": f"{_N}/lean_build_setup.sh", "/usr/local/bin/vy-lean-sandbox": f"{_N}/lean_sandbox.py",
               "/usr/local/lib/vy-lean-cache/run-daily": "tools/verity/lean/run_daily.py",
               "/usr/local/lib/vy-lean-cache/cache.py": "tools/verity/lean/cache.py",

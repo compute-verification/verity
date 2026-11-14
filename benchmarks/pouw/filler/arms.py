@@ -98,7 +98,7 @@ NONE = Colocation()
 def _record_rules():
     """The attempt ledger (`harness/ledger.py`) and the evidence store's canonical form, ids and manifest model: the code
     `score.record` and the store run on the record after the run."""
-    for p in (HERE.parent / "harness", REPO / "tools" / "research" / "src"):
+    for p in (HERE.parent / "harness", REPO / "infra" / "research" / "src"):
         if str(p) not in sys.path:
             sys.path.append(str(p))
     import ledger

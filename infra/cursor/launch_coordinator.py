@@ -58,7 +58,7 @@ Your slice: {remit} Your paths: {owns}. Your Linear team: {team}. {scope}
 First hour, in order:
 0. Put the agent guard and research on this VM (the environment's start does so since 18 Oct; this covers a VM booted \
 from an older version, and is harmless twice): \
-git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /workspace \
+git -C /workspace fetch -q origin main && git -C /workspace show origin/main:infra/agent-guard/boot.sh | bash -s -- /workspace \
 && export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH
 1. Launch check. Posting needs the name, so take it first (step 4's names open). Run each; a failure that your \
 {source} or the {thread_kind} thread's first post already names as known goes in your "up" post and doesn't stop you. \

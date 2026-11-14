@@ -193,12 +193,12 @@ class Row:
             print(f"PRECHECK_FAIL_SOURCE_IDENTITY: {self.proc} at {self.tree} but $VERITY_TREE={self.env.verity_tree} names another tree",
                   file=sys.stderr)
             raise Stop(3)
-        core, research = Path(self.tree, "../.."), Path(self.tree, "../../tools/research/src")
+        core, research = Path(self.tree, "../.."), Path(self.tree, "../../infra/research/src")
         if not core.is_dir():
             print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no Verity tree above {self.tree} (not a shipped Verity tree)", file=sys.stderr)
             raise Stop(3)
         if not research.is_dir():
-            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside {self.tree}", file=sys.stderr)
+            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no infra/research/src beside {self.tree}", file=sys.stderr)
             raise Stop(3)
         core_s, research_s = os.path.realpath(core), os.path.realpath(research)
         env = dict(self.env.environ)

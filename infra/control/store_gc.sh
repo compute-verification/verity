@@ -1,7 +1,7 @@
 #!/bin/sh
 # Every 6 h: the store's GC (`research data gc`, the store README §7.4) over the bucket, citing the notes repository the steward keeps,
 # the code checkout fixtures_export.sh fetches and Linear (relay.env's app credentials; only those two variables are read). Without /data/store-gc/apply a pass only plans (its report says what would go);
-# with it, a pass marks and deletes. Code: /data/infra/store-gc-src, a tools/research tree whose COMMIT file names it. A citing
+# with it, a pass marks and deletes. Code: /data/infra/store-gc-src, a infra/research tree whose COMMIT file names it. A citing
 # tree last fetched (.git/FETCH_HEAD) more than STALE_S ago skips the pass: a citation it lacks could lose a blob.
 # Log: /data/infra/store-gc.log
 LOG=/data/infra/store-gc.log

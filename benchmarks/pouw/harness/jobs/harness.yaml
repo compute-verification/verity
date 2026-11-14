@@ -37,7 +37,7 @@ secrets:
 
 run: |
   set -euo pipefail
-  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- bash -c '
+  PYTHONPATH=$PWD/infra/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- bash -c '
     . benchmarks/pouw/harness/jobs/env.sh "$BUILD" &&
     CUDA_VISIBLE_DEVICES=0 CUDA_DEVICE_ORDER=PCI_BUS_ID "$PY" benchmarks/pouw/harness/$CMD \
       --gpu 0 --expect-uuid "$NODE_UUIDS" --out "$RESEARCH_RUN_DIR/harness.json"'

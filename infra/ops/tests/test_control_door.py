@@ -77,7 +77,7 @@ def gate(tmp_path, monkeypatch):
     (tmp_path / "state.json").write_text(json.dumps(guard_state()))
     G.pod = Pod()
     for name, value in (("STATE", tmp_path / "state.json"), ("LOG", tmp_path / "door" / "gate.log"), ("clock", lambda: NOW),
-                        ("GUARD_SRC", str(ROOT / "tools/research/src")), ("run", G.pod.run)):
+                        ("GUARD_SRC", str(ROOT / "infra/research/src")), ("run", G.pod.run)):
         monkeypatch.setattr(G, name, value)
     monkeypatch.setattr(runpod, "_request", G.pod.api)     # the pod holds the account's key: its research reaches RunPod
     monkeypatch.setenv("RESEARCH_GUARD_HOST", "")          # the gate sets it for the code it loads: undone with the test
@@ -173,11 +173,11 @@ def test_drive_is_cis_key_only_and_only_its_listed_forms(gate, capsys):
     forms = ["status", "start", "stop", "once --dry-run", f"deploy {SHA}", "deploy main", "queue promote",
              f"queue baseline {SHA} --by ci", f"queue baseline {SHA[:12]} --by ci --steps suites,lean-check",
              f"queue accept-checked {SHA} --by ci", f"queue drive-shard-add {SHA} 3 20261019T1830Z-check-k3",
-             "queue eject 6861 --by ci --reason 'red on checked: suites (tools/research)'"]
+             "queue eject 6861 --by ci --reason 'red on checked: suites (infra/research)'"]
     for form in forms:
         assert serve(gate, f"drive {form}", "ci") == 0, form
     assert [a for a, _ in gate.pod.ran][-1] == [gate.DRIVE_SH, "queue", "eject", "6861", "--by", "ci", "--reason",
-                                                "red on checked: suites (tools/research)"], "one word a caller's word: no shell"
+                                                "red on checked: suites (infra/research)"], "one word a caller's word: no shell"
     assert all(a[0] == gate.DRIVE_SH and e == gate.ENV for a, e in gate.pod.ran) and len(gate.pod.ran) == len(forms)
     gate.pod.ran.clear()
     for lane in ("-", "infra"):

@@ -414,7 +414,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     circuit-check, ratchet-gate); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
     red the run beside its base's check doesn't share rings who acts on it.
   - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
-    `lowrisk_excludes` names (no Lean, lock, soundness-path or `tools/move/` change); a layout move's PR only once its move
+    `lowrisk_excludes` names (no Lean, lock, soundness-path or `infra/move/` change); a layout move's PR only once its move
     is certified (**Pure move**).
   - **Records run**: a candidate's run of `lean-audit` alone before its check, when a PR of it changes Lean, a lock or the
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
@@ -424,9 +424,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
-  - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
-    lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`tools/move/README.md`).
-- **Running jobs** (`tools/research`, `infra/`):
+  - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: infra/move/MAP.toml`)
+    lands on its ready mark alone once the queue's rerun of its map on its batch's tip is certified (`infra/move/README.md`).
+- **Running jobs** (`infra/research`, `infra/`):
   - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
     command that makes one.
   - **Pool**: a node's named set of run slots (`research run --pool NAME`; `research` is any lane's, where

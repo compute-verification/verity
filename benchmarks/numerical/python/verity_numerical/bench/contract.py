@@ -1,7 +1,7 @@
 """The campaign's result contract: what a campaign number must say about itself, on top of ``research``'s ``result.json``.
 
 ``research`` records and ships an opaque workload; the workload owns the meaning of ``$RESEARCH_RUN_DIR/result.json``
-(``tools/research/README.md``).  This module is that meaning for the proof campaign, shared by every backend:
+(``infra/research/README.md``).  This module is that meaning for the proof campaign, shared by every backend:
 
 * the ``workload_fingerprint`` fields a campaign number must carry (:data:`REQUIRED_FIELDS`), with the
   :data:`IDENTITY_FIELDS` two results must agree on before any of their numbers may be compared
@@ -13,7 +13,7 @@
 * :func:`validate`, the list of everything a result got wrong (empty means conforming), and the one-call builders
   :func:`fingerprint` and :func:`measurement` so a backend emits conforming pieces without re-reading this file.
 
-Envelope (``research/result/v0.1``, ``tools/research/src/research/result.py``)::
+Envelope (``research/result/v0.1``, ``infra/research/src/research/result.py``)::
 
     {"schema", "run_id", "workload_fingerprint": {...}, "validation": {"status", "checker", "detail", "evidence"},
      "measurements": [{"name", "value", "unit"}, ...], "measurement_files": [...], "artifacts": [...]}

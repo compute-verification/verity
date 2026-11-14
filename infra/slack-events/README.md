@@ -1,7 +1,7 @@
 # Slack events service
 
 A Vercel function that takes Slack's Events and Interactivity requests, puts each onto a Vercel queue, and routes it
-with `research msg`'s own code (`tools/research/src/research/slack.py`, copied in at build time). A person's post in a
+with `research msg`'s own code (`infra/research/src/research/slack.py`, copied in at build time). A person's post in a
 chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting` rings the lanes it names. A post that names no
 one goes to the admin, with a routing line in its thread (`consumer.NO_MODEL`) saying no lane was named and routing by
 model is off. In a person's chat, their own post that names no one goes instead to the lane their people.d record

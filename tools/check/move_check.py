@@ -146,7 +146,7 @@ import tomllib
 from pathlib import Path
 
 #: research's record of the moves, to which a move appends its own (`moves_change`)
-MOVES = "tools/research/src/research/store/moves.json"
+MOVES = "infra/research/src/research/store/moves.json"
 #: where the record is on either side of the move that takes research into the platform's `infra/`, which renames it too
 MOVES_AT = frozenset({MOVES, "infra/research/src/research/store/moves.json"})
 #: the files where a new package is registered by an added line (`registration`)

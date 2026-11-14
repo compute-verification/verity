@@ -30,15 +30,15 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, path as written): never tracked, each with why
 EXEMPT = {
     ("tools/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
-    ("tools/research/src/research/queue.py", "tools/verity/lean/modules.py"):
+    ("infra/research/src/research/queue.py", "tools/verity/lean/modules.py"):
         "the Lean module system's codemod, which lands with the port's tooling: a tree without it is one `ported` leaves as it is; "
         "the tooling drops this entry",
-    ("tools/research/src/research/queue.py", "tools/verity/lean/headers.py"):
+    ("infra/research/src/research/queue.py", "tools/verity/lean/headers.py"):
         "the Lean header reader the codemod reads with, which lands with it: `on_modules` reads a tree's roots with it; the "
         "tooling drops this entry",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
-TOOLING = ("tools/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
+TOOLING = ("tools/check/", "tools/verity/lean/", "infra/research/src/research/", "tools/verity/circuit_check/src/")
 
 
 @functools.cache

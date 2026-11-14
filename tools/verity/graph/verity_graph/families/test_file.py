@@ -77,7 +77,7 @@ GUARD = ("tools/check/guard/verity_suite_guard.py", "tools/check/guard/child/sit
 REGISTRY = "artifacts.json"
 #: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
 #: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
-STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
+STORE_READS = (REGISTRY, "infra/research/store.pod.toml")
 #: a module that names the fixture registry's path, whole or joined, as the store's replica map does
 #: (`Path("artifacts.json")`)
 _REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["'](?:fixtures/)?artifacts\.json["']""")

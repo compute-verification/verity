@@ -2,7 +2,7 @@
 # Every 5 min: bring Neon's `store_private` up to the bucket (`research data index --postgres`, the store README §5.1), and, once
 # store-export.env names the export bucket, rebuild `store_public` from it (`--public`), with store-export.env's key pair if it
 # has one, else r2.env's, which also writes that bucket (fixtures_export.sh). Code: /data/infra/store-index-src, a
-# tools/research tree whose COMMIT file names it. The credentials go only into the environment: r2.env is sourced, and the
+# infra/research tree whose COMMIT file names it. The credentials go only into the environment: r2.env is sourced, and the
 # unquoted lines of store-index.env (its URL has `&`) and store-export.env are read with sed. Log: /data/infra/store-index.log
 LOG=/data/infra/store-index.log
 CONF=/root/.config/verity

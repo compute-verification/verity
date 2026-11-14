@@ -210,8 +210,8 @@ PRs land through the verified queue (`research queue vqueue`): its flags are `dr
 moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too; `post_train.py`
 then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
 other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off
-the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
-body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);
+the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: infra/move/MAP.toml` in its
+body) lands on its ready mark alone once the queue's rerun of its map is certified (`infra/move/README.md`);
 `move_check.py` certifies a pure move (`verity check move BASE HEAD`).
 
 ## Settings

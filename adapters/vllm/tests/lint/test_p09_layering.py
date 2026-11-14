@@ -10,7 +10,7 @@ Checked today, against ``allowlists/p09_layering.json``:
   ``engine.profiles.layer_classes``, which import nothing, count apart from ``engine``).
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
-* ``forbidden-import``: library code importing ``tests``, ``tools``, ``research`` (tools/research) or ``relayout``.
+* ``forbidden-import``: library code importing ``tests``, ``tools``, ``research`` (infra/research) or ``relayout``.
 * ``sys-path``: library code editing ``sys.path``.
 * ``repo-path``: a path built from ``__file__`` that climbs out of ``verity_vllm/`` (repo-level data; package data is
   loaded with ``importlib.resources``).  One count per statement where the path first leaves the package.

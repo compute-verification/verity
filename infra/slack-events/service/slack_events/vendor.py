@@ -23,10 +23,10 @@ def _pick(vendored: str, rel: str) -> Path:
 
 
 def slack() -> ModuleType:
-    """`tools/research/src/research/slack.py`, run as the single file it is built to be."""
+    """`infra/research/src/research/slack.py`, run as the single file it is built to be."""
     if NAME in sys.modules:
         return sys.modules[NAME]
-    spec = importlib.util.spec_from_file_location(NAME, _pick("research_slack.py", "tools/research/src/research/slack.py"))
+    spec = importlib.util.spec_from_file_location(NAME, _pick("research_slack.py", "infra/research/src/research/slack.py"))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[NAME] = mod
     spec.loader.exec_module(mod)

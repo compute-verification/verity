@@ -17,7 +17,7 @@ evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Work
 allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]` prints what the planner would
 do beside Kueue. Node 1's executor under the one queue is kueue-fold's.
 
-A lane submits with `research run --queue` (tools/research): it declares the job's class and resources, `cluster submit`
+A lane submits with `research run --queue` (infra/research): it declares the job's class and resources, `cluster submit`
 places it and names the wrappers its node's executor runs it under (`submit.py`): the machine-side runner runs in a capped
 and pinned systemd scope, the job's CPU allocation, so the run's custody finishes before it is released, and a GPU job's
 workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked only while it runs. On node 1 it runs under node 1's

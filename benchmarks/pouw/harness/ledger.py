@@ -19,7 +19,7 @@ is kept as ``arm_claim`` and never published.
 `verify.py` builds the records (`records`), writes them under the run's ``ledger/`` (so they are preserved with the run's
 files wherever the store isn't reachable) and publishes them with ``--publish``. `rows` is what `panel.py` reads beside
 ``attempts.jsonl``. `verity.protocols.accounting.pouw.verifier.serving` is imported outright, so a job where `verity` doesn't import
-stops there; `research.store` is imported when present (from this checkout's ``tools/research/src`` otherwise), so a node-2
+stops there; `research.store` is imported when present (from this checkout's ``infra/research/src`` otherwise), so a node-2
 job without it still writes its records.
 """
 
@@ -83,7 +83,7 @@ def store_module():
     try:
         from research.store import local, vocab
     except ImportError:
-        _import_path("tools/research/src")
+        _import_path("infra/research/src")
         from research.store import local, vocab
     return local, vocab
 

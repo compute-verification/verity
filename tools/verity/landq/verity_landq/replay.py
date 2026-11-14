@@ -19,7 +19,7 @@ requires; and the whole tree for a `lean-suites` part, which graph/v2 keys on it
 
 `run` replays the trace in every combination of batch size, depth and node count, with breaking PRs, infra errors and false
 fails sampled at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
-is `research.vqueue` from a checkout (`--queue vqueue:SRC`, SRC its `tools/research/src`), driven by `snapshots.Driver`,
+is `research.vqueue` from a checkout (`--queue vqueue:SRC`, SRC its `infra/research/src`), driven by `snapshots.Driver`,
 whose snapshot fields `--set KEY=VALUE` sets (`--set lean=3`), and which starts the tasks `--defer TASK` names as the loop
 starts the run beside a check (`--defer slim`).
 """
@@ -246,7 +246,7 @@ def old_path(doc: dict, within: float = 120.0, lag: float = 180.0, every: float 
 
 def queue(spec: str, fields: dict | None = None, deferred: frozenset[str] = frozenset()) -> tuple:
     """The queue a run replays, ``vqueue:SRC``: the snapshot queue `research.vqueue` imported from the directory SRC (a
-    checkout's `tools/research/src`), driven by `snapshots.Driver` with snapshot ``fields`` and the ``deferred`` tasks it
+    checkout's `infra/research/src`), driven by `snapshots.Driver` with snapshot ``fields`` and the ``deferred`` tasks it
     starts; as (step, start)."""
     kind, _, src = spec.partition(":")
     if kind != "vqueue" or not (Path(src) / "research" / "vqueue.py").is_file():
@@ -334,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--build", type=float, default=2.0)
     r.add_argument("--listing", type=float, default=3.0)
     r.add_argument("--queue", required=True, metavar="vqueue:SRC",
-                   help="research.vqueue from SRC, a checkout's tools/research/src")
+                   help="research.vqueue from SRC, a checkout's infra/research/src")
     r.add_argument("--set", dest="fields", type=_field, action="append", default=[], metavar="KEY=VALUE",
                    help="a snapshot field for a snapshot queue, such as lean=3 (repeatable)")
     r.add_argument("--defer", action="append", default=[], metavar="TASK",

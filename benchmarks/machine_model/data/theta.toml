@@ -679,7 +679,7 @@ what = "host cores a GPU on the nodes we run"
 value = 12
 unit = "cores/GPU"
 grade = "measured (the VM's CPU count)"
-source = "the deployed nodes: 192 vCPUs (tools/research/src/research/pods/nebius/check.py), a VM of 2 sockets × 48 cores × 2 threads on 2 × Xeon 6776P, 8 GPUs"
+source = "the deployed nodes: 192 vCPUs (infra/research/src/research/pods/nebius/check.py), a VM of 2 sockets × 48 cores × 2 threads on 2 × Xeon 6776P, 8 GPUs"
 
 [[unit]]
 key = "tensor"

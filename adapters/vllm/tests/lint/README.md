@@ -93,7 +93,7 @@ candidate's check runs as the step's base has it, judging each `Queue: #N` merge
 fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what its lists don't
 cover (naming each violation). Before a PR's candidate, only the ready mark's preflight runs it, on the PR's merge within the
 preflight's budget, and prints what it fails as a warning without refusing the mark (`PREFLIGHT_RATCHET` in
-`tools/research/src/research/queue.py`): the gate tells a new violation by its text, so a moved line, or a cycle through a
+`infra/research/src/research/queue.py`): the gate tells a new violation by its text, so a moved line, or a cycle through a
 module the PR adds, can read as new. Its red never holds `main`
 (`tools/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
 forward in their next PR.

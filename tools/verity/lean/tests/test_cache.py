@@ -337,7 +337,7 @@ def test_a_build_published_before_a_layout_move_restores_at_the_packages_new_pat
     lines = []
     args = (client(url, READ), ["2" * 40, rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
     assert not C.restore(r, "moved", *args) and "no cached build of an ancestor" in lines[-1], "no move is recorded"
-    record = r / "tools" / "research" / "src" / "research" / "store" / "moves.json"
+    record = r / "infra" / "research" / "src" / "research" / "store" / "moves.json"
     record.parent.mkdir(parents=True)
     record.write_text(json.dumps({"moves": [{"paths": {"older/": "pkg/"}}, {"paths": {"pkg/": "moved/"}}]}))
     assert C.restore(r, "moved", *args)

@@ -1,4 +1,4 @@
-"""The ``research/result/v0.1`` document (``tools/research/src/research/result.py``) each PoUW benchmark writes when it runs
+"""The ``research/result/v0.1`` document (``infra/research/src/research/result.py``) each PoUW benchmark writes when it runs
 under ``research run`` (``$RESEARCH_RUN_DIR`` set): the gates as its validation, its headline numbers as measurements, and
 its full JSON as the measurement file.  It imports the settings registry (``settings.py``), through which it reads the three
 variables ``research run`` sets, and beyond it the standard library alone, so the benchmarks need not import ``research``.

@@ -413,8 +413,8 @@ def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):
 
 def test_the_steps_see_the_trees_packages_only(monkeypatch):
     """On a machine the runner's PYTHONPATH starts with its own shipped `research`; the steps must import the tree's."""
-    monkeypatch.setenv("PYTHONPATH", f"/opt/research-tool:{ROOT / 'tools/research/src'}:/elsewhere")
-    assert CHECK.env()["PYTHONPATH"] == str(ROOT / "tools/research/src")
+    monkeypatch.setenv("PYTHONPATH", f"/opt/research-tool:{ROOT / 'infra/research/src'}:/elsewhere")
+    assert CHECK.env()["PYTHONPATH"] == str(ROOT / "infra/research/src")
     monkeypatch.setenv("PYTHONPATH", "/opt/research-tool")
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "abc")
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/workspace/research/cache/pycache")
@@ -835,13 +835,13 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
 
 def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
-    monkeypatch.setenv("PYTHONPATH", f"/tmp/s1350/packages/verity/src:{ROOT / 'tools/research/src'}")
+    monkeypatch.setenv("PYTHONPATH", f"/tmp/s1350/packages/verity/src:{ROOT / 'infra/research/src'}")
     probed = []
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda pkgs, env: probed.append(env.get("PYTHONPATH")) or "verity from /tmp/s1350/x.py")
     monkeypatch.setattr(CHECK, "run", lambda *a: pytest.fail("a step ran"))
     assert CHECK.main([]) == 2
     assert "against another checkout's code (verity from /tmp/s1350/x.py)" in capsys.readouterr().err
-    assert probed == [str(ROOT / "tools/research/src")]
+    assert probed == [str(ROOT / "infra/research/src")]
 
 
 def test_check_run_as_a_script_in_a_fresh_trees_environment_installs_the_workspace_first(monkeypatch, capsys):

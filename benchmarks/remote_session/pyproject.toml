@@ -59,7 +59,7 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py",
           "verity/protocols/accounting/pouw/prover/sass_gate.py", "verity/protocols/accounting/poub/prover/word_codec/kv.cu",
           "benchmarks/pouw/harness/jobs/toolkit.sh",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
-          "tools/research/src/research/pods/sh/gpu_lease.sh",
+          "infra/research/src/research/pods/sh/gpu_lease.sh",
           "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit; and the
           # ledger and credit checks' Lean verifier, `sampled-proofs-verifier` (`coins.lean_answer`), with the

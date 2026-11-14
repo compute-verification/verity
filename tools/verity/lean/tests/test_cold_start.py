@@ -61,7 +61,7 @@ def test_the_lean_check_builds_and_audits_a_package_in_a_fresh_tree(tmp_path, mo
     check that works from this checkout and not from a tree a run ships: a path it resolves through the tree, `lean_slot.py`
     loaded from it, the runner's PYTHONPATH."""
     tree = _shipped(tmp_path)
-    data, digest = remote.tool_tarball(tree / "tools" / "research" / "src" / "research")
+    data, digest = remote.tool_tarball(tree / "infra" / "research" / "src" / "research")
     tool = tmp_path / "root" / "tool" / digest
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         tf.extractall(tool, filter="data")

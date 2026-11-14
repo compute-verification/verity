@@ -166,7 +166,7 @@ export PY=${PY:-$(first /workspace/venv312/bin/python \
   /workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python)}
 [ -x "$PY" ] || { say "PREFLIGHT: no torch venv (PY)"; exit 3; }
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
-LEASE=$TREE/tools/research/src/research/pods/sh/gpu_lease.sh
+LEASE=$TREE/infra/research/src/research/pods/sh/gpu_lease.sh
 command -v gpu-lease > /dev/null && LEASE=$(command -v gpu-lease)
 
 others() {  # into out/$1.node.txt: the compute processes on every card of the machine, at the step's $2

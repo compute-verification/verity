@@ -25,7 +25,7 @@ export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 # the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (artifacts.json)
-PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
+PYTHONPATH=$SRC/infra/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
   benchmarks/network_e2e/encodings/tests/fixtures verity/protocols/accounting/certifier/verifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \

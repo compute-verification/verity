@@ -76,7 +76,7 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
    PATH; `T` is the run's tree):
 
    ~~~sh
-   RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
+   RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/infra/research/src \
    RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
      python3 $T/verity/protocols/proofs/flock/prover/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
        --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json

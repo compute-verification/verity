@@ -1272,7 +1272,7 @@ def test_a_node_that_cannot_run_gpu_lease_is_refused_before_a_statement_is_stage
     refused = node.read(N.POINT_FILE)["refused"]
     assert refused == ("`gpu-lease` can't be run on this node (FileNotFoundError: [Errno 2] No such file or directory: "
                        "'gpu-lease'), and the timed step runs under its lease of one card: put "
-                       "tools/research/src/research/pods/sh/gpu_lease.sh of this tree on the node's path as "
+                       "infra/research/src/research/pods/sh/gpu_lease.sh of this tree on the node's path as "
                        "`gpu-lease`. A copy on the node's own disk goes when the node is reset")
     assert node.read(kit.RESULT)["validation"] == {
         "status": "failed", "checker": "verity_bench.steady_spec.point_why",

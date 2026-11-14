@@ -22,4 +22,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test_checks validates the result.json `Checks.finish` writes under a run with `research.result.check_doc`.
-inputs = ["tools/research/src/research/__init__.py", "tools/research/src/research/result.py"]
+inputs = ["infra/research/src/research/__init__.py", "infra/research/src/research/result.py"]

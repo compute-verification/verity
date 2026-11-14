@@ -32,7 +32,7 @@ echo "build rc $?" > "$O/rc.txt"
 # reads it skips with its reason and the rest run
 FIXTURES=verity/commitments/tests/fixtures/layouts
 case " $STEPS_ASKED " in *" tests "*)
-  PYTHONPATH=$ROOT/tools/research/src:$PYTHONPATH $PY -m research data fetch-fixtures --repo "$ROOT" "$ROOT/$FIXTURES" \
+  PYTHONPATH=$ROOT/infra/research/src:$PYTHONPATH $PY -m research data fetch-fixtures --repo "$ROOT" "$ROOT/$FIXTURES" \
     > "$O/fixtures.txt" 2>&1 && echo "fixtures fetched" >> "$O/rc.txt" \
     || echo "fixtures not fetched (fixtures.txt): the test that reads $FIXTURES skips" >> "$O/rc.txt" ;;
 esac

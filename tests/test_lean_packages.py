@@ -73,7 +73,7 @@ def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
-    image = ROOT / "tools/research/src/research/pods/nebius/image/Dockerfile"
+    image = ROOT / "infra/research/src/research/pods/nebius/image/Dockerfile"
     pins[str(image.relative_to(ROOT))] = re.search(r"^ARG LEAN_TOOLCHAIN=(\S+)", image.read_text(), re.MULTILINE).group(1)
     assert len(set(pins.values())) == 1, pins
 
@@ -352,7 +352,7 @@ def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
     def assigned(path: str) -> dict[str, ast.expr]:
         return {t.id: n.value for n in ast.parse((ROOT / path).read_text()).body if isinstance(n, ast.Assign)
                 for t in n.targets if isinstance(t, ast.Name)}
-    audit, merge = assigned("tools/verity/lean/lean_audit.py"), assigned("tools/research/src/research/merge.py")
+    audit, merge = assigned("tools/verity/lean/lean_audit.py"), assigned("infra/research/src/research/merge.py")
     repaired = {ast.literal_eval(e) for e in merge["REPAIRED"].args[0].elts}
     assert repaired == {ast.literal_eval(audit["UNREAD_CAPS"]), ast.literal_eval(audit["CAPS_TEST"])}
     assert ast.literal_eval(audit["CAPS_TEST"]) == _rel(Path(__file__))

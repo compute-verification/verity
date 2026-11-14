@@ -16,7 +16,7 @@ is in flight (`engine.class_admission`).  `engine.step_trace` records every step
     run.json           the engine record, the traffic's parameters and the run's counts
     advice/            `verity-vllm advice` on the above
 
-    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src /workspace/jobs/venv312/bin/python tools/advice_run.py \\
+    cd adapters/vllm; PYTHONPATH=.:../..:../../infra/research/src /workspace/jobs/venv312/bin/python tools/advice_run.py \\
         --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0] [--execution bi-eager]
         [--engine-class G --max-model-len N]
 """

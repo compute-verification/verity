@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 RS = Path(__file__).resolve().parents[1]
-GPU_LEASE = RS.parents[1] / "tools/research/src/research/pods/sh/gpu_lease.sh"
+GPU_LEASE = RS.parents[1] / "infra/research/src/research/pods/sh/gpu_lease.sh"
 NOW = 2_000_000_000
 EIGHT = "0,1,2,3,4,5,6,7"
 #: what the job reads that the tests leave at its default, whatever the suite's own environment holds

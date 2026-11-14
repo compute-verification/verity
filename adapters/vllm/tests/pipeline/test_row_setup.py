@@ -1,6 +1,6 @@
 """A row's setup and precheck past the tree's own checks (`Row.setup`, `prepare`, `run`): its stages' environment, the cuBLAS
 names, the release line, the target-family preflight, the Commit's session checks. A row's stages run with the run store's tool
-(`tools/research/src`) on their path, so these run only where it is beside the tree; `test_row` holds a tree without it to the
+(`infra/research/src`) on their path, so these run only where it is beside the tree; `test_row` holds a tree without it to the
 refusal at setup, by name.  With them, each with `subprocess` stood in: how a row runs a stage and a command it reads (`run_to`,
 `output`), the signals it takes, what a signalled row leaves behind, and the commands its prechecks and its report run
 (`release_line`, `source_identity`, `target_family`, `timeline_report`).  And a single-GPU row's prechecks themselves
