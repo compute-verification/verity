@@ -368,6 +368,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import functools
 import hashlib
 import io
 import json
@@ -2736,12 +2737,26 @@ def _local_ports(n: int) -> list[int]:
     return ports
 
 
+def _on_stop(run: Callable[..., dict]) -> Callable[..., dict]:
+    """`run` (`certifier_run`) given its unit's stop, a `_Stop` that is this process's SIGTERM handler while it runs."""
+    @functools.wraps(run)
+    def stoppable(*args, **kwargs) -> dict:
+        stop = _Stop()
+        previous = signal.signal(signal.SIGTERM, stop)
+        try:
+            return run(*args, stop=stop, **kwargs)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+    return stoppable
+
+
+@_on_stop
 def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
                   tunnel_argv: Callable[..., list[str]] | None = None,
                   sink_argv: Callable[[list[str], int, int], list[str]] | None = None,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
-                  wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
+                  wait: Callable[[subprocess.Popen, float], int] | None = None, stop: _Stop) -> dict:
     """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
     load") or relay session ("A relay session": a network certifier rehearsal's relay alone, where the same ssh also
     brings the peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that
@@ -2749,35 +2764,19 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
     end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
-    the store's record. A SIGTERM while either runs (its unit's stop) still ends it so (`_Stop`)."""
+    the store's record. A SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`)."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
     req = json.loads((d / "request.json").read_text())
-    warden, weights = req.get("device") == "warden", req.get("device") == "weights"
+    warden, weights, load = req.get("device") == "warden", req.get("device") == "weights", req.get("load")
     command = command or (warden_command if warden else weights_command if weights else certifier_command)
     out = d / "out"
     if out.exists():
         raise Refused(f"certifier rehearsal {run} has run already")
     out.mkdir(mode=0o755)
-    stop = _Stop()
-    previous = signal.signal(signal.SIGTERM, stop)
-    try:
-        if weights:
-            return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait, stop=stop)
-        return _rehearsal_run(host, d, req, pinned=pinned, now=now, tunnel_argv=tunnel_argv, sink_argv=sink_argv,
-                              up=up, command=command, wait=wait, stop=stop)
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-
-
-def _rehearsal_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[], datetime],
-                   tunnel_argv: Callable[..., list[str]] | None,
-                   sink_argv: Callable[[list[str], int, int], list[str]] | None,
-                   up: Callable[[subprocess.Popen, int], bool], command: Callable[..., list[str]],
-                   wait: Callable[[subprocess.Popen, float], int] | None, stop: _Stop) -> dict:
-    """`certifier_run` of a rehearsal or a relay session, under its unit's stop `stop`."""
-    warden, load, out = req.get("device") == "warden", req.get("load"), d / "out"
+    if weights:
+        return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait, stop=stop)
     work = out
     if warden:
         work = d / WITNESS

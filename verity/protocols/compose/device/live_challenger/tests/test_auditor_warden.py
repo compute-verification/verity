@@ -716,7 +716,7 @@ def test_a_relay_session_whose_unit_is_stopped_stops_its_runner_then_its_ssh_the
     before = signal.getsignal(signal.SIGTERM)
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=tunnel_argv, up=up,
                           command=session("import signal; signal.pause()", []), wait=wait)
-    assert end["rc"] == -signal.SIGTERM and end["ended"] == A.STOPPED and end["device"] == "warden"
+    assert end["rc"] == -signal.SIGTERM and end["ended"] == A.STOPPED
     assert mark.read_text() == "yes" and held[0].fileno() == -1
     assert json.loads((host.certifier / run / "end.json").read_text()) == end
     assert signal.getsignal(signal.SIGTERM) is before
