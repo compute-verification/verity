@@ -145,7 +145,14 @@
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
-        "verity/protocols/interface/"
+        "verity/protocols/interface/",
+        "security/Properties/Challenger.lean",
+        "security/Proofs/Properties/Challenger.lean",
+        "security/Proofs/Properties/Challenger/",
+        "security/Proofs/Properties/Verity/Sampled.lean",
+        "security/Proofs/Properties/Verity/Sampled/",
+        "security/Proofs/Properties/Verity/Recursive.lean",
+        "security/Proofs/Properties/Verity/Recursive/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -323,8 +330,6 @@
         "benchmarks/pouw/facet_break/",
         "benchmarks/pouw/dc/",
         "benchmarks/pouw/theory/",
-        "benchmarks/pouw/lean_headline.py",
-        "benchmarks/pouw/lean_headline_dc.py",
         "benchmarks/pouw/tests/test_lean_headline.py",
         "benchmarks/pouw/tests/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
@@ -427,7 +432,12 @@
         "security/Proofs/Accounting/Remote.lean",
         "security/Proofs/Accounting/Requirement.lean",
         "security/Proofs/Accounting/Responder.lean",
-        "security/Proofs/Accounting/Responder/"
+        "security/Proofs/Accounting/Responder/",
+        "security/Properties/Accounting/Requirement.lean",
+        "security/Proofs/Properties/Accounting/Requirement.lean",
+        "security/Definitions/Accounting/Requirement/Placed.lean",
+        "security/Proofs/Accounting/RequirementPouw.lean",
+        "security/Proofs/Accounting/Lemmas/RequirementPouw.lean"
       ],
       "branch_suffixes": [
         "3cf5",
@@ -492,19 +502,34 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
+      ],
+      "owns": [
+        "benchmarks/dashboard/"
       ]
     },
     {
-      "handle": "dashboard",
+      "handle": "dashboard-goals",
       "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
-      "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
-      "charter": "Daniel, 2026-11-02 11:24 AM PST",
+      "remit": "Daniel's Goals page on the console, and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-02 11:24 AM PST; named dashboard-goals by Daniel, 2026-11-13 7:05 PM PST",
       "linear": "CON",
       "examples": [
         "How do I put my goals on Daniel's Goals page?",
         "How do I publish a live plot of my runs to the console?"
       ],
       "usergroup": "S0CEC206YBW"
+    },
+    {
+      "handle": "dashboard-metrics",
+      "remit": "Daniel's Metrics dashboard on the console: which numbers it shows and how often. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-13 7:05 PM PST",
+      "linear": "CON",
+      "linear_label": "lane:dashboard-metrics",
+      "examples": [
+        "How do I get my benchmark's number onto the Metrics dashboard?",
+        "Why is a number on the Metrics dashboard stale?"
+      ],
+      "usergroup": "S0CH8FZD0KH"
     },
     {
       "handle": "ci",
@@ -552,7 +577,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",
@@ -616,6 +642,7 @@
         "fixtures/",
         "demos/README.md",
         "demos/lifecycle/",
+        "benchmarks/tree/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -634,6 +661,8 @@
         "demos/vllm/",
         "benchmarks/replay_determinism/",
         "benchmarks/prod_repro/",
+        "benchmarks/serve_tax/metrics.toml",
+        "demos/onsite_served/metrics.toml",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -739,7 +768,18 @@
       "linear_label": "lane:soundness",
       "owns": [
         "verity/protocols/compose/verifier/onsite/",
-        "verity/protocols/compose/verifier/remote/"
+        "verity/protocols/compose/verifier/remote/",
+        "security/Definitions/Claims.lean",
+        "security/Definitions/Claims/",
+        "security/Definitions/WeightSecurity.lean",
+        "security/Definitions/WeightSecurity/",
+        "security/Proofs/WeightSecurity.lean",
+        "security/Proofs/WeightSecurity/",
+        "security/Properties/Verity/",
+        "security/Proofs/Properties/Verity/Soundness.lean",
+        "security/Proofs/Properties/Verity/Coupling.lean",
+        "security/Proofs/Properties/Verity/Subprotocols.lean",
+        "security/Proofs/Properties/Verity/Assembled.lean"
       ],
       "branch_suffixes": [
         "9c4d"

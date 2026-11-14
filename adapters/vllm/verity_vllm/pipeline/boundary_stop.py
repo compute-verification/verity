@@ -166,8 +166,10 @@ def filed(spans: Sequence[Span], stop: Stop | None = None,
     no stop class. Each class's spans in admission order, the classes in order of their first span."""
     out: dict[tuple[int, int, bool], list[Span]] = {}
     for s in spans:
-        held = stop is not None and not (released and s.release is None) and stop.word(s) is not None
-        out.setdefault((s.shape[0], stop.outputs, True) if held else (*s.shape, False), []).append(s)
+        if stop is not None and not (released and s.release is None) and stop.word(s) is not None:
+            out.setdefault((s.shape[0], stop.outputs, True), []).append(s)
+        else:
+            out.setdefault((*s.shape, False), []).append(s)
     return out
 
 
