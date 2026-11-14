@@ -172,7 +172,7 @@ theorem certified_setup_accepts (hP : Pous.P2.Assumptions.PrimeP16448)
   simpa [certifiedCommitment, certifiedStore, certifiedPublic, certifiedSalt] using
     PousCheck.Properties.SecurityProofs.Accepts.check_honest hP (zeros_size 24) hk certifiedSetupState_spec
 
-set_option maxRecDepth 2000 in
+set_option maxRecDepth 10000 in
 theorem certified_run_accepts :
     PousCheck.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
       (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok () := by
@@ -308,10 +308,10 @@ theorem honest_recorded_prefix
         ⟨(Array.range n).map
             (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
           if n = 105 then some MemoryChallenger.COMPLETE else none⟩
-  | 0, _ => rfl
+  | 0, _ => by simp
   | n + 1, hn => by
       rw [List.replicate_succ', List.foldl_append, honest_recorded_prefix hk n (by omega)]
-      simp only [List.foldl_singleton]
+      simp only [List.foldl_cons, List.foldl_nil]
       have hn105 : n ≠ 105 := by omega
       simp only [hn105, ↓reduceIte]
       by_cases hlast : n + 1 = 105
@@ -350,12 +350,13 @@ theorem certified_signed
       some m at hm
     rw [certifiedRecordMessage_spec] at hm
     simp only [bind, Except.bind] at hm
+    change MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16)
+      honestSid certifiedRecordMessage = .ok m
     cases he : MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16)
         honestSid certifiedRecordMessage with
-    | error e => simp [he] at hm
+    | error e => cases hm
     | ok x =>
-      simp [he] at hm
-      subst x
+      cases hm
       exact he
 
 theorem playCollision_of_run {P : Audits Unit Unit}
@@ -372,7 +373,7 @@ theorem playCollision_of_run {P : Audits Unit Unit}
         blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1))) :
       z ∈ playStrings P ω := by
     rcases List.mem_append.1 hz with hz | hz
-    · exact List.mem_append_left _ (List.mem_append_right _ hz)
+    · exact List.mem_append_left _ (List.mem_append_right _ (List.mem_append_left _ hz))
     · exact List.mem_append_left _ (List.mem_append_right _ (List.mem_append_right _ hz))
   exact ⟨ω, x, mem_play hx, y, mem_play hy, hne, heq⟩
 
