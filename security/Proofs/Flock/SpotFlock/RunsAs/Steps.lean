@@ -95,7 +95,7 @@ theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
-      ¬(!(Spot.Registration.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
+      ¬(!(Spot.Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
       ¬i.closure.isSome = true ∧
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
@@ -153,7 +153,7 @@ theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot
     x.1 = it ∧ ∃ ns ids ks, Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
       ¬(Spot.nat? (Spot.getD it.record "population") != some (sample.size * ns.toList.sum)) = true ∧
-      ¬(!(Spot.Registration.check it.record { it.params.verifier with
+      ¬(!(Spot.Docket.check it.record { it.params.verifier with
         samplingDesign := Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson (sample.size * ns.toList.sum))] }).isEmpty) =
           true ∧
       Spot.Select.selectSecond sample ns ks it.source = .ok (x.2.2.1, x.2.2.2.2) ∧
@@ -277,14 +277,14 @@ theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : J
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
-      (Spot.Registration.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty = true ∧
+      (Spot.Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty = true ∧
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
       Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.nat? (Spot.getD it.record "population") =
         some (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum) ∧
-      (Spot.Registration.check it.record { it.params.verifier with
+      (Spot.Docket.check it.record { it.params.verifier with
         samplingDesign := Json.mkObj [("law", Json.str "subset"),
           ("k", Lean.toJson (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum))] }).isEmpty = true := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two

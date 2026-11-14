@@ -31,7 +31,11 @@ STORE, WEIGHTS = "store", "weights"
 
 
 class SetupIntegration:
-    """PoUS's setup as an integration: one proof block per sampled block, the setup unit (`setup_proof.setup_unit`) over
+    """Until a sampled unit's index reaches it as a row the verifier makes, nothing ties a sampled block to its index: a
+    prover could prove a correct setup of another block in a sampled unit's place, so the setup's units prove less than
+    they read as proving.
+
+    PoUS's setup as an integration: one proof block per sampled block, the setup unit (`setup_proof.setup_unit`) over
     the block of the store, its base, the registered row of W that holds its payload and its slot (`setup_proof.place`).
 
     `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
@@ -85,7 +89,7 @@ class SessionIntegration:
     unit), the message's hash (`PousSessionDigest_v1`, one unit) and one opened block a round (`PousRound_v1` at slot 0
     for the even rounds and at slot 1 for the odd), each its own proof block. Its wires are the session's links: the
     signature's ``m`` reads the digest's output m (``o1``), and round j's ``records`` the digest's records output ⌊j/2⌋
-    (``o{2 + ⌊j/2⌋}``). The rows the verifier knows (the key, the header, the domain id, the signed context, j and i) and
+    (``o{2 + ⌊j/2⌋}``). The rows the verifier knows (the key, the header, the signed context, j and i) and
     each round's registered row are free rows here, which the session's tables are to fill."""
 
     def __init__(self, statements: SessionStatements) -> None:

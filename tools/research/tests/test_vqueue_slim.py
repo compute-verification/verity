@@ -1397,7 +1397,7 @@ BUILD_LOG = f"""AUDIT {SCRATCH}/Security/Proofs: FAIL; built in the sandbox
 
 AUDIT {SCRATCH}/Security/Properties: FAIL; built in the sandbox
   staged: 560 of its 658 keyed modules from the artifact cache
-  sampled: 12 of the 560 modules its build didn't compile, recompiled in {{s}}.1 s (0 equal as object graphs): Spot.Registration
+  sampled: 12 of the 560 modules its build didn't compile, recompiled in {{s}}.1 s (0 equal as object graphs): Spot.Docket
   lean: proved_in: ../Proofs's build did not pass (its report says why), so its facts are not read
 AUDIT: FAIL ({SCRATCH}/Security/Proofs, {SCRATCH}/Security/Properties); reports in /workspace/research/runs/r-x/lean-audit
 """

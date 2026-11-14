@@ -21,7 +21,7 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   outputs of an earlier run or reuse an earlier record's registered value (`{value: {"record", "port" | "value"}}`, each
   of a value it expects registered and neither fills nor pinned, `record` lowercase hex of 64 bytes and `port` or `value`
   a string; or `{value: {"port"}}`, a window's history: that port of the previous record, the log's last, whose digest
-  the verifier takes from the log, `Registration.lastDigest`), each refused with any other form or when it expects
+  the verifier takes from the log, `Docket.lastDigest`), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
   expects registered, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in and commits a supplied value's rows
   in (`Supplied.root`), refused in any other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
@@ -35,21 +35,21 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   `window_root` and which the caller's check holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
   add `compiler`: the registration log's registered compiler as its view publishes it (`RegistrationLog`'s
   item), null when the log registers none, the digest lowercase hex of 64 bytes and the length ℓ a natural, whose digest
-  R6 holds the record's window's compiler to and ℓ its advice's bits (`Registration.compilerOk`,
-  `Registration.adviceOk`), refused in any other form; and it may add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
+  R6 holds the record's window's compiler to and ℓ its advice's bits (`Docket.compilerOk`,
+  `Docket.adviceOk`), refused in any other form; and it may add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
   opens its pool from and leaves it in, which it neither fills, pinned nor gives as outputs, the empty pool's root
   (lowercase hex of 64 bytes), the public lag at which serving learns a verdict (a positive integer), its verdict log
   (an object of record digests, lowercase hex of 64 bytes, to whether its run on that record accepted), whose verdict
-  on the record the lag back restarts the pool (`Registration.Pool.refused`), the window's own reset (a bool) and its
+  on the record the lag back restarts the pool (`Docket.Pool.refused`), the window's own reset (a bool) and its
   week on the verifier's clock (a natural), which R6 holds the record's window to name with the week's spent mark
   (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
-  an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
+  an output value reusing the previous record's `pout` when the window carries its pool (`Docket.Pool.chains`),
   and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
   and it may add `verdicts`, its verdict log in the pool's form, which the caller's check holds each output value's
-  earlier port to (`Registration.portsAccepted`, `R7-output-refused`), refused in any other form;
+  earlier port to (`Docket.portsAccepted`, `R7-output-refused`), refused in any other form;
   and it may add `tied`, a list of the program's parameters, which needs `parameters` with or without `registered`:
   run Inputs whose rows a later check ties to the registrations that computed them, which R8 lets through
-  (`Registration.tiedGate`, `R8-tied`), refused in any other form;
+  (`Docket.tiedGate`, `R8-tied`), refused in any other form;
   and it may add `history`, `{"digests", "held", "registered", "tables"}`: the history tables its program reads, which
   need `leaf_layer`, each table's root computed from its writers' public bodies the leaf layer binds and held to the root
   the window registers for it (`HistoryTable.rootsOf`), and a supplied value's source `{"history": "H/root"}` or
@@ -58,11 +58,11 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   and it may add `certified`, `{value: {"domain", "leaves", "root", "words"}}`, with `word_bits` (16 or 32, 16 when
   left out): the entries it built from registrations it read under the deployment's key, each of a value it neither
   expects a parameter registered under nor fills, `root` lowercase hex of 64 bytes, `leaves` and `words` naturals
-  and `domain` a string, which R7 holds the record's entries for those values to (`Registration.certifiedHeld`),
-  with which it expects a v2 record whatever it expects registered (`Registration.Verifier.v2`), refused in any
+  and `domain` a string, which R7 holds the record's entries for those values to (`Docket.certifiedHeld`),
+  with which it expects a v2 record whatever it expects registered (`Docket.Verifier.v2`), refused in any
   other form, and which only the registration check and the run of record read: `paramsOfJson` refuses the key;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
-  `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
+  `SHA-512(format || 0 || canon(record))` (`Docket.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
   `statement`, `verdicts` (`{name: {"accepted": true | false | null, "of_record", ...}}`, each verifier's verdict on the
   sampled proof blocks' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
@@ -74,7 +74,7 @@ SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, wit
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
 * **check** (`checkLive`, at the coins `checkAt`): with coins, that the sample's units are the ones their raw bytes sample
-  under the sampling design (`sampledFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
+  under the sampling design (`sampledFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Docket.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
   the registered one, and a read of the record's own port taken at that port's own root, `Record.lessOwnReads`; and
@@ -94,7 +94,7 @@ module
 public import CoreProtocol.Cli
 public import CoreProtocol.Profile
 public import CoreProtocol.Live
-public import Spot.Registration
+public import Spot.Docket
 public import Spot.Record
 public import Spot.ChallengerSample
 public import Spot.Select
@@ -110,7 +110,7 @@ open Lean (Json)
 open Flock (V)
 
 structure Params where
-  verifier : Registration.Verifier
+  verifier : Docket.Verifier
   delta : Core.Ratio
   /-- the auditor's challenger the sample's coins come from, and their family; none when the verifier samples from its own -/
   challenger : Option (Challenger.ChallengerKey × String) := none
@@ -214,7 +214,7 @@ private def certifiedOf (cj : Json) (registered : Array (String × Nat)) (suppli
     | _, _, _, _ => throw fail
 
 /-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value`, `root` and
-`domain`, which `Registration.heldRoots` reads (Python's `held_roots` raises on anything else). -/
+`domain`, which `Docket.heldRoots` reads (Python's `held_roots` raises on anything else). -/
 private def logRecord (j : Json) : V Json := do
   let j ← obj j "a record of the log"
   let r := getD j "registered"
@@ -241,7 +241,7 @@ with no row format of its own in `schemas` (it takes `pout`'s, `poolValues`), `g
 `lag` a positive integer, `verdicts` an object of record digests (lowercase hex of 64 bytes) to bools, `reset` a bool
 and `week` a natural. -/
 private def poolOf (pj : Json) (registered : Array (String × Nat)) (given : List (Option Json))
-    (schemas : Option Json) : V Registration.Pool := do
+    (schemas : Option Json) : V Docket.Pool := do
   exactly pj #["genesis", "lag", "pin", "pout", "reset", "verdicts", "week"] "the pool"
   let (.str pin, .str pout) := (getD pj "pin", getD pj "pout") | throw "the pool's pin and pout are not strings"
   for v in [pin, pout] do
@@ -267,16 +267,16 @@ private def withField (o : Option Json) (k : String) (x : Json) : Option Json :=
 
 /-- The parameters' supplied values, output values and row formats with the pool's `pin` among them
 (`registration.pool_values`): the previous record's `pout`, reused, in `pout`'s row format, when the window carries the
-previous window's pool (`Registration.Pool.chains`, at `program`, the program's digest as R2 reads it), else filled from
+previous window's pool (`Docket.Pool.chains`, at `program`, the program's digest as R2 reads it), else filled from
 the empty pool's root, the one row `[{"bytes": genesis}]`. A malformed object is left as it is, for its own parse to
 refuse. -/
-private def poolValues (pool : Option Registration.Pool) (program : String) (log : Array Json)
+private def poolValues (pool : Option Docket.Pool) (program : String) (log : Array Json)
     (supplied outputs schemas : Option Json) : Option Json × Option Json × Option Json :=
   match pool with
   | none => (supplied, outputs, schemas)
   | some p =>
     if p.chains log program then
-      let reuse := Json.mkObj [("record", .str (Registration.lastDigest log)), ("value", .str p.pout)]
+      let reuse := Json.mkObj [("record", .str (Docket.lastDigest log)), ("value", .str p.pout)]
       let schemas := match schemas, schemas.bind (field? · p.pout) with
         | some (.obj kvs), some s => some (.obj (kvs.insert p.pin s))
         | s, _ => s
@@ -383,10 +383,10 @@ def paramsParsed (j : Json) : V Params := do
         if !(registered.any (·.1 == v) && !supplied.any (·.1 == v) && !pinned.any (·.1 == v)) then throw fail
         if keys? o == some #["port"] then
           match getD o "port" with
-          | .str p => return (v, Registration.lastDigest log, Registration.Earlier.port p)
+          | .str p => return (v, Docket.lastDigest log, Docket.Earlier.port p)
           | _ => throw fail
-        let (key, mk) ← if keys? o == some #["port", "record"] then pure ("port", Registration.Earlier.port)
-          else if keys? o == some #["record", "value"] then pure ("value", Registration.Earlier.value) else throw fail
+        let (key, mk) ← if keys? o == some #["port", "record"] then pure ("port", Docket.Earlier.port)
+          else if keys? o == some #["record", "value"] then pure ("value", Docket.Earlier.value) else throw fail
         match getD o "record", getD o key with
         | .str d, .str p => if d.length == 128 && isHex d then pure (v, d, mk p) else throw fail
         | _, _ => throw fail
@@ -466,7 +466,7 @@ def paramsParsed (j : Json) : V Params := do
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
                                     declared, seedSalt, pool, verdicts, tied, compiler, certified },
                       delta, challenger, tables }
-  let again := Registration.unwindowed p.verifier
+  let again := Docket.unwindowed p.verifier
   if !again.isEmpty then
     throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
       "take now, and the verifier names no window root: a value registered afresh each window under a fixed name takes " ++
@@ -492,7 +492,7 @@ def paramsOfJson (j : Json) : V Params := do
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
   if !(j matches .obj _) then throw "the registration record is not an object"
-  return { record := j, digest := ← Registration.digest j }
+  return { record := j, digest := ← Docket.digest j }
 
 /-- The evidence as parsed, before `evidenceOf`'s refusal of a closure. -/
 def evidenceParsed (b : ByteArray) : V Evidence := do
@@ -575,13 +575,13 @@ def coveredDesign : Flock.Draw.SamplingDesign → V Flock.Draw.SamplingDesign
 
 /-- The sample the coins `src` give over `population` units under the expanded `samplingDesign` (`Select.select`'s for a sampling design rule):
 its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
-def sampledFrom (v : Registration.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
+def sampledFrom (v : Docket.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
   let derived ← Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
   let l ← coveredDesign (derived.getD (← Draw.flockSamplingDesign samplingDesign population))
   Draw.sampleUnits l population src
 
 /-- Why the sample is not the one the coins `src` give under `samplingDesign` (`sampledFrom`), every coin opened read; none when it is. -/
-def coinsReason (v : Registration.Verifier) (samplingDesign rec_ draw : Json) (src : ByteArray) : Option String :=
+def coinsReason (v : Docket.Verifier) (samplingDesign rec_ draw : Json) (src : ByteArray) : Option String :=
   match nat? (getD rec_ "population") with
   | none => some "the record names no population"
   | some n => match sampledFrom v samplingDesign n src with
@@ -594,14 +594,14 @@ def coinsReason (v : Registration.Verifier) (samplingDesign rec_ draw : Json) (s
       else none
 
 /-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
-check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Registration.check`): this audit
+check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
 pool's marks and chain, and the verdicts); SPOT, its caller, gates it (`VStar.Recursive.Caller.gate`), and
 this package's executables that run it on their own (`sampled-proofs-one-stage` and `-zk`) do not. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier
   let rec_ := c.record
-  let codes := Registration.check rec_ v
+  let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
   match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error err => .reject s!"registration: R1-law: {err}"
@@ -665,7 +665,7 @@ def publicJson (x : Public) : Json :=
     ("complete", Json.bool x.complete)]
 
 def protocol : Core.Protocol where
-  id := Registration.PROTOCOL
+  id := Docket.PROTOCOL
   Params := Params
   Commitment := Commitment
   Evidence := Evidence

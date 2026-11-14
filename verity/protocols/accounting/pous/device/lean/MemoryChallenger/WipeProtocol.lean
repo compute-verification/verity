@@ -245,19 +245,20 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
-(`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, the capacity it ran at), at
-the error its bound states (`eps`), at a moment. Until the network certifier's count reaches the check, every
-accepted wipe publishes `certified` false, and its rows say so.
+(`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
+bound states (`eps`), at a moment. Until the network certifier's count reaches the check, every accepted wipe publishes
+`certified` false, and its rows say so. The wipe is computed at `memory_bits`, which must be at least the memory
+registered for the server (`params`): foreign bits outside what it declared are outside its bound.
 
-It names no device and no registration's head. What it would say beyond what `Core.Account` holds: when in the period
-the bound held (an amount at a moment states no span); and which tiers the wipe declared. Its part is every tier a
-wipe can declare, while the session's own, under the challenger's labels (`gpu-hbm`, `host-dram`, a disk's name),
-are in its profile's `tiers`, which no field of an amount reads. -/
+Its answers name no auditor's device's key, so they are of the whole site (`witness`), and no step the bound held at
+(`held`). Its part is every tier a wipe can declare. The session's own tiers are in its profile's `tiers` as pairs of a
+label (`gpu-hbm`, `host-dram`, a disk's name) and bytes, not the list of labels `Core.Account.Amount.tiers` reads. -/
 def account : Core.Account :=
-  { protocol := ID, head := none
+  { protocol := ID, witness := none
     amounts := [{ metric := "after a wipe", part := .memory [.hbm, .dram, .disk], key := .published "foreign_bits",
                   unit := Core.Account.bits, side := .free, time := .moment, error := .published "eps",
-                  capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified") }] }
+                  capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified"),
+                  params := [{ name := "memory_bits", key := .published "memory_bits" }] }] }
 
 private def segment : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 

@@ -14,6 +14,7 @@ import pytest
 
 FILLER = Path(__file__).resolve().parents[1]
 DCAP = Path(__file__).resolve().parents[1]
+KERNEL = DCAP.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
 
 
 A = F.A  # the arms module fused_arm imported
@@ -23,7 +24,7 @@ V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]
 
 
 def _built() -> tuple[dict[str, set], set]:
-    src = (DCAP / "flin.cuh").read_text()
+    src = (KERNEL / "flin.cuh").read_text()
     body = re.search(r"static const char\* flin_built\(int M\) \{(.*?)\n\}", src, re.S).group(1)
     lists = re.findall(r'"([^"]+)"', body)
     flin = dict(zip(["32", "64", "128", "160/192", "256"], (set(s.split(", ")) for s in lists)))
@@ -102,7 +103,7 @@ def test_pump_only_build_runs_no_filler_warp(arm):
     assert all(q.FW == 0 and q.AFW == 0 for _, q in arm.table.values())
     src = (FILLER / "fscore.cu").read_text()
     assert re.search(r"#ifdef FSCORE_PUMP_ONLY\n#define FLIN_PUMP_ONLY\n#endif\n#define DCAP_FLIN\n", src)
-    assert src.index("#define FLIN_PUMP_ONLY") < src.index('#include "dcap.cu"')
+    assert src.index("#define FLIN_PUMP_ONLY") < src.index('#include "../../../verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu"')
 
 
 def test_warp_arm_fills_through_dfill_k_warp():
@@ -112,7 +113,7 @@ def test_warp_arm_fills_through_dfill_k_warp():
     assert all(q.AFW == 0 and (q.FW == 0) == (q.ST == 0) for _, q in rows.values())
     assert sum(q.FW > 0 for _, q in rows.values()) >= 16
     assert all(rows[k] == F.TABLE_PUMP[k] for k, (_, q) in rows.items() if q.FW == 0)
-    src = (DCAP / "flin.cuh").read_text()
+    src = (KERNEL / "flin.cuh").read_text()
     assert re.search(r"__device__ __noinline__ uint64_t dfill_k_warp\(uint64_t c0, uint64_t c1, unsigned long long tile, "
                      r"unsigned long long step\)", src)
     assert re.search(r"h \^= dfill_k_warp\(rs\.c0, rs\.c1, tile, \(unsigned long long\)steps\);", src)

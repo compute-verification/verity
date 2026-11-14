@@ -42,6 +42,10 @@ device code, torch and `verity_flock` (inside functions, and torch at import in 
   standalone `.cu` bench to include.
 - `served_zk/`: a served Pearl-C window's rows committed as hm96-sha512 leaves in the ZK statement's format, and that
   window registered, sampled, proved and judged by PoUW's verifier.
+- `filler/`: the DRAM-free filler, int8 MMAs on operands derived from a round's coins whose receipt a host recomputes
+  bit for bit: `dcap.cu` (the decode step's proxy beside it), `pfill.cuh` (the proved filler) with its host build and
+  its Python twin `pfill_ref.py`, `lfill.cuh` (the lane filler), `flin.cuh` (the fused filler) and `dfill_ref.py`. Its
+  scorer, arms and drivers are in `benchmarks/pouw/filler/`.
 
 The SASS gate is `sass_gate.py`: no shipped kernel computes a value the verifier's scalar model can't replay. Its pins
 are `sass_pins.json`, whose numeric pin is built from `ieee_pin.cu` and changes only with ptxas; the listings and probes

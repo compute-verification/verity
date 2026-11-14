@@ -71,7 +71,7 @@ def layout(domain_id: bytes, key: bytes, nonce: int, n: int, k: int) -> tuple[np
         raise ValueError(f"{n} rows of {k} codes under a {len(domain_id)}-byte domain id, a {len(key)}-byte key and nonce "
                          f"{nonce}: not 1 to 2^32 / 3 rows of an even K >= 2, a 64-byte id, a 32-byte key and a u64 nonce")
     s = -(-(k + 4) // RTD.SEG_BYTES)
-    tab = np.concatenate([np.asarray([0, 0, k | n << 32, s << 32, 0, RTD._width(n)], np.uint64), RTD._words(domain_id)])
+    tab = np.concatenate([np.asarray([0, 0, k | n << 32, s << 32, 0, RTD.table_width(n)], np.uint64), RTD.u64_words(domain_id)])
     args = RTD.Args()
     args.key[:] = np.frombuffer(key, "<u4").tolist()
     args.nonce[:] = [0, nonce & _M32, nonce >> 32]
@@ -112,7 +112,7 @@ def host_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> lis
         tab[0], tab[1] = codes.ctypes.data, words.ctypes.data
         roots = np.zeros(16, np.uint64)
         rc = RTD.host_lib().rt_step_host(tab.reshape(1, -1), np.arange(n, dtype=np.uint32), n * (int(tab[3]) >> 32), n,
-                                         RTD._hm(), RTD._prefixes(), ctypes.byref(args), roots)
+                                         RTD.hm_tables(), RTD.leaf_prefixes(), ctypes.byref(args), roots)
         if rc:
             raise ValueError(f"rt_step_host refused the table's layout ({rc})")
         out.append(_root(roots[8:]))
@@ -212,7 +212,7 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names
     for i, (_did, _nonce, c, w) in enumerate(tables):
         tabs[i, 0], tabs[i, 1] = c.data_ptr(), w.data_ptr()
     # each table's scratch, in 64-byte units: its segment digests, leaves, tree and step tree; then every table's output
-    units = [(n * s, n, RTD._width(n), 2) for n, s in ((int(t[2]) >> 32, int(t[3]) >> 32) for t, _args in laid)]
+    units = [(n * s, n, RTD.table_width(n), 2) for n, s in ((int(t[2]) >> 32, int(t[3]) >> 32) for t, _args in laid)]
     staged = torch.from_numpy(tabs.view(np.int64)).pin_memory()
     meta = staged.to(dev, non_blocking=True)
     perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
