@@ -1005,7 +1005,7 @@ def generated_kernels_of(versions: dict) -> Any:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class CommitConfig:
+class Settled:
     """What a Commit has settled before it takes the GPU (`commit_config`): its options with the staging resolved, what it read
     of the workload and of the required-value manifest, the committer kind of each arm, and what it derived on the CPU from the
     Programs of record.  No field is written after."""
@@ -1043,7 +1043,7 @@ class CommitConfig:
     cb_rec: dict[str, Any] | None
 
 
-def commit_config(args: Options) -> CommitConfig:
+def commit_config(args: Options) -> Settled:
     """What a Commit does before it takes the GPU, in this order: the stack dump ``VERITY_TRACEDUMP`` asks for; the source identity
     precheck, which ends the process with exit 3 on a tree other than the requested one; the staging's resolution; the refusals
     that need no engine; the served source's hooks; the required-value manifest, held to its Build's digest and its partition of
@@ -1127,10 +1127,10 @@ def commit_config(args: Options) -> CommitConfig:
                 print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
                       f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
-    return CommitConfig(args=args, session=_rs, source_identity=source_identity_doc, planner=_planner, fault=fault, served=served,
-                        required_classes=required_classes, required_classes_cli=required_classes_cli, required_manifest=required_manifest,
-                        out=out, wl=wl, engine_args=engine_args, kinds=kinds, multi=multi, coins=coins, oracle_producers=oracle_producers,
-                        plan_rec=plan_rec, cb_plan=cb_plan, cb_rec=cb_rec)
+    return Settled(args=args, session=_rs, source_identity=source_identity_doc, planner=_planner, fault=fault, served=served,
+                   required_classes=required_classes, required_classes_cli=required_classes_cli, required_manifest=required_manifest,
+                   out=out, wl=wl, engine_args=engine_args, kinds=kinds, multi=multi, coins=coins, oracle_producers=oracle_producers,
+                   plan_rec=plan_rec, cb_plan=cb_plan, cb_rec=cb_rec)
 
 
 def main(args: Options) -> None:
@@ -2076,7 +2076,7 @@ def warmup_instrumented(com: Any, eng: va.Engine, *, reqs: list[dict], sampling:
           f"errors {rc.extra.get('errors')}", flush=True)
 
 
-def committer_setup(cfg: CommitConfig, eng: va.Engine, com: Any, *, kind: str, reqs: list[dict], sampling: dict, base: dict,
+def committer_setup(cfg: Settled, eng: va.Engine, com: Any, *, kind: str, reqs: list[dict], sampling: dict, base: dict,
                     flip_weight_rec: dict | None,
                     _hidden_required: bool | None) -> tuple[dict | None, dict[str, Any] | None, dict[str, Any] | None]:
     """What a Commit does with a committer once its sources are attached and before its first run: sizes its staging and holds
@@ -2097,7 +2097,7 @@ def committer_setup(cfg: CommitConfig, eng: va.Engine, com: Any, *, kind: str, r
     return flip_weight_rec, _live_wd, _wor_rec
 
 
-def write_verdict(cfg: CommitConfig, *, versions: dict, rows: list[dict], step_rows: list[dict], decl: Any | None,
+def write_verdict(cfg: Settled, *, versions: dict, rows: list[dict], step_rows: list[dict], decl: Any | None,
                   decls: dict[str, dict], required_classes: tuple[str, ...], fa_version: int | None, moe_attached: bool,
                   flip_weight_rec: dict | None, replay_cache: dict[str, dict[str, Any]], first_run: dict[str, Any],
                   protocols: PO.Composition | None, engine_kw: dict[str, Any], deferred: dict[int, dict[str, Any]]) -> None:
