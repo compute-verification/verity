@@ -173,7 +173,7 @@ def write(out: Path, p: dict) -> None:
 
 def store_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     sys.path[:0] = [str(ns.research_src)]
-    from research.store.local import LocalStore  # noqa: PLC0415
+    from research.store.local import LocalStore
 
     store = LocalStore(ns.store) if ns.store else LocalStore()
     info = {"refresh": "skipped (--no-refresh)"}
@@ -234,7 +234,7 @@ def prom_now(query: str) -> list[dict]:
 
 def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     sys.path.insert(0, str(HERE))
-    import util_collect as uc  # noqa: PLC0415  the utilization definitions
+    import util_collect as uc  # the utilization definitions
 
     end = now.timestamp()
     start = (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)).timestamp()
@@ -619,7 +619,7 @@ def usage_module():
         raise ModuleNotFoundError(f"no cluster/usage.py beside the console or in a checkout: install deploy.toml's tree "
                                   f"{HERE / 'cluster'} (research deploy install vy-nebius-1 --by WHO {HERE / 'cluster'})",
                                   name="cluster")
-    from cluster import usage  # noqa: PLC0415  node 1's python3 has no cluster installed
+    from cluster import usage  # node 1's python3 has no cluster installed
     return usage
 
 
