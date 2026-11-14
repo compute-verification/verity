@@ -194,8 +194,9 @@ def operand_rows(op: Operand) -> int | None:
     return None
 
 
-def whole_view(op: Operand) -> ViewDesc:
-    """The device view an operand names whole (`Shared`, `PerRow`, `Gather`, `GatherMany`); no other operand has one."""
+def whole_view(op: Operand | None) -> ViewDesc:
+    """The device view an operand names whole (`Shared`, `PerRow`, `Gather`, `GatherMany`); no other operand has one, nor
+    an output kept in registers (None)."""
     if not isinstance(op, (Shared, PerRow, Gather, GatherMany)):
         raise TypeError(f"a {type(op).__name__} operand names no one view")
     return op.view
@@ -229,13 +230,14 @@ def operand_view(op: Operand, i: int) -> ViewDesc | None:
 @dataclass(frozen=True)
 class Compute:
     """`rows` instances of `spec`.  `operands[k]` describes parameter k of the specialization; `outputs[k]`
-    describes component k of its return (one entry for a non-tuple return).  Element order inside an operand
+    describes component k of its return (one entry for a non-tuple return), or is None for a component kept in registers and
+    never written.  Element order inside an operand
     view is the row-major leaf order of the parameter's type; the fold checks leaf counts."""
 
     spec: Any                                  # verity.circuits.defs.SpecializedDefinition
     rows: int
     operands: tuple[Operand, ...]
-    outputs: tuple[Operand, ...]
+    outputs: tuple[Operand | None, ...]
     consumed: tuple[int, ...]
     hint: str = ""                             # instance name hint (module path / op); never part of identity
     kernels: tuple[str, ...] = ()              # device kernel name substrings this compute accounts for (census)
