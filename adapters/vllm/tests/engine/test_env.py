@@ -231,7 +231,8 @@ def test_an_inherited_dynamic_tiling_is_refused_by_name_before_anything_is_pinne
         env.apply_engine(None)
     with pytest.raises(RuntimeError, match=f"inherited {RBLOCK}"):
         env.pin({**env.ENGINE, "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1"})
-    assert not (set(env.ENGINE) - set(env.FIXED)) & set(os.environ)
+    pinned = sorted(k for k in set(env.ENGINE) - set(env.FIXED) if k in os.environ)
+    assert pinned == []
     assert "HF_HUB_OFFLINE" not in os.environ
 
 

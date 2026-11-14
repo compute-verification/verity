@@ -33,8 +33,6 @@ FIX = """Compare an environment by name, before the assert:
 and read one variable as os.environ[NAME]"""
 
 ALLOWED: dict[str, str] = {
-    "adapters/vllm/tests/engine/test_env.py::test_an_inherited_dynamic_tiling_is_refused_by_name_before_anything_is_pinned":
-        "takes the set of the environment's names inside the assert; it goes when the set is taken before it",
 }
 
 
