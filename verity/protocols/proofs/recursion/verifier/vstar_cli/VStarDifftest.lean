@@ -10,9 +10,9 @@ public import Flock.RecLinkRef
 # V*'s difftest executable
 
 The functions `verity_flock`'s builders are held to (`tests/test_vstar_difftest.py`), each answering for one part of V*'s
-circuits on the parameters it is given: a part's rows as a laid-out netlist (`sha`, `climb`, `residuals`: the netlist's
-SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit file
-(`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
+circuits on the parameters it is given: a part's rows as a laid-out circuit description (`sha`, `climb`, `residuals`: the circuit
+description's SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`), and a statement's whole circuit
+file (`rec_open_circuit`, `inner_circuit`: its SHA-512 and bytes); the algebra's structure and its parts (`structure`,
 `spec`, `parts`), and V*'s statements over an inner session's shape (`statements`); `spec_holo`, `statements_holo`,
 `inner_circuit_holo` and `verifier_parts_holo` are those over a holo inner session (`VStar.Holo`). `verifier_parts` holds the Lean
 verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
