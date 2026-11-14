@@ -401,6 +401,55 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-020000-0001"
 
 
+def test_under_a_research_run_the_served_table_records_its_metrics(tmp_path, monkeypatch, capsys):
+    """Under a research run, `served-table` with a runner's metrics writes each into the run's result through the kit:
+    its row's arm over stock as served in time per output token as a percent over stock, measured, with its interval,
+    its run and result art, and its row's caveats; a row with no run has no value and says why, and the run's
+    validation then fails naming it. Outside a run it writes nothing."""
+
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    producer = Producer(tmp_path)
+    art = producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25, reps=3))
+    producer.label("r20261024-020000-0001", "note", "no pinned sm_120 build", "2026-10-24T05:00:00Z")
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "fresh"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(producer.config))
+    monkeypatch.setattr(served_table, "spec_added", lambda root, spec: ADDED)
+    monkeypatch.setattr(served_table, "PROTOCOLS", BY_SPEC["protocols"])
+    monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
+    monkeypatch.setattr(served_table, "BREAKDOWNS", BY_SPEC["breakdowns"])
+    metrics = {"benchmarks/served-overhead-commit": f"{COMMIT_SPEC}/b8-p512-mixed",
+               "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed"}
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    assert main(["served-table"], metrics=metrics) == 0 and not list(tmp_path.rglob(kit.RESULT))
+    outside = capsys.readouterr().out
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    assert main(["served-table"], metrics=metrics) == 0
+    assert capsys.readouterr().out == outside
+
+    got = json.loads((run_dir / kit.RESULT).read_text())
+    commit, pous = got["measurements"]
+    assert (commit["name"], commit["unit"], commit["mark"]) == (
+        "benchmarks/served-overhead-commit", served_render.OVERHEAD_UNIT, "measured")
+    assert commit["value"] == pytest.approx((1.2 * 1.25 - 1) * 100) and commit["ci95"] == pytest.approx([50.0, 50.0])
+    assert commit["inputs"] == ["measured", "r20261024-020000-0001", art]
+    assert (commit["protocol"], commit["device"], commit["reps"], commit["caveats"]) == ("Commit", RTX, 3, "no pinned sm_120 build")
+    assert pous["value"] is None and pous["why"] == ("no served ratio at llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed: "
+                                                     "no passing run of it in the store")
+    assert got["measurement_files"] == [served_render.TABLE]
+    assert json.loads((run_dir / served_render.TABLE).read_text())["schema"] == served_table.SCHEMA
+    assert got["validation"] == {"status": "failed", "checker": "verity_bench.served_table.collect",
+                                 "detail": "1 of 2 metrics have a served ratio; none for "
+                                           "benchmarks/served-overhead-pous-bandwidth-audit",
+                                 "evidence": [served_render.TABLE]}
+
+
 def test_every_record_has_its_own_name_in_the_vocabularys_form():
     from research.store import vocab
 
