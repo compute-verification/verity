@@ -74,7 +74,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
-  `verity.protocols.accounting.certifier.verifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  `verity.protocols.accounting.certifier.device.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
   (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
   killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
