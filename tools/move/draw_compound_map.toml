@@ -5,7 +5,7 @@
 # [keep] holds every quoted token of the family, the keys a served record or a verifier's input carries.
 
 [rewrite]
-exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**"]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py"]
 
 [keep]
 strings = [
@@ -816,7 +816,6 @@ files = ["*"]
 "drawnWith_std" = "sampledWith_std"
 "drawnWrong" = "sampledWrong"
 "drawn_contPlay" = "sampled_contPlay"
-"drawn_cost" = "sampled_cost"
 "drawn_digest" = "sampled_digest"
 "drawn_digestW" = "sampled_digestW"
 "drawn_facts" = "sampled_facts"
