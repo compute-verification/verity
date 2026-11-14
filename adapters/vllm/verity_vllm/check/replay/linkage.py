@@ -46,8 +46,9 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     for r in workload_requests:
         rid = str(r["request_id"])
         arrive = int(r.get("arrive_step") or 0)
-        prompt = [int(t) for t in r["prompt_token_ids"]][int(r.get("cached") or 0):]
-        steps = [int(s) for s in r["steps"]]
+        ids, served_steps = r.get("prompt_token_ids"), r.get("steps")            # a request that states none has no prompt row, no step
+        prompt = [int(t) for t in (ids if ids else [])][int(r.get("cached") or 0):]
+        steps = [int(s) for s in (served_steps if served_steps else [])]
         if not steps:
             continue
         # arrival step: the prescribed prompt
@@ -105,7 +106,8 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
         if r.get("max_tokens") is None and r.get("program_steps") is None:
             continue
         rid = str(r["request_id"])
-        steps = [int(s) for s in r["steps"]]
+        served_steps = r.get("steps")
+        steps = [int(s) for s in (served_steps if served_steps else [])]
         h: dict[str, Any] = {"linked_steps": len(steps), "declared_cap": r.get("max_tokens"), "program_steps": r.get("program_steps")}
         if r.get("max_tokens") is not None and steps and len(steps) < int(r["max_tokens"]):
             last = steps[-1]
@@ -207,7 +209,8 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
     seed_checked = seed_linked = 0
     for r in workload_requests:
         rid = str(r["request_id"])
-        steps = [int(s) for s in r["steps"]]
+        served_steps = r.get("steps")                                            # a request that states none sampled at no step
+        steps = [int(s) for s in (served_steps if served_steps else [])]
         live = [s for s in steps if store.has(rid, s, SAMPLER_OP, SAMPLED_MEMBER)]
         for s in live:
             live_at.setdefault(s, []).append(rid)

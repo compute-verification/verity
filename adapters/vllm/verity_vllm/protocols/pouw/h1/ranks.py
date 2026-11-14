@@ -42,7 +42,11 @@ from typing import Any
 import numpy as np
 from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Epoch,
+    Workload,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
