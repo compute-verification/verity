@@ -4,7 +4,7 @@
 #   `round`, `drawnAll`; `verity_flock.rec_algebra.CoinSource`), is `RoundCoins`, in Lean, Python and prose;
 # - `coin_source`, the name in code of where a run's coins come from (a parameter, an attribute, a local, a test's name),
 #   is `coins_from`;
-# - the prose "coin source(s)", by sense, file by file: a party's coins, a stream's or a window's coins' origin, the
+# - the prose "coin source(s)", by sense, file by file: a stream's or a window's coins' origin, the
 #   challenger's entropy, a coin key, Flock's `RoundCoins`.
 # It leaves every byte a stored record, a wire format or a digest takes: the key "coin_source" of a window's commitment,
 # a served record and the Lean verifier's input (quoted, in backticks, and the keywords `.update(...)` or a test's
@@ -26,7 +26,7 @@ files = ["**/protocols/pouw_h1_gpu.py"]
 "coin source" = "coins' origin"
 
 [[words_in]]
-files = ["**/network_traces/scan_zk.py"]
+files = ["**/scan_zk.py"]
 [words_in.words]
 "coin source the challenger" = "coins from the challenger"
 
@@ -42,19 +42,7 @@ files = ["**/memory_challenger/live.py"]
 "coin source" = "coin key"
 
 [[words_in]]
-files = ["**/Accounting/Assumptions/Parties.lean"]
-[words_in.words]
-"coin source's sample" = "coins"
-"a sample of its coin source" = "its coins"
-"its coin source's included" = "its coins included"
-
-[[words_in]]
-files = ["**/claims/__init__.py"]
-[words_in.words]
-"coin source's draws among them" = "coins among them"
-
-[[words_in]]
-files = ["**/Accounting/Guarantees/Compose.lean"]
+files = ["**/Guarantees/Compose.lean"]
 [words_in.words]
 "not of the coin source" = "not of the coins"
 
