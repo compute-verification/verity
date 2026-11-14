@@ -700,13 +700,8 @@ def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sib
 
 def _fromhex(s: Any, n: int) -> bytes | None:
     """`bytes.fromhex(s)` when `s` is a string of `n` bytes' hex, else None."""
-    if not _str(s):
-        return None
-    try:
-        b = bytes.fromhex(s)
-    except ValueError:
-        return None
-    return b if len(b) == n else None
+    b = _hex(s)
+    return b if b is not None and len(b) == n else None
 
 
 def _path(x: Any) -> list[bytes] | None:
@@ -908,7 +903,7 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
     except ValueError:
-        h = None
+        return "the proof's public file has no JSON header"
     if not isinstance(h, dict):
         return "the proof's public file has no JSON header"
     n = h.get("instances")
@@ -977,13 +972,12 @@ _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, 
 _WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
 
 
+#: exactly the strings `bytes.fromhex` takes: pairs of ASCII hex digits, with ASCII whitespace before and after each pair
+_FROMHEX = re.compile(r"[ \t\n\v\f\r]*(?:[0-9a-fA-F]{2}[ \t\n\v\f\r]*)*")
+
+
 def _hex(s: Any) -> bytes | None:
-    if not _str(s):
-        return None
-    try:
-        return bytes.fromhex(s)
-    except ValueError:
-        return None
+    return bytes.fromhex(s) if _str(s) and _FROMHEX.fullmatch(s) else None
 
 
 def coins_of(j: Any, recorded: bool) -> tuple[str, int, bytes]:
@@ -1071,7 +1065,7 @@ def _manifest(raw: bytes) -> dict:
     try:
         m = json.loads(raw.decode(), parse_constant=_no_constant)
     except ValueError:
-        m = None
+        raise Refused("the pass's manifest is not a JSON object") from None
     if not isinstance(m, dict):
         raise Refused("the pass's manifest is not a JSON object")
     return m

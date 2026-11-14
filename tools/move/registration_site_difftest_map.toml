@@ -1,0 +1,66 @@
+# The Site's difftest, out of SPOT's Lean package into registration's: what
+# `tools/move/layout.py --map tools/move/registration_site_difftest_map.toml` moves and rewrites.
+#
+# The Site's port (`site-difftest`: `Spot/SiteDifftest.lean` and its entry point `Spot/SiteDifftestMain.lean`) and its
+# Python half (`tests/test_site_difftest.py`, which holds `Core.Site` to `verity.device`) sat in SPOT's package because it
+# already required the interface and the harness. The Site is the registered hardware the registration log folds, so
+# the three files go to registration's package (`core_registration`), as `RegistrationLog/SiteDifftest.lean`,
+# `RegistrationLog/SiteDifftestMain.lean` and `tests/test_site_difftest.py`, its tests a suite of their own.
+#
+# What stays: every Lean file's bytes ([rewrite] exclude), and the layout of record. No root moves ([roots] old == new).
+# No file is split or deleted. The format is `layout_map.toml`'s.
+#
+# What no map writes, and so follows the move by hand: the two Lean modules' names and the imports of them, the
+# executable's place in the two lakefiles, registration's requirement of the harness, and the new suite's pyproject.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+
+
+[paths]
+"verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftest.lean" = "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftest.lean"
+"verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftestMain.lean" = "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftestMain.lean"
+"verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py" = "verity/protocols/accounting/registration/verifier/lean/tests/test_site_difftest.py"
+
+[retired]
+# the paths this map empties
+paths = ["verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftest.lean",
+         "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftestMain.lean",
+         "verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit of that file
+# takes it: a rewritten Lean file recompiles every module that imports it), every kernel source, and the layout of
+# record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+# Rewritten though a pattern above matches: the fixtures' READMEs, the Lake manifests, the adapter's Definitions
+# manifest, and the pins and vectors that record their sources' paths, which their tests read at those paths.
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+# the verifier pod's install directory, a checkout of the tree
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+
+
+[modules]
+# the rename [paths] and [roots] imply (`layout.py --modules`)
+"verity.protocols.proofs.spot.verifier.lean.tests.test_site_difftest" = "verity.protocols.accounting.registration.verifier.lean.tests.test_site_difftest"
