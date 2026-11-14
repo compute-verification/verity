@@ -524,10 +524,10 @@ def RECORD_DIGEST : String :=
     "the run of record reads the first stage's challenges after the digest of the record it is given"
 
 /-- **The record `j` has the digest `digest`** (check, 4; `RECORD_DIGEST`): the run of record takes a registration's
-digest from the record it is given (`Registration.digest`), and the check's commitment names one (`digest`), so the
+digest from the record it is given (`Docket.digest`), and the check's commitment names one (`digest`), so the
 boundary's read-back record is held to the commitment's. -/
 def digestIs (j : Json) (digest : ByteArray) : V Unit := do
-  let d ← Registration.digest j
+  let d ← Docket.digest j
   if d = digest then pure () else throw RECORD_DIGEST
 
 def INTERIOR_DIGEST : String :=
@@ -541,8 +541,8 @@ interior record (`record`), which `interiorUnshown` reads the digest of, and its
 record reads it of, are each held to the digest of the interior commitment (`digest`), which the second stage's
 challenges are sampled after. -/
 def interiorDigestIs (record j : Json) (digest : ByteArray) : V Unit := do
-  let d ← Registration.digest record
-  let d' ← Registration.digest j
+  let d ← Docket.digest record
+  let d' ← Docket.digest j
   if d = digest ∧ d' = digest then pure () else throw INTERIOR_DIGEST
 
 /-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
@@ -610,7 +610,7 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   match p.audit.base.challenger, p.boundary.verifier.windowRoot with
   | some (k, label), some w =>
     if some w == p.audit.base.verifier.windowRoot then .ok () else do
-      let after ← Registration.digest e.record
+      let after ← Docket.digest e.record
       let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
         k (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
@@ -719,10 +719,10 @@ the record's checks are handed. Those checks are `Record.checks`, which the run 
 `draw` entry aside (the sample is held to `design` above), at the reads the run of record hands it under a two-stage rule:
 the verdicts' own for the registration's own values (`Record.ownRegistered`), less the reads of the registration's
 own ports at their own roots (`Record.lessOwnReads`). -/
-def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (design : Json)
+def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (design : Json)
     (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   let rec_ := c.record
-  let codes := Registration.check rec_ v
+  let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
   let sampleCodes := Draw.checkDraw e.draw (getD rec_ "population") design
   if !sampleCodes.isEmpty then .reject s!"draw: {", ".intercalate sampleCodes.toList}" else
@@ -754,7 +754,7 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
 step**): the interior registration's population `m`; the sample the coins `ξ₂` give under `design`
 (`OneStage.coinsReason` at the verifier whose sampling design is `subsetDesign m`, so that the sample is `design`'s,
 `Draw.flockSamplingDesign`), every coin opened read; then `secondChecked` at that verifier. -/
-def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (design : Json)
+def secondCheck (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (design : Json)
     (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   match nat? (getD c.record "population") with
   | none => .reject "registration: the interior record names no population"
@@ -912,10 +912,13 @@ def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : 
   | .error err => .reject s!"two-stage: {err}"
   | .ok (two, run) => finishWith form two run
 
-/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`). -/
-def checkBlobsAt : Params → OneStage.Commitment → ByteArray → Evidence → Core.Blobs →
+/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`), held to the caller's check
+(`Caller.gate`) on the boundary's record at its verifier and on the interior's at the verifier the last step reads:
+neither the run of record nor the last step (`Spot.Run.run`, `secondChecked`) makes the caller's codes. -/
+def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  checkBlobsAtWith FORM
+  Caller.gate e.record p.audit.base.verifier
+    (Caller.gate c.record p.boundary.verifier (checkBlobsAtWith FORM p c ξ e bs))
 
 /-- The check at the bytes the evidence says the first stage read, which the run of record holds to the
 challenger's coins (`Run.coinsHold`). -/
@@ -938,7 +941,10 @@ bytes, the evidence and the blobs. -/
 theorem checkBlobsAt_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : Evidence) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
     checkBlobsAt p c ξ e bs ≠ .accept pub prof := by
-  unfold checkBlobsAt checkBlobsAtWith
+  intro h
+  have h₁ := (Caller.gate_accept (Caller.gate_accept h).2).2
+  revert h₁
+  unfold checkBlobsAtWith
   split
   · simp
   · exact finish_refuses hF _ _ _ _
@@ -1027,16 +1033,16 @@ private def orderT (opened : Array Challenger.TreeOpening) : Challenger.LoggedTr
 #guard match readBack (Json.obj ⟨⟨.inner 2 "a" (Json.num 1) (.inner 1 "a" (Json.num 2) .leaf .leaf) .leaf⟩⟩) with
   | .error why => why == RECORD_READ
   | .ok _ => false
-#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+#guard match Docket.digest (Json.mkObj [("a", Json.null)]) with
   | .ok d => (digestIs (Json.mkObj [("a", Json.null)]) d).toOption.isSome
   | .error _ => false
 #guard match digestIs (Json.mkObj [("a", Json.null)]) ByteArray.empty with
   | .error why => why == RECORD_DIGEST
   | .ok _ => false
-#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+#guard match Docket.digest (Json.mkObj [("a", Json.null)]) with
   | .ok d => (interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) d).toOption.isSome
   | .error _ => false
-#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+#guard match Docket.digest (Json.mkObj [("a", Json.null)]) with
   | .ok d => match interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.num 1)]) d with
     | .error why => why == INTERIOR_DIGEST
     | .ok _ => false

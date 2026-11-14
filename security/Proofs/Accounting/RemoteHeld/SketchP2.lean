@@ -38,9 +38,9 @@ import Proofs.Accounting.RemoteHeld.Sketch
 /-!
 # The receipts' sketch bound over PoUS's P2 store: the proof
 
-`SketchBoundRun` at P2's receipts: a unit of four 2,056-byte blocks, `m = 257` sectors, 16 sign rows, `h = 512`,
-`r = 12`, at most `Q + P` candidate seeds and `Q` queries, at `ε_ro = (Q + P)²/2^257`, as `SketchBoundDeployed` is at
-`m = 128`.
+`SketchBoundRun` at P2's receipts: a unit of four 2,056-byte blocks, `m = 257` sectors, 16 sign rows under 256-bit
+sign keys, `h = 512`, `r = 12`, at most `Q + P` candidate seeds and `Q` queries, at `ε_ro = (Q + P)²/2^257`, as
+`SketchBoundDeployed` is at `m = 128` and 64 rows.
 -/
 
 @[expose] public section

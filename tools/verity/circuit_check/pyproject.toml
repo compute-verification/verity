@@ -87,7 +87,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/channel.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
-          "verity/commitments/randomness", "verity/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/periods",
+          "verity/commitments/randomness", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/periods",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/accounting/pouw/verifier/salt.py",
           "verity/protocols/accounting/pouw/verifier/protocol.py",
           # circuit/h1window.py imports both, so building the H1 units reads them.
@@ -105,7 +105,11 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/pous/prover/circuit.circuit-check.py", "verity/protocols/accounting/pous/prover/circuit.circuit-check.json",
           "verity/protocols/accounting/pous/prover/answer_circuit.py", "verity/protocols/accounting/pous/prover/answer_circuit.circuit-check.py",
           "verity/protocols/accounting/pous/prover/decode_circuit.py", "verity/protocols/accounting/pous/prover/decode_circuit.circuit-check.py",
+          "verity/protocols/accounting/pous/prover/setup_circuit.py", "verity/protocols/accounting/pous/prover/setup_circuit.circuit-check.py",
+          "verity/protocols/accounting/pous/prover/setup_circuit.circuit-check.json",
           "verity/protocols/accounting/pous/prover/verdict_circuit.py", "verity/protocols/accounting/pous/prover/verdict_circuit.circuit-check.py",
+          "verity/protocols/accounting/pous/prover/session_circuit.py", "verity/protocols/accounting/pous/prover/session_circuit.circuit-check.py",
+          "verity/protocols/accounting/pous/prover/session_circuit.circuit-check.json",
           "verity/protocols/accounting/certifier/verifier/__init__.py", "verity/protocols/accounting/certifier/verifier/certificate.py",
           "verity/protocols/accounting/certifier/verifier/blocks.py", "verity/protocols/accounting/certifier/verifier/transfer_rows.py",
           "verity/protocols/accounting/certifier/verifier/arith_encode.py", "verity/protocols/accounting/certifier/verifier/arith_encode.circuit-check.py",
@@ -224,7 +228,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]
@@ -243,7 +247,7 @@ paths = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]
@@ -257,7 +261,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]
@@ -288,7 +292,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]

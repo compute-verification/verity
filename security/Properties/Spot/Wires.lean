@@ -4,7 +4,7 @@ public import Spot.Wires
 public import Definitions.Spot.Dataflow
 
 /-!
-# Sampled proofs' wires: the dataflow a wiring check accepts is acyclic (`Spot.Wires.check`)
+# SPOT's wires: the dataflow a wiring check accepts is acyclic (`Spot.Wires.check`)
 
 The property of the verifier's wiring check (`Spot.Wires.check`) as the sampled-proofs service runs it, stated
 against the function for every wiring its decoder produces. It takes no premise.

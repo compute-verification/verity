@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Properties.Verity.Sampled.OpenEmpty
 
 /-!
-# Sampled proofs' coupling: one hiding swap per opened leaf
+# SPOT's coupling: one hiding swap per opened leaf
 
 An opening's node costs the coupling two terms: the opening's gap and its empty class (`openGap`, `openEmpty`, in
 `Proofs.Properties.Verity.Sampled.CoinMap`). Both are read off one partition, the rounds of the leaf's fiber

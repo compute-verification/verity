@@ -7,7 +7,7 @@ import json
 
 import numpy as np
 import pytest
-from verity.definitions.registry import fp8_ds_mla_upconvert as U
+from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
 from tests.properties import fp8_read_back_capture_gpu as X
 

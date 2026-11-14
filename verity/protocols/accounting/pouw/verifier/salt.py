@@ -1,22 +1,21 @@
-"""PoUW's read of the network certifier's per-execution-phase salt (`verity/protocols/accounting/certifier/verifier/active.py`, "The salt").
+"""PoUW's read of the network certifier's per-execution-phase salt.
 
-PoUW execution phase p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier samples p's 512-bit
-salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,
-registration)` once the proof system registered p (the receipt the registration's) and p's last ingress record is
-published, once, and only until its reveal deadline on its own clock after p's end. PoUW doesn't import the certifier:
-`revealed` reads any object with that `reveal`.
+PoUW execution phase p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier device samples
+p's 512-bit salt and releases it into the block only (`CertifierDevice`'s `SaltSource`, under
+`verity/protocols/accounting/certifier/device/lean/`); the reveal and its custody are outside the device. PoUW reads
+the certifier as an interface and imports none of it: `revealed` takes any object whose `reveal(p, registration)` gives
+p's salt once the proof system registered p, and `committed` any whose `committed(p, registration)` gives what PoUW
+recorded for p before the salt.
 
-* `registered(registration)` is PoUW's reader of the execution phase a registration is for, the certifier's
-  `Proxy(registered=…)`: PoUW's served execution phase ``{"kind": "served", "context", "public"}`` (`core_check.commitment`'s),
-  whose context names PoUW execution phase p as ``<prefix>/pouw-window/<p>/<the pass manifest's SHA-512>`` (`context`).
+* `registered(registration)` is PoUW's reader of the execution phase a registration is for: PoUW's served execution
+  phase ``{"kind": "served", "context", "public"}`` (`core_check.commitment`'s), whose context names PoUW execution phase p as
+  ``<prefix>/pouw-window/<p>/<the pass manifest's SHA-512>`` (`context`).
 * `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
-  isn't p's (unregistered), when the certifier refuses (a receipt that isn't the registration's: unregistered; before
-  t_d: early; past the reveal deadline: late; a second reveal of p, so a second registration naming p gets none; a salt
-  never sampled, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
+  isn't p's (unregistered), when the certifier refuses (on its own rules), and when what it gives isn't 64 bytes
+  (missing).
 * `committed(certifier, p, registration)` is what PoUW recorded with the certifier for p before it sampled p's salt
-  (`Proxy.commit_weights`, which takes only a record the prover registered with the certifier signed), given on
-  `reveal`'s conditions but the once (`Proxy.committed`), or `Unrevealed` (uncommitted): the `pouw_record` of the
-  weights' root, the stream and the prover. The salt binds no weights, so a certified execution phase passes only weights,
+  (a record the prover registered with the certifier signed), or `Unrevealed` (refused, or uncommitted): the
+  `pouw_record` of the weights' root, the stream and the prover. The salt binds no weights, so a certified execution phase passes only weights,
   a stream and a prover recorded before its salt (`core_check.pass_epoch_twin`).
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in execution phase p, the one function that states its form,
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
@@ -116,7 +115,7 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
 
 
 def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
-    """What PoUW records with the certifier for a PoUW execution phase before its salt is sampled (`Proxy.commit_weights`), and
+    """What PoUW records with the certifier for a PoUW execution phase before its salt is sampled, and
     `committed` reads back: SHA-512(`RECORD_TAG` ‖ weights_root ‖ stream ‖ prover), every part fixed-width (Lean's
     `PouwCheck.pouwRecord`). So the certifier's word orders the weights, the stream and the prover before the salt."""
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
@@ -184,7 +183,7 @@ def anchored_epoch_root(weights_root: bytes, anchors_root: bytes, k: int) -> byt
 
 def prover_id(public_key: bytes) -> bytes:
     """The 64-byte id a certified execution phase's prover is registered under: SHA-512(`PROVER_TAG` ‖ the public key the
-    certifier verifies its records under, `Proxy(prover_key=…)`'s bytes). A record naming the id is taken only signed by
+    certifier verifies its records under). A record naming the id is taken only signed by
     that key."""
     if type(public_key) is not bytes or not public_key:
         raise DomainError("a prover's public key is non-empty bytes")
@@ -270,9 +269,7 @@ def registered(registration: WindowCommitmentRecord) -> int | None:
 def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """PoUW execution phase `window`'s certifier salt, `certifier.reveal(window, registration)`, given the execution phase's registration
     as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
-    off the registration), refused by the certifier (its receipt isn't the registration's; early, before the execution phase's
-    last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never sampled or
-    the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""
+    off the registration), refused by the certifier (on its own rules), or missing (what the certifier gave isn't a 64-byte salt)."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
@@ -287,9 +284,9 @@ def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord |
 def committed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """What PoUW recorded with the certifier for PoUW execution phase `window` before it drew the execution phase's salt, the 64-byte
     `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
-    (`Proxy.commit_weights` records it, signed by the registered prover), given the execution phase's registration. It fails
-    closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on `reveal`'s conditions but the once,
-    or uncommitted: nothing recorded before the sample); or uncommitted, when what the certifier gives isn't 64 bytes."""
+    (recorded signed by the registered prover), given the execution phase's registration. It fails
+    closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on its own rules, or nothing recorded
+    before the sample); or uncommitted, when what the certifier gives isn't 64 bytes."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:

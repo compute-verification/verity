@@ -52,7 +52,7 @@ theorem get_blobWith {S : Array ByteArray} {s what : String} {b : ByteArray}
     · rintro rfl
       rfl
     · intro e
-      exact (getD_inj h64 (Properties.NetworkCertifier.Bytes.hash_size f) e).symm
+      exact (getD_inj h64 (Properties.Certifier.Bytes.hash_size f) e).symm
   have hfind : (_root_.Core.Blobs.ofArray S).entries.find? (fun x => x.1 == dg) =
       (blobWith (digestOf s) S).map fun f => (Flock.Sha512.hash f, f) := by
     show (S.map fun b => (Flock.Sha512.hash b, b)).find? (fun x => x.1 == dg) = _

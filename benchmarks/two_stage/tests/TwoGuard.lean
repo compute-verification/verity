@@ -374,7 +374,7 @@ scope (`refAt_ok`); none where one isn't. The boundary and interior registration
 (`boundary_names`, `interior_names`: the design's ports, `expected_ports`, and no registered values). The first stage's
 registration
 is the boundary registration's program, query and work table with the stream's rule over them (`Select.resolve`, as
-the `select` piece takes it), the fields of `Registration.Verifier` the model doesn't read empty; `blockOf` is
+the `select` piece takes it), the fields of `Docket.Verifier` the model doesn't read empty; `blockOf` is
 `filesBlockOf` at the members (`Held.ms`), and no proof block is checked whatever the stages sample (`always`): every
 slot of the toy's boundary layout is a request's. -/
 def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Option Held) := do
@@ -400,7 +400,7 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let boundaryNames ← namesOf held "boundary_names"
   let interiorNames ← namesOf held "interior_names"
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
-    let verifier : Spot.Registration.Verifier :=
+    let verifier : Spot.Docket.Verifier :=
       { program := P, query := queryJ, samplingDesign := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=

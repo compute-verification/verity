@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-from verity.definitions.registry import fp8
+from verity_vllm.definitions.registry import fp8
 
 from tests.acquire.test_vocab_range_source import Recorder
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest

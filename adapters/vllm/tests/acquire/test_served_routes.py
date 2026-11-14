@@ -21,7 +21,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from tests.pipeline import test_served_match_main as MM
 from verity_vllm.acquire import served as SV

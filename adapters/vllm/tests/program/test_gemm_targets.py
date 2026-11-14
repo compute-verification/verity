@@ -12,7 +12,7 @@ from verity.circuits.silicon.models import (
     HOPPER_BF16_M16N8K16,
     HOPPER_BF16_WGMMA_K16,
 )
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests import fake_vllm
 from verity_vllm.program.frontend import gemm_targets as GT

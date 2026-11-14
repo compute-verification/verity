@@ -6,7 +6,7 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
-  whose strata or table don't apply), then R1–R8 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
+  whose strata or table don't apply), then R1–R8 (`Docket.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
@@ -226,7 +226,7 @@ def pinnedTables (proofs : Json) : Array (String × Json) :=
 
 /-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
 def receipt (record : Json) (challenger received : String) : V Json := do
-  return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
+  return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Docket.digestHex record)),
     ("verifier", Json.str challenger), ("received", Json.str received)]
 
 /-- The sample's coins are the challenger's, or the code its step is refused with: a sample that read any byte carries
@@ -239,7 +239,7 @@ carries none (`null`). A family whose log shows a root other than the registrati
 def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json) (window family : Option String)
     (read : ByteArray) : Option String :=
   if read.isEmpty then (if coins matches .null then none else some "coins") else
-  match key, window, family, Registration.digest record with
+  match key, window, family, Docket.digest record with
   | some key, some w, some label, .ok after =>
     (Challenger.coinsReason key main coins w label after read).map fun why =>
       if why == Challenger.FAMILY_ROOT then "family" else "coins"
@@ -247,7 +247,7 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
 
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, holding each value
 its verifier `v` holds a certified entry for to have a reported read (`Record.certifiedCheck`). -/
-def audit (i : Input) (v : Registration.Verifier) (record receipt draw samplingDesign : Json) (proved : Array Int)
+def audit (i : Input) (v : Docket.Verifier) (record receipt draw samplingDesign : Json) (proved : Array Int)
     (instances : Int) (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", samplingDesign), ("proved_units", Json.arr (proved.map Lean.toJson)),
@@ -286,12 +286,16 @@ def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStag
   ((List.range ids.size).map fun t => ⟨ids.toList.getD t "", q * (ns.toList.take t).sum, ns.getD t 0⟩).toArray
 
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
-in each cell: the interior, its receipt, the second stage's sample and sampling design, and the bytes it read; or the refusal's step
-and codes. -/
+in each cell: the interior, its receipt, the second stage's sample and sampling design, and the bytes it read; or the
+refusal's step and codes. The interior's registration is SPOT's check alone (`Docket.check`): this package has no
+caller's check (`VStar.Recursive.Caller.check`), so it refuses no interior for the caller's facts (the declared day, the
+binding, the seed salt, the registered compiler, the pool's marks and chain, and the verdicts); the stream refuses those
+when the interior registers (`one_stage.verifier.check`, `Caller.gate`), and the two-stage form gates its run
+(`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
 def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
-  let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
+  let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Docket.queryDigest v.query) it.values i.declared
   if !pub.codes.isEmpty then return .error ("interiors", pub.codes)
   let ns ← Select.replayCells it.replay v.query
   let ids ← Select.templateIds v.query
@@ -301,11 +305,11 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   let strata ← Partition.strata v.program v.query
   if SecondStage.parts sample.size strata ≠ some (cellParts sample.size ids ns) then
     return .error ("interiors", #["interior-parts"])
-  let boundary ← Registration.digestHex i.record
+  let boundary ← Docket.digestHex i.record
   if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
     return .error ("interiors", #["interior-window"])
   let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
-  let codes := Registration.check it.record v
+  let codes := Docket.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   if !tablesServed i.record it.params.tables then return .error ("interiors", #["interior-table"])
@@ -356,11 +360,15 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
 
 /-- The run, step by step; an error where the Python raises. The second stage's statement check allows the two-stage
 form where `form` does, by default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs
-it at `form := true`. -/
+it at `form := true`. Its registration step is SPOT's check alone (`Docket.check`), as `interiorSteps`' is: it
+refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
+pool's marks and chain, and the verdicts), which the stream refuses at registration, before any run
+(`one_stage.verifier.check`, `Caller.gate`), and the two-stage form after its run
+(`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
 def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let v := i.params.verifier
   if !grainHolds i.rule v.query then return refused "register" #["grain"]
-  let qd ← Registration.queryDigest v.query
+  let qd ← Docket.queryDigest v.query
   let pub ← Service.checkPublic i.record (Json.str v.scheme) qd i.values i.declared
   if !pub.codes.isEmpty then return refused "register" pub.codes
   let some n := nat? (getD i.record "population") | return refused "register" #["population"]
@@ -369,7 +377,7 @@ def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let samplingDesign ← rule.samplingDesignOver n
   let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
   let v := { v with samplingDesign, workTable }
-  let codes := Registration.check i.record v
+  let codes := Docket.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]

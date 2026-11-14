@@ -158,7 +158,7 @@ def bind_check(splits: list[int]) -> dict[str, Any]:
     from verity.circuits.evaluation.batch import type_shape
     from verity.circuits.ops import gemm as CG
     from verity.circuits.ops.boolean import gemm as BGO
-    from verity.definitions.registry import cublas_bf16 as CB
+    from verity_vllm.definitions.registry import cublas_bf16 as CB
 
     hop = word_of(BGO.HopperBF16WgmmaDot16)
     targets = [bind(CG.Gemm, K=K, N=N, DOT=hop)] + [bind(CB.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=s, DOT=hop) for s in splits]
@@ -201,7 +201,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from vllm.model_executor.layers.utils import dispatch_unquantized_gemm
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     doc["switch"] = BG.switch(True)
     if a.scans:

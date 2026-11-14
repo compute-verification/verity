@@ -1,4 +1,4 @@
-"""The continuous audit's memory challenger (`verity.protocols.accounting.pous.verifier.continuous`): each of the continuous game's three requirements on the
+"""The continuous audit's memory challenger (`verity.protocols.accounting.pous.device.continuous`): each of the continuous game's three requirements on the
 protocol (no pipelining, a hard deadline, every late answer counted) enforced on `audit.UnsignedRounds` over a stream
 of challenges, on a small band with the memory challenger's clock injected."""
 
@@ -20,7 +20,7 @@ from verity.protocols.accounting.pous.verifier.audit import (
     run_timed,
 )
 from verity.protocols.accounting.pous.verifier.codec import encode_segments
-from verity.protocols.accounting.pous.verifier.continuous import (
+from verity.protocols.accounting.pous.device.continuous import (
     ContinuousMemoryChallenger,
     Reply,
     run_continuous,

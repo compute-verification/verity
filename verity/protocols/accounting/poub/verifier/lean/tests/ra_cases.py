@@ -8,7 +8,7 @@ refuses a registration that would bind (counted, for a node with one live). Past
 the Python's own code on the decoded objects. A session's events run through `audit.AuditRun` itself, on a clock each
 event sets, its coins those of a challenger that replays the case's (`Replay`).
 
-A recorded session is one `Run` drives through a real `AuditRun`, the prover's side computed by `audit.Prover` from a
+A recorded session is one `Run` drives through a real `AuditRun`, the prover's side computed by `audit_prover.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
 ones; each names the outcome the definition gives it, which `test_session.py` holds the Lean's answer to, so a scenario
 that stops reaching its failure fails there, not silently in the difftest."""
@@ -27,6 +27,7 @@ from typing import Any
 import verity_difftest as D
 from verity_difftest import protocol as P
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, wire
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params, SessionError
 from verity.protocols.accounting.poub.verifier.receipts import Plan
@@ -217,7 +218,7 @@ def event_of(v: Any) -> tuple:
 
 class Clock:
     """The suite's one injected clock: nanoseconds from `now`, each reading `step` after the last (at `step = 0` time moves
-    only when a test sets `now`); waiting until `t` (`period.run`'s `sleep_until`) moves it there."""
+    only when a test sets `now`); waiting until `t` (`period_prover.run`'s `sleep_until`) moves it there."""
 
     def __init__(self, now: int = 0, step: int = 0) -> None:
         self.now, self.step = now, step
@@ -495,14 +496,14 @@ class World:
 
 
 @functools.cache
-def _encoded(c: codec.Codec, blocks: int) -> audit.Store:
+def _encoded(c: codec.Codec, blocks: int) -> audit_prover.Store:
     payloads = [payload(b"weights %d" % j) for j in range(blocks)]
     ys = salts(b"payload salts", blocks)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, blocks, root, c, nonce=bytes(32)), payloads, ys)
+    return audit_prover.Store(audit.register(SOURCE, NODE, blocks, root, c, nonce=bytes(32)), payloads, ys)
 
 
-def store(world: World) -> audit.Store:
+def store(world: World) -> audit_prover.Store:
     """A fresh store of the world's registration with no appends yet. The codec seed is sampled without the receipt kind
     (`audit.register`), so worlds of one codec and size share their encoded blocks."""
     base = _encoded(world.codec, world.blocks)
@@ -522,13 +523,13 @@ def _runs_json(runs) -> list | None:
 
 
 class Run:
-    """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit.Prover`, from
+    """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit_prover.Prover`, from
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
     clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
 
     def __init__(self, world: World | None = None, *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
-                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
+                 not_before_ns: int = 0, cheat: Callable[[audit_prover.Store], audit_prover.Store] | None = None,
                  pace: audit.Pace | None = None, groups_per_coin: int = 1) -> None:
         self.store = store(World() if world is None else world)
         reg = self.store.registration
@@ -540,13 +541,13 @@ class Run:
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
+        self.prover = audit_prover.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
-        self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.passes: dict[tuple[int, int], audit_prover.Pass] = {}
         self.draws: dict[int, tuple] = {}
 
     def _call(self, event: dict, fn: Callable[[], Any]) -> Any:
@@ -589,7 +590,7 @@ class Run:
                 self.store.encode(first, coin)
         return out
 
-    def append(self, count: int, label: bytes = b"kv page") -> audit.Append:
+    def append(self, count: int, label: bytes = b"kv page") -> audit_prover.Append:
         a = self.store.append(pages(self.store.extent, count, label),
                               salts(b"page salts %d" % self.store.extent, count))
         self.commit(a.root, a.count)
@@ -682,8 +683,8 @@ class Dropped:
         return bytes(codec.BLOCK_BYTES) if self.dropped(j) else self.blocks[j]
 
 
-def dropping(dropped: Callable[[int], bool]) -> Callable[[audit.Store], audit.Store]:
-    def cheat(honest: audit.Store) -> audit.Store:
+def dropping(dropped: Callable[[int], bool]) -> Callable[[audit_prover.Store], audit_prover.Store]:
+    def cheat(honest: audit_prover.Store) -> audit_prover.Store:
         out = copy.copy(honest)
         out.blocks = Dropped(honest.blocks, dropped)
         return out

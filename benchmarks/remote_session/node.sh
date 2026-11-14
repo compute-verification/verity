@@ -16,8 +16,8 @@ IFS=, read -ra DEVS <<< "${CUDA_VISIBLE_DEVICES:?}"
 nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
   --format=csv,noheader -i "${GPU_LEASE_UUID:-$CUDA_VISIBLE_DEVICES}" >> "$O/gpu.txt" 2>&1
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 MODEL=${MODEL:-unsloth/Llama-3.1-8B}
 # The cache holds snapshots without refs, which an offline lookup by name doesn't resolve.
 if [ ! -d "$MODEL" ]; then
