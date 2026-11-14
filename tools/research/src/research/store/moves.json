@@ -3306,6 +3306,41 @@
     },
     {
       "paths": {
+        "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursiveMain.lean": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursiveMain.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/m1_capture.py": "adapters/vllm/verity_vllm/pipeline/match_capture.py",
+        "adapters/vllm/tests/pipeline/test_m1_capture_main.py": "adapters/vllm/tests/pipeline/test_match_capture_main.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py": "verity/protocols/accounting/poub/tests/test_registry.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_memory_map.py": "verity/protocols/accounting/poub/tests/test_memory_map.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "verity/protocols/accounting/poub/tests/test_remote_session.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/prover/tests/test_lean_draw_laws.py": "verity/protocols/proofs/flock/prover/tests/test_lean_sample_designs.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/verifier/wipe_stream.py": "verity/protocols/accounting/pous/device/wipe_stream.py",
+        "verity/protocols/accounting/pous/verifier/wipe_stream.c": "verity/protocols/accounting/pous/device/wipe_stream.c"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_harden_moe.py": "adapters/torch/tests/frontend/test_harden_moe.py",
+        "adapters/vllm/tests/program/test_derive_hf5.py": "adapters/torch/tests/frontend/test_derive_hf5.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
       }
     }

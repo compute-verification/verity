@@ -253,7 +253,7 @@ def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
     return Verdict(py.ok, py.codes, py.detail, verifiers, py.fanout, py.rests_on_period_check)
 
 
-def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
             ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None, anchors: Sequence[Any],
             log: Iterable[Mapping[str, Any]], partition: Mapping[str, Any] | None, work_table: Mapping[str, Any] | None,
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
@@ -268,7 +268,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
     `registered` or `tied`, which name them; the certified entries name none."""
-    p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
+    p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(sampling_design), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
          "ports": {k: dict(v) for k, v in ports.items()}, "program": codec.encode_program(program), "query": dict(query),
          "registered": None if registered is None else dict(registered), "scheme": scheme,
@@ -309,7 +309,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
     return p
 
 
-def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
@@ -339,7 +339,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does."""
     log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:
-        py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
+        py: Verdict | None = R.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition,
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, members=members, day=day,
                                      declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
@@ -347,7 +347,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
-    params = _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+    params = _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                      supplied, pinned, binding, schemas, window_root, held, outputs, day, declarations, seed_salt, pool,
                      tied, history, compiler, certified, verdicts)
     got = _codes(lean("registration", {
@@ -363,7 +363,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     spot = _decide(got, py, whole=False)
     if not spot.ok:
         return spot
-    py = C.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+    py = C.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs, schemas, window_root, held, members, day, declarations, seed_salt,
                  pool, tied, history, compiler, certified, verdicts)
     caller = _decide(_codes(lean("caller", {"params": params, "record": dict(rec)}, _caller_server)), py, whole=False)
@@ -452,7 +452,7 @@ def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int],
 
 
 def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, query: Mapping[str, Any],
-        law: Mapping[str, Any], scheme: str, ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None,
+        sampling_design: Mapping[str, Any], scheme: str, ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None,
         anchors: Sequence[Any], log: Iterable[Mapping[str, Any]], work_table: Mapping[str, Any] | None,
         registered: Mapping[str, int] | None, rule: Mapping[str, Any], values: Iterable[tuple[str, bool]],
         declared: Iterable[str], challenger: str, received: str, read: bytes,
@@ -488,7 +488,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior docket and the second stage (`Run.Interior`): its
-    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
+    `program`, `query`, `sampling_design` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
     when it has one, and its `history` tables when it has any), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`), their evidence
     (`coins`, held to the run's `key` and `main`: a run has one challenger) and their family (`family`, the second
@@ -500,7 +500,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record with round 2's
     `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
+    args = {"params": _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
                               seed_salt=seed_salt, pool=pool, tied=tied, history=history, certified=certified),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
@@ -553,10 +553,10 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     return Verdict(True, (), {}, verifiers)
 
 
-def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any]) -> Verdict:
+def check_draw(draw: Any, registration: Mapping[str, Any], sampling_design: Mapping[str, Any]) -> Verdict:
     """`draw.check_draw` by the verifier."""
-    py = D.check_draw(draw, registration, law)
-    got = lean("check_draw", {"draw": draw, "population": registration.get("population"), "law": dict(law)})
+    py = D.check_draw(draw, registration, sampling_design)
+    got = lean("check_draw", {"draw": draw, "population": registration.get("population"), "law": dict(sampling_design)})
     return _decide(got, py, whole=True)
 
 
@@ -606,7 +606,7 @@ def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
-                 law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
+                 sampling_design: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
                  certified: Sequence[str] = ()) -> dict[str, Any]:
@@ -618,11 +618,11 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
     certified = sorted(certified)
     opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
-    py = audit.audit_record(registration, receipt, draw, law, list(proved_units), instances, statement, verdicts, delta,
+    py = audit.audit_record(registration, receipt, draw, sampling_design, list(proved_units), instances, statement, verdicts, delta,
                             sessions, served, session_roots, opened, certified)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("record", {"registration": dict(registration), "receipt": dict(receipt), "draw": dict(draw),
-                          "law": dict(law), "proved_units": list(proved_units), "instances": instances,
+                          "law": dict(sampling_design), "proved_units": list(proved_units), "instances": instances,
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
                           "session_roots": None if session_roots is None else dict(session_roots),

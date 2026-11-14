@@ -57,12 +57,12 @@ def case(shape: str, n: int) -> dict:
     s = T.Setup(mixed_population_program(ms), PO.template_instances_query([t for t, _ in ms]))
     T.PROGRAMS[s.sha512] = s.program
     T.PROGRAMS_TEMPLATES = s.templates
-    law = f"stratified-rate:2/{s.population}"
-    named, table = T.service.params_law(law, s.program, s.query, None)
+    sampling_design = f"stratified-rate:2/{s.population}"
+    named, table = T.service.params_sampling_design(sampling_design, s.program, s.query, None)
     drawn = T.DR.derive(s.program, s.query, named, table)
     rec = T.R.record(s.program, s.query, named, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
                      T.WINDOW, leaf_layer=T.LEAF, work_table=table)
-    params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": T.LEAF, "log": [], "partition": None,
+    params = {"anchors": [], "delta": "1/10", "law": sampling_design, "leaf_layer": T.LEAF, "log": [], "partition": None,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": T.SCHEME,
               "work_table": None}
     evidence = {"session_roots": dict(T.ROOTS), "statement": {"instances": sum(st["k"] for st in drawn["strata"])},

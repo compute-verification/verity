@@ -85,7 +85,7 @@ untraced = [
     "tests/pipeline/test_tp_gpu_lease.py",
     "tests/program/predict/test_predict.py",
     "tests/program/test_derive_transfer.py",
-    "tests/protocols/remote_bandwidth/test_remote_session.py",
+    "tests/protocols/remote_bandwidth/test_commit_session.py",
     "tests/protocols/test_credit_gate.py",
     "tests/protocols/test_pouw_h1.py",
     "tests/protocols/test_pouw_h1_commit.py",
@@ -303,7 +303,7 @@ paths = ["adapters/vllm/verity_vllm", "verity"]
 [[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_serve_remote.py",
-    "tests/protocols/remote_bandwidth/test_remote_session.py",
+    "tests/protocols/remote_bandwidth/test_commit_session.py",
 ]
 paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
          "verity/protocols/accounting/poub/verifier"]

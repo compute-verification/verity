@@ -8,6 +8,7 @@ from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
 from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_function, sigma_check
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 from verity_torch.frontend.derive import DeriveReport, Unsupported
 from verity_torch.frontend.program_identity import check_identity

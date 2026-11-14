@@ -36,7 +36,7 @@ def stratified(k: int, sizes: list[int]) -> tuple[dict, int]:
     return {"law": "stratified", "k": k, "strata": strata}, n
 
 
-LAWS = {"subset": ({"law": "subset", "k": 5}, 40), "bernoulli": ({"law": "bernoulli", "p": "1/3"}, 12),
+SAMPLING_DESIGNS = {"subset": ({"law": "subset", "k": 5}, 40), "bernoulli": ({"law": "bernoulli", "p": "1/3"}, 12),
         "stratified": stratified(6, [7, 20, 3])}
 
 
@@ -61,12 +61,12 @@ def exactly(stream: bytes):
     return read
 
 
-@pytest.mark.parametrize("name", sorted(LAWS))
+@pytest.mark.parametrize("name", sorted(SAMPLING_DESIGNS))
 def test_the_sample_reads_a_challengers_coins_opened_after_the_registration(lean, tmp_path, name):
-    law, n = LAWS[name]
+    sampling_design, n = SAMPLING_DESIGNS[name]
     after = hashlib.sha512(name.encode()).digest()
-    args = ["--population", str(n), "--law", name]
-    p = a0.challenger_sample(lean, args, law, n, after.hex(), tmp_path / "draw.log")
+    args = ["--population", str(n), "--sampling-design", name]
+    p = a0.challenger_sample(lean, args, sampling_design, n, after.hex(), tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     out = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     stream_file = tmp_path / "draw.coins.bin"
@@ -81,14 +81,14 @@ def test_the_sample_reads_a_challengers_coins_opened_after_the_registration(lean
     assert replay[:len(stream)] == stream
     assert len(replay) == -(-len(stream) // Ch.COIN_BYTES) * Ch.COIN_BYTES
 
-    drawn = CC.draw_first(CC.OwnRandomness(exactly(stream)), law, n)
+    drawn = CC.draw_first(CC.OwnRandomness(exactly(stream)), sampling_design, n)
     assert drawn["population"] == n and all(0 <= u < n for u in drawn["units"])
 
 
 def test_the_registration_digest_may_come_as_bytes(lean, tmp_path):
-    law, n = LAWS["subset"]
+    sampling_design, n = SAMPLING_DESIGNS["subset"]
     after = hashlib.sha512(b"bytes").digest()
-    p = a0.challenger_sample(lean, ["--population", str(n), "--k", "5"], law, n, after, tmp_path / "draw.log")
+    p = a0.challenger_sample(lean, ["--population", str(n), "--k", "5"], sampling_design, n, after, tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     assert json.loads((tmp_path / "draw.coins.json").read_text())["segment"]["after"] == after.hex()
 
@@ -98,9 +98,9 @@ def test_the_registration_digest_may_come_as_bytes(lean, tmp_path):
     ("challenger", "coin does not open against the epoch's coin commitment"),
 ])
 def test_the_record_replays_under_no_other_registration_or_challenger(lean, tmp_path, other, why):
-    law, n = LAWS["stratified"]
+    sampling_design, n = SAMPLING_DESIGNS["stratified"]
     after = hashlib.sha512(b"registration").digest()
-    p = a0.challenger_sample(lean, ["--population", str(n)], law, n, after, tmp_path / "draw.log")
+    p = a0.challenger_sample(lean, ["--population", str(n)], sampling_design, n, after, tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     record = json.loads((tmp_path / "draw.coins.json").read_text())
     commitment = Ch.LiveCommitment.from_json(record["commitment"])
