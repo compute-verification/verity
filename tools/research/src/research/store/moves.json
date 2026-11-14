@@ -3298,6 +3298,11 @@
       "paths": {
         "verity/protocols/policy/inference_only/verifier/inference_only/": "verity/protocols/policy/inference_only/verifier/"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py": "adapters/torch/verity_torch/dsa_table.circuit-check.py"
+      }
     }
   ]
 }
