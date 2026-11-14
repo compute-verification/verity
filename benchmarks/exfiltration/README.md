@@ -183,7 +183,7 @@ each one with the file it read and what that file holds instead. It computes no 
 From a record that holds `audit` the command prints one more section, before the resampling holes
 (`benchmarks/harness/verity_bench/served_row.py`; `served_run` in the JSON), read against the tree:
 
-- **The verdict**, in the verifier's own words: how many of the sampled proofs the Lean verifier accepted, then the
+- **The verdict**, in the verifier's own words: how many of SPOT the Lean verifier accepted, then the
   final accept as the stream's outcome gave it: given, refused with its codes, or withheld, where every check of the
   second stage held and the outcome is refused by one code the table names a reason for. An accept the verifier
   withheld is never printed as given, and neither is an outcome that accepted beside a second stage that did not

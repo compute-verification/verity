@@ -1,5 +1,5 @@
 /-
-Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
+SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `samplingDesign`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
@@ -596,7 +596,7 @@ def coinsReason (v : Registration.Verifier) (samplingDesign rec_ draw : Json) (s
 /-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
 check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Registration.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
-pool's marks and chain, and the verdicts); sampled proofs, its caller, gates it (`VStar.Recursive.Caller.gate`), and
+pool's marks and chain, and the verdicts); SPOT, its caller, gates it (`VStar.Recursive.Caller.gate`), and
 this package's executables that run it on their own (`sampled-proofs-one-stage` and `-zk`) do not. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier

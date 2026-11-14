@@ -1363,10 +1363,9 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
     (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
-    ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
-    evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
-    ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
-    proofs case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
+    ``out/case-v2.json``, and that case in SPOT's one-stage form (`case_with_form`), which onsite's and remote's
+    evidence carries for SPOT, in ``out/case-sampled.json``; or why there is neither in
+    ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
     (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins), the
@@ -1490,13 +1489,13 @@ def case_coins(case: dict, coins: dict, key: dict | None, label: str | None, win
             "params": {**case["params"], "challenger": {"key": key, "label": label}, "window_root": window_root}}
 
 
-#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
+#: onsite's and remote's SPOT component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
 #: whichever form its params and evidence name; it refuses one-stage v1's
 SAMPLED_PROOFS = "verity/sampled-proofs/v1"
 
 
 def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and
+    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SAMPLED_PROOFS`): its params and
     its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
     RP = own_replay()

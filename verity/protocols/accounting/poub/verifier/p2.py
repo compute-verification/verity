@@ -13,9 +13,10 @@ registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
               u32be k_s),  REGISTRATION_DOMAIN = "verity/remote-bandwidth/p2-registration/v0\\0"
-S_i           k_s × 8224 signs (`receipts.sign_bits(seed_i, k_s, 8224)`): K = derive(seed_i, SIGN_DOMAIN, {"tag":
-              "sketch-sha512", "k": k_s, "n": 8224}), row c the first 1,028 bytes of K.stream(("row", c)), bit x
-              (byte x // 8, LSB first) 1 → −1, 0 → +1
+S_i           k_s × 8224 signs (`receipts.sign_bits(seed_i, k_s, 8224)`): K = `receipts.sign_key(seed_i, k_s, 8224)`,
+              under {"tag": "sketch-sha512", "k": k_s, "n": 8224} (SIGN_DOMAIN's 32 bytes at 16 rows,
+              SIGN_DOMAIN_WIDE's 64 at 64), row c the first 1,028 bytes of K.stream(("row", c)), bit x (byte x // 8,
+              LSB first) 1 → −1, 0 → +1
 π_(i,j)       block j's partial: Σ_x S_i[c][2056·(j mod 4) + x] · int8(block_j[x]) over x < 2056, the block's bytes
               as stored; its signs are bytes 257·(j mod 4) … 257·(j mod 4) + 256 of each row.  k_s int32
               little-endian, |π[c]| ≤ 128·2056
