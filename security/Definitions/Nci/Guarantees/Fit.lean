@@ -26,7 +26,7 @@ multiplications number at most `k · reuse · N* S² / (4 w_e (N* b_w − S))`, 
 def FitBound : Prop :=
   ∀ (c : RegisteredCircuit) (T : Threading c) (k : ℕ) (P : Partition c.D k) (start : Fin T.m → Fin k)
     (Nstar : ℕ) (S b_w w_e : ℝ),
-    S < Nstar * b_w → (∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) →
+    S < Nstar * b_w → (∀ j, (freshInput c (P.gates j) : ℝ) ≤ S) →
     Assumptions.Reach c T Nstar → Assumptions.Fits c T P start b_w w_e →
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤ k * T.reuse * Nstar * S ^ 2
 
@@ -37,7 +37,7 @@ written multiplied out. With one slot per weight gate it is `FitBound`. -/
 def FitBoundSlots : Prop :=
   ∀ (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (k : ℕ) (P : Partition c.D k) (start : Fin T.m → Fin k)
     (Nstar : ℕ) (S b_w w_e : ℝ),
-    S < Nstar * b_w → (∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) →
+    S < Nstar * b_w → (∀ j, (freshInput c (P.gates j) : ℝ) ≤ S) →
     Assumptions.ReachSlots c T σ Nstar → Assumptions.FitsSlots c T σ P start b_w w_e →
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤ k * T.reuse * Nstar * S ^ 2
 

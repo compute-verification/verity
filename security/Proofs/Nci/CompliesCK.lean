@@ -72,9 +72,9 @@ theorem ExpandComplies : Guarantees.ExpandComplies := by
   have hcard : (P.gates u).card ≤ d.D.width (P.gates u) :=
     Circuit.card_le_width _ _ fun g hg => hw g (P.isInput_of_mem_gates hg)
   have hsize' : d.expand.D.size (P.expand.gates u) = d.D.width (P.gates u) := hsize
-  have hnovel : novelReads d.expand (P.expand.gates u) ≤ novelReads d (P.gates u) := by
-    have : novelReads d.expand (P.expand.gates u) = (d.expand.unregistered (P.expand.gates u)).card := by
-      simp [novelReads, Circuit.width, RegisteredCircuit.unregistered]
+  have hnovel : freshInput d.expand (P.expand.gates u) ≤ freshInput d (P.gates u) := by
+    have : freshInput d.expand (P.expand.gates u) = (d.expand.unregistered (P.expand.gates u)).card := by
+      simp [freshInput, Circuit.width, RegisteredCircuit.unregistered]
     rw [this]
     exact hunreg
   refine ⟨?_, ?_⟩
@@ -82,7 +82,7 @@ theorem ExpandComplies : Guarantees.ExpandComplies := by
     calc d.D.width (P.gates u) ≤ (P.gates u).card * W := Circuit.width_le _ _ W hW
       _ ≤ Γ * W := Nat.mul_le_mul_right _ hs
   · rw [hsize']
-    calc (novelReads d.expand (P.expand.gates u) : ℝ) ≤ novelReads d (P.gates u) := by exact_mod_cast hnovel
+    calc (freshInput d.expand (P.expand.gates u) : ℝ) ≤ freshInput d (P.gates u) := by exact_mod_cast hnovel
       _ ≤ α * (P.gates u).card := hr
       _ ≤ α * d.D.width (P.gates u) := mul_le_mul_of_nonneg_left (by exact_mod_cast hcard) hα
 
@@ -103,7 +103,7 @@ theorem floor_bound {x r K : ℕ} {α : ℝ} (hx : (x : ℝ) ≤ α * r) (hr : 0
 at most as wide as that unit's novel reads. -/
 theorem constInputs_bounds (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n) (u : Fin n) :
     (P.constInputs.gates u).card ≤ (P.gates u).card ∧
-      d.constInputs.D.width (d.constInputs.unregistered (P.constInputs.gates u)) ≤ novelReads d (P.gates u) := by
+      d.constInputs.D.width (d.constInputs.unregistered (P.constInputs.gates u)) ≤ freshInput d (P.gates u) := by
   refine ⟨card_le_card fun g hg => (P.mem_constInputs_gates.1 hg).2, ?_⟩
   show ∑ g ∈ d.constInputs.unregistered (P.constInputs.gates u), d.D.w g ≤
     ∑ g ∈ d.D.into (P.gates u) \ d.θ, d.D.w g
@@ -113,13 +113,13 @@ theorem constInputs_bounds (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D 
 are one bit wide: registering the constants makes it Boolean (`Circuit.constInputs_boolean`), takes them out of
 their units and adds no unregistered read. -/
 theorem constInputs_isCK {Γ : ℕ} {α : ℝ} {d : RegisteredCircuit} {n : ℕ} {P : Partition d.D n}
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (h1 : ∀ g, d.D.w g = 1) : P.constInputs.IsCK d.constInputs Γ ⌊α * Γ⌋₊ := by
   have hB : d.constInputs.D.Boolean := d.D.constInputs_boolean h1
   refine ⟨hB, fun u => (constInputs_bounds d P u).1.trans (hP u).1, fun u => ?_⟩
   have hw := (constInputs_bounds d P u).2
   rw [Circuit.width_eq_card hB] at hw
-  have hw' : ((d.constInputs.unregistered (P.constInputs.gates u)).card : ℝ) ≤ novelReads d (P.gates u) := by
+  have hw' : ((d.constInputs.unregistered (P.constInputs.gates u)).card : ℝ) ≤ freshInput d (P.gates u) := by
     exact_mod_cast hw
   exact floor_bound (hw'.trans (hP u).2) fun _ => (hP u).1
 
@@ -128,7 +128,7 @@ whose gates are at most `W` bits wide: registering the constants gives positive 
 (`Circuit.constInputs_bitFaninPos`), so the expansion is Boolean, and an expanded unit has at most `W` bits a gate
 and reads no more than its unit's novel reads (`ExpandSize`). -/
 theorem constInputs_expand_isCK {Γ W : ℕ} {α : ℝ} {d : RegisteredCircuit} {n : ℕ} {P : Partition d.D n}
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hW : ∀ g, d.D.w g ≤ W) :
     P.constInputs.expand.IsCK d.constInputs.expand (Γ * W) ⌊α * (Γ * W : ℕ)⌋₊ := by
   refine ⟨d.D.constInputs.expand_boolean d.D.constInputs_bitFaninPos, fun u => ?_, fun u => ?_⟩
@@ -140,12 +140,12 @@ theorem constInputs_expand_isCK {Γ W : ℕ} {α : ℝ} {d : RegisteredCircuit} 
   · obtain ⟨-, hunreg⟩ := (Verity.SecurityProofs.ExpandSize d.constInputs n P.constInputs).2 u
     have hx := hunreg.trans (constInputs_bounds d P u).2
     have hx' : ((d.constInputs.expand.unregistered (P.constInputs.expand.gates u)).card : ℝ) ≤
-        novelReads d (P.gates u) := by
+        freshInput d (P.gates u) := by
       exact_mod_cast hx
     refine floor_bound (hx'.trans (hP u).2) fun hpos => ?_
     have hW1 : 1 ≤ W := by
       by_contra h0
-      have h00 : novelReads d (P.gates u) = 0 := by
+      have h00 : freshInput d (P.gates u) = 0 := by
         show ∑ g ∈ d.D.into (P.gates u) \ d.θ, d.D.w g = 0
         exact sum_eq_zero fun g _ => by have := hW g; omega
       exact absurd (lt_of_lt_of_le hpos (hx.trans_eq h00)) (lt_irrefl 0)

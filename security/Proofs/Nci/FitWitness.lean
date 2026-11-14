@@ -64,8 +64,8 @@ theorem M_nonempty : threading.M.Nonempty := by decide +kernel
 
 theorem gap : (3 : ℝ) < ((2 : ℕ) : ℝ) * 2 := by norm_num
 
-theorem reads_le : ∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ 3 := by
-  have h : ∀ j, novelReads decl (windows.gates j) ≤ 3 := by decide +kernel
+theorem reads_le : ∀ j, (freshInput decl (windows.gates j) : ℝ) ≤ 3 := by
+  have h : ∀ j, freshInput decl (windows.gates j) ≤ 3 := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
 theorem reach : Assumptions.Reach decl threading 2 := by
@@ -74,7 +74,7 @@ theorem reach : Assumptions.Reach decl threading 2 := by
 
 theorem fits : Assumptions.Fits decl threading windows start 2 1 := by
   have h : ∀ j, 2 * (threading.weightsUsed (windows.gates j)).card + 1 * (threading.entered windows start j).card ≤
-      novelReads decl (windows.gates j) := by decide +kernel
+      freshInput decl (windows.gates j) := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
 /-- `FitBound` at the witness. -/

@@ -133,7 +133,7 @@ lands on, a row that is neither wired inside the slot nor held (`reads_land`); t
 no wider than the row's bits (`landing_bits`); and those rows' bits are within the summary's fresh. -/
 theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = .ok c)
     {d : Verity.RegisteredCircuit} (hd : Served form c d) (u : Fin d.n) :
-    Nci.novelReads d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by
+    Nci.freshInput d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by
   classical
   obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, hOwn, hAl, -, -, hL, hNm, hD⟩ := hd
   obtain rfl : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
