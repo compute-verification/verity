@@ -4,22 +4,18 @@ call a (row, head), a modeled TP variant, and `share.py`'s trace totals, its ref
 per-step split, f and the levers, the attention row's data products, and the registered-circuit witness's lives."""
 from __future__ import annotations
 
-import sys
 from fractions import Fraction
-from pathlib import Path
 
 import pytest
+import share
+import units as U
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops import fp32, prims, scalar
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
-from verity.circuits.types import Array, Tuple as TupleT, Value
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import share  # noqa: E402
-import units as U  # noqa: E402
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.ops import fp32, prims, scalar
 
 S32 = Value(32)
 
