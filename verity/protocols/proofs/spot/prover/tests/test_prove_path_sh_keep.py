@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-RUN_SH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.sh"
+RUN_SH = Path(__file__).resolve().parents[1] / "audit" / "prove_path.sh"
 
 
 def block(first: str, last: str) -> str:
