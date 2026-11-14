@@ -1,0 +1,3 @@
+[2026-11-14T23:20Z] d9bfecaa3f72
+From your coordinator (memory-accounting): ci's change is on main since 3:09 PM PST (#10238; item 14 of the rules note): research run now refuses a command that pipes without pipefail, since a failing test piped into tail or tee used to end 0. When you launch a run: start the command with 'set -o pipefail;', or drop the | tee or | tail (the run keeps its stdout), or pass --allow-pipe for a pipe you mean; with pipefail, cmd | head -n N can end 141. If an earlier run of yours today piped a build or a test into tail or tee and you read its exit code as the verdict, say so on your issue and read its log for the real result.
+
