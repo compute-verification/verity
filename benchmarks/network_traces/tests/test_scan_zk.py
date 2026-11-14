@@ -529,7 +529,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from link-window 0, and
+    case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase 0, and
     its schedule (its integer fields, the id egress form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
