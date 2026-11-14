@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 `CommOfMonitoringPeriodLeakAccepted` is the network audit's `PeriodRun.Sound`, the coins model's per-period guarantee,
 for a run whose communication audit is the network certifier's period of sampled audits
 (`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), at the error of
-`NetTiming.Guarantees.PeriodLeakAccepted`: `n · (δ + ε_ks + ε_bind + ε_tap)` over the period's `n` windows.
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`: `n · (δ + ε_ks + ε_bind + ε_tap)` over the period's `n` windows.
 -/
 
 @[expose] public section
