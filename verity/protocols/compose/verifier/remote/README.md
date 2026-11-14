@@ -98,7 +98,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
    (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
-   for PoUW), and the overhead calculator turns them into overhead (see Results).
+   for PoUW), and the slowdown calculator turns them into the slowdown bound (see Results).
 
 ## The security argument, end to end
 
