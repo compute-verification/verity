@@ -408,28 +408,28 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
         (repo / path / "pyproject.toml").write_text(body)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    (repo / "tools/verity/check").mkdir(parents=True)
-    (repo / "tools/verity/check/suites.py").write_text(
+    (repo / "tools/check").mkdir(parents=True)
+    (repo / "tools/check/suites.py").write_text(
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\nif rev == 'broken':\n    sys.exit(2)\n"
         "hit = {'nothing': 'none', 'core': 'verity/core'}.get(rev, 'verity-vllm, verity/core')\n"
         "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else hit.count(\",\") + 1}: {hit}')\n")
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
-    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    suites = ["uv", "run", "tools/check/suites.py"]
     for extra, cmd, want in (
             ([], [*suites, "verity-vllm", "--quick"], (None, 32, 15000)),
             (["--cpus", "8"], [*suites, "--jobs", "2", "adapters/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
             (["--cpus", "8"], [*suites, "vllm", "verity-core"], (8, 64, 14400 + 1800 + 600)),
             (["--mem-gb", "20"], [*suites, "vllm"], (None, 20, 15000)),
             (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
-            (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
+            (["--max-min", "30"], ["python3", "tools/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
             # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync
             ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes; 4 workers x vllm's 8 GB: a process a CPU, once
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
             (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
             # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
-            (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
+            (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py "
                                               "--changed main --quick"], (8, 64, 17040)),
             (["--cpus", "8", "--mem-gb", "144"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),   # a lead's own
             # a change touching only a suite that declares no worker_gb: 8 workers x suites.py's TEST_PROCESS_GB, 4.5
@@ -464,11 +464,11 @@ def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_shar
         (repo / path / "pyproject.toml").write_text(body)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    (repo / "tools/verity/check").mkdir(parents=True)
-    (repo / "tools/verity/check/suites.py").write_text(
+    (repo / "tools/check").mkdir(parents=True)
+    (repo / "tools/check/suites.py").write_text(
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\n"
         "print(f'suites: the change from {rev} touches ' + ('1: b' if rev == 'small' else '2: a, b'))\n")
-    run = ["uv", "run", "tools/verity/check/suites.py"]
+    run = ["uv", "run", "tools/check/suites.py"]
     old = suite_size.size(repo, [*run], None)
     assert old["mem_gb"] == 64 and "reserve_gb" not in old, "a tree whose slot.py takes no --budget-gb reserves its budget whole"
     (repo / suite_size.SLOT_PY).write_text(f'USAGE = "slot.py [{suite_size.BUDGET_OPT} GB] -- CMD..."\n')

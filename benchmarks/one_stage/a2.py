@@ -1,5 +1,5 @@
 """One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits the Llama-3.2-1B row's RoPE
-heads at serving time in the circuit prover's row format and hands over the registration, the verifier's public file,
+heads at serving time in the circuit prover's row format and hands over the docket, the verifier's public file,
 the prover's file and the unit index; nothing else changes.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
@@ -10,7 +10,7 @@ the prover's file and the unit index; nothing else changes.
   `index.json`. `--template-set` is any input set of the template, for the verifier's own lowering.
 * **The verifier's own copies.** It builds the population program and the partition itself, recomputes every served
   domain (`registration.window_domain`) from the record's program, partition and `window.run`, composes the bound circuit
-  itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
+  itself and holds the public file's pin and bindings to it. N is taken from the docket (the served index); the
   verifier doesn't yet derive it from the row's program, and the audit record says so.
 * **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
   verifier's own re-headered copies for the circuit prover's unbound statement (no `units.classes`, the unbound
@@ -122,7 +122,7 @@ def main() -> int:
     header = a0.public_header(st_dir, n)
     fv = header["frame_v3"]
 
-    # registration: R1-R6 against the verifier's own copies, the served domains recomputed
+    # docket: R1-R6 against the verifier's own copies, the served domains recomputed
     run_id = rec.get("window", {}).get("run", "")
     want = {port: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
             for port, (schema, leaves) in a0.ports(st["meta"], n).items()}

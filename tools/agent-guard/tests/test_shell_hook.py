@@ -396,7 +396,7 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     always = ("uv run pytest -q tests/", "cd tools/research && python -m pytest -x", "lake build Security", "cargo test --release",
               "uv run circuit-check --all", "nvcc -O3 k.cu", "timeout 600 /workspace/.venv/bin/python -m pytest")
     light = ("uv run pytest -q tests/test_x.py", "python -m pytest tests/test_x.py::test_y", "pytest -k mem tools/research/tests",
-             "uv run tools/verity/check/suites.py --quick", "uv run --extra torch-cpu verity check",
+             "uv run tools/check/suites.py --quick", "uv run --extra torch-cpu verity check",
              "cd Security && lake env lean X.lean")
     passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
               "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")

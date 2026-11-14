@@ -5,7 +5,7 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 
 | Command | What it runs |
 | --- | --- |
-| `verity check [ARGS]` | the whole check, `tools/verity/check/check.py` |
+| `verity check [ARGS]` | the whole check, `tools/check/check.py` |
 | `verity check tests\|circuits\|lean` | only those parts of it, with the jobs `check/ci.toml` puts in each |
 | `verity check --record [ARGS]` | the check of a clean commit, recorded as an Attempt |
 | `verity check move BASE HEAD` | the certificate that BASE..HEAD is a pure move (`check/move_check.py`) |
@@ -34,5 +34,5 @@ In a NAME, a `-` stands for a `_`.
 the suite runs one of its own (`tests/step0.py`).
 
 ~~~sh
-uv run tools/verity/check/suites.py tools/verity/cli   # the suite, on a node through `research run --on auto`
+uv run tools/check/suites.py tools/verity/cli   # the suite, on a node through `research run --on auto`
 ~~~
