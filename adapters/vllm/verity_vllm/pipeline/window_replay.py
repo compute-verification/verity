@@ -23,8 +23,8 @@ member of a batch reads at one writer row is a shared argument; any other is map
 member whose port's rows come from more than one source reads a concat of them, a part a source a member.
 
 **The id** names the window by its record: ``window`` is the SHA-512 of its ``circuit.json`` less the fields its run
-fixes (`interface.RUN_FIELDS`: ``run`` and ``context``), so every run of one circuit gives one Definition. The
-Definition is a reference a test evaluates; no verifier reads it.
+fixes (`interface.RUN_FIELDS`: ``run`` and ``context``), in canonical JSON, so every run of one circuit gives one
+Definition. The Definition is a reference a test evaluates; no verifier reads it.
 
 Refused (ValueError): a wire whose reader row isn't its writer's output field leaf for leaf (the same words at another
 leaf width, as a Boolean template's bits read as words: a body's argument names each leaf at its own width); a
@@ -41,6 +41,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
+from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, Refs, concat, strided_view
 from verity.circuits.types import Array, Tuple, Type
@@ -265,9 +266,9 @@ def _plan(circuit: IF.Circuit) -> _Plan:
 
 
 def window_digest(record: Mapping[str, Any]) -> str:
-    """The SHA-512 of a window's ``circuit.json`` less its run fields (`interface.circuit_of`), in its bytes
-    (`interface.circuit_bytes`): the same for every run of one circuit."""
-    return hashlib.sha512(IF.circuit_bytes(IF.circuit_of(record))).hexdigest()
+    """The SHA-512 of a window's ``circuit.json`` less its run fields (`interface.circuit_of`), in canonical JSON
+    (`codec.canonical_json`, no newline after it): the same for every run of one circuit."""
+    return hashlib.sha512(canonical_json(IF.circuit_of(record))).hexdigest()
 
 
 def replay(circuit: IF.Circuit, record: Mapping[str, Any]) -> SpecializedDefinition:
