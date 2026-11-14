@@ -13,7 +13,7 @@ multiplications of a threaded reference circuit `c`, where `Λ = Threading.bound
 (`Nci.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
 actual circuit's region, and `c` need only be contained in it.
 
-The windows are `Windows`' `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with its memory constraint replaced by a bound `R` on the
+The windows are `ServerBlocks`' `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with its memory constraint replaced by a bound `R` on the
 state at each window's start, so that what a wipe or exhaustion leaves plugs in; `r` bounds each location's link
 capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
 
