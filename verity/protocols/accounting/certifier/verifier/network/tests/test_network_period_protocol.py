@@ -776,8 +776,8 @@ def test_the_rows_forms_cells_are_the_schedules(server):
     for each of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules
     and cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no
     cells, one connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the
-    mirror alike; and a schedule of 4 lanes over a 32-bucket execution phase, 5 egress cells a connection, charges 384
-    bits for each over one execution phase (Lean's `#guard`)."""
+    mirror alike; and a schedule of 4 lanes over a link's 32-bucket execution phase, 5 egress cells a connection,
+    charges 384 bits for each over one such phase (Lean's `#guard`)."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, out = PC.params(case["params"]), reference(case)

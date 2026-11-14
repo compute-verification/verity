@@ -662,7 +662,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     that names none, at the state tie (`period_case.UNSTATED`), and a registration whose window states its units'
     ``sin`` off the chain (`period_case.MISREAD`), or opens leaf 0 under another leaf's salt (`period_case.UNPINNED`),
     each with its own answer; the honest registration's window states the members' reads (`state_reads`) and row 0's
-    opening (`state_empty`). A group of two execution phases, and a run in the bytes egress form, are refused by name.
+    opening (`state_empty`). A group of two execution phases' transfer blocks, and a run in the bytes egress form, are
+    refused by name.
     Slow (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no
     stand-in can stand for."""
     import scan_period as SP

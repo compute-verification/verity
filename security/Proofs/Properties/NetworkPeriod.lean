@@ -218,8 +218,8 @@ theorem stateChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : 
     (stateChecks p c)[i]? = some (stateCheck p s c.audits (p.first + i) reg) := by
   simp [stateChecks, hform, Array.getElem?_zipIdx, hreg]
 
-/-- An execution phase's state finding is none only when its scan's state is tied (`stateTied`) and its row 0 opened to
-the empty state (`stateEmpty`). -/
+/-- The state finding of an execution phase's transfer blocks is none only when their scan's state is tied
+(`stateTied`) and its row 0 opened to the empty state (`stateEmpty`). -/
 theorem stateCheck_none {p : Params} {s : Schedule} {audits : Array Lean.Json} {w : ℕ} {reg : Lean.Json}
     (h : stateCheck p s audits w reg = none) : stateTied p.audits s audits reg = true ∧ stateEmpty s reg = true := by
   unfold stateCheck at h
@@ -229,7 +229,7 @@ theorem stateCheck_none {p : Params} {s : Schedule} {audits : Array Lean.Json} {
     · cases h
   · cases h
 
-/-- An accepted rows-form period's execution phase has no state finding. -/
+/-- The transfer blocks of an accepted rows-form period's execution phase have no state finding. -/
 theorem stateCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
     (h : check p c e = .accept pub prof) {s : Schedule} {sd : ByteArray} {scan : Scan}
     (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
@@ -273,9 +273,9 @@ def stateReg (root : String) : Lean.Json :=
 def stateRun (l lo hi : ℕ) : Lean.Json :=
   Lean.Json.mkObj [("leaf", Lean.toJson l), ("units", Lean.Json.arr #[Lean.toJson lo, Lean.toJson hi])]
 
-/-- An execution phase whose scan's `prog` is at the slot audit's entries port's root and domain, whose state, the tree
-its units read and register their states in, is at the root `s` and the domain `e`, and whose registration states its
-units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
+/-- An execution phase's transfer blocks whose scan's `prog` is at the slot audit's entries port's root and domain,
+whose state, the tree its units read and register their states in, is at the root `s` and the domain `e`, and whose
+registration states its units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
 def stateExecutionPhaseOf (sin o1 : Lean.Json) : Lean.Json :=
   Lean.Json.mkObj [
     ("roots", Lean.Json.arr #[
@@ -283,8 +283,8 @@ def stateExecutionPhaseOf (sin o1 : Lean.Json) : Lean.Json :=
       Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]]),
     ("window", Lean.Json.mkObj [("reads", Lean.Json.mkObj [("scan/state", Lean.Json.mkObj [("o1", o1), ("sin", sin)])])])]
 
-/-- That execution phase under the slot audit's schedule, T = 2: unit 1 reads `sin` at leaf 1, where unit 0 registers
-its `o1`. Its registration opens no row 0. -/
+/-- Those transfer blocks under the slot audit's schedule, T = 2: unit 1 reads `sin` at leaf 1, where unit 0 registers
+its `o1`. Their registration opens no row 0. -/
 def stateExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 1 1 2) (stateRun 1 0 1)
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
@@ -336,9 +336,9 @@ def misindexedExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 
 theorem misindexedExecutionPhase_untied : stateTied #[slotAudit] slotSchedule #[stateReg "s"] misindexedExecutionPhase = false := by
   decide +kernel
 
-/-- **The rows form refuses a scan whose units read their state off the chain**: a period whose one execution phase's
-scan is wired to the slot audit, its state that audit's `SCAN_STATE` by root and domain, but its registration's reads
-misindexed (`misindexedExecutionPhase`), is accepted by no evidence (`rowsStateTied`). -/
+/-- **The rows form refuses a scan whose units read their state off the chain**: a period of one execution
+phase's transfer blocks, their scan wired to the slot audit, its state that audit's `SCAN_STATE` by root and domain, but
+their registration's reads misindexed (`misindexedExecutionPhase`), is accepted by no evidence (`rowsStateTied`). -/
 theorem rowsStateTied_misindexed {p : Params} {sd : ByteArray} {scan : Scan} (e : Evidence) (pub : Public)
     (prof : Profile) (hform : p.form = .rows slotSchedule sd scan) (ha : p.audits = #[slotAudit]) :
     check p ⟨#[stateReg "s"], #[misindexedExecutionPhase], .empty⟩ e ≠ .accept pub prof := by
@@ -361,13 +361,14 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   rw [stateExecutionPhase_skipped] at hs
   cases hs
 
-/-- The honest execution phase's registration opens no row 0: it states no `window.empty`. -/
+/-- The registration of the honest execution phase's transfer blocks opens no row 0: it states no `window.empty`. -/
 theorem stateExecutionPhase_unopened : stateEmpty slotSchedule stateExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsStateEmpty`'s property** (its nontrivial lemma): such a check
-accepts a rows-form period of one execution phase whose scan's state is the slot audit's `SCAN_STATE`, read as the
-chain, and whose registration opens no row 0, so the Programs anchored at bucket 0 read a row the prover chose. -/
+accepts a rows-form period of one execution phase's transfer blocks whose scan's state is the slot audit's
+`SCAN_STATE`, read as the chain, and whose registration opens no row 0, so the Programs anchored at bucket 0 read a row
+the prover chose. -/
 theorem rowsStateEmpty_nontrivial : ¬ RowsStateEmptyOf acceptAllRows := by
   intro h
   let p : Params :=
