@@ -2418,6 +2418,12 @@
     },
     {
       "paths": {
+        "benchmarks/pouw/harness/native/": "verity/protocols/accounting/pouw/prover/kernels/harness/native/",
+        "benchmarks/pouw/nvfp4_sm120/": "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/hash/dither/h1c.cu": "verity/protocols/experimental/dither/prover/kernels/h1c.cu",
         "benchmarks/hash/dither/h1f.cu": "verity/protocols/experimental/dither/prover/kernels/h1f.cu",
         "benchmarks/hash/dither/h1o.cu": "verity/protocols/experimental/dither/prover/kernels/h1o.cu",
