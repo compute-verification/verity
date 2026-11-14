@@ -619,7 +619,7 @@ def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: d
     if best:
         meas += [{"name": "flop_per_second", "value": fps, "unit": "flop/s"}]
         if frac is not None:
-            meas += [{"name": "fraction_of_spec", "value": frac, "unit": "ratio"}]
+            meas += [{"name": "circuits/native-peak.fraction-of-spec", "value": frac, "unit": "ratio"}]
         for s in sizes:
             stem = s["label"] if s.get("label") else f"gemm_{s['n']}"
             meas += [{"name": f"{stem}_seconds", "value": s["seconds_median"], "unit": "s"},
