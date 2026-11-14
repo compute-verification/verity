@@ -39,7 +39,7 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
     never PASS); the seed is the run root's first 8 bytes (no coin: a measurement, steerable by committing again), sha256(challenge|root)[:8]
     under a challenge, or a targeted one (prover-chosen), and the record says which (`sample.seed_form`); Calls at
     request-relative steps >= n_exec leave the pool into a NAMED class before sampling; a request linked over fewer steps than its
-    cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
+    max_tokens must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
 
 The check runs here; its steps live beside it: `index` (the Program rows), `population` and `coverage` (what may be sampled
@@ -473,7 +473,7 @@ def _strata_keys(strata: dict[str, dict], ranks: list[int], all_vus: list[dict],
                                  "identities); else fresh-window; unwindowed collectors: one value, stated",
                          "sampled": dict(Counter(v["lifetime"] for v in picked))},
             "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
-                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
+                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to max_tokens' last step; steps past the "
                       "prefix are 'not-executed', split out of the pool by name)"),
             # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
             "phase_anchor": {r: anchors[r] for r in sorted(anchors)}}
@@ -509,20 +509,20 @@ def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     return q if q in QUERIES else None
 
 
-DRAWS = ("family", "uniform")
+DESIGNS = ("family", "uniform")
 
 
-def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: str = "family") -> tuple[list[dict], int]:
-    """With `k` (the config run), every VU re-keyed to one stratum per `draw` (the key's fields kept) and `k` picks per stratum.
+def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, design: str = "family") -> tuple[list[dict], int]:
+    """With `k` (the config run), every VU re-keyed to one stratum per sampling `design` (the key's fields kept) and `k` picks per stratum.
     `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform sample without replacement from every unit.
-    `family`: one stratum per family (`family|all|all|all|all|all`); with the cap at `k`, the round-robin order of `sample` then takes
+    `family`: one stratum per family (`family|all|all|all|all|all`); with the bound at `k`, the round-robin order of `sample` then takes
     k units in all, one per family first, a small family used up before the others, the rest split evenly.  Without `k`, the VUs and
-    `per_stratum` as given.  Any other `draw` is refused by name."""
-    if draw not in DRAWS:
-        raise ValueError(f"replay draw {draw!r} is not one of {DRAWS}")
+    `per_stratum` as given.  Any other `design` is refused by name."""
+    if design not in DESIGNS:
+        raise ValueError(f"replay sampling design {design!r} is not one of {DESIGNS}")
     if not k:
         return vus, per_stratum
-    return [dict(v, stratum=f"{'all' if draw == 'uniform' else v['family']}|all|all|all|all|all") for v in vus], int(k)
+    return [dict(v, stratum=f"{'all' if design == 'uniform' else v['family']}|all|all|all|all|all") for v in vus], int(k)
 
 
 def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: dict[str, int], executed_prefix: dict[str, dict] | None,
@@ -554,7 +554,7 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         # a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
         # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
         # the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
-        # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
+        # lag step of an EOS-stopped request), not to max_tokens' last step: the EOS-stopped request has a `last` stratum too, sampled deterministically
         anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
         skip = RP.adopt(pi, rid, (cached_prefixes or {}).get(rid))                # a warm request whose Program recomputes its hit
         key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]), len(skip))
@@ -633,8 +633,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     identity by identity (`population.query_total` / `sampled_strata` / `uncovered_by_name` / `query_checks`); None is recorded as such.
     `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...})
     -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
-    `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
-    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, sampled by `replay_draw` (`family_strata`).
+    `max_evaluate` bounds the stratified sample but never below one VU per stratum (round-robin order; the effective bound is recorded);
+    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the bound); `replay_k` (the config run): that many units, sampled under the design `replay_draw` names (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly, every non-empty stratum was evaluated and every check of the Programs is 1
@@ -654,8 +654,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # classified out of the pool
     picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum, replay_draw), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
-    cap = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
-    picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap
+    bound = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
+    picked = picked_all[:min(bound, n_strat)] + picked_all[n_strat:]              # targeted VUs are outside the bound
     if plan:
         return planned(picked, indices, store, arrivals, t_start)
     if len(ranks) > 1:                                                            # TP: the map carries rank-local partials this version does not replay
@@ -707,9 +707,9 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),
                        "picked": len(picked), "evaluated": fold.evaluated, "equal": fold.equal,
-                       "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(cap),
-                       "stratified_picked": min(cap, n_strat), "targeted": targeted, "targeted_n": n_targeted,
-                       "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the cap",
+                       "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(bound),
+                       "stratified_picked": min(bound, n_strat), "targeted": targeted, "targeted_n": n_targeted,
+                       "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the bound",
                        "picks_by_request_step": picks_by_request_step,      # {request: {step: [picked, evaluated, mismatch]}}
                        # the step is the REQUEST-RELATIVE step (the executed prefix's n_exec counts the request's own steps); the engine
                        # step of a pick is arrival + step -- the arrival per request beside it, so a mixed-arrivals reader adds it, not guesses

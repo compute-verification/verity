@@ -30,7 +30,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     Plus `prescribed_input_linkage` (the seed).
     `store`: a CommittedStore-like reader (has/words) in place of (bmap, committed) -- tests.
     `eos_of_record`: the Program's declared stop rule (global_program.stop_rule eos_token_ids; None = undeclared): a request
-    linked over FEWER steps than its declared cap must end on a declared EOS id, else unlinked by name.
+    linked over FEWER steps than its declared max_tokens must end on a declared EOS id, else unlinked by name.
     `eos_lag_rows`: the placeholder rows the ATTESTED scheduler runs after an EOS (RunHeader.profile.engine_kwargs
     .async_scheduling True -> 1, False -> 0; None = unattested -> every early stop is refused by name).  The EOS is verified at
     steps[-1 - lag]; the trailing `lag` step(s) are the placeholder(s) fed the EOS (their committed embed input == that EOS id, recorded).
@@ -93,8 +93,8 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     method = "ordered boundary linkage (declared prompt -> input_token_ids; sampled_token_ids[s-1] -> input_token_ids[s])"
     if presc["seed"].get("checked"):
         method += " + prescribed-input linkage (seed)"
-    # the horizon each request was linked over, beside its declared cap and its Program of record's steps;
-    # a horizon SHORTER than the declared cap is an early stop: the committed sampled id at its EOS step must be one
+    # the horizon each request was linked over, beside its declared max_tokens and its Program of record's steps;
+    # a horizon SHORTER than the declared max_tokens is an early stop: the committed sampled id at its EOS step must be one
     # of the Program's declared EOS ids (stop_rule) -- Commit-side, not leaning on the Match chain's G6; undeclared -> fail closed.
     # the EOS step is steps[-1 - lag] where lag = the ATTESTED scheduler's placeholder rows after an EOS (async
     # scheduling runs ONE step after the EOS whose sample the driver discards: e.g. EOS 0 at step 10, 504 at step 11).
@@ -111,7 +111,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
         h: dict[str, Any] = {"linked_steps": len(steps), "declared_cap": r.get("max_tokens"), "program_steps": r.get("program_steps")}
         if r.get("max_tokens") is not None and steps and len(steps) < int(r["max_tokens"]):
             last = steps[-1]
-            over = f"{rid} linked over {len(steps)} of its declared cap {r['max_tokens']} steps"
+            over = f"{rid} linked over {len(steps)} of its declared max_tokens {r['max_tokens']} steps"
             e: dict[str, Any] = {"last_step": last, "lag": lag, "declared_eos": (sorted(eos_set)[:16] if eos_set is not None else None), "verified": False}
             w, why = store.words(rid, last, SAMPLER_OP, SAMPLED_MEMBER, 0, 1)
             e["sampled_id"] = None if w is None else int(np.asarray(w).astype(np.int64)[0])
@@ -161,7 +161,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
 def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None) -> tuple[dict[str, int], bool]:
     """The arrivals every C2 consumer (population placement, sampled replay, boundary linkage) counts from: the ENGINE
     schedule of record's observed arrive steps when the population was placed on the observed
-    committed-step axis (`schedule.use == "observed"`: every declared request observed, contiguous, exactly its cap), else the declaration.
+    committed-step axis (`schedule.use == "observed"`: every declared request observed, contiguous, exactly its max_tokens), else the declaration.
     Returns (arrivals, moved) -- `moved` iff an arrival differs from the declaration.  A missing / failed schedule leaves the declaration."""
     out = {str(k): int(v) for k, v in (declared or {}).items()}
     if not isinstance(schedule, dict) or schedule.get("use") != "observed":
@@ -173,15 +173,15 @@ def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None
     return out, moved
 
 
-def linkage_horizon(arrive: int, declared_cap: int, program_steps: int | None, executed: int | None = None) -> list[int]:
+def linkage_horizon(arrive: int, max_tokens: int, program_steps: int | None, executed: int | None = None) -> list[int]:
     """The engine steps a request is linked over: its Program OF RECORD's steps
-    (T_r + 1: the served shape at B=1 eos-truncated / GP-01 composed at B>=2), capped by the declared cap; the cap alone when the Program's
+    (T_r + 1: the served shape at B=1 eos-truncated / GP-01 composed at B>=2), capped by the declared max_tokens; max_tokens alone when the Program's
     step count is unknown (older records).  A request whose committed steps are FEWER than its Program of record still fails by name
-    (the chain rule inside the horizon is unchanged); the cap's never-executed steps are not 'unlinked' -- the Program never had them."""
-    n = int(declared_cap) if program_steps is None else min(int(declared_cap), int(program_steps))
-    # `executed`: the request's executed prefix of record (executed_prefix.executed_prefix_of_record: cap, or
-    # served + LAG on an EOS stop under the DECLARED lag) -- at B>=2 GP-01 composes every request to its cap, so the Program's step count
-    # is the cap's and the horizon is the executed prefix; boundary_linkage then verifies the EOS at steps[-1 - lag] and the placeholder
+    (the chain rule inside the horizon is unchanged); the never-executed steps up to max_tokens are not 'unlinked' -- the Program never had them."""
+    n = int(max_tokens) if program_steps is None else min(int(max_tokens), int(program_steps))
+    # `executed`: the request's executed prefix of record (executed_prefix.executed_prefix_of_record: max_tokens, or
+    # served + LAG on an EOS stop under the DECLARED lag) -- at B>=2 GP-01 composes every request to its max_tokens, so the Program's step count
+    # is max_tokens' and the horizon is the executed prefix; boundary_linkage then verifies the EOS at steps[-1 - lag] and the placeholder
     # row(s) fed the EOS exactly as before.  None = the horizon `n` above.
     if executed is not None:
         n = min(n, max(int(executed), 0))

@@ -247,7 +247,7 @@ def test_padrev_m0517_lag_1_negatives_name_the_eos_step_and_the_placeholder():
     store, req = _sys_int3_earlystop_world(eos_at_10=333)
     lk = _lk(store, req, {0}, lag=1)
     assert lk["result"] is False and lk["unlinked"][0] == {"request_id": "r0", "engine_step": 10, "kind": "eos",
-                                                           "why": "r0 linked over 12 of its declared cap 32 steps but its committed sampled id 333 at the EOS step 10 (= last step 11 - lag 1) is not a declared EOS id [0]"}
+                                                           "why": "r0 linked over 12 of its declared max_tokens 32 steps but its committed sampled id 333 at the EOS step 10 (= last step 11 - lag 1) is not a declared EOS id [0]"}
     # (b) the EOS at 10 is honest but the placeholder step is fed something other than the EOS: the chain names step 11 first, the eos rule names it too
     store, req = _sys_int3_earlystop_world(ph_input=7)
     lk = _lk(store, req, {0}, lag=1)

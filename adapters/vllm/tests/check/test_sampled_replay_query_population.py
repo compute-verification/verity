@@ -355,7 +355,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert any(k.split("|")[1] == "r0" and k.split("|")[3] == "last" for k in base["strata"])
     anchors = rep["strata_keys"]["phase_anchor"]
     assert anchors["r0"]["last_step"] == cap - 2 and anchors["r0"]["anchor"] == "n_exec - 1" and anchors["r0"]["lag_step"] == cap - 2
-    assert anchors["r0"]["n_exec"] == cap - 1 and anchors["r0"]["cap_last_step"] == cap - 1 and "anchored there, not at the cap" in anchors["r0"]["why"]
+    assert anchors["r0"]["n_exec"] == cap - 1 and anchors["r0"]["cap_last_step"] == cap - 1 and "anchored there, not at max_tokens' last step" in anchors["r0"]["why"]
     assert anchors["r1"]["last_step"] == cap - 1 and anchors["r1"]["anchor"] == "cap - 1" and anchors["r1"]["lag_step"] is None
     assert base["strata_keys"]["phase_anchor"]["r0"] == {"last_step": cap - 1, "anchor": "cap - 1", "cap_last_step": cap - 1, "n_exec": None,
                                                          "lag_step": None, "why": "no executed prefix"}
@@ -390,7 +390,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert p2["query_total"] == bpop["query_total"] and p2["sampled_strata"]["identities_reached"] == bpop["sampled_strata"]["identities_reached"]
     # the arithmetic is the rule's, not the caller's: LAG outside {0, 1} and a_r > cap are faults by name
     assert POP.executed_prefix_of_record("r0", a_r=2, lag=2, cap=cap, eos_declared=True, served_len_commit=2, **ok)["faults"][0].startswith("LAG 2 outside")
-    assert "outside [0, cap" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
+    assert "outside [0, max_tokens" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
     # (a)(b)(c) + the served-length rule, each a fault BY NAME; an unasserted fact is a fault, never a default
 
     def f(**kw):
@@ -436,7 +436,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
     assert ep["n_exec"] == 2 and ep["faults"] == []
     anchor = POP.phase_anchor(cap, ep)
     assert anchor == {"last_step": 1, "anchor": "n_exec - 1", "cap_last_step": cap - 1, "n_exec": 2, "lag_step": 1, "why": anchor["why"]}
-    assert "lag step" in anchor["why"] and "anchored there, not at the cap" in anchor["why"]
+    assert "lag step" in anchor["why"] and "anchored there, not at max_tokens' last step" in anchor["why"]
     base, _, _ = POP.population(pi, "r0")
     moved, _, _ = POP.population(pi, "r0", last_step=anchor["last_step"])
     assert [v["i"] for v in base] == [v["i"] for v in moved]                      # the SAME rows
@@ -451,7 +451,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
     assert POP.phase_anchor(cap, None)["anchor"] == "cap - 1" and POP.phase_anchor(cap, None)["why"] == "no executed prefix"
     full = POP.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)
     assert POP.phase_anchor(cap, full) == {"last_step": cap - 1, "anchor": "cap - 1", "cap_last_step": cap - 1, "n_exec": cap, "lag_step": None,
-                                          "why": "the request ran to its cap"}
+                                          "why": "the request ran to its max_tokens"}
     faulted = dict(ep, faults=["a fault"])
     assert POP.phase_anchor(cap, faulted)["anchor"] == "cap - 1" and POP.phase_anchor(cap, faulted)["n_exec"] is None
     assert "faults" in POP.phase_anchor(cap, faulted)["why"]
@@ -464,7 +464,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
     # ...and without LAG the same stop has no lag step; at the cap it 'ran to its cap', at a_r = cap - 1 (EOS at the last slot) the why
     # says the STOP, not 'ran to its cap'
     edge0 = POP.executed_prefix_of_record("r3", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)
-    assert POP.phase_anchor(cap, edge0)["lag_step"] is None and POP.phase_anchor(cap, edge0)["why"] == "the request ran to its cap"
+    assert POP.phase_anchor(cap, edge0)["lag_step"] is None and POP.phase_anchor(cap, edge0)["why"] == "the request ran to its max_tokens"
     eos0 = POP.executed_prefix_of_record("r4", a_r=cap - 1, lag=0, cap=cap, eos_declared=True, served_len_commit=cap - 1, **ok)
     assert not eos0["faults"] and eos0["n_exec"] == cap - 1                     # LAG 0: n_exec = a_r < cap -> anchored at n_exec - 1, no lag step
     a0 = POP.phase_anchor(cap, eos0)

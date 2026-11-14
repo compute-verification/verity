@@ -658,7 +658,7 @@ def test_family_strata_draw_k_units_with_every_family_at_least_once():
 def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
            for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
-    keyed, per = family_strata(vus, 460, draw="uniform")
+    keyed, per = family_strata(vus, 460, design="uniform")
     assert per == 460 and {v["stratum"] for v in keyed} == {"all|all|all|all|all|all"}
     assert {v["family"] for v in keyed} == {"Gemm_v1", "RoPE_v1", "Embedding_v1"}, "each unit keeps its family for the record"
     picked, strata, tgt = sample(keyed, per, seed=11)
@@ -675,6 +675,6 @@ def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_i
     assert [draw_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
         "family", "family", "uniform"]
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"} for fam in ("Gemm_v1", "RoPE_v1") for i in range(3)]
-    assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
-    with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
-        family_strata(vus, 4, draw="stratified")
+    assert family_strata(vus, 4, design=draw_of(SimpleNamespace())) == family_strata(vus, 4)
+    with pytest.raises(ValueError, match=r"replay sampling design 'stratified' is not one of \('family', 'uniform'\)"):
+        family_strata(vus, 4, design="stratified")

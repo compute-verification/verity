@@ -398,7 +398,7 @@ def _controller(mq: Mapping[str, Any] | None, controller_rows: dict[str, int] | 
 
 def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict] | None, req_max_step: dict[str, int], not_exec_req: Counter) -> list[dict]:
     """The classified requests whose Q(P) carries no identity at their not-executed steps, by name."""
-    # the class is an EXCLUSION over the cap-length manifest of record: a classified request whose Q(P) carries NO
+    # the class is an EXCLUSION over the full-length manifest of record: a classified request whose Q(P) carries NO
     # identity at its not-executed steps was CUT before it reached the population (a restricted manifest handed in as Q(P)) -- N_manifest
     # would shrink silently and the class count 0.  Named here, fails the reconciliation: the manifest of record is never restricted.
     manifest_cut: list[dict] = []
@@ -411,7 +411,7 @@ def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict]
                 manifest_cut.append({"request_id": str(r), "manifest_last_step": req_max_step.get(str(r)), "cap_last_step": last,
                                      "n_exec": int(e["n_exec"]), "identities_at_not_executed_steps": int(not_exec_req.get(str(r), 0)),
                                      "why": "Q(P) carries no identity at the request's not-executed steps: the manifest was restricted before the "
-                                            "population (the manifest of record stays cap-length; the class is the exclusion)"})
+                                            "population (the manifest of record stays full-length; the class is the exclusion)"})
     return manifest_cut
 
 

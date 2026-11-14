@@ -14,7 +14,7 @@ from verity_vllm.records import replay_codes as RC
 def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None,
            key: Key | None = None) -> tuple[list[dict], dict[str, dict[str, int]], dict]:
     """Stratified sample (`challenge.stratum_picks`: legacy from `seed`, or from `key`), emitted ROUND-ROBIN across strata (every stratum's
-    first pick before any stratum's second) so that a caller's cap keeps >= 1 VU per stratum.  `targets`: `<op_path>[@<step>]` -- every VU
+    first pick before any stratum's second) so that a caller's bound keeps >= 1 VU per stratum.  `targets`: `<op_path>[@<step>]` -- every VU
     of that module (at that request-local step, if given) is added to the sample and recorded as targeted (the negatives of record)."""
     by: dict[str, list[dict]] = {}
     for v in vus:
