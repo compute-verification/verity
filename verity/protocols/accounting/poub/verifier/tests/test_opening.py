@@ -17,6 +17,7 @@ from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments import gates
 from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.prover import opening_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.accounting.poub.verifier import opening as O
 from verity.protocols.accounting.poub.verifier.receipts import Plan
@@ -37,15 +38,15 @@ def payload(j: int) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     payloads = [payload(j) for j in range(N)]
     salt = Entropy(b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(N)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return audit_prover.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-def window(store: audit.Store) -> SimpleNamespace:
+def window(store: audit_prover.Store) -> SimpleNamespace:
     """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call,
     so the same samples over any store of the same registration."""
     reg = store.registration
@@ -82,7 +83,7 @@ def test_a_plan_rows_commitment_is_the_proof_systems() -> None:
 def test_an_honest_window_is_accepted(store) -> None:
     w = window(store)
     assert len(w.session.drawn(0)) == 4
-    assert O.reference(w.session, store, w.passes, w.c3) == [audit.Verdict(0, True)]
+    assert opening_prover.reference(w.session, store, w.passes, w.c3) == [audit.Verdict(0, True)]
 
 
 def test_a_lost_block_fails_on_codec_at_its_sample(store) -> None:
@@ -94,13 +95,13 @@ def test_a_lost_block_fails_on_codec_at_its_sample(store) -> None:
     lost.blocks[d0.block] = hashlib.shake_256(b"a lost block").digest(codec.BLOCK_BYTES)
     w = window(lost)
     assert w.session.drawn(0)[0].block == d0.block
-    assert O.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
+    assert opening_prover.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
 
 
 def test_an_appended_blocks_payload_is_its_block_decoded(store) -> None:
-    """The witness's payload of an appended block (`audit.Store.payload`) is its append's while it awaits its coin, then
+    """The witness's payload of an appended block (`audit_prover.Store.payload`) is its append's while it awaits its coin, then
     its block decoded under its digest and that coin: the store keeps no second copy."""
-    st = audit.Store(store.registration, store.payloads, store.salts)
+    st = audit_prover.Store(store.registration, store.payloads, store.salts)
     m = [payload(N + u) for u in range(2)]
     a = st.append(m, [Entropy(b"append salts")(receipts.SALT_BYTES) for _ in m])
     assert [st.payload(a.first + u) for u in range(2)] == m
@@ -122,7 +123,7 @@ def test_the_plan_link_and_the_public_rows(store) -> None:
     w = window(store)
     d = w.session.drawn(0)[0]
     S = O.statics(P512, d.leaf_size, L, w.c3.DR, w.c3.DP, w.c3.DV)
-    a = O.witness(d, w.passes[d.window, d.index], store, w.c3.plan_rows[d.step], S, w.c3.values)
+    a = opening_prover.witness(d, w.passes[d.window, d.index], store, w.c3.plan_rows[d.step], S, w.c3.values)
     seed = store.registration.codec_seed
     salt, bc = w.c3.plan_salts[d.step], w.c3.plan_bcs[d.step]
     assert O.check(d, a, seed, S, w.c3.values, salt, bc) is None

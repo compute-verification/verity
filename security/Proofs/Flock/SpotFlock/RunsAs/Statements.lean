@@ -71,7 +71,7 @@ def StmtsAre (h : Held) (m₂ : Msg) (ss : Array Json) : Prop :=
 def TwoHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
 
 /-- **The run's records name their registrations' names** (`recordsOk`). Round 2 does not make it: `Run.run`'s
-registration step (`Registration.check`) does. -/
+registration step (`Docket.check`) does. -/
 def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
 
 /-- **Round 1's record registers no value**: no entry under its `registered` names a string `value`. The model's

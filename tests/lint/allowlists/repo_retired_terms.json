@@ -3943,7 +3943,6 @@
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Produced.lean", "count": 7},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Rate.lean", "count": 4},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean", "count": 98},
-    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean", "count": 24},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean", "count": 51},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Select.lean", "count": 153},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Service.lean", "count": 3},
@@ -4676,6 +4675,7 @@
     {"file": "verity/protocols/accounting/poub/prover/session_prover.py", "count": 3},
     {"file": "verity/protocols/experimental/pearl_c4/prover/f1_fast.py", "count": 3},
     {"file": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py", "count": 6},
-    {"file": "verity/protocols/accounting/poub/verifier/p2_parties.py", "count": 23}
+    {"file": "verity/protocols/accounting/poub/verifier/p2_parties.py", "count": 23},
+    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Docket.lean", "count": 24}
   ]
 }

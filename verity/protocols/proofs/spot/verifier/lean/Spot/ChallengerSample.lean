@@ -33,7 +33,7 @@ reason is `FAMILY_ROOT`), its `after` the registration's digest.
 
 `seedSaltOf key window coins` reads a window's seed salt the same way: the one coin of the challenger's
 `SEED_SALT_FAMILY`, a family no sample reads, that the session released after the window's open root itself, which
-R6 holds the window's registrations to name (`Registration.Verifier.seedSalt`).
+R6 holds the window's registrations to name (`Docket.Verifier.seedSalt`).
 
 The difftest's pieces (`Pieces.table`): `challenger_draw_coins` (`coins_reason`), `{"reason"}`, or `{"refused": why}`
 for a key `ChallengerKey.ofJson` refuses, and `challenger_seed_salt` (`seed_salt_of`).

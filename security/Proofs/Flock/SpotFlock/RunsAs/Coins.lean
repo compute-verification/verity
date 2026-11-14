@@ -27,7 +27,7 @@ theorem coinsCode_read {key : Option Spot.Challenger.ChallengerKey} {main coins 
     {window family : Option String} {read : ByteArray}
     (h : Spot.Run.coinsCode key main coins record window family read = none) (hr : 0 < read.size) :
     ∃ k w label after, key = some k ∧ window = some w ∧ family = some label ∧
-      Spot.Registration.digest record = .ok after ∧
+      Spot.Docket.digest record = .ok after ∧
       Spot.Challenger.coinsReason k main coins w label after read = none := by
   have hne : read.isEmpty = false := by
     unfold ByteArray.isEmpty
@@ -35,7 +35,7 @@ theorem coinsCode_read {key : Option Spot.Challenger.ChallengerKey} {main coins 
     omega
   unfold Spot.Run.coinsCode at h
   rw [hne] at h
-  cases hd : Spot.Registration.digest record with
+  cases hd : Spot.Docket.digest record with
   | error e => cases key <;> cases window <;> cases family <;> simp [hd] at h
   | ok after =>
     cases key with

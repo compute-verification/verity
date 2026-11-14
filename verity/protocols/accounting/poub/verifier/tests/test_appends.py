@@ -44,14 +44,14 @@ def salts(label: bytes, n: int) -> list[bytes]:
 
 
 @functools.cache
-def registered() -> audit.Store:
+def registered() -> audit_prover.Store:
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return audit_prover.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     """A store of N registered blocks under p512/k2 with no appends yet, its own to append to."""
     out = copy.copy(registered())
     out.blocks, out.appends, out.pending = list(out.blocks), [], {}
@@ -69,7 +69,7 @@ class Run:
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
     parameters commit `schedule_cap` (`SCHEDULE_CAP` by default) on its schedule's bits."""
 
-    def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
+    def __init__(self, store: audit_prover.Store, prover_store: audit_prover.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
                  deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = SCHEDULE_CAP) -> None:
         reg = store.registration
@@ -87,7 +87,7 @@ class Run:
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
-        self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.passes: dict[tuple[int, int], audit_prover.Pass] = {}
         self.coins: dict[int, bytes] = {}
         self.received: list[tuple[int, int, bytes]] = []
 
@@ -103,7 +103,7 @@ class Run:
             self.store.encode(first, coin)
         return first
 
-    def append(self, count: int) -> audit.Append:
+    def append(self, count: int) -> audit_prover.Append:
         a = self.store.append(pages(self.store.extent, count), salts(b"page salts %d" % self.store.extent, count))
         assert self.commit(a.root, a.count) == a.first
         return a
