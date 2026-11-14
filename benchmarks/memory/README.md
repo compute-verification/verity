@@ -20,12 +20,10 @@ verity bench memory --loopback                both processes on this machine, on
   one word, by default seven credited stretches of a second, each pass under a live coin of its own): the developer's
   node serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers
   BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host, and the
-  coins come from the challenger host under period `PERIOD`, a name its ledger hasn't used. `BIND` (default `0`) is
-  whether the verifier binds the store to the role's pinned checkpoint, and whether the period signs the role
-  (`period-open --model`). With `0` the verifier holds no checkpoint, the period signs no model, and the store is the
-  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits the
-  session on its other checks, conditional on `DeveloperStore`, the developer's word that the store holds the
-  registered weights. No auditor's machine reads a checkpoint, so the default is 0. `BIND=1` binds it.
+  coins come from the challenger host under period `PERIOD`, a name its ledger hasn't used. The verifier holds no checkpoint and
+  the period signs no model, so the store is the developer's choice, which the text and the JSON's `bound` say; the
+  auditor's line of record credits the session on its other checks, conditional on `DeveloperStore`, the developer's
+  word that the store holds the registered weights.
   `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
   (`7:60000:33273` is seven windows of a minute with 33,273 openings each); the verifier's ledger holds its γ as it
   does a paced session's, and the auditor's line of record has no time-held line for it, which only a paced session
@@ -77,8 +75,9 @@ readings). A capacity's rate is the verifier's own figure for the node (`timing.
 and its unit says so. The printed number is written once more under
 `memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
 That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
-verifier held no checkpoint (`BIND=0`) still writes it, with `"bound": false` and its verdict naming that premise
-(`within target; the verifier held no checkpoint`); a bound session's entry holds neither. Where the number's error
+verifier held no checkpoint, every session now, still writes it, with `"bound": false` and its verdict naming that premise
+(`within target; the verifier held no checkpoint`); a bound session's entry, from a record made while the verifier could bind
+the store, holds neither. Where the number's error
 is above 2^-100, the goal's bound, the verdict names that as well (`within target; the verifier held no checkpoint;
 its error is above 2^-100`): the record's declared error where it holds one, else the ledger's own, and above it
 where the record holds neither. At a share of 1 or

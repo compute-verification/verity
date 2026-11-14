@@ -13,7 +13,7 @@ For each program (A4 P6's six-template population, as core's sample test builds 
 - on a small program, each unit's inclusion frequency over samples on fresh streams from the operating system against
   `k_s / n_s`; given no stream, Lean samples only a sampling design of every unit and refuses any other (the verifier has no coins of
   its own);
-- A4's sampling design as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
+- A4's sampling design as core's `Stratified` (`audit.core_sampling_design`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
 Needs core's stratified sample on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
 everything agrees.
@@ -67,10 +67,10 @@ def _nth(ranges, j: int) -> int:
     raise IndexError(j)
 
 
-def reference_sample(law: dict, src: bytes) -> list[int] | None:
+def reference_sample(sampling_design: dict, src: bytes) -> list[int] | None:
     """The stratified sampler of record on the given bytes: stratum s's stream is the next `2 k_s · width(n_s) + 64` bytes."""
     out, at = [], 0
-    for s in law["strata"]:
+    for s in sampling_design["strata"]:
         n_s = sum(hi - lo for lo, hi in s["units"])
         need = 2 * s["k"] * width(n_s) + 64
         local = _subset(s["k"], n_s, src[at:at + need])
@@ -171,8 +171,8 @@ def main() -> int:
         n = P.units(prog, q)
         flags = ["--program", str(desc), "--partition", str(part)]
         for k in ks:
-            law = D.derive(prog, q, D.parse_design(f"stratified:{k}"))
-            need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in law["strata"])
+            sampling_design = D.derive(prog, q, D.parse_design(f"stratified:{k}"))
+            need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in sampling_design["strata"])
             src = os.urandom(need)
             (out / "stream.bin").write_bytes(src)
             p = subprocess.run([a.lean, "draw", *flags, "--stratified", str(k), "--stream-file", str(out / "stream.bin")],
@@ -183,18 +183,18 @@ def main() -> int:
                 bad.append((label, k, "no draw", p.stderr.strip()[-300:]))
                 continue
             d = got[0]
-            if D.law_of(d) != law or d["population"] != n:
+            if D.sampling_design_of(d) != sampling_design or d["population"] != n:
                 bad.append((label, k, "law or population"))
-            ref = reference_sample(law, src)
+            ref = reference_sample(sampling_design, src)
             if ref is not None and d["units"] != ref:
                 bad.append((label, k, "units against the reference sampler"))
-            v = D.check_draw(d, {"population": n}, law)
+            v = D.check_draw(d, {"population": n}, sampling_design)
             if not v.ok:
                 bad.append((label, k, "check_draw refuses the stream draw", v.codes))
             p = subprocess.run([a.lean, "draw", *flags, "--stratified", str(k)], capture_output=True, text=True)
             got = _lines(p, "DRAW")
-            if all(s["k"] == sum(h - l for l, h in s["units"]) for s in law["strata"]):
-                if not got or not D.check_draw(got[0], {"population": n}, law).ok:
+            if all(s["k"] == sum(h - l for l, h in s["units"]) for s in sampling_design["strata"]):
+                if not got or not D.check_draw(got[0], {"population": n}, sampling_design).ok:
                     bad.append((label, k, "a draw of every unit given no coins", p.stderr.strip()[-300:]))
             elif got or p.returncode != 2 or "draws no coins of its own" not in p.stderr:
                 bad.append((label, k, "a draw given no coins not refused", p.stderr.strip()[-300:]))
@@ -202,14 +202,14 @@ def main() -> int:
                 p = subprocess.run([a.lean, "draw", *flags, "--stratified", str(k), "--tables", str(tables),
                                     "--stream-file", str(out / "stream.bin")], capture_output=True, text=True)
                 tables_checked += 1
-                why = D.tables_problem(law, tables)
+                why = D.tables_problem(sampling_design, tables)
                 got = _lines(p, "DRAW")
-                if why is None and (not got or got[0] != d or not D.check_draw(got[0], {"population": n}, law, tables).ok):
+                if why is None and (not got or got[0] != d or not D.check_draw(got[0], {"population": n}, sampling_design, tables).ok):
                     bad.append((label, k, tables, "tables: Lean refuses or draws otherwise", p.stderr.strip()[-300:]))
                 if why is not None and (got or why not in p.stderr):
                     bad.append((label, k, tables, "tables: Lean takes what core refuses", why, p.stderr.strip()[-300:]))
             if label == "a4" and k == 1024:
-                core = audit.core_law(D.law_of(d), n)
+                core = audit.core_sampling_design(D.sampling_design_of(d), n)
                 res["a4"] = {"k_s": [s["k"] for s in d["strata"]], "drawn": len(d["units"]),
                              "units": [s["units"] for s in d["strata"]],
                              "count_bound_2^-20": core.count_bound(2.0 ** -20),
@@ -225,7 +225,7 @@ def main() -> int:
                 for (why, x), lv in zip(muts, lean_v):
                     mutations += 1
                     try:
-                        cv = D.check_draw(x, {"population": n}, law).ok
+                        cv = D.check_draw(x, {"population": n}, sampling_design).ok
                     except Exception as e:
                         cv = False
                     if cv != lv["ok"]:
@@ -245,10 +245,10 @@ def main() -> int:
     # the frequency check: each unit's inclusion over samples on fresh streams against k_s / n_s
     prog = P.mixed_population_program([(T[0], 3), (T[1], 5), (T[0], 2)])
     q = P.template_instances_query([P.template_id(T[0]), P.template_id(T[1])])
-    law = D.derive(prog, q, D.parse_design("stratified:4"))
+    sampling_design = D.derive(prog, q, D.parse_design("stratified:4"))
     (out / "freq.desc").write_bytes(canonical_json(encode_program(prog)))
     (out / "freq.partition.json").write_text(json.dumps(P.partition(prog, q)))
-    need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in law["strata"])
+    need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in sampling_design["strata"])
     counts = [0] * 10
     for _ in range(a.draws):
         (out / "freq.bin").write_bytes(os.urandom(need))
@@ -257,7 +257,7 @@ def main() -> int:
         for u in _lines(p, "DRAW")[0]["units"]:
             counts[u] += 1
     worst = 0.0
-    for s in law["strata"]:
+    for s in sampling_design["strata"]:
         n_s = sum(h - l for l, h in s["units"])
         pr = s["k"] / n_s
         sd = (a.draws * pr * (1 - pr)) ** 0.5 or 1.0
@@ -279,7 +279,7 @@ def main() -> int:
     a4 = json.loads((out / "a4.1024.cases.json").read_text())[0]["statement"]
     lax = json.loads(json.dumps(a4))
     lax["strata"][0]["k"] = True
-    res["core_takes_a_boolean_stratum_k"] = D.check_draw(lax, {"population": a4["population"]}, D.law_of(a4)).ok
+    res["core_takes_a_boolean_stratum_k"] = D.check_draw(lax, {"population": a4["population"]}, D.sampling_design_of(a4)).ok
     res.update({"programs": len(cases), "draws": checked, "mutations": mutations, "refusals": refusals,
                 "tables": tables_checked,
                 "frequency_draws": a.draws, "frequency_worst_sd": round(worst, 2), "disagree": bad[:20]})

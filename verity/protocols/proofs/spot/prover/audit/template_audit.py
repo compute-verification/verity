@@ -81,17 +81,17 @@ def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 360
 DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 
-def challenger_sample(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
+def challenger_sample(lean: str, args: list[str], sampling_design: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
     """Lean's sample, ``verity-verify-proof draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
     none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
     committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
-    docket's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
+    docket's digest) by `ChallengerCoins`. F holds the bytes `sampling_design` reads over `population`, each stream once, in
     Lean's `Draw.sampleOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
     the segment, from which `coins.challenger_stream` replays F. Its samples show the path, not an auditor's coins: those
     are `a5_coins`' (`a5.py --challenger`)."""
     reads: list[int] = []
-    CC.draw_first(CC.OwnRandomness(lambda n: reads.append(n) or bytes(n)), law, population)
+    CC.draw_first(CC.OwnRandomness(lambda n: reads.append(n) or bytes(n)), sampling_design, population)
     need = sum(reads)
     ch = Ch.LiveChallenger(DEV_SCHEME, 0, [(DEV_FAMILY, max(1, -(-need // Ch.COIN_BYTES)))], secrets.token_bytes)
     coins = CC.ChallengerCoins(Ch.LiveRecord(ch, DEV_FAMILY))
@@ -218,7 +218,7 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
 SERVING_POLL, SERVING_WAIT = 0.02, 900.0
 
 
-def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, sample_file: Path | None = None,
+def session(bin_: str, st: dict, n: int, sampling_design: str, port: int, out: Path, sample_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
             tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: docket, the sample, coins, the verdict) and `prove`.
@@ -244,7 +244,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, sample_
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(sample_file)] if sample_file else ["--draw", law]), "--sessions", "1",
+                              *(["--draw-file", str(sample_file)] if sample_file else ["--draw", sampling_design]), "--sessions", "1",
                               *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
@@ -614,7 +614,7 @@ def proved_units(header: dict, live: dict) -> list[int]:
     return [pop[u] for u in (live.get("unit_draw") or {}).get("units", [])]
 
 
-def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, record, live, lean: str, lean118: str, out: Path,
+def audit_session(rec: dict, receipt: dict, st: dict, header: dict, sampling_design: dict, record, live, lean: str, lean118: str, out: Path,
                   delta: float) -> dict:
     """Every check on one session, then the audit record."""
     draw = (record or {}).get("unit_draw")
@@ -635,11 +635,11 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
     sessions = [sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))]
-    return V.audit_record(rec, receipt, draw, law, proved_units(header, live or {}), (live or {}).get("instances", -1),
+    return V.audit_record(rec, receipt, draw, sampling_design, proved_units(header, live or {}), (live or {}).get("instances", -1),
                           statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
 
 
-def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict,
+def audit_negatives(result: dict, sampling_design: dict, delta: float, session_roots: dict,
                     served: list | None = None) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
@@ -647,7 +647,7 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict,
     (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
     where the Lean answered (`lean_answered`);
     `agree` is whether the Lean and the Python decided it alike."""
-    base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
+    base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=sampling_design,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
                 verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
@@ -726,9 +726,9 @@ def main() -> int:
     s = InputSet.open(a.set)
     n = s.n
     template = s.subcircuit.definition()
-    law_text = f"subset:{a.k}"
-    law = D.parse_design(law_text)
-    summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
+    sampling_design_text = f"subset:{a.k}"
+    sampling_design = D.parse_design(sampling_design_text)
+    summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": sampling_design, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
     program = P.population_program(template, n)
@@ -753,9 +753,9 @@ def main() -> int:
     fv = header["frame_v3"]
     want = stand_in_ports(s.name, s.content_digest, st["meta"], n)
     leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")
-    rec = R.record(program, query, law, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, SCHEME, want, leaf_layer=leaf_layer).to_json(),
+    checks = {"registration": V.check(rec, program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer).to_json(),
               "public": V.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json()}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a0.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
@@ -772,9 +772,9 @@ def main() -> int:
 
     # 4-6. the verifier samples after Register, M0 proves the sampled proof blocks, M0's verifier and Lean's sample checks
     t = time.time()
-    record, live = session(a.bin, st, n, law_text, a.port, out / "session")
+    record, live = session(a.bin, st, n, sampling_design_text, a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)
-    result = audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean_verify, out / "session", a.delta)
+    result = audit_session(rec, receipt, st, header, sampling_design, record, live, a.lean, a.lean_verify, out / "session", a.delta)
     result["checks_before_draw"] = checks
     result["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "tp_s", "proof_bytes", "k_log", "units")}
     result["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
@@ -791,22 +791,22 @@ def main() -> int:
     neg["registration-root-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], first: "00" * 64}, header["instances"])
     neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, sampling_design, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
+    v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, sampling_design, SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, D.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
+    v = V.check(dict(rec, previous=R.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, leaf_layer=None), program, query, law, SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if "registration" in result:
-        neg.update(audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))
+        neg.update(audit_negatives(result, sampling_design, a.delta, (live or {}).get("roots") or {}))
     neg["public-body-altered-leaf-layer-updated (Lean roots)"] = altered_public(
         a.lean_verify, st, n, out / "session", out / "neg-public-body", rec,
-        lambda r, digest: V.check(r, program, query, law, SCHEME, want, leaf_layer=digest))
+        lambda r, digest: V.check(r, program, query, sampling_design, SCHEME, want, leaf_layer=digest))
     if a.bind:
         other_part = P.digest(P.partition(R2.program([(template, n)], mixed=False), query))
         b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])
@@ -815,7 +815,7 @@ def main() -> int:
     for name, bad in (("draw-over-another-population", {**draw, "population": n + 1}),
                       ("draw-outside-the-partition", {**draw, "units": draw["units"][:-1] + [n]}),
                       ("draw-under-another-law", {**draw, "k": a.k - 1, "units": draw["units"][:-1]})):
-        v = V.check_draw(bad, rec, law)
+        v = V.check_draw(bad, rec, sampling_design)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     altered = {**draw, "units": sorted(set(draw["units"][:-1]) | {next(u for u in range(n) if u not in draw["units"])})}
     lean_alt = lean_sample_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},

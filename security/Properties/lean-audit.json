@@ -18,13 +18,13 @@
   "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Pouw.PearlPlusTie",
   "Properties.Pouw.PearlPlusDraw",
-  "Properties.Nci",
-  "Properties.Nci.Threads",
-  "Properties.Nci.Baseline",
-  "Properties.Nci.Count",
-  "Properties.Nci.Desc",
-  "Properties.Nci.Desc.Verdict",
-  "Properties.Nci.Desc.Cover",
+  "Properties.InferenceOnly",
+  "Properties.InferenceOnly.Threads",
+  "Properties.InferenceOnly.Theta",
+  "Properties.InferenceOnly.Count",
+  "Properties.InferenceOnly.Desc",
+  "Properties.InferenceOnly.Desc.Verdict",
+  "Properties.InferenceOnly.Desc.Cover",
   "Properties.Certifier.Device",
   "Properties.Pous",
   "Properties.Certifier.Check",
@@ -65,6 +65,7 @@
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Component",
+  "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -82,8 +83,8 @@
   "Properties.Accounting.Remote.Subprotocol",
   "Properties.Accounting.Remote.SubprotocolDeployed",
   "Properties.Composition",
-  "Properties.Nci.Protocol",
-  "Properties.Nci.Record",
+  "Properties.InferenceOnly.Protocol",
+  "Properties.InferenceOnly.Record",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
   "Properties.Verity.Sha512",
@@ -107,7 +108,20 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
- "assumptions": {},
+ "assumptions": {
+  "Accounting.Assumptions.KeyBinding": {
+   "owner": "@compute-accounting",
+   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+  },
+  "Hash.Assumptions.Sha512Prf": {
+   "owner": "@memory-accounting",
+   "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
+  },
+  "Pous.Period.Instantiates": {
+   "owner": "@memory-accounting",
+   "digest": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e"
+  }
+ },
  "domain": {
   "Accounting.Compose.Declared.Reads": {
    "owner": "@compute-accounting",
@@ -134,30 +148,55 @@
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
   },
-  "NciCheck.Properties.Record.Accepts": {
+  "InferenceOnlyCheck.Properties.Record.Accepts": {
    "owner": "@lean",
    "digest": "1b8274c56e081ec038185ca4d05cd647a23b791d47a12bb5b8d3759c02900667",
    "why": "The check accepts: the event the statement conditions on."
   },
-  "NciCheck.Properties.Record.RowLeaf": {
+  "InferenceOnlyCheck.Properties.Record.RowLeaf": {
    "owner": "@lean",
    "digest": "feff4c7578388131f97f53c44ed963640440e1628046a1085cd0767f87761569",
    "why": "The gates a clause of the record's circuit speaks of: each leaf of a reader row."
   },
-  "NciCheck.Properties.Record.Served": {
+  "InferenceOnlyCheck.Properties.Record.Served": {
    "owner": "@lean",
    "digest": "46fc5e9fba165c52d6bee0e1cb38d3ff0f53a4a359aa4b9a61b2082dc5f3db14",
    "why": "The circuits the rate rule speaks of: each one the record the check read lays out."
   },
-  "NciCheck.Properties.Record.UnitAt": {
+  "InferenceOnlyCheck.Properties.Record.UnitAt": {
    "owner": "@lean",
    "digest": "df4ced019ca8bea8cae4f65be7e30397dd41735b2758f583f709acc34ccbe65f",
    "why": "The units a clause of the record's circuit speaks of: each activation the Program's root gives a template."
   },
-  "NciCheck.Properties.Record.WriterLeaf": {
+  "InferenceOnlyCheck.Properties.Record.WriterLeaf": {
    "owner": "@lean",
    "digest": "2084ad09848208a75e1bfc1e8b7c999edbffd64fe89959e2e6c2d4c21abbac86",
    "why": "The gates a clause of the record's circuit speaks of: each leaf of the output row a reader row is wired to."
+  },
+  "Pous.Guarantees.RoundsBound": {
+   "owner": "@memory-accounting",
+   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
+   "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
+  },
+  "Pous.Period.Audits.OnTime": {
+   "owner": "@memory-accounting",
+   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
+   "why": "Inside DeviceModel, the coins on which it bounds each round's program: those on which the memory challenger's signed record has every answer on time."
+  },
+  "Pous.Period.CountMeets": {
+   "owner": "@memory-accounting",
+   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
+   "why": "The counts the pooled bound speaks of: M at least ((z − 1)·U·(δ + ε_max) + ln(1/δ'))/ln z."
+  },
+  "Pous.Period.Drawn": {
+   "owner": "@memory-accounting",
+   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
+   "why": "Inside DeviceModel and Instantiates, the samples they speak of: the indices and coin view the memory challenger's code reads from the coin's own streams."
+  },
+  "Pous.Period.Fits": {
+   "owner": "@memory-accounting",
+   "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
+   "why": "The certificates the bound speaks of: S bits a tick over the capacity window, with the device's on-chip state and its side channels' capacity over a round, within the state bound S₀."
   },
   "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
@@ -237,12 +276,6 @@
   "Accounting.Assumptions.HelpWithinCertifier": {
    "owner": "@compute-research",
    "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Assumptions.KeyBinding": {
-   "owner": "@compute-accounting",
-   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -381,7 +414,7 @@
   "Accounting.Remote.Held.Assumptions.Covered": {
    "owner": "@memory-accounting",
    "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
-   "issue": "LEAN-186",
+   "issue": "MEM-289",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Covers": {
@@ -393,7 +426,7 @@
   "Accounting.Remote.Held.Assumptions.IngressCounted": {
    "owner": "@memory-accounting",
    "digest": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e",
-   "issue": "LEAN-186",
+   "issue": "MEM-289",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Paced": {
@@ -438,106 +471,100 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Hash.Assumptions.Sha512Prf": {
-   "owner": "@memory-accounting",
-   "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864",
+  "InferenceOnly.Assumptions.ThetaRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "82b2b8424ff21842f1d09245654262b8bae5cee97ef914b1697bb79c34a4a467",
    "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnly.Assumptions.WeightsIncompressible": {
+   "owner": "@lean",
+   "digest": "0638192a04fd4bde84e03375d0bbdd858e3c1c95630bba389eb297b46cd80420",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnly.Assumptions.WeightsIncompressibleSlots": {
+   "owner": "@lean",
+   "digest": "b0f96342adb0eff4b869a392676d0ebcbddc94d93d7d8db25d9c8ad05e5fe970",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnly.Cover.Assumptions.UpdateHardness": {
+   "owner": "@training",
+   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnly.Cover.MulBlocks.Upstream": {
+   "owner": "@training",
+   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnly.Threading.Threaded": {
+   "owner": "@training",
+   "digest": "ad71302f706ba1cfb69e2003ee6e271c6e8674351dbad5703165d02118059905",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Divides": {
+   "owner": "@network-accounting",
+   "digest": "312a4c0e6c039c3cc218713fb9ceaf35ce2be329392a9e49a6a72c9d77432f61",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Expands": {
+   "owner": "@network-accounting",
+   "digest": "b35f7ede4fa7db5a774bf5e1341c953492e4c76811a983165e12315b5adedcff",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.LaysOut": {
+   "owner": "@network-accounting",
+   "digest": "d6ced09fbe18a0f3a5539f1d7bd612e1953b096f32a5c890b97904c0bed38ec5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Names": {
+   "owner": "@network-accounting",
+   "digest": "8cd40971569c5fd55e3d2a32c5a2cf96bc65a20b5db3b48f2476f2386d79b12c",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Parses": {
+   "owner": "@network-accounting",
+   "digest": "f6fe84b4bff51d558f3006c5d20538d2a713b6945e6058074230053dc34a8018",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Record.Counts": {
+   "owner": "@training",
+   "digest": "b0ab053f893c7f33b2190b36602d03f1f589ceb330eaf53e34873884f2703887",
+   "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Record.LaidOut": {
+   "owner": "@training",
+   "digest": "28b0ad169c51314e4eeaf969ee095f75548eb7b4f224548d1503c9fe36543661",
+   "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Record.Owns": {
+   "owner": "@training",
+   "digest": "19486f8e4f500ba6452ec03f8d729a574c97709eb0422a86b3bae2a669a30e01",
+   "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "InferenceOnlyCheck.Properties.Record.Rates": {
+   "owner": "@training",
+   "digest": "d3ebe8c89bae991f4049aada926046b289337438f71a594cc591b103bbf0cdc5",
+   "issue": "TRN-103",
    "due": "2026-11-30"
   },
   "MemoryChallenger.Properties.WipeRun.Plays": {
    "owner": "@memory-accounting",
    "digest": "5b24be0019ae820eccc6190a9ae6025923268852362544040c6edc1dba51bfe5",
    "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Assumptions.ThetaRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "82b2b8424ff21842f1d09245654262b8bae5cee97ef914b1697bb79c34a4a467",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "0638192a04fd4bde84e03375d0bbdd858e3c1c95630bba389eb297b46cd80420",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Assumptions.WeightsIncompressibleSlots": {
-   "owner": "@lean",
-   "digest": "b0f96342adb0eff4b869a392676d0ebcbddc94d93d7d8db25d9c8ad05e5fe970",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Cover.Assumptions.UpdateHardness": {
-   "owner": "@training",
-   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Cover.MulBlocks.Upstream": {
-   "owner": "@training",
-   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Threading.Threaded": {
-   "owner": "@training",
-   "digest": "ad71302f706ba1cfb69e2003ee6e271c6e8674351dbad5703165d02118059905",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Divides": {
-   "owner": "@network-accounting",
-   "digest": "312a4c0e6c039c3cc218713fb9ceaf35ce2be329392a9e49a6a72c9d77432f61",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Expands": {
-   "owner": "@network-accounting",
-   "digest": "b35f7ede4fa7db5a774bf5e1341c953492e4c76811a983165e12315b5adedcff",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.LaysOut": {
-   "owner": "@network-accounting",
-   "digest": "d6ced09fbe18a0f3a5539f1d7bd612e1953b096f32a5c890b97904c0bed38ec5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Names": {
-   "owner": "@network-accounting",
-   "digest": "8cd40971569c5fd55e3d2a32c5a2cf96bc65a20b5db3b48f2476f2386d79b12c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Parses": {
-   "owner": "@network-accounting",
-   "digest": "f6fe84b4bff51d558f3006c5d20538d2a713b6945e6058074230053dc34a8018",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Record.Counts": {
-   "owner": "@training",
-   "digest": "b0ab053f893c7f33b2190b36602d03f1f589ceb330eaf53e34873884f2703887",
-   "issue": "TRN-103",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Record.LaidOut": {
-   "owner": "@training",
-   "digest": "28b0ad169c51314e4eeaf969ee095f75548eb7b4f224548d1503c9fe36543661",
-   "issue": "TRN-103",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Record.Owns": {
-   "owner": "@training",
-   "digest": "19486f8e4f500ba6452ec03f8d729a574c97709eb0422a86b3bae2a669a30e01",
-   "issue": "TRN-103",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Record.Rates": {
-   "owner": "@training",
-   "digest": "d3ebe8c89bae991f4049aada926046b289337438f71a594cc591b103bbf0cdc5",
-   "issue": "TRN-103",
    "due": "2026-11-30"
   },
   "Pous.Component.AcceptsAll": {
@@ -570,12 +597,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Guarantees.RoundsBound": {
-   "owner": "@memory-accounting",
-   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "a22cc6653b91f423e9ec2af90439f16b13fd83a20e5f51729151ec083856ca4b",
@@ -600,59 +621,23 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Audits.Certified": {
-   "owner": "@memory-accounting",
-   "digest": "4da8f2178342cde3571dbf23c427e688fce47637a942f800ee8d51f81e8e2518",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Audits.OnTime": {
-   "owner": "@memory-accounting",
-   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.CountMeets": {
-   "owner": "@memory-accounting",
-   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.DeviceModel": {
    "owner": "@memory-accounting",
    "digest": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Drawn": {
-   "owner": "@memory-accounting",
-   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Fits": {
-   "owner": "@memory-accounting",
-   "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.FixedBefore": {
    "owner": "@memory-accounting",
    "digest": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Instantiates": {
-   "owner": "@memory-accounting",
-   "digest": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e",
-   "issue": "LEAN-186",
+   "issue": "MEM-134",
    "due": "2026-11-30"
   },
   "Pous.Period.ReadsNoPrimitive": {
    "owner": "@memory-accounting",
    "digest": "941286e788e84d808d5f58d95004d4e5cb4762a1eb9bf82b9f04d854577e552c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Pous.Period.RingDeviceAt": {
    "owner": "@memory-accounting",
@@ -843,8 +828,8 @@
   "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Properties.Spot.ExpectsV2": {
    "owner": "@proofs",
@@ -1026,16 +1011,16 @@
   "Identity.Sha512",
   "Identity.Tagged",
   "Identity.Domains",
-  "Properties.Nci",
+  "Properties.InferenceOnly",
   "Definitions.Core",
-  "Definitions.Nci",
-  "Definitions.Nci.Assumptions.Threads",
-  "Definitions.Nci.Assumptions.Baseline",
-  "NciCheck.Check",
-  "NciCheck.Baseline",
-  "NciCheck.Desc",
-  "NciCheck.Protocol",
-  "NciCheck.DefinitionDigest",
+  "Definitions.InferenceOnly",
+  "Definitions.InferenceOnly.Assumptions.Threads",
+  "Definitions.InferenceOnly.Assumptions.Theta",
+  "InferenceOnlyCheck.Check",
+  "InferenceOnlyCheck.Theta",
+  "InferenceOnlyCheck.Desc",
+  "InferenceOnlyCheck.Protocol",
+  "InferenceOnlyCheck.DefinitionDigest",
   "Spot.RecordText",
   "Flock",
   "Base",
@@ -1085,6 +1070,7 @@
   "Properties.Accounting",
   "CircuitRequirement",
   "Definitions.Accounting",
+  "Definitions.Assumptions",
   "Definitions.Claims",
   "Definitions.Hash",
   "Definitions.Pouw.Basic",
@@ -1097,7 +1083,7 @@
   "CoreOnsite",
   "CoreRemote",
   "Properties.Remote",
-  "Properties.Nci.Desc",
+  "Properties.InferenceOnly.Desc",
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
@@ -1111,6 +1097,7 @@
   "Properties.Challenger",
   "Definitions.Pouw.Dither",
   "Definitions.Pouw.Assumptions.ServedWork",
+  "Properties.Assumptions",
   "Properties.ZkServer",
   "ZkServer"
  ],
@@ -1217,9 +1204,6 @@
   "Properties.Composition.acceptTied": {
    "honest": ["Properties.Composition.acceptTied_honest"],
    "nontrivial": "Properties.Composition.acceptTied_nontrivial"
-  },
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
   },
   "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
    "nontrivial": "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial"
@@ -1486,6 +1470,9 @@
   "Properties.NetworkPeriod.rowsStartCharged": {
    "honest": ["Properties.NetworkPeriod.rowsStartCharged_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStartCharged_nontrivial"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "nontrivial": "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1500,6 +1487,96 @@
   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "type_hash": "9152e842487b7fc7d74554af82e9266510a2ec46be1c971d8dd5a0646d3db35c",
    "unfolded_hash": "a9b91d25dbcdf96c818ffb95f0d02fc6106ca7eb8e2074aa16ba2db4af51efb1"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
+   "type_hash": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
+   "unfolded_hash": "82e46455326dfd2612e02bd029951e46f1ade3f9695018a910045c026d1f887f"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": {
+   "type_hash": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5",
+   "unfolded_hash": "08b41189fe3c3dc0c10770ae4884fe72f15eaa04057636a9b00dacfd713bdb13"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
+   "type_hash": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a",
+   "unfolded_hash": "7e369a26cae3262962af4cc1f3c1d083370a9399f45833e8dcad8429bf919a74"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+   "type_hash": "a8bd41ed9bc36f1c11a7c3e6a0e82a2e56542cacb7779adabd2c4101002bf833",
+   "unfolded_hash": "2e6da7e366e2dfdd554e84f31a5b348f62a40acbad0c646d369a1ebac0d9a8ea"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
+   "type_hash": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd",
+   "unfolded_hash": "1347a83d39e6e2e75bcfe2b19a73d446a319b029cdc058663a4062c68a56aefa"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
+   "type_hash": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
+   "unfolded_hash": "822bebb0e12fcf0143a43c945313e27ef09034e92e01637d2b865a6f9b267849"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": {
+   "type_hash": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b",
+   "unfolded_hash": "d46bd6cfbaf058746aa5200ecc5e2cafcc814c783feec5186b4248e9a899cb82"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
+   "type_hash": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e",
+   "unfolded_hash": "3bca3c2eef301c122e54567678a4dd522f4ad6304dd766fce5652a913cc01bc5"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
+   "type_hash": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2",
+   "unfolded_hash": "648483aa962b03697abe04eb7a465966980fa79890baf8b922fd090f13ff967b"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+   "type_hash": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
+   "unfolded_hash": "7db5fdce26de6142fcacfe6e3962684809ba3f54ee4e642adae3857c4c879fd2"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+   "type_hash": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
+   "unfolded_hash": "8596d027de6f5fa727c791faa595c022d8173db6ecd853eb8ce377e2ff310011"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
+   "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
+   "unfolded_hash": "411b39e73316c5efe2044c66f5607e5fe9bf9c611a1c0603c8cdf0609638d528"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "missing": "honest",
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
+   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": {
+   "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
+   "unfolded_hash": "431165b68857272ea604298227a698b7430b35451365a436f2811e44f1d77bf3"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.Reports": {
+   "type_hash": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
+   "unfolded_hash": "3e3030c473e9f71ec6ecffea3f34b309921e1e528e99a61e447361354927b611"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance": {
+   "type_hash": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
+   "unfolded_hash": "eb50dabcdd1724cf78b3d3f5cf2ef23e82bb9a19a32869bf1a8876d2e6cc1a00"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
+   "type_hash": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
+   "unfolded_hash": "5852b618225b84bd2f8fe9dc58264fbe2b683715cc034aed1c5d8484cd87cf8f"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
+   "type_hash": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d",
+   "unfolded_hash": "628e9f1e786d88a266b87ed0aa91e34d98468a3e3d0670073ec174ea5bc07ece"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+   "type_hash": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7",
+   "unfolded_hash": "49a06edd2f5062d576ccf0b7afd6cc0e6d01593cd1e1c5fe6e7ef78920368c29"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
+   "type_hash": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263",
+   "unfolded_hash": "180659a262af0295e1db6b52ce91eceef50aaa7fbd754e6626cb060e0f83cf0c"
+  },
+  "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
+   "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
+   "unfolded_hash": "789029c92ae51811219cc41abd1420df24aafe57b2a34c546264be9a91c23f07"
+  },
+  "InferenceOnlyCheck.SecurityProofs.ServedComplies": {
+   "type_hash": "646c29d742d6c8e92424c17cd71a1978fc61c03adf182282bfee1675cfdb588e",
+   "unfolded_hash": "379940af3fcc4d4e01c63516a7dbe106ef493a5e656cbbb3bdf64f929fa1a3b8"
   },
   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
    "type_hash": "606a2e4fac1660a70473857cbb34860a5460f7308c5769766de8a0e7c386fd9e",
@@ -1520,96 +1597,6 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
-  },
-  "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
-   "type_hash": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
-   "unfolded_hash": "82e46455326dfd2612e02bd029951e46f1ade3f9695018a910045c026d1f887f"
-  },
-  "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
-   "type_hash": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
-   "unfolded_hash": "eb50dabcdd1724cf78b3d3f5cf2ef23e82bb9a19a32869bf1a8876d2e6cc1a00"
-  },
-  "NciCheck.Properties.SecurityProofs.CheckAccepts": {
-   "type_hash": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5",
-   "unfolded_hash": "08b41189fe3c3dc0c10770ae4884fe72f15eaa04057636a9b00dacfd713bdb13"
-  },
-  "NciCheck.Properties.SecurityProofs.CheckRefuses": {
-   "type_hash": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a",
-   "unfolded_hash": "7e369a26cae3262962af4cc1f3c1d083370a9399f45833e8dcad8429bf919a74"
-  },
-  "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-   "type_hash": "a8bd41ed9bc36f1c11a7c3e6a0e82a2e56542cacb7779adabd2c4101002bf833",
-   "unfolded_hash": "2e6da7e366e2dfdd554e84f31a5b348f62a40acbad0c646d369a1ebac0d9a8ea"
-  },
-  "NciCheck.Properties.SecurityProofs.Decodes": {
-   "type_hash": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd",
-   "unfolded_hash": "1347a83d39e6e2e75bcfe2b19a73d446a319b029cdc058663a4062c68a56aefa"
-  },
-  "NciCheck.Properties.SecurityProofs.DescAgrees": {
-   "type_hash": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
-   "unfolded_hash": "822bebb0e12fcf0143a43c945313e27ef09034e92e01637d2b865a6f9b267849"
-  },
-  "NciCheck.Properties.SecurityProofs.DescReports": {
-   "type_hash": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b",
-   "unfolded_hash": "d46bd6cfbaf058746aa5200ecc5e2cafcc814c783feec5186b4248e9a899cb82"
-  },
-  "NciCheck.Properties.SecurityProofs.DescThrottles": {
-   "type_hash": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e",
-   "unfolded_hash": "3bca3c2eef301c122e54567678a4dd522f4ad6304dd766fce5652a913cc01bc5"
-  },
-  "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
-   "type_hash": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2",
-   "unfolded_hash": "648483aa962b03697abe04eb7a465966980fa79890baf8b922fd090f13ff967b"
-  },
-  "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-   "type_hash": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
-   "unfolded_hash": "7db5fdce26de6142fcacfe6e3962684809ba3f54ee4e642adae3857c4c879fd2"
-  },
-  "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-   "type_hash": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
-   "unfolded_hash": "8596d027de6f5fa727c791faa595c022d8173db6ecd853eb8ce377e2ff310011"
-  },
-  "NciCheck.Properties.SecurityProofs.DescWitnesses": {
-   "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
-   "unfolded_hash": "411b39e73316c5efe2044c66f5607e5fe9bf9c611a1c0603c8cdf0609638d528"
-  },
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
-   "missing": "honest",
-   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
-   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
-  },
-  "NciCheck.Properties.SecurityProofs.RejectsExactly": {
-   "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
-   "unfolded_hash": "431165b68857272ea604298227a698b7430b35451365a436f2811e44f1d77bf3"
-  },
-  "NciCheck.Properties.SecurityProofs.Reports": {
-   "type_hash": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
-   "unfolded_hash": "3e3030c473e9f71ec6ecffea3f34b309921e1e528e99a61e447361354927b611"
-  },
-  "NciCheck.Properties.SecurityProofs.Throttles": {
-   "type_hash": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
-   "unfolded_hash": "5852b618225b84bd2f8fe9dc58264fbe2b683715cc034aed1c5d8484cd87cf8f"
-  },
-  "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
-   "type_hash": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d",
-   "unfolded_hash": "628e9f1e786d88a266b87ed0aa91e34d98468a3e3d0670073ec174ea5bc07ece"
-  },
-  "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-   "type_hash": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7",
-   "unfolded_hash": "49a06edd2f5062d576ccf0b7afd6cc0e6d01593cd1e1c5fe6e7ef78920368c29"
-  },
-  "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
-   "type_hash": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263",
-   "unfolded_hash": "180659a262af0295e1db6b52ce91eceef50aaa7fbd754e6626cb060e0f83cf0c"
-  },
-  "NciCheck.Properties.SecurityProofs.Witnesses": {
-   "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
-   "unfolded_hash": "789029c92ae51811219cc41abd1420df24aafe57b2a34c546264be9a91c23f07"
-  },
-  "NciCheck.SecurityProofs.ServedComplies": {
-   "type_hash": "646c29d742d6c8e92424c17cd71a1978fc61c03adf182282bfee1675cfdb588e",
-   "unfolded_hash": "379940af3fcc4d4e01c63516a7dbe106ef493a5e656cbbb3bdf64f929fa1a3b8"
   },
   "Pous.Component.SecurityProofs.runAccepts": {
    "type_hash": "1f62adc1d401e89ae7fd1e127eddd0626124b177506be24f96f20e82cb2d9f2b",
@@ -2213,22 +2200,6 @@
    "except": [],
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Nci": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Threads",
-    "Definitions.Nci.Assumptions.Baseline",
-    "NciCheck.Check",
-    "NciCheck.Baseline",
-    "NciCheck.Protocol",
-    "NciCheck.Count",
-    "Properties.Nci"
-   ],
-   "except": [],
-   "why": "a property is stated over the definitions and the code it is about, never over a proof"
-  },
   "Properties.Pous": {
    "imports": [
     "Mathlib",
@@ -2239,7 +2210,12 @@
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity"
    ],
-   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe", "Properties.Pous.PeriodGame"],
+   "except": [
+    "Properties.Pous.Period",
+    "Properties.Pous.Wipe",
+    "Properties.Pous.PeriodGame",
+    "Properties.Pous.MemoryChallenger.Session"
+   ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Pous.Period": {
@@ -2251,10 +2227,11 @@
     "MemoryChallenger",
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity",
-    "Definitions.Accounting"
+    "Definitions.Accounting",
+    "Properties.Assumptions"
    ],
    "except": [],
-   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
+   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, and its named assumption the instantiation (Properties.Assumptions.Pous), never over a proof"
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
@@ -2390,7 +2367,7 @@
     "CoreComposites",
     "Definitions.Core.Blocks",
     "Definitions.Core.Site",
-    "Definitions.Nci",
+    "Definitions.InferenceOnly",
     "Definitions.Hash.Assumptions",
     "Lms.Verify",
     "Flock.CoinTree",
@@ -2408,17 +2385,17 @@
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.WindowFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Core": {
-   "imports": ["Definitions.Core", "CoreProtocol.Site"],
+   "imports": ["Definitions.Core", "CoreProtocol.Site", "RegistrationLog.SiteCheck"],
    "except": [],
-   "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
+   "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`, and registration's check on it, `RegistrationLog.SiteCheck`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
   },
   "Properties.Remote": {
    "imports": [
     "Definitions.Core",
     "CoreRemote",
     "Properties.Composition",
-    "Properties.Nci",
-    "Properties.Nci.Desc",
+    "Properties.InferenceOnly",
+    "Properties.InferenceOnly.Desc",
     "Properties.Spot"
    ],
    "except": [],
@@ -2440,32 +2417,15 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity",
     "Definitions.Accounting",
-    "Definitions.Hash.Assumptions"
+    "Definitions.Assumptions.Hash"
    ],
    "except": [],
-   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Hash.Assumptions), never over a proof"
+   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Assumptions.Hash), never over a proof"
   },
   "Properties.Annot": {
    "imports": ["Flock.Annot", "Flock.AnnotExpand"],
    "except": [],
    "why": "the annotation check's property is stated against C-Flock's Flock.Annot and its per-gate reference, on Lean core: nothing of Mathlib or of `security`"
-  },
-  "Properties.Nci.Desc": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Baseline",
-    "Definitions.Nci.Assumptions.Cover",
-    "NciCheck.Check",
-    "NciCheck.Baseline",
-    "NciCheck.Desc",
-    "Properties.Nci",
-    "Properties.Nci.Desc"
-   ],
-   "except": [],
-   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
-   "sealed": true
   },
   "Properties.Hash.Identity": {
    "imports": ["Identity.Tagged"],
@@ -2595,20 +2555,6 @@
    "except": [],
    "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
   },
-  "Properties.Nci.Record": {
-   "imports": [
-    "NciCheck.DefinitionDigest",
-    "Spot.RecordText",
-    "Flock.TemplateQuery",
-    "Spot.Wires",
-    "Spot.Bits",
-    "Properties.Nci",
-    "Properties.Nci.Record"
-   ],
-   "except": [],
-   "why": "the circuit record's properties are stated over the code they are about (the record's text as Spot.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
-   "sealed": true
-  },
   "Properties.Nci.Opening": {
    "imports": [
     "Properties.Nci.Record",
@@ -2665,6 +2611,68 @@
    "imports": ["ZkServer"],
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`ZkServer.Record`, `ZkServer.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
+  },
+  "Properties.Assumptions": {
+   "imports": ["Mathlib", "Properties.Pous", "Properties.Assumptions"],
+   "except": [],
+   "why": "a named assumption stated over the code reads the code's definitions it is about (PoUS's instantiation: the period's audit and the ring game, Properties.Pous.Period.Audits), never a guarantee or a proof"
+  },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "imports": [
+    "Mathlib",
+    "Properties.Pous.MemoryChallenger",
+    "MemoryChallenger",
+    "Definitions.Accounting.Assumptions.Parties"
+   ],
+   "except": [],
+   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+  },
+  "Properties.InferenceOnly": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions.Threads",
+    "Definitions.InferenceOnly.Assumptions.Theta",
+    "InferenceOnlyCheck.Check",
+    "InferenceOnlyCheck.Theta",
+    "InferenceOnlyCheck.Protocol",
+    "InferenceOnlyCheck.Count",
+    "Properties.InferenceOnly"
+   ],
+   "except": [],
+   "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.InferenceOnly.Desc": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions.Theta",
+    "Definitions.InferenceOnly.Assumptions.Cover",
+    "InferenceOnlyCheck.Check",
+    "InferenceOnlyCheck.Theta",
+    "InferenceOnlyCheck.Desc",
+    "Properties.InferenceOnly",
+    "Properties.InferenceOnly.Desc"
+   ],
+   "except": [],
+   "why": "the description-sized check's properties are stated over the code they are about (InferenceOnlyCheck.Desc, and InferenceOnlyCheck.Theta, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.InferenceOnly.Assumptions), never over a proof",
+   "sealed": true
+  },
+  "Properties.InferenceOnly.Record": {
+   "imports": [
+    "InferenceOnlyCheck.DefinitionDigest",
+    "Spot.RecordText",
+    "Flock.TemplateQuery",
+    "Spot.Wires",
+    "Spot.Bits",
+    "Properties.InferenceOnly",
+    "Properties.InferenceOnly.Record"
+   ],
+   "except": [],
+   "why": "the circuit record's properties are stated over the code they are about (the record's text as Spot.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
@@ -2726,12 +2734,11 @@
    "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
     "open": [
      "Pous.P2.Assumptions.P2RingAuditSecure",
      "Pous.Period.DeviceModel",
-     "Pous.Period.Instantiates",
      "PousCheck.Properties.AcceptsDecodes",
      "PousCheck.Properties.PublishesRoot"
     ],
@@ -3192,6 +3199,51 @@
    },
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
+  },
+  "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests :",
+    "  MemoryChallenger.Session.Properties.AuditorSeesDigests"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Assumptions.Parties.Confined",
+     "Accounting.Assumptions.Parties.Faithful",
+     "Accounting.Assumptions.Parties.WitnessPathPrivate"
+    ],
+    "reads": [
+     "Accounting.Assumptions.Parties.Code",
+     "Accounting.Assumptions.Parties.Code.init",
+     "Accounting.Assumptions.Parties.Code.messages",
+     "Accounting.Assumptions.Parties.Code.mk",
+     "Accounting.Assumptions.Parties.Code.step",
+     "Accounting.Assumptions.Parties.Code.trace",
+     "Accounting.Assumptions.Parties.Code.trace._f",
+     "Accounting.Assumptions.Parties.Dest",
+     "Accounting.Assumptions.Parties.Dest.casesOn",
+     "Accounting.Assumptions.Parties.Dest.clear",
+     "Accounting.Assumptions.Parties.Dest.ctorIdx",
+     "Accounting.Assumptions.Parties.Dest.rec",
+     "Accounting.Assumptions.Parties.Dest.witness",
+     "Accounting.Assumptions.Parties.Run",
+     "Accounting.Assumptions.Parties.Run.coins",
+     "Accounting.Assumptions.Parties.Run.emitted",
+     "Accounting.Assumptions.Parties.Run.mk",
+     "Accounting.Assumptions.Parties.Run.overheard",
+     "Accounting.Assumptions.Parties.Run.sent",
+     "Accounting.Assumptions.Parties.Run.states",
+     "Accounting.Assumptions.Parties.Run.taken",
+     "Accounting.Assumptions.Parties.Run.truth",
+     "Accounting.Assumptions.Parties.auditorView",
+     "Accounting.Assumptions.Parties.instDecidableEqDest"
+    ]
+   },
+   "type_hash": "967034dac532b3c68f13d3fbe4c795315c6152d238cfb451ef4db5b3e953bbfa",
+   "unfolded_hash": "d5380f4bbc65593c052c9a2dff29b36c23950e3f776f8f04f79ac28f72193c46"
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -4127,9 +4179,9 @@
    "signature": ["Pous.Period.SecurityProofs.obligationHeld : Pous.Period.ObligationHeld"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
@@ -4140,14 +4192,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodCapacity : Pous.Period.PeriodCapacity"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": [
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.Audits.Accepts",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Instantiates"
-    ],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.Audits.Accepts", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
@@ -4158,9 +4205,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeld : Pous.Period.PeriodHeld"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309",
@@ -4184,15 +4231,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldCoins : Pous.Period.PeriodHeldCoins"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Fits",
-     "Pous.Period.Instantiates",
-     "Pous.Period.ReadsNoPrimitive"
-    ],
+    "assumptions": ["Pous.Period.Instantiates"],
+    "domain": ["Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.ReadsNoPrimitive"],
     "reads": []
    },
    "type_hash": "12162ed978d2f4b82b49a5f69bdc8df71a7620ed3600fa2dedef89650a68ec5f",
@@ -4204,14 +4245,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": [
-     "Pous.Guarantees.RoundsBound",
-     "Pous.P2.Assumptions.P2RingRoundSecureWide",
-     "Pous.Period.Fits",
-     "Pous.Period.ReadsNoPrimitive",
-     "Pous.Period.RingDeviceAt"
-    ],
+    "domain": ["Pous.Guarantees.RoundsBound", "Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingRoundSecureWide", "Pous.Period.ReadsNoPrimitive", "Pous.Period.RingDeviceAt"],
     "reads": []
    },
    "type_hash": "3297a948950cd089f3404b63c20c4e252366402b7b48ebc70784f0b249b96322",
@@ -4252,9 +4287,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldDeployed : Pous.Period.PeriodHeldDeployed"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Pous.Period.Instantiates"],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel"],
     "reads": []
    },
    "type_hash": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
@@ -4289,16 +4324,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldSha512 : Pous.Period.PeriodHeldSha512"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Hash.Assumptions.Sha512Prf",
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Fits",
-     "Pous.Period.Instantiates",
-     "Pous.Period.ReadsNoPrimitive"
-    ],
+    "assumptions": ["Hash.Assumptions.Sha512Prf", "Pous.Period.Instantiates"],
+    "domain": ["Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.ReadsNoPrimitive"],
     "reads": []
    },
    "type_hash": "9a23bf115f0d3f48f589eea3e677f7477beb892a128fe95bb27a0eef5b0708fe",
@@ -4309,16 +4337,9 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldSha512At : Pous.Period.PeriodHeldSha512At"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Hash.Assumptions.Sha512Prf",
-     "Pous.Guarantees.RoundsBound",
-     "Pous.P2.Assumptions.P2RingRoundSecureWide",
-     "Pous.Period.Fits",
-     "Pous.Period.ReadsNoPrimitive",
-     "Pous.Period.RingDeviceAt"
-    ],
+    "assumptions": ["Hash.Assumptions.Sha512Prf"],
+    "domain": ["Pous.Guarantees.RoundsBound", "Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingRoundSecureWide", "Pous.Period.ReadsNoPrimitive", "Pous.Period.RingDeviceAt"],
     "reads": []
    },
    "type_hash": "a171afb09bfd59cbe89aad4a6ecaf03d0b840c2c3d02e99a07f3498915b33225",
@@ -4346,16 +4367,9 @@
    "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Pous.P2.Assumptions.P2RingAuditSecure",
-     "Pous.Period.CountMeets",
-     "Pous.Period.DeviceModel",
-     "Pous.Period.Fits",
-     "Pous.Period.FixedBefore",
-     "Pous.Period.Instantiates"
-    ],
+    "assumptions": ["Pous.Period.Instantiates"],
+    "domain": ["Pous.Period.CountMeets", "Pous.Period.Fits"],
+    "open": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.FixedBefore"],
     "reads": []
    },
    "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b",
@@ -4367,9 +4381,9 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Pous.Period.Audits.Certified", "Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
-    "reads": []
+    "domain": ["Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [],
+    "reads": ["Pous.Period.Instantiates"]
    },
    "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b",
    "unfolded_hash": "aa16d3a67603e7624414180988c2f7136600b9b7621222bd7588a931fdb62eba"
@@ -8625,12 +8639,11 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
      "Accounting.Assumptions.CircuitCarriers",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -12525,34 +12538,6 @@
     "function": "MemoryChallenger.verdict",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
-    "function": "NciCheck.check",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
-    "function": "NciCheck.check",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.Decodes": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.Reports": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.Witnesses": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
    "PousCheck.Properties.SecurityProofs.deployed": {
     "function": "PousCheck.P2.Params.deployed",
     "outcome": "none"
@@ -13311,22 +13296,6 @@
     "function": "Spot.Fleet.run",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Throttles": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
     "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
     "outcome": "accept"
@@ -13387,10 +13356,6 @@
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
-    "function": "NciCheck.Baseline.evaluate",
-    "outcome": "accept"
-   },
    "Properties.RemoteAudit.liveIsRun": {
     "function": "Properties.RemoteAudit.Live.run",
     "outcome": "accept"
@@ -13417,38 +13382,6 @@
    },
    "Properties.Pouw.LiveSalt.acceptMeans": {
     "function": "PouwCheck.liveSaltCheck",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescAgrees": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescReports": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.DescThrottles": {
-    "function": "NciCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-    "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.liveCoinBinding": {
@@ -13553,10 +13486,6 @@
    },
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
     "function": "PouwCheck.Credit.Internal.credited",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-    "function": "NciCheck.Protocol.check",
     "outcome": "accept"
    },
    "Properties.Composition.acceptSame": {
@@ -13750,10 +13679,6 @@
       "outcome": "accept"
      }
     ]
-   },
-   "NciCheck.SecurityProofs.ServedComplies": {
-    "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
-    "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsCapPublished": {
     "function": "NetworkCheck.Period.check",
@@ -14010,6 +13935,98 @@
    "Properties.NetworkPeriod.rowsStateEmpty": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
+   },
+   "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
+    "function": "MemoryChallenger.Session.Properties.code",
+    "outcome": "none"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": {
+    "function": "InferenceOnlyCheck.check",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
+    "function": "InferenceOnlyCheck.check",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.Reports": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
+    "function": "InferenceOnlyCheck.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance": {
+    "function": "InferenceOnlyCheck.Theta.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+    "function": "InferenceOnlyCheck.Theta.evaluate",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
+    "function": "InferenceOnlyCheck.Protocol.check",
+    "outcome": "accept"
+   },
+   "InferenceOnlyCheck.SecurityProofs.ServedComplies": {
+    "function": ["InferenceOnlyCheck.Properties.Record.Form.read", "InferenceOnlyCheck.Properties.Record.Form.rate"],
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -14056,11 +14073,10 @@
    "Pous.Component.SecurityProofs.runAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts' honest instance: a key of the deployed LMS parameters signs a one-round session over setup's accepted two-block store that the compiled run check accepts",
    "Pous.Component.SecurityProofs.runBinds_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunBinds' honest instance: runAccepts_meets' run, accepted twice under one setup",
    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod over a finite set S of the sampling block's tile strata, one a contraction K (16,384 and 65,536 in H1's served layout), each s in S with its own N_s = |stratum sigma s|, K_d = k s, declared circuit, rho s and Lambda_s = j10rRate (k s) (rho s), so its own eps_s(j); the fixed words and the credits are summed over S and the error is the union bound, the sum over S of each stratum's delta_s + n(delta_bind + delta_ks) (the strata's permutations are independent coordinates of the draw, but every stratum's game reads the window's one round coin and the prover adapts across strata, so no sharper bound is claimed). Not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, as the one-stratum statement's. Period-wide premises, on the period's coins (StrataCoin): RegisteredBeforeDraw and SaltIsLiveCoin, as the one-stratum statement's (one registration and one salt a window), and StrataSampleIsCoin, listed under assumptions, in place of TileSampleIsCoin: the window's drawn proof blocks are exactly the union over S of the strata's coordinates (TileSampleIsCoin read per stratum is false at a window over two non-empty strata), a code fact once the verifier draws the tiles inside the stratified draw, one stratum a K (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin). Per stratum, at stratum s's view (pathsAt): the one-stratum statement's other premises, TileServiceSound, SharedNoiseLucks and UnitFixed among them. Proved from CircuitCreditMonitoringPeriod at each stratum's tileRun, as Proofs.Pouw.PeriodJ10R applies it, then the union bound (Proofs.Pouw.PeriodJ10RStrata). Honest: HonestStrata.strata_meets_period, strata_meets_stratum and strata_credit (HonestJ10R's instance at every stratum, every premise met); nontrivial: HonestStrata.strata_nontrivial (at the verdict that credits every window, the provers that fix no word break the bound once Lambda_s ln(1/delta_s) < n at each stratum) (Proofs.Pouw.PeriodJ10RStrata.Honest).",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
    "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols: the union bound at the compiled verifier of remote's list (Verity.Registration.Composite.remote, whose verifier is Core.Remote.V1.protocol, verity/remote/v1, Verity.verifier_remote, tiedSameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwCheck.PearlPlus.Protocol) and the inference-only policy, the policy and sampled proofs committed to one record and Pearl+'s run on it (Properties.Composition.AcceptSame, AcceptTied), with the same errors and Vocab, the policy's claim PolicyHeld of its sent case, and PoUW's claim Pearl+'s in MACs at the credit its check published; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved; InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis",
    "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
    "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.spotSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
-   "NciCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (NciCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
    "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
    "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
    "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
@@ -14068,7 +14084,6 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": "frozen (no-function,world-unlisted): ServiceSound from ProofSoundAt, a union bound over each window's sessions of the deployed check's layer (Properties.Accounting.JointBridge.Sessions.checkLayer, PouwCheck.protocol.check's acceptance and Public.drawn): no deployed function's outcome is one hypothesis, its sound case is the named premise Accounting.Assumptions.TS.ProofSoundAt, and its conclusion is a Pouw.RelativeSecurity.prob event that shape.events does not list; no new premise",
    "Pous.Period.SecurityProofs.pooledShort_log": "frozen (premise): periodHeld pooled over a monitoring period of U windows, each window's joint run, audit and other audits' coins fixed before its own capacity coins (Pous.Period.FixedBefore) and its strategy any under the device model: the probability that at least M windows are accepted with no break and a certificate short of the held state (Pous.Period.ShortAccepted) is at most delta', for every z > 1 and every M >= ((z - 1) U (delta + eps_max) + log (1 / delta')) / log z (Pous.Period.CountMeets). Its event's acceptance is an abstract audit's (Pous.Period.Audits.Accepts) over an abstract joint run of the device model, and it takes periodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates, the certificate's fit in the ring game's state bound, Pous.Period.Fits) and FixedBefore, none of them under shape.premises. delta' is delta_PoUS, a public deployment parameter that no component publishes.",
    "Properties.Pouw.PeriodJ10R.TileStratumAcceptProb": "unstated: proved in security_proofs by Properties.Pouw.PeriodJ10R.SecurityProofs.tileStratumAcceptProb (Proofs.Pouw.PeriodJ10R.Stratum): the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, since a uniform permutation's k-prefix misses B with C(N - |B|, k)/C(N, k) exactly (miss_eq), and that escape equals the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumAcceptProb_eq_proj). A lemma, not a premise: no guarantee states it, since its proof is security_proofs' and stratum is restated here until it moves to Definitions.",
@@ -14095,7 +14110,9 @@
    "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them",
    "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof",
-   "Properties.RemoteAudit.Subprotocol.PublishedQBytes": "unstated: on the subprotocol's acceptance, `q_bytes` plus `BLOCK_BYTES` times the pooled bound of the record's samples at `DELTA` is at most `BLOCK_BYTES` times its receipts, with no premise: what `RemoteAudit.Protocol.certify` computes; unproved, a statement that gets a guarantee entry beside `publishedEps`'s, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof"
+   "Properties.RemoteAudit.Subprotocol.PublishedQBytes": "unstated: on the subprotocol's acceptance, `q_bytes` plus `BLOCK_BYTES` times the pooled bound of the record's samples at `DELTA` is at most `BLOCK_BYTES` times its receipts, with no premise: what `RemoteAudit.Protocol.certify` computes; unproved, a statement that gets a guarantee entry beside `publishedEps`'s, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof",
+   "InferenceOnlyCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (InferenceOnlyCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with InferenceOnly.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and InferenceOnlyCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
+   "InferenceOnlyCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14959,7 +14976,7 @@
    }
   },
   "Commitments.FV3": {
-   "digest": "11b4707d2e489649023187f2d9968a77e274aafefdc256181a2dfb43a6b5f0bb",
+   "digest": "0250401b8dbaa73b7c0f534b51784108bd38fedede32231db6332ee68bce660f",
    "definitions": {
     "Flock.FV3.Domain": "36a9410f0bb424a2c38165b764ed69a1207ee86948fa393f705d1ddc0fbdd692",
     "Flock.FV3.Domain.climb": "99fcc386553517f89ea585cbe1cc9a8cee9e5fb19434a237ebb775106fb7ddeb",
@@ -14994,12 +15011,14 @@
     "Flock.FV3.Sha512.hash": "65eb0dc95ee344351cca2dd0437d7ff6313b9a242f42a499e16a680766319b0d",
     "Flock.FV3.Sha512.leafAs": "b0f201a7ace51ea5c4e9c2cf9b4abd20feb7efe774025a43fca5d29e44e3730c",
     "Flock.FV3.Sha512.node": "2b5a1399f0c3465babd3baa43fcd702f9e6b625f22297197a46124a1881ec695",
+    "Flock.FV3.Sha512.path": "32f46488fed3dcce02ce5a8a9fa3a127b3fb83f0c355a2c2802868d49a9ebee6",
     "Flock.FV3.Sha512.scheme": "0a2e745f691ffb3b648a322d3e45fb092e0e8cb428f54f10f1cbe498f488dffc",
     "Flock.FV3.Sha512.sibs": "fdcede501b2029181c011c52e3a6349b6b6fab3870183b59194d76dc645fbc21",
     "Flock.FV3.Sha512.taggedSha512": "7ce543bed847ab1a41082253496f3001a227e9eb208cb74f462b08fcc3a80355",
     "Flock.FV3.hash": "cc9e4c8cff49884c029e2dcd72eacfcff412be1262f7605a1340423d22de694c",
     "Flock.FV3.input": "40f6284bef69a01c2183abb181d134f0933c86d920af89dbdd6287181a68493c",
     "Flock.FV3.leaf": "4b7af71c043502c3b39a0c104b4738a7d793224b9a774a8f16ab9bd06cab139f",
+    "Flock.FV3.path": "44efffc387746567108f8f00ded084ce41dbdc0bbe0439e15e702a5c84dfdc99",
     "Flock.FV3.root": "6a22de22bbca2178bc03fcea105a21368f1b0b34dd561c136c085d25319ad51f",
     "Flock.FV3.uint": "1ac23222e67f6d80d0114374a4088da24daf3d7b1315e5239d849bb2606fce47"
    }
@@ -15602,10 +15621,9 @@
    }
   },
   "Definitions.Accounting.Assumptions.Stacking": {
-   "digest": "7ca9cf40b573c0ed2539443841c61596498817734f127b03ec9a8417a2184751",
+   "digest": "b8f75823131861d8621705f29586ec46e956b3d164aafae46358fab3398a9ec8",
    "definitions": {
     "Accounting.Assumptions.CircuitCarriers": "99f59232cf288d13cb7c5f394e99aa3978d8c3bc7d7c2f67e22acc18cc608b56",
-    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
     "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    }
   },
@@ -16476,6 +16494,18 @@
     "Accounting.Wipe.Strategy.wipe": "a325b788108fae99d194a8ece5cc8e5ac607aea67587bb567e1e5154219ecab4"
    }
   },
+  "Definitions.Assumptions.Accounting": {
+   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "definitions": {
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+   }
+  },
+  "Definitions.Assumptions.Hash": {
+   "digest": "b83985bbe9f93402e3f0cbebf4c0a96289357e5f389aea0dd3bc932f2327e130",
+   "definitions": {
+    "Hash.Assumptions.Sha512Prf": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
+   }
+  },
   "Definitions.Claims.Sampling": {
    "digest": "8e195d56a6d11ded245c351bc4d78d8ccbde867b671a6e4059752b389aaab858",
    "definitions": {
@@ -17340,12 +17370,6 @@
     "Hash.Assumptions.LmsForger.out": "dafe9f95753d92eca9a374d881df489b8bd4100eefa614e0a3fa18fb2601b800",
     "Hash.Assumptions.LmsForger.signed": "0b4c65cb0cf719411f5b39ca329d28293faa5fa6eaca1f670f42bba4821d8f17",
     "Hash.Assumptions.LmsUnforgeable": "53b0ceae6abe1e800ca2ed8e64c70ff33d5cf5656bcbb5427fa2ee7ccab09648"
-   }
-  },
-  "Definitions.Hash.Assumptions.Prf": {
-   "digest": "b83985bbe9f93402e3f0cbebf4c0a96289357e5f389aea0dd3bc932f2327e130",
-   "definitions": {
-    "Hash.Assumptions.Sha512Prf": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
    }
   },
   "Definitions.Hash.HistoryTable": {
@@ -21426,7 +21450,7 @@
    }
   },
   "MemoryChallenger.Records": {
-   "digest": "e9a94507b7261268b3bfda69986402a0c359d3f7e89e45b8d37192a108d3af6c",
+   "digest": "01ce8b79a23d15304fdc8f57e559676b25a69956de8a6c6d652261e6d1277802",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -21445,8 +21469,11 @@
     "MemoryChallenger.CoinTree.indices": "0e2a5a6b2f1d9384d8c065719db0a803e4ed76eda6d8c4007bee243d8838ec18",
     "MemoryChallenger.CoinTree.k": "0fe8aeeeb3186fb5063b393791f98f4236d413ca3dc958078ddf4a6e7e85e332",
     "MemoryChallenger.CoinTree.key": "e8816d917e1f7c0ccc43c08d439e4ad304c904862440adbfc63920be73f80a8d",
+    "MemoryChallenger.CoinTree.levels": "d8c5b8a4a23b24b3a0c941db0374b12a2dd982dfccb6cb9980e6617fbedf3352",
     "MemoryChallenger.CoinTree.make": "ecdcaed9b38f54aea78987c8574779aa108bb975e03a5bb48d289a05b9a242fa",
+    "MemoryChallenger.CoinTree.opening": "a9419c8c9dde0dcc9767ff959855b2fd22fad373d54c2c674bf9f414bc63a512",
     "MemoryChallenger.CoinTree.root": "6100657735795727f4f3c969337fe4da8714f3aecbc95171fdd107ee517664e2",
+    "MemoryChallenger.CoinTree.salts": "21721c80f3a11baa192bf2114e3d194b65f8f4f66aabf5ba98e0b005e8ab4d24",
     "MemoryChallenger.CoinTree.session": "c904b761372eb2eb6541aeaa462b3d624c67d24df9b4b358d0c7fc360701a82b",
     "MemoryChallenger.DRAW_BYTES": "68f85e41afb606989e1aaa0bbfe522d5c78ce32c0feecfbd531c263925303fe0",
     "MemoryChallenger.E": "a375a27998813b4bdcd78a978652f133230b90354170dd67d190c2b8b6d02730",
@@ -24378,6 +24405,12 @@
     "Properties.Requirement.wiring": "f07bdcd481f3743cb9a717f4955604d5673374699246cf53592ee35907ddc365"
    }
   },
+  "Properties.Assumptions.Pous": {
+   "digest": "541e9a70b9b88b65ca9e21ccedae68349a28c68d0b8fe44e25130eed263e13c2",
+   "definitions": {
+    "Pous.Period.Instantiates": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e"
+   }
+  },
   "Properties.Attest": {
    "digest": "ad1003ceed60b3eab97d8d9dd5ca53b2f5aa3fc3111fc410e39fe91b20c645f6",
    "definitions": {
@@ -25233,6 +25266,51 @@
     "MemoryChallenger.Properties.treeStrings": "3d99dea70208f39c41d1968350b39acae0c06cca6efe071224abeae848f97f27"
    }
   },
+  "Properties.Pous.MemoryChallenger.Session": {
+   "digest": "2a9e89d6a3a39e1ae2d887d28a31050364bf299454e176a7902a6f03ec8087b3",
+   "definitions": {
+    "MemoryChallenger.Session.Properties.AuditorSeesDigests": "2cc9af34d7fd6af5c99eb80a9c776dd8b69b1923ee99db1c1f25b2032dde4992",
+    "MemoryChallenger.Session.Properties.AuditorSeesSkeletonAt": "286b03f5bdf675d4754b4128355099f00746816beaeed9a8eb911708b3145de4",
+    "MemoryChallenger.Session.Properties.Ch": "d1cc517fb053f1e0236e0b6b2760dfc968724b2e86a982e6a330eee142ef319e",
+    "MemoryChallenger.Session.Properties.Ch.casesOn": "a79fec91a297918526117d682125eed75d8135d49090bc65397ee3916a5e560d",
+    "MemoryChallenger.Session.Properties.Ch.challenge": "8b6c8d28260a317aeb094d66d0a4d0f88e347cda3e9875cd2541e94e5f798620",
+    "MemoryChallenger.Session.Properties.Ch.rec": "f8d30cb904ea28796aa60ca933e0aa492a975e19d98a1a1d109895d1a2e81077",
+    "MemoryChallenger.Session.Properties.Ch.report": "93a467ae715992c99e7cf7a041c7c7a3bb8782a72983680a6833d989717fe56c",
+    "MemoryChallenger.Session.Properties.Msg": "554422fc728dcdea36c00a207d01aaeb074518554c3134f66693874dfcc3b3c6",
+    "MemoryChallenger.Session.Properties.Msg.done": "bdbbdec64dadabcfd35b77dbf0127f95cc5a71a525b67d4bfc6f52a6eec9c9d1",
+    "MemoryChallenger.Session.Properties.Msg.index": "71c805c0fd13633a22595385e9cd40dfee8c1194b03eaae60317478b9d0927fd",
+    "MemoryChallenger.Session.Properties.Msg.report": "12316f6f3f3b98078180e200c5cddb670364a154443242e7602eb891025ad457",
+    "MemoryChallenger.Session.Properties.Msg.warmup": "730d7ecd51fae85c0d82831e6652aeb5379724f9bbe40190d5ed9c98dd303144",
+    "MemoryChallenger.Session.Properties.Params": "bc5d22732ef9f95a0e4de698d1684b39478e934db6a3398276b75e691eb412aa",
+    "MemoryChallenger.Session.Properties.Params.binding": "5cf041e82ec317e1df5fd82adb7f8b76c79c823554e0c5c42a71ae69fd607a4f",
+    "MemoryChallenger.Session.Properties.Params.blockBytes": "3f7aa4f9667ed1758fbc79abc2b254e6f4915187814be51fd1c0b285e5a4abe4",
+    "MemoryChallenger.Session.Properties.Params.closing": "189ae930fb22749991e54d0c7a651a29e42ea067764e09bd6bc46354a9078015",
+    "MemoryChallenger.Session.Properties.Params.coins": "0333f1083798d55d1389d99a3db8d2a18656abcc66ac89b40e277b972e90b263",
+    "MemoryChallenger.Session.Properties.Params.commitment": "07370ddfd24bb75a3c660abc92636e704268ea77bbdaa848c12abc712f55bb90",
+    "MemoryChallenger.Session.Properties.Params.limitNs": "0eec80b629998964d3b88a08ff3403a067ff3ab6e3558d2df87950c32358a1d5",
+    "MemoryChallenger.Session.Properties.Params.publicKey": "bff0bd162785473747ad53f80978af162e7d8dac2ae6e95f23ad60a7d361f995",
+    "MemoryChallenger.Session.Properties.Params.scheme": "a36f0b4b42d54b0b292399e7a5cbd0dacae3500ce88d279ecb4ce9e55fc76491",
+    "MemoryChallenger.Session.Properties.Params.sign": "09e1950c32c9aad0e95ef13dfa2f35a7b28092992ed6e8cd36016d76389d1e72",
+    "MemoryChallenger.Session.Properties.Seen": "8114f05e228a79695a15da6946e50610779b09d989ef2b9e4c0670db508dffad",
+    "MemoryChallenger.Session.Properties.Seen.digest": "8af5557521e565aa463dc71f6f41e847ad4a2f7d0a2c96a738b78ee347e9a9dd",
+    "MemoryChallenger.Session.Properties.Seen.receiptNs": "5d92d87f68c53ee9b0193fb8896bd920de5b07edccf97369a3bbc97a86ae49d6",
+    "MemoryChallenger.Session.Properties.Seen.sendNs": "f31adb1f953101c65234ff90be02834757faee21e8e548d317e80e71b179eff6",
+    "MemoryChallenger.Session.Properties.Seen.size": "5e0f67191ef846157da422444f1410e8d964110db1953b5c1d357637b25a9e7c",
+    "MemoryChallenger.Session.Properties.Step": "325076aa0c61199d0623921a2b49218997eb579da10198c088d3ccff0c75c34f",
+    "MemoryChallenger.Session.Properties.Step.casesOn": "deefe14649f52569c5f5d10d818d71e93f0d53864e9d3fd506f462683a8d058c",
+    "MemoryChallenger.Session.Properties.Step.rec": "2c1a8c689d4f0c8294ff14f4d4f06218d7467e747dc0381739c1b2a5b871915c",
+    "MemoryChallenger.Session.Properties.Step.round": "694244dd4567fb7a5ff07e5e5fe937e399f33435f8464c9b938a5cb651ae50fb",
+    "MemoryChallenger.Session.Properties.Step.skeleton": "63e4e8bf48550c252893e91f79b32624ebef115278f83253691287d0df316a23",
+    "MemoryChallenger.Session.Properties.Step.warmup": "d910e5e6c2351ce4990875b957390917cd58b8bceefc55cb4d5ef8491c4eef9c",
+    "MemoryChallenger.Session.Properties.code": "6039c6582f41e4e839661960eb43e0a31895a82db52586f5b9e2e6570b7b2214",
+    "MemoryChallenger.Session.Properties.codeOn": "7cf29e2aa0613093bb94b35c9d9657b32f3c74f2e3ef40f560ad045ffb64d960",
+    "MemoryChallenger.Session.Properties.inClear": "33a2dec2814689572842c7da42a2665611850a8167e72e0e24f3b04c43921872",
+    "MemoryChallenger.Session.Properties.reportPublic": "ca3c4f571227e3a7816c898a7564c0f0e1528e9a1b5b4552a295fc90591e01b5",
+    "MemoryChallenger.Session.Properties.roundSeen": "35679b2095b14e003e6bab18ba32543035ebc30723a85f80aaf3b814885b89ff",
+    "MemoryChallenger.Session.Properties.seen": "1a776558bddcb8f52ead6073db8a30b2e4600021b126fe1e5c3aa328de0da74b",
+    "MemoryChallenger.Session.Properties.seenCode": "db167dd3c3ba0212886fbe0ad6efe44f65538513d7f84bff75503a0116a3272b"
+   }
+  },
   "Properties.Pous.Obligation": {
    "digest": "3e82f123b4093cd34f4c57ab24f84c417ef804c891e769f2a67fa28b1cf489a4",
    "definitions": {
@@ -25240,7 +25318,15 @@
    }
   },
   "Properties.Pous.Period": {
-   "digest": "83564e1f922394f6f522b5f8b6d301c52ed604e8d356eddadc1a39b6e3a01bfc",
+   "digest": "fb880be420dd3766b9e3e09960eef6956283327b1a58ada46fed3ecb5d1c4ce9",
+   "definitions": {
+    "Pous.Period.DeviceModel": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
+    "Pous.Period.PeriodCapacity": "6deff84b6199c805126cc0d8e2d90a05a009dfef0d053d64d4171780fd3be117",
+    "Pous.Period.PeriodHeld": "d06dcf0011fc36e635235ec050e48099130853e2e6fd7d132251099c902e3162"
+   }
+  },
+  "Properties.Pous.Period.Audits": {
+   "digest": "b396e74c8e078d53561494c94c11b5fa12b54bba1bcd0aa6f540a23ff46164f6",
    "definitions": {
     "Pous.Period.Audits": "62adb11e6027a89511984a34f72fdb381632569f16085d8fcce4bd84631a51b0",
     "Pous.Period.Audits.Accepts": "9c59a62ff9f63e44a0a428705d76fa30ccfb0d8ad8075c50591f2bc4c108c803",
@@ -25258,11 +25344,7 @@
     "Pous.Period.Audits.store": "48c5ed32a90b4013cec8cece8b54fbf47e8f6e42ac2dfc78780a55f232add1f8",
     "Pous.Period.Audits.trace": "b778ea243aac385cc95584b8c89aba65fe095dab2d1d221df0cf2ae76cacac42",
     "Pous.Period.Audits.trusted": "b17da66a5d8acb82246074cec18a14315b812993923ce16038faa44d919ae0f1",
-    "Pous.Period.DeviceModel": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
     "Pous.Period.Drawn": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-    "Pous.Period.Instantiates": "648237f7867e6375e99c03eb5907158ed71c303e98e34cca4c301d296a55253e",
-    "Pous.Period.PeriodCapacity": "6deff84b6199c805126cc0d8e2d90a05a009dfef0d053d64d4171780fd3be117",
-    "Pous.Period.PeriodHeld": "d06dcf0011fc36e635235ec050e48099130853e2e6fd7d132251099c902e3162",
     "Pous.Period.Strategy": "ed199d30a98be5fa95987d783e637fca18a1bee1dfdec8739d04b0e05473b050",
     "Pous.Period.Strategy.pre": "9b452a9084c82c7df820973e2057765e71fa974a1d28f092add285d92c28ce74",
     "Pous.Period.Strategy.step": "763d2ff6837aaaf6be99aecf1f11a06768e76fe56981c5c0c9e670b5cbb3ec02"
@@ -26710,9 +26792,9 @@
    }
   },
   "RemoteAudit.Protocol": {
-   "digest": "147f3643c503b7a1b3d650abb2ecf624fbc594ce3ffcf87065d302ce2f35e27c",
+   "digest": "336c9159eb47946ca6e69f8611594183eafbc5f7e8ceec4f76e0b129bbfa964b",
    "definitions": {
-    "RemoteAudit.Protocol.DELTA": "ebf9a44a7dd92b1cf379f2a61b40202693a821d055fff22fb0fd693aad616177",
+    "RemoteAudit.Protocol.DELTA": "668f6cf3703c5fa1fac6d5dca8e0320f5ecf6a63012b59ecbe49cd394bd99f35",
     "RemoteAudit.Protocol.Evidence": "8f1e577fa67565d95c78100ad54ccab0f0f435a936e773610b1066ce5805a8d9",
     "RemoteAudit.Protocol.Evidence.appendCoins": "6008c3d4107d1c095a04071c82482027cd921e8cd7111d1ded1167cb9200e003",
     "RemoteAudit.Protocol.Evidence.coins": "95679a98f56076b0535c53a8e37265eee6461ba6515898c414a605b69e05231e",

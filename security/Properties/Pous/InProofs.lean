@@ -2,6 +2,7 @@ module
 
 public import MemoryChallenger.Verdict
 public import Properties.Pous
+public import PousCheck.SetupInProofs
 public import Definitions.Core.Interaction
 
 /-!
@@ -21,8 +22,7 @@ on this branch yet, so the statement takes them as parameters at the signature i
 `rate:8828/B` of one `PousP2SetupCheck_v1` instance a block of `C*`. `SetupInProofsDeployed` says that a fixed extractor
 recovers a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to their slice of the registered `W`, except
 `ε_Pa + ε_ks + ε_bind` (`ε_Pa ≤ 0.99^8828`, the chance the sample misses `⌊B/100⌋ + 1` wrong blocks) and the collision
-term. `check` and its `Claim` are not on this branch yet, so the statement takes them as parameters; the deployed instance
-is `SetupInProofsDeployed H SetupInProofs.Claim SetupInProofs.check`.
+term.
 
 Both are stated and not proved. What closes them is proofs' two forms, through the lemmas of
 `Proofs.Properties.Pous.InProofs` and `Proofs.Properties.Pous.SetupInProofs`:
@@ -77,20 +77,19 @@ noncomputable def undecoded (q : P2.Params) (salt W : ByteArray) (cs : Fin q.blo
     (W.extract (u.val * q.payloadBytes) (u.val * q.payloadBytes + q.payloadBytes))
 
 /-- **PoUS's setup checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityHorizonCarried` at
-`q = 8828/B` closes it through `setupGives`. For a setup check `check` on a claim `Claim` (SETUPUNIT's, not on this
-branch yet), the parameters `q`, the commitment `c`, the registered weights `W` (each row padded to its slots,
-SETUPUNIT's `padded`), and a setup verifier `V` that accepts only a claim (`claimOf`) that `check` accepts: a fixed
+`q = 8828/B` closes it through `setupGives`. For the parameters `q`, the commitment `c`, the registered weights `W` (each row
+padded to its slots, SETUPUNIT's `padded`), and a setup verifier `V` that accepts only a claim (`claimOf`) that
+`SetupInProofs.check` accepts: a fixed
 extractor `E` recovers, by rerunning any prover, a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to their
 slice of `W`, except `εPa + εKs + εBind` and `Claims.KS`'s collision term at `γ`. -/
-def SetupInProofsDeployed (H : Claims.Msg → Claims.Msg) (Claim : Type)
-    (check : P2.Params → SetupProtocol.Commitment → Claim → Core.Outcome SetupProtocol.Public Unit)
-    (εPa εKs εBind γ : ℝ) : Prop :=
+def SetupInProofsDeployed (H : Claims.Msg → Claims.Msg) (εPa εKs εBind γ : ℝ) : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (W : ByteArray)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
-    (claimOf : List Claims.Msg → Option Claim),
+    (claimOf : List Claims.Msg → Option _root_.PousCheck.SetupInProofs.Claim),
     (∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
-        ∃ cl pub, claimOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some cl ∧ check q c cl = .accept pub ()) →
+        ∃ cl pub, claimOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some cl ∧
+          _root_.PousCheck.SetupInProofs.check q c cl = .accept pub ()) →
     ∃ E : Claims.Extractor Coin (Fin q.blocks → ByteArray) V,
       Claims.KS H V (fun _ cs => (undecoded q c.salt W cs).card ≤ q.blocks / 100) E (fun _ => εPa + εKs + εBind)
         fun _ => γ

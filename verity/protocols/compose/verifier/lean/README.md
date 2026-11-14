@@ -71,7 +71,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../../../accounting/certifier/verifier/lean`) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../../../accounting/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused, and the two-stage audit read, checked and refused last while its switch is off) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../proofs/spot_flock/verifier/lean`) | `verity/sampled-proofs/v1` |
-| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../../../policy/inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
+| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../policy/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../accounting/pous/verifier/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../../../accounting/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../accounting/pous/device/lean`) | `verity/wipe/v0` |
@@ -89,7 +89,7 @@ The inference-only policy has no rounds and reads no coins. Its case is the regi
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
 SPOT's audit commits to) and the division with θ and θ's provenance (evidence). It accepts exactly
 when the record names the registered circuit (its `program` is the circuit's SHA-512, as SPOT's audit asks of its
-own record) and the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. Each product ties
+own record) and the policy's check (`InferenceOnlyCheck.Theta.evaluate`) finds that the division complies. Each product ties
 the policy's record to SPOT's (one record, below), so the circuit the policy checked is the one SPOT
 audited.
 
@@ -155,11 +155,11 @@ Lean to:
   two-stage form's params through its own difftest's twin (`sampled_two.py`) and its evidence up to its keys;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
-- the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_baseline`) behind
+- the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_theta`) behind
   the protocol's decoders, on θ's provenance difftest's declarations with at most one change, from its `drawn`, or on
   the one-stage audit's own registered circuit and record (`policy_on`);
 - the wipe: its mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`;
-- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period.audit`
+- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period_prover.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
   those verifiers (`../../../accounting/pous/verifier/check/tests/test_run_protocol.py`, `../../../accounting/poub/verifier/lean/tests/test_p2_case.py`).

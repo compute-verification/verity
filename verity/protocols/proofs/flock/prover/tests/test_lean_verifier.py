@@ -291,7 +291,7 @@ def test_unit_sample_check(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_sample_is_held_to_its_registered_law(tmp_path):
+def test_a_sample_is_held_to_its_registered_sampling_design(tmp_path):
     """`draw --registration F` and `draw-test --registration F`: the sampling design is the one the window registered before any coin,
     so a sample at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -391,7 +391,7 @@ def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
            "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0"]}}}
     (tmp_path / "q.json").write_text(json.dumps(obj))
     flags = ["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "q.json")]
-    law = {"law": "stratified", "k": 4, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "k": 2},
+    sampling_design = {"law": "stratified", "k": 4, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "k": 2},
                                                    {"template": "T1_v0", "units": [[2, 5]], "k": 2}]}
     import random
     rng = random.Random(20260927)
@@ -399,8 +399,8 @@ def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
         src = rng.randbytes(2 * 2 * 9 + 64 + 2 * 2 * 9 + 64)
         (tmp_path / "s.bin").write_bytes(src)
         d = _lean_sample_obj([*flags, "--stratified", "4", "--stream-file", str(tmp_path / "s.bin")])
-        assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 6
-        assert d["units"] == ref.reference_sample(law, src)
+        assert {k: d[k] for k in ("law", "k", "strata")} == sampling_design and d["population"] == 6
+        assert d["units"] == ref.reference_sample(sampling_design, src)
     d = _lean_sample_obj([*flags, "--stratified", "4"])
     assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2
     assert [s["k"] for s in _lean_sample_obj([*flags, "--stratified", "1"])["strata"]] == [1, 1]
@@ -452,17 +452,17 @@ def test_work_sample_from_the_verifiers_own_program(tmp_path):
     ref = _stratified_agree()
     table = _work_program(tmp_path)
     flags = table("w.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": 0})
-    law = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "floor": 1, "k": 2},
+    sampling_design = {"law": "work", "k": 2, "strata": [{"template": "T0_v0", "units": [[0, 2], [5, 6]], "work": 3, "floor": 1, "k": 2},
                                              {"template": "T1_v0", "units": [[2, 5]], "work": 1, "floor": 1, "k": 1},
                                              {"template": "T2_v0", "units": [[6, 10]], "work": 0, "floor": 1, "k": 1}]}
-    need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+    need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in sampling_design["strata"])
     rng = random.Random(20260929)
     for _ in range(20):
         src = rng.randbytes(need)
         (tmp_path / "s.bin").write_bytes(src)
         d = _lean_sample_obj([*flags, "--work", "2", "--stream-file", str(tmp_path / "s.bin")])
-        assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 10
-        assert d["units"] == ref.reference_sample(law, src)
+        assert {k: d[k] for k in ("law", "k", "strata")} == sampling_design and d["population"] == 10
+        assert d["units"] == ref.reference_sample(sampling_design, src)
     # W = 3·3 + 1·3 = 12: sized by work, floored at one, capped at n_s
     for k, want in {"1": [1, 1, 1], "4": [3, 1, 1], "10": [3, 3, 1]}.items():
         assert [s["k"] for s in _lean_sample_obj([*flags, "--work", k])["strata"]] == want, k
@@ -667,12 +667,12 @@ def test_closure_sample_proves_the_verifiers_closure(tmp_path):
     rng = random.Random(20260929)
     for _ in range(10):
         plain = _lean_sample_obj([*flags, "--work", "2"])
-        law = {k: plain[k] for k in ("law", "k", "strata")}
-        need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
+        sampling_design = {k: plain[k] for k in ("law", "k", "strata")}
+        need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in sampling_design["strata"])
         src = rng.randbytes(need)
         (tmp_path / "s.bin").write_bytes(src)
         d = _lean_sample_obj([*flags, "--work", "2", *cl, "--stream-file", str(tmp_path / "s.bin")])
-        assert d["units"] == ref.reference_sample(law, src)
+        assert d["units"] == ref.reference_sample(sampling_design, src)
         assert d.get("closure", []) == closure_of(d["units"])
     d = _lean_sample_obj([*flags, "--work", "2", *cl])
     while not d.get("closure"):

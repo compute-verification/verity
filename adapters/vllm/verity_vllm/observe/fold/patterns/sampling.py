@@ -13,6 +13,7 @@ from verity.circuits.defs import bind
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import sampling as _sampling
 
+from verity_vllm.errors import Refused
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
 from verity_vllm.observe.fold.patterns.ops import (
@@ -650,5 +651,5 @@ def with_sampler_construction(profile, construction: str | None):
     if construction is None:
         return profile
     if construction not in TargetProfile.SAMPLER_CONSTRUCTIONS:
-        raise SystemExit(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
+        raise Refused(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
     return replace(profile, patterns=[replace(p, construction=construction) if isinstance(p, TokenSelectGumbelTopP) else p for p in profile.patterns])

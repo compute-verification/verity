@@ -1177,7 +1177,7 @@ class LinkWindows:
         if k is not None and not (type(k) is int and 1 <= k <= n):
             raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
         commitment = self._committed(stream, roots)
-        rule = S.All() if k is None else S.Law(f"rate:{k}/{n}")
+        rule = S.All() if k is None else S.SamplingDesign(f"rate:{k}/{n}")
         if k is not None and callable(getattr(coins, "commit", None)):
             coins.commit(bytes.fromhex(commitment))
         read = bytearray()
@@ -1186,7 +1186,7 @@ class LinkWindows:
             b = coins(m)
             read.extend(b)
             return b
-        draw = S.select_draw(rule, S.selection_law(rule, n), n, reading)
+        draw = S.select_draw(rule, S.selection_sampling_design(rule, n), n, reading)
         return {"format": PERIOD_DRAW, "stream": stream.digest, "law": "subset", "k": draw["k"], "population": n,
                 "units": list(draw["units"]), "roots": roots, "commitment": commitment, "read": read.hex()}
 
@@ -1287,7 +1287,7 @@ class LinkWindows:
                           "accepted": accepted, **sampled})
         out = {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
         if drawn is not None:
-            bound = OA.core_law({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
+            bound = OA.core_sampling_design({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
             out |= {"why": why,
                     "selection": {**{k: drawn[k] for k in ("law", "k", "population", "commitment")}, "units": expected,
                                   "by": by},

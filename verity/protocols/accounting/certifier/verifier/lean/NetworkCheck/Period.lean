@@ -7,8 +7,8 @@ public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
-public import NciCheck.Desc
-public import NciCheck.DefinitionDigest
+public import InferenceOnlyCheck.Desc
+public import InferenceOnlyCheck.DefinitionDigest
 public import NetworkCheck.Period.ConnectionRows
 public import NetworkCheck.Period.Start
 meta import NetworkCheck.Check
@@ -18,8 +18,8 @@ meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
-meta import NciCheck.Desc
-meta import NciCheck.DefinitionDigest
+meta import InferenceOnlyCheck.Desc
+meta import InferenceOnlyCheck.DefinitionDigest
 meta import NetworkCheck.Period.ConnectionRows
 meta import NetworkCheck.Period.Start
 
@@ -106,7 +106,7 @@ and the schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 
 gate is a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
 egress gate is an input (`NetTiming.BoundaryGates.Fits`), so `K` counts only what a Program that computes its egress rows
 leaves free. The rest of what `NetTiming.BoundaryGates.Fits` asks is read off the description (`scanOf`): the Program laid out
-as the decoder lays one out and within its resolution's walk (`NciCheck.Desc`), every egress leaf returned by the root
+as the decoder lays one out and within its resolution's walk (`InferenceOnlyCheck.Desc`), every egress leaf returned by the root
 and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
 ingress row's. A compute audit's free inputs are in the term of each link-window whose scan's `prog` is its output
 (`tiedAudits`), and its other layout terms and its units' bits are in no term.
@@ -348,7 +348,7 @@ namespace NetworkCheck.Period
 open Lean (Json toJson)
 open Flock (V)
 open NetworkCheck.Check (Certificate)
-open NciCheck.DefinitionDigest (closureDigest)
+open InferenceOnlyCheck.DefinitionDigest (closureDigest)
 
 def protocolId : String := "verity/certifier/v0"
 def commitmentTag : String := "verity-network-certifier/period/v0"
@@ -589,6 +589,7 @@ structure Facts where
 
 def isDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
+
 def rowsParamsKeys : List String :=
   ["audits", "cells", "circuit", "first", "jitter", "keys", "link", "lms", "program", "scan", "schedule", "windows"]
 
@@ -752,7 +753,7 @@ def templateNodes (P : Flock.Program.Prog) : List Nat :=
 def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
   match a.seq.parts.toList with
   | [.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
-    | some n => if NciCheck.Desc.isInputNode P n then some k else none
+    | some n => if InferenceOnlyCheck.Desc.isInputNode P n then some k else none
     | none => none
   | _ => none
 
@@ -773,7 +774,7 @@ def inputsRead (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pks : Li
     | [.affine false k 0 c] => nodes[k]?.map (·.members) == some c
     | _ => false) &&
   pks.all (fun pk => nodes[pk]?.map (·.members) == some entries) &&
-  (List.range nodes.size).all fun k => !NciCheck.Desc.isInputNode P nodes[k]! || pks.contains k || ks.contains (some k)
+  (List.range nodes.size).all fun k => !InferenceOnlyCheck.Desc.isInputNode P nodes[k]! || pks.contains k || ks.contains (some k)
 
 /-- Whether two types have as many leaves, each of one width, the same in both (`Flock.Program.Widths.homo`): what a
 tie of two rows of gates, leaf by leaf, needs of their types. From the types' structure, no walk over their leaves. -/
@@ -922,13 +923,13 @@ refuses, and `K` would count the free inputs of a Program that only compares its
 
 Then what `NetTiming.BoundaryGates.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
 the description, at the cost of its nodes and returns: the Program is laid out as Flock's decoder lays one out and
-within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
+within what its resolution walks (`InferenceOnlyCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
 returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); the
 ingress template's row, and every template's row, state and egress argument, is one input node's leaves (`inputArg`),
 so each ingress gate is an input and a template reads only input gates outside its own; no egress template's argument
 is the ingress rows' input node, so no egress gate depends on an ingress gate; and the Program is topological
-(`Prog.orderViolation`, as `NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it.
+(`Prog.orderViolation`, as `InferenceOnlyCheck.Desc.evaluate` checks it), so a gate reads only gates before it.
 
 The ingress template's entry ports `prog<j>` all have one type, a slot entry's, and lane `j`'s read one input node of
 its own, distinct from every other lane's and from the rows, lane `j`'s slot entries (`T / every` rows each, `lanes ·
@@ -990,7 +991,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need (inputs == paramBits ds.params + T * paramBits (di.params.extract 0 2) + T * paramBits de.params +
       s.lanes * nb * bitsOf ety)
     "scan: an input gate that is no template's row, state or egress parameter, nor one of the slot entries"
-  need (NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog)
+  need (InferenceOnlyCheck.Desc.rootLaidOut prog && InferenceOnlyCheck.Desc.inputsAtRoot prog && InferenceOnlyCheck.Desc.walkable prog)
     "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
       (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
   let ke := (templateNodes prog).getLast?.getD 0
@@ -1013,7 +1014,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let pks := a0.map fun a => (a.memberRef 0 0).i
   need (a0.all (fun a => !(a.memberRef 0 0).p) && decide pks.Nodup && pks.all fun pk =>
       rows != some pk && match root.body.nodes[pk]? with
-        | some n => NciCheck.Desc.isInputNode prog n
+        | some n => InferenceOnlyCheck.Desc.isInputNode prog n
         | none => false)
     "scan: bucket 0's prog<j> reads no input node of lane j's own, its slot entries', distinct from every other lane's"
   need (readsEntries xi 2 0 s.every ety.leaves pks)

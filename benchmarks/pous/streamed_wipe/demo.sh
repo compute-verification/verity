@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One streamed wipe of one GPU's memory, as one Attempt. wipe_period's leg on this node: the prover keeps the
+# One streamed wipe of one GPU's memory, as one Attempt. wipe_run's leg on this node: the prover keeps the
 # fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory challenger
 # streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
 # the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
@@ -21,7 +21,7 @@
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.protocols.accounting.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
+#                        there, e.g. 'python -m verity.protocols.accounting.pous.device.wipe_challenger --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
@@ -180,7 +180,7 @@ EOF
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
-  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/verifier/wipe_stream.c -o "$S/wipe_stream-check"
+  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/device/wipe_stream.c -o "$S/wipe_stream-check"
   if [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"

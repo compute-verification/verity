@@ -89,7 +89,7 @@ DEPENDENCIES = {"numpy"}
 #: the hardware's cards, the Site's types, SPOT's planning beside its verifier, and a protocol's manifest with the
 #: monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
-               "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/proofs/spot",
+               "verity/claims", "verity/device.py", "verity/protocols/proofs/spot",
                "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
@@ -811,7 +811,7 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
-                         "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
+                         "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
         "x/loader.py": ("import importlib.util\nfrom x import config\ndef load(name, directory=config.SESSION):\n"
                         "    def named(n):\n        return n\n"
@@ -824,7 +824,7 @@ def test_a_benchmarks_import_is_found() -> None:
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
         "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
-        "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/rho']"],
+        "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
     }, found

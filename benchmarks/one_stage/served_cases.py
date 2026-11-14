@@ -132,7 +132,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for SPOT (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's SPOT case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
@@ -320,7 +320,7 @@ def __getattr__(name: str) -> Any:
 
 
 def _reference():
-    """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
+    """`inference_only_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
     return policy().reference()
 
 

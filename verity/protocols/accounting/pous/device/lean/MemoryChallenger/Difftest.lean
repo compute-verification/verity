@@ -13,10 +13,10 @@ public import MemoryChallenger.SetupRecord
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
 `MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the setup record's
-bytes, message and check (`SetupRecord`), the streamed wipe's signed message, its start and end messages and an egress
-count's unit and what a composition's tie reads off a wipe's case
-(`MemoryChallenger.WipeCount`), and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the `range-u64` domain id, the
-period tree's root, the verifier's acceptance of a period and the liveness check).
+bytes, message and check (`SetupRecord`), the streamed wipe's signed message, its start and end messages, an egress
+count's unit and what a composition's tie reads off a wipe's case (`MemoryChallenger.WipeCount`), and a device's HSS
+role digests and checks (`Lms.Hss`, `Attest.Period`: the `range-u64` domain id, the period tree's root, the verifier's
+acceptance of a period and the liveness check).
 `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
 run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/

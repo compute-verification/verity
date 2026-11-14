@@ -510,7 +510,7 @@ class Case:
                     self.stages, {**(self.public or {}), **public} if public is not None else self.public)
 
 
-def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
+def params(program, query: dict, sampling_design: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
            log: list | None = None, anchors: list | None = None, work_table: dict | None = None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
            schemas: dict | None = None) -> dict:
@@ -518,7 +518,7 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
     when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
     function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
     registered."""
-    return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
+    return {"anchors": list(anchors or []), "delta": delta, "law": sampling_design, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
             **({"parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]} if registered is not None else {}),
@@ -751,8 +751,8 @@ def a0(run: Run) -> Iterator[Case]:
     leaf_layer, prov["leaf_layer"] = public_digest(run, f"{base}/stage/pub-{n}.bin", f"{base}/session/archive-put.log")
     live = live_line(run.path(f"{base}/session/prove.log")) or {}
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{base}/session")
-    law = summary["law"]
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    sampling_design = summary["law"]
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=live.get("instances", -1), sessions=sessions, session_roots=live.get("roots") or {},
                  served=None)
     prov["evidence"] = "audit.json; instances and session roots from session/prove.log's LIVE line"
@@ -778,7 +778,7 @@ def a0(run: Run) -> Iterator[Case]:
     neg = run.json(f"{base}/negatives.json")
     src = f"{base}/negatives.json"
     draw = a["draw"]
-    k = law["k"]
+    k = sampling_design["k"]
     smaller = R2.program([(template, n)], mixed=False, version=population_version(program))
     spart = with_program(partition, smaller)
     first = rec["roots"][0]
@@ -863,10 +863,10 @@ def a0_lean(run: Run) -> Iterator[Case]:
                                    for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
                                   rec, f"{FLOCK_CIRCUIT_BINDING} hidden")
     prov["leaf_layer"] = "the record's: the run kept no copy of the public file (stage and archive were scratch)"
-    law = DR.parse_design(state["law"])
+    sampling_design = DR.parse_design(state["law"])
     served = run.json(f"{base}/served-draw.json")["units"]
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or []
-    p = params(program, query, law, ports, rec["leaf_layer"], delta_of(state["delta"]), partition=partition)
+    p = params(program, query, sampling_design, ports, rec["leaf_layer"], delta_of(state["delta"]), partition=partition)
     e = evidence(a, instances=len(DR.proved(a["draw"])), sessions=sessions, session_roots=a["statement"].get("roots") or {},
                  served=served)
     prov["evidence"] = ("audit.json; served = served-draw.json; the sessions' roots the statement's; instances the draw's "
@@ -981,8 +981,8 @@ def a2(run: Run) -> Iterator[Case]:
     program, part, prov = v2.program, v2.part, v2.prov
     live = live_line(run.path(f"{base}/session/prove.log")) or {}
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{base}/session")
-    law = {"k": summary["k"], "law": "subset"}
-    p = params(program, v2.query, law, v2.ports, v2.leaf_layer, delta_of(summary["delta"]), partition=part)
+    sampling_design = {"k": summary["k"], "law": "subset"}
+    p = params(program, v2.query, sampling_design, v2.ports, v2.leaf_layer, delta_of(summary["delta"]), partition=part)
     e = evidence(a, instances=live.get("instances", -1), sessions=sessions, session_roots=live.get("roots") or {},
                  served=None)
     prov["evidence"] = "audit.json; instances and session roots from session/prove.log's LIVE line"
@@ -1173,8 +1173,8 @@ def a3(run: Run) -> Iterator[Case]:
     if sample_file and not split.get("served_is_lean_draw"):
         raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
     served = sorted(a["draw"]["units"]) if sample_file else None
-    law = {"k": summary["k"], "law": "subset"}
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    sampling_design = {"k": summary["k"], "law": "subset"}
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots if with_roots else None,
                  served=served)
     prov["evidence"] = ("audit.json; instances and session roots from each session's prove.log LIVE line"
@@ -1184,7 +1184,7 @@ def a3(run: Run) -> Iterator[Case]:
     yield c
     src = f"{base}/negatives.json"
     n = rec["population"]
-    union = {"law": "subset", "population": n, "k": law["k"], "units": sorted(a["draw"]["units"])}
+    union = {"law": "subset", "population": n, "k": sampling_design["k"], "units": sorted(a["draw"]["units"])}
     proved = sorted(a["proved_units"])
     bases = {name: (lo, lo + cnt) for (name, *_), (_, lo, cnt) in zip(mem, P.ranges(program, query))}
     fewer = R2.program([(d, cnt) for _, _, d, cnt in mem], mixed=True, version=population_version(program))
@@ -1319,7 +1319,7 @@ def a4(run: Run) -> Iterator[Case]:
         raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
     served = sorted(a["draw"]["units"]) if with_served else None
     stratified = (summary.get("law") or "").startswith("stratified")
-    law = {"k": summary["k"], "law": "stratified" if stratified else "subset"}
+    sampling_design = {"k": summary["k"], "law": "stratified" if stratified else "subset"}
     log: list = []
     served_rec = None
     if summary.get("reaudit"):
@@ -1331,7 +1331,7 @@ def a4(run: Run) -> Iterator[Case]:
             served_rec = json.loads(tar_member(run, "inputs/served.tar", "registration.json"))
             prov["log"] = "the served record (inputs/served.tar's registration.json)"
         log = [served_rec]
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition, log=log)
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition, log=log)
     e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots if with_served else None,
                  served=served)
     prov["evidence"] = ("audit.json; instances and session roots from each session's prove.log LIVE line"
@@ -1404,8 +1404,8 @@ def a4_unaudited(run: Run) -> Iterator[Case]:
     program, query, partition, ports, leaf_layer, _, _, prov = a4_copies(run, base, summary, rec)
     prov["record"] = "inputs/served.tar's registration.json (the receipt's)"
     stratified = (summary.get("law") or "").startswith("stratified")
-    law = {"k": summary["k"], "law": "stratified" if stratified else "subset"}
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    sampling_design = {"k": summary["k"], "law": "stratified" if stratified else "subset"}
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     checks = summary.get("checks") or {}
     reg, src = checks.get("registration"), f"{base}/summary.json's checks.registration"
     rv = None if reg is None else recorded("pass", source=src) if reg["ok"] else recorded("reject", "registration", reg["codes"], src)
@@ -1501,7 +1501,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     parameters = _json([[name, t.to_json()] for name, t in program.fn.signature()[0]])
     query = P.template_instance_query(template)
     era_tid = run.json(f"{base}/stage/partition.json")["query"]["params"]["template"]
-    law = DR.parse_design(f"subset:{summary['k']}")
+    sampling_design = DR.parse_design(f"subset:{summary['k']}")
     prov0: dict = {"commit": run.commit(), "set": f"{sd} (the run's generated set)",
                    "program": f"RegisteredGemm over the set's template, W[pos] from {base}/stage/registered.json's reads",
                    "registered": f"{values} with the program function's parameters"}
@@ -1529,7 +1529,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
         live = live_line(run.path(f"{d}/session/prove.log")) or {}
         sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{d}/session")
         delta = delta_of((a.get("profile") or {}).get("delta") or a["wrong_units"]["delta"])
-        p = params(program, query, law, ports, leaf_layer, delta, partition=partition, log=prior,
+        p = params(program, query, sampling_design, ports, leaf_layer, delta, partition=partition, log=prior,
                    registered=values if registered else None)
         if registered:
             p["parameters"] = parameters
@@ -1649,7 +1649,7 @@ def served_window(run: Run) -> Iterator[Case]:
     levels = [rec["window"]["public"]["work"]["level"]] + ([raised["window"]["public"]["work"]["level"]] if raised else [])
     tile_work = pv["k"]
 
-    def law_at(ell: int) -> dict:
+    def sampling_design_at(ell: int) -> dict:
         return Wd.sampling(Fraction(pv["eps"]), Fraction(pv["delta"]), Wd.Work.at(ell, pv["grid_bits"]), tile_work,
                            pv["grid_bits"])["law"]
     n0 = Wd.Work.at(levels[0], pv["grid_bits"]).n
@@ -1708,12 +1708,12 @@ def served_window(run: Run) -> Iterator[Case]:
         ports = ports_at(levels[0], program, partition, form, wb)
         prov["ports"] = (f"served_domain {form[0]} {form[1]} ({port}), W's domain {wb}" if found else
                          "GAP: no derivation matches the record's ports; today's")
-    law = law_at(levels[0])
+    sampling_design = sampling_design_at(levels[0])
     first = run.json(outcomes[0])
     service = first.get("format") == "verity/proof-service/outcome/v0"
     scheme = SCHEME if service else SERVED_ZK_SCHEME
     prov["scheme"] = "the proof system's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof system)"
-    p = params(program, query, law, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)
+    p = params(program, query, sampling_design, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)
     base = None
     for path in outcomes:
         body = run.json(path)
@@ -1750,7 +1750,7 @@ def served_window(run: Run) -> Iterator[Case]:
         rv = recorded("reject", "registration", ours, "out/receive-raised.out (its R codes)") if ours else \
             recorded("reject", None, None, "out/receive-raised.out")
         yield base.but("receive-raised", "negative" if ours else "analog", rv, program=prog_r, rec=raised,
-                       params={"program": descriptor(prog_r), "partition": part_r, "law": law_at(ell),
+                       params={"program": descriptor(prog_r), "partition": part_r, "law": sampling_design_at(ell),
                                "ports": ports_at(ell, prog_r, part_r, form, wb)},
                        provenance={"change": f"out/registration-raised.json under the verifier's copies at level {ell}"})
     if "receive-foreign" in checks and run.has("out/other/registration.json"):
@@ -1768,9 +1768,9 @@ def served_window(run: Run) -> Iterator[Case]:
         run.outside.append({"run": run.id, "driver": "served-window", "name": name, "why": why})
 
 
-#: served_zk's first window's registered scheme, sampling design and δ (`served_commit.SCHEME`, `LAW`, `DELTA` before `params.json`)
+#: served_zk's first window's registered scheme, sampling design and δ (`served_commit.SCHEME`, `SAMPLING_DESIGN`, `DELTA` before `params.json`)
 SERVED_ZK_V0_SCHEME = "verity/pouw/served-zk/hm96-sha512+frame-v3-sha512/v0"
-SERVED_ZK_V0_LAW = {"k": 1, "law": "subset"}
+SERVED_ZK_V0_SAMPLING_DESIGN = {"k": 1, "law": "subset"}
 SERVED_ZK_V0_DELTA = 0.05
 
 
@@ -1825,7 +1825,7 @@ def served_audit(run: Run) -> Iterator[Case]:
         program, query, ports, how = copies(side, rec)
         if PO.program_sha512(program) != rec["program"]:
             raise Gap(f"out/{side}/commitment.json's tiles give {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
-        p = params(program, query, SERVED_ZK_V0_LAW, ports, None, delta_of(SERVED_ZK_V0_DELTA), scheme=SERVED_ZK_V0_SCHEME)
+        p = params(program, query, SERVED_ZK_V0_SAMPLING_DESIGN, ports, None, delta_of(SERVED_ZK_V0_DELTA), scheme=SERVED_ZK_V0_SCHEME)
         e = evidence(a, instances=1, sessions=[], session_roots=None, served=None)
         prov = {**prov0, "copies": f"out/{side}/commitment.json", "ports": f"served_domain {how['form'][0]} {how['form'][1]} "
                 f"(run {how['run_id']})", "evidence": f"{path}; one instance, the draw's unit; no sessions"}
@@ -1959,8 +1959,8 @@ def a5_audit(run: Run, base: str) -> Iterator[Case]:
     if not summary.get("served_is_lean_draw"):
         raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
     served = sorted(a["draw"]["units"])
-    law = summary["law"]
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    sampling_design = summary["law"]
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
     prov["evidence"] = (f"{base}/audit.json; instances and session roots from each session's prove.log LIVE line; "
                         "served = the Lean draw")
@@ -2027,7 +2027,7 @@ def a6(run: Run) -> Iterator[Case]:
     tids = [P.template_id(d) for d, _ in defs]
     partition, prov["partition"] = partition_form(program, query, rec, tids)
     k = int(summary["k"])
-    law = DR.parse_design(f"stratified:{k}")
+    sampling_design = DR.parse_design(f"stratified:{k}")
     def pub_of(m: dict) -> Path:
         K, j = re.fullmatch(r"s8-coord-k(\d+)(?:-c(\d+))?", m["name"]).groups()
         return run.path(f"{base}/stage-k{K}/{f'c{j}/' if j is not None else ''}pub-{m['n']}.bin")
@@ -2053,7 +2053,7 @@ def a6(run: Run) -> Iterator[Case]:
                         if re.fullmatch(rf"{base}/session-{re.escape(m['name'])}/sessions/[^/]+/session\.json", f["path"])
                         for u in (run.json(f["path"]).get("unit_draw") or {}).get("units", []))
         served_from = "each member's base plus its sessions' session.json unit_draw (the run's served units)"
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
     prov["evidence"] = (f"{base}/audit.json; instances and session roots from each session's prove.log LIVE line; "
                         f"served = {served_from}")
@@ -2159,7 +2159,7 @@ def a7(run: Run) -> Iterator[Case]:
     tids = [P.template_id(d) for d, _ in defs]
     partition, prov["partition"] = partition_form(program, query, rec, tids)
     k = int(summary["k"])
-    law = DR.parse_design(f"stratified:{k}")
+    sampling_design = DR.parse_design(f"stratified:{k}")
     rows = {"plan": RU.plan_rows(SimpleNamespace(**sp)), "map": RU.memory_map_rows(SimpleNamespace(**sm))}
     ports: dict = {}
     publics: dict = {}
@@ -2186,7 +2186,7 @@ def a7(run: Run) -> Iterator[Case]:
     if not summary.get("served_is_lean_draw"):
         raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
     served = sorted(a["draw"]["units"])
-    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    p = params(program, query, sampling_design, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
     e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
     prov["evidence"] = (f"{base}/audit.json; instances and session roots from each session's prove.log LIVE line; "
                         "served = the Lean draw")

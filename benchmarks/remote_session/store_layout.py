@@ -1,6 +1,6 @@
-"""Pins and checkpoints for the store binding, whose layout and decision are PoUB's own
-(`verity/protocols/accounting/poub/verifier/store.py`: the pin's form and checks, the arena, the store, its expected payload
-root and `Binding`): a checkpoint's local pin, a small synthetic BF16 checkpoint for tests, the plain SHA-256 a GiB
+"""Pins and checkpoints for the store a checkpoint lays out, whose layout is PoUB's own
+(`verity/protocols/accounting/poub/verifier/store.py`: the pin's form and checks, the arena and the store): a checkpoint's
+local pin, a small synthetic BF16 checkpoint for tests, the plain SHA-256 a GiB
 of an engine's arena holding the checkpoint's weights (`node.py --model-dir`'s check of each engine against the layout),
 and the layout a serving node's hello gives of its store (`regions`).
 
@@ -42,9 +42,8 @@ def arena_sha256(a: rstore.Arena, nbytes: int, workers: int = 1) -> list[str]:
 def regions(n: list[int], base: list[int], on_host: list[bool], weights: list[int]) -> list[dict]:
     """The hello's layout of a store in segments (the serving node's: `device.DeviceStore`'s `n`, `base` and `on_host`),
     an arena a GPU with `weights` blocks of weights each and then the host tier's segments: each arena's weights and
-    its filler, then the host tier as one region however many segments hold it. That is the store as the verifier's
-    binding lays it out (`rstore.Store.regions`), and the binding refuses any other layout, a region a host segment
-    among them."""
+    its filler, then the host tier as one region however many segments hold it: the store's own regions
+    (`rstore.Store.regions`)."""
     out = []
     for q, w in enumerate(weights):
         out.append({"kind": "weights", "tier": "hbm", "first": base[q], "blocks": w})
@@ -122,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="verb", required=True)
     p = sub.add_parser("pin", help="the local pin of the checkpoint in DIR, every file in it")
     p.add_argument("dir", type=Path)
-    p.add_argument("--name", required=True, help="the model's role, the name --model takes")
+    p.add_argument("--name", required=True, help="the model's role, the pin's name")
     p.add_argument("--out", type=Path, required=True)
     s = sub.add_parser("synthetic", help="a small BF16 checkpoint and its pin (DIR/pin.json)")
     s.add_argument("dir", type=Path)

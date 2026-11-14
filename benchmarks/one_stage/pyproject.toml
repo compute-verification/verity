@@ -42,10 +42,10 @@ artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-veri
 worker_gb = 6
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
-# `verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
+# `verity/protocols/policy/inference_only/verifier/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
 # `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
-# `vstar-recursive sampled` (`verity/protocols/proofs/spot_flock/verifier/lean`); its slow test builds the 4,32,4 class's
+# `vstar-recursive sampled` (`verity/protocols/proofs/spot_flock_recursion/verifier/lean`); its slow test builds the 4,32,4 class's
 # window circuit (`adapters/vllm/verity_vllm`).
 # `verity/protocols/compose/device/live_challenger`: the challenger reserve's tests open a session on its local auditor device (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
@@ -103,8 +103,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-          "verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml",
-          "adapters/vllm/verity_vllm", "adapters/torch/verity_torch", "benchmarks/network_traces",
+          "verity/protocols/policy/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm",
+          "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
           "verity/protocols/accounting/pous/verifier/p2_v1/wire.py", "verity/protocols/accounting/pous/verifier/p2_v1/vectors.json", "verity/protocols/accounting/pous/verifier/p2_v1/audit-vectors.json",

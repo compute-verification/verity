@@ -63,13 +63,13 @@ from verity_flock import partition_units as PU
 SPEC = "q-template-instance"
 
 
-def _netlist(rng: random.Random, G: int, N_IN: int, N_OUT: int, n_in: int | None = None) -> U.Netlist:
+def _netlist(rng: random.Random, G: int, N_IN: int, N_OUT: int, n_in: int | None = None) -> U.PrivateCircuit:
     g0, n0 = max(1, 3 * G // 4), n_in or max(1, 3 * N_IN // 4)
     gates = tuple((rng.randrange(4), rng.randrange(n0 + g), rng.randrange(n0 + g)) for g in range(g0))
-    return U.Netlist(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT)))
+    return U.PrivateCircuit(n0, gates, tuple(rng.randrange(n0 + g0) for _ in range(N_OUT)))
 
 
-def direct(net: U.Netlist, name: str):
+def direct(net: U.PrivateCircuit, name: str):
     """The hidden netlist as its own Boolean Definition (unregistered): the program run directly."""
     def build(C, x):
         w = list(x)
@@ -83,7 +83,7 @@ def direct(net: U.Netlist, name: str):
                          register=False)
 
 
-def lanes(units, cl, net: U.Netlist, xs: list[list[int]]):
+def lanes(units, cl, net: U.PrivateCircuit, xs: list[list[int]]):
     """`class_statement.class_lanes`'s (inputs, outputs, row identities) for the given netlist and inputs: the program's
     sources are one row for every instance, x one row per instance."""
     act = units.activation(cl.definition)
