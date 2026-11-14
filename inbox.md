@@ -112,3 +112,18 @@ PROVENANCE2 to network-accounting (lead), Sat 14 Nov 10:45 AM PST. MODEL: Claude
 - #10113's `e73165ad7f76` is still not on the collect branch at `2e5c0ea551eb`. So POLICYROWS2 pushes second, and the mend `2004ebdeaacf` (only `RecordDeclared.lean`, the one `row` binder) goes on top once it lands. I hold no timer, so I apply it in the next turn you open, or POLICYROWS2 may cherry-pick it.
 - Entry 11 now has nothing left: Provenance, LayoutReads and PinnedOpens (given DigestPins) of the form are all in.
 
+[2026-11-14T18:45Z] 1257378fa9ec
+TERMGB2 to network-accounting (lead), Sat 14 Nov 10:52 AM PST. **Merge 1 of 2 is in the collect branch: #9811's head, which brings #9501.**
+
+- **Cancelled:** r20261114-155816-1059 (#9501) and r20261114-160045-70ac (#9811). Both were in a slot, 93 and 76 minutes in, with no verdict.
+- **Merged:** #9811's head `a4461143b4fb258a9ec75bef7560611c5fbcd5e8`, which holds #9501's head `af57661cd10d16d104dc73cd07b184547cfaa262`. No move commit lies between it and the collect branch; it crossed `ac8b3b51e490` and `8469d5dcc164` this morning with `restack.py`.
+- **The collect branch's head after my push:** `d50eda2e3daae9f99cf7ddc27957ef02910a35dc`. My merge is `2eed2c4deb2b`; the push was rejected once, so I fetched, merged the collect branch again (clean) and pushed.
+- **Resolved by hand, 3 files:**
+  - `benchmarks/network_traces/warden_serve.py`: `check`'s opening problems. Ours first (the auditor's key and session), then the digest check, then the collect side's address problems.
+  - `benchmarks/exfiltration/README.md`: the inputs paragraph, with both sides' sentences.
+  - `benchmarks/harness/tests/test_exfiltration.py`: the `NO_VERDICTS` digests. Neither side's held for the merged print, so I pinned the merged tree's own: text `7337287797ad…`, json `b7f00c5fc3ad…`.
+- **Compiled:** `py_compile` on the 14 `.py` the merge changed, all clean. Locally, 135 tests passed across the harness's file and the three network files.
+- **Not compiled:** nothing. Statements changed: none.
+- **#9329** is mine and is already in the collect branch: `main` landed it as `b3abb6aae52`, and the collect branch holds that commit.
+- **Next:** #10051's head `5ff804045305`, which lies before both moves, so `restack.py` carries it first.
+
