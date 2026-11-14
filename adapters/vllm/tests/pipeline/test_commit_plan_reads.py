@@ -201,5 +201,27 @@ def test_a_plan_s_facts_with_no_record_of_them_come_with_an_empty_one(tmp_path: 
     assert got == ({("op", "m0"): {}}, {}) and record["members"] == 1
 
 
+def test_the_commit_plan_command_writes_the_plan_it_derived_where_out_names_and_prints_its_record_and_key(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """`commit-plan` derives the plan of the Commit its options describe, writes it whole at `--out` (in a directory it makes, with
+    no partial file left beside it) and ends 0 on one printed line: where the plan is, the record of its producer facts, the
+    seconds it took and each field of its key, cut to 16 characters."""
+    doc: Record = {"schema": CP.SCHEMA, "key": {"program_digest": D, "required_manifest_sha256": None, "vllm": "0.11.0"},
+                   "producer_facts": {"facts": [["op", "m0", {"operand": "x"}]], "record": dict(DERIVED)}, "wall_s": 1.5,
+                   "utc": "2026-01-01T00:00:00Z"}
+    asked: list[Any] = []
+
+    def derive(args: Any) -> Record:
+        asked.append(args)
+        return doc
+    monkeypatch.setattr(CP, "derive", derive)
+    out = tmp_path / "plan" / "commit_plan.json"
+    o = CP.Options(workload="workload.json", out=str(out))
+    assert CP.main(o) == 0 and asked == [o]
+    assert json.loads(out.read_text()) == doc and [f.name for f in out.parent.iterdir()] == ["commit_plan.json"]
+    assert capsys.readouterr().out == (f"[plan] {out}: producer facts {DERIVED} in 1.5s; key program_digest={D[:16]} "
+                                       "required_manifest_sha256=None vllm=0.11.0\n")
+
+
 def test_the_plan_reads_its_schema_id_from_the_records_package() -> None:
     assert CP.SCHEMA is schema_ids.COMMIT_PLAN_SCHEMA
