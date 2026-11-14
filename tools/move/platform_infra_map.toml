@@ -1,0 +1,49 @@
+# The team's platform into `infra/`: what `tools/move/layout.py --map tools/move/platform_infra_map.toml` moves and
+# rewrites (ARCHITECTURE.md: the team's own platform is `infra/`, not part of the system).
+#
+# `tools/research/` (the `research` distribution: the run recorder, the queue that moves `main`, messaging, the notes,
+# pods and deploys), `tools/agent-guard/` (the agents' hooks, inbox and guards) and `tools/move/` (these codemods)
+# become `infra/research/`, `infra/agent-guard/` and `infra/move/`, each whole and laid out as it was.
+#
+# - The `research` root moves with its directory ([roots]); its import name stays `research`, so no import changes.
+# - `tools/move/` is never rewritten: its maps are the earlier moves' records, and its scripts name `tools/move/` as the
+#   path of the move tool inside a checkout of any move's base, which before this move is a directory and after it the
+#   link this move's second commit leaves there. `tools/research/`'s recorded moves (`moves.json`) stay as they were.
+# - The links at the three old paths are a second commit, by hand: a move commit adds no file that no rename pairs.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It is the branch's last move.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "infra/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"tools/research/" = "infra/research/"
+"tools/agent-guard/" = "infra/agent-guard/"
+"tools/move/" = "infra/move/"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row, and each row is a
+# directory's, so a file only a branch has under one is carried
+paths = ["tools/research/", "tools/agent-guard/", "tools/move/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, the move tool itself, changelogs, research's
+# recorded moves), files whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`): the directories as dotted paths, which nothing imports by
+"tools.move" = "infra.move"
+"tools.research" = "infra.research"
