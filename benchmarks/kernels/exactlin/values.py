@@ -5,7 +5,7 @@ OUT/exactlin_calls.json, so a run where the two Triton kernels never served show
 plus `--scratch` (ignored), as served.sh passes it; run from adapters/vllm.  `--at` and `--by` are the pin entry's
 resolved_at and resolved_by.
 
-    SERVED_SCRIPT=benchmarks/hash/exactlin/values.py SERVED_KGATE=1 bash benchmarks/hash/exactlin/served.sh \
+    SERVED_SCRIPT=benchmarks/kernels/exactlin/values.py SERVED_KGATE=1 bash benchmarks/kernels/exactlin/served.sh \
       --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --by WHO --int8-exact linears
 """
 from __future__ import annotations

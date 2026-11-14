@@ -2571,6 +2571,17 @@
     },
     {
       "paths": {
+        "benchmarks/torch_gpu/s8_linear/": "benchmarks/kernels/s8_linear/",
+        "benchmarks/hash/exactlin/": "benchmarks/kernels/exactlin/",
+        "benchmarks/torch_gpu/ship.sh": "benchmarks/kernels/ship.sh",
+        "benchmarks/torch_gpu/ship_clock.c": "benchmarks/kernels/ship_clock.c",
+        "benchmarks/torch_gpu/ship_nvcc.sh": "benchmarks/kernels/ship_nvcc.sh",
+        "benchmarks/torch_gpu/ship_probe.sh": "benchmarks/kernels/ship_probe.sh",
+        "benchmarks/torch_gpu/job_nvcc.sh": "benchmarks/kernels/job_nvcc.sh"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c/",
         "benchmarks/pouw/pearl_c_sm120/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/",
         "benchmarks/pouw/pearl_c_sm120/fixture.py": "benchmarks/pouw/pearl_c_sm120/fixture.py",
@@ -2689,6 +2700,11 @@
     {
       "paths": {
         "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean"
       }
     }
   ]

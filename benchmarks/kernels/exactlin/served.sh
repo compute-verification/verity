@@ -8,7 +8,7 @@
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 # On an H200 under a GPU lease:
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/served.sh \
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
@@ -43,7 +43,7 @@ case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
 KGATE=${SERVED_KGATE:-$KGATE}
 SCRIPT=$ROOT/${SERVED_SCRIPT:-benchmarks/hash/dither/sbench.py}
 [ -f "$SCRIPT" ] || { echo "served.sh: no $SCRIPT (set SERVED_SCRIPT)" >&2; exit 2; }
-export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
+export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/kernels/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- "$PY" "$DITHER/numabind.py" "$OUT/env/numa.json" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
@@ -67,7 +67,7 @@ rc=$?
 echo "served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" export --type sqlite --force-overwrite true -o "$S/gate.sqlite" "$S/gate.nsys-rep" > "$OUT/nsys-export.log" 2>&1
-  "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "served: steps.py rc $?"
+  "$PY" "$ROOT/benchmarks/kernels/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "served: steps.py rc $?"
   [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
 fi
 exit "$rc"

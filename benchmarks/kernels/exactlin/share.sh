@@ -5,7 +5,7 @@
 # the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound;
 # env/numa.json says which).
 # On an RTX PRO 6000 under a GPU lease:
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/share.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/share.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
 ROOT=${SHARE_ROOT:-$PWD}
@@ -19,9 +19,9 @@ if [ "${1:-}" != --leased ]; then
   [ -x "$NSYS" ] || { echo "share.sh: no nsys on $(hostname) (looked for NSYS, \$CUDA/bin, PATH, /opt/nvidia/nsight-systems)" >&2; exit 3; }
   echo "share: nsys $NSYS; asking for one GPU at $(date -u +%H:%M:%SZ)"
   pre=(); [ "${SHARE_PREEMPTIBLE:-0}" = 1 ] && pre=(--preemptible)   # a preempted trace is lost whole
-  numa=(python3 "$(cd "$(dirname "$0")/../dither" && pwd)/numabind.py" "$OUT/env/numa.json")
+  numa=(python3 "$(cd "$(dirname "$0")/../../hash/dither" && pwd)/numabind.py" "$OUT/env/numa.json")
   NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- "${numa[@]}" \
-    bash "$ROOT/benchmarks/hash/exactlin/share.sh" --leased
+    bash "$ROOT/benchmarks/kernels/exactlin/share.sh" --leased
   rc=$?
   echo "share: exited $rc at $(date -u +%H:%M:%SZ)"
   exit "$rc"
@@ -41,7 +41,7 @@ export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache T
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/hash/dither
-SHARE=$ROOT/benchmarks/hash/exactlin/share.py
+SHARE=$ROOT/benchmarks/kernels/exactlin/share.py
 q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
 nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"
 nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
