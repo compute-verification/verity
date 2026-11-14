@@ -35,10 +35,6 @@ noncomputable def rankinFactorPatternsAt (s : AuditStatement) (Pt : Partition) (
           fun U => (fun r => lightOf s Pt (n r) (blocksTo s.prog Pt req U r)) = c),
         d.passes Pt q (counts Pt d.part U.1) ρ ^ θ
 
-theorem rankinFactorPatternsAt_servedBits (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type}
-    [Fintype R] [DecidableEq R] (req : Fin s.prog.outs.length → R) (q θ : ℝ) (ρ : ℕ) :
-    rankinFactorPatternsAt s Pt d req (servedBits req) q θ ρ = rankinFactorPatterns s Pt d req q θ ρ := rfl
-
 /-- A class at a higher threshold, read at the threshold `n`. -/
 def coarsen (s : AuditStatement) (Pt : Partition) (n : ℕ) : Option (Option (Finset ℕ)) → Option (Option (Finset ℕ))
   | none => none
