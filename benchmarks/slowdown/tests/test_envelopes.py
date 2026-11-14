@@ -20,7 +20,7 @@ T = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(T)
 
 #: our envelope field: tiers' DEFAULTS key
-TIERS_KEYS = {"residual": "residual", "clock_share": "clock_share", "eps_w": "eps_w", "eps_agg": "eps_agg",
+TIERS_KEYS = {"residual": "free", "clock_share": "clock_share", "eps_w": "eps_w", "eps_agg": "eps_agg",
               "identities": "identities", "lag_s": "lag_s", "proof_share": "share", "overhead": "overhead",
               "replay": "replay", "step_flop": "step_flop", "p_evade": "p_evade", "luck": "luck",
               "step_bits": "step_bits", "floor_steps": "floor_steps", "chord_kappa": "kappa"}
@@ -63,8 +63,8 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
     ctx = tiers_context()
     p = tiers_params(ctx)
     remote = envelopes.regime(REG, "remote")
-    assert remote.pouw.audited(ctx.location) == pytest.approx(T.audited_residual(p), rel=1e-12)
-    assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["residual"], rel=1e-9)
+    assert remote.pouw.audited(ctx.location) == pytest.approx(T.audited_free(p), rel=1e-12)
+    assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["free"], rel=1e-9)
 
 
 def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
@@ -81,7 +81,7 @@ def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
         slack = sampled.slack(ctx)
         assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
         assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["free"], rel=1e-9)
         assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
         shares.append(slack["exfil.incorrect"])
     assert shares[0] == 1 > shares[1] > 0
@@ -133,7 +133,7 @@ def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
 
     ctx = tiers_context()
     t1 = T.evaluate(tiers_params(ctx), T.TIERS["T1"])
-    x = t1["residual"] + t1["declared"] + t1["cheat"]
+    x = t1["free"] + t1["declared"] + t1["cheat"]
     assert x / T.DEFAULTS["mfu"] < 1
     peak = REG.override({"task.reference_efficiency": False})
     # tiers counts no unregistered share (s = 0) where the slowdown calculator's fleet has 0.1%
