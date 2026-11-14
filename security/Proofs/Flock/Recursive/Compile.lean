@@ -28,8 +28,8 @@ and the interactive table's error as its inner term. Every declaration is proved
 
 * `ClashCL`, `clashPickCL`: two runs of the compiled table that clash (either run self-clashes, `SelfClashL`, or the two
   open a position of the level-0 cap or of a rep's recorded cap to different rows), and the inner fork's output: on two
-  inner transcripts whose steps play the compiled table to outcomes that clash, a collision of `H` (`collOf`), else
-  nothing.
+  inner transcripts whose steps play the compiled table to outcomes that clash, the pair of the first of the outcomes'
+  candidates (`clashCandsCL`) whose test passes, a collision of `H` (`clashCandsCL_spec`), else nothing.
 * `flock_inner_sound_compiled` (**gap 1**, the compile lemma): `InnerSoundForkOn` at `flockInnerCL` with `clashPickCL`,
   at `tableError`, the interactive table's error that `flock_inner_sound` gives `flockInner`.
   `flock_inner_sound_compiled_plain` is its `InnerSoundFork`, and `flock_inner_sound_compiled_fast100` its `2^-205`.
@@ -63,15 +63,59 @@ def ClashCL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf
     ∃ i < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if i = 0 then o.pend.1 else o.pend.2).caps[ℓ - 1]? = some cap ∧
       ∃ p, Rewinding.ConflictAt (opRL H E Lf sch i ℓ cap) (o, o') p
 
+/-- **Two clashing runs' candidates**: each run's self-clash candidates (`selfCandsL`), then, at each position of the
+first run's level-0 cap and of each cap a rep of the first run records, the test that the two runs open it to different
+rows and the pair of their openings there (`op₀LPair`, `opRLPair`). -/
+noncomputable def clashCandsCL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (sch : Schedule) (o o' : OutCL F D Sl) : List (Prop × (List UInt8 × List UInt8)) :=
+  selfCandsL H E Lf sch o ++ (selfCandsL H E Lf sch o' ++
+    ((List.finRange (2 ^ (lvOf sch 0).logLen)).map (fun p =>
+        (Rewinding.ConflictAt (op₀L H E Lf sch o.cap₀) (o, o') p, op₀LPair H E Lf sch o.cap₀ (o, o') p)) ++
+      [0, 1].flatMap fun i => (if i = 0 then o.pend.1 else o.pend.2).caps.zipIdx.flatMap fun ci =>
+        (List.finRange (2 ^ (lvOf sch (ci.2 + 1)).logLen)).map fun p =>
+          (Rewinding.ConflictAt (opRL H E Lf sch i (ci.2 + 1) ci.1) (o, o') p,
+            opRLPair H E Lf sch i (ci.2 + 1) ci.1 (o, o') p)))
+
 omit [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision.** -/
-theorem ClashCL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch : Schedule} {o o' : OutCL F D Sl} (h : ClashCL H E Lf sch o o') : Merkle.Collision H := by
-  rcases h with h | h | ⟨_, h⟩ | ⟨_, _, _, _, _, _, _, h⟩
-  · exact h.collision
-  · exact h.collision
-  · exact op₀L_conflict_collision h
-  · exact opRL_conflict_collision h
+/-- **A clash is a collision**: a candidate whose test passes is one. -/
+theorem clashCandsCL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch : Schedule} {o o' : OutCL F D Sl} {c : Prop × (List UInt8 × List UInt8)}
+    (hc : c ∈ clashCandsCL H E Lf sch o o') (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
+  rcases List.mem_append.1 hc with hc | hc
+  · exact selfCandsL_spec hc h
+  rcases List.mem_append.1 hc with hc | hc
+  · exact selfCandsL_spec hc h
+  rcases List.mem_append.1 hc with hc | hc
+  · obtain ⟨p, -, rfl⟩ := List.mem_map.1 hc
+    have hw : Rewinding.ConflictAt (op₀L H E Lf sch o.cap₀) (o, o') p := h
+    exact op₀L_conflict_collision hw
+  · obtain ⟨i, -, hc⟩ := List.mem_flatMap.1 hc
+    obtain ⟨ci, -, hc⟩ := List.mem_flatMap.1 hc
+    obtain ⟨p, -, rfl⟩ := List.mem_map.1 hc
+    have hw : Rewinding.ConflictAt (opRL H E Lf sch i (ci.2 + 1) ci.1) (o, o') p := h
+    exact opRL_conflict_collision hw
+
+omit [Fintype F] [DecidableEq F] in
+/-- Two runs that clash have a candidate whose test passes. -/
+theorem ClashCL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch : Schedule} {o o' : OutCL F D Sl} (h : ClashCL H E Lf sch o o') :
+    ∃ c ∈ clashCandsCL H E Lf sch o o', c.1 := by
+  rcases h with h | h | ⟨p, h⟩ | ⟨i, hi, ℓ, hℓ, cap, hcap, p, h⟩
+  · obtain ⟨c, hc, hp⟩ := h.cand
+    exact ⟨c, List.mem_append_left _ hc, hp⟩
+  · obtain ⟨c, hc, hp⟩ := h.cand
+    exact ⟨c, List.mem_append_right _ (List.mem_append_left _ hc), hp⟩
+  · exact ⟨_, List.mem_append_right _ (List.mem_append_right _ (List.mem_append_left _
+      (List.mem_map.2 ⟨p, List.mem_finRange p, rfl⟩))), h⟩
+  · obtain ⟨k, rfl⟩ : ∃ k, ℓ = k + 1 := ⟨ℓ - 1, (Nat.sub_add_cancel hℓ).symm⟩
+    have hi' : i ∈ [0, 1] := by
+      have : i = 0 ∨ i = 1 := by omega
+      rcases this with rfl | rfl <;> simp
+    have hk : (cap, k) ∈ (if i = 0 then o.pend.1 else o.pend.2).caps.zipIdx :=
+      List.mem_zipIdx_iff_getElem?.2 (by simpa using hcap)
+    exact ⟨_, List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _
+      (List.mem_flatMap.2 ⟨i, hi', List.mem_flatMap.2 ⟨(cap, k), hk,
+        List.mem_map.2 ⟨p, List.mem_finRange p, rfl⟩⟩⟩))), h⟩
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
@@ -85,13 +129,14 @@ noncomputable def outCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
       (schedSteps T CT 0 t) out then some h.choose else none
 
 /-- **The inner fork's output at the compiled table**: on two inner transcripts whose steps play the compiled table to
-outcomes that clash (`ClashCL`), a collision of `H` (`collOf`), else nothing. -/
+outcomes `o` and `o'`, the pair of the first of the two outcomes' candidates (`clashCandsCL`) whose test passes, a
+collision of `H` when the outcomes clash (`ClashCL`); else nothing. The picker searches the outcomes' own lists and
+positions. The outcomes are `outCL`'s. -/
 noncomputable def clashPickCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : Schedule) (M : Hidden cls) (t t' : List (List (SMsg T) × ((k : Fin r) → CT k))) : Pair :=
-  collOf H (∃ o o', outCL T CT A H E Lf cls regs sch M t = some o ∧ outCL T CT A H E Lf cls regs sch M t' = some o' ∧
-      ClashCL H E Lf sch o o')
-    fun ⟨_, _, _, _, hc⟩ => hc.collision
+  (outCL T CT A H E Lf cls regs sch M t).bind fun o => (outCL T CT A H E Lf cls regs sch M t').bind fun o' =>
+    collOf (clashCandsCL H E Lf sch o o') (fun c => c.1) fun c => c.2
 
 /-- **Gap 1, the compile lemma: Flock's compiled inner protocol is sound in fork form, at the interactive table's
 error.** On every hidden template of the class whose statement no witness satisfies, for every `G` and every prover of
@@ -131,7 +176,12 @@ theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D
     refine Inner.fork_of_outcomes H _ hr _ s ht ht' ?_
     have e : pickOn G (clashPickCL T CT A H E Lf cls regs sch M) t t' =
         clashPickCL T CT A H E Lf cls regs sch M t t' := pickOn_of hG hG'
-    exact (congrArg (StrictCR.IsColl H) e).mpr (collOf_isColl H _ ⟨o, o', hout ho, hout ho', hc⟩)
+    have ep : clashPickCL T CT A H E Lf cls regs sch M t t' =
+        collOf (clashCandsCL H E Lf sch o o') (fun c => c.1) fun c => c.2 := by
+      unfold clashPickCL
+      rw [hout ho, hout ho', Option.bind_some, Option.bind_some]
+    exact (congrArg (StrictCR.IsColl H) (e.trans ep)).mpr
+      (collOf_isColl H (fun _ hc hp => clashCandsCL_spec hc hp) hc.cand)
   · exact Or.inr hb
 
 /-- **The compile lemma as `InnerSoundFork`**: `flock_inner_sound_compiled` at `G := True`. -/
