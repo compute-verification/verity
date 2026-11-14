@@ -7,7 +7,6 @@ figure as the block's compute)."""
 
 from __future__ import annotations
 
-import importlib.util
 import re
 from pathlib import Path
 
@@ -74,8 +73,6 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
             P.placed(wrong, grid)
 
 
-needs_h1 = pytest.mark.skipif(importlib.util.find_spec("verity.protocols.accounting.pouw.prover.circuit.segment") is None,
-                              reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
 ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 
 
@@ -90,7 +87,6 @@ def h1_rows() -> dict[tuple[int, int, int], int]:
 TILE_ROWS = {(4, 8, 64): (2048, 6144), (4, 16, 64): (4096, 12288), (4, 8, 96): (3072, 8192)}
 
 
-@needs_h1
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
 def test_a_tiles_products_are_lean_h1_rows_and_placed_credits_z_at_its_k(r, c, k):
     """census/v1 counts an H1 tile's z and its lanes' segment dots as int8 products, r·c·(2K + 32m), 3× z's at K = 64;
@@ -106,7 +102,6 @@ def test_a_tiles_products_are_lean_h1_rows_and_placed_credits_z_at_its_k(r, c, k
 TILE_ROWS_V3 = {(4, 8, 64): 4096, (4, 16, 64): 8192, (4, 8, 96): 5120}
 
 
-@needs_h1
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
 def test_a_one_stream_tiles_products_are_its_lanes_and_placed_credits_z_at_its_k(r, c, k):
     """v3's z is recombined from the lanes' folded words, so its tile has `h1Rows`' products less z's own, and `placed`
@@ -123,7 +118,6 @@ def test_lean_h1_rows_are_the_three_rows():
     assert set(h1_rows()) == set(TILE_ROWS)
 
 
-@needs_h1
 @pytest.mark.slow
 @pytest.mark.parametrize("version", [1, 3])
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
