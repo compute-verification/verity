@@ -16,7 +16,7 @@ from pathlib import Path
 
 #: Public resolvers a script routes toward to find its own interface; they are nobody's machine.
 RESOLVERS = {"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "9.9.9.9"}
-#: Binary data, never read.
+#: Binary data, never read: the tree's one list, which `tests/test_repository.py`'s scan for credentials reads too.
 BINARY = frozenset({".bin", ".npy", ".npz", ".lgto", ".neg", ".proof", ".gz", ".png", ".pdf", ".olean", ".ilean", ".tar", ".zip"})
 #: Files never scanned: `uv.lock`, whose dotted numbers are package versions, and the test's toy files, which name each form.
 SKIP = frozenset({"uv.lock", "tests/test_literal_addresses.py"})
@@ -25,7 +25,8 @@ _DIGITS = "0123456789"
 _WORD = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 #: the middle of a dotted quad (`.0.2.4` of `192.0.2.4`), from which `quads` widens to the whole
 _QUAD_MIDDLE = re.compile(r"\.\d{1,3}\.\d{1,3}\.\d")
-_QUAD = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
+#: any dotted quad, address or not
+QUAD = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
 #: A dotted quad that is a version or a section number, not an address: `PTX ISA 9.7.14.5`, `§2.1.3.2`, `section 1.4.1.1`,
 #: `==12.9.1.4`, `pkg-13.0.3.0`. A hyphen marks one only after a word: `${H:-ADDRESS}` is an address.
 _VERSION_BEFORE = re.compile(
@@ -68,7 +69,7 @@ def quads(text: str):
         s = m.start()
         while s > 0 and m.start() - s < 3 and text[s - 1] in _DIGITS:
             s -= 1
-        q = _QUAD.match(text, s)
+        q = QUAD.match(text, s)
         if s == m.start() or s in seen or not q:
             continue
         seen.add(s)

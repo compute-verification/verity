@@ -10,9 +10,15 @@ which leaves out ``uv.lock``, its dotted numbers being package versions, and thi
 """
 from __future__ import annotations
 
+import test_repository
+from research import addresses
+from research.addresses import QUAD as _QUAD
 from research.addresses import quads, reader, scan
 
 from test_repository import ROOT, _tracked
+
+#: a tracked file's text (None when it is deleted in the working tree), and any dotted quad: for tests that read one file
+_read = reader(ROOT)
 
 #: Each file that still names an address or a service id, with at most how many it names.
 ALLOWED: dict[str, int] = {
@@ -129,6 +135,21 @@ def test_the_scan_reads_each_form():
         "f.txt": [("ipv4", 1)],
         "g.sh": [("ipv4", 2)],
     }
+
+
+def test_the_rules_exceptions_are_these():
+    """What `research.addresses` never reads or never counts, which `benchmarks/security_findings/` counts the tree by: a
+    file, an extension or a resolver added there drops what it holds from that count without the file changing, so it
+    changes this test too. The tree keeps one list of binary extensions, the rule's."""
+    assert addresses.SKIP == {"uv.lock", "tests/test_literal_addresses.py"}
+    assert addresses.BINARY == {".bin", ".npy", ".npz", ".lgto", ".neg", ".proof", ".gz", ".png", ".pdf", ".olean", ".ilean",
+                                ".tar", ".zip"}
+    assert addresses.RESOLVERS == {"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4", "9.9.9.9"}
+    assert [n for n, v in vars(test_repository).items() if isinstance(v, frozenset | set) and ".olean" in v] == []
+
+
+def test_read_and_quad_serve_a_test_that_reads_one_file():
+    assert _QUAD.search("at 192.0.2.7") and _read("tests/test_literal_addresses.py") and _read("no/such/file") is None
 
 
 def test_an_address_after_a_hyphen_is_read_unless_a_word_comes_before_the_hyphen():
