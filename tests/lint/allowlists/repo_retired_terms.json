@@ -3205,7 +3205,7 @@
     {"file": "benchmarks/recursion_e2e/run.py", "count": 17},
     {"file": "benchmarks/recursion_e2e/settings.py", "count": 3},
     {"file": "benchmarks/recursion_e2e/stage.sh", "count": 1},
-    {"file": "benchmarks/recursion_e2e/tests/test_recursion_e2e.py", "count": 30},
+    {"file": "benchmarks/recursion_e2e/tests/test_recursion_e2e.py", "count": 29},
     {"file": "benchmarks/recursion_e2e/tests/test_release.py", "count": 1},
     {"file": "benchmarks/recursion_e2e/tests/test_settings.py", "count": 3},
     {"file": "benchmarks/recursion_figures/tests/test_figures.py", "count": 1},
