@@ -6,8 +6,9 @@ layers that share a quant method; and H1's install's of a layout without its row
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
 a kernel directory without one cubin, of a pass whose coins don't parse or are no object, of a live salt over other
 weights than its workload's, of a group of experts that repeat, are another group's, differ in shape or whose bytes
-are not the kernel's size for them, of a grouped call under a schedule with other side steps and of B̃'s prefetch on a
-kernel without it, and the in-process certifier's of fewer coin bytes than it asks for."""
+are not the kernel's size for them, of a grouped call under a schedule with other side steps, and of B̃'s prefetch and
+the shared-memory split of pd_commit and pd_tree on a kernel without them, and the in-process certifier's of fewer coin
+bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -392,3 +393,15 @@ def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
         whole_options("e", lacks, True, False, False, False, whole_prefetch_b=True)
     has = SimpleNamespace(run=SimpleNamespace(Pipeline=type("Pipeline", (), {"prefetch_b": None})))
     assert whole_options("e", has, True, False, False, False, whole_prefetch_b=True) is None
+
+
+def test_a_shared_memory_split_is_refused_on_a_kernel_whose_pipeline_lacks_it_with_or_without_a_deferred_capture():
+    said = ("e: whole_pd_shared launches pd_commit and pd_tree in half an SM's shared memory (`Pipeline.pd_shared`), "
+            "which the kernel's pipeline lacks")
+    lacks = SimpleNamespace(run=SimpleNamespace(Pipeline=type("Pipeline", (), {"prefetch_b": None})))
+    has = SimpleNamespace(run=SimpleNamespace(Pipeline=type("Pipeline", (), {"pd_shared": None})))
+    for defer in (True, False):
+        with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+            whole_options("e", lacks, defer, False, False, False, whole_pd_shared=True)
+        assert whole_options("e", has, defer, False, False, False, whole_pd_shared=True) is None
+        assert whole_options("e", lacks, defer, False, False, False) is None
