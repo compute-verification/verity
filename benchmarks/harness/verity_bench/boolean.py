@@ -16,6 +16,7 @@ def boolean_version(block: str, definition: str) -> bool:
     # registers `EmbeddingRead_v1`, a `READ` static's Definition, which `boolean.load` doesn't
     from verity.commitments.gates import embedding  # noqa: F401
     from verity_vllm.definitions import boolean
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
 
     boolean.load()

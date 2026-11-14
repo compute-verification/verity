@@ -335,9 +335,37 @@ def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it
     assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
 
 
-def test_the_wipes_and_the_rounds_parties_each_have_their_protocols_start():
-    for s in (T.WIPE, T.POUS):
+def test_the_wipes_the_rounds_and_poubs_parties_each_have_their_protocols_start():
+    for s in (T.WIPE, T.POUS, T.POUB):
         assert sorted(s.protocol().starts) == sorted(s.roles.values())
+
+
+def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch):
+    """PoUB's verifier pins the memory challenger's PoUS key, which is in that party's run on the same host: its start
+    gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
+    got = {}
+
+    def start(configuration, bound, state):
+        got.update(bound=bound, state=state)
+        raise NotImplementedError(T.NOT_YET)
+
+    monkeypatch.setitem(T.P2.STARTS, T.P2.VERIFIER, start)
+    with pytest.raises(NotImplementedError):
+        T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
+    assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
+                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
+    assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
+
+
+def test_the_runtime_components_channels_are_their_protocols_manifests():
+    """The configuration's channels of PoUS's rounds, the wipe and PoUB are their protocols' manifests', each role
+    under the configuration's name for its party, with the channel to onsite's verifier beside them."""
+    for component, s in (("pous", T.POUS), ("wipe", T.WIPE), ("bandwidth", T.POUB)):
+        named = {r: c for c, r in s.roles.items()}
+        mine = {(c.sender, c.receiver, c.messages, c.carries_coins) for c in T.MANIFESTS[component].channels
+                if T.VERIFIER not in (c.sender, c.receiver)}
+        assert mine == {(named[c.sender], named[c.receiver], c.messages, c.carries_coins)
+                        for c in s.protocol().manifest.channels}
 
 
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):

@@ -40,6 +40,7 @@ from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier.period import decided_by
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 
@@ -208,7 +209,7 @@ def _split(params: sw.WipeParams, prover: WS.Prover, signer, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
+            got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
                                 clock=Clock(10 ** 9, 1))
 
     t = threading.Thread(target=side)
