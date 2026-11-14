@@ -141,6 +141,7 @@ theorem leftOut_of_check_held {form : Bool} {p : VStar.Recursive.SampledTwo.Para
     {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
     (hports : (p.interior.verifier.ports.map (·.1)).toList.Nodup)
+    (hsn : SampledNoneOf p c ξ e bs)
     (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧
       ∀ opened v root,
@@ -148,7 +149,7 @@ theorem leftOut_of_check_held {form : Bool} {p : VStar.Recursive.SampledTwo.Para
         (v, root) ∈ opened → (v, root) ∉ (Spot.Record.lessOwnReads it.record (some opened)).getD #[] →
         ∃ x, (v, x) ∈ Spot.Record.byPort it.record ∧ Spot.jeq (Spot.getD x "root") root = true ∧
           HeldRead i it v root := by
-  obtain ⟨-, c₂, ξ₂, r, i, it, run, hin, ha, -⟩ := acceptedTwo_of_check hp h
+  obtain ⟨-, c₂, ξ₂, r, i, it, run, hin, ha, -⟩ := acceptedTwo_of_check hp hsn h
   have hit : it.params = p.interior := by
     obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
     exact inputOf_interior_params _ _ _ _ _ _ _ ha.interior
@@ -165,6 +166,7 @@ theorem ownReads_form_held (hrec : RecordReadSame) {form : Bool} {p : VStar.Recu
     {c : Spot.OneStage.Commitment} {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
     (hports : (p.interior.verifier.ports.map (·.1)).toList.Nodup)
+    (hsn : SampledNoneOf p c ξ e bs)
     (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧
       ∀ opened v root,
@@ -172,7 +174,7 @@ theorem ownReads_form_held (hrec : RecordReadSame) {form : Bool} {p : VStar.Recu
         (v, root) ∈ opened → (v, root) ∉ (Spot.Record.lessOwnReads c₂.record (some opened)).getD #[] →
         ∃ x, (v, x) ∈ Spot.Record.byPort c₂.record ∧ Spot.jeq (Spot.getD x "root") root = true ∧
           HeldRead i it v root := by
-  obtain ⟨c₂, ξ₂, r, i, it, hin, hint, H⟩ := leftOut_of_check_held hp hports h
+  obtain ⟨c₂, ξ₂, r, i, it, hin, hint, H⟩ := leftOut_of_check_held hp hports hsn h
   have hr : it.record = c₂.record := hrec p c ξ e bs c₂ ξ₂ r i it hin hint
   have hs : Spot.Record.sessionRegistered i.verdicts = Spot.Record.sessionRegistered r.out := inputAt_reported hin
   refine ⟨c₂, ξ₂, r, i, it, hin, hint, fun opened v root ho hv hno => ?_⟩

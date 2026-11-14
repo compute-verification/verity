@@ -109,7 +109,8 @@ theorem stmts_of_accepts {k : Case} {p : VStar.Recursive.SampledTwo.Params}
 `heldOf` builds from the play's run (`HeldOfAt`) and their parts are the interior program's strata's
 (`PartsHeldAt`). The run's second-stage check read the evidence's statements (`stmts_of_accepts`) against the held
 copies' parts (`RunsAs.parts_of_accepted`), one statement a part (`RunsAs.count_of_parts`). -/
-theorem stmtsCount_of {A : Live₂} {C : CaseOf} (Good : Verity.Exchange → Prop) (hof : HeldOfAt A C)
+theorem stmtsCount_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (Good : Verity.Exchange → Prop)
+    (hof : HeldOfAt A C)
     (hparts : PartsHeldAt A C) : StmtsCount A C Good := by
   intro o k p e hA _ hk hf
   have hA₀ := hA
