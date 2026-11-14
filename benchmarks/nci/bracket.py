@@ -106,13 +106,13 @@ def search(U: float, splits: bool, flops: float, w: float, t: float, decode: flo
         per_token = w_in + t
         tokens = min((K - state) / per_token if per_token > 0 else math.inf, (Gamma - dec) / (phi * flops))
         slowdown = Gamma / (phi * flops * tokens)
-        if best is None or slowdown < best["rho"]:
-            best = {"rho": slowdown, "phi": phi, "tokens": tokens,
+        if best is None or slowdown < best["slowdown"]:
+            best = {"slowdown": slowdown, "phi": phi, "tokens": tokens,
                     "reads": {"state": state, "activations": tokens * w_in, "data": tokens * t},
                     "work": {"reference": phi * flops * tokens, "decode": dec}}
     if best is None:
         raise ValueError("no compliant construction in the family: the state or its decoding exceeds a block")
-    best["rho"] = max(1.0, best["rho"])
+    best["slowdown"] = max(1.0, best["slowdown"])
     best["basis"] = "fit" if best["phi"] == 1.0 else ("shard" if splits else "decode-shard")
     return best
 
@@ -120,7 +120,7 @@ def search(U: float, splits: bool, flops: float, w: float, t: float, decode: flo
 def construction_upper(i: dict, K: float, Gamma: float, b_tok: float, splits: bool = True) -> tuple[float, str]:
     c = search(i["U_token_bits"], splits, i["flops_per_token"], i["crossings"] * i["w_cut"], b_tok, i["decode_flops"],
                K, Gamma)
-    return c["rho"], c["basis"]
+    return c["slowdown"], c["basis"]
 
 
 def bracket(row: dict, calibration: dict, parameters: list[dict]) -> dict:
