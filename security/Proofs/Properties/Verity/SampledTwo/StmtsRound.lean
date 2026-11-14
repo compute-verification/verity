@@ -67,7 +67,7 @@ theorem sample_of_codesOk {own : Spot.SecondStage.Own} {t : ℕ} {S : Spot.Secon
 
 /-- **Two statements `pinOk` passes at one template agree** in every field but the sample, the registered reads and
 the public file. -/
-theorem pin_eq {t : ℕ} {w w' : FlockDeploy.Raw} (hp : pinOk h t w = true) (hp' : pinOk h t w' = true) :
+theorem pinOk_agree {t : ℕ} {w w' : FlockDeploy.Raw} (hp : pinOk h t w = true) (hp' : pinOk h t w' = true) :
     { w with draw := none, registered := none, publicFile := .empty } =
       ({ w' with draw := none, registered := none, publicFile := .empty } : FlockDeploy.Raw) := by
   unfold pinOk at hp hp'
@@ -143,7 +143,7 @@ theorem sample_canon_of_stmtOk {x x' m₁ m₁' m₂ m₂' : Claims.Msg} {c₀ :
   obtain ⟨s, hs, hown⟩ := ReadsJson.canon_of_jeq hq
   obtain ⟨s', hs', hown'⟩ := ReadsJson.canon_of_jeq hq'
   obtain rfl : s = s' := Except.ok.inj (hown.symm.trans hown')
-  exact ⟨w, w', b, b', d, d', s, hw, hw', pin_eq hpin hpin', hb, hb', hj, hj', hs, hs'⟩
+  exact ⟨w, w', b, b', d, d', s, hw, hw', pinOk_agree hpin hpin', hb, hb', hj, hj', hs, hs'⟩
 
 end SpotFlock
 
