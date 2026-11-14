@@ -123,7 +123,7 @@ def test_the_free_inputs(request, which):
     CompileSlice_v5's witness at the class and the edge's R returns, and the calls its records and the edge's R. Each
     unit's output is 16 bits."""
     x = request.getfixturevalue(which)
-    for unit, rows in ((V6.compile_unit, V6.COMPILE_ROWS), (V6.pool_unit, V6.POOL_ROWS)):
+    for unit, rows in ((V6.compile_slice_block, V6.COMPILE_ROWS), (V6.pool_unit, V6.POOL_ROWS)):
         params, ret = unit(**x.st).signature()
         widths = {name: sum(BL.elements(t)) for name, t in params}
         assert tuple(widths) == rows and sum(BL.elements(ret)) == 16

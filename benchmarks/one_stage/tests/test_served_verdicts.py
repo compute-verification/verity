@@ -6120,6 +6120,10 @@ print(json.dumps({"protocol": f"verity/{Path(sys.argv[0]).name}/v0", "reason": "
                   "verdict": "reject"}))
 sys.exit(1)
 '''
+#: What composite.py's provenance leaves unshown after a product's Lean runs in a toy tree, which is no git checkout,
+#: and for onsite, whose CITES names no guarantee
+UNSHOWN = {"remote": ["COMPOSITE remote: NOT_ESTABLISHED the tree is no git checkout"],
+           "onsite": ["COMPOSITE onsite: NOT_ESTABLISHED the product cites no listed guarantee"]}
 
 
 @pytest.mark.parametrize("protocol", list(ONSITE_OWN))
@@ -6182,9 +6186,9 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     assert said.splitlines()[:-1] == [
         *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
-        "COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in",
+        "COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in", *UNSHOWN["remote"],
         *([f"COMPOSITE onsite: NOT_ESTABLISHED missing {protocol}"] if killed else []),
-        "COMPOSITE onsite: VERDICT verity/onsite/v0 reject stand-in"]
+        "COMPOSITE onsite: VERDICT verity/onsite/v0 reject stand-in", *UNSHOWN["onsite"]]
     assert str(tmp_path) not in said
     for x in ("remote", "onsite"):
         want = [p for p in C.COMPONENTS[x] if not (killed and p == protocol)]
@@ -6240,7 +6244,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     assert r.returncode == 0, r.stderr
     assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
     said = [x for x in (out / "verdicts.txt").read_text().splitlines() if "NOT_ESTABLISHED" in x or "LEFT_OUT" in x]
-    assert said == [f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}"]
+    assert said == [*UNSHOWN["remote"], f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}", *UNSHOWN["onsite"]]
     for x in ("remote", "onsite"):
         want = [p for p in C.COMPONENTS[x] if p != certifier]
         made = d / "private" / "composite" / x / "private"
