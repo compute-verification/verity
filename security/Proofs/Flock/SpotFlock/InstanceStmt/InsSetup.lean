@@ -28,7 +28,7 @@ import Flock.RecSetup
 import Flock.RecCoins
 import Flock.RecVStar
 import Flock.ProvedScope
-import all Flock.Program
+import Flock.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic

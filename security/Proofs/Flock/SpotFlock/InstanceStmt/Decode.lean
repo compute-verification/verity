@@ -3,8 +3,9 @@ module
 public import Proofs.Flock.SpotFlock.InstanceStmt.Digests
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.Claims.Sampling.Select.SecondWitness
-import all Flock.Program
-import all Flock.TemplateQuery
+import Batteries.Tactic.OpenPrivate
+import Flock.Program
+import Flock.TemplateQuery
 import Flock.Canon
 import Flock.JsonParse
 import all Lean.Data.Json.Basic
@@ -71,7 +72,7 @@ set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
 open private Flock.Program.DecState.mk Flock.Program.DecState.defs Flock.Program.DecState.index
-  Flock.Program.DecState.busy Flock.Program.DecState.walked from Flock.Program
+  Flock.Program.DecState.busy Flock.Program.DecState.walked from Circuits.Program
 
 namespace SpotFlock.InstanceStmt.Decode
 

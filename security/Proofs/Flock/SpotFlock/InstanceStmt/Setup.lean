@@ -4,7 +4,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
 public import Proofs.Flock.SpotFlock.InstanceStmt.File
 public import Proofs.Flock.SpotFlock.InstanceStmt.Decode
 import Proofs.Flock.Claims.Sampling.Select.SecondWitness
-import all Flock.Program
+import Flock.Program
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
