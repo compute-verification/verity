@@ -179,7 +179,7 @@ def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
         IS.window_state(CLS, [x[:-16] for x in registered], 0, 2)
 
 
-def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_bucket_wrote(run):
+def test_each_egress_bucket_computes_the_network_certifiers_row_from_the_view_its_ingress_bucket_wrote(run):
     ch = run.chain
     assert len(ch.egress) == len(ch.ingress) == PARAMS.window
     assert sum(row[s * B] == DATA for row in ch.egress for s in range(SHAPE.R)) == sum(map(len, RESPONSES))

@@ -4,7 +4,7 @@
 #   env WZ_MEM_GB=64 CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/network_certifier_zk.sh
 #   as a job of at most 180 minutes on 16 CPUs and 64 GB.
-# The run: a warden-serve rehearsal against the fake endpoint (`network_certifier_serve.py rehearse --fake`), whose network
+# The run: a network-certifier-serve rehearsal against the fake endpoint (`network_certifier_serve.py rehearse --fake`), whose network
 # certifier commits and signs each window's bucket rows while serving; then `network_certifier_zk.py prove` on it.
 # env: WZ_MEM_GB (what job.sh's stages may take, within the slot's)  WZ_REQUESTS (rehearse's --requests, 6)
 #      WZ_UNITS (network_certifier_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where
@@ -29,7 +29,7 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "wzk: no firewall frame"; exit 7; }
 
 RUN=$W/run
-log "wzk: warden-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
+log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
 (cd benchmarks/network_traces && "$PY" network_certifier_serve.py rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }

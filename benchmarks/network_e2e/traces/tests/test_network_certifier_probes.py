@@ -260,7 +260,7 @@ def test_summary_lays_each_late_tick_against_the_publishes_and_the_host(tmp_path
     assert sorted(late) == [2, 4] and late[2]["publish"] == [] and late[2]["tick_before_ms"] == 2.0
     assert late[4]["publish"] == [[0.35, 40.0, "requests", 0]] and late[4]["tick_before_ms"] == 120.0
     assert [h["t"] for h in late[4]["host"]] == [0.4, 0.5, 0.6, 0.7]
-    assert late[4]["host"][0]["warden_cores_busy"] == {"3": 0.4} and late[4]["host"][0]["warden"]["invol"] == 2
+    assert late[4]["host"][0]["network_certifier_cores_busy"] == {"3": 0.4} and late[4]["host"][0]["warden"]["invol"] == 2
     assert summary.client_loop(w)["stalls"] == 1 and summary.late_ticks(tmp_path, origin, []) is None
     assert summary.network_certifier_cores({"cpus": "not pinned: the job has 2 cores"}) == []
     assert t["publisher"] is None

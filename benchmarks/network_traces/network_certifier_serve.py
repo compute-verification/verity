@@ -1,4 +1,4 @@
-"""warden-serve: the active network certifier (`verity.protocols.accounting.certifier.verifier.network_certifier`) on one host, a relay in front of any TCP
+"""network-certifier-serve: the active network certifier (`verity.protocols.accounting.certifier.verifier.network_certifier`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -641,7 +641,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
-                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
+                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the network certifier closed")
             publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
@@ -670,7 +670,7 @@ class PublisherProcess:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
-        self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
+        self.process = ctx.Process(target=_publisher_main, name="network-certifier-publisher", daemon=True,
                                    args=(self.rows, results, out, key, session, params, commit, load_heads))
         self.process.start()
         results.close()
@@ -825,7 +825,7 @@ def prepare_process(params: NetworkCertifierParams) -> dict:
     report["mlock"] = _memlock(libc)
     for key, value in report.items():
         if (key == "allocator" and value != "malloc") or str(value).startswith("not"):
-            print(f"warden-serve: {key}: {value}", file=sys.stderr, flush=True)
+            print(f"network-certifier-serve: {key}: {value}", file=sys.stderr, flush=True)
     return report
 
 
@@ -1172,11 +1172,11 @@ def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
     for name in INTEGER_FIELDS:
         q.add_argument(f"--{name.replace('_', '-')}", type=int, default=SCHEDULE[name])
     q.add_argument("--egress", choices=EGRESS_FORMS, default=egress,
-                   help="the egress form (warden's \"The egress form\"): id, the egress record's, which the period "
+                   help="the egress form (network certifier's \"The egress form\"): id, the egress record's, which the period "
                         "check takes, or bytes, any server's bytes, a rehearsal's relay of another form (default: "
                         + (egress or "id with --ids, else bytes") + ")")
     q.add_argument("--max-tokens-cap", type=int, default=None,
-                   help="the response cap (warden's \"The response cap\"), in the id form: a request whose max_tokens "
+                   help="the response cap (network certifier's \"The response cap\"), in the id form: a request whose max_tokens "
                         "exceeds it, or doesn't parse, is refused (cap) and every response is held to its request's "
                         "(default: none)")
 
@@ -1189,7 +1189,7 @@ def _params(args) -> NetworkCertifierParams:
 
 def _check_paced(args) -> None:
     if not args.slack < args.paced_ms / 1000 < args.bucket_ms / 1000:
-        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the warden always paces, each bucket released past the slack "
+        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the network certifier always paces, each bucket released past the slack "
                          f"({args.slack * 1000:g} ms) and before the next boundary ({args.bucket_ms} ms)")
 
 
@@ -1257,7 +1257,7 @@ def rehearse(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     params = crr.schedule(_params(args), args)
     me = [sys.executable, str(HERE / "network_certifier_serve.py")]
-    scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
+    scratch = Path(tempfile.mkdtemp(prefix="network-certifier-serve-"))
     procs: list[subprocess.Popen] = []
     try:
         cs.load_key(scratch / "network_certifier", args.height)
@@ -1355,8 +1355,8 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the network certifier is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
         q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
-                       help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
-                            "before the next boundary): the warden always paces")
+                       help="when the network certifier's pacer releases each bucket, ms after its boundary (past the slack, "
+                            "before the next boundary): the network certifier always paces")
         q.add_argument("--watermark", action="store_true",
                        help="also send the server the watermark stream, a chunked POST /verity/watermark on its own "
                             "connection, one line 't n l...' a tick: bucket t has closed, its releases are N < n, and "

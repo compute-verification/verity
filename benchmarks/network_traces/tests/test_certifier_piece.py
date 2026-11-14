@@ -266,7 +266,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
 
 
 def test_a_window_request_the_network_certifier_didnt_certify_is_rejected_before_any_chain(tmp_path, network_certifier, capsys, monkeypatch):
-    stranger = {"user": "not-the-wardens", "prompt": [1, 2], "output": [3]}
+    stranger = {"user": "not-the-network-certifiers", "prompt": [1, 2], "output": [3]}
     d = _serve_dir(tmp_path / "serve", network_certifier, [*network_certifier["records"][:1], stranger])
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
@@ -377,7 +377,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     why = (piece / CP.REFUSED).read_text()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
-    assert {"no kept run": "no warden run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
+    assert {"no kept run": "no network certifier run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
             "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
     if case != "no kept run":
@@ -432,7 +432,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     (bare / CP.CASES / CP.CASE).write_text("{}")
     out = tmp_path / "bare-pieces" / "certifier"
     assert CP.main(["piece", str(bare), str(K), str(out), "--chain-cmd", "exit 7"]) == 3
-    assert "no warden run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
+    assert "no network certifier run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
 
 
 def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, network_certifier):
@@ -571,7 +571,7 @@ def _private_chain_out(out: Path) -> Path:
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
                        "rows": [{"window": 0, "certified": True}],
-                       "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
+                       "network_certifier_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
@@ -589,7 +589,7 @@ def _private_chain_out(out: Path) -> Path:
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
         "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
-        "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
+        "job.json": {"path": CR.NETWORK_CERTIFIER, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
     }
     for rel, doc in docs.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -624,9 +624,9 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     report = json.loads(published["chain/report/report.json"].read_text())
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
         "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
-    assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
+    assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["network_certifier_endpoint_served"]}
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
-    assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
+    assert report["stubbed"] == list(CR.NETWORK_CERTIFIER_SERVED_STUBBED)
     for rel in ("endpoint/report.json", "scan/answers.json"):
         (hold / "chain" / rel).parent.mkdir()
         (hold / "chain" / rel).write_bytes((out / rel).read_bytes())

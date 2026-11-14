@@ -71,7 +71,7 @@ def test_my_phase8_reads_are_refused_foreign_duplicate_cell_past_and_empty():
         with pytest.raises(ValueError, match=why):
             W.port(head, wiring, PARAMS, bad)
     for other in [W.Wiring(wiring.connections, bytes(64)), W.Wiring(wiring.connections[:-1], wiring.salt)]:
-        with pytest.raises(ValueError, match="isn't the one the warden signed"):
+        with pytest.raises(ValueError, match="isn't the one the network certifier signed"):
             W.port(head, other, PARAMS, [(1, 0)])
 
 

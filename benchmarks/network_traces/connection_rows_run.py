@@ -113,7 +113,7 @@ def _class(text: str) -> tuple[int, ...]:
 def flags(q: argparse.ArgumentParser) -> None:
     """The connection rows as `q`'s flags, beside its schedule's."""
     q.add_argument("--lengths", type=int, choices=LENGTHS_FORMS, default=None,
-                   help="the lengths rows' form (warden's \"The lengths rows\"): the network certifier hands each "
+                   help="the lengths rows' form (network certifier's \"The lengths rows\"): the network certifier hands each "
                         "execution phase's releases, and the publisher commits and signs their tables; under 2 "
                         "every execution phase of the run ends, the last included, in its head or in the network "
                         "certifier's signed word that it has none (default: none)")

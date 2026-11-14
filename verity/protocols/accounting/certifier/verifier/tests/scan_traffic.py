@@ -129,7 +129,7 @@ def chain(cls: IS.Class, ingress: Sequence[bytes], egress: Sequence[bytes],
         raise ValueError("one ingress row and one egress row a bucket")
     got = IS.scan(cls, ingress, outputs)
     if got is None:
-        raise ValueError("the reference refuses the warden's own ingress rows")
+        raise ValueError("the reference refuses the network certifier's own ingress rows")
     states, progs = got
     scan = [IS.empty(cls)] + states
     return Chain(cls, ingress, egress, scan, [IS.encode(cls, s) for s in scan],

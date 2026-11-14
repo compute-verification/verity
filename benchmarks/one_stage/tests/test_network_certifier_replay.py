@@ -82,7 +82,7 @@ def test_each_request_is_answered_with_the_tokens_the_server_streamed_it(run):
     assert _exchange(held, {"prompt": [9]})["status"] == 404
 
 
-def test_the_served_window_is_its_own_flag_beside_the_wardens_schedule(run):
+def test_the_served_window_is_its_own_flag_beside_the_network_certifiers_schedule(run):
     """The served run's Commit window and the network certifier's own window (`NetworkCertifierParams.window`, in buckets) are separate flags, and the
     schedule's flags reach the network certifier as `network_certifier_serve.py rehearse` passes them, in the bytes egress form."""
     args = WP.parser().parse_args(["rehearse", "--serve-run", str(run), "--serve-window", "212", "--out", str(run / "o"),
