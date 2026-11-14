@@ -17,3 +17,7 @@ packages = ["datacenter"]
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# examples.py reads the RTX PRO 6000 node's file and its cards through verity.device (load_node reads every card)
+inputs = ["hardware/cards", "hardware/nodes/rtx-pro-6000-server-x8.toml"]
