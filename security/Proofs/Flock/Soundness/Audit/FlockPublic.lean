@@ -81,7 +81,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The public wires decode to their values**: every message packing a satisfying witness of a sampled proof block's table
 decodes, on the unit's committed wires, each gate of `ones` to 1 and each gate of `zeros` outside `ones` to 0. -/

@@ -89,7 +89,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **The replaying provers' messages are the ones the check read, at the form** (`SessionMsgs` at
 `SessionMsgs.replayProver`): `sessionMsgs_replay` where the statements' count, their fit and the sessions' verdicts
 are the form's (`stmtsCount_of`, `SessionCoins.stmtsFit_of`, `SessionCoins.verdictsAt_of`), at every play. -/
-theorem sessionMsgs_form {A : Live₂} {C : CaseOf} {S : SessionReading}
+theorem sessionMsgs_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)
@@ -118,7 +118,7 @@ its last by its evidence (`lastFixed_of`). The replaying provers send each sessi
 them (`sessionMsgs_form`). The frame's run on agreeing coins, its messages the check's wherever it has one, has
 every message (`reaches_frame`), as the replaying provers' run does. -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop)
     (L : CoinMap.Locate)
     (hL : L = SessionCoins.runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) fun _ => Flock.Tags.circuit.table) (q : ℕ)

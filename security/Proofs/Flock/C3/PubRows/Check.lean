@@ -237,7 +237,7 @@ public rows passes at `tr`'s setup, a sampled proof block `u` that its table's s
 port `reg` of `own` whose value `fixedRow` knows (the circuit's port `q`), and the public file's `b ‖ c` of `u`'s row
 `q` is `fixedRow`'s row `x` of the value, at the unit's RecSparse shape or else `sparse`. -/
 theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {cs : RecVStar.InnerCommits}
     {sparse : Option RecSparse.Shape}
     (hchk : ∃ spec sts, setupOf (zkInputs zo.I) tr.record = .ok (spec, sts) ∧
@@ -347,7 +347,7 @@ theorem sampleJ_tableSample (I : Inputs) (d : Lean.Json) (j : ℕ) : drawJ I d j
 tables label their instances with the units their samples prove, the sampled statement's label of a sampled proof block is the
 unit. -/
 theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr)
     (hlb : ∃ spec sts, setupOf (zkInputs zo.I) tr.record = .ok (spec, sts) ∧
       RecVStar.checkLabels (recordDraw tr.record) zo.I.count sts = .ok ())
@@ -382,7 +382,7 @@ theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
 /-! ## At the family -/
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n1) A session accepting a transcript it writes samples the units that read a value `fixedRow` knows**: G's
 `RowsSampled` at every such value, at the outcomes the session's game reaches (`ZkOuter.Writes`). `AcceptsZKR` checks the
@@ -410,7 +410,7 @@ theorem rowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : RowsHeld F 
   obtain ⟨D, dp, idx, hD, hdp, hidx⟩ := FlockSoundness.Discharge.ZkReg.sampled_of_acceptsZKR (F.zs R ω t R₂ j).I
     (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hcH (F.zs R ω t R₂ j).hpub (F.zs R ω t R₂ j).hTags hacc hd u.val
   exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((F.zs R ω t R₂ j).hDraw ω' (partOf (F.zs R ω t R₂ j).I _ u.val)).1 D hD u
-    (FlockSoundness.Discharge.Composed.mem_partS (execOS_subset_full_mem (F.Vs j).law.src ω' u))⟩
+    (FlockSoundness.Discharge.Composed.mem_partS (execOS_subset_full_mem (F.Vs j).samplingDesign.src ω' u))⟩
 
 /-- **(n1) Each of V*'s circuits names each port once** (G's `PortNamesUnique`): the check reads the first port of a
 name. -/

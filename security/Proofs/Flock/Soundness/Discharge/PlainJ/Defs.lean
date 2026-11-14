@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Site
 # One plain sampled session of `J` tables: the plan, sites, layout and rows
 
 `verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
-`Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.sampleLaw` at `plainTables`). `Stmt.setupTables` sets table
+`Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.sampleDesign` at `plainTables`). `Stmt.setupTables` sets table
 `j` up under `tagsAt` at its sample `Composed.drawJ` (the session's sample at one table, its part `j` at several). These are
 `Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are `Discharge/Layout`'s directly,
 with no transfer to compiled tables:

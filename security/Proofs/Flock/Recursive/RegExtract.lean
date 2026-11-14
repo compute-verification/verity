@@ -79,7 +79,7 @@ end Runs
 open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL Composed
   ZkReg
 
-variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg Cm : Type}
+variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type}
 
 /-- **Gap 2 at the word the prover's runs open** (the extraction, `C3/Fork/Extract.lean`).
 `zk_sessions_recursive_fork_innerC` at candidate 3's inner protocol, at a statement whose class checks pass, with the hidden statement the word the
@@ -108,7 +108,7 @@ theorem zk_sessions_recursive_fork_reg {nT r : ℕ} (T : Fin nT → Type) (CT : 
           ¬ (holoInnerAt T CT st hp).holds (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap o.1 o.2.1))
           (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=
@@ -149,7 +149,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
           ¬ (holoInnerAt T CT st hp).holds (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap o.1 o.2.1))
           (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((holoInnerAt T CT st hp).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=
@@ -194,7 +194,7 @@ theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT
             (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap o.1 o.2.1))
           (recGame L Reg (holoInnerAtτ T CT st hp τv) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((holoInnerAtτ T CT st hp τv).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp)) :=

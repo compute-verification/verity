@@ -705,7 +705,7 @@ def unitsAscending (n : ℕ) (units : Array ℕ) : Bool :=
 
 /-- **The record's sample is the one v2 drew**: the units are ascending below `n`, and the record's `unit_draw`
 (`Flock.Witness.recordDraw`) is the sample of `units` under the sampling design `L` over `n` units. -/
-def recordSampled (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
+def recordSampled (L : Flock.Draw.SamplingDesign) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
   unitsAscending n units = true ∧
     Flock.Witness.recordDraw record = some (Flock.Draw.UnitSample.toJson ⟨L, n, units, #[]⟩)
 
@@ -748,7 +748,7 @@ theorem unitsAscending_spec {n : ℕ} {units : Array ℕ} (h : unitsAscending n 
     simpa using far d i (by simpa using h₂)
 
 /-- **The verifier's own sample of the proof blocks an ascending sample names** is that sample. -/
-theorem sampleOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) (L : Flock.Draw.Law) :
+theorem sampleOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) (L : Flock.Draw.SamplingDesign) :
     FlockSoundness.Discharge.ZkLink.drawOf L n (Finset.univ.filter fun u : Fin n => u.val ∈ units) =
       ⟨L, n, units, #[]⟩ := by
   obtain ⟨hlt, hs⟩ := unitsAscending_spec h
@@ -796,7 +796,7 @@ the session's sampling design and population are `L` and `n`, the record v2 read
 blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.sampleUnits_size`), so the record's subset sample
 is the session's. -/
 theorem recordSample_of_drew {k : Verity.Registration.Composite} (hH : SampleHeld k) {s : Verity.Sent} {dr : Draws}
-    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
+    {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
     (hd : Drew k s dr L n ξ units) (hone : OneStatement s.params) (A : Live)
     (hL : A.design = L) (hn : A.n = n) {record : String}
     (hr : sentRecord s = some record) :
@@ -876,7 +876,7 @@ theorem recordSample_of_coins {V : Vocab d α} {k : Verity.Registration.Composit
   have hone : OneStatement o.params := by rw [hθ]; exact hA.single
   obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_sample_v2 hR (by rw [hθ]; exact hp₀) hone hv hl
   have hn := n_of_popTied ht hv.2.1 hθ hd
-  have hL := law_of_setsUp hA hv.2.1 hθ hd hn
+  have hL := samplingDesign_of_setsUp hA hv.2.1 hθ hd hn
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, -⟩ := id hd
   obtain ⟨hlab, haft⟩ := hN a b e p c ev ξ dr hcase hacc
   have hξ := coins_size_le hacc

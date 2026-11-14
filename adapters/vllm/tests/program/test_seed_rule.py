@@ -15,7 +15,7 @@ from verity.definitions.registry import io_shell as X
 
 from verity_vllm.engine import served_seed
 from verity_vllm.program.frontend import seed_rule as SR
-from verity_vllm.program.frontend.value_types import type_of_tensor
+from verity_torch.frontend.value_types import type_of_tensor
 
 
 def _col(xs) -> np.ndarray:

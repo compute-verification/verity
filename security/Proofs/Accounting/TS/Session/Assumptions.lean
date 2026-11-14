@@ -74,8 +74,8 @@ def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
 /-- `accounting-ts-window-law` (live coins at the window: the proof system's samples and audit coins are the window's).
 **At each round and proof, the window's coins read through the session have the session game's law**: for every event
 `E` of a session's outcome, its probability over the window's paths at `(w, i)` is at most the average over the paths
-of its probability in the session's own game (`Flock.SoundAtBridge.SessionLaw`). Read with every `E` it is equality of
-the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof system
+of its probability in the session's own game (`Flock.SoundAtBridge.SessionSamplingDesign`). Read with every `E` it is equality of
+the two laws; `Flock.SoundAtBridge.WindowSamplingDesign` is the same `Prop`. The equality rests on five facts of the proof system
 and of how `sess` is built:
 1. **No retry or resample.** `out x w i` is the outcome of the session's one run on its sample: a refused session is a
    visible failure and is never rerun on a fresh sample. Otherwise the kept outcome leans toward acceptance, and `δ`
@@ -104,7 +104,7 @@ prover's node (`hidden_zk/job.sh`'s `session`), which doesn't meet 5. It stays a
 Flock games run on one coin tape. -/
 def ExecutionPhaseDesign [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) :
     Prop :=
-  ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
+  ∀ w i, SessionSamplingDesign (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
     (fun x => out x w i)
 
 /-- `accounting-ts-served-checks` (a fact of each served Definition's circuit, to be computed by a check). **The served
