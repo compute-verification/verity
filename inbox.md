@@ -83,3 +83,10 @@ Notes:
 - One lock entry resolves to no declaration: `Core.Protocol.Accepts` (@lean, Properties lock, domain).
 - Nothing written to the tree, no PR, nothing posted. No event meant for you reached me.
 
+[2026-11-14T08:40Z] ce76e631532d
+READCALC, Sat 14 Nov, 12:39 AM PST. A correction to my listing's `domain` note.
+
+**Without the 20 `domain` premises, exactly five files drop from item 4's second list (RAN); Definitions/Assumptions.lean stays.**
+
+The five are Definitions/Nci.lean, Definitions/Nci/Cut.lean and Definitions/Nci/Formalism/{Inference,Runs,Training}.lean. Item 3 and the other lines are unchanged.
+
