@@ -22,6 +22,12 @@ variable {Col D : Type}
 
 variable (H : List UInt8 → D) (E : Enc Col D)
 
+/-- `up` is `H(acc ‖ sib)` at an even index and `H(sib ‖ acc)` at an odd one. -/
+theorem up_eq (idx : ℕ) (acc sib : D) :
+    up H E idx acc sib = if idx % 2 = 0 then H (E.dig acc ++ E.dig sib) else H (E.dig sib ++ E.dig acc) := by
+  unfold up upIn
+  exact apply_ite H _ _ _
+
 theorem append_inj {a b a' b' : D} (h : E.dig a ++ E.dig b = E.dig a' ++ E.dig b') :
     a = a' ∧ b = b' := by
   have hl : (E.dig a).length = (E.dig a').length := E.dig_len a a'
