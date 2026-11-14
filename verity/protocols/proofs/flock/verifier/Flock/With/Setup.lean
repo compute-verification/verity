@@ -594,7 +594,7 @@ def deriveTemplateUnitsWith (hs : Hashes M) (c : Circuit) (obj : Json) (program 
     match TemplateQuery.locate rs i with
     | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the unit class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
+  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
 
 /-- `deriveQwordUnits` through the oracle. -/
@@ -903,7 +903,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
 def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
     M Circuit := do
   let mj ← metaOf bytes
-  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
+  if J.has mj "definition" then throw "META definition: a proof-block class has no templated statement"
   let ctx := "templated statement META"
   let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
@@ -929,7 +929,7 @@ numbers through the view (`HmOut.tmplCountView`, `ByteLines.View.parseAt_tmpl`),
 @[noinline] def parseTmplWithVT (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (v : ByteLines.View) (cls : Task (V ByteArray)) : V Circuit := do
   let mj ← metaOf bytes
-  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
+  if J.has mj "definition" then throw "META definition: a proof-block class has no templated statement"
   let ctx := "templated statement META"
   let k ← tmplCountView v
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)

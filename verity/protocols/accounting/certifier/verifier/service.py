@@ -282,7 +282,7 @@ def _unit(check) -> CompositeDefinition:
 
 _UNIT = _unit(HC.gate)
 #: the same unit with each gate replaced by the Definition it names, as a proof's circuit lowers it
-_PROOF_UNIT = _unit(_head_expanded)
+_PROOF_BLOCK = _unit(_head_expanded)
 
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], *, proof: bool = False):
@@ -290,7 +290,7 @@ def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], *, proof: 
     With `proof`, the unit a proof's circuit lowers: the same id and signature, so the template the registered query
     names, with each gate the Definition it names once that Definition's circuit digest is the gate's pin
     (`head_check.expand`, which traces it: minutes a head check, and a `ValueError` for an unpinned size class)."""
-    return bind(_PROOF_UNIT if proof else _UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+    return bind(_PROOF_BLOCK if proof else _UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
 
 
 PUBLIC = (

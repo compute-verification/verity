@@ -176,7 +176,7 @@ theorem partitionsOk_sound {P : Partition} {C : Prog} (hP : partitionsOk P C = t
   · have := hne u hu
     simpa using this
   · have := hw u hu
-    cases hcl : unitClass C u with
+    cases hcl : sizeClass C u with
     | none => simp [hcl] at this
     | some w =>
       rw [hcl] at this
