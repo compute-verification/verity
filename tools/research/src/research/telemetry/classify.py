@@ -120,7 +120,8 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     status = read_status(d)
     try:
         jobdoc = json.loads((d / "job.json").read_text()) if (d / "job.json").exists() else {}
-    except ValueError:
+    except ValueError as e:
+        print(f"tele classify: {d / 'job.json'} is not JSON, so no output is declared ({e})", file=sys.stderr, flush=True)
         jobdoc = {}
     declared_outputs = [str(x) for x in ((jobdoc.get("execution") or {}).get("declared_outputs") or [])]
     evidence: list[dict[str, Any]] = []

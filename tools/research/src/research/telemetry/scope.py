@@ -35,6 +35,7 @@ import json
 import os
 import re
 import signal
+import sys
 import tempfile
 import time
 from collections.abc import Callable, Iterable
@@ -77,10 +78,13 @@ def claim(path: Path, doc: dict[str, Any], mode: int | None = None) -> bool:
 def cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
     """`research cancel`'s request in CONTROL_CANCEL, once it is there and parses: {"grace_s", "actor", "reason", "scopes"}; None
     for none, and for the runner's `closed`."""
+    if not (attempt_dir / CONTROL_CANCEL).exists():
+        return None
     try:
         doc = json.loads((attempt_dir / CONTROL_CANCEL).read_text())
         return doc if isinstance(doc, dict) and float(doc.get("grace_s")) >= 0 else None
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError) as e:
+        print(f"tele: {attempt_dir / CONTROL_CANCEL} is no cancel request ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 

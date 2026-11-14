@@ -54,8 +54,8 @@ def pgid_members(pgid: int) -> list[dict[str, Any]]:
                 st = stat_fields(int(x))
                 if st and st["pgrp"] == pgid:
                     out.append({"pid": st["pid"], "comm": st["comm"], "starttime_ticks": st["starttime_ticks"]})
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"tele cancel: /proc unlisted, so group {pgid}'s members are not known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out[:256]
 
 
@@ -74,8 +74,8 @@ def run_dir_strays(pgid: int, want: str) -> list[dict[str, Any]]:
                 st = stat_fields(int(x))
                 if st and st["pgrp"] != pgid and run_dir_of(st["pid"]) == want:
                     out.append({"pid": st["pid"], "comm": st["comm"], "pgrp": st["pgrp"]})
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"tele cancel: /proc unlisted, so the run's processes outside group {pgid} are not known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
@@ -206,8 +206,8 @@ def cancel(a: argparse.Namespace) -> int:
             try:
                 os.kill(s["pid"], a.signal)
                 hit += 1
-            except OSError:
-                pass
+            except OSError as e:
+                print(f"tele cancel: stray {s['pid']} not signalled ({type(e).__name__})", file=sys.stderr, flush=True)
         if strays:
             result.update(strays=strays[:MEMBERS_KEPT], strays_total=len(strays), strays_signalled=hit)
     if a.confirm_exit_s and a.target_pid is not None and result.get("delivered"):

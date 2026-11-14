@@ -88,9 +88,12 @@ class _TimeoutControl:
         self._bad: str | None = None
 
     def poll(self) -> dict[str, Any] | None:
+        if not self.path.exists():
+            return None
         try:
             st = self.path.stat()
-        except OSError:
+        except OSError as e:
+            print(f"[tele run] {self.path.name} unread, so no timeout change is taken ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             return None
         sig = (st.st_mtime_ns, st.st_size)
         if sig == self._sig:
@@ -122,7 +125,8 @@ def _close_cancel(attempt_dir: Path) -> dict[str, Any] | None:
     try:
         if claim(attempt_dir / CONTROL_CANCEL, {"closed_utc": utc_now_ms(), "by": "runner"}):
             return None
-    except OSError:
+    except OSError as e:
+        print(f"[tele run] {CONTROL_CANCEL} not claimed as closed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return cancel_request(attempt_dir)
 
@@ -255,7 +259,8 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
         try:
             import tomllib
             policy_version = tomllib.loads(Path(a.policy).read_text()).get("policy", {}).get("version")
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError, AttributeError) as e:
+            print(f"[tele run] {a.policy} unread, so the run records no policy version ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             policy_version = None
     if not (d / "job.json").exists() or a.rewrite_job:
         job = build_job(project=a.project, task=a.task, job=a.job, attempt=a.attempt, lane=a.lane, generation=a.generation, tree_sha=a.tree_sha,
@@ -391,8 +396,8 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
                 except subprocess.TimeoutExpired:
                     sampler.kill()
                     em.emit("mark", stage=a.stage, name="sampler_killed_by_runner", note="sampler did not stop within 10 s of SIGTERM")
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"[tele run] the sampler was not stopped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     for f in (out_f, err_f):
         if f:
             f.close()
