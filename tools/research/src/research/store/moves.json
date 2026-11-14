@@ -4354,6 +4354,11 @@
         "security/Proofs/Accounting/ReadUnit/Tie.lean": "security/Proofs/Poub/ReadUnit/Tie.lean",
         "security/Proofs/Accounting/ReadUnit/Witnesses.lean": "security/Proofs/Poub/ReadUnit/Witnesses.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/streamed_wipe/wipe_on_node.py": "verity/protocols/accounting/pous/prover/wipe_on_node.py"
+      }
     }
   ]
 }
