@@ -99,6 +99,16 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in MAIN_FILE PP_CHALLENGER_KEY DAY_PARAMS; do
       [ -z "${!v-}" ] || [ -s "${!v}" ] || no "$v names ${!v}, which is missing or empty: send it with the run"
     done
+    # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
+    # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
+    if [ -n "${PEARLPLUS_TIE-}" ]; then
+      num='' den=''
+      [[ ${V3C_LAW-} =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
+      [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
+        || no "V3C_LAW is ${V3C_LAW:-unset}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch states it, a" \
+          "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
+          "each template while none holds more than DEN"
+    fi
     # the class the window is committed at, the harness's default where the settings name none
     cls=${V3C_CLASS-4,32,4}
     if [[ $cls =~ ^[1-9][0-9]*,[1-9][0-9]*,([1-9][0-9]*)$ ]]; then
@@ -116,18 +126,8 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     # `check` builds and profiles the settings' class and no other
     [ -z "${WANT_CLASS-}" ] || [ "$WANT_CLASS" = "$cls" ] \
       || no "CLASS is $WANT_CLASS and the settings serve $cls: name the class in the settings (V3C_CLASS and CLASSES)"
-    # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
-    # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
-    if [ -n "${PEARLPLUS_TIE-}" ]; then
-      num='' den=''
-      [[ ${V3C_LAW-} =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
-      [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
-        || no "V3C_LAW is ${V3C_LAW:-unset}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch states it, a" \
-          "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
-          "each template while none holds more than DEN"
-    fi
-    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, its rule $V3C_LAW, product remote," \
-      "limits $ALPHA and $GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
+    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, product remote, limits $ALPHA and" \
+      "$GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
     exit "$bad"
   )
 }

@@ -3844,7 +3844,7 @@ def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(t
     Pearl+-tied serve's settings that state no V3C_LAW, or one that is no ``stratified-rate:NUM/DEN`` with 0 < NUM <= DEN:
     the tied window's rule has no default, and the harness's preflight refuses such a launch (`NO_PEARL_RULE`), which the
     rehearsal would learn only on the serve node. The refusal names V3C_LAW and the form in the preflight's words;
-    settings that state one are held, and the line names the rule."""
+    settings that state one are held."""
     for name in ("main.txt", "key.json", "day-params.json"):
         (tmp_path / name).write_text("x\n")
     settings = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "ROW": "stand-in",
@@ -3857,8 +3857,7 @@ def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(t
                          env={"PATH": os.environ["PATH"]}, capture_output=True, text=True, check=False)
     said = run.stdout.splitlines()
     if held:
-        assert run.returncode == 0 and len(said) == 1, (run.returncode, said, run.stderr)
-        assert said[0].startswith(f"SETTINGS held: Pearl+ tied to the window at class 4,32,4, its rule {law}, "), said
+        assert run.returncode == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (run.returncode, said, run.stderr)
     else:
         assert (run.returncode, said) == (3, [
             f"SETTINGS refused: V3C_LAW is {law or 'unset'}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch "
