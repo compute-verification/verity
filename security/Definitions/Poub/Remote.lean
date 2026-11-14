@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Poub.Remote.Sample
 public import Definitions.Poub.Remote.Node
 public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Outside

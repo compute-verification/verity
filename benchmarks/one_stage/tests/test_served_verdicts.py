@@ -2926,6 +2926,25 @@ W63K4 = "8,32,4,4,16"
 #: V3c's default rules (`served_verdicts.sh`'s V3C_LAW), which its window-commit and its audit both take: a rate, and
 #: under H1_TIE a stratified rate
 RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
+#: the toy tree's `window_commit.py`: the tree's own prove_path.py, run under the name served_verdicts.sh's calls record
+WINDOW_COMMIT = '''import runpy, sys
+from pathlib import Path
+sys.argv[0] = str(Path(__file__).parents[2] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py")
+runpy.run_path(sys.argv[0], run_name="__main__")
+'''
+
+
+def _one_stage(tree: Path, *, linked: bool = True) -> None:
+    """The toy tree's benchmarks/one_stage: this directory's files (``linked``), but a window_commit.py that runs the
+    tree's own prove_path.py rather than SPOT's."""
+    one = tree / "benchmarks" / "one_stage"
+    one.mkdir(parents=True, exist_ok=True)
+    for f in HERE.parent.iterdir() if linked else ():
+        if f.name != "window_commit.py":
+            (one / f.name).symlink_to(f, target_is_directory=f.is_dir())
+    (one / "window_commit.py").write_text(WINDOW_COMMIT)
+
+
 FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
@@ -3016,6 +3035,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
+    _one_stage(tree, linked=False)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -3137,7 +3157,7 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
@@ -3764,7 +3784,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
         p.mkdir(parents=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')

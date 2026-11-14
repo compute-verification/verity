@@ -14,7 +14,7 @@ Stacking needs a carrier the audit counts: device memory whose contents were cho
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
 (`Definitions/Poub/Carrier.lean`). Five guarantees, whose proofs are in
-`Security/Proofs/Poub/Stacking.lean`:
+`security/Proofs/Poub/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
   the store, `I + q·b` for `I` input bits and `q` blocks encoded.

@@ -6,7 +6,7 @@ public import Commitments.FV3
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
 
-`verity.core.attest`, whose module docstring is the spec. An auditor party on a device commits each sampling block's
+`verity.commitments.attest`, whose module docstring is the spec. An auditor party on a device commits each sampling block's
 records (each a byte string) as the leaves of one frame-v3-sha512 tree per certification period (`root`, over the domain
 `periodDomain count` at the binding `PERIOD_BINDING`, owner −1, leaf schema `PERIOD_SCHEMA`), and its lower HSS key signs the
 root once per period (`Lms.periodRootMessage`, binding the deployment, the party, the attachment the challenger drew, the

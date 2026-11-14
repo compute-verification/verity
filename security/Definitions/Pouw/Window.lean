@@ -52,7 +52,7 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
   transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
   served with probability at most a term of the window's state;
-* the deployed sample, SPOT (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
+* the deployed sample, SPOT (`verity/protocols/accounting/pouw/verifier/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
   the `N` tiles; `share` and `sessionLaw`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `IncorrectCopyClosed`,
@@ -336,7 +336,7 @@ def MissProbWithin {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n)) (L : Reg
 * `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
   `p`, its anchors;
 * `rootH3`: the pass's `-h3` root; `leaf p`, the `-h3` leaf at position `p` under it; `tileRead l v`, the words of leaf
-  `l` that unit `v` reads (`tile_read` in `verity/core/protocols/pouw/window.py`);
+  `l` that unit `v` reads (`tile_read` in `verity/protocols/accounting/pouw/verifier/window.py`);
 * `inputs X v`, `outputs X v`: a transcript `X`'s values at unit `v`'s input and output wires; `rootOf X`, the `-h3`
   root the window's entries hold in `X`.
 The positions are the units' statements' (`UnitStmts.Pos`), so a unit reads the anchors and the leaf at its own place in
@@ -392,7 +392,7 @@ end Window
 
 /-! ## The deployed sample: SPOT
 
-PoUW runs on SPOT (decision 102; `verity/core/protocols/pouw/window.py`): after the receipt the
+PoUW runs on SPOT (decision 102; `verity/protocols/accounting/pouw/verifier/window.py`): after the receipt the
 verifier samples one uniform `K′`-of-`N` subset of the window's equal tiles (`subset:K′`), and the service proves the sampled
 tiles in `⌈K′/cap⌉` sessions of `cap` instances, session `σ` holding the sampled indices of rank `σ·cap` to `σ·cap + cap − 1`
 in ascending order and padding with the filler tile `N − 1` (`instance_ts`). A session mixes tiles of every call, so the

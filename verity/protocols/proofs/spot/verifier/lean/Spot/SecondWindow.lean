@@ -38,6 +38,7 @@ module
 
 public import Spot.Ranks
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 meta import Spot.Ranks
 meta import Spot.SecondStage
 
