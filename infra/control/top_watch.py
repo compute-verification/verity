@@ -4,7 +4,7 @@ top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended.
 inbox doorbells, and whatever needs judgment rings top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
-    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
+    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $CURSOR_API_KEY,
                                                                                       $LINEAR_CLIENT_ID, $LINEAR_CLIENT_SECRET
 
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
@@ -27,7 +27,9 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci.
+4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci. It reads
+   GitHub with the token GH_TOKEN_CMD prints, taken at each pass and never from the loop's environment; a read GitHub
+   refuses, or no token to read with, rings infra once until a read works again, with what to do.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
    ($FLEET_DIR): top, with the numbers.
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
@@ -58,6 +60,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -79,6 +82,9 @@ AUDIT_LOG = "linear-audit.jsonl"
 GOALS_DIR, GOALS_KEY, GOALS_STAMP = "goals", "goals.key", "goals-%Y%m%dT%H%MZ.json.gz"
 DAY_BEFORE_S = 86400 - 1800             # the line 24 h earlier: the newest one at least this old (passes drift within the hour)
 REPO = "compute-verification/verity"
+GH_TOKEN_CMD = ("/data/infra/gh_read_token.sh", "--cached")     # the pod's read-only App token: every reader's one source
+GH_REFUSED = (401, 403)
+GH_REFUSED_ID = "github:refused"
 OPEN = ("Waiting on Daniel", "Revising")
 HANDLE_LEAD = re.compile(r"^\s*@[a-z0-9][a-z0-9._-]*")
 OPTION_LETTER = re.compile(r"^([A-E])\.")
@@ -332,15 +338,38 @@ MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owne
   ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
 
 
-def gh_main() -> dict:
+class GitHubRefused(Exception):
+    """GitHub refused a read (HTTP 401 or 403), or the token command gave no token to read with."""
+
+
+def gh_token() -> str:
+    """The read-only token of the moment: what GH_TOKEN_CMD prints, run at each read, so a loop that has run for days reads
+    with a token minted within the hour."""
+    cmd = " ".join(GH_TOKEN_CMD)
+    try:
+        r = subprocess.run(GH_TOKEN_CMD, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise GitHubRefused(f"`{cmd}` didn't run ({type(e).__name__})") from None
+    if r.returncode != 0 or not r.stdout.strip():
+        raise GitHubRefused(f"`{cmd}` gave no token (exit {r.returncode}: {r.stderr.strip()[-300:] or 'nothing on stderr'})")
+    return r.stdout.strip()
+
+
+def gh_main(token: Callable[[], str] | None = None) -> dict:
     """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued)."""
+    carries every commit and patch: megabytes while a few hundred commits are queued), with the token `token` gives now
+    (`gh_token`)."""
     owner, name = REPO.split("/")
     req = urllib.request.Request("https://api.github.com/graphql", method="POST",
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
-                                 headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        out = json.load(r)
+                                 headers={"Authorization": f"Bearer {(token or gh_token)()}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            out = json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code in GH_REFUSED:
+            raise GitHubRefused(f"GitHub answered HTTP {e.code} to the read of main") from None
+        raise
     if out.get("errors"):
         raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
     ref = out["data"]["repository"]["ref"]
@@ -349,8 +378,18 @@ def gh_main() -> dict:
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
-    to it, so the clock starts at the later of that and the first pass that saw the head."""
-    head = read()
+    to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
+    and again only after a read that worked: until it reads, a stalled main rings nobody."""
+    try:
+        head = read()
+    except GitHubRefused as e:
+        once_each(state, GH_REFUSED_ID, ring, "infra",
+                  f"infra: the sweep can't read main from GitHub: {e}. Until it reads, a stalled main rings nobody. On the "
+                  f"control pod, `{GH_TOKEN_CMD[0]} > /dev/null` mints a token and prints GitHub's reason when it can't (the "
+                  f"App's key, its installation or its permissions); if that mints, the cached token is the one GitHub no "
+                  f"longer takes: `rm /dev/shm/verity-read-token`. The next pass reads again.", None, now)
+        raise
+    (state.get("rung") or {}).pop(GH_REFUSED_ID, None)
     committed = datetime.fromisoformat(head["committed"].replace("Z", "+00:00")).timestamp()
     seen = state.get("main_head") or {}
     if seen.get("sha") != head["sha"]:
