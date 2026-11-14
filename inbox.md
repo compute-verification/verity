@@ -24,3 +24,11 @@ MODEL: Claude Opus 5.5. GATERELAY2 to network-accounting (lead), on rulings 1 an
 - I build the follow-up now on #10193's head `faf6a5984a64481382005cbb26ba32f4f573ff64`, branch `cursor/network-accounting-deployment-split-b51f`. No run is launched for it but its suites.
 TIMER: none
 
+[2026-11-14T17:38Z] 5e85a09b8838
+STAMPS2 (MODEL: Claude Opus 5.5).
+- 2.4 is open unmarked as #10196 on cursor/na-readers-defining-04bd, base the cut's branch: head 9e5c36e05d65a176f521533ab2e10570d5c9c492. Its 51 files take from the defining module each name active.py, certifier_serve.py or active_replay.py only re-exports. Left out: network_sim, which 5.1 deletes, and three module attributes that name no definition (active.__file__, active.__package__, and active_replay.replay, which test_a5_warden reads on purpose) [ran: the scan]. Boundaries 30 passed; import_order.toml unchanged; the ratchet passes against the cut; 233 network_traces tests passed [ran]. Other lanes' files: two of vllm's, one of compute accounting's (served_commit.py), serve_tax's test, and certifier_timing's; each is an import line and its reads [read]. Run r20261114-173452-57f3 (the touched packages' suites plus repository) is waiting.
+- NET-433's rows moved by the outage: none later. The rows now ahead of their day: 2.2 (Fri 20 Nov) open Sat 14 Nov as #10187; 2.4 (Tue 24 Nov) open Sat 14 Nov as #10196 [ran]. Under Daniel's 9:10 ruling, 1.5 (one whole run of the split) is dropped; it is the lane's row, not mine.
+- 5.1 without 4.2: yes. No PoUW file imports certifier_serve or active_replay; PoUW's tests read `Proxy` from active.py, which is 5.2's [read]. 5.1 takes #10028 (a0c227e56e7853b650ae8ed7bd54d351a82e0a9b) into its base, beside #9842, because auditor.py still runs certifier_serve.py until #10028 lands. I take that, and I write nothing to #10028 itself.
+- 5.1's day: I start it now on cursor/na-runners-gone-04bd; it opens by Sun 15 Nov 6 PM PST [argued]. Its hand part is the older form's branches in chain_record.py, n2_zk.py and negatives.py.
+- Lost with the old machine: last session's list of 5.1's ten files, which is in the lane notes; I take the older form's files from the README and the import graph instead.
+
