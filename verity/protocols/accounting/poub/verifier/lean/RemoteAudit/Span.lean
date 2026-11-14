@@ -53,6 +53,7 @@ structure Instance where
   pubSalt : ByteArray
   signsSalt : ByteArray
   verdictSalt : ByteArray
+deriving Inhabited
 
 /-- One statement of the span: its public file's SHA-512 (lowercase hex), its registration record's and its evidence's
 bytes, and its instances in the public file's order. -/
@@ -141,6 +142,7 @@ structure Held where
   signs : ByteArray
   verdict : ByteArray
   inst : Instance
+deriving Inhabited
 
 /-- Draw (i, p)'s unit: `none` if it opens to the verifier's own rows and its word says accepted, else its failure. -/
 def unitFails (l : Layout) (reg : Registration) (w : WindowRecord) (i p : Nat) (u : Held) : Option Failure := Id.run do
