@@ -33,7 +33,8 @@ them, and of nothing a server or a prover says. This is the one statement of the
 - `max_tokens` is the u32 the request's first cell holds at `active.MAX_TOKENS_AT`, in `active.ID_DIGITS`
   characters after the key `{"max_tokens":`, which the reading holds to that place
   (`active.id_request_max_tokens`). Every released request has it, so the rule has no default to apply. It is the
-  number the device reads at ingress under the response cap and holds the response to, so it is at most the cap.
+  number the device reads at ingress under the response cap and holds the response to, so it is from 1 to the cap:
+  ingress refuses a request that asks for no token.
 - The count of the prompt's ids is the cells' prompt fields, one id each, at least 1. It is at most its class's P:
   a canonical id request's length is a function of its prompt's count and B alone and grows with the count, and a
   release is filed only in a class whose `request_room`, the length at P ids, holds its request (`tables` refuses
@@ -97,11 +98,11 @@ more than O, is refused, never cut short.
   releases, so releases with one past it are no execution phase's of the schedule, and none of them is laid.
 - In a schedule with request words a class's words table holds, at row r, the words of the request of its request
   table's row r. A release filed in a class whose request `request_words` doesn't read is refused, naming the
-  release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is
-  past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same way.
-  These are `tables`' own checks of what the device already holds: in every table laid, a words row's
-  `max_tokens` is at most the schedule's and at least its response row's count, and its count of prompt ids is at
-  most its class's P.
+  release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is 0
+  or past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same
+  way. These are `tables`' own checks of what the device already holds: in every table laid, a words row's
+  `max_tokens` is from 1 to the schedule's and at least its response row's count, and its count of prompt ids is
+  at most its class's P.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It is called in one place, in `connection_rows`,
@@ -501,11 +502,11 @@ def _laid(params: WardenParams, released: Sequence[Released],
                 raise ValueError(f"release {r.order}, filed in class {i}, has a request without words: "
                                  f"{e}") from None
             asked, most = words[r.order][0], params.max_tokens_cap
-            if asked > most or r.outputs > asked:
+            if not asked or asked > most or r.outputs > asked:
                 raise ValueError(f"release {r.order}, filed in class {i}, has a max_tokens of {asked} and "
                                  f"{r.outputs} ids where the schedule's max_tokens_cap is {most}: the network "
-                                 f"certifier releases no request whose max_tokens is past it and no id past a "
-                                 f"request's max_tokens")
+                                 f"certifier releases no request whose max_tokens is 0 or past it and no id past "
+                                 f"a request's max_tokens")
     return filed, words
 
 
@@ -517,7 +518,7 @@ def tables(params: WardenParams, released: Sequence[Released],
     the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
     hold it, under form 2 a release filed in a class past its R-th, naming the release, the class and R, or in a
     schedule with request words a release filed in a class whose request `request_words` doesn't read, whose
-    `max_tokens` is past the response cap or whose ids are more than its `max_tokens`, naming the release."""
+    `max_tokens` is 0 or past the response cap or whose ids are more than its `max_tokens`, naming the release."""
     laid, words = _laid(params, released, filing)
     B, listed = params.cell_bytes, sized(params)
     out: dict[str, list[bytes]] = {}

@@ -43,8 +43,9 @@ HELD_REGISTERED = ("65bbc0b02c29f9d80d3761afcd4dc19299d6bd356b75eaa5166ac8d2eb81
                    "3755382f840ebac9ad2140bb4033a9760b2d664df08f5da3f7fb6ab7dd6b6142")
 
 #: each released request's `max_tokens` and its prompt's count of ids, by its place in the release order: a prompt
-#: of one cell, of two and of three, a `max_tokens` of 0 and one at the schedule's most
-ASKED = ((8, 3), (1, 40), (8, 100), (0, 3), (5, 16), (7, 2))
+#: of one cell, of two and of three, a `max_tokens` of 1, the least a released request asks for, and one at the
+#: schedule's most
+ASKED = ((8, 3), (1, 40), (8, 100), (1, 3), (5, 16), (7, 2))
 #: what the server sends on each, and on each in a second run of the same requests
 SENT = ((11, 22, 33), (9,), tuple(range(8)), (), (5,), (1, 2))
 OTHER = ((1,), (), (3, 4), (), (), (6, 7, 8))
@@ -335,8 +336,8 @@ def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_commi
     """The tables of a schedule with request words are laid only from releases whose requests the rule reads: a
     hand with a request that is no canonical id request is refused, naming the release and its class, and none of
     it is laid, where the same hand under the schedule without request words is laid as it was. So is a hand with
-    a request whose `max_tokens` is past the schedule's `max_tokens_cap`, or with more ids than its request's
-    `max_tokens`, which the device never releases; at each of the two it is laid. A request of more prompt ids than
+    a request whose `max_tokens` is 0 or past the schedule's `max_tokens_cap`, or with more ids than its request's
+    `max_tokens`, which the device never releases; from 1 to the cap, with at most that many ids, it is laid. A request of more prompt ids than
     a class's P is longer than the class holds, so it is no row of the class: filed there it is refused by its
     bytes, and at P ids it is laid with a count of P. The commitment takes a class's words table only at the
     class's count, in rows of 8 bytes."""
@@ -351,12 +352,13 @@ def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_commi
         return ((Released(0, len(request), ids, False, request, bytes(4 * ids)),), *((),) * (len(handed[0]) - 1))
 
     most = WORDED.max_tokens_cap
-    for max_tokens, ids in ((most + 1, 2), (2, 3), (0, 1)):
+    for max_tokens, ids in ((most + 1, 2), (2, 3), (0, 1), (0, 0)):
         with pytest.raises(ValueError, match=f"release 0, filed in class 0, has a max_tokens of {max_tokens} and {ids} "
-                                             f"ids where the schedule's max_tokens_cap is {most}: the network "):
+                                             f"ids where the schedule's max_tokens_cap is {most}: the network "
+                                             "certifier releases no request whose max_tokens is 0 or past it"):
             CR.tables(WORDED, hand(max_tokens, ids))
         assert len(CR.tables(BOUNDED, hand(max_tokens, ids))["request.0"]) == 1
-    for max_tokens, ids in ((most, 4), (2, 2), (0, 0)):
+    for max_tokens, ids in ((most, 4), (2, 2), (1, 0), (1, 1)):
         assert [CT.words_of(row) for row in CR.tables(WORDED, hand(max_tokens, ids))["words.0"]] == [(max_tokens, 3)]
     for i, (P, _) in enumerate(WORDED.content):
         at, past = id_req(0, P), id_req(0, P + 1)

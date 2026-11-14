@@ -2071,8 +2071,9 @@ the cut gives one event a `DATA` cell and the `END` holds the trailer; any other
 
 **The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
 network certifier reads each request's `max_tokens` from its first request cell (`active.id_request_max_tokens`) before
-cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
-cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
+cutting it. A request whose field isn't a u32 at its place, is 0 or exceeds the cap is refused (`cap`): none of its
+bytes is cut into a cell or reaches the server, and it fails at once. It is never clamped, and a request that asks for
+no token is refused because the stop rule ends no response of it. Every other response is held to its
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
@@ -2224,10 +2225,10 @@ prompt ids and a size of ids released, each a power of two.
   - **The count of prompt ids is at most the class's P.** A canonical id request's length grows with its prompt's
     count alone, and a release is filed only in a class that holds its request's bytes.
   - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
-    naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
-    more ids released than its `max_tokens`. These are `tables`' own checks of what the device already holds:
-    under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
-    count.
+    naming the release, and no head is signed over it. So is one with a `max_tokens` of 0 or past `max_tokens_cap`,
+    or with more ids released than its `max_tokens`. These are `tables`' own checks of what the device already
+    holds: under every signed head a words row's `max_tokens` is from 1 to the schedule's and at least its response
+    row's count.
   - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
     schedule's.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`

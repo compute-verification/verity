@@ -62,9 +62,11 @@ parameters' digest is no id form's, and the period check reads only the id form'
 **The response cap** (`WardenParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
 in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
 reads each request's `max_tokens` from its first request cell, where `active.id_request` puts it
-(`active.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32 or exceeds the cap
-is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is padding, and
-it fails at once, as the client's other problems do. Every other request's response is held to its `max_tokens`: an
+(`active.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32, is 0 or exceeds
+the cap is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is
+padding, and it fails at once, as the client's other problems do. A request that asks for no token is refused because
+no response answers it: its response would be held to no `DATA` cell, and the stop rule ends no response of it.
+Every other request's response is held to its `max_tokens`: an
 egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives
 holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTiming.Guarantees.ResponseCapped`). The
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
@@ -950,7 +952,7 @@ class Warden:
             if c.ingress_end is None and not c.refused and not c.ingress_cells and not sent and \
                     self.params.max_tokens_cap is not None and (len(c.ingress) >= p or c.ingress_ended):
                 c.max_tokens = id_request_max_tokens(bytes(c.ingress[:p]))
-                if c.max_tokens is None or c.max_tokens > self.params.max_tokens_cap:
+                if not c.max_tokens or c.max_tokens > self.params.max_tokens_cap:
                     c.refused, c.problem = True, c.problem or "cap"
             if c.ingress_end is not None or c.refused or (c.problem is not None and self.params.lengths is not None):
                 out.append(pad)
@@ -1142,8 +1144,8 @@ def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[B
     to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
     In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
     schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
-    request cell as the network certifier read it: a request cut into cells has one at most the cap, its response at
-    most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
+    request cell as the network certifier read it: a request cut into cells has one from 1 to the cap, its response
+    at most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
     records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
     lengths rows every `FAIL` is at an egress slot, a client's reason (`CLIENT_REASONS`) is a connection's whose request
     has no `END` and a server's one whose request has, and a connection that was never released fails no window: its
@@ -1236,8 +1238,8 @@ def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[B
         max_tokens = None
         if cap is not None and requested:
             max_tokens = id_request_max_tokens(requested[0])
-            if max_tokens is None or max_tokens > cap:
-                problems.append(f"its request's max_tokens ({max_tokens}) is past the cap, and was released")
+            if not max_tokens or max_tokens > cap:
+                problems.append(f"its request's max_tokens ({max_tokens}) is not from 1 to the cap, and was released")
             elif live.count(DATA) > max_tokens:
                 problems.append(f"its response has {live.count(DATA)} DATA cells, past its max_tokens ({max_tokens})")
         if failed == "cap" and requested:
