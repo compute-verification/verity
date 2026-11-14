@@ -34,7 +34,7 @@ untraced = ["tests/test_lean_deployed.py", "tests/test_lean_try.py", "tests/test
 # `verity lean try` (`tests/test_lean_try.py`): the axiom probe it loads, and `siblings.py` (with the `headers.py` it
 # loads), which gives every try its package's Lean options. `verity lean deployed` (`tests/test_lean_deployed.py`): the Lean
 # check whose `trust_gaps` it calls, and the tree's locks through git (those under `verity` come with it).
-inputs = ["verity", "demos/onsite_served", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/siblings.py",
+inputs = ["verity", "benchmarks/demo_minutes/onsite_minutes.py", "benchmarks/demo_minutes/tests/test_onsite_minutes.py", "tools/verity/cli/verity_cli/served_table.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/siblings.py",
           "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "security/lean-audit.json",
           "security/Properties/lean-audit.json", "security/Proofs/lean-audit.json",
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py", "benchmarks/pous/served_piece.sh",

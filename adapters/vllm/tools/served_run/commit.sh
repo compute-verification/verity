@@ -21,7 +21,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 . "$(dirname "${BASH_SOURCE[0]}")/published.sh" || exit 2
 for v in ROW ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT; do
-  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`verity demo vllm commit\` (demos/vllm/run.sh)"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`verity demo vllm commit\` (adapters/vllm/tools/served_run/run.sh)"; exit 2; }
 done
 TREE=$PWD
 ROOT=$LLAMA_ROOT

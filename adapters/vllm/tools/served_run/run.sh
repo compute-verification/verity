@@ -18,7 +18,7 @@
 # names VY_CHALLENGER_1_HOST, the challenger host's): with NAME unset nothing starts, unless a FLAG sets that value.
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-cd "$HERE/../.."
+cd "$HERE/../../../.."
 RUN=window
 case ${1:-} in window|commit|serve) RUN=$1; shift;; esac
 DRY=0
@@ -34,7 +34,7 @@ import tomllib
 from pathlib import Path
 
 here, run = Path(sys.argv[1]), sys.argv[2]
-script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "demos/vllm/commit.sh", "serve": "demos/vllm/serve.sh"}[run]
+script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "adapters/vllm/tools/served_run/commit.sh", "serve": "adapters/vllm/tools/served_run/serve.sh"}[run]
 placement = tomllib.loads((here / "placement.toml").read_text())
 r = placement["run"][run]
 node = placement["node"][r["node"]]

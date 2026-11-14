@@ -10,12 +10,12 @@ version of it in `lifecycle.py`, and nothing under `verity/` or `security/` chan
 uv run python demos/lifecycle/run.py                          # one monitoring period of each composite, about 2 s on CPU
 uv run python demos/lifecycle/run.py --only onsite --cheat off-node   # the developer deviating
 verity demo lifecycle                                         # the same, through the demo command
-uv run --directory demos/lifecycle pytest tests/test_lifecycle.py     # honest, and every deviation refused
+uv run --directory demos/lifecycle pytest test_lifecycle.py     # honest, and every deviation refused
 ```
 
 `lifecycle.py` holds the model, the site's `Layout`, the phases as functions and the two parties both composites share
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
-`remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
+`remote.py` is the two-party deployment; `test_lifecycle.py` runs both, honest and with every deviation.
 
 **The proofs are a stand-in**, answering under the id each composite runs for integrity (`lifecycle.SAMPLED`), in both
 sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`). `prove(statement, witness) -> proof` returns the
@@ -124,7 +124,7 @@ declaration 1
                1.94e+17 multiply-adds; delta 10^-6017 at eps 1/2
 ```
 
-The deviations, one or more a phase, each refused or rejected (`tests/test_lifecycle.py`; `--cheat NAME`):
+The deviations, one or more a phase, each refused or rejected (`test_lifecycle.py`; `--cheat NAME`):
 
 | cheat | phase | caught by |
 | --- | --- | --- |
