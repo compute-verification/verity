@@ -43,12 +43,12 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog Defn)
-open NciCheck.Baseline (getD strAt digest lastWith Trusted trustedOf)
+open NciCheck.Theta (getD strAt digest lastWith Trusted trustedOf)
 open NciCheck.Properties (Chained)
 open NciCheck.Record (Case Front Layout front finish rolesOf layoutOf pinOf isTheta openingHeld covered)
 open NciCheck.Record.SecurityProofs (read_front finish_text mem_of_lookup)
 open NciCheck.RecordText (Row Tmpl Decl Fill Inputs Table TableRead Opening Held Declared inputsOf fillAt)
-open NciCheck.Properties.SecurityProofs.BaselineSteps (forIn_each trustedOf_ok findIdx_eq)
+open NciCheck.Properties.SecurityProofs.ThetaSteps (forIn_each trustedOf_ok findIdx_eq)
 
 /-! ## The trusted input and the run -/
 

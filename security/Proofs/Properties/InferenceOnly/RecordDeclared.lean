@@ -1,14 +1,14 @@
 module
 
 public import Proofs.Properties.Nci.RecordInputs
-public import Proofs.Properties.Nci.BaselineSteps
+public import Proofs.Properties.Nci.ThetaSteps
 
 /-!
 # What a table read and an opening declare
 
 `RecordText.inputsOf` reads a table read and each port of an opening as a declaration of a rectangle
 (`RecordText.rect`): the reader's units `[at, at + units)`, every row of the port's cut. A second walk down its stages
-(`inputsOf_declared`), by one invariant through each loop (`Declared`, with `BaselineSteps.forIn_list_prefix`), says
+(`inputsOf_declared`), by one invariant through each loop (`Declared`, with `ThetaSteps.forIn_list_prefix`), says
 which declaration each is:
 
 * every table read the declarations list has its declaration, the rectangle of its reader, port and units, filled
@@ -32,7 +32,7 @@ With the first walk's disjointness (`inputsOf_decls`) that gives what fills a ro
 namespace NciCheck.Properties.Record.SecurityProofs
 
 open NciCheck.RecordText (Row Tmpl Decl Fill Inputs TableRead Opening inputsOf fillAt rect)
-open NciCheck.Properties.SecurityProofs.BaselineSteps (forIn_list_prefix)
+open NciCheck.Properties.SecurityProofs.ThetaSteps (forIn_list_prefix)
 open Lean (Json)
 
 /-! ## The rows a declaration covers -/

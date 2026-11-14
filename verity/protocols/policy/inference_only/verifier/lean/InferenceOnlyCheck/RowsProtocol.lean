@@ -135,28 +135,28 @@ def entryOf? : Json → Option (String × String)
 
 /-- The params. `gamma`, `alpha` and `pins` are held to the form `Record.parse` asks of them. -/
 def paramsOf (j : Json) : V Params := do
-  if Baseline.keys? j != some PARAMS_KEYS then
+  if Theta.keys? j != some PARAMS_KEYS then
     throw s!"the keys of the params are not {", ".intercalate PARAMS_KEYS.toList}"
-  let .str program := Baseline.getD j "program" | throw "the params' program is not a string (the descriptor's text)"
-  let .arr log := Baseline.getD j "log" | throw "the params' log is not a list of registration records"
-  let some gamma := natOf? (Baseline.getD j "gamma") | throw "the params' gamma is not a natural number"
-  let some (a, b) := pairOf? (Baseline.getD j "alpha") | throw ALPHA_FORM
+  let .str program := Theta.getD j "program" | throw "the params' program is not a string (the descriptor's text)"
+  let .arr log := Theta.getD j "log" | throw "the params' log is not a list of registration records"
+  let some gamma := natOf? (Theta.getD j "gamma") | throw "the params' gamma is not a natural number"
+  let some (a, b) := pairOf? (Theta.getD j "alpha") | throw ALPHA_FORM
   let some num := natOf? a | throw ALPHA_FORM
   let some den := natOf? b | throw ALPHA_FORM
   if den = 0 then throw ALPHA_FORM
-  let .arr pins := Baseline.getD j "pins" | throw PINS_FORM
+  let .arr pins := Theta.getD j "pins" | throw PINS_FORM
   let some pins := pins.mapM pinOf? | throw PINS_FORM
-  let .arr circuits := Baseline.getD j "circuits" | throw CIRCUITS_FORM
+  let .arr circuits := Theta.getD j "circuits" | throw CIRCUITS_FORM
   let some circuits := circuits.mapM entryOf? | throw CIRCUITS_FORM
   pure { gamma, num, den, circuits, log, pins, program }
 
 /-- The evidence: the circuit record's text, and the order where it is given. -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
-  let ks := Baseline.keys? j
+  let ks := Theta.keys? j
   if ks != some #["record"] && ks != some #["order", "record"] then
     throw "the keys of the evidence are not record, or order and record"
-  let .str record := Baseline.getD j "record"
+  let .str record := Theta.getD j "record"
     | throw "the evidence's record is not a string (the circuit record's text)"
   pure { record, order := (j.getObjVal? "order").toOption }
 
