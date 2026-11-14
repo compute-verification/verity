@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Select.SampleLaw
+public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
+public import Proofs.Flock.Claims.Sampling.Select.DrawDesign
 public import Proofs.Flock.Claims.Sampling.Reference.Prover
 public import Proofs.Flock.Claims.Sampling.Session
 import Mathlib.Algebra.Order.Floor.Extended

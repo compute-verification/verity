@@ -17,8 +17,8 @@ import all Init.Data.String.Slice
 * **`Select`'s `split1`** (`split1_colon`, `split1_slash`): `a ++ ":" ++ b` splits into `a` and `b` where neither holds
   a colon, and likewise at a slash.
 * **`parseDesign` at a text** (`parseDesign_count`, `parseDesign_bernoulli`): `kind:K` at `K ≥ 1`, for a `subset`,
-  `stratified` or `work` design, is `{law: kind, k: K}`, and `bernoulli:NUM/DEN` at `0 < DEN` and `NUM ≤ DEN` is
-  `{law: bernoulli, p: "NUM/DEN"}`, each number in `Nat.repr`'s digits.
+  `stratified` or `work` design, is `{samplingDesign: kind, k: K}`, and `bernoulli:NUM/DEN` at `0 < DEN` and `NUM ≤ DEN` is
+  `{samplingDesign: bernoulli, p: "NUM/DEN"}`, each number in `Nat.repr`'s digits.
 -/
 
 @[expose] public section
@@ -75,7 +75,7 @@ theorem toNat!_repr (K : ℕ) : (Nat.repr K).toNat! = K := by
   · exact absurd h (by simp)
 
 /-- **`parseDesign` reads `kind:K` back**: a `subset`, `stratified` or `work` design of `K ≥ 1`, its count in
-`Nat.repr`'s digits, is `{law: kind, k: K}`. -/
+`Nat.repr`'s digits, is `{samplingDesign: kind, k: K}`. -/
 theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : ℕ)
     (h1 : 1 ≤ K) :
     _root_.Spot.Select.parseDesign (kind ++ ":" ++ Nat.repr K) =
@@ -87,7 +87,7 @@ theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stra
   rcases hk with rfl | rfl | rfl <;> rfl
 
 /-- **`parseDesign` reads `bernoulli:NUM/DEN` back**: at `0 < DEN` and `NUM ≤ DEN`, each in `Nat.repr`'s digits, it is
-`{law: bernoulli, p: "NUM/DEN"}`. -/
+`{samplingDesign: bernoulli, p: "NUM/DEN"}`. -/
 theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
     _root_.Spot.Select.parseDesign ("bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) =
       .ok (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) := by

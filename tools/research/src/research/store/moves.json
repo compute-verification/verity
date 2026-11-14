@@ -2871,6 +2871,16 @@
     },
     {
       "paths": {
+        "verity/commitments/windows/": "verity/commitments/periods/"
+      }
+    },
+    {
+      "paths": {
+        "demos/configurations.toml": "tests/configurations.toml"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
         "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
         "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
@@ -2944,12 +2954,7 @@
     },
     {
       "paths": {
-        "verity/commitments/windows/": "verity/commitments/periods/"
-      }
-    },
-    {
-      "paths": {
-        "demos/configurations.toml": "tests/configurations.toml"
+        "verity/circuits/requirement/tests/test_census_and_memory_map.py": "adapters/vllm/tests/commit/test_census_and_memory_map.py"
       }
     },
     {
@@ -3018,6 +3023,13 @@
         "adapters/vllm/verity_vllm/program/prune.py": "adapters/torch/verity_torch/prune.py",
         "adapters/vllm/verity_vllm/program/dsa_table.py": "adapters/torch/verity_torch/dsa_table.py",
         "adapters/vllm/verity_vllm/correspondence/runtime.py": "adapters/torch/verity_torch/correspondence/runtime.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Bridge/SampledLaw.lean": "security/Proofs/Flock/Bridge/SampledDesign.lean",
+        "security/Proofs/Flock/Claims/Sampling/Select/SampleLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SampleDesign.lean",
+        "security/Proofs/Flock/Soundness/Discharge/Exec/LawSample.lean": "security/Proofs/Flock/Soundness/Discharge/Exec/SamplingDesignSample.lean"
       }
     }
   ]

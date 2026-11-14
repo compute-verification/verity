@@ -122,7 +122,7 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   have e := s.hCust.2 S D hD
   subst e
   have hkd : s.kd = k := by
-    have h : Flock.Draw.Law.subset s.kd = .subset k := hl
+    have h : Flock.Draw.SamplingDesign.subset s.kd = .subset k := hl
     injection h
   have hn : k = s.n := hp
   refine ⟨?_, hkd.trans hn, by rw [← hn]; exact hk⟩

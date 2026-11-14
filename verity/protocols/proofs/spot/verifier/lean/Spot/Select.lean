@@ -4,7 +4,7 @@ public import Spot.Draw
 public import Spot.Rate
 
 /-!
-The challenger's sample from a Spec's selection rule on (`service.selection_law`, `draw.derive` and `service.select_draw`,
+The challenger's sample from a Spec's selection rule on (`service.selection_samplingDesign`, `draw.derive` and `service.select_draw`,
 which `Stream.register` and `Stream.select` run): the sampling design the rule names over the population of the verifier's own
 program and query, that sampling design expanded over them, and the sample from the challenger's own bytes (every unit for `All`), with
 a work sample's closure under the challenger's closure map, held to `Draw.checkDraw` as the stream holds it. With the sample,
@@ -25,7 +25,7 @@ A two-stage rule (`Rule.twoStage grain replay k`) samples twice. Its first stage
 population of the boundary registration's program under the replay grain's query, by its replay sampling design (a rate sampling design); its
 second stage (`selectSecond`, on fresh coins after the interior registration) samples `k_t` proof blocks of each cell, a
 sampled replay block's `n_t` instances of template `t` (`replayCells`, `Counts.over`), one stratum per cell over the
-template-major interior (`secondLaw`). One-stage is the rule `law`: a two-stage rule whose replay blocks are single proof
+template-major interior (`secondSamplingDesign`). One-stage is the rule `samplingDesign`: a two-stage rule whose replay blocks are single proof
 blocks is refused, so each design has one form.
 -/
 
@@ -110,13 +110,13 @@ inductive Counts where
   | each (k : Nat)
   | per (ks : Array (String × Nat))
 
-/-- The selection rules a `Stream` runs: every unit (`All`), a one-stage sampling design, a rate (`rate?`, `Law`), and a two-stage
+/-- The selection rules a `Stream` runs: every unit (`All`), a one-stage sampling design, a rate (`rate?`, `SamplingDesign`), and a two-stage
 design (`TwoStage`): replay blocks, the template instances of the replay partition's query `grain`, sampled by the first
 stage's sampling design `replay` (a rate sampling design), then `k`'s count of proof blocks inside each cell of each sampled replay block
 (`selectSecond`). -/
 inductive Rule where
   | all
-  | law (text : String)
+  | samplingDesign (text : String)
   | twoStage (grain : Json) (replay : String) (k : Counts)
 
 /-- A two-stage rule's counts as `to_json` writes them: a positive integer, or an object of positive integers, one per
@@ -151,11 +151,11 @@ def grain? (g : Json) : Bool :=
 
 /-- A two-stage rule's first-stage sampling design text: a rate sampling design, a uniform sample of replay blocks at the rate however many replay
 blocks the prover registers. -/
-def replayLaw? (t : String) : Bool := (parseRate t).isSome
+def replaySamplingDesign? (t : String) : Bool := (parseRate t).isSome
 
-/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}`, its sampling design text a rate (`rate?`), as
-`service.Law` refuses any other when it is made (`FIXED`), or `{rule: two-stage, grain, replay, k}`, its grain the replay
-partition's query (a `Q_template_instance` query object), its replay sampling design a rate sampling design (`replayLaw?`) and `k` a positive
+/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: samplingDesign, samplingDesign}`, its sampling design text a rate (`rate?`), as
+`service.SamplingDesign` refuses any other when it is made (`FIXED`), or `{rule: two-stage, grain, replay, k}`, its grain the replay
+partition's query (a `Q_template_instance` query object), its replay sampling design a rate sampling design (`replaySamplingDesign?`) and `k` a positive
 integer or an object of them by template (`Counts.ofJson?`), as `service.TwoStage` refuses any other. A stream refuses a
 sequential rule. -/
 def Rule.ofJson (j : Json) : V Rule := do
@@ -165,14 +165,14 @@ def Rule.ofJson (j : Json) : V Rule := do
     if keys? j == some #["law", "rule"] then
       if let .str t := getD j "law" then
         if !rate? t then throw (FIXED t)
-        return .law t
+        return .samplingDesign t
   | .str "two-stage" =>
     if keys? j == some #["grain", "k", "replay", "rule"] then
       let grain := getD j "grain"
       match getD j "replay" with
       | .str t =>
         if grain? grain then
-          if !replayLaw? t then
+          if !replaySamplingDesign? t then
             throw s!"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not {pyRepr t}"
           let some k := Counts.ofJson? (getD j "k")
             | throw "a two-stage rule samples k >= 1 proof blocks in each cell: one count, or one per template {descriptor id: k_t}"
@@ -181,11 +181,11 @@ def Rule.ofJson (j : Json) : V Rule := do
   | _ => pure ()
   throw "a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, grain, replay, k}"
 
-/-- `service.selection_law`, after `Rule.over`: the sampling design a rule names over `n` units, before `Draw.derive` expands it; a
+/-- `service.selection_samplingDesign`, after `Rule.over`: the sampling design a rule names over `n` units, before `Draw.derive` expands it; a
 two-stage rule's is its first stage's, over `n` replay blocks. -/
-def Rule.lawOver : Rule → Nat → V Json
+def Rule.samplingDesignOver : Rule → Nat → V Json
   | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
-  | .law t, _ => parseDesign t
+  | .samplingDesign t, _ => parseDesign t
   | .twoStage _ t _, _ => parseDesign t
 
 /-- A sampling design text over `n` units in strata of `sizes` units: a rate sampling design is `subset:k` at
@@ -211,7 +211,7 @@ rate, `Rate.floor NUM DEN n_s f_s`, so each stratum samples at least `⌈NUM·n_
 rule's is `table`. An error where the query doesn't apply, a work rate sampling design has no table or its table names no work for a
 stratum's template. -/
 def Rule.tableOver (rule : Rule) (p : Program) (query : Json) (table : Option Json) : V (Option Json) := do
-  let .law t := rule | return table
+  let .samplingDesign t := rule | return table
   let some (true, num, den) := parseStrataRate t | return table
   let strata ← Partition.strata p query
   let given ← match table with
@@ -230,12 +230,12 @@ def strataSizes (p : Program) (query : Json) : List Nat :=
   | .ok ss => ss.toList.map fun (_, rs) => rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
   | .error _ => []
 
-/-- `service.selection_law`'s first step: the rule over `n` units in strata of `sizes` units (`strataSizes`), its rate
-`subset:k`, `stratified:k` or `work:k` (`textOver`); none where `selection_law` refuses (`rate`). It follows `lawOver`,
-whose matcher it shares, so that `lawOver` stays the definition the Properties lock records. -/
+/-- `service.selection_samplingDesign`'s first step: the rule over `n` units in strata of `sizes` units (`strataSizes`), its rate
+`subset:k`, `stratified:k` or `work:k` (`textOver`); none where `selection_samplingDesign` refuses (`rate`). It follows `samplingDesignOver`,
+whose matcher it shares, so that `samplingDesignOver` stays the definition the Properties lock records. -/
 def Rule.over : Rule → Nat → List Nat → Option Rule
   | .all, _, _ => some .all
-  | .law t, n, sizes => (textOver t n sizes).map .law
+  | .samplingDesign t, n, sizes => (textOver t n sizes).map .samplingDesign
   | .twoStage g t k, n, sizes => (textOver t n sizes).map (.twoStage g · k)
 
 /-- The templates a template query names, in its order (`Flock.TemplateQuery.templatesOf`); an error for any other
@@ -259,19 +259,19 @@ def replayCells (p : Program) (query : Json) : V (Array Nat) := do
   return ids.map fun t => rs.foldl (fun s r => if r.template == t then s + r.count else s) 0
 
 /-- The cell of `n` proof blocks from `o + i·n` of template `t` in sampled replay block `r` sampling `k`: a work stratum of
-`secondLaw`, named `r/t`, of unit work and floor `k`. -/
+`secondSamplingDesign`, named `r/t`, of unit work and floor `k`. -/
 def cellObj (o n k i r t : Nat) : Json :=
   Json.mkObj [("template", Json.str s!"{r}/{t}"), ("units", Json.arr #[natsJson #[o + i * n, o + (i + 1) * n]]),
     ("work", Lean.toJson (1 : Nat)), ("floor", Lean.toJson k), ("k", Lean.toJson k)]
 
-/-- `service.second_law`: the second stage's sampling design over the interior's `sample.size · Σ n_t` proof blocks, template-major:
+/-- `service.second_samplingDesign`: the second stage's sampling design over the interior's `sample.size · Σ n_t` proof blocks, template-major:
 template `t`'s from `off_t = sample.size · Σ_{t'<t} n_t'`, the `i`-th sampled replay block's (replay block `sample[i]`
 of the registration) instances of it `[off_t + i·n_t, off_t + (i+1)·n_t)`, one cell. One stratum per cell, template by
 template and in each by sampled replay block, `ks[t]` of its `ns[t]` proof blocks in each (`cellObj`); the strata tile
 `[0, sample.size · Σ n_t)` in order. The stratified sampling design sizes each stratum's count in proportion to its size, which
 cells of several templates' sizes don't follow, so the sampling design is the work sampling design at `k = 1` and unit work: its rule
 (`Flock.Draw.workK`) gives each stratum `max floor 1` capped at its size, and each cell's floor is its count. -/
-def secondLaw (sample : Array Nat) (ns ks : Array Nat) : Json :=
+def secondSamplingDesign (sample : Array Nat) (ns ks : Array Nat) : Json :=
   Json.mkObj [("law", "work"), ("k", Lean.toJson (1 : Nat)),
     ("strata", Json.arr ((List.range ns.size).flatMap fun t => (List.range sample.size).map fun i =>
       cellObj (sample.size * (ns.toList.take t).sum) (ns.getD t 0) (ks.getD t 0) i (sample.getD i 0) t).toArray)]
@@ -293,15 +293,15 @@ def secondProblem (sample : Array Nat) (ns ks : Array Nat) : Option String :=
   else none
 
 /-- `service.select_second`: the second stage on the coins `src`, read after the interior registration's digest: the
-sample object of `secondLaw` over the interior's `sample.size · Σ n_t` proof blocks (`Draw.sampleFirstRead`), held to
+sample object of `secondSamplingDesign` over the interior's `sample.size · Σ n_t` proof blocks (`Draw.sampleFirstRead`), held to
 `Draw.checkDraw`, and the number of bytes it read. An error where the Python raises: `secondProblem`, or a sample the
 coins don't end. -/
 def selectSecond (sample : Array Nat) (ns ks : Array Nat) (src : ByteArray) : V (Json × Nat) := do
   if let some e := secondProblem sample ns ks then throw e
-  let law := secondLaw sample ns ks
+  let samplingDesign := secondSamplingDesign sample ns ks
   let m := sample.size * ns.toList.sum
-  let (draw, read) ← Draw.sampleFirstRead law m src
-  let codes := Draw.checkDraw draw (Lean.toJson m) law
+  let (draw, read) ← Draw.sampleFirstRead samplingDesign m src
+  let codes := Draw.checkDraw draw (Lean.toJson m) samplingDesign
   if !codes.isEmpty then throw s!"the second stage's draw is not well formed under its law: {codes}"
   return (draw, read)
 
@@ -320,7 +320,7 @@ def closureMap? (j : Json) : V (Array (Int × Array Int)) := do
 private def inRange (n : Nat) (u : Int) : Bool := 0 ≤ u && u < n
 
 /-- The rule over the population of `p` under `query` (`Partition.units`, `Rule.over` over its `strataSizes`), which
-`select` runs over `Rule.tableOver`'s work table; an error where the query doesn't apply or `selection_law` refuses the
+`select` runs over `Rule.tableOver`'s work table; an error where the query doesn't apply or `selection_samplingDesign` refuses the
 rule's rate. -/
 def resolve (rule : Rule) (p : Program) (query : Json) : V Rule := do
   let n ← Partition.units p query
@@ -328,13 +328,13 @@ def resolve (rule : Rule) (p : Program) (query : Json) : V Rule := do
     | throw s!"a rate law over {n} units draws none of them or more than {n}"
   return r
 
-/-- `selection_law`, `draw.derive` and `select_draw` on the coins `src`, then `Stream.select`'s `draw.check_draw`, under
+/-- `selection_samplingDesign`, `draw.derive` and `select_draw` on the coins `src`, then `Stream.select`'s `draw.check_draw`, under
 a rule `resolve` gives (`parseDesign` refuses a rate sampling design itself): the
 sample object over the population of `p` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the sampled
 proof blocks, then a work sample's closure) and the number of bytes of `src` it read. The sampling design is the rule's over that population,
 expanded (`Draw.derive`, with the work `table`); `All` samples every unit and reads nothing, any other rule samples its Flock
-sampling design by `Draw.sampleUnits`, as `Draw.sampleFirstRead` does: the sampling design `Draw.flockLaw` reads from the sampling design object, or, for
-`stratified` and `work`, once `flockLaw` accepts that object, the expansion it was written from (`Draw.deriveLaw`), the
+sampling design by `Draw.sampleUnits`, as `Draw.sampleFirstRead` does: the sampling design `Draw.flockSamplingDesign` reads from the sampling design object, or, for
+`stratified` and `work`, once `flockSamplingDesign` accepts that object, the expansion it was written from (`Draw.deriveSamplingDesign`), the
 same sampling design. With the closure map `cm`, a work sample carries
 the sampled proof blocks' closure (`Flock.Draw.closureOf`) when it is not empty. An error where the Python raises: the query
 doesn't apply, the rule's sampling design or its expansion is refused, a closure map is given for another sampling design or names a unit outside
@@ -342,23 +342,23 @@ the population, the sample is refused (`sampleFirstRead`), or it is not well for
 def select (rule : Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Json × Array Nat × Nat) := do
   let n ← Partition.units p query
-  let named ← rule.lawOver n
-  let derived ← Draw.deriveLaw p query named table
-  let law := (derived.map (·.toJson)).getD named
+  let named ← rule.samplingDesignOver n
+  let derived ← Draw.deriveSamplingDesign p query named table
+  let samplingDesign := (derived.map (·.toJson)).getD named
   if let some cm := cm then
-    if !(jeq (getD law "law") "work" && cm.all fun (u, cs) => inRange n u && cs.all (inRange n)) then
+    if !(jeq (getD samplingDesign "law") "work" && cm.all fun (u, cs) => inRange n u && cs.all (inRange n)) then
       throw s!"a closure map over [0, {n}) widens a work draw only"
   let (units, read) ← match rule with
     | .all => pure (Array.range n, 0)
     | _ => do
-      let parsed ← Draw.flockLaw law n
+      let parsed ← Draw.flockSamplingDesign samplingDesign n
       Draw.sampleUnits (derived.getD parsed) n src
-  let draw := Json.mkObj ((entries law).toList ++ [("population", Lean.toJson n), ("units", natsJson units)])
+  let draw := Json.mkObj ((entries samplingDesign).toList ++ [("population", Lean.toJson n), ("units", natsJson units)])
   let closure := match cm with
     | some cm => Flock.Draw.closureOf (cm.foldl (fun m (u, cs) => m.insert u.toNat (cs.map Int.toNat)) {}) units
     | none => #[]
   let draw := if closure.isEmpty then draw else Json.mkObj ((entries draw).toList ++ [("closure", natsJson closure)])
-  let codes := Draw.checkDraw draw (Lean.toJson n) law
+  let codes := Draw.checkDraw draw (Lean.toJson n) samplingDesign
   if !codes.isEmpty then throw s!"the draw is not well formed under the law: {codes}"
   return (draw, units ++ closure, read)
 

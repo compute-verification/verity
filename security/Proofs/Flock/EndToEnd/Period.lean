@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -32,8 +32,8 @@ import Proofs.Flock.Soundness.Game
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnWrong_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
   `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
-  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `Law.execOS_subset_escape_le`,
-  `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
+  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_escape_le`,
+  `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
 @[expose] public section
@@ -122,9 +122,9 @@ theorem sampleMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb 
     (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ (1 - (w.kd : ℝ≥0∞) / w.n) ^ B.card := by
   rw [prob_sampleMiss]
-  refine (Law.execOS_subset_escape_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
-  rw [Law.subset_escape]
-  exact Law.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
+  refine (SamplingDesign.execOS_subset_escape_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
+  rw [SamplingDesign.subset_escape]
+  exact SamplingDesign.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
 
 /-- A sample covering a fraction `q` of the sampling block's units: `1 − kd/n ≤ 1 − q`. -/
@@ -143,7 +143,7 @@ theorem one_sub_le {q : ℝ} (hq : 0 < q) (hqk : q ≤ (w.kd : ℝ) / w.n) :
 /-- **The sampling term at `δ`**: `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀} ≤ δ` once `K₀ ≥ ln(1/δ)/q`. -/
 theorem miss_le {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) (hqk : q ≤ (w.kd : ℝ) / w.n)
     (hK : Real.log (1 / δ) / q ≤ w.K₀) : w.miss ≤ ENNReal.ofReal δ :=
-  (Law.choose_div_le_one_sub_pow w.hkd w.hK₀).trans
+  (SamplingDesign.choose_div_le_one_sub_pow w.hkd w.hK₀).trans
     ((pow_le_pow_left₀ zero_le (w.one_sub_le hq hqk) _).trans (Flock.SecurityProofs.one_sub_pow_le_of_log hq hδ hK))
 
 end Flock.Guarantees.SamplingBlock

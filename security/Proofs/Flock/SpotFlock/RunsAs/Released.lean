@@ -161,11 +161,11 @@ theorem stratifiedWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ'
   exact bind_read hz (fun r hr => onWith_read hA (by unfold Flock.Draw.Stratum.need; omega) hr)
     (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
-theorem sampleWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (law : Flock.Draw.Law) (n : ℕ) {p : ℕ}
+theorem sampleWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) {p : ℕ}
     {x : Option Flock.Draw.UnitSample × ℕ}
-    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) law n).run p = .ok x) :
-    p ≤ x.2 ∧ (x.2 ≤ R → (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ' need) law n).run p = .ok x) := by
-  cases law with
+    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run p = .ok x) :
+    p ≤ x.2 ∧ (x.2 ≤ R → (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ' need) samplingDesign n).run p = .ok x) := by
+  cases samplingDesign with
   | subset k =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
@@ -185,10 +185,10 @@ theorem sampleWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) 
 
 /-- **A sample reads only the bytes it reports reading**: the units a sampling design samples from `ξ`, having read `r.2` bytes, are
 the same from any source that starts with `ξ`'s first `r.2` bytes. -/
-theorem sampleUnits_read {ξ ξ' : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
-    (h : Spot.Draw.sampleUnits law n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) : Spot.Draw.sampleUnits law n ξ' = .ok r := by
+theorem sampleUnits_read {ξ ξ' : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
+    (h : Spot.Draw.sampleUnits samplingDesign n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) : Spot.Draw.sampleUnits samplingDesign n ξ' = .ok r := by
   unfold Spot.Draw.sampleUnits at h ⊢
-  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) law n).run 0 with
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     obtain ⟨o, rd⟩ := y
@@ -197,12 +197,12 @@ theorem sampleUnits_read {ξ ξ' : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {
     | none => cases h
     | some d =>
       obtain rfl := (Except.ok.inj h).symm
-      rw [(sampleWith_read hA law n hw).2 (Nat.le_refl _)]
+      rw [(sampleWith_read hA samplingDesign n hw).2 (Nat.le_refl _)]
       rfl
 
-theorem sampleFirstRead_read {law : Json} {n : ℕ} {ξ ξ' : ByteArray} {r : Json × ℕ}
-    (h : Spot.Draw.sampleFirstRead law n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) :
-    Spot.Draw.sampleFirstRead law n ξ' = .ok r := by
+theorem sampleFirstRead_read {samplingDesign : Json} {n : ℕ} {ξ ξ' : ByteArray} {r : Json × ℕ}
+    (h : Spot.Draw.sampleFirstRead samplingDesign n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) :
+    Spot.Draw.sampleFirstRead samplingDesign n ξ' = .ok r := by
   unfold Spot.Draw.sampleFirstRead at h ⊢
   obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
   obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
@@ -254,7 +254,7 @@ theorem select_read {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} 
   dsimp only at h ⊢
   cases rule with
   | all => exact h
-  | law text =>
+  | samplingDesign text =>
     dsimp only at h ⊢
     obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
     obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
