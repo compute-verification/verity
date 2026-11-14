@@ -1198,6 +1198,17 @@ def test_an_identity_429_is_asked_again_once_after_the_wait(identity, broker, mo
     assert NS.broker_why() is None and len(broker["seen"]) == 1
 
 
+def test_a_broker_that_gives_no_answer_is_named_with_the_reason(identity, broker, monkeypatch):
+    import urllib.error
+
+    def unanswered():
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(NS, "_mint", unanswered)
+    assert NS.notes_token() is None and NS.broker_why() == "the broker gave no usable answer (URLError: timed out)"
+    assert broker["waits"] == [], "not a 429: not asked again at once"
+
+
 def test_a_cursor_agent_whose_mint_fails_sends_nothing_and_says_the_mint_failed(cloud_vm, identity, broker, tmp_path, monkeypatch):
     """With no token, a Cursor agent's git would go to the plain URL, which the VM's global rules rewrite to cursor[bot]'s oldest
     token (`Invalid username or token`) or its newest (`Repository not found`): the sync sends nothing, and says why the mint

@@ -239,7 +239,10 @@ def _mint_why(e: Exception) -> str:
         if not has_identity():
             return NO_IDENTITY
         return f"{e}" + (": this VM asked Cursor for too many identity tokens at once, which clears in seconds" if code == 429 else "")
-    return f"the broker answered HTTP {code}" if code else f"the broker gave no usable answer ({type(e).__name__})"
+    if code:
+        return f"the broker answered HTTP {code}"
+    reason = getattr(e, "reason", None)
+    return f"the broker gave no usable answer ({type(e).__name__}{f': {reason}'[:100] if reason else ''})"
 
 
 def notes_token(now: float | None = None, fresh: bool = False) -> str | None:
