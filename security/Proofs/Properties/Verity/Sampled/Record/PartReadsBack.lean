@@ -11,7 +11,7 @@ public import Proofs.Properties.Verity.Sampled.Record.PartSame
 
 A session statement carries its partition object as the bytes of its text (`Flock.RecordText.printT`). The verifier's
 parser reads the text of a printable object (`Claims.Json.Good`: every object a well-formed tree, every number an
-integer) back as an object alike it (`FlockComplete.JsonRT.parse_print`). So `flock-verify`'s reading of the
+integer) back as an object alike it (`FlockComplete.JsonRT.parse_print`). So `verity-verify-proof`'s reading of the
 statement's partition (`FlockDeploy.jsonOf`) is that object up to `PartSame` (`partition_readsBack`), which is what a
 session's two readings of the partition may differ by (`Verity.Sampled.Record.SessionMatch`). The same holds of any
 of the statement's JSON files (`printed_readsBack`), the registered reads among them (`registered_readsBack`).
@@ -36,7 +36,7 @@ namespace Flock.PartCong
 
 open Lean (Json)
 
-/-- **A printed value reads back alike**: the bytes of a printable value's text read, as `flock-verify` reads a
+/-- **A printed value reads back alike**: the bytes of a printable value's text read, as `verity-verify-proof` reads a
 statement's JSON file (`FlockDeploy.jsonOf`, whatever the file is called), as a value alike it. -/
 theorem printed_readsBack (what : String) {o : Json} (h : Claims.Json.Good o) :
     ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf what) = .ok P ∧ PartSame P (some o) := by
@@ -49,7 +49,7 @@ theorem printed_readsBack (what : String) {o : Json} (h : Claims.Json.Good o) :
   simp only [hp]
   rfl
 
-/-- **A printed partition object reads back alike**: the bytes of a printable object's text read, as `flock-verify`
+/-- **A printed partition object reads back alike**: the bytes of a printable object's text read, as `verity-verify-proof`
 reads a statement's partition, as an object alike it. -/
 theorem partition_readsBack {o : Json} (h : Claims.Json.Good o) :
     ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf "partition") = .ok P ∧
