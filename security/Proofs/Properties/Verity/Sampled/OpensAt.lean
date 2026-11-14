@@ -16,9 +16,9 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Live.placeAt`: **the place the session registers for a claims position**, `placeFrom` (`Sampled/Place.lean`) at
   the session's commitment (`Live.Cd`'s layout). `Live.placeOfRead_eq`: wherever v2 reads a session's files, the
   committed files' place of a gate (`placeOfRead`) is the session's `placeAt` of its claims position.
-* `Live.OpensReady`: what the session's files must give: they pass `verify --zk`'s ports and roots check
-  (`Flock.PortRoots.checkOf`), which v2 runs on every session it accepts (`Accepted.ports`). What `opens_rowLeaf` reads
-  of the files is a property of that check:
+* `Live.OpensReady` (`Sampled/Instance.lean`): what the session's files must give: they pass `verify --zk`'s ports and
+  roots check (`Flock.PortRoots.checkOf`), which v2 runs on every session it accepts (`Accepted.ports`), and each of the
+  deployment's sessions does (`Instance.sessions`). What `opens_rowLeaf` reads of the files is a property of that check:
   * `Live.OpensReady.domain`: **every port's frame-v3 domain is 64 bytes**, the width of `Hash.Tree.Domain.id`: the
     domain is the one the public file publishes (`Flock.Bridge.domOf`), and the check refuses a file whose published
     domain is not 64 bytes (`Flock.Bridge.idsSized_of_checksStmt`).
@@ -35,17 +35,23 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
   `sha512/row/v1`'s, hashes to its registered schema's `Hash.RowLeaf` digest (`Flock.Bridge.Spec.formatOf`).
 * `Live.opens_rowLeaf`: **an opening the deployed commitment accepts is a `Hash.RowLeaf` opening at `placeAt`** under
   SHA-512, whose row holds the opened bit at the place's offset.
-* `Instance.opensAt_of`: **`OpensAt`**, wherever each session v2 sets up is `OpensReady` and the base places each
-  non-constant gate at the session's `placeAt` of its claims position. The committed files' circuit is Boolean
-  (`Circuit.ofAudit`), so the opened bit is the gate's whole value. `Instance.opensAt_of_ready`: the same, for a base
-  whose place is `placeOfRead` at its reading of the files, at sessions `OpensReady` alone; `Instance.opensAt_of_sessions`
-  at every instance, whose base's place is `placeOfRead` by construction (`Instance.place`).
-* `Instance.SessionsReady`: every session v2 sets up is `OpensReady`: its files pass the ports and roots check.
+* `Instance.opensAt_of`: **`OpensAt`**, wherever the base places each non-constant gate of a session's files at the
+  session's `placeAt` of its claims position. The committed files' circuit is Boolean (`Circuit.ofAudit`), so the
+  opened bit is the gate's whole value. `Instance.opensAt`: at every instance, whose base's place is `placeOfRead` by
+  construction (`Instance.place`).
 * `remote_soundness_deployedReady_honest`, `remote_soundness_deployedReady_nontrivial`: its premises hold at the idle
   deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
-* `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` discharged** at `SessionsReady`,
-  `SessionAt` by `sessionAt_of_registered` at the deployment's session on the registered files, and the device's log
-  opening only the record's rounds by v2's record check (`Instance.logOpensRecorded`).
+* `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` and `RegisteredFiles` discharged**
+  at every instance (`Instance.opensAt`, `Instance.registeredFiles`), `SessionAt` by `sessionAt_of_registered` at the
+  deployment's session on the registered files, and the device's log opening only the record's rounds by v2's record
+  check (`Instance.logOpensRecorded`).
+* `spotSound_deployedReady`: **SPOT's target at the deployed vocabulary, at any composite** (`spotSound_of_targets` at
+  the deployment's constructions), from `SessionRegistered` at that composite's verdict, the openings and the
+  registered files discharged as for remote.
+* `onsite_soundness_deployedReady`: **`Verity.Soundness` at the deployed vocabulary**, onsite's seven targets with
+  SPOT's discharged by `spotSound_deployedReady`; the other six are the base's, each a premise.
+* `onsite_soundness_deployedReady_honest`, `onsite_soundness_deployedReady_nontrivial`: its premises hold at the idle
+  deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
 -/
 
 @[expose] public section
@@ -142,16 +148,6 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
   simp only [hD, hpub, dite_eq_left A.hU]
   rw [A.hn, dite_eq_left (show g.val < A.Cc.N from hN ▸ g.isLt)]
   rfl
-
-/-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: they pass `verify --zk`'s ports
-and roots check (`Flock.PortRoots.checkOf` at the circuit `Flock.ProvedScope.circuitOf` reads). The check refuses a
-published frame-v3 domain that is not 64 bytes (`OpensReady.domain`), two ports' published roots that are one root
-under different domains (`OpensReady.roots`: the deployed path check opens a row at the first port of the row's root,
-which is then the row's own) and a row of `2^64` bits or more (`OpensReady.words`). -/
-structure OpensReady : Prop where
-  ports : Flock.PortRoots.checkOf
-    (Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.tables)
-    (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.publicFile = .ok ()
 
 /-- **Every port's frame-v3 domain is 64 bytes at files that pass the ports and roots check**: the domain is the one
 the public file publishes for the port (`Flock.Bridge.domOf`), `Flock.PortRoots.checkOf` refuses a public file with a
@@ -285,22 +281,19 @@ end Live
 
 namespace Instance
 
-/-- **Every session v2 sets up is `OpensReady`**: its files pass `verify --zk`'s ports and roots check, which gives
-what `Live.opens_rowLeaf` reads of them. -/
-def SessionsReady (I : Instance d α) : Prop :=
-  ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady
-
-/-- **`OpensAt`, at sessions ready for it**: wherever each session v2 sets up on the committed files is `OpensReady`
-and the base places each non-constant gate at the session's registered place of its claims position (`placeAt`), the
-deployed commitment's openings are the base's. -/
+/-- **`OpensAt`, at the base's places**: wherever the base places each non-constant gate of a session's committed files
+at the session's registered place of its claims position (`placeAt`), the deployed commitment's openings are the
+base's: each of the deployment's sessions is set up on the files (`SetsUp`) and passes the ports and roots check
+(`Live.OpensReady`, `Instance.sessions`). -/
 theorem opensAt_of (I : Instance d α)
-    (h : ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady ∧
+    (h : ∀ θ F A, I.sessions θ F = some A →
       ∀ c (hN : (I.base.read θ F).circuit.N = A.Cc.N) (g : Fin (I.base.read θ F).circuit.N),
         (I.base.read θ F).consts g = none →
           I.base.place θ F c g = A.placeAt (Flock.Bridge.posOf A.Cc (Fin.cast hN g))) :
     I.OpensAt := by
-  intro θ F A hs hsu c hN g b m hconst hop v hv
-  obtain ⟨hready, hplace⟩ := h θ F A hs hsu
+  intro θ F A hs c hN g b m hconst hop v hv
+  obtain ⟨-, hsu, hready⟩ := I.sessions_some hs
+  have hplace := h θ F A hs
   obtain ⟨p, hp, o, hacc, hrow⟩ := Live.opens_rowLeaf hready hop
   have hw : (I.base.read θ F).circuit.w g = 1 :=
     w_ofAudit ((congrArg Verity.FileRead.circuit hsu.read).trans
@@ -315,51 +308,130 @@ theorem opensAt_of (I : Instance d α)
   rw [hk, Nat.add_zero, hrow]
   exact congrArg some hv.symm
 
-/-- **`OpensAt` at the committed files' places**: wherever the base places each gate at the committed files' place
-(`placeOfRead`, by definition at the deployment) and each session v2 sets up is `OpensReady`. -/
-theorem opensAt_of_ready (I : Instance d α)
-    (hplace : ∀ θ F c g, I.base.place θ F c g = placeOfRead (I.base.read θ F) g)
-    (h : I.SessionsReady) : I.OpensAt :=
-  I.opensAt_of fun θ F A hs hsu => ⟨h θ F A hs hsu, fun c hN g _ =>
-    (hplace θ F c g).trans (A.placeOfRead_eq hsu.read hN g)⟩
-
-/-- **`OpensAt` at sessions `OpensReady`**: an instance's base places each gate at the committed files' place by its
-construction (`Instance.place`), so `OpensAt` needs only that each session v2 sets up is `OpensReady`. -/
-theorem opensAt_of_sessions (I : Instance d α) (h : I.SessionsReady) : I.OpensAt :=
-  I.opensAt_of_ready I.place h
+/-- **`OpensAt` at every instance**: an instance's base places each gate at the committed files' place by its
+construction (`Instance.place`, `placeOfRead`), which is the session's `placeAt` wherever v2 reads the session's files
+(`Live.placeOfRead_eq`), and each of its sessions passes the ports and roots check (`Instance.sessions`). -/
+theorem opensAt (I : Instance d α) : I.OpensAt :=
+  I.opensAt_of fun θ F A hs c hN g _ =>
+    (I.place θ F c g).trans (A.placeOfRead_eq (I.sessions_some hs).2.1.read hN g)
 
 end Instance
 
-/-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
-`opensAt_of_sessions`, its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`, and the
-coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), by v2's record check, which
-refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
+/-- **`remote_soundness_deployedAt` with its openings and registered files discharged**: its openings premise
+`OpensAt` holds at every instance (`Instance.opensAt`), as does the registered files' file check (`RegisteredFiles`,
+`Instance.registeredFiles`); its session premise `SessionAt` is `sessionAt_of_registered`'s from `SessionRegistered`,
+and the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
+which refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hready : I.SessionsReady) (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
+    (hSr : I.SessionRegistered .remote)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
-  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
+  remote_soundness_deployedAt I K₀ reg record recordDigest I.opensAt I.registeredFiles
     (I.sessionAt_of_registered .remote hSr) (I.logOpensRecorded .remote) hW hI
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
-reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
+reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: the session
 premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
 theorem remote_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionsReady ∧ (Instance.Honest.inst ⊤ fun _ => none).RegisteredFiles ∧
-      (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
+    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
-    Instance.Honest.sessionRegistered_none ⊤ .remote,
+  ⟨Instance.Honest.sessionRegistered_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
 fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_deployedReady_nontrivial : ¬ Verity.Idle.exact.SoundnessFor .remote fun _ => True :=
   Verity.remote_soundness_of_subprotocols_nontrivial
+
+/-- **SPOT's target at the deployed vocabulary, at composite `k`**: `spotSound_of_targets` at the constructions the
+deployment assembles at `k` (`Instance.constructionsAt`), whose read finder and forger are the binding's by
+definition. `Deployed` is `Instance.deployed` at the openings every instance has (`Instance.opensAt`), `Covers` is
+`Instance.covers` from the registered files' check (`Instance.registeredFiles`) and `sessionAt_of_registered` at
+`SessionRegistered`, and the
+coupling at each session is `couplingTarget_at`'s, its log premise discharged by v2's record check
+(`Instance.logOpensRecorded`). -/
+theorem spotSound_deployedReady (I : Instance d α) (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
+    (reg : (A : Live) → Option Claims.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (hSr : I.SessionRegistered k) :
+    (I.vocab (I.constructionsAt K₀ k reg record recordDigest)).SpotSound k :=
+  spotSound_of_targets (I.vocab (I.constructionsAt K₀ k reg record recordDigest)) k
+    (I.deployed (I.constructionsAt K₀ k reg record recordDigest) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl)
+      I.opensAt)
+    (I.covers (I.constructionsAt K₀ k reg record recordDigest) k I.registeredFiles (I.sessionAt_of_registered k hSr))
+    fun θ F A h => I.couplingTarget_lift (I.constructionsAt K₀ k reg record recordDigest) k
+      (I.couplingTarget_at K₀ k reg record recordDigest (I.logOpensRecorded k) θ F A h)
+
+/-- **A target of the base, at a subprotocol other than SPOT, is the deployed vocabulary's**: the deployed
+vocabulary changes only SPOT's names and the extractor (`Instance.stage`, `Instance.vocab`), which no other
+subprotocol's verdict, claim or error reads. -/
+theorem Instance.target_of_base (I : Instance d α) (K : Constructions I.base) (k : Verity.Registration.Composite) :
+    ∀ a : Subprotocol, a ≠ .sampled → I.base.Target k a → (I.vocab K).Target k a
+  | .sampled, ha, _ => absurd rfl ha
+  | .pouw, _, h => h
+  | .inferenceOnly, _, h => h
+  | .pous, _, h => h
+  | .poub, _, h => h
+  | .network, _, h => h
+  | .wipe, _, h => h
+
+/-- **`Verity.Soundness` at the deployed vocabulary, SPOT's target discharged**: onsite's compiled verifier accepts
+files that passed the commit phase's check while one of the period's seven claims fails with probability at most the
+seven errors at that strategy summed, at the vocabulary `Instance.vocab` builds from the deployment and the
+constructions `Instance.constructionsAt` assembles at onsite. It is `soundness_of_subprotocols` with SPOT's target
+proved (`spotSound_deployedReady`, from Flock's live chain through `spotSound_of_targets`) from the one premise about
+the deployment's sessions that `remote_soundness_deployedReady` takes, here at onsite's verdict (`SessionRegistered`).
+
+The other six targets are the base's (`Instance.target_of_base`), each a premise no proof here discharges: PoUW's
+(`PouwSound`), the inference-only policy's (`InferenceOnlySound`), PoUS's (`PousSound`), PoUB-P2's
+(`BandwidthAuditSound`), the network certifier's (`NetworkCertifierSound`) and the wipe's (`WipeSound`). Of the
+network certifier's: its period check takes each of SPOT's answers in its evidence as given
+(`NetworkCheck`'s `answered` holds an answer to one-stage's id and its registration's digest, then reads its verdict
+and profile), and verifies no proof behind one, so the `K` it publishes rests on answers no check of the
+composite has verified; the premise stands for that until the period check reads verified outcomes. Of the wipe's: the
+bits that leave the device during the wipe are the vocabulary's (`Verity.Wipe.egress`), which no statement yet ties
+to the network certifier's count over the wipe's span. -/
+theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
+    (reg : (A : Live) → Option Claims.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (hSr : I.SessionRegistered .onsite)
+    (hW : I.base.PouwSound .onsite) (hI : I.base.InferenceOnlySound .onsite)
+    (hP : I.base.PousSound .onsite) (hB : I.base.BandwidthAuditSound .onsite)
+    (hN : I.base.NetworkCertifierSound .onsite) (hX : I.base.WipeSound .onsite) :
+    (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)).SoundnessAt .onsite :=
+  Verity.soundness_of_subprotocols ι α d (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest))
+    (spotSound_deployedReady I K₀ .onsite reg record recordDigest hSr)
+    (I.target_of_base _ .onsite .pouw (by decide) hW) (I.target_of_base _ .onsite .inferenceOnly (by decide) hI)
+    (I.target_of_base _ .onsite .pous (by decide) hP) (I.target_of_base _ .onsite .poub (by decide) hB)
+    (I.target_of_base _ .onsite .network (by decide) hN) (I.target_of_base _ .onsite .wipe (by decide) hX)
+
+open scoped ENNReal in
+/-- **`onsite_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
+reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
+premise speaks of the sessions the deployment runs, and the base's six targets hold at `⊤`. -/
+theorem onsite_soundness_deployedReady_honest :
+    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.PousSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.BandwidthAuditSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.NetworkCertifierSound .onsite ∧
+      (Instance.Honest.inst ⊤ fun _ => none).base.WipeSound .onsite :=
+  ⟨Instance.Honest.sessionRegistered_none ⊤ .onsite,
+    Instance.Honest.target_top .onsite .pouw, Instance.Honest.target_top .onsite .inferenceOnly,
+    Instance.Honest.target_top .onsite .pous, Instance.Honest.target_top .onsite .poub,
+    Instance.Honest.target_top .onsite .network, Instance.Honest.target_top .onsite .wipe⟩
+
+/-- **`onsite_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at onsite's compiled verifier,
+fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/
+theorem onsite_soundness_deployedReady_nontrivial : ¬ Verity.Idle.exact.SoundnessFor .onsite fun _ => True :=
+  Verity.soundness_of_subprotocols_nontrivial
 
 end Verity.Sampled
