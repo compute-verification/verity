@@ -242,7 +242,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
-| a served span: "window", `IntegrityPeriod`, "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
+| a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
 | "window" for SPOT's served span with its audit; SPOT's records' `window` (`window.kind`, `window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
