@@ -68,7 +68,8 @@
   record's own, so no earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
-  registration log (`verity/registration/declaration/v1`, `verity.hardware.registration`). The verifier passes
+  registration log (`verity/registration/declaration/v1`,
+  `verity.protocols.accounting.registration.verifier.registration`). The verifier passes
   the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
   "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
   before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a

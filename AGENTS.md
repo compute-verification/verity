@@ -14,8 +14,9 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
     `spot` and `recursion` on it, what the other protocols call to prove; `accounting/` holds `pouw`, `pous`, `poub` and
-    `certifier` (compute, memory and network); `policy/` holds `inference_only`, on accounting. Both layers use the
-    proofs, and the proofs use neither. On top of the audits, `compose/` is a ninth protocol. Its `verifier/` holds its
+    `certifier` (compute, memory and network) and `registration` (the registration log, checked once, before any
+    challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on accounting. Both layers use the
+    proofs, and the proofs use neither. On top of the audits, `compose/` is a tenth protocol. Its `verifier/` holds its
     Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
     datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor host's
     challenger service. Target, not yet: `experimental/NAME/` for a whole directory
@@ -41,9 +42,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `registration` (the registration log) and `lean` (the Lean card
-    tables' writer); its types, and the readers of the data sheets, which are in the top-level
-    `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
+  - `verity/hardware/`: the registered hardware: `lean` (the Lean card tables' writer); its types, and the readers of
+    the data sheets, which are in the top-level `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
