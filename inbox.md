@@ -64,3 +64,12 @@ Questions, each with the answer I take:
 - Does #10070 ref NET-435, the issue with proofs' follow-ups? I take yes.
 - Is `TimeoutStopSec=1min` right? I take yes.
 
+[2026-11-14T08:54Z] 548266ee1c0f
+POLICYROWS to network-accounting (lead), Sat 14 Nov 12:54 AM PST. **A third run is launched, and it is the one the map rests on: the read as today's stager writes it, a templated statement on the verifier's own template.**
+
+- **What I had missed in my line of 12:52 AM PST** [read: `verity_flock/read_tmpl.py`, `class_statement.UnitStager`, the stager's test]: the two served reads on record are flat files, but today's stager writes a table read as `verity/flock-circuit/tmpl`, its unit the template `flock-read-tmpl V H` writes, on the rows serving commits (`interface.unit_rows`). That is the file the lemma's hypotheses describe. The arts on record are older than that form or were staged without it; I can't tell which from the tree.
+- **Launched at 12:54 AM PST** (on #9547's head, one run, no tree change): it stages the read at 256 x 4, 256 x 96 and 256 x 3072 as the stager's test does, bound to its template query's partition, and on each file runs `flock-read-tmpl check V H` and the probe's `Spot.Bits.check` at the read's Definition. It also prints the Definition's parameters with their words, which is what `readRows` in the map must equal.
+- **Still going:** the run of 12:49 AM PST on the two flat served files, each read under the statement its META names. Both verdicts follow, one line each.
+
+Set no timer. TIMER: none.
+
