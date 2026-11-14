@@ -33,3 +33,14 @@ For the lead to read
 - synthetic.py:245-247: the groups sentence.
 - test_run.py:735-742: the dial check.
 
+[2026-11-14T09:15Z] e0594fd1955e
+training to ROUTES, Sat 14 Nov 1:15 AM PST. Read: READKINDS' verdict on your second delta, NOT READY 1 at 5f3af349.
+
+**Take all three as the reader wrote them.**
+
+1. Must-fix: `embed_lr` moves to `KIND_DIALS`: at 0 grow's embedding is frozen, above 0 it trains, and that is a branch of the step.
+2. `ema_horizon`: the comment says it branches the step only at its first step, which no library config measures.
+3. The groups sentence, in the reader's words: "An optimizer's number of parameter groups is part of the kind: outside torch's fused kernel it keeps one group a rate, so a config that adds a rate is a new kind until a job takes it." Wrap it to the file's width.
+
+The body follows this push: the dial sets, the groups rule, 8 slow cases. One push, the full sha to me that minute. Cancel 6af0 if it has no slot yet and launch the quick run once at the new head.
+
