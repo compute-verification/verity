@@ -1,10 +1,12 @@
-# PoUW's tile Definitions and the Boolean-versions lookup, out of the vLLM adapter back under `verity/`: what
+# PoUW's tile Definitions, out of the vLLM adapter back under `verity/`: what
 # `tools/move/layout.py --map tools/move/pouw_tile_boolean_map.toml` moves and rewrites.
 #
 # - The four `pearl_c_*` Definition modules, with their circuit-check sidecars, go to PoUW's circuit
 #   (`verity/protocols/accounting/pouw/prover/circuit/`), beside the tile Program that reads them.
-# - The Boolean-versions lookup (`definitions/boolean.py`) goes to `verity/circuits/boolean/versions.py`. It imports no
-#   catalog: the adapter's `definitions` package registers its registry with it (`catalog_loader`).
+# - The Boolean-versions lookup (`definitions/boolean.py`), which those four import, goes to
+#   `verity/circuits/ops/boolean/versions.py`: it walks `verity.circuits.ops.boolean`, so it is in the place
+#   `verity/circuits/ops` (`tests/import_order.toml`), not `verity/circuits`, which loads nothing. It imports no catalog:
+#   the adapter's `definitions` package registers its registry with it (`catalog_loader`).
 # - `registry/boolean_gather.py` stays: it imports the adapter's `b1`, `prims`, `dsv4_decode_indices`, `ref_prims` and
 #   `sampling`, and the adapter hands its families to the lookup with its registry.
 #
@@ -26,8 +28,7 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.py"
 "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.py"
 "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.json" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.json"
-"adapters/vllm/verity_vllm/definitions/boolean.py" = "verity/circuits/boolean/versions.py"
-
+"adapters/vllm/verity_vllm/definitions/boolean.py" = "verity/circuits/ops/boolean/versions.py"
 [drop]
 paths = []
 
@@ -50,7 +51,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] implies (`layout.py --modules`)
-"verity_vllm.definitions.boolean" = "verity.circuits.boolean.versions"
+"verity_vllm.definitions.boolean" = "verity.circuits.ops.boolean.versions"
 "verity_vllm.definitions.registry.pearl_c_call" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_call"
 "verity_vllm.definitions.registry.pearl_c_forming" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming"
 "verity_vllm.definitions.registry.pearl_c_noise" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise"
