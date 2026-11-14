@@ -118,6 +118,16 @@ def test_a_released_window_dumps_slim_to_its_sampled_leaves(tmp_path):
     assert again["steps"][0]["nodes"] == st["nodes"] and again["steps"][0]["ranges"] == st["ranges"]
 
 
+def test_a_store_dumps_slim_only_when_every_one_of_its_steps_was_released():
+    _host, _rc, dev = committed()
+    whole = dev._gpu_blocks[1]
+    DP.release(dev, {0: [1]})
+    slim = SD.kept(dev)
+    assert slim is not None and sorted(slim.ranges) == [0, 1, 2] and slim.ranges[1] == []
+    dev._gpu_blocks[1] = whole
+    assert SD.kept(dev) is None, "one step still holds its whole block"
+
+
 def test_a_release_names_only_committed_leaves_and_happens_once():
     _host, _rc, dev = committed()
     with pytest.raises(KeyError, match="steps \\[7\\]"):
