@@ -2,6 +2,7 @@ module
 
 public import NetworkCheck.Period
 public import Spot.OneStage
+public import Lms.Sign
 public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
@@ -365,6 +366,43 @@ def heldMonitoringPeriod : Params :=
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
+
+
+/-! ## An accepted rows-form period with an execution phase: the steps, unproved
+
+The rows form's statements (`RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`, `RowsTiedInputWired`, `RowsOkHeld`)
+speak of each execution phase, and every acceptance Lean shows of `check` has none (`pairParams 0` among them).
+These state what a witness with one execution phase and one compute audit rests on. Each is unproved, and no
+guarantee reads one. -/
+
+/-- A certificate that the key `k` at the deployed LMS parameters signs passes `Certificate.signs` under `k`'s public
+key, at any link, direction, window and digest whose certificate message forms: the step from Lean's signer
+(`Lms.signAt`) to the check's verification of each certificate. -/
+def SignsCertificateAt : Prop :=
+  ∀ (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray) (link : String) (d : NetworkCheck.Direction)
+    (w : ℕ) (digest : ByteArray),
+    Lms.key Lms.deployed I seed = .ok k →
+    (∃ m, NetworkCheck.certificateMessage k.I session link d w digest = .ok m) →
+    ∃ x : NetworkCheck.Check.Certificate, x.keyId = k.I ∧ x.link = link ∧ x.direction = d ∧ x.window = w ∧
+      x.digest = digest ∧ x.signs Lms.deployed k.publicKey session = true
+
+/-- A ratio in lowest terms with a positive denominator reads back from the text `Core.Ratio.toString` writes: the
+step a profile's `delta` takes when the check reads an audit's answer. -/
+def RatioReadsBack : Prop :=
+  ∀ (r : Core.Ratio) (ctx : String), 0 < r.den → Nat.gcd r.num r.den = 1 →
+    Core.Ratio.ofString r.toString ctx = .ok r
+
+/-- The profile `i` reads back from the JSON `Core.Integrity.toJson` writes. Not every profile does (an unsorted
+`prescribed`, a ratio not in lowest terms), so a witness states it at its own audits' profiles. -/
+def ProfileReadsBackAt (i : Core.Integrity) : Prop := Core.Integrity.ofJson i.toJson = .ok i
+
+/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under the public key of a key at
+the deployed LMS parameters. -/
+def RowsExecutionPhaseAccepted : Prop :=
+  ∃ (I seed : ByteArray) (k : Lms.PrivateKey) (p : Params) (c : Commitment) (e : Evidence) (pub : Public)
+    (prof : Profile) (s : Schedule) (sd : ByteArray) (scan : Scan),
+    Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ p.key = k.publicKey ∧ p.form = .rows s sd scan ∧
+      0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
 
 /-- The one-stage answers the period check reads: each compute audit's, then each link-window's. -/
 def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)
