@@ -919,3 +919,14 @@ def test_the_challengers_list_is_not_made_until_the_register_holds_its_hosts_pri
         deploy.fill((deploy.SRC / src).read_text(), reg, src)
     held = [e.hold for e in deploy.load()["vy-challenger-1"].entries if e.src == src]
     assert held and "`private_host`" in held[0], "held, so the host's other files install and its drift says why"
+
+
+def test_the_verifiers_file_is_held_while_its_template_gives_no_peer_its_addresses():
+    """The verifier's gate admits a party only from one of a peer's `addresses` in its verifier.json (live_verifier/host.py's
+    `node_of`): an install of a template that gives a peer none would shut that peer's parties out, so the entry is held, on
+    both auditor hosts, until the template gives every peer its addresses."""
+    src = "tools/research/src/research/pods/nebius/verifier/verifier.json"
+    peers = json.loads((deploy.SRC / src).read_text())["peers"]
+    entries = [e for n in ("vy-auditor-1", "vy-auditor-2") for e in deploy.load()[n].entries if e.path == "/etc/vy/verifier.json"]
+    assert len(entries) == 2 and all(e.register and e.src == src for e in entries)
+    assert all("addresses" in p for p in peers.values()) or all(e.hold for e in entries)

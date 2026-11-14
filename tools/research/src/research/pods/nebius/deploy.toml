@@ -628,12 +628,15 @@ src = "tools/research/src/research/pods/nebius/verifier/12-vy-verifier.conf"
 nodes = ["vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
-# the challenger's address in it is the register's (`register`)
+# the challenger's address in it is the register's (`register`). Held: the verifier's gate admits a party only from one of a
+# peer's `addresses` here (live_verifier/host.py's `node_of`), which the template doesn't give, so an install of it would shut
+# every party out. The hold goes with the PR whose template gives each peer its `addresses` from the register; held, it names
+# its template as `src`, as the challenger's list does
 [[file]]
 path = "/etc/vy/verifier.json"
-template = "tools/research/src/research/pods/nebius/verifier/verifier.json"
+src = "tools/research/src/research/pods/nebius/verifier/verifier.json"
 register = true
-by = "research deploy, from the template and the register of machines"
+hold = "the verifier admits a party only from a peer's `addresses`, which the template doesn't give each peer yet"
 nodes = ["vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
