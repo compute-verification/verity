@@ -53,7 +53,7 @@ def test_the_remote_dampener_at_the_defaults():
     """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
     MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
     3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
-    peak, ``InferenceOnly.Guarantees.SlowdownRemote``'s rho = max(1, 1/(s + x/MFU_0)) as stated, and D is 1.21; without the hosts
+    peak, ``InferenceOnly.Guarantees.SlowdownRemote``'s slowdown max(1, 1/(s + x/MFU_0)) as stated, and D is 1.21; without the hosts
     assumption too (host CPUs at 12.6% of the GPUs) x = 0.45 is above MFU_0 and D is 1; without the hosts assumption
     alone D is 2.19."""
     def at_peak(p: dict, t: str) -> float:
