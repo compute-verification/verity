@@ -199,9 +199,9 @@ theorem pous_record_size {c : SessionCommitment} {ended : String} {rounds : Arra
   exact hash_size _
 
 /-- The wipe's session record is a digest. -/
-theorem wipe_record_size {c : StreamedWipe.Commitment} {ended : String} {fillStartNs fillEndNs : Int}
-    {batches : Array StreamedWipe.Batch} {egressBits : Int} {r : ByteArray}
-    (h : StreamedWipe.message c ended fillStartNs fillEndNs batches egressBits = .ok r) : r.size = 64 := by
+theorem wipe_record_size {c : StreamedWipe.Commitment} {ended : String} {startMark : ByteArray}
+    {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch} {r : ByteArray}
+    (h : StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) : r.size = 64 := by
   unfold StreamedWipe.message at h
   cases hr : StreamedWipe.recordsRoot c.session batches <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
   subst h
@@ -223,8 +223,8 @@ theorem SetupRecord.value_ne_pous {r : SetupRecord} {b : ByteArray} {c : Session
   SetupRecord.value_ne_digest h (pous_record_size hd)
 
 theorem SetupRecord.value_ne_wipe {r : SetupRecord} {b : ByteArray} {c : StreamedWipe.Commitment} {ended : String}
-    {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch} {egressBits : Int} {d : ByteArray}
-    (h : r.value = .ok b) (hd : StreamedWipe.message c ended fillStartNs fillEndNs batches egressBits = .ok d) :
+    {startMark : ByteArray} {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch} {d : ByteArray}
+    (h : r.value = .ok b) (hd : StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok d) :
     b ≠ d :=
   SetupRecord.value_ne_digest h (wipe_record_size hd)
 
@@ -264,9 +264,9 @@ theorem setupPreimage_ne_pous {I I' s s' b d : ByteArray} {r : SetupRecord} {c :
   setupPreimage_ne_digest hI hI' hs hs' h (pous_record_size hd)
 
 theorem setupPreimage_ne_wipe {I I' s s' b d : ByteArray} {r : SetupRecord} {c : StreamedWipe.Commitment}
-    {ended : String} {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch} {egressBits : Int}
+    {ended : String} {startMark : ByteArray} {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch}
     (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64) (hs' : s'.size < 2 ^ 64) (h : r.value = .ok b)
-    (hd : StreamedWipe.message c ended fillStartNs fillEndNs batches egressBits = .ok d) :
+    (hd : StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok d) :
     rolePreimage I s b ≠ rolePreimage I' s' d :=
   setupPreimage_ne_digest hI hI' hs hs' h (wipe_record_size hd)
 
