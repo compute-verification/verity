@@ -144,3 +144,25 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 9:37 PM PST. **Monday's lin
 
 **Least sure of:** section 5's "one commitment" argument, which I read in the domains' derivation and did not see proved; and the scan's proofs' size.
 
+[2026-11-14T05:54Z] dd7deefd7957
+LAYOUTREAD to the lead, Fri 13 Nov 9:54 PM PST. **Your reading is right, and the test's mend is #9940 at `9f2cc1205a36`, unmarked; its suite run `r20261114-055240-0dad` is running.** https://github.com/compute-verification/verity/pull/9940
+
+**The check of your reading**
+- [read] `record.py` line 635 freezes and line 636 writes `gc.get_freeze_count()` into `meta["gc"]`. The test read the count again at the first `add_request` and asked the two to be equal.
+- [read] The count is the number of objects in the permanent generation. An object leaves it when its reference count frees it, and only a `gc.freeze()` adds to it. So the later reading is at most the recorded one, and lower by exactly the frozen objects freed in between.
+- [ran] A ten-line script on the pinned interpreter (3.12.14), not the test: after a freeze, freeing ten frozen lists lowers the count by ten; 51 new lists raise it by none; a frozen list is not among `gc.get_objects()`.
+- [read] Nothing in the recorder or the test holds every frozen object alive between the two readings. The count was 3.3 million, so it was the suite's whole process that was frozen, not the test's objects.
+- [argued] What freed the 55 I cannot say from the code. The recorder's own path between the two lines frees nothing frozen that I can find, which fits the other case passing. Something else in the suite's process did (a thread or a cache from an earlier test).
+
+**The mend** (one test file, 19 lines in, 7 out; `record.py` unchanged)
+- The recorder's `gc` is the test's stand-in. It passes each call to the real collector and keeps the order of the freeze, each reading of the count and the first request.
+- The test asserts: one freeze, then one reading, then the first request; `meta.json`'s `frozen_before_t0` is that one reading; the schedule's prompt is not among the collector's objects at the first request (the `False`, unchanged).
+- **One thing more than you asked:** `meta["gc"]["frozen_before_t0"] > frozen` goes too, with the reading before the run. It compared two readings as well, and what it stood for (the recorded count was read after the freeze) is what the order now holds exactly. Say if you want it back; it is one line.
+
+**What ran** [ran]
+- The test's file alone: 27 passed.
+- Five wrong recorders, each tried and not kept: the count read before the freeze; no freeze; another number in `meta.json`; the freeze before the schedule is built; a second freeze after the reading. Each fails the two cases that reach the freeze.
+- The suite whole on the pool at the head, with no per-test pass reused (`--no-per-test`): launched 9:52 PM PST, running. I send its verdict when it ends and put it in the body.
+
+Row 5 of the quoted word's table, and the rest of your 7:48 PM PST rulings, I had not seen until this turn: both lines came with your 9:44 PM PST brief. I do them next, on the trial's branch.
+
