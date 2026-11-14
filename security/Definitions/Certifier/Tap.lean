@@ -12,7 +12,7 @@ them, the observations the audits read (`recordingCode`). Its trust is one `trus
 (`Verity.Assumptions.TrustedDevice`) over that code, with no second device and no second trust, so that what the
 certifier saw is what the warden sent is a fact of the code, not a premise.
 
-**The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
+**The record is the wire.** The deployed tap (`verity/protocols/accounting/certifier/device/warden_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
 connection (`verity/core/protocols/certifier/warden_rows.py`; `Definitions.Certifier.RecordRows` is that
 format). So on every schedule the format holds (`RecordFormat.fits`: a record of the monitoring period's buckets, each of

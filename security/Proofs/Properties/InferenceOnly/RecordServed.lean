@@ -56,7 +56,7 @@ open InferenceOnlyCheck.Record.SecurityProofs (form read_front finish_text front
 /-- **The wires of a record `read` accepts pass the check's `unwhole`**, on the templates the text gives and the
 leaves the Program gives each. -/
 theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
-    InferenceOnlyCheck.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts ∧
+    Spot.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts ∧
       unwhole c.f.ts (c.f.ts.map (leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc

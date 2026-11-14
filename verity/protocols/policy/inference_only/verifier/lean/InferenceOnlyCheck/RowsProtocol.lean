@@ -203,7 +203,7 @@ def reasonOf (j tr : Json) (code : String) : String :=
   | none => code
 
 /-- Whether `circuits` names the templates `ts`, each once, in order. -/
-def namesTemplates (circuits : Array (String × String)) (ts : List RecordText.Tmpl) : Bool :=
+def namesTemplates (circuits : Array (String × String)) (ts : List Spot.RecordText.Tmpl) : Bool :=
   circuits.toList.map (·.1) == ts.map (·.tid)
 
 /-! ## The circuit files -/

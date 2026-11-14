@@ -10,7 +10,7 @@ The game behind the bandwidth audit v0.
 A device holds a store `E` of `N` blocks of `b` bits in device memory. The verifier reveals a fresh seed `σ`; the prover
 must commit, before a deadline, to the tag `H(σ, j, E_j)` of every block `j`; the verifier then checks `s` blocks sampled
 uniformly. Ingress is the number of bits the chip read from device memory in the window. The guarantee, PoUB's
-per-pass lemma (`Definitions/Accounting/Guarantees/RemotePass.lean`), bounds the probability that a device is accepted
+per-pass lemma (`Definitions/Compose/Guarantees/RemotePass.lean`), bounds the probability that a device is accepted
 while its ingress falls short of the store by more than what it could have held or obtained another way.
 
 **The random oracle.** `H(σ, ·, ·)` at the fresh seed is a uniform function `O : Fin N × Bits b → Bits h`, and the

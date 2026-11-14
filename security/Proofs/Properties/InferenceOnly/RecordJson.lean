@@ -376,7 +376,7 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 open Lean (Json toJson)
 open Flock.Program (Prog fieldsOf)
 open Flock.Sigma (bits)
-open InferenceOnlyCheck.RecordText (Tmpl tmplOf wiresOf outerOf)
+open Spot.RecordText (Tmpl tmplOf wiresOf outerOf)
 
 /-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
 theorem nodup_of_eraseDups : ∀ (n : Nat) (l : List String), l.length ≤ n →
@@ -480,7 +480,7 @@ theorem piece_templates {f : Front} (hd : (f.ts.map (·.tid)).Nodup)
         (fun a b => a.1 ≠ b.1) ∧
       piece f = (Lean.Json.obj (Std.TreeMap.Raw.ofList [("templates", Lean.Json.mkObj []),
           ("cuts", (f.doc.getObjVal? "cuts").toOption.getD (Lean.Json.mkObj [])),
-          ("wires", RecordText.valueAt f.doc "wires")] compare)).mergeObj
+          ("wires", Spot.RecordText.valueAt f.doc "wires")] compare)).mergeObj
         (Lean.Json.mkObj (("templates",
           Lean.Json.mkObj (f.ts.map fun t => (t.tid, Json.tmplJson t.units t.rows t.outs))) :: rest)) := by
     refine ⟨match (f.doc.getObjVal? "order").toOption, f.i.order with

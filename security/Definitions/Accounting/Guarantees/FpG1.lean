@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Registration.Assumptions.Sheet
 public import Definitions.Pouw.Headline.Sm120Measured
 public import Definitions.Pouw.FpG1
 public import Definitions.Pouw.FpG1.H1

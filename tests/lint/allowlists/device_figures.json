@@ -57,7 +57,7 @@
     {"file": "security/Proofs/Pouw/HeadlineDc/Sm90.lean", "count": 1, "lane": "lean"},
     {"file": "security/Proofs/Pouw/HeadlineDc/Sm90Measured.lean", "count": 1, "lane": "lean"},
     {"file": "security/Proofs/Pouw/HeadlineDc/Sm90MeasuredI3.lean", "count": 1, "lane": "lean"},
-    {"file": "security/Proofs/Accounting/RemoteHeld/Meets.lean", "count": 3, "lane": "lean"},
+    {"file": "security/Proofs/Compose/RemoteHeld/Meets.lean", "count": 3, "lane": "lean"},
     {"file": "security/Proofs/Core/Accel/Witness.lean", "count": 3, "lane": "proofs"},
     {"file": "security/Proofs/Core/Site.lean", "count": 1, "lane": "proofs"},
     {"file": "security/Proofs/Flock/Claims/Complete/Coins.lean", "count": 1, "lane": "proofs"},

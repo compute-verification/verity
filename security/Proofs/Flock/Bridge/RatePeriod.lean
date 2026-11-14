@@ -10,7 +10,7 @@ import Proofs.Flock.EndToEnd.Period
 # The integrity audit pooled over a period, at a rate
 
 Seven statements about a period of `SamplingBlock`s take one share `q` for every window as a hypothesis,
-`q ≤ kd_t / n_t`: `IntegrityPeriodLog`, `IntegrityPooled`, `IntegrityBlock`, `IntegrityBlocks`,
+`q ≤ kd_t / n_t`: `IntegrityMonitoringPeriodLog`, `IntegrityPooled`, `IntegrityBlock`, `IntegrityBlocks`,
 `IntegrityPooledBlocks`, `IntegrityBlockCarried` and `IntegrityPooledCarried`. A window's `n_t` is the registration's,
 which the prover sizes, so under a fixed count `kd_t` the largest `q` that holds is the prover's. A `SamplingBlock`
 samples a uniform `kd`-subset of its `n` units (`SamplingBlock.L`), the design `subset kd`, which is what the rule

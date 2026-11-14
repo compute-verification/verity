@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Proof of the integrity audit over a period, per sampling block and pooled
 
-* `Flock.SecurityProofs.IntegrityPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
+* `Flock.SecurityProofs.IntegrityMonitoringPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
   `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_incorrect_le`), with its
   knowledge term at the worst registration.
 * `Flock.SecurityProofs.IntegrityPooled`: a run in which every sampling block is accepted and the incorrect proof blocks total at
@@ -154,7 +154,7 @@ open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
 /-- **The integrity audit over a period.** -/
-theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
+theorem IntegrityMonitoringPeriod : Flock.Guarantees.IntegrityMonitoringPeriod := by
   intro W T hA3 s hT hL
   have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
     monitoringPeriodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
@@ -166,9 +166,9 @@ theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
   simpa [Period.run] using h
 
 /-- **The integrity audit over a period, at `δ`.** -/
-theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
+theorem IntegrityMonitoringPeriodLog : Flock.Guarantees.IntegrityMonitoringPeriodLog := by
   intro W T q δ hq hδ hqt hK hA3 s hT hL
-  refine (IntegrityPeriod W T hA3 s hT hL).trans (Finset.sum_le_sum fun t ht => ?_)
+  refine (IntegrityMonitoringPeriod W T hA3 s hT hL).trans (Finset.sum_le_sum fun t ht => ?_)
   have ht' := Finset.mem_range.1 ht
   gcongr
   exact (W t).miss_le hq hδ (hqt t ht') (hK t ht')

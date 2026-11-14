@@ -17,5 +17,5 @@ public import Proofs.Slowdown.Cover.Training
 The cuts and the min-cut bound (`Cut`, `CutCharged`), the work and product counts of threads, fit and layered references,
 the cover theorem (`Cover.Training`), covering at one and two costs, the local bounds (`Capability`), the training
 formalism (`Formalism`), the slowdown over execution phases (`Slowdown`), the remote bound over monitoring periods
-(`RemotePeriod`), and their witnesses. The policy they take as a hypothesis is `Proofs.InferenceOnly`'s.
+(`RemoteMonitoringPeriod`), and their witnesses. The policy they take as a hypothesis is `Proofs.InferenceOnly`'s.
 -/

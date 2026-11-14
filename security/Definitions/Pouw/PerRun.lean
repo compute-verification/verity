@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Joint
+public import Definitions.Compose.Joint
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
 
