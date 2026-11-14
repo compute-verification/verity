@@ -117,7 +117,7 @@ theorem computed_block (R : Finset (Fin d.D.N)) (x : Bit d.D) (hx : x ∈ bits d
   · exact hne.ne_empty h
   · exact h (pred_subset_block hxR)
 
-/-- **(T2) The block is handed at most `R`'s novel reads**: for `R` of computed gates, the bits its block is handed
+/-- **(T2) The block is handed at most `R`'s fresh input bits**: for `R` of computed gates, the bits its block is handed
 outside the free bits are bits of `in(R) \ θ`. -/
 theorem inputs_block_subset (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
     (Circuit.ofDecl d).inputs (block d R) \ (Circuit.ofDecl d).θ ⊆
