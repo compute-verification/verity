@@ -3072,6 +3072,12 @@
       "paths": {
         "adapters/vllm/verity_vllm/program/mla_capture.py": "adapters/vllm/tests/program/mla_inputs.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
     }
   ]
 }
