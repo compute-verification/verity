@@ -42,7 +42,7 @@ from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: `verity`'s packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`)
-PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core")
+PACKAGES = ("verity", "verity.circuits", "verity.circuits.kernels", "verity.core")
 #: the repository's directories of other distributions' packages, one directory per serving stack holding the package that
 #: attaches Verity to it.  A package there registers itself by a sidecar of its own module
 #: (``adapters/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;

@@ -11,7 +11,7 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, self_check
 from verity.definitions.registry import fp8_ds_mla_upconvert as M
-from verity.definitions.silicon.cast import e4m3_to_f32_word
+from verity.circuits.silicon.cast import e4m3_to_f32_word
 
 SMALL = {"DN": 128, "DR": 2}
 

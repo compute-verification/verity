@@ -57,12 +57,12 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, multiply
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
-from verity.definitions.ops.boolean.scalar import f32_to_e4m3_sat
-from verity.definitions.ops.boolean.sqrt import isqrt
-from verity.definitions.ops.fp32 import F32DivV2, F32MulV2
-from verity.definitions.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, S32ToF32Rn, const
+from verity.circuits.ops.boolean.scalar import f32_to_e4m3_sat
+from verity.circuits.ops.boolean.sqrt import isqrt
+from verity.circuits.ops.fp32 import F32DivV2, F32MulV2
+from verity.circuits.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, S32ToF32Rn, const
 from verity.circuits.refs import array_of
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Value
 from verity.commitments import rowleaf
 from verity.commitments.gates.sha512 import IV, compress_gadget, midstate, pad_tail
