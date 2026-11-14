@@ -93,19 +93,38 @@ SOURCE_BYTES = 64
 
 
 class Refusal(RuntimeError):
-    """A request the challenger's side refuses; the message is why."""
+    """A request the challenger's side refuses; the message is why: the field and the rule it breaks, never the request's
+    bytes, which go back to the caller."""
+
+
+def field_bytes(request: Any, field: str, n: int) -> bytes:
+    """`request[field]`, `n` bytes in hex; `Refusal` naming the field and its form otherwise."""
+    value = request.get(field) if isinstance(request, Mapping) else None
+    why = f"the request's `{field}` is {n} bytes in hex"
+    if not isinstance(value, str):
+        raise Refusal(why)
+    try:
+        out = bytes.fromhex(value)
+    except ValueError:
+        raise Refusal(why) from None
+    if len(out) != n:
+        raise Refusal(why)
+    return out
 
 
 def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], entropy: Callable[[int], bytes] = os.urandom) -> bytes:
     """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `entropy` after the
     commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
-    audit, commitment = bytes.fromhex(request["audit"]), bytes.fromhex(request["commitment"])
+    audit, commitment = field_bytes(request, "audit", 64), field_bytes(request, "commitment", 64)
+    once = "the memory challenger draws one salt an audit, and a retry never redraws it"
+    if salts.get(audit) is not None:
+        raise Refusal(f"the request's `audit` has its salt: {once}")
     source = entropy(SOURCE_BYTES)
     try:
         salts.record(audit, commitment, pous_setup.draw_salt(source, commitment))
-    except (mc.SessionLogError, ValueError) as e:
-        raise Refusal(str(e)) from None
+    except mc.SessionLogError:
+        raise Refusal(f"the salt log refused the request's `audit`: {once}") from None
     return source
 
 
@@ -113,22 +132,25 @@ def designate(request: Mapping[str, Any], salts: mc.SaltLog, sessions: mc.Sessio
     """The id of the session `request` names its audit for (`session_id`), from the commitment and salt `salts` logged
     under the audit; `Refusal` unless setup's published outputs (`published`) carry exactly those and the session audits
     the `C*` they publish, or when a session has run under the id (`sessions`)."""
+    audit = field_bytes(request, "audit", 64)
     try:
-        audit, published = bytes.fromhex(request["audit"]), R.Setup.from_json(request["published"])
-    except (KeyError, TypeError, ValueError) as e:
-        raise Refusal(f"the request names no audit and setup's published outputs ({type(e).__name__}: {e})") from None
+        published = R.Setup.from_json(request["published"])
+    except (KeyError, TypeError, ValueError):
+        raise Refusal("the request's `published` is setup's published outputs, {blocks, commitment, root, salt}, the "
+                      "bytes in hex") from None
     logged = salts.get(audit)
     if logged is None:
-        raise Refusal(f"the memory challenger drew no salt for audit {audit.hex()}: a session runs on a setup salted by it")
+        raise Refusal("the memory challenger drew no salt for the request's `audit`: a session runs on a setup salted by "
+                      "it")
     if (published.commitment, published.salt) != logged:
-        raise Refusal(f"setup's published outputs do not carry the commitment and salt the memory challenger logged for "
-                      f"audit {audit.hex()}")
+        raise Refusal("setup's published outputs (`published`) do not carry the commitment and salt the memory challenger "
+                      "logged for the request's `audit`")
     if published.root.hex() != request.get("binding") or published.blocks != request.get("blocks"):
-        raise Refusal("the session does not audit the C* setup published: its binding and blocks are the published root's "
-                      "and count")
+        raise Refusal("the session does not audit the C* setup published: its `binding` and `blocks` are the published "
+                      "root's and count")
     sid = session_id(audit, *logged)
     if sid in sessions:
-        raise Refusal(f"a session has run for audit {audit.hex()}: the memory challenger runs one an audit, and a retry "
+        raise Refusal("a session has run for the request's `audit`: the memory challenger runs one an audit, and a retry "
                       "is refused, never redrawn")
     return sid
 
@@ -295,8 +317,8 @@ def _reply(line: str) -> None:
     sys.stdout.flush()
 
 
-def _refused(e: BaseException) -> int:
-    _reply(json.dumps({"refused": str(e)}))
+def _refused(why: str) -> int:
+    _reply(json.dumps({"refused": why}))
     return 1
 
 
@@ -308,6 +330,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     request = json.loads(sys.stdin.readline())
     device = Path(a.device)
     try:
+        if not isinstance(request, dict):
+            raise Refusal("the request is one JSON object")
         salts, sessions = _logs(device)
         if "salt" in request:
             source = give_salt(salts, request["salt"])
@@ -316,8 +340,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if "audit" in request:
             designate(request, salts, sessions)
         setup_of(request)
-    except (Refusal, mc.SessionLogError, KeyError, TypeError, ValueError) as e:
-        return _refused(e)
+    except (Refusal, mc.SessionLogError, ValueError) as e:
+        return _refused(str(e))
+    except (KeyError, TypeError) as e:
+        return _refused(f"the request is not a session's request ({type(e).__name__})")
     signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:

@@ -260,22 +260,26 @@ def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None
 def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     """Setup's published outputs with P2's parameters, as a request naming its audit carries them (`request_of`), None
     for a request without them; ValueError unless their root is the session's binding, their blocks the request's,
-    their commitment and root 64 bytes, their salt PoUS's, and the parameters P2's at those blocks and block size."""
+    their commitment and root 64 bytes, their salt PoUS's, and the parameters P2's at those blocks and block size. Each
+    ValueError names the field and the rule, and quotes none of the request (`challenger_party.main` returns it)."""
     if "published" not in request and "params" not in request:
         return None
     s, p = request.get("published"), request.get("params")
     if not isinstance(s, dict) or sorted(s) != sorted(("blocks", "commitment", "root", "salt")):
         raise ValueError("a request's published outputs are {blocks, commitment, root, salt}")
-    if s["root"] != request["binding"]:
+    if s["root"] != request.get("binding"):
         raise ValueError("the setup's root is not the session's binding")
-    if s["blocks"] != request["blocks"]:
-        raise ValueError(f"the setup is of {s['blocks']} blocks, the session of {request['blocks']}")
+    if s["blocks"] != request.get("blocks"):
+        raise ValueError("the setup's blocks (`published.blocks`) are not the session's `blocks`")
     if not isinstance(p, dict) or sorted(p) != sorted(PARAMS):
         raise ValueError(f"a setup's params are {list(PARAMS)}")
     q = P2Params(**p)
-    if (q.blocks, q.block_bytes) != (request["blocks"], request["block_bytes"]):
-        raise ValueError("the setup's parameters are not the session's blocks")
-    published = R.Setup.from_json(s)
+    if (q.blocks, q.block_bytes) != (request.get("blocks"), request.get("block_bytes")):
+        raise ValueError("the setup's parameters (`params`) are not P2's at the session's blocks and block_bytes")
+    try:
+        published = R.Setup.from_json(s)
+    except (TypeError, ValueError):
+        raise ValueError("a setup's published blocks are an integer and its commitment, root and salt hex") from None
     if len(published.commitment) != 64 or len(published.root) != 64 or len(published.salt) != R.SALT_BYTES:
         raise ValueError("a setup's commitment and root are 64 bytes and its salt PoUS's")
     return s | {"params": p}
