@@ -11,7 +11,6 @@ failure message carries its fix.
  - P2: opened values;
  - P3: one evaluator;
  - P4: one result;
- - P5: properties;
  - P6: one CLI;
  - P7: declared inputs;
  - P8: facts;

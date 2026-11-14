@@ -22,7 +22,7 @@ def depth (own : Array _root_.Flock.Registered.Port) : ℕ :=
   own.toList.foldr (fun p m => max (_root_.Flock.log2ceil p.leaves) m) 0
 
 /-- **The sampled verifier's code**, as the record reads it: the verifier in public-coin form (`V`), its parser, scope
-check and partition evaluation; its sample layout (`stage2`, `checked`, `rounds`); each checked unit's session and what
+check and partition evaluation; its sample layout (`secondStage`, `checked`, `rounds`); each checked unit's session and what
 its Flock witness reveals (`session`, `reveal`); the trace commitment's registered ports (`own`), the ports a position
 reads under a run's roots (`ownAt`: `own` unless the code sets it, each no deeper than `own`), the root and leaf
 index of each position under a run's roots (`at_`) and its published leaf layer (`layer`); where each committed bit
@@ -39,7 +39,7 @@ structure Code where
   parse : Msg → Option AuditStatement
   scopeCheck : Msg → Bool
   partition : AuditStatement → Option Partition
-  stage2 : (x : Msg) → Finset (Fin (V.k x))
+  secondStage : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → FlockDeploy.Coin) → List ℕ
   rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ → Seen → Option (Msg × Seen)

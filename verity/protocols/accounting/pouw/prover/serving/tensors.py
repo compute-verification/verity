@@ -17,12 +17,16 @@ from typing import Any, Protocol
 
 import numpy as np
 
-#: the goal under which the PyTorch adapter hands both in
+#: the goal under which the device adapter hands both in
 GOAL = "compute-accounting/architecture-on-branch"
 
 
 class Tensors(Protocol):
     """The workload's buffers as PoUW's serving code reads, writes and allocates them."""
+
+    def is_buffer(self, x: Any, /) -> bool:
+        """Whether ``x`` is one of the workload's buffers (a NumPy array is not)."""
+        ...
 
     def host(self, t: Any, /) -> np.ndarray:
         """``t``'s values on the host, a NumPy array of its own element type (a uint16 buffer's as ``uint16``)."""
@@ -59,6 +63,12 @@ class Tensors(Protocol):
         current stream, behind what it has enqueued, without waiting; the result waits for the copy, and ``out`` is read
         only after it has. ``t`` is kept alive for the copy."""
         ...
+
+
+def dtype_name(x: Any) -> str:
+    """``x``'s element type by its bare name (``"uint8"``, ``"float32"``), whichever library's buffer or array ``x`` is; ``""``
+    when it has none."""
+    return str(getattr(x, "dtype", "")).rpartition(".")[2]
 
 
 class H1Device(Protocol):
@@ -134,6 +144,11 @@ def use_h1(provider: Callable[[], H1Device]) -> None:
     _h1 = provider
 
 
+def has_tensors() -> bool:
+    """Whether a workload has handed its buffers in (`use`)."""
+    return _tensors is not None
+
+
 def tensors() -> Tensors:
     if _tensors is None:
         raise NotImplementedError(f"{GOAL}: no tensors handed in; the workload that serves the model calls `tensors.use` first")
@@ -147,4 +162,4 @@ def h1_device() -> H1Device:
     return _h1()
 
 
-__all__ = ["GOAL", "H1Device", "Tensors", "h1_device", "tensors", "use", "use_h1"]
+__all__ = ["GOAL", "H1Device", "Tensors", "dtype_name", "h1_device", "has_tensors", "tensors", "use", "use_h1"]
