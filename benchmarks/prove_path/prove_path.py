@@ -1478,7 +1478,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 @contextlib.contextmanager
 def network_traces() -> Iterator[None]:
     """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
-    its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
+    its ``replay`` isn't one_stage's, which ``a5`` imports."""
     path, replay = list(sys.path), sys.modules.pop("replay", None)
     sys.path.insert(0, str(HERE.parent / "network_traces"))
     sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces

@@ -32,7 +32,7 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 - The keys are LMS at H = `ck.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `verity/protocols/compose/device/live_challenger/auditor.py`).
 
-**Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
+**Traffic** (`traffic`, `varied_traffic`): varied: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies

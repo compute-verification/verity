@@ -1,34 +1,35 @@
-"""network-e2e's steps after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
+"""The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
 `verity.protocols.accounting.certifier.verifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
 residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
-* **The advice** (`advice`, ``--advice FILE``): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
+* **The advice** (`advice`, a file): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
   advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
 * **Bits per link-window** (`bits`), T the honest run's egress window in buckets: v0's (I1's
-  `bits_by_window`) and, given the registered serving config (``--serving-config``: `derived.Config`'s fields, or a step
+  `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
   trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
   I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
   advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
   (the tie's derivation, in the clear on the rehearsal's published witness).
-* **The endpoint's own advice** (`served_advice`, e2e's ``--endpoint-run``): `verity-vllm advice` over a `verity-vllm
+* **The endpoint's own advice** (`served_advice`, a served run's records): `verity-vllm advice` over a `verity-vllm
   serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
   Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
   run's windows are bound to it (each window opened to its registered root, every certified request admitted in
   exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
   chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
   (`endpoint_config`), its bits placed in the run's link-windows.
-* **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
+* **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
   the ZK server released no proof of it, or in a plain audit Lean refused the proof it read). The advice the arm
-  committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
-  hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
-  only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.
+  committed is held to the given advice file's: the stand-in's codec committed the file's bytes (its SHA-512), v0's
+  commitment is hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path
+  is bound to them only when the file is their advice and the Commit it proves is theirs, and only a bound prove path
+  counts in the OK.
   Beside the endpoint's own advice, an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window
   it proves (`served_commit`); the prove path is bound to these runs when every arm's Commit is the endpoint's (its
   ``windows.jsonl``) and sealed while serving, every arm's committed advice is held by content to the report's advice
@@ -65,7 +66,7 @@ def _derived():
 
 
 D = _derived()
-ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
+ADVICE = "advice"  # the varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
 
 
 def _sha512(data: bytes) -> str:
@@ -477,7 +478,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     report's advice directory ``adv_dir``, each window's close ``closed``), whether registered by the report's own run
     or apart. ``registered`` is, by window, who registered its advice (``by``, ``ref``), the registration's directory
     when it isn't the report's (``registration``), the serving run's own record (``record``, its run directory,
-    `serve_record`) and the arm's first sample (``first_draw``), as the job states them (``--prove-path-registered``);
+    `serve_record`) and the arm's first sample (``first_draw``), as the job states them;
     whether it was at serve time is never the job's to say: its sample followed the registration when every rank's
     `advice_before_draw` (the verifier's receipt of it before any coin) says so. A window with no next close in the
     endpoint's records is bounded by the session's end only when the record says the session ended with this window
@@ -514,7 +515,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
 def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | None = None, bits: dict | None = None,
                ep: Path | None = None, registered: dict | None = None) -> dict:
     """`prove_path.py audit`'s output at ``src`` (one directory or several), one row per arm and rank (the module's
-    docstring). Each arm's committed advice is held to the ``--advice`` file (``info``), which says nothing of these
+    docstring). Each arm's committed advice is held to the given advice file (``info``), which says nothing of these
     runs: the prove path is ``bound`` to them only when that file is these runs' advice (``advice_bound``, `bits`'
     ``bound``) and the Commit it proves is theirs, which nothing here checks (no Commit record of these runs is an
     input), so it is never bound and its ``ok`` stays out of the report's. Beside the endpoint's own advice
@@ -606,8 +607,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
     """What the report stood on that isn't yet the chain's own, from what ``r`` (the report) says ran."""
     out, c = [], r.get("chain") or {}
     if not varied_client:
-        out.append("Varied traffic: certifier_serve.py's `rehearse --traffic varied` (Poisson arrivals, "
-                   "prompts as ids, real EOS) isn't in this tree.")
+        out.append("Varied traffic: no varied plan (Poisson arrivals, prompts as ids, real EOS) ran.")
     if r.get("profile") == ADVICE:
         out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no link-window has N2's verdict "
                    "and nothing is proved by n2_zk; the rehearsal's own check (certified I/O, audit, salt) is the "

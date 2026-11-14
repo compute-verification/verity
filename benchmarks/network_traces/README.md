@@ -19,14 +19,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 ## Entry points
 
 - **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving; `replay.py` runs
-  honest traces through the reference protocol at calibrated parameters; `active_replay.py` runs the active certifier
-  on recorded traces in real time, and in front of a live vLLM (`active_live.sh`, `active_live_cells.sh`). `covert.py`
-  measures a colluding sender's channel through the declared clock sync, and `stall_probe.py` and `tick_load.py` find
-  what makes a tick late.
-- **The certifier in front of an endpoint.** `certifier_serve.py` runs the network certifier (`active.Proxy`) in front
-  of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
-  besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
-  framing.
+  honest traces through the reference protocol at calibrated parameters, and `stall_probe.py` finds what makes a tick
+  late.
+- **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
+  the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.accounting.certifier.verifier.warden`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
@@ -44,8 +40,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
-  `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
-  runbook (below).
+  `served_session.py` is the served session's runbook (below).
 - **The weights' load:** `load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
@@ -341,23 +336,17 @@ The run of record takes the network chain end to end on the gate's machines:
 5. The verdict is the per-execution-phase acceptance that the certification period's leak bound reads.
 
 **How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate warden-rehearse --scan --peer HOST
---port PORT --minutes 30` (the network certifier as a relay), then `status` and `fetch`. The proxy's rehearsal is no
-verb of the gate's: `certifier_serve.py rehearse --upstream URL --traffic varied --requests 100 --tokens 64 --seed 1
---eos-ids 128001 --height 20` runs it off the gate's machine, and `demo_chain.sh` keeps its run as the gate keeps one. A
-prompt range shorter than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one
-prompt, so such an endpoint takes its prompts from a file and a wider margin: `demo_stub.py prompts --count 100 >
-PROMPTS`, then `certifier_serve.py rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0
---prompts-file PROMPTS --margin 4` (`--prompts-file`: request j sends the (j mod n)-th; `--margin`: the plan's over the
-probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the endpoint's records
-(`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
-`serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
+--port PORT --minutes 30` (the network certifier as a relay), then `status` and `fetch`. The fetched tarballs go to one
+job, `chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`:
+`advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve directory,
+`CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 binding and the two provers, and writes `out/report/report.json` and `report.md`:
 
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each execution phase's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
-| endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
+| endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O off the network certifier's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |

@@ -1,6 +1,6 @@
 """demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop), for
-the network certifier's rehearsal (`certifier_serve.py rehearse --upstream URL --traffic varied`), writing the records a
-`verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding and I/O tie read it unchanged.
+a network certifier's rehearsal, writing the records a `verity-vllm serve-openai` endpoint writes, so network-e2e's
+endpoint binding reads it unchanged.
 
     python demo_endpoint.py --out DIR [--engine hash|seeded:SHAPE|MODULE:FACTORY] [--seed 0] [--host 127.0.0.1]
         [--port 0] [--eos 0] [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--window-steps 16]
@@ -11,8 +11,8 @@ Commit window and writes ``summary.json``.
 * **HTTP** (one request a connection): ``GET /v1/models`` lists the engine's model; ``POST /tokenize`` makes one token a
   UTF-8 byte (the demo's byte vocabulary, no BOS); ``POST /v1/completions``, streamed (``transfer-encoding: chunked``,
   one ``data:`` event a token, then ``data: [DONE]``), each chunk carrying its ``token_ids`` and the first its
-  ``prompt_token_ids``, as vLLM's server does under ``return_token_ids``. A request is the certifier's varied body
-  (`certifier_serve.varied_body`): its prompt as token ids, ``max_tokens``, greedy (temperature 0, top_p 1), no stop
+  ``prompt_token_ids``, as vLLM's server does under ``return_token_ids``. A request is a varied body of
+  token ids: its prompt as token ids, ``max_tokens``, greedy (temperature 0, top_p 1), no stop
   strings, its ``user`` the id the certified I/O names it by. Its prompt and ``max_tokens`` must fit the engine's
   context, as vLLM refuses a request past ``max_model_len``. Any other body is answered 400.
 * **The scheduler** (`Scheduler`) is vLLM V1's synchronous one as the derived rules model it
