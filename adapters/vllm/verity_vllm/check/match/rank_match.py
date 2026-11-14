@@ -34,7 +34,7 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.records.schema_ids import RANK_COMMIT_BINDING_SCHEMA, RANK_MATCH_SCHEMA
 
-__all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record"]
+__all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record", "same_module_path"]
 
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
 LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm")
@@ -123,7 +123,9 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
     nodes = result.body.nodes
     node_spec = {i: getattr(n.fn, "id", None) or str(n.fn) for i, n in enumerate(nodes)}
     node_step = {m["node"]: m.get("step") for m in result.instances if m.get("node") is not None}
-    name = lambda k: _named(k, lambda j: node_spec.get(j, "?"), lambda j: [list(runs(a.refs)) for a in nodes[j].args], node_step.get)  # noqa: E731
+
+    def name(k: int) -> str:
+        return _named(k, lambda j: node_spec.get(j, "?"), lambda j: [list(runs(a.refs)) for a in nodes[j].args], node_step.get)
     for m in result.instances:
         c = m.get("collective")
         if not c:
@@ -155,7 +157,9 @@ def own_producers_from_record(instances_path: str | Path) -> dict[tuple[int, int
             if o.get("collective"):
                 rows.append(o)
     out: dict[tuple[int, int], list[str]] = {}
-    name = lambda k: _named(k, lambda j: spec_of.get(j, "?"), args_of.get, step_of.get)  # noqa: E731
+
+    def name(k: int) -> str:
+        return _named(k, lambda j: spec_of.get(j, "?"), args_of.get, step_of.get)
     for o in rows:
         c = o["collective"]
         key = (int(c["step"]), int(c["k"]))

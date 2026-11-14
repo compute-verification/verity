@@ -12,7 +12,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
 `dequantize(int_mm(...))`, and:
     fused       quant_rows then scaled_mm into buffers filled with 0xA5 first: xq, s_a and y equal the reference bit for bit
     fused_mm    scaled_mm alone on the reference's xq and s_a: y equal
-    op_bodies   `row_quant` then `product`, the ops' CUDA bodies as `install` serves them: xq, s_a and y equal
+    op_bodies   `row_quant` then `product`, the ops' CUDA bodies (`engine.int8_ops` registers them): xq, s_a and y equal
     control     the same 0xA5 buffers with no launch: must differ from the reference in every buffer
     graph       both kernels captured in a CUDA graph, its buffers 0xA5 again, one replay: equal
     alloc       torch's allocated bytes unchanged by the eager calls and by the capture
@@ -22,7 +22,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
                 multiple of 16 and the build has it, CUTLASS's GEMM as vLLM calls it and on the transposed product
                 (`cutlass_swapped`); and triton_scaled_mm's kernel at each tile a traced engine freezes (FROZEN_TILES)
                 against its per-call tile
-plus the PTX of both kernels (`exactlin.ptx_check`).  With `--zy` also
+plus the PTX of both kernels (`int8_fused.ptx_check`).  With `--zy` also
     zy          `int8_fused.product_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, H1's fused z/y check) at its served
                 config over T = M rounded up to 32 slots: y equal, the records byte-identical to `int8_exact.scaled_mm_zy`'s,
                 and its PTX
@@ -40,9 +40,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
+from verity_vllm.engine import int8_fused as X
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -58,7 +56,7 @@ MODELS = {
 LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)
 DECODE_MS = (1, 32, 256)
-# the gate's Ms: every exactlin.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
+# the gate's Ms: every int8_fused.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
 GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256),
            "prefill": (4096, 4097, 8192, 8193, 16384, 16385, 32768)}
 
@@ -251,7 +249,7 @@ def dump_replay(path: Path, x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, 
              y=y[:, :DUMP_N].contiguous().view(torch.int16).cpu().numpy().view(np.uint16))
 
 
-def zy_doc(xq, s, w, s_w, y_ref) -> dict:
+def zy_doc(xq: torch.Tensor, s: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y_ref: torch.Tensor) -> dict:
     """The served zy op body (`int8_fused.product_zy`, at its own `_plan`) against `int8_exact.scaled_mm_zy`."""
     from verity_vllm.engine import int8_fused as F
     e = E()
@@ -270,7 +268,7 @@ def zy_doc(xq, s, w, s_w, y_ref) -> dict:
 
 def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg: X.Cfg | None = None,
         dump: Path | None = None, zy: bool = False) -> dict:
-    """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
+    """`cfg` is the GEMM's config (default `int8_fused.pick`, what the op serves); `dump` a directory that gets the
     graph replay's outputs (`dump_replay`); `zy` adds the served zy op body's check (`zy_doc`)."""
     e = E()
     cfg = cfg or X.pick(m, n, k)

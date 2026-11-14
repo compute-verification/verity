@@ -28,7 +28,8 @@ The checks (cloud_watch.toml holds every threshold, price and path):
 - **spend**: the budgets guard's state (RunPod balance, rate and each line's spend) against budgets.toml's live lines, the
   RunPod balance under its auto top-up (a failed top-up), R2's month at Cloudflare's list price, and, when Nebius credentials and an
   instance list are available, each running VM's line: one on no line, on an expired line, or burning past its line is an anomaly.
-- **github**: the token's core rate limit; **jobs**: Control's Job queue, where a job queued past `stale_queued_h` (from its
+- **github**: the core rate limit of the read-only App token the pod's watchers read GitHub with (`token_command`, run each
+  pass; relay.env holds no GitHub token); **jobs**: Control's Job queue, where a job queued past `stale_queued_h` (from its
   `not_before`) means no worker claims its kind; **http**: the public endpoints (Vercel's site, the Slack broker) answer below 500.
 """
 from __future__ import annotations
@@ -587,12 +588,17 @@ def check_spend(ctx: Ctx, rep: Report) -> None:
 # ---- GitHub and the public endpoints ---------------------------------------------------------------------------------------------
 
 def check_github(ctx: Ctx, rep: Report) -> None:
+    """The core rate limit of the token every watcher on the pod reads GitHub with: what `token_command` prints, run each
+    pass, so the watch holds none from its start. A command that gives no token, or a token GitHub refuses, is unreadable."""
     cfg = ctx.cfg["github"]
-    token = ctx.env.get(cfg["token_env"])
-    if not token:
-        rep.gaps.append(f"needs {cfg['token_env']}: the GitHub API rate limit")
+    cmd = cfg.get("token_command") or []
+    if not cmd or not shutil.which(cmd[0], path=ctx.env.get("PATH")):
+        rep.gaps.append(f"needs {cmd[0] if cmd else 'github.token_command'}: the GitHub API rate limit")
         return
-    status, body = ctx.http("GET", "https://api.github.com/rate_limit", {"Authorization": f"Bearer {token}",
+    rc, token, err = ctx.run(cmd, ctx.env)
+    if rc != 0 or not token.strip():
+        raise Unreadable(f"`{' '.join(cmd)}` gave no token (exit {rc}: {err.strip()[-200:] or 'nothing on stderr'})")
+    status, body = ctx.http("GET", "https://api.github.com/rate_limit", {"Authorization": f"Bearer {token.strip()}",
                                                                          "User-Agent": "verity-cloud-watch"})
     if status != 200:
         raise Unreadable(f"GitHub rate_limit answered HTTP {status}")
@@ -600,7 +606,7 @@ def check_github(ctx: Ctx, rep: Report) -> None:
     rep.lines.append(f"GitHub: {core['remaining']:,} of {core['limit']:,} core requests left, resets {iso(core['reset'])}")
     if core["remaining"] < cfg["remaining_share"] * core["limit"]:
         rep.findings.append(Finding("github|core", f"*GitHub API: {core['remaining']:,} of {core['limit']:,} core requests left* "
-                                                   f"for `{cfg['token_env']}` until {iso(core['reset'])}."))
+                                                   f"for the watchers' read token (`{cmd[0]}`) until {iso(core['reset'])}."))
 
 
 def check_jobs(ctx: Ctx, rep: Report) -> None:
