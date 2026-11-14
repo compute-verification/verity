@@ -278,6 +278,14 @@ How long the team's own changes take to reach `main`: measured on the verified q
 | --- | --- | --- |
 | `landing/` | mark to `main`: for each PR the verified queue landed in the last 7 days, the hours from its ready mark at the head that landed to the move of `main` that holds it, split as the queue batches (plain, Lean), each class's p90, median, count and share within 2 h | maintained |
 
+### Communication
+
+How fast the team's leads answer each other: measured on Linear's comments, not on a protocol.
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `communication/` | over the last 24 hours, the minutes from a Linear comment ringing at most three lanes to each rung lane's answer on the issue, as a 90th percentile, and the asks open over 30 minutes (`response.py`, on `research msg linear response`) | maintained |
+
 ### Census data
 
 | Directory | What it measures | Status |
