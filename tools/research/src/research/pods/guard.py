@@ -270,14 +270,10 @@ def budgets_from_state(state: dict[str, Any]) -> B.Budgets | None:
 # ---- one poll ---------------------------------------------------------------------------------------------------------------------------------
 
 def listed_rate(v: Any) -> float | None:
-    """A pod's listed costPerHr as dollars an hour, or None when it is not a finite number."""
-    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+    """A pod's listed costPerHr as dollars an hour, or None when it is not a finite JSON number (a string included)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
-    try:
-        r = float(v)
-    except ValueError:
-        return None
-    return r if math.isfinite(r) else None
+    return float(v) if math.isfinite(v) else None
 
 
 def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: float, log: Callable[[str], None]) -> list[dict[str, Any]]:

@@ -109,7 +109,7 @@ def test_the_state_keeps_every_live_pods_rate_its_own_host_exempt_and_foreign_on
     assert state["rate_all"] == 16.0 and state["unrated"] == ["n"]
 
 
-@pytest.mark.parametrize("rate", ["n/a", [1.5], {"usd": 1}, "nan", float("inf"), True])
+@pytest.mark.parametrize("rate", ["n/a", "1.5", [1.5], {"usd": 1}, float("nan"), float("inf"), True])
 def test_a_pod_whose_rate_is_not_a_number_is_unrated_and_the_poll_goes_on_as_before(rate):
     """The guard is what stops spend: a provider's odd costPerHr on a pod outside its scope makes that pod unrated and changes
     nothing else the poll does."""
