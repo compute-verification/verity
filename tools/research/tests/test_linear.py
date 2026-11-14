@@ -621,7 +621,7 @@ AUDITED = [
     issue("INF-7", startedAt="2026-10-18T14:00:00Z", comments={"nodes": [{"createdAt": "2026-10-19T18:00:00Z"}]}),   # commented
     issue("INF-8", "Todo", updatedAt="2026-10-11T19:00:00Z"),                                           # stale
     issue("INF-9", title="infra 01:58Z (sent 01:48Z): check.py hangs"),                                 # title
-    issue("INF-10", title="A deliverable cut at the cap\u2026"),                                         # title
+    issue("INF-10", title="A deliverable cut at the limit\u2026"),                                       # title
     issue("INF-11", "In Review", attachments={"nodes": [pr(1, "merged"), pr(2, "closed"),               # landed
                                                         {"url": "https://github.com/x/y/issues/3", "sourceType": "github", "metadata": {}}]}),
     issue("INF-12", "In Review", attachments={"nodes": [pr(4, "merged"), pr(5, "open")]}),
