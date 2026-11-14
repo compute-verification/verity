@@ -1,7 +1,6 @@
 {
   "rule": "ruff with vLLM's rules (adapters/vllm/tests/lint/ruff_vllm.toml)",
   "entries": [
-    {"file": "tests/check/test_sampled_replay.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/check/test_stoch_draw_ledger_of_record.py", "kind": "ISC004", "symbol": "test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_to_its_cap_r5_not_exercised", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "tests/check/test_stoch_draw_ledger_of_record.py", "kind": "SIM115", "symbol": "test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_to_its_cap_r5_not_exercised", "detail": "Use a context manager for opening files"},
     {"file": "tests/commit/test_rows_cuda.py", "kind": "B023", "symbol": "test_windows_folded_together_copy_their_levels_on_another_stream.fold", "detail": "Function definition does not bind loop variable `held`", "count": 4},
