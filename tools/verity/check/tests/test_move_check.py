@@ -656,6 +656,18 @@ def test_tools_registry_dotted_rewrite_is_certified(tmp_path):
                                                "tools/research/src/research/store/parity.py"}
 
 
+def test_pathlib_chain_from_a_call_is_certified(tmp_path):
+    repo, base = _repo(tmp_path, {"tools/lean/warm.py": 'CHECK = Path("tools") / "verity" / "check"\n',
+                                  "tools/verity/check/check.py": ""})
+    _move(repo, "tools/verity/check", "tools/check")
+    _write(repo, {"tools/lean/warm.py": 'CHECK = Path("tools") / "check"\n'})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    _write(repo, {"tools/lean/warm.py": 'CHECK = Path("tools") / "chek"\n'})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "tools/lean/warm.py"
+
+
 def test_tools_registry_non_path_change_is_refused(tmp_path):
     repo, base = _repo(tmp_path, REGISTRY_FILES)
     _move(repo, "backends/flock", "catalog/flock")
