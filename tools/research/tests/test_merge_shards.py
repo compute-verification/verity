@@ -13,7 +13,7 @@ import pytest
 
 from research.merge import SHARD_KIND, Refused, gate, shard_set, step_status, unchecked_pushes, unlike
 
-COMMAND = ["uv", "run", "python", "tools/verity/check/check.py"]
+COMMAND = ["uv", "run", "python", "tools/check/check.py"]
 DECL = ("from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', "
         f"command={COMMAND!r}, produces=['check/v1'])\n")
 CI = ('schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{n}"\nowner = "ci"\ngroup = {g}\n'
@@ -32,15 +32,15 @@ def _git(repo: Path, *args: str) -> str:
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
-    """(the main checkout, feat's tip, its tools/verity/check tree, the store) with tools/verity/check's declaration read from the checkout."""
+    """(the main checkout, feat's tip, its tools/check tree, the store) with tools/check's declaration read from the checkout."""
     from research.store.local import LocalStore
 
-    for name in ("tools", "tools.verity.check", "tools.verity.check.tool"):
+    for name in ("tools", "tools.check", "tools.check.tool"):
         monkeypatch.setitem(sys.modules, name, None)
     main = tmp_path / "main"
-    (main / "tools" / "verity" / "check").mkdir(parents=True)
-    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL)
-    (main / "tools" / "verity" / "check" / "ci.toml").write_text(CI)
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check" / "tool.py").write_text(DECL)
+    (main / "tools" / "check" / "ci.toml").write_text(CI)
     _git(main, "init", "-q", "-b", "main")
     _git(main, "add", "-A")
     _git(main, "commit", "-q", "-m", "init")
@@ -51,7 +51,7 @@ def world(tmp_path, monkeypatch):
     tip = _git(main, "rev-parse", "HEAD")
     _git(main, "checkout", "-q", "main")
     store = LocalStore(tmp_path / "store", config_path=tmp_path / "no-remote.toml")
-    return main, tip, _git(main, "rev-parse", f"{tip}:tools/verity/check"), store
+    return main, tip, _git(main, "rev-parse", f"{tip}:tools/check"), store
 
 
 _n = iter(range(10_000))
@@ -204,13 +204,13 @@ def _off_gate(world):
     circuit-check is)."""
     main, _tip, _config, store = world
     _git(main, "checkout", "-q", "feat")
-    (main / "tools" / "verity" / "check" / "ci.toml").write_text(CI + '[[job]]\nname = "off"\nowner = "ci"\ngroup = 2\n')
-    (main / "tools" / "verity" / "check" / "policy.toml").write_text('schema = "policy/v0"\noff_gate = ["off"]\n')
+    (main / "tools" / "check" / "ci.toml").write_text(CI + '[[job]]\nname = "off"\nowner = "ci"\ngroup = 2\n')
+    (main / "tools" / "check" / "policy.toml").write_text('schema = "policy/v0"\noff_gate = ["off"]\n')
     _git(main, "add", "-A")
     _git(main, "commit", "-q", "-m", "off the gate")
     tip = _git(main, "rev-parse", "HEAD")
     _git(main, "checkout", "-q", "main")
-    return main, tip, _git(main, "rev-parse", f"{tip}:tools/verity/check"), store
+    return main, tip, _git(main, "rev-parse", f"{tip}:tools/check"), store
 
 
 def test_a_job_off_the_gate_is_required_of_no_check_whole_or_sharded(world):
