@@ -1051,7 +1051,7 @@ class Proxy:
       response head, then (position, record) units, `compact_unit`), and each egress frame is a record zero-filled to
       B (`compact_cell`), B ≥ 8: a record that isn't one (`compact_record_data`) or names another request than its
       connection's is malformed. The Lean certifier device models it (`CertifierDevice`'s `Config.compact`), and the
-      gate's rehearsal runs it (`certifier-rehearse --traffic varied --compact B`);
+      proxy's rehearsal runs it (`certifier_serve.py rehearse --traffic varied --compact B`);
     - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
       slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A

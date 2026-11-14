@@ -37,11 +37,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.release import release_of
-from verity.protocols.accounting.certifier.verifier import record_files as RF
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -51,7 +49,6 @@ SESSION = bytes(range(32))
 
 def _load():
     sys.path.insert(0, str(HERE))
-    sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_certifier_serve",
                                                   ROOT / "benchmarks/network_traces/certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
@@ -172,7 +169,7 @@ def _released_as_signed(out: dict) -> list[int]:
     0 … n − 1, under the run id `deployment.json` names; no ingress frame holds a release header. Each N in arrival
     order."""
     run = out["run"]
-    records = [RF.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(run / "requests.records")]
+    records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(run / "requests.records")]
     signed = {name: stream - 1 for name, stream in ar.released_sessions(records).items()}
     run_id = bytes.fromhex(json.loads((run / "deployment.json").read_text())["run_id"])
     assert out["released"] == signed and sorted(signed.values()) == list(range(len(signed)))
@@ -271,7 +268,7 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
         return report, plan, list(RELEASES)
 
     report, plan, releases = asyncio.run(go())
-    records = [RF.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp_path / "requests.records")]
+    records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp_path / "requests.records")]
     assert ar.released_sessions(records) == {"served.0": 1, "served.2": 2, "served.3": 3}
     released = dict(json.loads((tmp_path / "server.json").read_text())["released"])
     assert released == {"served.0": 0, "served.2": 1, "served.3": 2}
@@ -282,38 +279,30 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     assert all(r["raw"] == r["committed"] == "status:delivery-refused" for r in faulted)
 
 
-def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
-    """`certifier-rehearse`'s command (`verity/protocols/compose/device/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
-    temperature and top_p (0 and 1 by default) always among it, and they are the body every request sends."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
-    req = {"requests": 8, "tamper": None, "profile": "served", "in_flight": 2, "tokens": 32, "temperature": 0.6,
-           "top_p": 0.9}
-    args = cs.parser().parse_args(A.certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+def test_a_rehearsals_sampling_parses_here_and_is_the_body_every_request_sends(tmp_path):
+    """`rehearse` takes a temperature and a top_p (0 and 1 by default), and they are the body every request sends."""
+    rehearse = ["rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--requests", "8"]
+    args = cs.parser().parse_args(rehearse + ["--in-flight", "2", "--tokens", "32", "--temperature", "0.6", "--top-p",
+                                              "0.9", "--profile", "served", "--strategies", "honest"])
     assert (args.command, args.upstream, args.requests, args.in_flight, args.tokens, args.temperature, args.top_p,
             args.profile, args.strategies) == ("rehearse", "http://127.0.0.1:40001", 8, 2, 32, 0.6, 0.9, "served",
                                                "honest")
     body = cs.request_body("m", args.tokens, cs.PROMPT, args.temperature, args.top_p)
     assert (body["temperature"], body["top_p"]) == (0.6, 0.9)
-    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
+    plain = cs.parser().parse_args(rehearse)
     assert (plain.temperature, plain.top_p) == (0.0, 1.0)
     assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
 
 
-def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_made_in_its_workers(tmp_path,
-                                                                                                    monkeypatch):
-    """`certifier-rehearse`'s command passes its keys' height, the deployed key's (20) unless the request gives one,
-    as `rehearse`'s `--height`, which makes both keys at it; `load_key` makes a key above `HEIGHT` in
-    `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in one,
-    and either loads back from its files."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
-    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
-    given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
-                                                       "u")[2:])
-    assert (plain.height, given.height) == (lms.DEPLOYED.H, 10) and cs.KEYGEN_WORKERS == 8
-    keygen, workers = lms.keygen, []
-    monkeypatch.setattr(lms, "keygen", lambda params, seed, workers=1, seen=workers: (
+def test_rehearse_takes_its_keys_height_and_a_key_above_this_files_is_made_in_its_workers(tmp_path, monkeypatch):
+    """`rehearse` takes its keys' height (`--height`) and makes both keys at it; `load_key` makes a key above `HEIGHT`
+    in `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in
+    one, and either loads back from its files."""
+    rehearse = ["rehearse", "--upstream", "u", "--out", str(tmp_path), "--requests", "8", "--height"]
+    assert [cs.parser().parse_args(rehearse + [str(h)]).height for h in (cs.lms.DEPLOYED.H, 10)] == \
+        [cs.lms.DEPLOYED.H, 10] and cs.KEYGEN_WORKERS == 8
+    keygen, workers = cs.lms.keygen, []
+    monkeypatch.setattr(cs.lms, "keygen", lambda params, seed, workers=1, seen=workers: (
         seen.append((params.H, workers)), keygen(params, seed, workers))[1])
     for h in (cs.HEIGHT, cs.HEIGHT + 1):
         made = cs.load_key(tmp_path / f"h{h}", h)
@@ -321,14 +310,13 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
     assert workers == [(cs.HEIGHT, 1), (cs.HEIGHT + 1, cs.KEYGEN_WORKERS)]
 
 
-def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
-    """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
-    each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
-    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
-    for t in A.TAMPERS:
-        args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
+def test_each_tamper_is_a_strategy_of_rehearse_and_a_serve_this_parser_takes(tmp_path):
+    """`serve`'s `--tamper` choices are the shims this file has, and each reaches `serve` (which alone checks it) as
+    one strategy of `rehearse`."""
+    assert cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
+    for t in cs.TAMPERS:
+        args = cs.parser().parse_args(["rehearse", "--upstream", "u", "--out", str(tmp_path), "--requests", "8",
+                                       "--strategies", t])
         assert args.strategies.split(",") == [t]
         served = cs.parser().parse_args(["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o",
                                          "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
@@ -347,30 +335,24 @@ def test_the_byte_shim_changes_one_output_byte_of_a_hex_response_and_keeps_it_he
     assert cs.ar.adversary_plan({"sessions": [["s.0", "s.1"]]}, None, "byte")["byte"] == "s.0"
 
 
-def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_every_flag_it_was_given(tmp_path):
-    """The gate's traffic is `rehearse`'s `--traffic`, and a varied request's command is a varied `rehearse` this
-    parser takes, named for its run, with each varied flag the request has and no fixed one: without them, the plan's
-    own 64, 2 a second, 16:1024, seed 0 and the probe's EOS."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
-    assert A.CERTIFIER_TRAFFIC == cs.TRAFFIC
-    req = {"run": "c20261024T120000Z-ab12", "requests": 40, "tamper": "token", "traffic": "varied", "temperature": 0.0,
-           "top_p": 1.0, "tokens": 32, "rate": 1.5, "prompt_range": "16:512", "seed": 7, "eos_ids": [128001, 128009]}
-    args = cs.parser().parse_args(A.certifier_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+def test_a_varied_rehearse_is_named_for_its_run_and_takes_every_varied_flag_it_is_given(tmp_path):
+    """A varied `rehearse` (`--traffic varied`) is named for its run and takes each varied flag: without them, the
+    plan's own 64, 2 a second, 16:1024, seed 0 and the probe's EOS."""
+    run = "c20261024T120000Z-ab12"
+    varied = ["rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path / "out"), "--requests", "40",
+              "--traffic", "varied", "--name", run]
+    args = cs.parser().parse_args(varied + ["--tokens", "32", "--rate", "1.5", "--prompt-range", "16:512", "--seed",
+                                            "7", "--eos-ids", "128001,128009", "--strategies", "token"])
     assert (args.command, args.upstream, args.traffic, args.name, args.requests, args.tokens, args.rate,
             args.prompt_range, args.seed, args.eos_ids, args.strategies) == \
-        ("rehearse", "http://127.0.0.1:40001", "varied", req["run"], 40, 32, 1.5, "16:512", 7, "128001,128009",
-         "token")
-    plain = cs.parser().parse_args(A.certifier_command(
-        {k: req[k] for k in ("run", "requests", "traffic", "temperature", "top_p")} | {"tamper": None}, tmp_path,
-        "u")[2:])
-    assert (plain.tokens, plain.rate, plain.prompt_range, plain.seed, plain.eos_ids, plain.in_flight, plain.profile,
-            plain.strategies) == (64, A.CERTIFIER_VARIED_RATE, "16:1024", 0, None, 4, cs.PROFILES[0], "honest")
+        ("rehearse", "http://127.0.0.1:40001", "varied", run, 40, 32, 1.5, "16:512", 7, "128001,128009", "token")
+    plain = cs.parser().parse_args(varied)
+    assert (plain.tokens, plain.rate, plain.prompt_range, plain.seed, plain.eos_ids, plain.in_flight,
+            plain.profile) == (64, 2.0, "16:1024", 0, None, 4, cs.PROFILES[0])
     assert (plain.margin, plain.prompts_file) == (2.0, None)
-    given = cs.parser().parse_args(A.certifier_command(
-        {k: req[k] for k in ("run", "requests", "traffic", "temperature", "top_p", "tamper")}
-        | {"margin": 4.0, "prompts": {"count": 3, "ids": 4}}, tmp_path / "out", "u")[2:])
-    assert (given.margin, given.prompts_file, given.out) == (4.0, tmp_path / A.WITNESS / A.PROMPTS, tmp_path / "out")
+    prompts = tmp_path / "witness" / "prompts.json"
+    given = cs.parser().parse_args(varied + ["--margin", "4.0", "--prompts-file", str(prompts)])
+    assert (given.margin, given.prompts_file, given.out) == (4.0, prompts, tmp_path / "out")
 
 
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
@@ -453,7 +435,7 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     own fresh salt, and salted clock certificates of the syncs handed with the egress records, the same leaves too,
     each opening under its own fresh salt; a reveal signed between two records takes the same leaf: its calls run in
     the order they are made."""
-    from benchmarks.network_traces import certifier_serve  # by name, so that the spawned process finds its functions
+    import certifier_serve  # by name, so that the spawned process finds its functions
 
     _, report, _, runs = served
     published = runs["honest"]["published"]
@@ -494,7 +476,7 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     assert [d["head"] for d in process_docs] == [d["head"] for d in inline_docs]
     leaves = [[bytes.fromhex(d["certificate"]["signature"])[:4] for d in docs] for docs in (inline_docs, process_docs)]
     assert leaves[0] == leaves[1] and len(set(leaves[0])) == len(published)
-    assert all(RF.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
+    assert all(cs.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
     clocks = [cs.read_clocks(tmp_path / run / "clocks.jsonl") for run in ("inline-run", "process-run")]
     egress = [r for r, _ in published if r.link == setup.egress_link]
     assert [[(c.window, c.sync) for c in k] for k in clocks] == [[(r.window, sync(r)) for r in egress]] * 2
@@ -915,7 +897,7 @@ def test_a_request_in_a_windows_first_bucket_is_released_behind_the_salt_frame_a
     the window's egress counts derive from its ingress counts and N2 accepts it."""
     tmp, report, plan, runs = served_profile
     setup = ar.Setup(report)
-    records = sorted((RF.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp / "honest" / "requests.records")),
+    records = sorted((ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp / "honest" / "requests.records")),
                      key=lambda r: r.window)
     first = records[1]
     kinds = [[active.decode_frame(f)[0] for f in row[:active.row_count(row)]] for row in first.grid[:4]]
@@ -1519,7 +1501,7 @@ def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells
     pytest.importorskip(negatives.IO_TIE_MODULE)
     tmp, _, report, plan, _, _ = varied
     run, e = shutil.copytree(tmp / "honest", tmp_path / "frame"), ar.Setup(report).egress_params
-    records = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     k = next(k for k, r in enumerate(records) if any(row[0] is not None for row in r.grid))
     t = next(t for t, row in enumerate(records[k].grid) if row[0] is not None)
     q, x = active.id_event_data(active.decode_frame(records[k].grid[t][0])[2])
@@ -1528,7 +1510,7 @@ def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells
     records[k] = replace(records[k], grid=records[k].grid[:t] + (row,) + records[k].grid[t + 1:])
     (run / "responses.records").unlink()
     for r in records:
-        ar.write_blobs(run / "responses.records", RF.pack_record(r))
+        ar.write_blobs(run / "responses.records", ar.pack_record(r))
     got = negatives.tie_run(run, negatives.read_ids(_ids(tmp_path, plan)))
     w = records[k].window
     assert got["held"] == {"egress": plan["windows"] - 1, "ingress": plan["windows"]}
@@ -1567,8 +1549,8 @@ def test_the_certified_io_reads_each_response_by_its_ordinal_wherever_its_frames
     tmp, _, report, plan, _, _ = varied
     run, setup = tmp / "honest", ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     frames = [s for rec in sorted(outs, key=lambda r: r.window) for row in rec.grid for s in row if s is not None]
     by_ordinal: dict = defaultdict(list)
     for f in frames:
@@ -1601,8 +1583,8 @@ def test_the_certified_io_refuses_two_requests_with_one_user(varied):
     tmp, _, report, plan, _, _ = varied
     run, setup = tmp / "honest", ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     first, second = (json.dumps(q["session"]).encode() for q in plan["requests"][:2])
     shared = [SimpleNamespace(window=r.window, grid=[[f if f is None else f.replace(second, first) for f in row]
                                                      for row in r.grid]) for r in ins]
@@ -1615,27 +1597,29 @@ def test_the_certified_io_refuses_two_requests_with_one_user(varied):
         [(r["stream"], r["output"]) for r in honest["records"]]
 
 
-#: two gate runs of `certifier-rehearse --traffic varied` against one endpoint, each strategy's (run, --tamper)
+#: two varied rehearsals against one endpoint, each named as the gate names a run: each strategy's (run, its tamper)
 GATE_RUNS = {"honest": ("c20261024T120000Z-ab12", None), "token": ("c20261024T121500Z-cd34", "token")}
+
+
+def _named(run: str, tamper: str | None, out: Path, *more: str):
+    """A varied `rehearse` of 16 requests of 16 tokens at seed 3, named for `run`, on its one strategy."""
+    return cs.parser().parse_args(["rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(out), "--requests",
+                                   "16", "--tokens", "16", "--seed", "3", *more, "--traffic", "varied", "--name", run,
+                                   "--strategies", tamper or "honest"])
 
 
 @pytest.fixture(scope="module")
 def gate_varied(tmp_path_factory):
-    """`GATE_RUNS` against one `_Varied` endpoint: each the rehearsal the gate's command asks for
-    (`auditor.certifier_command` of a varied request, as `certifier_serve.py rehearse` parses it), its plan made, run
-    and checked, laid out as the gate keeps it (`<run>/out/`: the plan, its calibration and probe, and the strategy's
-    run) and tarred as `fetch` gives it; and the endpoint's `requests.jsonl`, every request it served, probes included,
-    as serve-openai records them."""
+    """`GATE_RUNS` against one `_Varied` endpoint: each a varied `rehearse` named for its run (`_named`), its plan
+    made, run and checked, laid out under `<run>/out/` (the plan, its calibration and probe, and the strategy's run)
+    and tarred; and the endpoint's `requests.jsonl`, every request it served, probes included, as serve-openai
+    records them."""
     import tarfile
 
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
     tmp, endpoint, got = tmp_path_factory.mktemp("gate-varied"), _Varied(), {}
     for strategy, (run, tamper) in GATE_RUNS.items():
-        req = {"run": run, "requests": 16, "tamper": tamper, "traffic": "varied", "temperature": 0.0, "top_p": 1.0,
-               "tokens": 16, "seed": 3}
         out = tmp / run / "out"
-        args = cs.parser().parse_args(A.certifier_command(req, out, "http://127.0.0.1:40001")[2:])
+        args = _named(run, tamper, out)
         runs_dir, probed, report, plan, runs = _varied_runs(
             tmp / f"{run}.runs", endpoint, lambda url, a=args: cs.plan_of(a, url, lambda: 0.0, _no_sleep),
             args.strategies.split(","))
@@ -1652,13 +1636,13 @@ def gate_varied(tmp_path_factory):
     return got, endpoint, ids
 
 
-def test_the_gates_varied_rehearsal_names_its_requests_for_its_run_and_the_endpoint_records_each_under_that_name(
+def test_a_varied_rehearsal_names_its_requests_for_its_run_and_the_endpoint_records_each_under_that_name(
         gate_varied):
-    """The gate's varied request runs `rehearse --traffic varied --name RUN` with its flags: each request's `user`,
+    """A varied rehearsal named for its run is `rehearse --traffic varied --name RUN`: each request's `user`,
     its session, is `RUN.j`, which the shim forwards, so the endpoint records every request of both runs under its
     own name, once, beside the probes it was sent without one. The honest run's certified I/O is what the endpoint
     recorded, request by request; the token run's, which `check` accepts, differs from it in window 0's ids alone.
-    The run the gate keeps holds the plan, the records the I/O is read from (`requests.records`,
+    The run's directory holds the plan, the records the I/O is read from (`requests.records`,
     `responses.records`, `certified.jsonl`) and `io.json`."""
     got, endpoint, _ = gate_varied
     rows = [r for r in endpoint.served if r["user"] is not None]
@@ -1683,15 +1667,11 @@ def test_the_gates_varied_rehearsal_names_its_requests_for_its_run_and_the_endpo
 
 @pytest.fixture(scope="module")
 def gate_compact(tmp_path_factory):
-    """`GATE_RUNS` as `gate_varied`, each request with `compact` 8: the rehearsal the gate's command asks for, its plan
-    made, run and checked, against one `_Varied` endpoint whose every other response ends in a merged chunk."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
+    """`GATE_RUNS` as `gate_varied`, each with `--compact 8`: its plan made, run and checked, against one `_Varied`
+    endpoint whose every other response ends in a merged chunk."""
     tmp, endpoint, got = tmp_path_factory.mktemp("gate-compact"), _Varied(merges=lambda r: r % 2 == 1), {}
     for strategy, (run, tamper) in GATE_RUNS.items():
-        req = {"run": run, "requests": 16, "tamper": tamper, "traffic": "varied", "temperature": 0.0, "top_p": 1.0,
-               "tokens": 16, "seed": 3, "compact": 8}
-        args = cs.parser().parse_args(A.certifier_command(req, tmp / run / "out", "http://127.0.0.1:40001")[2:])
+        args = _named(run, tamper, tmp / run / "out", "--compact", "8")
         runs_dir, _, _, plan, runs = _varied_runs(
             tmp / f"{run}.runs", endpoint, lambda url, a=args: cs.plan_of(a, url, lambda: 0.0, _no_sleep),
             args.strategies.split(","))
@@ -1700,16 +1680,12 @@ def gate_compact(tmp_path_factory):
     return got, endpoint
 
 
-def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them_as_on_id_events(gate_compact):
-    """`certifier-rehearse --traffic varied --compact 8`'s command is a compact varied `rehearse` this parser takes,
-    named for its run, and the gate's bounds on B are a compact record's bytes and an id event's frame. Its runs are
+def test_a_compact_rehearsal_runs_compact_cells_and_its_check_reads_them_as_on_id_events(gate_compact):
+    """A varied `rehearse --compact 8` is a compact varied rehearsal named for its run. Its runs are
     on 8-byte cells: the honest run accepted, its certified I/O the endpoint's ids (each stop's EOS id too), and the
     token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses. The
     tie's compact rule (`active.compact_finish_violations`), with the endpoint's ids as the Commit's, finds nothing
     in the honest run's cells and refuses exactly window 0's responses in the token run's."""
-    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
-    import auditor as A
-    assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
     got, endpoint = gate_compact
     recorded = {r["user"]: r["streamed_ids"] for r in endpoint.served if r["user"] is not None}
     for strategy, (run, tamper) in GATE_RUNS.items():
@@ -1722,21 +1698,19 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
         differs = {u for u, r in g["io"].items() if r["output"] != recorded[u]}
         assert differs == (set() if tamper is None else window0) and (tamper is None or differs)
         e = ar.Setup(json.loads((g["dir"] / "calibration.json").read_text())).egress_params
-        outs = sorted((RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
+        outs = sorted((ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
                       key=lambda r: r.window)
         cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
         sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}
         bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells,
                                                max_tokens={r["stream"]: r["max_tokens"] for r in g["io"].values()})
         assert {o for o, _ in bad} == {g["io"][u]["stream"] for u in differs}, bad
-    plain = cs.parser().parse_args(A.certifier_command(
-        {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
-    assert plain.compact is None
+    assert _named("c20261024T120000Z-ab12", None, Path("o")).compact is None
 
 
-def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and_holds_their_finish(
+def test_tie_run_on_the_compact_runs_reads_their_records_as_data_cells_and_holds_their_finish(
         gate_compact, negatives, tmp_path):
-    """`negatives.tie_run` on the gate's compact runs, the endpoint's `requests.jsonl` the Commit's ids: each compact
+    """`negatives.tie_run` on the compact runs, the endpoint's `requests.jsonl` the Commit's ids: each compact
     record is the data cell of its id, so neither run lacks id events, and the tie holds the link's records to the
     ids (`finish`, `active.compact_finish_violations`). Honest's finish holds; token's fails on exactly window 0's
     responses, which refuses it. Honest's fails too, at that request's ordinal alone, where the Commit says a user's
@@ -1771,9 +1745,8 @@ def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and
     assert negatives.tie_ok("honest", honest) and negatives.tie_ok("token", token)
 
 
-def test_tie_run_on_the_gates_varied_runs_with_the_endpoints_ids_accepts_honest_and_refuses_token(gate_varied,
-                                                                                                    capsys):
-    """`negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` on each gate run's tarball, the ids the endpoint's
+def test_tie_run_on_the_varied_runs_with_the_endpoints_ids_accepts_honest_and_refuses_token(gate_varied, capsys):
+    """`negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` on each run's tarball, the ids the endpoint's
     `requests.jsonl` (both runs' and the probes'), exits 0: the honest run is accepted and the token run refused by
     IoTieWindow.content, each verdict the one it owes (`ok`)."""
     spec = importlib.util.spec_from_file_location("network_traces_negatives_gate", HERE / "negatives.py")
