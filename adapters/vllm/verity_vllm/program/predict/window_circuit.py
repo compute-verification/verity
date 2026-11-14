@@ -148,6 +148,7 @@ from verity.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2
 from verity.definitions.registry.fa3_check_inf import AttentionV20
 from verity.commitments.windows import interface as IF
 from verity_vllm.pipeline.tp.grain import GROUP
+from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -420,7 +421,7 @@ class _Program:
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
         t = self.tables
-        if not isinstance(t, Tables) or K != t.k:
+        if not isinstance(t, Tables) or t.k != K:
             self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
             return
         s, i = t.at(self.cls, self.slot_index, self.position - 1)
@@ -433,11 +434,11 @@ class _Program:
     def _SiluMul(self, j: int, node: Any) -> None:
         """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
         gate-up GEMM's rows that hold them, P the fewest that leaves a unit within ``grain.rows`` rows."""
-        I, (gu,) = node.fn.bindings["I"], node.args
-        for P in (p for p in range(1, I + 1) if I % p == 0):
-            w = I // P
+        n, (gu,) = node.fn.bindings["I"], node.args
+        for P in (p for p in range(1, n + 1) if n % p == 0):
+            w = n // P
             try:
-                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(I + k * w, I + (k + 1) * w))
+                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(n + k * w, n + (k + 1) * w))
                           for k in range(P)]
             except Unexpressible:
                 continue
@@ -447,7 +448,7 @@ class _Program:
             raise Unexpressible(f"{node.fn.id}: no cut of its gate and up rows holds a unit within {self.b.grain.rows} rows")
         tid, u = self.b.unit(bind(node.fn.defn, I=w), P)
         self._each(tid, "gu", u, pieces)
-        self.outs[j] = [(0, I, Row(tid, u, "o0", w))]
+        self.outs[j] = [(0, n, Row(tid, u, "o0", w))]
 
     def _Gemm(self, j: int, node: Any) -> None:
         if self.cut is not None and j not in self.cut.heads:
@@ -697,7 +698,6 @@ def class_program(registered: Any, cls: WindowClass) -> Any:
 
 def stop_ids(registered: Any) -> tuple[int, ...]:
     """The registered model's stop ids (`frontend.stop_rule.stop_ids`): outputs end at the first, kept."""
-    from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
     return of_config(registered.phi.hf_config)
 
 
@@ -718,7 +718,7 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  name: str = NAME, provable: bool = True, tables: FixedLoad | None = None) -> IF.Circuit:
+                  provable: bool = True, tables: FixedLoad | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
@@ -726,10 +726,10 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     tables (`Tables`) or Pearl+'s (`PearlTables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
     (`class_size`). Each unit is a proof block Flock's composer proves (`_Builder.settle`) unless not ``provable`` (a probe's,
     or a test's of too small a class)."""
-    return lower(registered, cls, programs, grain, name, provable=provable, tables=tables).circuit
+    return lower(registered, cls, programs, grain, provable=provable, tables=tables).circuit
 
 
-def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME,
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
           wired: bool = True, provable: bool = True, tables: FixedLoad | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
     wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`). With ``tables``,
@@ -776,14 +776,14 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                         tuple(openings), values=held, formats={v: ROW_FORMAT for v in held} if layout is not None else {})
     wires = tuple(IF.coalesce(b.wires))
     starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
-    circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
+    circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, starts) if wires else None,
                          blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
-def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
+def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
                    tables: FixedLoad | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
@@ -793,8 +793,8 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
     tables read (`Tables`) or the circuit cut at its linears (`PearlTables`), refused unless the window is the fixed load."""
     takes(compiled, cls, placed, tables)
-    return class_circuit(registered, cls, None, grain, name, provable, tables)
+    return class_circuit(registered, cls, None, grain, provable, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WindowClass",
-           "class_circuit", "class_program", "lower", "stop_ids", "takes", "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
+           "WindowClass", "class_circuit", "class_program", "lower", "stop_ids", "takes", "window_circuit"]

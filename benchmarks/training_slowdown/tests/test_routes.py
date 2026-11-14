@@ -13,7 +13,8 @@ from training_slowdown.codecs import ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
 from training_slowdown.routes import ema, qat, subset
-from training_slowdown.routes._optimizers import newton_schulz
+from training_slowdown.routes._codes import row_codes, row_values
+from training_slowdown.routes._optimizers import Muon, newton_schulz
 from training_slowdown.traced import trace_step
 
 
@@ -100,6 +101,84 @@ def test_muon_takes_the_matrices_and_adamw_the_gains():
     lr = 0.01 * subset.schedule(dials, 0, 1)
     want = before["blocks.0.w_up.weight"] * (1 - lr * 0.05) - lr * 2 ** 0.5 * newton_schulz(1.95 * seen["grad"])
     assert torch.allclose(w, want, rtol=0, atol=1e-7)
+
+
+def test_muons_defaults_and_state_are_as_before_unless_it_keeps_a_low_width_state():
+    """`Muon` built without `low_state` has the defaults and, after a step, the state it had before the option: a
+    state kept under it loads as it did. With `low_state` the option is in its defaults, and its state is the
+    momentum's int8 codes and their bf16 scales, one a row, which a load keeps at their dtypes (torch's own load casts
+    a float parameter's state to the parameter's dtype)."""
+    w = torch.nn.Parameter(torch.zeros(8, 16))
+    plain = Muon([w], lr=0.1)
+    w.grad = torch.randn(8, 16, generator=torch.Generator().manual_seed(0))
+    plain.step()
+    assert plain.defaults == {"lr": 0.1, "momentum": 0.95, "weight_decay": 0.0}
+    assert set(plain.state_dict()["param_groups"][0]) == {"lr", "momentum", "weight_decay", "params"}
+    assert set(plain.state[w]) == {"buf"}
+    v = torch.nn.Parameter(torch.zeros(8, 16, dtype=torch.bfloat16))
+    low = Muon([v], lr=0.1, low_state=True)
+    v.grad = w.grad.bfloat16()
+    low.step()
+    assert low.defaults["low_state"] is True and v.dtype == torch.bfloat16
+    again = Muon([v], lr=0.1, low_state=True)
+    again.load_state_dict(low.state_dict())
+    for held in (low, again):
+        assert {k: (t.dtype, tuple(t.shape)) for k, t in held.state[v].items()} == {
+            "codes": (torch.int8, (8, 16)), "scales": (torch.bfloat16, (8, 1))}
+    assert torch.equal(again.state[v]["codes"], low.state[v]["codes"])
+
+
+def test_muons_low_width_state_steps_by_its_rule_on_the_generators_values():
+    """`Muon`'s `low_state` against its rule written out, over two steps, on the same values of torch's generator:
+    the momentum decoded from its codes, times 0.95, plus the gradient, coded again at one bf16 scale a row (the
+    row's largest magnitude over 127) by adding one uniform value an entry and taking the floor; the update the
+    Nesterov sum through Newton-Schulz, scaled by the shape; the parameter plus it rounded to bf16 up in magnitude
+    exactly where the 16 bits a bf16 drops and 16 random bits overflow, else cut. The momentum's random values come first."""
+    gen = torch.Generator().manual_seed(1)
+    grads = [torch.randn(8, 16, generator=gen).bfloat16() for _ in range(2)]
+    v = torch.nn.Parameter(torch.randn(8, 16, generator=gen).bfloat16())
+    p = start = v.detach().clone()
+    opt = Muon([v], lr=0.05, low_state=True)
+    torch.manual_seed(3)
+    for g in grads:
+        v.grad = g
+        opt.step()
+    torch.manual_seed(3)
+    codes, scales = torch.zeros(8, 16, dtype=torch.int8), torch.zeros(8, 1, dtype=torch.bfloat16)
+    for g in grads:
+        buf = codes.float() * scales.float() * 0.95 + g.float()
+        scales = (buf.abs().amax(1, keepdim=True) / 127).bfloat16()
+        y = buf / torch.where(scales > 0, scales.float(), 1.0)
+        codes = (y + torch.rand(8, 16)).floor().clamp(-127, 127).to(torch.int8)
+        x = p.float() - 0.05 * newton_schulz(g.float() + 0.95 * buf)
+        word = x.view(torch.int32)
+        cut = word & -65536
+        up = (word & 0xFFFF) + torch.randint(0, 1 << 16, (8, 16), dtype=torch.int32) >= 1 << 16
+        p = torch.where(up, cut + 65536, cut).view(torch.float32).bfloat16()
+    assert torch.equal(v.detach(), p) and not torch.equal(p, start)
+    assert torch.equal(opt.state[v]["codes"], codes) and torch.equal(opt.state[v]["scales"], scales)
+
+
+@pytest.mark.parametrize("bits", [2, 4, 8])
+def test_row_codes_pack_each_rows_rounding_into_bytes_and_row_values_decode_it(bits):
+    """`_codes.row_codes`: each row rounded to the nearest multiple of its scale, the row's largest magnitude over
+    2^(bits-1) - 1 as bf16 holds it, packed 8/bits codes a byte, with the scales beside them; `row_values` decodes
+    that rounding, a zero row as zeros. A matrix already on its rows' grids passes unchanged, and a row that fills
+    no whole bytes is refused."""
+    g = torch.randn(6, 16, generator=torch.Generator().manual_seed(2))
+    g[2] = 0.0
+    packed, scales = row_codes(g, bits)
+    assert (packed.dtype, tuple(packed.shape)) == (torch.uint8, (6, 16 * bits // 8))
+    assert (scales.dtype, tuple(scales.shape)) == (torch.bfloat16, (6, 1))
+    top = 2 ** (bits - 1) - 1
+    step = (g.abs().amax(1, keepdim=True) / top).bfloat16().float()
+    want = torch.where(step > 0, (g / step).round().clamp(-top, top) * step, 0.0)
+    got = row_values(packed, scales, bits)
+    assert torch.equal(got, want) and not got[2].any()
+    assert torch.equal(row_values(*row_codes(got, bits), bits), got)
+    if bits < 8:
+        with pytest.raises(ValueError, match="fill whole bytes of a row only, and a row of 3"):
+            row_codes(torch.randn(2, 3), bits)
 
 
 GAINS = ["norm", "blocks.0.attn_norm", "blocks.0.mlp_norm"]
@@ -476,6 +555,29 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
     assert c["update_cut_bits"] == c["u1_bits"] == 2 * entries + 16 * len(targets)
     assert c["state_bits"] == 2 * 32 * entries and c["grad_cut_bits"] == 32 * entries
     assert not trace["p_match"] and not trace["data_dependent"] and not trace["carried_scalars"]
+
+
+@pytest.mark.parametrize("bits", [4, 8])
+def test_a_qat_step_with_a_coded_gradient_and_a_low_width_state_traces_at_their_widths(tmp_path, bits):
+    """Route `qat` under `grad_code` and `low_state` through the harness. The gradient's cut is the codes as they
+    pass, B bits an entry and a 16-bit scale a row; the carried state is the bf16 latents, Muon's int8 codes and
+    their 16-bit scale a row; the update's cut is the codes', as without the dials. The roundings' random values reach
+    the next forward only through the latents' codes, so no token op reads a random op and the trace charges no
+    seed (`tau_other_bits`). The capture runs on tensors without data and leaves torch's generator as it was."""
+    targets = ("blocks.0.wq.weight", "blocks.0.w_up.weight")
+    rec, _, model, theta, trace = loop(tmp_path, route="qat", dials={
+        "targets": ",".join(targets), "keep": 0.5, "lr": 1e-2, "grad_code": f"rtn{bits}", "low_state": True})
+    assert rec["invalid"] == [] and "refused" not in trace
+    entries, rows = sum(theta[k].numel() for k in targets), sum(theta[k].shape[0] for k in targets)
+    c = trace["circuit"]
+    assert c["grad_cut_bits"] == bits * entries + 16 * rows
+    assert c["state_bits"] == (16 + 8) * entries + 16 * rows
+    assert c["update_cut_bits"] == 2 * entries + 16 * len(targets) and c["tau_other_bits"] == 0
+    cfg = config.load(tmp_path / "a.toml", starts.registry(tmp_path / "reg" / "starts.toml"))
+    optimizers = qat.build(cfg.start.shape, cfg.dials)[1]
+    held = torch.get_rng_state()
+    trace_step(cfg, qat, model, optimizers, "cpu")
+    assert torch.equal(torch.get_rng_state(), held)
 
 
 @pytest.mark.slow

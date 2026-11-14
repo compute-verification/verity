@@ -48,23 +48,6 @@ import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
 from torch._library.infer_schema import infer_schema
-
-from verity_vllm.program.frontend import marlin_moe_leaf as mml
-from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
-from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream, cuda_streams_inert, deep_gemm_fp8_einsum_leaf,
-                                                        mhc_pre_broadcast_leaf, registered_op_bodies_as_ops)
-from verity_vllm.program.frontend.rules import vllm_bindings as VB
-from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
-from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
-from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
-from verity_vllm.program.frontend.rules.triton_iface import triton_launch
-from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
-from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
 from verity.definitions.numerics import deepgemm_twins as DT
 from verity.definitions.numerics import dsv4_compressor_twin as DC
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as TQ
@@ -76,8 +59,35 @@ from verity.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, rou
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import hopper
+
+from tests import fake_vllm
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
+from verity_vllm.program.frontend import marlin_moe_leaf as mml
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
+from verity_vllm.program.frontend.export_compat import (
+    InertEvent,
+    InertStream,
+    cuda_streams_inert,
+    deep_gemm_fp8_einsum_leaf,
+    mhc_pre_broadcast_leaf,
+    registered_op_bodies_as_ops,
+)
+from verity_vllm.program.frontend.loader_parity import (
+    fp8_block_weights_as_the_loader_does,
+    post_load_tensors_as_the_loader_does,
+)
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
+from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
+from verity_vllm.program.frontend.rules.triton_iface import triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
+from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
+from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 
 class _Overlapped(nn.Module):
@@ -275,8 +285,9 @@ def test_the_sparse_mla_exports_as_its_insert_compressor_state_and_attention_lea
     model = _SparseMla()
     with dsv4_attention_leaves(model):
         ep = torch.export.export(model, _sparse_mla_inputs(), strict=False)
-    assert {m.__func__ for m in (model._fused_qnorm_rope_kv_insert, model.forward_mqa, model.compressor.forward,
-                                 model.indexer.forward)} == {_launches}
+    methods = (model._fused_qnorm_rope_kv_insert, model.forward_mqa, model.compressor.forward, model.indexer.forward)
+    bound = [m for m in methods if isinstance(m, types.MethodType)]
+    assert len(bound) == len(methods) and {m.__func__ for m in bound} == {_launches}
     targets = _call_targets(ep)
     leaves = [t for t in targets if t.startswith("vllm_iface.")]
     assert leaves == ["vllm_iface.dsv4_compressor_state.default", "vllm_iface.dsv4_qnorm_rope_kv_insert.default",
@@ -297,10 +308,9 @@ def test_a_sparse_mla_the_leaves_do_not_model_refuses_at_export(model, refusal):
 
 
 def test_deep_gemms_einsum_is_the_leaf_op_in_every_vllm_module_bound_to_it(monkeypatch):
-    deep_gemm, user = types.ModuleType("vllm.utils.deep_gemm"), types.ModuleType("vllm.o_proj_standin")
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.utils.deep_gemm", "vllm.o_proj_standin"])
+    deep_gemm, user = fake["vllm.utils.deep_gemm"], fake["vllm.o_proj_standin"]
     deep_gemm.fp8_einsum = user.fp8_einsum = _launches
-    for module in (deep_gemm, user):
-        monkeypatch.setitem(sys.modules, module.__name__, module)
 
     class _OProj(nn.Module):
         def forward(self, a, a_scale, b, b_scale, c=None):
@@ -371,15 +381,12 @@ class _Routed(nn.Module):
 @pytest.fixture
 def marlin_site(monkeypatch):
     """vLLM's Marlin MoE modules."""
-    mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
-    site, scalar_type = types.ModuleType(mml._MARLIN_MOE), types.ModuleType("vllm.scalar_type")
-    mxfp4.Mxfp4MoEMethod = _Mxfp4Method
-    oracle.Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
-    oracle.make_mxfp4_moe_kernel = lambda **kwargs: kwargs
-    scalar_type.scalar_types = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
+    fake = fake_vllm.install(monkeypatch, extra=[mml._MXFP4, mml._ORACLE, mml._MARLIN_MOE, "vllm.scalar_type"])
+    oracle, site = fake[mml._ORACLE], fake[mml._MARLIN_MOE]
+    fake[mml._MXFP4].Mxfp4MoEMethod = _Mxfp4Method
+    oracle.Mxfp4MoeBackend, oracle.make_mxfp4_moe_kernel = types.SimpleNamespace(MARLIN="marlin"), lambda **kwargs: kwargs
+    fake["vllm.scalar_type"].scalar_types = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
     site.fused_marlin_moe = _launches
-    for module in (mxfp4, oracle, site, scalar_type):
-        monkeypatch.setitem(sys.modules, module.__name__, module)
     return site
 
 
@@ -478,7 +485,8 @@ class _Hyper(nn.Module):
 
     def __init__(self, rng, norm_weight: bool = True, norm_eps: float = EPS) -> None:
         super().__init__()
-        p = lambda words: nn.Parameter(_tensor(words), requires_grad=False)
+        def p(words):
+            return nn.Parameter(_tensor(words), requires_grad=False)
         self.fn0, self.fn0_broadcast = p(_f32(rng, OUT, HC * HID, sd=0.1)), p(_f32(rng, OUT, HID, sd=0.1))
         self.fn1 = p(_f32(rng, OUT, HC * HID, sd=0.1))
         self.scale0, self.base0, self.scale1, self.base1 = (p(_f32(rng, n, sd=0.5)) for n in (3, OUT, 3, OUT))
@@ -499,7 +507,8 @@ class _Hyper(nn.Module):
 def _twin(model: _Hyper, x: np.ndarray, NS: int, NS0: int, M: int | None = None) -> list[int]:
     """The model's output as the twin composes the kernels at T tokens in a launch of M (T without one): the FMA path at most 16
     tokens, the TF32 path above."""
-    u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
+    def u(t):
+        return np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     TN, TH, TH_HEAD = GEOMETRY["TN"], GEOMETRY["TH"], GEOMETRY["TH_HEAD"]
     h, post, comb = W.pre_broadcast(x, m["fn0_broadcast"], m["scale0"], m["base0"], m["norm0"], NS0, TN, REPEAT, EPS, EPS)
@@ -703,7 +712,8 @@ class _SparseAttn(nn.Module):
     def __init__(self, rng, ratio: int, window: int, calls: tuple[int, ...], topk: int = 1024, NHP: int = 64, p0: int = 0,
                  skip: int = 0) -> None:
         super().__init__()
-        p = lambda words: nn.Parameter(_tensor(words), requires_grad=False)
+        def p(words):
+            return nn.Parameter(_tensor(words), requires_grad=False)
         self.ratio, self.window, self.calls, self.topk, self.NHP, self.p0, self.skip = ratio, window, calls, topk, NHP, p0, skip
         self.cos_sin_cache, self.attn_sink = p(TQ._cs(rng, (p0 + sum(calls) + skip * len(calls), SPARSE_DR))), p(_f32(rng, NHP))
         if ratio > 1:
@@ -711,7 +721,8 @@ class _SparseAttn(nn.Module):
             self.norm_weight = p(W.bf16(_f32(rng, SPARSE_D)))
 
     def forward(self, *xs):
-        k, outs, p0 = 3 if self.ratio > 1 else 2, [], self.p0
+        k, p0 = 3 if self.ratio > 1 else 2, self.p0
+        outs: list[torch.Tensor] = []
         for call in zip(*(xs[i::k] for i in range(k))):
             q, kv = call[-2:]
             positions = torch.arange(p0, p0 + q.shape[0], dtype=torch.int64)
@@ -734,12 +745,15 @@ def _sparse_inputs(rng, model: _SparseAttn) -> list[np.ndarray]:
 def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None = None) -> list[int]:
     """The layer's outputs as the twins compose the kernels over its window, state and compressed histories from position P; the
     decode at position p planned among the (window, compressed) lengths and at the index `launch[p]` gives, else alone."""
-    u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
+    def u(t):
+        return np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     ratio, window, cs, sink = model.ratio, model.window, m["cos_sin_cache"], m["attn_sink"][:2]
     D, DN, QB, BN, k = SPARSE_D, SPARSE_D - SPARSE_DR, SPARSE_DR, SPARSE_BN, 3 if model.ratio > 1 else 2
-    stack = lambda rows: [np.stack(c) for c in zip(*rows)]
-    words = lambda v: np.array(v, np.int64).astype(np.uint32)
+    def stack(rows):
+        return [np.stack(c) for c in zip(*rows)]
+    def words(v):
+        return np.array(v, np.int64).astype(np.uint32)
     win, state, comp, outs, P = [], [], [], [], model.p0
     p0 = P
     for call in zip(*(xs[i::k] for i in range(k))):
@@ -759,7 +773,7 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None =
                 n, ro, e = (a.reshape(-1) for a in row)
                 comp.append((n, e[:DN // QB], ro))
         for i, p in enumerate(pos):
-            s0, nc = max(p - window + 1, P), (p + 1) // ratio - P // ratio if ratio > 1 else 0
+            s0, nc = max(int(p) - window + 1, P), (p + 1) // ratio - P // ratio if ratio > 1 else 0
             w0 = s0 - P
             if len(q) == 1:
                 swa = p - s0 + 1
@@ -774,7 +788,7 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None =
             else:
                 rows = comp[:nc] + win[w0:p - P + 1]
                 n, N = len(rows), -(-len(rows) // (2 * BN)) * 2 * BN
-                kvw = np.zeros((N, D), np.uint16)
+                kvw: np.ndarray = np.zeros((N, D), np.uint16)
                 kvw[:n] = FP.gather_rows(*stack(rows), QB)
                 outs.append(FP.prefill(qp[i, :2], kvw, words([0] * n + [-1] * (N - n)), words(n), words(1), sink, BN=BN,
                                        SCALE=SPARSE_SCALE))
@@ -926,7 +940,8 @@ class _OProj(nn.Module):
     def __init__(self, rng, expr: str = "bhr,hdr->bhd", recipe: tuple = (1, 128, 128)) -> None:
         super().__init__()
         self.expr, self.recipe = expr, list(recipe)
-        p = lambda t: nn.Parameter(t, requires_grad=False)
+        def p(t):
+            return nn.Parameter(t, requires_grad=False)
         self.cos_sin_cache = p(_tensor(TQ._cs(rng, (16, 16), p=0.0)))
         self.weight = p(torch.from_numpy(rng.standard_normal((2, self.N, 256)).astype(np.float32)).to(torch.float8_e4m3fn))
         self.weight_scale_inv = p(torch.from_numpy((np.abs(rng.standard_normal((2, 1, 2))) * 0.01).astype(np.float32)))
@@ -1075,7 +1090,8 @@ class _ScoredRouter(nn.Module):
 def _scored_inputs(rng, E: int = 384) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Two rows of logits under one bias: a NaN logit, and two experts tied for the largest current."""
     x, b = _f32(rng, 2, E, sd=4.0), _f32(rng, E, sd=0.1)
-    x[0, 5], x[1, 7], x[1, 9], b[7], b[9] = 0x7FC00000, *np.array([30.0, 30.0, 0.0, 0.0], np.float32).view(np.uint32)
+    x[0, 5] = 0x7FC00000
+    x[1, 7], x[1, 9], b[7], b[9] = np.array([30.0, 30.0, 0.0, 0.0], np.float32).view(np.uint32)
     return x, b, np.array([7, 2], np.int32)
 
 
@@ -1116,10 +1132,11 @@ class _MarlinLaunches(nn.Module):
 
     def __init__(self, rng, block_m: int = 8) -> None:
         super().__init__()
-        E, H, I = MARLIN_E, MARLIN_H, MARLIN_I
-        self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * I, H)), rng.integers(0, 16, (E, H, I))
-        self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * I, H // 32)), rng.integers(118, 128, (E, H, I // 32))
-        p = lambda a: nn.Parameter(torch.from_numpy(a.astype(np.uint8)), requires_grad=False)
+        E, H, INTER = MARLIN_E, MARLIN_H, MARLIN_I
+        self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * INTER, H)), rng.integers(0, 16, (E, H, INTER))
+        self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * INTER, H // 32)), rng.integers(118, 128, (E, H, INTER // 32))
+        def p(a):
+            return nn.Parameter(torch.from_numpy(a.astype(np.uint8)), requires_grad=False)
         self.w13, self.w2 = p(MR.pack_e2m1(self.codes13)), p(MR.pack_e2m1(self.codes2))
         self.s13, self.s2 = p(self.bytes13), p(self.bytes2)
         self.block_m = block_m
@@ -1134,7 +1151,8 @@ class _MarlinLaunches(nn.Module):
 def _align(ids: np.ndarray, E: int, BM: int) -> tuple[np.ndarray, int]:
     """The deterministic `moe_align_block_size`, each expert's pairs in pair-index order: each pair's sorted position / BM, and the
     padded count / BM."""
-    blk, start = np.zeros(len(ids), np.int64), 0
+    blk: np.ndarray = np.zeros(len(ids), np.int64)
+    start = 0
     for e in range(E):
         for r, p in enumerate(np.flatnonzero(ids == e)):
             blk[p] = (start + r) // BM
@@ -1150,7 +1168,8 @@ def _marlin_inputs(rng) -> tuple:
 
 def _derive_marlin(model, xs, monkeypatch, served=MARLIN_SMALL):
     monkeypatch.setattr(vllm_marlin_moe, "MARLIN_SERVED", served)
-    to = lambda a: torch.from_numpy(a) if a.dtype == np.int32 else _tensor(a)
+    def to(a):
+        return torch.from_numpy(a) if a.dtype == np.int32 else _tensor(a)
     inputs = tuple(to(a) for a in xs)
     return derive_report(model, inputs, mode="profile", profile=PROFILE_B1_EAGER_V3.name, name="marlin", rules=vllm_ruleset()), inputs
 
