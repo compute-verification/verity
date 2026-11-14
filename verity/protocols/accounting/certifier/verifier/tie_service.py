@@ -170,7 +170,7 @@ class AdvisedProfile:
     """The link's public sizes the tie reads, fixed before the run: its windows; `request_frames`, the link's framing,
     whose entry n − 1 is the ingress frames a request of an n-token prompt takes, for every prompt length the link
     admits (`framing`); and `own`, the ingress certifier's own frames at the head of every window's first bucket: 1
-    with its salt on (`active.Proxy(salt=…)`), else 0. The warden's ingress has none, so `IngressTie.tie` refuses a
+    with a salt frame there, else 0. The warden's ingress has none, so `IngressTie.tie` refuses a
     profile with one."""
 
     windows: int
