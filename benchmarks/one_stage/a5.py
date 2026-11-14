@@ -595,7 +595,7 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
     it registered, Lean refuses either before `RegBound` (`Registered.check`); a statement committing it afresh is
     `RegBound`'s refusal (`test_lean_registered_reads`). Each verify is a process of its own (`a0.lean_verify`):
     one after another, or with more ``workers`` up to that many at once on a `LeanPool` within the audit's memory,
-    the session's archive put under the members' one claim (`a0.archiving`)."""
+    every case's files put in the session's archive (`a0.archive_put`) before any case is verified."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
@@ -642,21 +642,32 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
                 "root": fv.get("roots", {}).get(d, "00" * 64), "domain": fv.get("domain_ids", {}).get(d, "00" * 64)}}}, why, None)
             cases["declared-port-left-out"] = (kept, why, None)
 
-    def verify(name: str) -> dict:
-        doc, why, staged = cases[name]
+    def statement(name: str) -> dict:
+        """The statement a case is verified against, its registered reads written."""
+        doc, _why, staged = cases[name]
         alt = {x: y for x, y in st.items() if x != "registered_file"
                and not (x == "interface_file" and name == "bound-ports-without-interface")} | ({"dir": staged} if staged else {})
         if doc is not None:
             alt["registered_file"] = sdir / f"{name}.json"
             alt["registered_file"].write_text(json.dumps(doc, sort_keys=True))
-        v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
-        return {"refused": a0.lean_refused(v, why), "why": v.get("why")}
+        return alt
+
+    def verify(name: str, alt: dict | None = None) -> dict:
+        v = a0.lean_verify(a.lean, alt or statement(name), n, sdir, zk=True, log=name)
+        return {"refused": a0.lean_refused(v, cases[name][1]), "why": v.get("why")}
 
     if workers == 1:
         return {name: verify(name) for name in cases}
+    # Lean's put writes an object again in place, and two cases can hold the same bytes in files of their own, so a
+    # put beside a verify can truncate what the verify reads: every case is put before any is verified, and each
+    # verify's own put then finds its files held and writes nothing
+    held = st["archived"] if st.get("archived") is not None else {}
+    alts = {name: {**statement(name), "archived": held} for name in cases}
+    for name, alt in alts.items():
+        a0.archive_put(a.lean, sdir / "archive", a0.archive_files(alt, n), sdir / f"{name}.archive-put.log", held)
     with LeanPool(workers, audit_memory(a, available_memory), available_memory) as pool:
         for name in cases:
-            pool.submit(verify, name, lean_need(st))
+            pool.submit(lambda name: verify(name, alts[name]), name, lean_need(st))
         return dict(zip(cases, pool.results()))
 
 

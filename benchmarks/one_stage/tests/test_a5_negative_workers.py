@@ -16,12 +16,15 @@
 * the negatives' file is byte for byte the same with one worker and with several, on the toy window's coin negatives,
   the registration's and the audit record's, each decided by the Lean and the Python, and a negative that isn't refused
   is its entry's ``refused: false`` either way;
-* the registered reads' negatives, each a verify of its own, are the same entries in the same order on a pool of several;
+* the registered reads' negatives, each a verify of its own, are the same entries in the same order on a pool of several,
+  where every case's files are put in the session's archive before any case is verified, so no put writes an object a
+  running verify reads;
 * the flag reaches the audit, default 1.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import multiprocessing
 import os
@@ -323,7 +326,8 @@ def test_the_negatives_file_is_byte_for_byte_the_same_with_one_worker_and_with_s
 
 def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_on_a_pool(tmp_path, monkeypatch):
     """`a5.registered_negatives` one verify after another, and with three at once on a `LeanPool`: the same entries in
-    the same order, each verify run once under its own name."""
+    the same order, each verify run once under its own name. At once, every case's files are put, in the cases'
+    order, before any case is verified; one after another, each verify puts its own as before."""
     ports = {f"p{j}": {"value": f"v{j}", "root": f"{j}" * 128, "leaves": 4, "reads": [0, 1, 2, 3]} for j in range(2)}
     (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
     member = tmp_path / "m"
@@ -337,13 +341,137 @@ def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_o
         return {"accepted": False, "digest": "d", "why": f"{log}: holds no registered roots; does not open; the verifier's program "
                                                          "reads; registered reads (complete)"}
 
+    def archive_put(lean, archive, files, log, held=None):
+        seen.append(log.name)
+        return {}
+
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    monkeypatch.setattr(a5.a0, "archive_put", archive_put)
     mm = {"st": {"registered_file": tmp_path / "registered.json", "dir": member}, "m": SimpleNamespace(n=4)}
     one = a5.registered_negatives(SimpleNamespace(lean="lean"), mm, tmp_path / "one")
     assert seen == list(one) and len(one) == 4 and all(e["refused"] for e in one.values())
     seen.clear()
     several = a5.registered_negatives(SimpleNamespace(lean="lean", audit_mem_gb=1), mm, tmp_path / "several", workers=3)
-    assert json.dumps(several) == json.dumps(one) and sorted(seen) == sorted(one)
+    assert json.dumps(several) == json.dumps(one)
+    assert seen[:4] == [f"{name}.archive-put.log" for name in one] and sorted(seen[4:]) == sorted(one)
+
+
+class Archive:
+    """Lean's ``archive-put`` and ``verify`` as `a0.run` starts them, stood in: a put writes each file again, in place,
+    under its SHA-512 (`archivePutCmd`), and a verify reads the objects its flags name by key for as long as it runs.
+    Every verify stays open until ``at_once`` of them run, so a put that starts after a verify overlaps it. A put that
+    `lean_verify` makes waits for the verify of every such put before it, which follows it on its own thread, so it
+    lands while those verifies read; a put a caller makes ahead of `lean_verify` waits for nothing. ``overwritten``: each
+    object a put wrote while a running verify was reading it, by the put's file and the verify's log."""
+
+    def __init__(self, at_once: int):
+        self.cv, self.at_once = threading.Condition(), at_once
+        self.inside = threading.local()
+        self.puts_inside = self.verifying = 0
+        self.reading: dict[str, list[str]] = {}
+        self.overwritten: list[tuple[str, str]] = []
+        self.puts: list[str] = []
+        self.failed = False
+
+    def lean_verify(self, *args, **kw) -> dict:
+        self.inside.verify = True
+        try:
+            return self.real(*args, **kw)
+        except BaseException:
+            with self.cv:
+                self.failed = True
+                self.cv.notify_all()
+            raise
+        finally:
+            self.inside.verify = False
+
+    def run(self, cmd: list[str], log: Path, env: dict | None = None) -> SimpleNamespace:
+        if cmd[1] == "archive-put":
+            return self.put(Path(cmd[2]), cmd[3:])
+        assert cmd[1] == "verify", cmd
+        return self.verify([cmd[i + 1] for i, x in enumerate(cmd) if x in (
+            "--circuit", "--public", "--partition", "--program", "--registered", "--interface") and cmd[i + 1]], log.name)
+
+    def put(self, archive: Path, files: list[str]) -> SimpleNamespace:
+        inside = getattr(self.inside, "verify", False)
+        with self.cv:
+            if inside:
+                self.cv.wait_for(lambda: self.verifying >= self.puts_inside or self.failed)
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            out = []
+            for f in files:
+                data = Path(f).read_bytes()
+                key = hashlib.sha512(data).hexdigest()
+                self.overwritten += [(Path(f).name, log) for log in self.reading.get(key, [])]
+                (archive / "sha512" / key).write_bytes(data)
+                self.puts.append(Path(f).name)
+                out.append(f"{key}  {f}")
+            self.puts_inside += inside
+        return SimpleNamespace(stdout="\n".join(out) + "\n", stderr="", returncode=0)
+
+    def verify(self, keys: list[str], log: str) -> SimpleNamespace:
+        with self.cv:
+            for key in keys:
+                self.reading.setdefault(key, []).append(log)
+            self.verifying += 1
+            self.cv.notify_all()
+            self.cv.wait_for(lambda: self.verifying >= self.at_once or self.failed)
+            for key in keys:
+                self.reading[key].remove(log)
+        why = ("holds no registered roots; does not open; the verifier's program reads; registered reads (declared); is not "
+               "the window's committed one; registered reads (complete): the statement's port b0 is; holds no registered "
+               "interface (--interface); the statement names port p1 registered, and the verifier's registered reads do not")
+        return SimpleNamespace(stdout="VERDICT " + json.dumps({"accepted": False, "why": why}) + "\n", stderr="", returncode=1)
+
+
+def _bound_member(tmp_path: Path) -> dict:
+    """A member of two registered ports whose last is one the window's record declares registered, with a bound port
+    beside them, a session recorded, and its files' archive shared as a run's members share it."""
+    ports = {f"p{j}": {"value": f"v{j}", "root": f"{j + 1}" * 128, "leaves": 4, "reads": [0, 1, 2, 3]} for j in range(2)}
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "registered.json").write_text(json.dumps(
+        {"format": "verity/registered-reads/v1", "ports": ports, a5.REG.BOUND: {"b0": {"root": "b" * 128, "domain": "d" * 128}}}))
+    (tmp_path / "interface.json").write_text("{}")
+    member = tmp_path / "m"
+    member.mkdir()
+    (member / "circuit.txt").write_text("circuit")
+    head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * 4} for p, e in ports.items()}}
+    (member / "pub-4.bin").write_bytes(json.dumps(head).encode() + b"\n" + bytes(range(8)))
+    return {"st": {"registered_file": tmp_path / "registered.json", "interface_file": tmp_path / "interface.json",
+                   "dir": member, "archived": {}}, "m": SimpleNamespace(n=4, template="t")}
+
+
+def _session(sdir: Path) -> Path:
+    (sdir / "sessions" / "s0").mkdir(parents=True)
+    (sdir / "sessions" / "s0" / "session.json").write_text("{}")
+    return sdir
+
+
+def test_no_registered_reads_case_puts_an_object_another_cases_verify_is_reading(tmp_path, monkeypatch):
+    """The registered reads' cases verify one session against one archive, and Lean's put writes an object again in
+    place, so a put beside a verify that reads the same object truncates it under the reader, which Lean then refuses
+    as an object that doesn't hash to its key and not by the case's reason. Two cases can register the same reads: a
+    member whose last port is the one the window's record declares registered leaves that port out in both, each in a
+    file of its own, the same bytes under one key. With every case verified at once, nine here, no put writes an
+    object a running verify reads; the entries are those of one verify after another."""
+    monkeypatch.setattr(a5, "declared_ports", lambda interface, template: ["p1"])
+    one = Archive(at_once=1)
+    one.real = a0.lean_verify
+    monkeypatch.setattr(a0, "run", one.run)
+    monkeypatch.setattr(a5.a0, "lean_verify", one.lean_verify)
+    first = a5.registered_negatives(SimpleNamespace(lean="lean"), _bound_member(tmp_path / "one"), _session(tmp_path / "one" / "s"))
+    assert len(first) == 9 and all(e["refused"] for e in first.values()) and not one.overwritten
+    same = [f for f in one.puts if f in ("registered-reads-leaving-a-port-committed-afresh.json", "declared-port-left-out.json")]
+    assert len(same) == 2 and (tmp_path / "one" / "s" / same[0]).read_bytes() == (tmp_path / "one" / "s" / same[1]).read_bytes()
+
+    at_once = Archive(at_once=len(first))
+    at_once.real = one.real
+    monkeypatch.setattr(a0, "run", at_once.run)
+    monkeypatch.setattr(a5.a0, "lean_verify", at_once.lean_verify)
+    several = a5.registered_negatives(SimpleNamespace(lean="lean", audit_mem_gb=1), _bound_member(tmp_path / "several"),
+                                      _session(tmp_path / "several" / "s"), workers=len(first))
+    assert at_once.overwritten == [] and not at_once.failed
+    assert json.dumps(several) == json.dumps(first) and sorted(at_once.puts) == sorted(one.puts)
 
 
 def _fork_line(out: str) -> list[dict]:
