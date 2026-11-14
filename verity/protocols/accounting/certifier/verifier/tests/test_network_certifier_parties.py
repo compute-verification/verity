@@ -17,6 +17,7 @@ from verity.protocol import Role, place, site_of
 from verity.channel import Message, Refused
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.tests import signers as S
 from verity.protocols.proofs.spot.verifier import parties as SP
 
@@ -54,11 +55,12 @@ def test_the_manifest_states_the_certifier_and_spots_two() -> None:
 def test_the_certifier_sends_the_opening_to_the_workers_and_the_record_to_the_verifier() -> None:
     m = NC.MANIFEST
     assert [(c.sender, c.receiver, c.messages, c.after, c.carries_coins, c.latency_ms) for c in m.channels] == [
-        ("network-certifier", "workers", ("out-opening",), (), False, None),
-        ("network-certifier", "verifier", ("out-record",), (), False, None)]
+        ("network-certifier", "workers", ("out-opening", "records", "cells-salts"), (), False, None),
+        ("network-certifier", "verifier", ("out-record", "certificate", "registration", "load"), (), False, None)]
     assert m.peers(NC.NETWORK_CERTIFIER) == ("verifier", "workers")
-    assert sorted(m.registry.types) == ["out-opening", "out-record"]
-    assert m.registry.kind(NC.OUT_OPENING) == "private" and m.registry.kind(NC.OUT_RECORD) in wire.PUBLIC
+    assert {t: m.registry.kind(t) for t in m.registry.types} == {
+        "out-opening": "private", "records": "private", "cells-salts": "private", "out-record": "commitment",
+        "certificate": "commitment", "registration": "commitment", "load": "commitment"}
     assert not m.sends(NC.WORKERS, NC.VERIFIER).types and not m.sends(NC.VERIFIER, NC.NETWORK_CERTIFIER).types
 
 
@@ -95,6 +97,33 @@ def test_an_output_value_goes_as_its_two_messages(out) -> None:
         assert e.value.name == "unknown-type"
 
 
+def _sent(channel, message: Message) -> Message:
+    return channel.decode(channel.encode(message))
+
+
+#: what the device's run hands out beside the output value, each with a stand-in body, by the channel that carries it
+RUN = {NC.WORKERS: [Message(NC.RECORDS, {**HEAD, "record": r}, bytes(range(256)) * 3) for r in NC.RECORD_NAMES]
+       + [Message(NC.CELLS_SALTS, HEAD, bytes(3 * WR.SALT_BYTES + WR.WIRING_SALT_BYTES))],
+       NC.VERIFIER: [Message(NC.CERTIFICATE, HEAD, b'{"refused": ["node0/uplink0", "egress", 3]}'),
+                     Message(NC.REGISTRATION, HEAD, b'{"cost": {"rows": 4}, "registration": {}}'),
+                     Message(NC.LOAD, {}, b'{"values": []}')]}
+
+
+def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrations_to_the_verifier() -> None:
+    """The records and the rows' salts reach the workers alone, the certificates, the rows' registrations and the
+    load the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
+    for receiver, other in ((NC.WORKERS, NC.VERIFIER), (NC.VERIFIER, NC.WORKERS)):
+        to, wrong = (NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, p) for p in (receiver, other))
+        for message in RUN[receiver]:
+            got = _sent(to, message)
+            assert (got.type, got.fields, got.body) == (message.type, message.fields, message.body)
+            with pytest.raises(Refused) as e:
+                wrong.encode(message)
+            assert e.value.name == "unknown-type", message.type
+    salts, wiring = WR.read_witness(RUN[NC.WORKERS][-1].body)
+    assert (len(salts), len(wiring)) == (3, WR.WIRING_SALT_BYTES)
+
+
 def test_a_message_past_its_schema_is_refused_by_name(out) -> None:
     value, _ = out
     types = NC.MANIFEST.registry
@@ -102,7 +131,13 @@ def test_a_message_past_its_schema_is_refused_by_name(out) -> None:
                           (Message(NC.OUT_OPENING, {"link": LINK}, value.witness), "schema"),
                           (Message(NC.OUT_OPENING, {**HEAD, "window": 1 << 64}, value.witness), "schema"),
                           (Message(NC.OUT_RECORD, {**HEAD, "window": -1}, b"{}"), "schema"),
-                          (Message(NC.OUT_RECORD, HEAD, bytes(NC.MAX_RECORD + 1)), "oversized")):
+                          (Message(NC.OUT_RECORD, HEAD, bytes(NC.MAX_RECORD + 1)), "oversized"),
+                          (Message(NC.RECORDS, {**HEAD, "record": "cells"}, b""), "schema"),
+                          (Message(NC.RECORDS, HEAD, b""), "schema"),
+                          (Message(NC.CELLS_SALTS, HEAD, bytes(WR.SALT_BYTES + 1)), "schema"),
+                          (Message(NC.CERTIFICATE, {"link": LINK}, b"{}"), "schema"),
+                          (Message(NC.REGISTRATION, HEAD, bytes(NC.MAX_RECORD + 1)), "oversized"),
+                          (Message(NC.LOAD, HEAD, b"{}"), "schema")):
         with pytest.raises(Refused) as e:
             types.encode(message)
         assert e.value.name == name, message.type
@@ -113,6 +148,9 @@ def test_the_bounds_are_the_frames_and_the_deployed_signatures() -> None:
     frame = wire.HEADER.unpack(b"\xff" * wire.HEADER.size)[1]
     assert NC.MAX_OPENING % O.SALT_BYTES == 0 and NC.MAX_OPENING <= frame < NC.MAX_OPENING + O.SALT_BYTES
     assert wire.MAX_HEAD < 2 * lms.DEPLOYED.signature_bytes() < NC.MAX_RECORD
+    assert NC.MAX_PACKED == frame and 1024 * NC.MAX_RECORD <= NC.MAX_LOAD <= frame
+    assert WR.SALT_BYTES % WR.WIRING_SALT_BYTES == 0 and NC.MAX_SALTS % WR.SALT_BYTES == 0
+    assert NC.MAX_SALTS <= frame < NC.MAX_SALTS + WR.WIRING_SALT_BYTES
 
 
 def test_its_id_and_its_check_are_the_leans() -> None:
