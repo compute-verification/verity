@@ -28,6 +28,7 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
 SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$HERE" rev-parse HEAD 2>/dev/null || echo unknown)}
 ROOT=$(pwd -P)
+KERNELS=$(dirname "$ROOT/benchmarks/hash/dither/h1u.cu")    # FILE.cu's directory, named through a kernel so a move map follows it
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 
@@ -41,10 +42,10 @@ if [ "$BENCH" = build ]; then
     file=${file:-$src}
     [ -n "$def" ] && flags+=(${def//,/ })
     [ -n "${NVCC_EXTRA:-}" ] && flags+=($NVCC_EXTRA)
-    CUDA=$(dirname "$(dirname "$NVCC")") "$ROOT/benchmarks/torch_gpu/job_nvcc.sh" "${flags[@]}" "$ROOT/benchmarks/hash/dither/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
+    CUDA=$(dirname "$(dirname "$NVCC")") "$ROOT/benchmarks/torch_gpu/job_nvcc.sh" "${flags[@]}" "$KERNELS/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
     "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
     "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
-    "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$ROOT/benchmarks/hash/dither/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; return 2; }
+    "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$KERNELS/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; return 2; }
     deps=$(tr ' \\' '\n\n' < "$dir/$src.deps" | grep -v ':$' | grep . | xargs -r realpath -m | while read -r f; do [ -f "$f" ] && echo "$f"; done | grep "^$ROOT/" | sed "s#^$ROOT/##" | sort -u)
     echo "src $src $(srchash $deps) $(echo $deps)" > "$dir/$src.line"
   }
