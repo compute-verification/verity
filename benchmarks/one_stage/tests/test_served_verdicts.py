@@ -14,7 +14,7 @@ open. The period the served windows join opens, through infra's own gate, on the
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
 CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the network certifier's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Under H1_TIE its serve gives
@@ -732,7 +732,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
              "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
                              f"network certifier ran on {host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                        "via": "the network certifier's tunnel to the endpoint's port"},
+                        "via": "the warden's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
@@ -751,7 +751,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
                                        servers={k: S.piece_server(k, d.parent) for k in [*S.PIECES, "wipe"]})
         clause[name] = line["reason"].split("; the network certifier: ", 1)[1]
     assert clause["gated"].startswith(
-        f"accept (K counts the relayed link alone, {host} to {node} through the network certifier's tunnel to the endpoint's "
+        f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
         f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
         f"trusted-device {gated['trusted-device']}; ")
     assert clause["local"].startswith(f"accept (trusted-device {local['trusted-device']}; ")
@@ -5531,7 +5531,7 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 IDS = "--protocol ids --id-payload 503"
 #: the runner's refusal of a front in front of an endpoint that is off the id form
-OFF_IDS = ("PREFLIGHT: the certifier front's network certifier sends id-form requests, which serve-openai answers only under "
+OFF_IDS = ("PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under "
            f"SERVE_ARGS='{IDS}'")
 SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 
