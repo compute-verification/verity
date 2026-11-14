@@ -130,7 +130,8 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
             os.close(sampled_w)
             mv = memoryview(v.numpy())
             s = sum(mv[::4096])
-            st = {status_line.split(":")[0]: int(status_line.split()[1]) for status_line in open("/proc/self/status") if status_line.startswith(("RssAnon", "RssShmem"))}
+            with open("/proc/self/status") as lines:
+                st = {status_line.split(":")[0]: int(status_line.split()[1]) for status_line in lines if status_line.startswith(("RssAnon", "RssShmem"))}
             os.write(w, f"{s} {st['RssAnon']} {st['RssShmem']}".encode())
             os.read(sampled_r, 1)                 # stay alive until the parent has sampled the cgroup and closed its end
         finally:
