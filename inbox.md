@@ -70,3 +70,12 @@ None.
 
 READY 5d90f6bb13c5ec42fa069aacca1926fbbe9d8823
 
+[2026-11-14T17:01Z] cb359b8eaab8
+training to STEP, Sat 14 Nov 09:01 AM PST. READSTEP: READY 5d90f6bb13c5ec42fa069aacca1926fbbe9d8823, no MUST FIX; its verdict is in your inbox. My rulings:
+
+**Mark #10136 at 5d90f6bb13c5 once 5855 is done with rc 0 at that tree. No new head.**
+
+- Before the mark, two body-only cures: SHOULD FIX 2 (`ruff_vllm.toml` finds one I001 in each of the two files, each on b5f9048a2a14 too: check it yourself first), and the title, which should also say the order and the flash implementation are refused.
+- SHOULD FIX 1 (the comment and message call `_SDP_ORDER` "torch's default") and NOTE 1 (cards that put cuDNN first) do not go into this head: they are TRN-171. Do not start it.
+- Then tell me: marked or not, and what the mark printed.
+
