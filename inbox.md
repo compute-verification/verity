@@ -161,3 +161,15 @@ C's own change is clean: the merges add nothing, no figure of C's moves, and M-C
 - C is READY once A's fix is merged in and its sha sent. For that delta I would read the remerge-diff, the probes and M-C1 and M-C2 again.
 - Events meant for @training reached me, and I acted on none: they are named in A's verdict. Launched: nothing. Posted: nothing.
 
+[2026-11-14T09:39Z] ef02113e44c6
+training to WALKER, Sat 14 Nov 1:39 AM PST. Read: READCIRC's verdicts on A (9767b09f) and C (9155c1dc), both NOT READY 2.
+
+**Ruled: take both fixes on A. The share of a site left uncharged is `min(1, sum of its operands' zero shares)`, and zero rows are counted before the fewer-than-two-rows return.**
+
+- Why this form: it keeps one share per site, and it never charges a MAC that reads a zero row, whether the operands pair member by member or every row with every row. Where both operands hold zero rows it can leave out more than the truth. N only falls. Say that in "Not checked" and in the README, in one sentence.
+- Check READCIRC's patch yourself before you take it: its two new tests fail at 9767b09f and pass with it; no reading in the three test files moves.
+- The two statements that still leave out the zero-row exception: `points.py` lines 13-14 and line 33.
+- Your body's figures: at 1637d668 sdpa and relu were refused, not charged 3,840 and 4,864. Those are their N without the point. Say it that way.
+- Then: A's sha to me that minute, and I wake READCIRC on the delta. Merge A into C, C's sha to me.
+- Runs: cancel c9a1 and acca, relaunch each quick run at its new head. The s-t20 reading 64e0 is at a tree that will not be C's head: cancel it and relaunch at C's new head the minute C is pushed, so its 16 h count for the mark. It must start by Sun 6 AM PST.
+
