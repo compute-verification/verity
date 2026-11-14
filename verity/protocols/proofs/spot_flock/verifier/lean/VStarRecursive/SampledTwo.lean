@@ -912,10 +912,13 @@ def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : 
   | .error err => .reject s!"two-stage: {err}"
   | .ok (two, run) => finishWith form two run
 
-/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`). -/
-def checkBlobsAt : Params → OneStage.Commitment → ByteArray → Evidence → Core.Blobs →
+/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`), held to the caller's check
+(`Caller.gate`) on the boundary's record at its verifier and on the interior's at the verifier the last step reads:
+neither the run of record nor the last step (`Spot.Run.run`, `secondChecked`) makes the caller's codes. -/
+def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  checkBlobsAtWith FORM
+  Caller.gate e.record p.audit.base.verifier
+    (Caller.gate c.record p.boundary.verifier (checkBlobsAtWith FORM p c ξ e bs))
 
 /-- The check at the bytes the evidence says the first stage read, which the run of record holds to the
 challenger's coins (`Run.coinsHold`). -/
@@ -938,7 +941,10 @@ bytes, the evidence and the blobs. -/
 theorem checkBlobsAt_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : Evidence) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
     checkBlobsAt p c ξ e bs ≠ .accept pub prof := by
-  unfold checkBlobsAt checkBlobsAtWith
+  intro h
+  have h₁ := (Caller.gate_accept (Caller.gate_accept h).2).2
+  revert h₁
+  unfold checkBlobsAtWith
   split
   · simp
   · exact finish_refuses hF _ _ _ _

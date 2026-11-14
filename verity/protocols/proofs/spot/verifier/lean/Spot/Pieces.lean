@@ -257,7 +257,10 @@ def fanout (j : Json) : V Json := do
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the
 record. With `"members"` (`LinkPoints.membersOfJson`), the per-member form's members, the check holds them to
-`link-points` after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. -/
+`link-points` after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. It is
+SPOT's check alone: the caller's facts (the declared day, the binding, the seed salt, the registered compiler, and the pool's marks and chain) are the caller's check's
+(`VStar.Recursive.Caller.check`), which this package can't load; `spot-flock-caller` serves it, and the verifier runs
+both (`one_stage.verifier.check`, `Caller.gate`). -/
 def registration (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   let members ← match field? j "members" with
