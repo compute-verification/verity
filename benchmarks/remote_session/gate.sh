@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A gate run's steps through the two auditor hosts' gates under the lane's gate key (GATE_KEY), as a job on the machine
+# A gate run's steps through the two auditor devices' gates under the lane's gate key (GATE_KEY), as a job on the machine
 # that holds it, cwd = a clone of COMMIT, the commit the verifier host's verifier is pinned at.
 # `gate_run.sh` launches it; one VERB a run, everything into $OUT:
 #
@@ -32,6 +32,9 @@
 #          period open for a rerun in it and runs no auditor. With LEASE_BY (a UTC time) it opens nothing for a lease
 #          that began after LEASE_BY, and stops waiting 2 minutes after it.
 #
+# CHALLENGER and AUDITOR are the challenger host and the verifier host as USER@HOST, by default research@ the addresses
+# VY_CHALLENGER_1_HOST and VY_AUDITOR_1_HOST hold; a host with neither ends any VERB but form, naming the variable.
+#
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
 # the verifier host's host key). A dry fire that can't read PROVER_NODE's leases (a stopped node) says so and goes on.
@@ -56,8 +59,8 @@ fi
 [ "$VERB" = form ] && exit 0
 : "${OUT:?}"
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
-CHALLENGER=${CHALLENGER:-research@204.12.178.84}
-AUDITOR=${AUDITOR:-research@81.85.1.145}
+CHALLENGER=${CHALLENGER:-research@${VY_CHALLENGER_1_HOST:?the address of the challenger host, or CHALLENGER as USER@HOST}}
+AUDITOR=${AUDITOR:-research@${VY_AUDITOR_1_HOST:?the address of the verifier host, or AUDITOR as USER@HOST}}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
 LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}

@@ -1,6 +1,6 @@
 """serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit period's H1 window
 taps the server's own rows-sha512 Commit (its step-input port and the bench row's int8 source) and ties at ROOTS1, on the
-epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor host's
+epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor device's
 challenger, which the auditor's ledger opens and ends for it; `CommitWindows` opens the arm once the committer is
 installed and closes it before the committer comes off, its outcome the window's line; and the flags are refused before
 the model loads where the server can't serve them."""

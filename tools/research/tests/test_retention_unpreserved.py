@@ -617,6 +617,236 @@ def test_an_unpreserved_run_stays_while_whether_its_clone_stands_cannot_be_read(
     assert reason.endswith("), and a clone goes before its run's directory" + KEEP.format(d=d, run=RUN))
 
 
+# ---- 6: a launch that was refused before it ran ---------------------------------------------------------------------------------------
+
+KEEP_REFUSED = "; to keep it: `research keep {d} --owner @LANE --expires DATE --priority P`"
+REFUSED_WHY = ("no run custody (its launch was refused before it ran): this directory is the run's only copy, and it expires 7 d after "
+               "its last write")
+
+
+def refused(root: Path, name: str = RUN, *, under: str = RUNS, runner: int | None = None, host: str = HOST, when: datetime = WRITTEN,
+            request: dict | None = {}, **doc: object) -> Path:        # noqa: B006  (read, never changed)
+    """The directory of a launch that was refused before it ran, as a machine's launch leaves one: refused.json alone, or with
+    `runner` also the launch.json and the launcher.log of the runner it started on `host`; and, beside the directory it lies in,
+    its request. `request` replaces fields of request.json (None: no request, a field's None removes it), `doc` those of
+    refused.json. Every entry was last written at `when`."""
+    d = root / under / name
+    d.mkdir(parents=True)
+    q = d.parent.parent / R.REQUESTS / name
+    body = {"run_id": name, "reason": "the shipped source is not ready", "fault": "SourceNotReady", "at_utc": "2026-09-20T10:00:01.000Z"}
+    (d / "refused.json").write_text(json.dumps({k: v for k, v in {**body, **doc}.items() if v is not None}))
+    if runner is not None:
+        (d / "launch.json").write_text(json.dumps({"run_id": name, "claimed_utc": "2026-09-20T10:00:00.000Z", "runner_pid": runner,
+                                                   "argv": ["python3", "-m", "research"], "cwd": None, "request": str(q / "request.json"),
+                                                   "hostname": host}))
+        (d / "launcher.log").write_bytes(b"l" * UNIT)
+    if request is not None:
+        q.mkdir(parents=True, exist_ok=True)
+        asked = {"schema": "research/launch-request/v0", "run_id": name, "runs_root": str(d.parent), "command": ["true"], "env": {}}
+        (q / "request.json").write_text(json.dumps({k: v for k, v in {**asked, **request}.items() if v is not None}))
+        written(q, when)
+    return written(d, when)
+
+
+def test_a_launch_that_was_refused_before_it_ran_gets_the_same_record(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "ws"
+    alone, started = refused(root), refused(root, RUN2, runner=PID)
+    request = root / "research" / R.REQUESTS / RUN
+    before = entries(root)
+    for d in (alone, started):
+        found = record(d, root)
+        assert found.source == R.UNPRESERVED and found.error is None and found.record == {
+            "schema": R.SCHEMA, "path": R.relative(d, root), "node": HOST, "owner": "runner", "by": None, "created": None,
+            "expires": EXPIRES, "priority": "low", "preserved": None, "regenerate": None, "why": REFUSED_WHY}
+        assert R.expired(found.record, NOW)
+    assert entries(root) == before and R.REQUESTS == "requests", "nothing is written, and the request is where a launch stages it"
+    assert R.keeping(alone) == KEEP_REFUSED.format(d=alone)[2:], "a launch that ran nothing has nothing custody could preserve"
+
+    left = by_path(collect(root, [alone, started], apply=True))
+    assert alone.exists() and started.exists(), "the same switch: the pass the timer runs takes neither"
+    assert left[f"{RUNS}/{RUN}"]["reason"] == (f"left: {ONLY_COPY}, which only --unpreserved-runs deletes" + KEEP_REFUSED.format(d=alone))
+    through_research(monkeypatch, [alone, started])
+    assert research_main(["retention", "report", "--root", str(root)]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert sorted(x.split()[0] + " " + x.rsplit("  ", 1)[-1] for x in out[out.index(R.UNPRESERVED_HEAD) + 1:][:2]) == [
+        f"EXPIRED {RUNS}/{RUN} (implicit: unpreserved run)", f"EXPIRED {RUNS}/{RUN2} (implicit: unpreserved run)"]
+
+    plan = collect(root, [alone, started], apply=True, unpreserved=True)
+    assert not alone.exists() and not started.exists() and by_path(plan)[f"{RUNS}/{RUN}"]["reason"] == f"deleted: {ONLY_COPY}"
+    assert plan["unpreserved"]["deleted"]["paths"] == 2 and plan["unpreserved"]["deleted"]["inodes"] == 2 + 4
+    assert {k: v for k, v in entries(root).items() if R.REQUESTS in k} == {k: v for k, v in before.items() if R.REQUESTS in k}
+    assert (request / "request.json").exists(), "the request is not the collector's: it goes after its run directory, by its own rule"
+
+
+def test_a_refused_launch_whose_runner_is_not_known_gone_has_no_record(tmp_path, table):
+    root = tmp_path / "ws"
+    d = refused(root, runner=PID)
+    assert record(d, root).source == R.UNPRESERVED, "no process has the runner's pid"
+
+    process(table, PID, TICKS)
+    assert record(d, root) is None, "launch.json records no start time: a pid some process has now is not known gone"
+    (table / str(PID) / "stat").unlink()
+    assert record(d, root) is None, "whatever that process is"
+    (table / str(PID)).rmdir()
+    assert record(d, root).source == R.UNPRESERVED
+    (table / "1" / "stat").unlink()
+    assert record(d, root) is None, "a process table that does not show pid 1 shows nobody gone"
+    process(table, 1, 1)
+
+    assert record(refused(root, RUN2, runner=PID, host="another-host"), root) is None, "the pid was another host's"
+    for n, launch in enumerate(({"runner_pid": str(PID), "hostname": HOST}, {"runner_pid": True, "hostname": HOST}, {"hostname": HOST},
+                                {"runner_pid": PID}, [PID], "{")):
+        odd = refused(root, f"r20260924-100000-000{n}")
+        (odd / "launch.json").write_text(launch if isinstance(launch, str) else json.dumps(launch))
+        assert record(written(odd), root) is None, f"a launch.json that names no runner of this host says nothing of one: {launch}"
+
+
+def test_an_empty_claim_and_a_directory_that_cannot_show_it_is_a_refused_launchs_have_no_record(tmp_path, monkeypatch):
+    root = tmp_path / "ws"
+    claim = refused(root)
+    (claim / "refused.json").unlink()
+    assert not list(claim.iterdir()) and record(written(claim), root) is None, "an empty directory is a claim: its launch may be starting"
+    (claim / "launcher.log").write_bytes(b"l")
+    (claim / "launch.json").write_text(json.dumps({"run_id": RUN, "runner_pid": PID, "hostname": HOST}))
+    assert record(written(claim), root) is None, "a runner was started and nothing says the launch was refused"
+
+    cases = {
+        "its refused.json names another run": dict(run_id=RUN3),
+        "its refused.json names no run": dict(run_id=None),
+        "it has no request": dict(request=None),
+        "its request names another run": dict(request={"run_id": RUN3}),
+        "its request names no run": dict(request={"run_id": None}),
+        "its request places the run in another runs root: a copy, or a run moved aside": dict(request={"runs_root": str(root / "other")}),
+        "its request names no runs root": dict(request={"runs_root": None}),
+        "a relative runs root places it nowhere, wherever the collector runs": dict(request={"runs_root": RUNS}),
+    }
+    (root / "other").mkdir()
+    monkeypatch.chdir(root)
+    for n, (why, case) in enumerate(cases.items()):
+        assert record(refused(root, f"r20260925-100000-000{n}", **case), root) is None, why
+    for n, (name, body) in enumerate([("refused.json", "{"), ("refused.json", json.dumps([RUN])), ("request.json", "{"),
+                                      ("request.json", json.dumps(["r20260926-100000-0003"]))]):
+        d = refused(root, f"r20260926-100000-000{n}")
+        (d if name == "refused.json" else root / "research" / R.REQUESTS / d.name).joinpath(name).write_text(body)
+        assert record(written(d), root) is None, f"a {name} that is not a JSON object names nothing: {body}"
+
+    named = refused(root, "results", run_id="results", request={"run_id": "results"})
+    assert record(named, root) is None, "not named as a run"
+    (named / CU.MARKER).write_text(json.dumps({"schema": CU.SCHEMA, "run_id": "results", "preserved": False, "host": HOST}))
+    assert record(written(named), root) is None, "nor with a marker that says custody preserved nothing"
+    aside = refused(root, "r20260927-100000-0001", under="research/runs-aside", request={"runs_root": str(root / RUNS)})
+    assert record(aside, root) is None, "moved aside: its request names the runs root it was claimed in"
+    status = refused(root, "r20260927-100000-0002")
+    (status / "status.json").write_text(json.dumps({"state": "done"}))
+    assert record(written(status), root) is None, "a status.json and no job.json: not a launch refused before it ran"
+    launcher = refused(root, "r20260927-100000-0003")
+    (launcher / CU.LAUNCHER_RECORD).write_text("{}")
+    assert record(written(launcher), root) is None, "the launcher's copy of a run on another machine"
+    outer = ended(root, "r20260927-100000-0004")
+    inner = refused(root, "r20260927-100000-0005", under=f"{RUNS}/r20260927-100000-0004/out")
+    assert (outer / R.REQUESTS / inner.name / "request.json").exists(), "with a request beside the directory it lies in"
+    assert record(inner, root) is None and record(written(outer), root).source == R.UNPRESERVED, "inside a run's directory: its data"
+    kept_above = refused(root, "r20260927-100000-0006")
+    R.keep(root / "research", root=root, owner="@infra", expires=None, priority="keep", now=clock, node=HOST)
+    assert record(written(kept_above), root) is None and R.find(kept_above, root).source == "sidecar", "a record above it wins"
+
+
+def test_a_directory_is_a_refused_launch_only_by_its_own_refused_json(tmp_path):
+    """`_refused_launch` itself requires the refusal's record, whatever else also reads it: with its request and a runner gone,
+    a directory without refused.json is no refused launch."""
+    root = tmp_path / "ws"
+    d = refused(root, runner=PID)
+    assert R._refused_launch(d) == (HOST, str(root / "research" / R.REQUESTS / RUN / "request.json"))
+    (d / "refused.json").unlink()
+    assert R._refused_launch(d) is None, "nothing says the launch was refused: its runner may have died as it started"
+
+
+def waiting(root: Path, n: int, start: int = 0) -> list[Path]:
+    """`n` refused launches, each an hour older than the next, all of them older than `ended`'s runs."""
+    return [refused(root, f"r20260919-{i // 3600:02d}{i // 60 % 60:02d}{i % 60:02d}-{i:04x}", when=WRITTEN - timedelta(days=1, hours=n + start - i))
+            for i in range(start, start + n)]
+
+
+def test_a_pass_frees_the_ended_runs_however_many_refused_launches_wait(tmp_path):
+    """Refused launches have --max-paths of their own: more of them than a pass takes leave its paths to the runs that free the disk."""
+    root = tmp_path / "ws"
+    many = waiting(root, R.MAX_PATHS + 5)
+    runs_ = [ended(root, f"r20260920-10000{i}-ab1{i}") for i in range(3)]
+    plan = collect(root, [*many, *runs_], apply=True, unpreserved=True, max_paths=R.MAX_PATHS)
+    assert not any(d.exists() for d in runs_), "the ended runs go in the first pass, though older refused launches outnumber its paths"
+    assert sum(not d.exists() for d in many) == R.MAX_PATHS and all(d.exists() for d in many[R.MAX_PATHS:]), "the oldest 200 go"
+    left = by_path(plan)[R.relative(many[-1], root)]["reason"]
+    assert plan["capped"] == 5 and left.startswith(f"left for the next pass: this one has its {R.MAX_PATHS} refused launch(es)")
+
+
+def test_every_refused_launch_is_taken_within_ceil_n_over_max_paths_passes_that_act(tmp_path):
+    """However many older runs every pass finds, the n-th refused launch by expiry is gone by pass ceil(n / --max-paths)."""
+    root, cap = tmp_path / "ws", 5
+    many, later, older = waiting(root, 2 * cap + 1), [], []
+    for n in (1, 2, 3):
+        older += [ended(root, f"r20260918-{n}0000{i}-ab{n}{i}", when=WRITTEN - timedelta(days=5)) for i in range(cap + 1)]
+        collect(root, [*many, *older], apply=True, unpreserved=True, max_paths=cap)
+        assert sum(not d.exists() for d in many) == min(n * cap, len(many)), f"pass {n} takes the next {cap}, oldest first"
+        assert sum(not d.exists() for d in older) == n * cap, "and its paths still go to the runs"
+        if n == 1:
+            later = [refused(root, f"r20260926-10000{i}-ef3{i}") for i in range(2)]
+        assert n != 2 or all(d.exists() for d in later), "one that expires later waits behind those already waiting"
+    assert not any(d.exists() for d in [*many, *later]), "ceil(11 / 5) = 3 passes take the 11, and the 2 behind them in the 3rd"
+
+
+def test_a_pass_takes_refused_launches_first_then_the_rest_in_one_order_whatever_the_scan_order(tmp_path, monkeypatch):
+    root = tmp_path / "ws"
+    runs_ = [ended(root, f"r20260920-10000{i}-ab1{i}", when=WRITTEN - timedelta(days=2, hours=i)) for i in range(3)]
+    newer = [refused(root, f"r20260925-10000{i}-cd2{i}", when=WRITTEN - timedelta(hours=i)) for i in range(3)]
+    want = [R.relative(d, root) for d in [*sorted(newer, key=lambda d: d.stat().st_mtime), *sorted(runs_, key=lambda d: d.stat().st_mtime)]]
+    order = [a["path"] for a in collect(root, [*runs_, *newer], unpreserved=True)["actions"] if a["action"] == "delete"]
+    assert order == want, "refused launches first, though newer; then the oldest expiry first"
+    scan = R.scan
+    monkeypatch.setattr(R, "scan", lambda *a, **k: (sc := scan(*a, **k), sc.rows.reverse(), sc)[2])
+    assert [a["path"] for a in collect(root, [*runs_, *newer], unpreserved=True)["actions"] if a["action"] == "delete"] == want
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every file")
+def test_a_refused_launch_whose_records_cannot_be_read_is_listed_with_what_could_not_be_read_and_is_never_deleted(tmp_path):
+    root = tmp_path / "ws"
+    d = refused(root, runner=PID)
+    for unreadable in (root / "research" / R.REQUESTS / RUN / "request.json", d / "refused.json", d / "launch.json"):
+        error = f"whether the run of {d} ended can't be read (cannot read {unreadable}: [Errno 13] Permission denied: '{unreadable}')"
+        unreadable.chmod(0)
+        try:
+            found = record(d, root)
+            assert (found.record, found.source, found.error) == (None, R.UNPRESERVED, error), "what can't be read may say it is live"
+            act = by_path(collect(root, [d], apply=True, unpreserved=True))[f"{RUNS}/{RUN}"]
+            assert d.exists() and (act["action"], act["state"]) == ("skip", "invalid") and act["reason"].startswith(f"no record: {error}")
+        finally:
+            unreadable.chmod(0o644)
+    assert record(d, root).record["expires"] == EXPIRES
+
+
+def test_a_refused_launchs_record_follows_its_last_write_its_custody_key_and_its_clone(tmp_path):
+    root = tmp_path / "ws"
+    d = refused(root, runner=PID, fault="CloneRefused")
+    young = NOW - timedelta(days=2)
+    os.utime(d / "launcher.log", (young.timestamp(), young.timestamp()))
+    rec = record(d, root).record
+    assert rec["expires"] == R.fmt_utc(young + R.UNPRESERVED_RUN_EXPIRY) and not R.expired(rec, NOW), "7 days after its last write"
+    written(d)
+
+    cred = root / "research" / R.REQUESTS / RUN / CU.DIR_NAME / CU.CRED_FILE
+    cred.parent.mkdir()
+    cred.write_text(json.dumps({"expires_utc": "2026-10-02T06:00:00Z"}))
+    assert record(d, root).record["expires"] == "2026-10-02T06:00:00Z", "a custody key its refusal did not delete bounds it as a run's"
+    cred.write_text("{")
+    assert record(d, root).error == f"the expiry of the custody key {cred} can't be read, so whether the runner of {d} still publishes is unknown"
+    cred.unlink()
+
+    c = clone(root)
+    act = by_path(collect(root, [d], apply=True, unpreserved=True))[f"{RUNS}/{RUN}"]
+    assert d.exists() and act["reason"] == CLONE_FIRST.format(c=c) + KEEP_REFUSED.format(d=d), "its clone goes first, as a run's"
+    assert CL.remove(c) is None and collect(root, [d], apply=True, unpreserved=True)["unpreserved"]["deleted"]["paths"] == 1
+    assert not d.exists()
+
+
 # ---- 5: the constant ------------------------------------------------------------------------------------------------------------------
 
 def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_keep_a_run():
@@ -631,3 +861,5 @@ def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_ke
         assert needed in section, f"the retention section names {needed}"
     assert f"{days} d after its last write" in R.UNPRESERVED_HEAD and f"expires {R.UNPRESERVED_RUN_EXPIRY.days} days" in rule
     assert f"one whose clone stands waits (`{R.CLONES}/<run id>` goes first)" in " ".join(section.split())
+    assert "(`UNPRESERVED_RUN_EXPIRY`). So does a refused launch." in " ".join(section.split())
+    assert "or `research data custody RUN --publish` if it ran." in " ".join(section.split()), "a refused launch has no job.json to publish"

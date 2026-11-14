@@ -32,7 +32,7 @@ So the word-level numbers are floors on each channel's exposure, not upper bound
     design's credited time a word (`setup(...).baseline.T`, eps's own denominator), not a share of the tensor peak,
     which understates it by the design's tensor utilization (printed per device). The machine model's per-GPU eps has
     no host term; LOC deducts the host at node level at its int8 peak, and the data-sheet rows price that
-    peak (AMX's 1,024 int8 MACs a cycle a core at Intel ARK's clocks).
+    peak (AMX's `rate.amx` int8 MACs a cycle a core at Intel ARK's clocks).
 
 Each fraction is read against the 1% target as counted eps, the headline's eps plus the fraction, at the sheet reading
 and at the measured one, and printed as a `verdict` line. Those verdicts move with whichever designs
@@ -53,9 +53,11 @@ card's SM clock), and its device memory; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); H1's smallest tile
-4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: `benchmarks/host_tiles` runs, cited where they're used; host
-core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); cores and
-clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
+4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: measured per core, each cited where it's set (the AMX
+bench, `ncp_amx`, is not in this tree); the Xeon 6776P's and 8468's cores, AMX rate and max turbo from their host
+cards, the GPUs beside each host written in `HOSTS`; the other hosts' core counts from each run's lscpu and NVIDIA's
+DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); the Xeon 8480C's, 8570's and 8580's clocks and every base
+clock from Intel ARK.
 """
 from __future__ import annotations
 
@@ -69,7 +71,7 @@ from verity_machine_model.eps import design, machine, setup
 from verity_machine_model.headline import CREDIT, OPERANDS, READINGS, row, spec
 from verity_machine_model.model import device as family_data
 
-from verity.device import load_card, rate
+from verity.device import load_card, number, rate
 
 MAC_PER_WORD = 32  # a committed word sums 32 int8 products (FOLD-BW)
 BYTES_PER_WORD = 4  # a fresh s32
@@ -129,14 +131,21 @@ AMX_RESIDENT_BY_HOST = {"vy-dc-h200 slot, Xeon 8468": 4.4278e12 / 8, "DGX H200, 
 # The fold's and fillers' lane work, per core: LOP3+IMAD chains on AVX-512, best of 10 cores
 # (Xeon 8580), priced at the design's own lane instructions a word.
 LANE_PER_CORE = 5.1349e11 / 10
-AMX_MACS_PER_CYCLE = 1024  # TDPBSSD: int8 MACs a cycle a core (Intel's 2,048 int8 ops)
 
-# The hosts beside each device: (name, cores, GPUs sharing them, ARK base and max turbo clocks in Hz). Node 2's VM
-# exposes 48 of each 6776P's 64 cores (lscpu); bare metal has all 128.
+# The host cards (hardware/cards) of the RTX PRO 6000's and the H200's nodes; the GPUs beside each host are literals.
+XEON_6776P, XEON_8468 = load_card("xeon-6776p-2s"), load_card("xeon-platinum-8468-2s")
+CPU_6776P, CPU_8468 = ({k: int(number(e)) for k, e in card["cpu"].items()} for card in (XEON_6776P, XEON_8468))
+TURBO_6776P, TURBO_8468 = (float(number(card["clock"]["turbo"]) * 10**9) for card in (XEON_6776P, XEON_8468))
+AMX_MACS_PER_CYCLE = int(number(XEON_6776P["rate"]["amx"]))  # TDPBSSD: int8 MACs a cycle a core
+
+# The hosts beside each device: (name, cores, GPUs sharing them, ARK base and max turbo clocks in Hz). On a host with a
+# card, a node's VM gives each GPU cpu.vm_cores cores, bare metal has cpu.sockets x cpu.cores, max turbo is clock.turbo.
 HOSTS = {
-    "sm_120 RTX PRO 6000": [("node 2 VM, 2 x Xeon 6776P", 96, 8, 2.3e9, 3.9e9),
-                            ("node 2 bare metal, 2 x Xeon 6776P", 128, 8, 2.3e9, 3.9e9)],
-    "H200 sm_90": [("vy-dc-h200 slot, Xeon 8468", 8, 1, 2.1e9, 3.8e9),
+    "sm_120 RTX PRO 6000": [
+        ("node 2 VM, 2 x Xeon 6776P", CPU_6776P["vm_cores"] * 8, 8, 2.3e9, TURBO_6776P),
+        ("node 2 bare metal, 2 x Xeon 6776P", CPU_6776P["sockets"] * CPU_6776P["cores"], 8, 2.3e9, TURBO_6776P),
+    ],
+    "H200 sm_90": [("vy-dc-h200 slot, Xeon 8468", CPU_8468["vm_cores"], 1, 2.1e9, TURBO_8468),
                    ("DGX H200, 2 x Xeon 8480C", 112, 8, 2.0e9, 3.8e9)],
     "B200 sm_100": [("vy-dc-b200 slot, Xeon 8580", 10, 1, 2.0e9, 4.0e9),
                     ("DGX B200, 2 x Xeon 8570", 112, 8, 2.1e9, 4.0e9)],

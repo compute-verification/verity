@@ -406,8 +406,8 @@ _SLOTS: dict = {}
 
 
 def cache_slot_circuits() -> None:
-    """Build the SHA-512 and hm96 slot circuits, their layouts and netlists once: `circuit.compose` rebuilds them for every
-    statement, identically, and they are about 95% of a small class's staging time."""
+    """Build the SHA-512 and hm96 slot circuits, their layouts and circuit descriptions once: `circuit.compose` rebuilds them for
+    every statement, identically, and they are about 95% of a small class's staging time."""
     if _SLOTS:
         return
     from . import sha512_circuit as S

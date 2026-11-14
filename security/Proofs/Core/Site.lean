@@ -271,7 +271,7 @@ def auditor : Auditor :=
 
 /-- A device under `parent` with sheet `k`. -/
 def device (id parent : String) (k : Sheet) : Loc :=
-  { id, kind := .device, parent := some parent, sheet := digests.sheet k }
+  { id, kind := .accelerator, parent := some parent, sheet := digests.sheet k }
 
 /-- A memory leaf of tier `t` under `parent`, holding `bytes`. -/
 def memory (id parent : String) (t : Tier) (bytes : ℕ) : Loc :=

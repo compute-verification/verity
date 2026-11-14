@@ -30,13 +30,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import rec_profile as RP
+import rec_table as RT
+import settings as RS
+
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 
-import rec_profile as RP  # noqa: E402
-import rec_table as RT  # noqa: E402
-import settings as RS  # noqa: E402
-
+#: the job's command before its KEY=VALUE arguments, run from the tree's root; a caller of `main` may wrap it (`job`)
+JOB = ("bash", "benchmarks/recursion_e2e/job.sh")
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
 E2E = (*RP.E2E_STEPS, "negative")
@@ -66,6 +67,9 @@ FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top
 
 # Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
 # plain runs, pinned to CORES; the SLOT_ONLY nodes take runs only through slots.
+# `--on auto` (AUTO) is research run's queue itself, which places the run on a node of its choosing: it takes the queue's
+# options but no --queue, and a CPU run there may land on a CPU node.
+AUTO = "auto"
 CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
 SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
@@ -139,7 +143,8 @@ def cpu_run(a) -> bool:
 
 
 def on(a) -> str:
-    """The machine: --on, else a plain CPU node for a CPU run and the GPU node's queue for a GPU one."""
+    """The machine: --on (AUTO: research run's queue places it), else a plain CPU node for a CPU run and the GPU node's
+    queue for a GPU one."""
     m = a.on or (CPU_NODE if cpu_run(a) else NODE)
     if m in PLAIN_CPU_NODES and not cpu_run(a):
         raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
@@ -199,8 +204,9 @@ def job_env(a: argparse.Namespace) -> list[str]:
     if bad:
         raise SystemExit(f"--env: {', '.join(bad)} is not KEY=VALUE")
     lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, "firewall" in a.modes.split(","), levels(a))
-    # a CPU node has no GPU, and /workspace/jobs isn't the research user's there
-    node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if direct(a) else ["GPU=0"] if a.cpu else []
+    # a CPU node has no GPU, and /workspace/jobs isn't the research user's there; a CPU run books no GPU anywhere
+    cpu_node = direct(a) or (on(a) == AUTO and cpu_run(a))
+    node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if cpu_node else ["GPU=0"] if cpu_run(a) else []
     env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
            f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
            f"FORGE={','.join(forge(a))}", *([f"FORGE_AFTER={','.join(forge_after(a))}"] if "forge-after" in steps(a.steps) else []),
@@ -215,11 +221,11 @@ def job_env(a: argparse.Namespace) -> list[str]:
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
     env, m, limit = job_env(a), on(a), a.max_min or max_min(a)
-    job = ["bash", "benchmarks/recursion_e2e/job.sh", *env]
+    job = [*a.job, *env]
     if direct(a):
         return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
                 "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]
-    return ["research", "run", "--queue", "--on", m, *([] if a.cpu else ["--gpu-host"]),
+    return ["research", "run", *([] if m == AUTO else ["--queue"]), "--on", m, *([] if cpu_run(a) else ["--gpu-host"]),
             *(["--preemptible"] if a.preemptible else []), "--project", "verity",
             "--campaign", "recursion-e2e", "--source", str(root), "--cwd", "source", "--mem-gb", str(mem_gb(a)),
             "--cpus", str(a.cpus), "--max-min", str(limit),
@@ -250,10 +256,7 @@ def cmd_plan(a) -> int:
 
 def cmd_run(a) -> int:
     a = preset(a)
-    if a.here:
-        cmd = ["bash", str(HERE / "job.sh"), *job_env(a)]
-    else:
-        cmd = job_command(a, root())
+    cmd = [*a.job, *job_env(a)] if a.here else job_command(a, root())
     print(" ".join(cmd), flush=True)
     return 0 if a.dry_run else subprocess.run(cmd, cwd=root(), check=False).returncode
 
@@ -331,7 +334,7 @@ def cmd_store(a) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
     ap = argparse.ArgumentParser(prog="verity bench recursion_e2e", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -359,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
                             "GPU idles about 10 min, as a firewalled release's does), 1 the GPU one under a lease")
         p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
                        help=f"default {CPU_NODE} for a CPU run (firewalled on the CPU prover, or --cpu), a plain run there; "
-                            f"else {NODE}'s queue")
+                            f"else {NODE}'s queue; {AUTO}: research run's queue places it")
         p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
         p.add_argument("--preemptible", action="store_true",
                        help="queue the run preemptible (a guest on a node that admits guests only so)")
@@ -393,6 +396,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             p.add_argument("--dir", required=True, help="a new or empty directory the art's tree is written in")
     a = ap.parse_args(argv)
+    a.job = job
     return {"plan": cmd_plan, "run": cmd_run, "result": cmd_result, "table": cmd_table, "store": cmd_store}[a.cmd](a)
 
 

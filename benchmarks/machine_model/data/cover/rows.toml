@@ -1,5 +1,5 @@
 # The opcode table: the evidence for the card assumption, that every instruction a
-# card executes is dominated by an ACCEL op (envelope.toml: `Accel.Op` and the proposed
+# card executes is dominated by an ACCEL op (envelope.toml: `Accel.Opcode` and the proposed
 # entries) at no fewer units of the same resource. It is evidence, not the trusted base: `machine-model cover` renders
 # it, and tests/test_cover.py fails when an opcode has no row or a dominated row's rate exceeds its resource's ρ.
 #
@@ -24,7 +24,7 @@
 #   matter;
 # - absent: the opcode is in NVIDIA's family table, and the card can't execute it.
 # A row whose op, pipe or format is a proposed entry rests on it: `machine-model cover` counts the table both ways, with
-# the proposed entries and on `Accel.Op` alone (those rows as holes).
+# the proposed entries and on `Accel.Opcode` alone (those rows as holes).
 #
 # Pipes: an opcode goes on the pipe a run or the CPG places it on. One that neither places goes on fma, marked coarse:
 # fma charges only the issue slot every instruction takes, so a lane on it dominates any opcode of ≤ 4 words in and 2

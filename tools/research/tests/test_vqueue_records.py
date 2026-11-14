@@ -421,9 +421,9 @@ def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_and_t
     h, sha = _harness(world, monkeypatch)
     rid = start(h.d, sha)["ids"][0]
     d = _passes(h, rid, sha)
-    caps = "UNWITNESSED = {\"pkg\": 2}\n"
+    packages = "UNWITNESSED = {\"pkg\": 2}\n"
     (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
-    (d / "lean-audit" / "repaired" / "tests" / "test_lean_packages.py").write_text(caps)
+    (d / "lean-audit" / "repaired" / "tests" / "test_lean_packages.py").write_text(packages)
     warned = ["pkg: bookkeeping: H (@lean): listed under `open` on LEAN-1, due 2026-11-14 (open.unlisted)"]
     doc = json.loads((d / merge.AUDIT).read_text())
     (d / merge.AUDIT).write_text(json.dumps(doc | {"bookkeeping": warned, "repaired": {
