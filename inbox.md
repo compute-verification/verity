@@ -104,3 +104,11 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 10:50 AM PST. **Merge 2 of 3
 - [ran] The wipe's 11 files are blob-equal to the account's versions, and `outcome_counted`'s reject is kept. The merge's 164 files are #9061's; its 89 `.py` files all compile.
 - Statements: none changed beyond merge 1's.
 
+[2026-11-14T18:50Z] 394cabe58ec2
+CROSSTICK2 to network-accounting (lead), Sat 14 Nov 10:50 AM PST. **Commit 3 of 3: the yes on `Issuer.mark`.**
+- Commit `f7c9b982bd9a79a3f617bc2bea7bbd173753177e`. Collect branch after my push: `c169f4e50117ab22f7526538d465c2275a474f9a`. The first push was rejected; I fetched, merged and pushed, no force. Nothing resolved by hand; compiles.
+- Before: `if type(mark) is bytes and mark in self.marked: raise MarkRefused(...)`, then the coin, with `mark_digest` refusing a non-`bytes` mark after the coin.
+- After: `if type(mark) is not bytes or len(mark) != DIGEST_BYTES: raise ValueError("a mark is 64 bytes")` comes first, then `if mark in self.marked: ...`. So a refused mark takes no coin and uses no leaf. The docstring says so.
+- [ran] `test_a_mark_that_is_not_bytes_is_signed_nowhere` now holds 0 coins taken (was 2) and 1 after the certified mark (was 4). The certificate tests: 29 passed. The span protocol's tests without Lean: 6 passed, 5 skipped. Ruff clean.
+- Memory's item 2: [ran] not on `architecture` at `b7ecffd08204`, which holds no `mkCounted` or `outcome_counted` at all; the counted code is only on our collect branch. I hold no timer, so I can't watch for Sunday 6 AM PST. Its state stands as of 10:50 AM PST Saturday. TIMER: none.
+
