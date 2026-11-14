@@ -3,6 +3,7 @@
  "roots": ["CoreOnsite", "CoreComposites"],
  "exempt": {
   "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "OnsiteCountedMain": "the onsite-counted executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
   "ProductMain": "the product executable's entry point, one line; its command is Core.Composites.main, audited under CoreComposites"
  },
  "layers": {
@@ -12,9 +13,11 @@
     "CoreComposition.Cases",
     "CoreComposition.Tie",
     "CoreRemote",
+    "MemoryChallenger.WipeCount",
     "MemoryChallenger.WipeProtocol",
     "NciCheck.Protocol",
     "NetworkCheck.Period",
+    "NetworkCheck.Span",
     "PousCheck.RunProtocol",
     "PouwCheck.Period",
     "RemoteAudit.P2Protocol",
