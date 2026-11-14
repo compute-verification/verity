@@ -15,11 +15,18 @@
 * every row is one `DsaMqaLogits_v3{N=T}` and one `DsaTopKShortRow_v1`, the Build's per row; a launch that is not the next one is refused;
 * the request-index copy between the top-k and FA3 is held to its pinned launch, its pointers, its i32 layouts and the shared top-k
   allocation, in that order, and records the page table it writes;
-* the FA3 sparse MLA call is held to its pointers, the step's rows, the pinned widths, bf16 and the default arguments, in that order.
+* the FA3 sparse MLA call is held to its pointers, the step's rows, the pinned widths, bf16 and the default arguments, then to the
+  arguments it may not carry, to `k` and `v` as the halves of the latent cache its layer's norm launch wrote, to the page table its
+  layer's index copy wrote, to its split count, to the record target's 132 SMs and to the step's block tables, in that order; it folds
+  as one `SparseMlaSplit_v1` a row over the request's latent rows, at the split count the launch's heuristic gives the row;
+* a logits allocation the indexer cannot fill, a gather with no keys destination and a top-k of another width or past the short row
+  are refused.
 """
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
+
+import dataclasses
 
 import pytest
 
@@ -32,10 +39,12 @@ from verity_vllm.observe.events import (
     ViewDesc,
 )
 from verity_vllm.observe.fold.patterns import dsa as D
+from verity_vllm.observe.fold.patterns.geometry import GeometryError
 from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.fold.resolver import (
     Compute,
     Gather,
+    GatherMany,
     Group,
     PerRow,
     Shared,
@@ -88,8 +97,9 @@ def _ctx(requests, slots=None):
     return ctx
 
 
-def _node(id_, op, schema, args, outs=None):
-    return build_trees([DispatchEnter(id_, None, 0, "forward", op, schema, list(args), {}, 7, LAYER), DispatchExit(id_, outs)])[0][0]
+def _node(id_, op, schema, args, outs=None, kwargs=None):
+    enter = DispatchEnter(id_, None, 0, "forward", op, schema, list(args), dict(kwargs or {}), 7, LAYER)
+    return build_trees([enter, DispatchExit(id_, outs)])[0][0]
 
 
 def _gather(id_, keys):
@@ -416,11 +426,12 @@ def test_an_index_share_copy_of_the_shared_top_k_rows_is_staging_and_records_its
 MLA = "_vllm_fa3_C::fwd(Tensor q, Tensor k, Tensor v, Tensor? q_v) -> Tensor[]"
 
 
-def _mla(rows=2, heads=8, out_width=512, dtype="bfloat16", q_v=True, outs=True, op="_vllm_fa3_C.fwd.default"):
-    """An FA3 sparse MLA call: `q` [rows, heads, 64], `q_v` and the output [rows, heads, 512], `k` and `v` of the paged cache."""
+def _mla(rows=2, heads=8, out_width=512, dtype="bfloat16", q_v=True, outs=True, op="_vllm_fa3_C.fwd.default", k=None, v=None, **kwargs):
+    """An FA3 sparse MLA call: `q` [rows, heads, 64], `q_v` and the output [rows, heads, 512], `k` and `v` of the paged cache; `kwargs`
+    are its keyword arguments."""
     q, qv, out = view(20, (rows, heads, 64), dtype), view(21, (rows, heads, 512), "bfloat16"), view(22, (rows, heads, out_width), "bfloat16")
-    args = [q, view(23, (4, 64, 1, 64), "bfloat16"), view(24, (4, 64, 1, 512), "bfloat16"), qv if q_v else None]
-    return _node(40, op, MLA, args, outs=[out] if outs else None), q, qv, out
+    k, v = view(23, (4, 64, 1, 64), "bfloat16") if k is None else k, view(24, (4, 64, 1, 512), "bfloat16") if v is None else v
+    return _node(40, op, MLA, [q, k, v, qv if q_v else None], outs=[out] if outs else None, kwargs=kwargs), q, qv, out
 
 
 @pytest.mark.parametrize("kw", [{"q_v": False}, {"outs": False}])
@@ -445,3 +456,128 @@ def test_a_sparse_mla_at_the_pinned_views_is_held_to_bf16_and_then_to_the_defaul
     assert isinstance(off, Unsupported) and off.reason == "FA3 sparse MLA arguments differ from the GLM-5.3 default path"
     assert off.detail["mismatches"]["max_seqlen_k"] == (None, 2048) and off.detail["mismatches"]["is_causal"] == (None, True)
     assert D.DsaSparseMla().match(_mla(op="_vllm_fa2_C.fwd.default")[0], ctx) is None, "another library's call is not this pattern's"
+
+
+MLA_DEFAULT = {"max_seqlen_q": 1, "max_seqlen_k": 2048, "softmax_scale": 0.0625, "is_causal": True, "window_size_left": -1,
+               "window_size_right": -1, "softcap": 0.0, "is_rotary_interleaved": True, "sm_margin": 0, "cp_world_size": 1, "cp_rank": 0,
+               "num_splits": 0, "page_table": view(52, (2, 2048), "int32")}
+LATENT = view(77, (128, 576), "bfloat16")
+
+
+def _halves(alloc=77, slots=128):
+    """`k` and `v` of an FA3 call as the two halves of a latent cache's 576-word slot rows: `v` the first 512 words, `k` the 64 after."""
+    return {"k": view(alloc, (slots, 1, 1, 64), "bfloat16", offset=512, strides=(576, 576, 64, 1)),
+            "v": view(alloc, (slots, 1, 1, 512), "bfloat16", strides=(576, 576, 512, 1))}
+
+
+def _before_its_mla(requests=TWO, slots=(5, 70), sms=132, **norm):
+    """The step of `requests` (`TWO`'s when not given) on a record target of `sms` SMs, once its layer has folded the fused norm/RoPE
+    launch (`norm` its arguments), which names the latent cache, and the request-index copy, which names the page table."""
+    ctx = _ctx(requests, slots=slots)
+    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"multi_processor_count": sms}})
+    assert isinstance(D.DsaNormRope().match(_norm(rows=len(slots), **norm), ctx), Group)
+    assert isinstance(D.DsaIndexShare().match(_share(rows=len(slots)), ctx), Transparent)
+    return ctx
+
+
+def test_a_sparse_mla_on_the_default_path_is_one_split_attention_a_row_over_its_request_s_latent_rows():
+    node, q, qv, out = _mla(**MLA_DEFAULT, **_halves())
+    r = D.DsaSparseMla().match(node, _before_its_mla())
+    assert isinstance(r, Group) and (r.consumed, r.hint, r.pattern) == ((40,), LAYER, "dsa.fa3_sparse_mla_split")
+    assert [spec_label(p.spec) for p in r.parts] == [
+        f"SparseMlaSplit_v1{{T={n},NS=1,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}}" for n in (6, 10)]
+    for i, (part, (req, pos), slots) in enumerate(zip(r.parts, [("a", 5), ("b", 9)], [tuple(range(6)), tuple(range(64, 74))])):
+        assert isinstance(part, Compute) and (part.rows, part.attribution, part.pattern) == (1, ((req, pos),), "dsa.fa3_sparse_mla_split")
+        assert part.operands == (PerRow(view(21, (1, 8, 512), "bfloat16", offset=i * 4096)),
+                                 PerRow(view(20, (1, 8, 64), "bfloat16", offset=i * 512)), GatherMany(LATENT, (slots,)))
+        assert part.outputs == (PerRow(view(22, (1, 8, 512), "bfloat16", offset=i * 4096)),)
+        assert (part.consumed, part.hint, part.kernels) == ((40,) if i == 0 else (), f"{LAYER}/sparse_mla[t={pos},splits=1]", ("FlashAttnFwdSm90",))
+
+
+def test_a_sparse_mla_of_a_long_row_is_split_and_its_splits_are_combined():
+    ctx = _before_its_mla([("a", [1999])], [1999], indexer=False, mla_cache_ptr=view(77, (32, 64, 576), "bfloat16"))
+    r = D.DsaSparseMla().match(_mla(rows=1, **MLA_DEFAULT, **_halves(slots=2048))[0], ctx)
+    assert isinstance(r, Group) and len(r.parts) == 1
+    part = r.parts[0]
+    assert spec_label(part.spec) == (
+        "SparseMlaSplit_v1{T=2000,NS=28,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}")
+    assert (part.hint, part.kernels) == (f"{LAYER}/sparse_mla[t=1999,splits=28]", ("FlashAttnFwdSm90", "FlashAttnFwdCombine"))
+    assert part.operands[2] == GatherMany(view(77, (2048, 576), "bfloat16"), (tuple(range(2000)),))
+
+
+@pytest.mark.parametrize("kw,reason,detail", [
+    ({"cu_seqlens_k": 7}, "FA3 sparse MLA has unsupported argument cu_seqlens_k", {"value": "7"}),
+    ({"k": view(23, (128, 1, 1, 64), "bfloat16")}, "FA3 k/v are not adjacent views of 576-word latent-cache rows",
+     {"k": repr(view(23, (128, 1, 1, 64), "bfloat16")), "v": repr(_halves()["v"])}),
+    (_halves(alloc=88), "FA3 does not read the latent cache fused_norm_rope wrote",
+     {"observed": repr(view(88, (128, 576), "bfloat16")), "established": repr(LATENT)}),
+    ({"page_table": view(53, (2, 2048), "int32")}, "FA3 page table is not the shared top-k allocation",
+     {"page_table": repr(view(53, (2, 2048), "int32")), "established": (52, 0, 2048, (2048, 1))}),
+    ({"num_splits": -1}, "FA3 num_splits is not a nonnegative integer", {"num_splits": -1}),
+    (_halves(slots=64), "a selected latent-cache slot is outside the cache", {"T": 10, "cache_slots": 64}),
+], ids=["argument", "halves", "latent-cache", "page-table", "splits", "slot-range"])
+def test_a_sparse_mla_on_the_default_path_off_its_layer_s_caches_is_refused_with_what_differs(kw, reason, detail):
+    off = D.DsaSparseMla().match(_mla(**{**MLA_DEFAULT, **_halves(), **kw})[0], _before_its_mla())
+    assert isinstance(off, Unsupported) and off.reason == reason and off.consumed == (40,)
+    assert {k: off.detail[k] for k in detail} == detail
+
+
+def test_a_sparse_mla_is_held_to_its_layer_s_index_copy_the_record_target_s_132_sms_and_the_step_s_block_tables():
+    node = _mla(**MLA_DEFAULT, **_halves())[0]
+    uncopied = D.DsaSparseMla().match(node, _ctx(TWO))
+    assert isinstance(uncopied, Unsupported) and uncopied.reason == "FA3 page table is not the shared top-k allocation"
+    assert uncopied.detail["established"] is None
+    sms = D.DsaSparseMla().match(node, _before_its_mla(sms=80))
+    assert isinstance(sms, Unsupported) and sms.reason == "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch"
+    assert sms.detail["num_sms"] == 80
+    ctx = _before_its_mla()
+    ctx.start = dataclasses.replace(ctx.start, block_tables={"a": [0]})
+    untabled = D.DsaSparseMla().match(node, ctx)
+    assert isinstance(untabled, Unsupported) and untabled.reason == "no block table for request 'b'"
+    assert (untabled.detail["request"], untabled.detail["T"]) == ("b", 10)
+
+
+def test_an_allocation_that_is_no_logits_buffer_is_left_and_one_the_indexer_cannot_fill_is_refused():
+    ctx = _ctx([("a", [19])])
+    assert D.DsaMqaAllocation().match(_empty(3, (12,), 40), ctx) is None, "a rank-1 allocation is not the indexer's"
+    narrow = D.DsaMqaAllocation().match(_empty(4, (1, 16), 41), ctx)
+    assert isinstance(narrow, Unsupported) and narrow.reason == "MQA row or cache does not cover its valid keys"
+    assert {k: narrow.detail[k] for k in ("T", "first_key", "output_width", "cache_slots")} == {
+        "T": 20, "first_key": 0, "output_width": 16, "cache_slots": 64}
+    ctx = _ctx([("a", [19])])
+    ctx.start = dataclasses.replace(ctx.start, block_tables={})
+    untabled = D.DsaMqaAllocation().match(_empty(3, (1, 512), 40), ctx)
+    assert isinstance(untabled, Unsupported) and untabled.reason == "no block table for request 'a'"
+    assert (untabled.detail["request"], untabled.detail["T"]) == ("a", 20)
+    ctx = _ctx([("a", [19])])
+    del D._state(ctx)["modules"][LAYER]["index_q"]
+    unfused = D.DsaMqaAllocation().match(_empty(3, (1, 512), 40), ctx)
+    assert isinstance(unfused, Unsupported) and unfused.reason == "invisible MQA allocation lacks the fused-q or index-cache views"
+    assert unfused.detail["module"] == LAYER
+
+
+def test_a_gather_without_a_keys_destination_is_refused_and_stages_no_keys():
+    ctx = _ctx([("b", range(11))])
+    node = _node(2, "_C_cache_ops.cp_gather_indexer_k_quant_cache.default", GATHER, [view(13, (8, 64, 132), "uint8"), None])
+    off = D.DsaMqaGather().match(node, ctx)
+    assert isinstance(off, Unsupported) and off.reason == "indexer K-cache gather destination is not a [keys, D] view"
+    assert off.detail["dst_k"] == "None" and "mqa_keys" not in D._state(ctx)["modules"][LAYER]
+
+
+def test_a_top_k_of_another_width_or_of_a_row_past_the_short_row_is_refused():
+    def decode(k):
+        return _node(7, "_C.cooperative_topk.default", DECODE_TOPK,
+                     [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32"),
+                      view(4, (1048576,), "uint8"), k, 20])
+    narrow = D.DsaTopK().match(decode(1024), _ctx([("a", [19])]))
+    assert isinstance(narrow, Unsupported) and narrow.reason == "top-k output is not contiguous i32 [rows,2048]"
+    assert (narrow.detail["output"], narrow.detail["topk"]) == (repr(view(TOPK_ALLOC, (1, 2048), "int32")), 1024)
+    long = D.DsaTopK().match(decode(2048), _ctx([("a", [2048])]))
+    assert isinstance(long, Unsupported) and long.reason == "DSA top-k row exceeds the short-row shortcut"
+    assert {k: long.detail[k] for k in ("position", "keys", "TOPK")} == {"position": 2048, "keys": 2049, "TOPK": 2048}
+
+
+def test_a_row_outside_a_view_is_no_row_of_it():
+    assert D._one_row(view(1, (2, 4)), 1) == view(1, (1, 4), offset=4)
+    with pytest.raises(GeometryError, match="row 2 outside"):
+        D._one_row(view(1, (2, 4)), 2)
