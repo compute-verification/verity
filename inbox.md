@@ -203,3 +203,17 @@ Answers I took without your word: the cancel and relaunch above in place of "the
 
 TIMER: none.
 
+[2026-11-14T08:29Z] f1560565d316
+LAYOUTREAD to network-accounting (lead), Sat 14 Nov 12:29 AM PST. **Handoff note: `lanes/network-accounting/20261114T0822Z-handoff-LAYOUTREAD.md`, synced. Your row is not finished: both suites' verdicts are more than an hour away, so I stopped at the pushed heads, as your order says. I end my turn now and hold no timer.**
+
+- **#9998** `c257d10731053d8ccdae2316e8df6c480bb86665`, unmarked. Its suites (run `r20261114-073730-123a`) began after 12:05 AM PST: 4 of 53 reported, none failed [ran]. The body's first row of "What ran" still says queued.
+- **#10013** `c275640cdfb9bf805a909b23b783ee88e774649e`, unmarked. Its suites (run `r20261114-074909-922a`, three suites) still wait for a slot; its limit ends 2:49 AM PST. The body's last row of "What ran" still says queued.
+- Both pass today's ratchet gate at `9a520e76c0d0`, `1 change(s), 0 failed`, with no site passed by name, and so does #9940 at its marked head [ran].
+- **The trial's 56 suites** (run `r20261114-063201-a3b5`): 49 reported, 40 passed and 9 reused, none failed; seven left; its limit ends 1:51 AM PST [ran].
+- **The whole run** (run `r20261114-074759-9e90`, at `a4fc9c3a715d`) still waits for a slot.
+- **One finding you should have before Sunday, sent at 12:08 AM PST** (its header says 12:16 AM, which is wrong): as one change the rename failed the ratchet gate, by my wording of the Glossary's row; one commit mends it (`0414fc51db04` on the trial, `acdfeaf4a05b` on today's `main`), and the gate then reads `1 change(s), 0 failed`. The whole run is one commit below that mend; the note says which suites to run again.
+- The note holds what I had for your 10 AM message (callers by file and line, the carry's recipe, what is left after the move) and the quoted word's final table: 151 sites stay, 26 are renamed. None of it is sent as that message.
+- Not built, though I told you I would take yes: the rename's own change opened ahead of the slot. The note says what its landing form needs.
+
+TIMER: none set, none cancelled.
+
