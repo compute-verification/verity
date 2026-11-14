@@ -69,11 +69,17 @@ for t in uv elan lake cargo; do
   fi
 done
 # `slot.py --twin` claims a pair on its home machine over /etc/vy/peers with the vy-cluster key: a node without them refuses every
-# twinned check. A peer this node can't reach is only reported: cpu-4 and cpu-5 reach no uk-south2 node.
+# twinned check. Neither is made here: the key pair is copied from another node, and `research deploy` writes the list from the
+# register of machines and has each node take the key from the machines its list names (deploy.toml's /etc/vy/peers). A peer
+# this node can't reach, and a node that takes the key from no machine, are only reported.
 PEERS=${CHECK_PEERS:-/etc/vy/peers}
-for f in "$PEERS" "$HOME/.ssh/vy-cluster"; do
-  [ -s "$f" ] || { echo "pod_setup: no $f: copy it from vy-nebius-2, add this node to every node's $PEERS and to the from= of vy-cluster's line in each peer's authorized_keys" >&2; exit 1; }
-done
+KEY=$HOME/.ssh/vy-cluster
+ROLL="\`research deploy roll /etc/vy/peers --by WHO --apply\`, run where the register of machines is, writes this node's list, has it take the key from each machine the list names, and puts this node in every other node's list, one node at a time"
+[ -s "$KEY" ] || { echo "pod_setup: no $KEY: copy the pair (vy-cluster and vy-cluster.pub) from another node, node to node; then $ROLL" >&2; exit 1; }
+[ -s "$PEERS" ] || { echo "pod_setup: no $PEERS: $ROLL" >&2; exit 1; }
+if [ -s "$KEY.pub" ] && ! grep -qF "$(cut -d' ' -f2 "$KEY.pub")" "$HOME/.ssh/authorized_keys" 2>/dev/null; then
+  echo "pod_setup: this node takes the vy-cluster key from no machine, so no twin can claim here: $ROLL" >&2
+fi
 while read -r name rest; do
   case "$name" in ''|'#'*) continue;; esac
   ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $rest true 2>/dev/null || echo "pod_setup: peer $name unreachable from here" >&2
