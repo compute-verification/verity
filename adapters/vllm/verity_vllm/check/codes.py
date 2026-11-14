@@ -1,4 +1,4 @@
-"""Verdict codes: why a verifier accepted or rejected (promoted from veritor ``protocol/messages.py``).
+"""Verdict codes: why a verifier accepted or rejected.
 
 The code strings are wire constants: the phase-equivalence vectors (``fixtures/proof-format-v3``) name them and
 the SP1 kernel's ``CheckError`` maps onto them.  The full veritor enum is kept so those vectors decode.

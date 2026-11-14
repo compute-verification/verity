@@ -690,7 +690,7 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# the row's per-rank fold Match entry point (bench/tp/fold_match.py) over the fixture: the fold runs in-process (the CLI's fold_rank is
+# the row's per-rank fold Match entry point (`verity_vllm.pipeline.tp.fold_match`) over the fixture: the fold runs in-process (the CLI's fold_rank is
 # a subprocess over a profile MODULE; the fixture's profile is an object), everything after it -- persisted record, cb_a.compare per
 # rank, recorder / links / provenance ingestion, the cross-rank leg, the verdict -- is the CLI's own code
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -797,8 +797,8 @@ def test_rank_legs_run_concurrently_and_the_document_does_not_depend_on_the_sche
 
 
 def test_the_folds_run_wider_than_the_legs_after_them(tmp_path, monkeypatch):
-    """`--fold-workers` ranks fold at once while `--rank-workers` bounds the compare and GM-01 legs after the fold (a GLM-5.3 B8 rank's
-    fold peaks at 40 GB, its GM-01 near 400 GB): both ranks are inside their fold together, at a barrier neither passes alone, yet never
+    """`--fold-workers` ranks fold at once while `--rank-workers` bounds the compare and GM-01 legs after the fold (a rank's
+    GM-01 holds far more memory than its fold): both ranks are inside their fold together, at a barrier neither passes alone, yet never
     inside GM-01 together, and the document is the serial run's."""
     barrier, lock, inside, most = threading.Barrier(2), threading.Lock(), [0], [0]
 
