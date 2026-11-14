@@ -20,8 +20,8 @@ from verity.circuits.ops.scalar import F32Neg
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from . import pc4
-from . import words as W
-from .rowk import (BF16, CARRY4, E2M1, F32, HEAD4, HEAD4_OUT, OK, R, U8, _HIDDEN, _col, _flat, _head_out, _ports, _rows,
+from verity.protocols.accounting.pouw.prover.circuit import words as W
+from verity.protocols.accounting.pouw.prover.circuit.rowk import (BF16, CARRY4, E2M1, F32, HEAD4, HEAD4_OUT, OK, R, U8, _HIDDEN, _col, _flat, _head_out, _ports, _rows,
                    _slices)
 
 

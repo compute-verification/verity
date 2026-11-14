@@ -28,7 +28,8 @@ from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SE
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc4
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.experimental.pearl_c4.prover import pc4
 
 #: a Boolean unit (a + b over 20 bits with its carry, a & c, and w[0] & w[2047] ^ w[1000]), its parameters' leaves off word
 #: boundaries in two rows that split c's, its 34-bit output padded to three words; w's row spans SHA-512 blocks, as a composed

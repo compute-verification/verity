@@ -54,7 +54,7 @@ from verity_config.settings import of
 
 from verity.commitments import Commitment, MerkleTree, Opening
 from verity.protocols.accounting.pouw.prover.schemes import get
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.verifier import audit as au
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, tagged

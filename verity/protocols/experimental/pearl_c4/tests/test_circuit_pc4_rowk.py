@@ -14,8 +14,9 @@ import pearl_c4_vectors as V4
 import test_circuit_rowk as R
 from verity.circuits.evaluation import evaluate
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import pc4, pc4_rowk, plan, rowk
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pc4, pc4_rowk
+from verity.protocols.accounting.pouw.prover.circuit import plan, rowk
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 

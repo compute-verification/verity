@@ -1,4 +1,4 @@
-"""Pearl-C4's tile check as a Program (`verity.protocols.accounting.pouw.prover.circuit.pc4`): its primitives and float forms are the scheme's operations
+"""Pearl-C4's tile check as a Program (`verity.protocols.experimental.pearl_c4.prover.pc4`): its primitives and float forms are the scheme's operations
 on the domain the row's admission bit admits, its units evaluate to `schemes.pearl_c4`'s forming, clean-up and checked
 words (the pinned ``test-16-nvfp4`` vector), its admission bit is `row_passes` on every row, and its partition computes
 every value in exactly one unit; its hiding Programs publish only admission bits and tile digests, their units' ports are
@@ -24,10 +24,11 @@ from verity.circuits.program import Program
 from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity.commitments.randomness import derive
-from verity.protocols.accounting.pouw.prover.circuit import pc4, plan
+from verity.protocols.experimental.pearl_c4.prover import pc4
+from verity.protocols.accounting.pouw.prover.circuit import plan
 from verity.protocols.accounting.pouw.prover.circuit import words as W
 from verity.protocols.accounting.pouw.prover.circuit.anchors import TileAnchors, region_bytes
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 

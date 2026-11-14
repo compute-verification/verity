@@ -31,7 +31,7 @@ def _pearl_c(forming: str, device: str = "h100", *, hashing: str) -> Callable[..
 
 def _pearl_c4(fmt: str, *, hashing: str) -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
-        from .pearl_c4 import PearlC4
+        from verity.protocols.experimental.pearl_c4.prover.pearl_c4 import PearlC4
         return PearlC4(fmt, hashing=hashing, **config)
     return make
 

@@ -23,7 +23,7 @@ from clear_audit import Prover
 import clear_work as CW
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 
 K = T.K

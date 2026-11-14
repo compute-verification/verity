@@ -27,7 +27,8 @@ from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_S
 from verity.circuits.types import Tuple
 from verity_flock import circuit as FC
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import pc4, pc8
+from verity.protocols.experimental.pearl_c4.prover import pc4
+from verity.protocols.accounting.pouw.prover.circuit import pc8
 
 POUW_TESTS = Path(__file__).resolve().parents[4] / "accounting" / "pouw" / "verifier" / "tests"
 LEAN = Path(__file__).resolve().parents[2] / "verifier"

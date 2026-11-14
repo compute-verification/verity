@@ -16,7 +16,7 @@ tried: no demo lists it, and its guarantee rests on a premise that is stated and
 
 ## Where the rest is
 
-- The scheme's scalar reference (`verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`, `pearl_c4_c_L.py`),
+- The scheme's scalar reference (`verity/protocols/experimental/pearl_c4/prover/pearl_c4.py`, `pearl_c4_c_L.py`),
   its tile check as a circuit (`prover/circuit/pc4.py`), its pinned vectors and their tests stay in PoUW's package:
   PoUW's own circuits load `pc4`, which loads the scheme, and PoUW loads nothing of `experimental/`.
 - The shipping (`benchmarks/pouw/pearl_c4/ship.sh`), the reference replay of a device run (`replay.py` beside it) and

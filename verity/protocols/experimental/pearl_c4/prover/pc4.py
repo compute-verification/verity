@@ -65,14 +65,14 @@ from verity.circuits.ops.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3To
 from verity.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
-from ..schemes import pearl_c as C
-from ..schemes import pearl_c4 as S
-from . import anchors as A
-from . import boolean as _boolean  # noqa: F401  registers the _v2 Definitions Flock's lowering falls back to
-from . import leaves as L
-from . import words as W
-from .tile_units import DIGESTS, GRID_ROLES, ROLES, ProofBlock, RowK, _Emit, _f32, ok_word
-from . import tile_units as U
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as S
+from verity.protocols.accounting.pouw.prover.circuit import anchors as A
+from verity.protocols.accounting.pouw.prover.circuit import boolean as _boolean  # noqa: F401  registers the _v2 Definitions Flock's lowering falls back to
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.circuit import words as W
+from verity.protocols.accounting.pouw.prover.circuit.tile_units import DIGESTS, GRID_ROLES, ROLES, ProofBlock, RowK, _Emit, _f32, ok_word
+from verity.protocols.accounting.pouw.prover.circuit import tile_units as U
 
 F32, BF16, E2M1, U8, OK = W.F32, W.BF16, W.E2M1, W.U8, L.OK
 R, ATOM, BLOCK, PEEL = S.R, S.ATOM, S.NVFP4.block, S.PEEL_K

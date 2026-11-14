@@ -8,7 +8,8 @@ import pytest
 import test_circuit_leaves as T
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import cap, pc4, pc4_rowk, pc8, rowk
+from verity.protocols.accounting.pouw.prover.circuit import cap, pc8, rowk
+from verity.protocols.experimental.pearl_c4.prover import pc4, pc4_rowk
 
 #: each unit's statement rows: its input rows' (row, role) by read, then each output row's (row, role) and run of outputs
 STATEMENTS = {

@@ -12,7 +12,7 @@ from verity.circuits import Program
 from verity.circuits.codec import program_digest
 from verity.circuits.cut import CallGraph, call_scope
 
-pc4 = pytest.importorskip("verity.protocols.accounting.pouw.prover.circuit.pc4", reason="the row templates are `verity.protocols.accounting.pouw.prover.circuit.pc4`'s")
+pc4 = pytest.importorskip("verity.protocols.experimental.pearl_c4.prover.pc4", reason="the row templates are `verity.protocols.experimental.pearl_c4.prover.pc4`'s")
 
 #: `program_digest` of the row templates the Lean tables were checked against; a change to any needs the Lean re-read
 ROW_DIGESTS4 = {

@@ -1,6 +1,6 @@
 """Pinned vectors for Pearl-C4's tile check's public input regions, `pouw_regions_vectors`' on Pearl-C4's anchors:
-``uv run python verity/protocols/accounting/pouw/verifier/tests/pearl_c4_regions_vectors.py`` rewrites
-``tests/vectors/pearl_c4_regions.json``.  A change to that file is a change to a region's layout or derivation and needs a
+``uv run python verity/protocols/experimental/pearl_c4/tests/pearl_c4_regions_vectors.py`` rewrites
+``../../../experimental/pearl_c4/tests/vectors/pearl_c4_regions.json``.  A change to that file is a change to a region's layout or derivation and needs a
 reason in the PR."""
 
 from __future__ import annotations
@@ -9,9 +9,9 @@ import json
 from pathlib import Path
 
 import pouw_regions_vectors as RV
-from verity.protocols.accounting.pouw.prover.circuit import pc4
+from verity.protocols.experimental.pearl_c4.prover import pc4
 from verity.protocols.accounting.pouw.prover.circuit.anchors import TileAnchors
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c4_regions.json"
 #: (case, circuit, k, device), as `pouw_regions_vectors.CASES`

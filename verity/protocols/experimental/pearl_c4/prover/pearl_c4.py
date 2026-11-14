@@ -139,10 +139,10 @@ from verity.protocols.accounting.pouw.verifier.registration import (  # noqa: F4
     check_registration,
 )
 
-from . import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from . import pearl_c4_c_L as CL
-from . import pearl_kw as P
-from .pearl_c_work import UnitRecord
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64
