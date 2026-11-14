@@ -166,6 +166,10 @@ PUBLIC = {
     "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
                                                    "under its domain (y_domain, commit_y, retain_y) and on its device "
                                                    "(DeviceTrees), which verify_run opens on each drawn tile",
+    "verity_vllm.protocols.remote_bandwidth.registry": "I1: the node's store as one registry (NodeMemory), the reference "
+                                                       "implementation of StoreView and Lifecycle, which "
+                                                       "benchmarks/remote_session registers a served engine's weights and "
+                                                       "KV pool in",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -186,7 +190,6 @@ KNOWN = frozenset({
     "verity_vllm.commit.committer.native_host",
     "verity_vllm.commit.committer.native_jit",
     "verity_vllm.commit.index",
-    "verity_vllm.commit.memory_map",
     "verity_vllm.commit.opened",
     "verity_vllm.commit.row_tables",
     "verity_vllm.commit.row_tables_device",
@@ -277,13 +280,9 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.pearl_c.screen",
     "verity_vllm.protocols.pouw.pearl_c.whole",
     "verity_vllm.protocols.remote_bandwidth.binder",
-    "verity_vllm.protocols.remote_bandwidth.interface",
-    "verity_vllm.protocols.remote_bandwidth.memory_map",
-    "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.manifest.format",
     "verity_vllm.query.program_view",
-    "verity_vllm.query.required",
 })
 
 #: Every private name outside code imports from a module of the package. Move its importers off it and delete it.
@@ -292,7 +291,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
 })
 
 
