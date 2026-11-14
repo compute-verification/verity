@@ -168,7 +168,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
-          # test_mma_gate runs torch_gpu's build gate, which reads the build through harness/sass_gate.py's mma_gate
+          # test_mma_gate runs torch_gpu's build gate, which reads the build through verity/protocols/pouw/prover/sass_gate.py's mma_gate
           "benchmarks/torch_gpu/s8_linear/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
