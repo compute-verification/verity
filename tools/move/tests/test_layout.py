@@ -814,6 +814,20 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
     assert "`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted: 2" in p.stdout
 
 
+def test_an_anchor_inside_a_string_literal_stays_as_written(tmp_path):
+    """A moved file's own anchor is recounted from its new place; one inside a string (a toy's source, a docstring's
+    example) is no anchor of the file's, and recounting it would change the toy (or, joined back in parentheses with
+    double quotes inside a double-quoted string, leave the file unparseable)."""
+    toy = 'LIB = "ROOT = Path(__file__).resolve().parents[2]\\n"\n'
+    r, p = _run(tmp_path, {"tools/a/b/t.py": '"""`Path(__file__).parents[1]` names b."""\nROOT = Path(__file__).resolve().parents[3]\n'
+                           + toy, "tools/a/b/data.json": "{}\n"},
+                LEVELS_MAP.replace('"benchmarks/live/" = "verity/composite/device/live/"', '"tools/a/b/" = "tools/b/"')
+                .replace('"benchmarks.live" = "verity.composite.device.live"', '"tools.a.b" = "tools.b"'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "tools/b/t.py").read_text() == ('"""`Path(__file__).parents[1]` names b."""\n'
+                                                 'ROOT = Path(__file__).resolve().parents[2]\n' + toy)
+
+
 @pytest.mark.parametrize("text, comments", [
     ("", True), ("\n\n", True), ("# the data sheets\n", True), ("  # indented\r\n\t\n\f\n", True),
     ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),

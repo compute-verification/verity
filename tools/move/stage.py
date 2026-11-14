@@ -46,7 +46,7 @@ import restack as RS  # noqa: E402
 #: the check's directory: `tools/check/`, or `tools/verity/check/` in a tree from before the move that put it there. A base
 #: holds `move_check.py` and the pins list in one of them, and this checkout's is the one `MOVE_CHECK` and `PINS` name
 CHECK_DIRS = ("tools/check/", "tools/verity/check/")
-CHECK_DIR = next((d for d in CHECK_DIRS if (HERE.parents[1] / d).is_dir()), CHECK_DIRS[0])
+CHECK_DIR = next((d for d in CHECK_DIRS if (HERE.parents[1] / d / "move_check.py").is_file()), CHECK_DIRS[0])
 MOVE_CHECK = f"{CHECK_DIR}move_check.py"
 #: what the scripts import from their own checkout: `tools/move/`'s other scripts and the pins list
 MOVE_DIR, PINS = "tools/move/", f"{CHECK_DIR}pins.py"
