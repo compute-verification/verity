@@ -79,7 +79,7 @@ def test_the_tail_profiles():
 
 def test_varying_token_blocks_take_the_largest_per_token_affected_count():
     """Two parts whose token blocks differ: the token form holds with α_max in place of a common count,
-    ρ ≥ (1 − x0) c Σ|T ∩ A| / (α_max |C| s*) = σ (1 − x0) (s/s*) (ᾱ/α_max)."""
+    the record's slowdown ≥ (1 − x0) c Σ|T ∩ A| / (α_max |C| s*) = σ (1 − x0) (s/s*) (ᾱ/α_max)."""
     a = F.Part(gates=1e12, tokens=1e3, token_gates=0.9e12, affected_gates=0.8e12, delta_grad_bits=None)
     b = F.Part(gates=1e12, tokens=1e3, token_gates=0.5e12, affected_gates=0.2e12, delta_grad_bits=None)
     u = F.even(1e9)
