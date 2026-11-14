@@ -84,14 +84,14 @@ def harness() -> ModuleType:
     return mod
 
 
-def tool(name: str, cap: int = 120) -> str:
-    """Triton's bundled CUDA tool: nvdisasm, or the ptxas Triton compiles `cap` with."""
+def tool(name: str, arch: int = 120) -> str:
+    """Triton's bundled CUDA tool: nvdisasm, or the ptxas Triton compiles `arch` with."""
     import triton
     from triton.backends.nvidia import compiler as nv
-    t = nv.get_ptxas(cap) if name == "ptxas" else getattr(triton.knobs.nvidia, name)
+    t = nv.get_ptxas(arch) if name == "ptxas" else getattr(triton.knobs.nvidia, name)
     path = getattr(t, "path", None)
     if not path or not Path(path).is_file():
-        raise ToolMissing(f"Triton has no {name} for sm_{cap}")
+        raise ToolMissing(f"Triton has no {name} for sm_{arch}")
     return path
 
 
@@ -104,13 +104,13 @@ def variants(T: ModuleType) -> dict[str, tuple[Any, dict, dict]]:
             "lut_rows/d64": (T.lut_rows, LUT_SIG, {"BLOCK_M": T.BLOCK_M, "BLOCK_N": T.BLOCK_N, "BLOCK_D": 64})}
 
 
-def compile_variant(T: ModuleType, variant: str, cap: int, **opts):
-    """Triton's CompiledKernel of one variant for sm_`cap` under `int8_fused.OPTS` (`opts` overriding them)."""
+def compile_variant(T: ModuleType, variant: str, arch: int, **opts):
+    """Triton's CompiledKernel of one variant for sm_`arch` under `int8_fused.OPTS` (`opts` overriding them)."""
     import triton
     from triton.backends.compiler import GPUTarget
     from triton.compiler import ASTSource
     fn, sig, consts = variants(T)[variant]
-    return triton.compile(ASTSource(fn, sig, consts), target=GPUTarget("cuda", cap, 32), options={**T.OPTS, **opts})
+    return triton.compile(ASTSource(fn, sig, consts), target=GPUTarget("cuda", arch, 32), options={**T.OPTS, **opts})
 
 
 def ptx_ops(ptx: str) -> Counter:
@@ -226,12 +226,12 @@ def instructions(text: str) -> list[str]:
     return [t for fd in G.parse_nvdisasm(text) for _, t in fd["insns"]]
 
 
-def ptxas(ptx: str, cap: int, fmad: bool) -> bytes:
+def ptxas(ptx: str, arch: int, fmad: bool) -> bytes:
     from triton.backends.nvidia.compiler import sm_arch_from_capability
     with tempfile.TemporaryDirectory() as td:
         src, out = Path(td) / "k.ptx", Path(td) / "k.cubin"
         src.write_text(ptx)
-        cmd = [tool("ptxas", cap), "-lineinfo", *([] if fmad else ["--fmad=false"]), f"--gpu-name={sm_arch_from_capability(cap)}",
+        cmd = [tool("ptxas", arch), "-lineinfo", *([] if fmad else ["--fmad=false"]), f"--gpu-name={sm_arch_from_capability(arch)}",
                str(src), "-o", str(out)]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode:
@@ -239,8 +239,8 @@ def ptxas(ptx: str, cap: int, fmad: bool) -> bytes:
         return out.read_bytes()
 
 
-def fmad_rule(ptx: str, cap: int) -> dict[str, Any]:
-    on, off = (instructions(listing(ptxas(ptx, cap, f))) for f in (True, False))
+def fmad_rule(ptx: str, arch: int) -> dict[str, Any]:
+    on, off = (instructions(listing(ptxas(ptx, arch, f))) for f in (True, False))
     ffma = [sum(t.split()[0].startswith("FFMA") for t in x) for x in (on, off)]
     same = on == off
     return {"same": same, "ffma_contraction_allowed": ffma[0], "ffma_fmad_false": ffma[1],
@@ -248,11 +248,11 @@ def fmad_rule(ptx: str, cap: int) -> dict[str, Any]:
                                          "--fmad=false)")]}
 
 
-def gate(kernel: str, ptx: str, cubin: bytes, cap: int) -> dict[str, Any]:
+def gate(kernel: str, ptx: str, cubin: bytes, arch: int) -> dict[str, Any]:
     """The verdict on one compiled kernel: its PTX, ptxas's build of it with and without contraction, and its SASS."""
-    p, f, s = ptx_rules(kernel, ptx), fmad_rule(ptx, cap), sass_rules(kernel, listing(cubin))
+    p, f, s = ptx_rules(kernel, ptx), fmad_rule(ptx, arch), sass_rules(kernel, listing(cubin))
     refused = p["refused"] + f["refused"] + s["refused"]
-    return {"kernel": kernel, "arch": f"sm_{cap}", "ptx": p, "fmad": f, "sass": s, "refused": refused, "ok": not refused}
+    return {"kernel": kernel, "arch": f"sm_{arch}", "ptx": p, "fmad": f, "sass": s, "refused": refused, "ok": not refused}
 
 
 def gate_compiled(compiled) -> dict[str, Any]:
@@ -280,15 +280,15 @@ def unrounded(ptx: str) -> str:
     return re.sub(r"\b(mul|add|sub)\.rn\.f32\b", r"\1.f32", ptx)
 
 
-def negatives(T: ModuleType, where: Path, cap: int) -> dict[str, Any]:
+def negatives(T: ModuleType, where: Path, arch: int) -> dict[str, Any]:
     """Each must be refused, except kv_rows with contraction allowed, which must compile to the same SASS and pass."""
-    lut = compile_variant(T, "lut_rows/d128", cap, enable_fp_fusion=True)
-    shipped = compile_variant(T, "lut_rows/d128", cap)
+    lut = compile_variant(T, "lut_rows/d128", arch, enable_fp_fusion=True)
+    shipped = compile_variant(T, "lut_rows/d128", arch)
     stripped = unrounded(shipped.asm["ptx"])
-    kv_on, kv_off = (compile_variant(T, "kv_rows/paged", cap, enable_fp_fusion=f) for f in (True, False))
-    mutant = compile_variant(div_full_mutant(where), "kv_rows/paged", cap)
+    kv_on, kv_off = (compile_variant(T, "kv_rows/paged", arch, enable_fp_fusion=f) for f in (True, False))
+    mutant = compile_variant(div_full_mutant(where), "kv_rows/paged", arch)
     return {"lut_rows contraction allowed": gate_compiled(lut),
-            "lut_rows PTX unrounded through ptxas": gate("lut_rows", stripped, ptxas(stripped, cap, True), cap),
+            "lut_rows PTX unrounded through ptxas": gate("lut_rows", stripped, ptxas(stripped, arch, True), arch),
             "kv_rows div.full": gate_compiled(mutant),
             "kv_rows contraction allowed": {**gate_compiled(kv_on), "same_sass": instructions(listing(kv_on.asm["cubin"]))
                                             == instructions(listing(kv_off.asm["cubin"]))}}
@@ -309,13 +309,13 @@ def main(argv: list[str] | None = None) -> int:
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "triton": __import__("triton").__version__, "compiled": {},
                            "negatives": {}, "launched": []}
     with tempfile.TemporaryDirectory() as td:
-        for cap in ARCHES:
+        for arch in ARCHES:
             for v in variants(T):
-                doc["compiled"][f"{v}/sm_{cap}"] = r = gate_compiled(compile_variant(T, v, cap))
-                print(f"[sass] {v} sm_{cap} ok={r['ok']} {r['sass']['census']} {r['refused'][:2]}", flush=True)
-            doc["negatives"][f"sm_{cap}"] = neg = negatives(T, Path(td), cap)
+                doc["compiled"][f"{v}/sm_{arch}"] = r = gate_compiled(compile_variant(T, v, arch))
+                print(f"[sass] {v} sm_{arch} ok={r['ok']} {r['sass']['census']} {r['refused'][:2]}", flush=True)
+            doc["negatives"][f"sm_{arch}"] = neg = negatives(T, Path(td), arch)
             for name, r in neg.items():
-                print(f"[negative] {name} sm_{cap} ok={r['ok']} {r.get('same_sass', '')} {[x[:120] for x in r['refused']]}", flush=True)
+                print(f"[negative] {name} sm_{arch} ok={r['ok']} {r.get('same_sass', '')} {[x[:120] for x in r['refused']]}", flush=True)
     if a.launch:
         import torch
 

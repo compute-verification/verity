@@ -29,7 +29,7 @@ NO_KERNELS = {"wrappers": 0, "distinct_kernel_sources": 0, "kernel_set_sha256": 
 #: two texts of the manifest and its notes hold a word the glossary retires, so they are pinned by their sha256 and not written out
 #: here: `adapter.interception`, which is in the profile id, and the notes' `profile_id_method` (273 characters, one string)
 INTERCEPTION_SHA256 = "097b30e8214d648efe4d27849222c362cd127368204b4604ab8a4ec5fa824c7b"
-METHOD_SHA256 = "43ad3e91103a24f32028236c485f4df25f2a9102b6cd530dbe90860f5ba67965"
+METHOD_SHA256 = "9704ecd5eee3a08bff79281471c620f2bb8b1b7bbd57b89e21d9314fc4c9fea3"
 
 
 @pytest.fixture
