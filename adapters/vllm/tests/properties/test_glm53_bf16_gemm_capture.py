@@ -23,7 +23,7 @@ from verity.definitions.registry import mla_check as MK
 from tests import fake_vllm
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
 SPLITK = {"kind": "splitk", "SPLIT_K": 2, "TILE_K": 128, "WARPS": 2}
