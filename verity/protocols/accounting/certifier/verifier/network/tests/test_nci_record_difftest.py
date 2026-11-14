@@ -33,9 +33,9 @@ fifteenth is a history table: a table over no registered parameter, so every row
 pins and registers the rest. The sixteenth is what the prover chose of an execution phase's input bits: the rows no
 declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over every
 slot's units, with an opening's ports off the count only where the opening is held. The seventeenth is the row an
-opening may declare: an output of its reader, as the verdict is, by which nothing is filled or counted. The
-eighteenth is the opening whose row is its verdict's own output: taken, and held by its reader's pin and its table
-reads or not at all, so that under no pin every one of its ports is fresh and counts.
+opening may declare: the first of its reader's two outputs, the second its verdict, of a reader of six input rows, by
+which nothing is filled or counted. The eighteenth is the opening whose row is its verdict's own output: refused with
+the declarations, under its reader's pin and under none.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -105,7 +105,8 @@ HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.item
 #: of those, the one the form takes that the interface refuses, and the one whose opening is against a history
 LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
 #: the cases on an opening that declares its row, each with the stage that refuses it, None where the form takes it
-ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items()} | {f"2x3 {vectors.ROW_UNPINNED}": None}
+ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items()} | {
+    f"2x3 {vectors.ROW_UNPINNED}": vectors.ROW_ROLE[vectors.ROW_VERDICT][0]}
 
 
 @pytest.fixture(scope="module")
@@ -1039,10 +1040,10 @@ def test_what_the_prover_chose_of_an_execution_phase(random_cases, shaped):
 
 def test_an_opening_may_declare_its_row(shaped):
     """An opening may declare its `row`, the output of its reader that returns the row opened. The form holds it to
-    the reader's outputs, as it holds the verdict, and reads nothing else of it: the served shape's record with its
-    opening declaring the output that returns the row, or the verdict's own, counts as the accepted record does, row
-    by row, and no row is of another kind for it. One whose row is no output of the reader (an input row of it among
-    them) or no string is refused with the declarations. A record that declares no row is read as before: the accepted
+    the row a table read returns, the first of its reader's two outputs, the second its verdict, of a reader of six
+    input rows, and reads nothing else of it: the served shape's record with its opening declaring that output counts
+    as the accepted record does, row by row, and no row is of another kind for it. One whose row is the verdict's own
+    output, no output of the reader, an input row of it or no string is refused with the declarations. A record that declares no row is read as before: the accepted
     record is each of these with the key dropped. `verity.commitments.windows.interface` takes and refuses the same,
     and reads the row back as the record states it."""
     accepted = shaped["2x3 registered"]
@@ -1059,7 +1060,8 @@ def test_an_opening_may_declare_its_row(shaped):
         opening, = doc["registered"]["openings"]
         assert opening.pop("row") == row and doc == built, what
         assert m["case"]["instance"]["pins"] == accepted["case"]["instance"]["pins"] != [], what
-        assert (stage is None) == (isinstance(row, str) and row in dict(lay.outs)), what
+        returned = len(lay.rows) == 6 and [q for q, _ in lay.outs] == [row, opening["verdict"]]
+        assert (stage is None) == (isinstance(row, str) and returned), what
         assert _interface(m)[0] == stage, what
         if stage is not None:
             assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}, what
@@ -1075,47 +1077,23 @@ def test_an_opening_may_declare_its_row(shaped):
         assert read.row == row and read.doc()["row"] == row, what
 
 
-def test_an_opening_whose_row_is_its_verdicts_output_is_taken_and_its_ports_count(shaped):
-    """An opening whose `row` is its verdict's own output is taken, and the row it declares takes none of its ports
-    off the count. Nothing reads the row: what holds an opening is its reader's pin with its table reads (`held`), as
-    it is for an opening that declares none. Under the pin the record counts as the accepted record does. Under no
-    pin nothing holds the opening, and every one of its ports is fresh (`openings`) and counted, so that the rate
-    refuses, in gates, in rows and by the count: bit for bit what the same record counts with the key dropped. The
-    row and its verdict are one output, and no port is held for it."""
+def test_an_opening_whose_row_is_its_verdicts_output_is_refused(shaped):
+    """An opening whose `row` is its verdict's own output is refused with the declarations, under its reader's pin and
+    under none: the row an opening declares is the one a table read returns, the first of its reader's two outputs,
+    and the verdict is the second. `verity.commitments.windows.interface` refuses it too. The record is the accepted
+    one with the key added, so the refusal is the row's alone."""
     accepted, pinned = shaped["2x3 registered"], shaped[f"2x3 {vectors.ROW_VERDICT}"]
     loose = shaped[f"2x3 {vectors.ROW_UNPINNED}"]
     built = json.loads(accepted["case"]["instance"]["record"])
-    embed = next(fn for fn, _ in accepted["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
-    bits = {p: 16 * words for p, words in IF.layout(embed).rows}
-    units = dict(built["templates"])[vectors.EMBED]
-    ports = ("row", "salt", "path")
-    rows = [[vectors.EMBED, p, u, 0] for p in ports for u in range(units)]
-    for m in (pinned, loose):
+    stage = vectors.ROW_ROLE[vectors.ROW_VERDICT][0]
+    assert stage == "inputs"
+    for m, pins in ((pinned, accepted["case"]["instance"]["pins"]), (loose, [])):
         doc = json.loads(m["case"]["instance"]["record"])
         opening, = doc["registered"]["openings"]
-        assert opening["row"] == opening["verdict"] == "o1" and tuple(opening["ports"]) == ports
+        assert opening["row"] == opening["verdict"] == "o1" and tuple(opening["ports"]) == ("row", "salt", "path")
         assert opening.pop("row") and doc == built
-        assert m["broken"] is None and "error" not in vectors.results(m["case"])["detail"]
-        assert _interface(m)[0] is None
-    # under the pin: held as the accepted record's opening is, by the pin and the table reads
-    before = accepted["case"]["instance"], accepted["case"]["trusted"]
-    inst, tr = pinned["case"]["instance"], pinned["case"]["trusted"]
-    assert inst["pins"] == before[0]["pins"] != []
-    assert ref.kinds(inst, tr, rows) == ref.kinds(*before, rows) == ["theta"] * len(rows)
-    # under no pin: every port of the opening fresh, and counted
-    inst, tr = loose["case"]["instance"], loose["case"]["trusted"]
-    assert inst["pins"] == []
-    assert ref.kinds(inst, tr, rows) == ["openings"] * len(rows)
-    assert all(reason is None for _, reason in ref.exported(inst, tr, rows))
-    r, held = vectors.results(loose["case"]), vectors.results(accepted["case"])
-    d, d0 = r["detail"], held["detail"]
-    a_block = units // d["blocks"]
-    assert d["openings"] == a_block * sum(bits[p] for p in ports) > 0 == d0["openings"]
-    assert d["fresh"] == d0["fresh"] + d["openings"]
-    assert (d["failure"], r["count"]["failure"], r["block_rows"]["failure"]) == ("nci", "fresh", "nci")
-    # the row holds none of them: the same record with the key dropped counts the same, row by row
-    bare = copy.deepcopy(loose)
-    vectors._rewrite(bare, lambda doc: doc["registered"]["openings"][0].pop("row"))
-    assert json.loads(bare["case"]["instance"]["record"]) == built
-    assert bare["case"]["instance"]["pins"] == [] and vectors.results(bare["case"]) == r
-    assert ref.kinds(bare["case"]["instance"], bare["case"]["trusted"], rows) == ["openings"] * len(rows)
+        assert m["case"]["instance"]["pins"] == pins
+        r = vectors.results(m["case"])
+        assert m["broken"] == stage
+        assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}
+        assert _interface(m)[0] == stage

@@ -57,9 +57,9 @@ templates. Then a template keyed as an input id (`KEYED`), bound per run and bou
 its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
 record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
 Then an opening that declares its `row` (`ROW_ROLE`): the served shape's record with its opening naming the output
-that returns the row opened, taken where it is an output of the reader, the verdict's among them, and refused with
-the declarations where it is no output or no string; and the one whose row is its verdict's output under no pin
-(`ROW_UNPINNED`), its opening's ports fresh as they are with no row declared.
+that returns the row opened, taken where it is the first of the reader's two outputs, the second its verdict, and
+refused with the declarations where it is the verdict's own output, no output, an input row or no string; and the one
+whose row is its verdict's output under no pin (`ROW_UNPINNED`), refused with the declarations as under the pin.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -874,16 +874,16 @@ HISTORIES: dict[str, tuple] = {
 LOOSE = "a history of no template's rows"
 
 #: `lowered(2, 3)`'s record with its opening declaring its `row`, a case each: the stage that refuses the record, None
-#: where the form takes it, and the opening's `row`. An output of the reader is taken, whichever it is: the form holds
-#: the row to the reader's outputs as it holds the verdict, and reads nothing else of it.
+#: where the form takes it, and the opening's `row`. Only the row a table read returns is taken: the first of the
+#: reader's two outputs, the second its verdict, of a reader of six input rows.
 ROW_ROLE: dict[str, tuple] = {
     "an opening that declares its row": (None, "o0"),
-    "an opening whose row is its verdict's output": (None, "o1"),
+    "an opening whose row is its verdict's output": ("inputs", "o1"),
     "an opening whose row is no output of its reader": ("inputs", "o2"),
     "an opening whose row is an input row of its reader": ("inputs", "row"),
     "an opening whose row is no string": ("inputs", 0),
 }
-#: the second of those under no pin: nothing holds its opening, and the row it declares holds none of its ports
+#: the second of those under no pin: refused as it is under the pin, the row being no pin's to decide
 ROW_VERDICT = "an opening whose row is its verdict's output"
 ROW_UNPINNED = f"{ROW_VERDICT}, no pin"
 
@@ -1087,7 +1087,7 @@ def shaped() -> list[dict]:
               edit=opening(row=row), broken=stage)
     first(f"2x3 {ROW_UNPINNED}", lowered(2, 3),
           47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(ROW_ROLE), pins=[],
-          edit=opening(row=ROW_ROLE[ROW_VERDICT][1]))
+          edit=opening(row=ROW_ROLE[ROW_VERDICT][1]), broken=ROW_ROLE[ROW_VERDICT][0])
     return out
 
 

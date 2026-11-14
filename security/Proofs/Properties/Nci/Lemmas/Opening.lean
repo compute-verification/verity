@@ -175,8 +175,9 @@ def PinnedReadNontrivial : Prop :=
 /-- **An opening's declared row is the row its reader returns**: where the check's own form accepts a record and holds
 its row `r` as an opening under a pin, and the opening declares a row (`Form.openedRow`), that row is the output row
 `out` at which the reader's Definition is a table read (`readRows`). An opening that declares no row is outside it.
-Not proved, and not true of the check today: the check refuses a declared row only where it names no output of the
-reader's template, so a record that declares the verdict's output row as its row is accepted. -/
+The check refuses a declared row unless its reader's template has six input rows and its outputs are that row and
+then the verdict (`RecordText.inputsOf`), and `readRows` names the first of exactly two outputs. Not proved: it reads
+the check's `read` through to that refusal. -/
 def OpenedRowReturned : Prop :=
   ∀ (j tr : Json) (c : NciCheck.Record.SecurityProofs.form.Case) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
     (dfn : Defn) (ro : Roles) (o out : String) (count words : ℕ),
