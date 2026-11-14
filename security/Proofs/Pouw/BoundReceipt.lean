@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.BoundReceipt.Witnesses
+public import Proofs.Pouw.BoundReceipt.Witnesses
 public import Proofs.Pouw.BoundReceipt.Audit
 public import Proofs.Pouw.BoundReceipt.Interactive
 public import Proofs.Pouw.BoundReceipt.Tile

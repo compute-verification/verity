@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.BoundReceipt.Interactive
+public import Proofs.Pouw.BoundReceipt.Interactive
 public import Proofs.Accounting.RateAudit.Witnesses
 
 /-!
