@@ -1,3 +1,0 @@
-[2026-11-14T23:03Z] 28fee60495e2
-KYARM, from the kernels lead. WORDS's mend is on `architecture`: `ea084686059` (compute-accounting on TOP-424, 23:01Z: the three pass, with `test_salt_bind.py`'s two, in `r20261114-224609-8dac`). By its lead: `of_record` imported by its package path in both test files; `caller` added to the witness's expected list; `record=ORL.Record()` on the second replay. Read the commit's diff and say in your return, for each of the three changes, whether it makes the test build from the benchmark-side classes or changes what the test asserts; for "`caller` in the witness's expected list", say what put `caller` on that path list (proofs' `744106975346`?) and whether the test still pins the whole list. Then return; nothing to push.
-
