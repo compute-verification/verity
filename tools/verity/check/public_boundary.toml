@@ -378,6 +378,22 @@ why = "the ZK server's record as its Lean code runs it, stated and proved, which
 paths = ["security/{Properties,Proofs/Properties}/Firewall.lean"]
 from = ["flock"]
 
+[[needed]]
+why = "what `security/Proofs/Flock/SpotFlock/` reads of sampled proofs and the challenger: `RunsAs/Statement.lean` the challenger's properties and `SampleInts.lean` the sampled proofs'; `RunsAs/{OwnReadsHeld,Proved,SecondUnits}.lean` the sampled proofs' proofs, which import the challenger's, `FilePart.lean` and `Pinned.lean`; `RunsAs/OfCheck.lean` the two-stage check's steps; `RunsAs/OwnReadsHeld.lean` the record's names, which import `JpWalk.lean`"
+paths = [
+    "security/Properties/Challenger.lean",
+    "security/Properties/Spot.lean",
+    "security/Proofs/Properties/Challenger.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Spot/FilePart.lean",
+    "security/Proofs/Properties/Spot/Pinned.lean",
+    "security/Proofs/Properties/Verity/SampledTwo/JpWalk.lean",
+    "security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean",
+    "security/Proofs/Properties/Verity/SampledTwo/Steps.lean",
+]
+from = ["flock"]
+via = ["lean import"]
+
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
 # matches. A Lean lock's kept text is held closer: lane text in it, or the name of what the export leaves out, refuses the
