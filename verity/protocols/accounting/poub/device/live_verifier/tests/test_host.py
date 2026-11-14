@@ -926,6 +926,8 @@ def _member(name: str, kind: bytes = tarfile.REGTYPE, link: str = "") -> tarfile
     (tar_of(HANDED, extra=((_member("/etc/x"), b"x"),)), "the hand-off's member '/etc/x' isn't a path under the serve dir"),
     (tar_of(HANDED, extra=((_member("h1/../../x"), b"x"),)), "isn't a path under the serve dir"),
     (tar_of(HANDED, extra=((_member("h1/log.jsonl"), b"{}\n"),)), "the hand-off carries h1/log.jsonl twice"),
+    (tar_of(HANDED, extra=((_member("h1"), b"x"),)), "the hand-off's member h1 can't be written under the serve dir"),
+    (tar_of(HANDED, extra=((_member("h1/log.jsonl/x"), b"x"),)), "member h1/log.jsonl/x can't be written under the serve"),
     (tar_of(HANDED, unlisted=("h1/log.jsonl",)), "the hand-off carries h1/log.jsonl, which its sums don't list"),
     (tar_of(HANDED, sums={"h1/log.jsonl": "0" * 64}), "h1/log.jsonl isn't the file the served node hashed"),
     (tar_of(HANDED, extra=((_member(H.COMPOSE_SUMS), b"0" * 64 + b"  h1/gone.json\n"),)),
@@ -954,6 +956,9 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  h1/gone.json\n")), tmp_path / "lacks")
     with pytest.raises(H.Refused, match=r"sums list the served run's witness: private/h1/key \(H1's prover state"):
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  private/h1/key\n")), tmp_path / "listed")
+    for i, outside in enumerate(("../../etc/passwd", "/etc/passwd", "h1/../../x")):
+        with pytest.raises(H.Refused, match="lacks .*, which its sums list"):
+            H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  {outside}\n")), tmp_path / f"outside{i}")
     with pytest.raises(H.Refused, match="a line that isn't sha256sum's"):
         H.receive(io.BytesIO(tar_of(HANDED, more="nonsense\n")), tmp_path / "line")
     with pytest.raises(H.Refused, match="over 10 bytes"):
@@ -1009,6 +1014,27 @@ def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp
     assert H.compose_settings(b"") == {}
     with pytest.raises(H.Refused, match="over 65536 bytes"):
         H.compose_settings(b"K=7\n" * 20000)
+
+
+def test_a_compose_answers_no_byte_a_link_in_its_out_points_at(composer, tmp_path):
+    """The answer is $OUT's own files: a link there, to a file or a directory outside it, is named and never followed,
+    so no byte of the auditor's host outside $OUT reaches the caller."""
+    (tmp_path / "secret").write_text("SECRET\n")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "key").write_text("KEY\n")
+
+    def run(env, log):
+        out = Path(env["OUT"])
+        (out / "record").mkdir(parents=True)
+        (out / "verdicts.txt").write_text("RECORD {}\n")
+        (out / "record" / "a.json").symlink_to(tmp_path / "secret")
+        (out / "dir").symlink_to(tmp_path / "secrets", target_is_directory=True)
+        return 0
+
+    rc, doc = H.compose_handoff(composer, tmp_path / "scratch", io.BytesIO(tar_of(HANDED)), pinned=PIN, on=None, run=run)
+    assert rc == 0, doc
+    assert doc["files"] == {"verdicts.txt": "RECORD {}\n"} and doc["links"] == ["dir", "record/a.json"]
+    assert "SECRET" not in json.dumps(doc) and "KEY" not in json.dumps(doc)
 
 
 def test_the_settings_rule_is_the_compose_scripts():

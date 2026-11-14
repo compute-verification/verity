@@ -932,11 +932,13 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
     """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
     the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
     served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
-    past `cap` in all, or it is `COMPOSE_ENV` and not settings `compose_settings` reads; and after, when a file the sums
-    list is missing, one isn't listed, or one isn't its listed sum."""
+    past `cap` in all, or it is `COMPOSE_ENV` and not settings `compose_settings` reads, or its path is another member's
+    file or directory; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum,
+    so a path the sums name is only ever one of the members it wrote."""
     d.mkdir(mode=0o700, parents=True)
     got: dict[str, str] = {}
     total = 0
+    name = "(none yet)"
     try:
         with tarfile.open(fileobj=src, mode="r|") as t:
             for m in t:
@@ -967,6 +969,9 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 got[name] = h.hexdigest()
     except tarfile.TarError as e:
         raise Refused(f"the hand-off isn't a tar: {e}") from None
+    except OSError as e:
+        raise Refused(f"the hand-off's member {name} can't be written under the serve dir ({e.strerror}): its path is "
+                      "another member's, or the disk refused it") from None
     if COMPOSE_SUMS not in got:
         raise Refused(f"the hand-off has no {COMPOSE_SUMS}, the sums the served node wrote")
     listed: dict[str, str] = {}
@@ -1024,18 +1029,29 @@ def run_compose(env: dict[str, str], log: Path, minutes: int = COMPOSE_MINUTES, 
 
 
 def answered(out: Path, cap: int = COMPOSE_ANSWER_BYTES) -> dict[str, Any]:
-    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size."""
+    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size.
+    A link is named and never followed, so the answer carries no byte from outside $OUT."""
     files: dict[str, str] = {}
     over: dict[str, int] = {}
+    links: list[str] = []
     used = 0
-    for f in sorted(p for p in out.rglob("*") if p.is_file()) if out.is_dir() else []:
-        rel, n = str(f.relative_to(out)), f.stat().st_size
-        if used + n > cap:
-            over[rel] = n
+    walked = [Path(r) / n for r, ds, fs in os.walk(out) for n in [*ds, *fs]] if not out.is_symlink() else []
+    for f in sorted(walked):
+        rel = str(f.relative_to(out))
+        if f.is_symlink():
+            links.append(rel)
             continue
-        files[rel] = f.read_text(errors="replace")
+        if not f.is_file():
+            continue
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as fin:
+            n = os.fstat(fd).st_size
+            if used + n > cap:
+                over[rel] = n
+                continue
+            files[rel] = fin.read().decode(errors="replace")
         used += n
-    return {"files": files, **({"not_sent": over} if over else {})}
+    return {"files": files, **({"not_sent": over} if over else {}), **({"links": links} if links else {})}
 
 
 def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on: str | None,
