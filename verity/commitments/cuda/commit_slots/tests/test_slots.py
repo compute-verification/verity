@@ -25,7 +25,7 @@ KEY = bytes(range(100, 132))
 #: ``commitments.layout``'s ``json_digest`` of it, and a step root over it, from the loader slots had before
 #: ``commitments.layout``
 LAYOUTS = "verity/commitments/tests/fixtures/layouts"
-FAMILIES = Path(__file__).resolve().parents[4] / LAYOUTS / "families-shared-1024b.layout.json"
+FAMILIES = Path(__file__).resolve().parents[5] / LAYOUTS / "families-shared-1024b.layout.json"
 FAMILIES_SHA256 = "15fd14be19dea4d4d70b18771d0e185881894c3d5e480db35a9dbe4eb5141cd8"
 FAMILIES_DIGEST = ("eb7937f19e2e8e3a0daf9f7b85f33d837b267a079cd0c5c60d3581e8c2b1675b"
                    "095d54fd36f2e8434c67734213533c0aba0e40d9f2601cc4307ca9474e403a03")

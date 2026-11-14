@@ -4,7 +4,7 @@ The call that commits a serving step's proof-block outputs: every proof block's 
 under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled proof block opens by
 replaying its own request. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf, the three
 trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on its host twin)
-on the SHA-512 engine (`benchmarks/torch_gpu/sha512_rows/`).
+on the SHA-512 engine (`verity/commitments/cuda/sha512_rows/`).
 `verity/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
 
 ## The call
@@ -62,11 +62,12 @@ blocks.
 
 - `slots.py`: the reference, the layouts, `load()`, and `python slots.py fixture` (writes the fixture).
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`).
-- `check.py`: the GPU's roots against the reference's. `bench.py`: the call's throughput at the H200 example's layout,
-  alone and beside the layer's int8 GEMMs. `step.py`: one streamed step at a layout file, timed by phase (`time`), and a
-  layout's compressions a row-slot on the host twin (`count`).
-  `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root; its header has the
-  options).
+
+What measures it is in `benchmarks/torch_gpu/commit_slots/`: `check.py`, the GPU's roots against the reference's;
+`bench.py`, the call's throughput at the H200 example's layout, alone and beside the layer's int8 GEMMs; `step.py`, one
+streamed step at a layout file, timed by phase (`time`), and a layout's compressions a row-slot on the host twin
+(`count`); and `gpu.sh`, these with the tests under one GPU lease (`OUT=DIR bash benchmarks/torch_gpu/commit_slots/gpu.sh`
+from the tree's root; its header has the options).
 
 ## Tests
 
