@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Accounting.RateAudit.Honest
-public import Proofs.Accounting.RateAudit.Interactive
-public import Proofs.Accounting.RateAudit.Partial
+public import Proofs.Poub.RateAudit.Honest
+public import Proofs.Poub.RateAudit.Interactive
+public import Proofs.Poub.RateAudit.Partial
 public import Proofs.Pous.Prob
 
 /-!

@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Accounting.RateAudit.SketchWitnesses
-public import Proofs.Accounting.RateAudit.Witnesses
+public import Proofs.Poub.RateAudit.SketchWitnesses
+public import Proofs.Poub.RateAudit.Witnesses
 public import Proofs.Poub.RateAudit.Audit
 public import Proofs.Poub.RateAudit.Chain
 public import Proofs.Poub.RateAudit.Conservation

@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Accounting.RateAudit.SketchHonest
-public import Proofs.Accounting.RateAudit.SketchInteractive
-public import Proofs.Accounting.RateAudit.Witnesses
+public import Proofs.Poub.RateAudit.SketchHonest
+public import Proofs.Poub.RateAudit.SketchInteractive
+public import Proofs.Poub.RateAudit.Witnesses
 
 /-!
 # The sketch rate audit's guarantees: each one's honest and nontrivial lemmas

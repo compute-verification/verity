@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.BoundReceipt.Interactive
-public import Proofs.Accounting.RateAudit.Witnesses
+public import Proofs.Poub.RateAudit.Witnesses
 
 /-!
 # The bound-receipt link relay's guarantees: each one's honest and nontrivial lemmas

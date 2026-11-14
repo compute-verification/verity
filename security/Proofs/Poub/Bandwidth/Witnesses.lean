@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Accounting.Bandwidth.Honest
-public import Proofs.Accounting.RateAudit.Witnesses
+public import Proofs.Poub.Bandwidth.Honest
+public import Proofs.Poub.RateAudit.Witnesses
 
 /-!
 # PoUB's per-pass lemma: its honest and nontrivial lemmas
