@@ -50,7 +50,7 @@ each registration hold fewer than `Fmax` proof blocks in total, and every execut
 relation at its own incorrect set. That is the event whose secrets `PooledLeakAccepted` counts, with the incorrect
 proof blocks paid for once over the monitoring period, so `K` is the bits of that count: the pooled reading of the
 monitoring period, where the realization beside this one is the reading per phase. The run carries the deployed
-network certifier in `PooledLeakAccepted`'s form, and its trust, `trusted-host` (`Verity.Assumptions.TrustedHost`), is
+network certifier in `PooledLeakAccepted`'s form, and its trust, `trusted-host` (`Verity.Assumptions.TrustedDevice`), is
 a field.
 
 The period's operator (`op`) is `PooledLeakAccepted`'s: fixed before the period, a function of the observations
@@ -162,7 +162,7 @@ structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L Kₒ S))
   /-- the network certifier runs its code (`recordingCode`) on its host: `trusted-host`, the trust the network audit
   rests on. `PooledLeakAccepted` takes it, and its record is what the leak relation (`hleak`) is about. -/
-  trusted : Verity.Assumptions.TrustedHost device run fun p => recordingCode fmt p.1 (arr p.2)
+  trusted : Verity.Assumptions.TrustedDevice device run fun p => recordingCode fmt p.1 (arr p.2)
   /-- the network certifier's schedule at the coins -/
   sched : ((i : I) → Ω i) → CertifierSchedule Conn
   /-- the server's state at the coins -/

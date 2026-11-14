@@ -665,8 +665,8 @@ def test_vendor_kernel_and_isa_names_are_other_senses_and_pearl_s_cap_in_their_s
             ["CAP", "capOK", "cap check"]),
     }
     for sense, (theirs, pearls, pearl) in cases.items():
-        assert said(theirs, "benchmarks/pouw/harness/native/lt.cu") == [], sense
-        assert said(f"{theirs}\n{pearls}\n", "benchmarks/pouw/harness/native/lt.cu") == [(2, o) for o in pearl], sense
+        assert said(theirs, "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [], sense
+        assert said(f"{theirs}\n{pearls}\n", "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [(2, o) for o in pearl], sense
 
 
 def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spellings_there_are_not() -> None:

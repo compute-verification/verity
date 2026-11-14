@@ -113,8 +113,8 @@ their bindings:
 
     verity run demos/onsite_served/config.toml --on prover-node --bindings BINDINGS --state STATE
 
-The gate's and the auditor host's sides are started by their gates when the prover's pieces open them, so
-`verity run --on gate-host` starts nothing. On the auditor host, with `STATE/out` holding the served window's public
+The gate's and the auditor device's sides are started by their gates when the prover's pieces open them, so
+`verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the served window's public
 record, the onsite check and the period's verdict:
 
     verity run demos/onsite_served/config.toml --on auditor-host --state STATE

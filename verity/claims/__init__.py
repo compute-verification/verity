@@ -217,7 +217,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedHost` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedDevice` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
     Entry("trusted-host", "assumption",
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
@@ -282,7 +282,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
-    # session per audit cites trusted-host.
+    # session per audit cites trusted-device.
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
           "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "

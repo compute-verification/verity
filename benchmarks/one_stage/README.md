@@ -306,7 +306,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's utilization (the work its step trace's
   steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
   credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at
-  the tensor and boost clock readings.
+  each reading of the tensor's clock the card states (`verity.device.readings`: the tensor clock's and the SM clock's).
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s

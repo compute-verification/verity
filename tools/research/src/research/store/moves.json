@@ -2464,6 +2464,59 @@
         "verity/protocols/accounting/certifier/verifier/device_needs.py": "verity/protocols/accounting/certifier/device/device_needs.py",
         "verity/protocols/accounting/certifier/verifier/device_party.py": "verity/protocols/accounting/certifier/device/device_party.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier/Guarantees/Period.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/Period.lean": "security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/PeriodChecked.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/PeriodConditions.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodConditions.lean",
+        "security/Proofs/NetworkCertifier/Period.lean": "security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Proofs/NetworkCertifier/PeriodCheckedChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
+        "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
+        "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/h1c.cu": "verity/protocols/experimental/dither/prover/kernels/h1c.cu",
+        "benchmarks/hash/dither/h1f.cu": "verity/protocols/experimental/dither/prover/kernels/h1f.cu",
+        "benchmarks/hash/dither/h1o.cu": "verity/protocols/experimental/dither/prover/kernels/h1o.cu",
+        "benchmarks/hash/dither/h1r.cu": "verity/protocols/experimental/dither/prover/kernels/h1r.cu",
+        "benchmarks/hash/dither/h1u.cu": "verity/protocols/experimental/dither/prover/kernels/h1u.cu",
+        "benchmarks/hash/dither/h1sha.cuh": "verity/protocols/experimental/dither/prover/kernels/h1sha.cuh",
+        "benchmarks/hash/dither/tests/test_h1u_domain.py": "verity/protocols/experimental/dither/tests/test_h1u_domain.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/dashboard/": "infra/dashboard/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/native/": "verity/protocols/accounting/pouw/prover/kernels/harness/native/",
+        "benchmarks/pouw/nvfp4_sm120/": "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+      }
     }
   ]
 }

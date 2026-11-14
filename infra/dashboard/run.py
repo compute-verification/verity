@@ -3,7 +3,7 @@ measured as `console/top-goals-running` against the count of top goals as its ta
 the dashboard lists under it, and it runs when its newest value has a target, is younger than its `every` and carries a
 mark. Higher is better; the dashboard holds to its goal when every top goal's number runs.
 
-    research run --on vy-nebius-cpu-9 --project verity --source . --cwd source -- uv run python benchmarks/dashboard/run.py
+    research run --on vy-nebius-cpu-9 --project verity --source . --cwd source -- uv run python infra/dashboard/run.py
 
 It reads the dashboard's own data (`research metrics show --json`, in the checkout it runs in, with the site key of the
 machine it runs on) and writes under `--out` (`out/` outside a research run). The validation's detail names each goal
@@ -63,7 +63,7 @@ def main() -> None:
     ok, total, misses = running(report)
     w = kit.writer(out)
     w.measurement("console/top-goals-running", ok, "goals", target=total, mark="measured")
-    w.validation("passed", "benchmarks/dashboard/run.py",
+    w.validation("passed", "infra/dashboard/run.py",
                  f"{ok} of {total} top goals' numbers run" + "".join(f"; {g}: {why}" for g, why in misses))
 
 

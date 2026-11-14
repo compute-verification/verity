@@ -10,7 +10,7 @@ rank's `chunk-leaf-v1` step stream, frame-v3-sha512 trees, 64-byte roots), and (
 i.e. per-rank run roots combined deterministically, rank-tagged, in rank order — the option "per-rank roots combined into the run
 root" of the charter.  ``--commit-scheme`` takes rows-sha512 alone (`rows_only`); vllm-v1's 32-byte ``verity/tp-run-root/v1``
 roots are only reread from recorded runs.  Every rank's root is fixed (finalize on every rank returns) BEFORE the pair's coins
-are flipped (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host's challenger opens them after the TP run root;
+are flipped (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor device's challenger opens them after the TP run root;
 without it they are this process's own, a measurement); the challenge of rank r is `challenge_positions(tp_run_root,
 leaves_per_step_r, k, salt=pair/rank r)` from the pair's positions coin, and its population openings come from the identities coin,
 so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
