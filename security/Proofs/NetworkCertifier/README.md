@@ -281,17 +281,15 @@ last two by `pooledIncorrectBlocks` and `pooledLeak`). All 17 are under `shape.f
 possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and no Lean states that an accepted run of the check is
 a run the first 6 count. Two are the
-theorems whose bounds the calibration reports (`verity.protocols.accounting.certifier.verifier.calibration`, `PROTOCOL.md`'s
-"Capacity"):
+ingress theorems (`PROTOCOL.md`'s "Capacity"):
 
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerExecutionPhase`.
 
-The calibration's egress bits per window (`clock_sync.bits_per_window`, held by `test_network_certifier_calibration.py`)
-are the check's bound over its first `m` windows, not one of these, and no Lean states it: the check is the reference
-Program as one execution block of its `W` windows, where the per-block forms give only the `W`-window total, so the
-finer count comes from the program's hand ticks, which a window's sync moves only at or after the window's start
-(`test_network_certifier_capacity.py`). A window's bits given the run before it need not be bounded so for the check:
+The check's egress bits per window, `log2 #Σ_sync`, are its bound over its first `m` windows, not one of these, and
+no Lean states it: the check is the reference Program as one execution block of its `W` windows, where the per-block
+forms give only the `W`-window total, so the finer count comes from the program's hand ticks, which a window's sync
+moves only at or after the window's start. A window's bits given the run before it need not be bounded so for the check:
 the queue and the hand ticks carry across windows.
 
 The other 15 are the rest of the Capacity table's bounds:
@@ -511,5 +509,4 @@ The constant-rate Program adds these:
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
 17. **In-set advice.** The check's advice ranges over the values of Σ_sync: a run whose declared sync is outside the
     set is an `advice` violation and rejected, so its advice is never counted. That an earlier window's grid doesn't
-    depend on a later window's sync, in the set or not, has no Lean statement (`test_network_certifier_capacity.py`
-    holds it); the rest of a window's verdict reads only that window's records and syncs.
+    depend on a later window's sync, in the set or not, has no Lean statement; the rest of a window's verdict reads only that window's records and syncs.

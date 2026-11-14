@@ -56,15 +56,14 @@ Open premises (`open`):
 
 ## Interface
 
-- **Python**: `verity.protocols.accounting.certifier.verifier`. Code outside this directory imports every module but `boundary`,
-  `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
+- **Python**: `verity.protocols.accounting.certifier.verifier`. Code outside this directory imports every module but `boundary`
+  and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
   `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `demos/onsite_served`; the tests of
   `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`,
   `prove_path`, `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network
   check's tests (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and
   `../../../proofs/recursion` import none.
-- **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
@@ -182,7 +181,7 @@ A spec-level reference for network accounting's timing channel:
 - the lengths row's proof block (`verity.protocols.accounting.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
   execution phase and slot stride (`PROTOCOL.md`, "The lengths row's proof block");
 - the response tie's two proof blocks (`response_tie`, beside it), in no Spec;
-- the calibration of honest runs;
+- the honest prover's clock syncs in hindsight (`calibration.choose_syncs`);
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
   canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
@@ -449,12 +448,6 @@ records = run_shaper(frames, ready=[4] * 5, syncs=syncs, certifier=Certifier("re
 audit = Audit()
 audit.check_link("responses", records, frames, syncs, sync_set, params)
 assert audit.accepted
-~~~
-
-Calibration, from a JSON trace of honest runs:
-
-~~~text
-uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
 ## Zero knowledge: what N2's verdict reads, and what's open

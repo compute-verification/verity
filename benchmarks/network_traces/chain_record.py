@@ -981,7 +981,7 @@ def main(argv=None) -> int:
     c = sub.add_parser("custody", help="each gate run's files against its end.json")
     c.add_argument("--gates", required=True, type=Path)
     c.add_argument("--out", required=True, type=Path)
-    v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
+    v = sub.add_parser("certs", help="the client's kept certificates, verified")
     v.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
                    help="the network certifier path: an active network certifier's run (warden_chain)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
