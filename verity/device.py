@@ -48,10 +48,9 @@ record, a `measurement`). Every number in a card file is an entry `{value, unit,
 measured value, so only a lower bound on the ceiling), `premise` (no page and no run bounds the number; it is assumed
 under the premise its source states, of whom it names. A row that uses it prints the premise for its device's host, and
 no figure of record uses it) or `placeholder` (none of these: open). `source` names a data sheet, a document or an
-`art:` id (a run's record), and a node by its kind, never its host name. The Lean card tables
-(`security/Definitions/Core/Accel`) are held to the GPU cards that name one (`lean`), number by number
-(`verity/hardware/tests/test_lean.py`). `rate` is the one calculator of a GPU's peak rates, Lean's `card.ρ`: a reader
-that needs the tensor peak at some clock calls it rather than multiplying the card's numbers itself.
+`art:` id (a run's record), and a node by its kind, never its host name. `rate` is the one calculator of a GPU's peak
+rates, Lean's `card.ρ`: a reader that needs the tensor peak at some clock calls it rather than multiplying the card's
+numbers itself.
 
 ~~~python
 from verity.device import load_card, number, rate, skus
@@ -993,8 +992,7 @@ def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: f
     """Lean's ``card.ρ resource``: the units a second of ``resource`` on the whole GPU, ``sm.count × rate.<resource> ×``
     its clock in Hz (for the tensor ``clock.tensor`` where the card has one and ``clock.sm`` where it doesn't, for the
     rest ``clock.sm``, unless ``mhz`` names the clock), and for device memory (``dram``) ``memory.bandwidth`` in 32-bit
-    words. With ``fmt``, the tensor rate in MACs of that operand format (tensor units over ``weight.<fmt>``).
-    ``verity/hardware/tests/test_lean.py`` holds it to every Lean table's arms."""
+    words. With ``fmt``, the tensor rate in MACs of that operand format (tensor units over ``weight.<fmt>``)."""
     if card["kind"] != "gpu":
         raise ValueError(f"{card['sku']} is a {card['kind']} card; rate is a GPU's")
     if resource == "dram":
