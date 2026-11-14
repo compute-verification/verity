@@ -46,7 +46,6 @@ import sys
 import tarfile
 import tempfile
 from collections import Counter
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -108,13 +107,6 @@ def load(p: Path) -> Any:
 
 def hexed(j: Any) -> str:
     return D.canonical(j).encode().hex()
-
-
-def ratio_of(x: Any, want: str) -> str:
-    """A recorded profile's δ as `Core.Integrity`'s ratio string: the window's own when the float is it."""
-    if isinstance(x, str):
-        return x
-    return want if float(Fraction(want)) == x else str(Fraction(x).limit_denominator(10**9))
 
 
 def answer_of(outcome_dir: Path, delta: str) -> dict:
