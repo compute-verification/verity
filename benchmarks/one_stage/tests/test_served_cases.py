@@ -1066,9 +1066,9 @@ def handed_serve(root: Path, w: dict | None, first: dict | None = FIRST) -> tupl
     """A copy of a compose hand-off of a serve tied to Pearl+, as far as the cases read it: V3c's audit of the window's
     record R with R beside its case, the serve's first registration record and the window's W where the hand-off lists
     them (`SC.DEPLOYMENT`, `SC.RECORDS`), and nothing else: no H1 log and no part of Pearl+'s case. R is chained right
-    after `h1_registration`'s W over ``first``; ``w`` is what the W file holds (None: no such file). The dir and v1's
+    after `h1_docket`'s W over ``first``; ``w`` is what the W file holds (None: no such file). The dir and v1's
     case."""
-    v1 = tied_v1_case(h1_registration(R.digest(first) if first is not None else None))
+    v1 = tied_v1_case(h1_docket(R.digest(first) if first is not None else None))
     audit = audit_dir(root / "v3c-w0-4-27-2", v1)
     (audit / "window" / "registration.json").write_text(bytes.fromhex(v1["commitment"]).decode())
     if first is not None:
@@ -1085,7 +1085,7 @@ def test_a_copy_of_the_compose_hand_off_alone_writes_the_policys_case_with_the_w
     the W the hand-off lists, each taken by the digest the next names, and its commitment v1's own, the record R. A
     hand-off whose W file holds another W than R names, or none, refuses the policy's case alone, before its check
     runs."""
-    w = h1_registration(R.digest(FIRST))
+    w = h1_docket(R.digest(FIRST))
     serve, v1 = handed_serve(tmp_path / "serve", w)
     assert sorted(p.name for p in serve.iterdir()) == ["deployment-registration.json", "pearlplus", "v3c-w0-4-27-2"]
     private = tmp_path / "private"
@@ -1096,7 +1096,7 @@ def test_a_copy_of_the_compose_hand_off_alone_writes_the_policys_case_with_the_w
     case = json.loads((private / "inference-only" / "case.json").read_text())
     assert case["params"]["log"] == [FIRST, w] and case["commitment"] == v1["commitment"]
     assert json.loads((tmp_path / "reg.seen").read_text())["commitment"] == v1["commitment"]
-    for name, held in (("other-w", h1_registration(R.digest(FIRST), entry=5)), ("no-w", None)):
+    for name, held in (("other-w", h1_docket(R.digest(FIRST), entry=5)), ("no-w", None)):
         (tmp_path / "reg.seen").unlink(missing_ok=True)
         serve, v1 = handed_serve(tmp_path / name, held)
         rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"private-{name}",
@@ -1117,13 +1117,13 @@ def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and
     def after(x: dict) -> dict:
         return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
 
-    w0 = h1_registration(R.digest(FIRST))
+    w0 = h1_docket(R.digest(FIRST))
     r0 = after(w0)
-    w1 = h1_registration(R.digest(r0), entry=1)
+    w1 = h1_docket(R.digest(r0), entry=1)
     r1 = after(w1)
     files = {SC.DEPLOYMENT: FIRST, "pearlplus/w0/registration.json": w0, "pearlplus/w1/registration.json": w1,
              "v3c-w0-4-27-2/audit/window/registration.json": r0, "v3c-w1-4-27-2/audit/window/registration.json": r1,
-             "pearlplus/w9/registration.json": h1_registration(entry=9)}
+             "pearlplus/w9/registration.json": h1_docket(entry=9)}
 
     def serve(name: str, *without) -> Path:
         for f, rec in files.items():
@@ -1150,7 +1150,7 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
     """An empty or a truncated file under `SC.RECORDS` beside a whole log is skipped, as a record nobody names is, so the
     walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
     docket (`SC.DEPLOYMENT`) truncated is still refused."""
-    w0 = h1_registration(R.digest(FIRST))
+    w0 = h1_docket(R.digest(FIRST))
     r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
     files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
              Path("pearlplus/w9/registration.json"): "",
@@ -1186,12 +1186,12 @@ def test_the_lean_check_refuses_a_log_whose_w_is_not_the_record_r_names(tmp_path
     after the same first record, alone or after it, or the right W without the first record before it, it rejects
     ``trusted``: whoever hands the log over, the check holds each record's ``previous`` to the digest of the one before
     it, R's included, and the first's to null."""
-    w = h1_registration(R.digest(FIRST))
+    w = h1_docket(R.digest(FIRST))
     v1 = tied_v1_case(w)
     case = SC.inference_only_case(v1, *SC.UNBOUNDED, [FIRST, w])
     got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
     assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), "accept"), got
-    other = h1_registration(R.digest(FIRST), entry=5)
+    other = h1_docket(R.digest(FIRST), entry=5)
     for log in ([FIRST, other], [other], [w]):
         case["params"]["log"] = log
         got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
