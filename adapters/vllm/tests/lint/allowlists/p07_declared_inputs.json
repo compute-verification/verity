@@ -17,8 +17,6 @@
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "environ", "symbol": "_probe_pins", "detail": "PY"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_is_fake", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_reset_tuned_table_cache", "detail": "except Exception"},

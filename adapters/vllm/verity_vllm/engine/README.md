@@ -20,20 +20,24 @@ what it holds.
   admission (`class_admission`), the collectives' sites and the fused norm as one collective
   (`collectives.collective_sites`, `collectives.fused_norm`), the static serving schedule (`static_schedule`), the
   two checkpoint makers' commands (`fp8_checkpoint`, `int8_checkpoint`), a workload's load and its requests' run
-  through a built engine, at once or at declared steps (`vllm_adapter`, `arrivals`), the generated kernels'
-  identity (`kernel_identity`), a checkpoint's modules on the meta device and a serving rank's (`meta_inventory`),
+  through a built engine, at once or at declared steps (`vllm_adapter`, `arrivals`), a checkpoint's modules on
+  the meta device and a serving rank's (`meta_inventory`),
   the one wrap of the model runner's step and the parts that run around it (`runner_step`), and the facts of
   models, cards and transports (`profiles.cases`, `profiles.coverage_roles`, `profiles.dense_generic`,
   `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
-  `profiles.admission_calibration`). Each of these but `env` lists in `__all__` the names that other packages,
-  the benchmarks and the command line read from it. `env` and one more module that other packages read,
-  `profiles.layer_classes`, state no `__all__` yet; and `observe.fold.profiles.generic` reads one private name
-  that no `__all__` lists, `profiles.dense_generic._sha256`.
+  `profiles.admission_calibration`), with the names of vLLM's layer classes (`profiles.layer_classes`). Each of
+  these but the last lists in `__all__` the names that other packages, the benchmarks and the command line read
+  from it. `profiles.layer_classes` states none: the list would hold `GEMMA_RMS_NORM` as a string, which the
+  by-name lint reads as a model's name. Two files read past a list: `observe.fold.profiles.generic` reads the
+  private `profiles.dense_generic._sha256`, and the adapter's `tools/wgbench/wgbench.py`, which times the int8
+  kernels by name, reads `int8_wgmma`, which states no `__all__`, and names of `int8_fused` that its `__all__`
+  does not list.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
-  and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
-  (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`
-  and a dozen more directories).
+  and `commit` packages, its `llm` and `glue`; three of the adapter's `tools`; and the benchmarks that build,
+  serve or time the engine (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`,
+  `benchmarks/vllm_encoded` and a dozen more directories).
 - **Loads:** vLLM, torch, triton, numpy and, in `meta_inventory`, `huggingface_hub`; the integration's `config`,
-  `settings`, `errors`, `log`, `target_family`, `records.logits_capture`, `program.frontend` (the target profile,
-  the kernel read-back, the export's compatibility) and, in `vllm_adapter`, `program.prefix_plan` and `commit`;
+  `settings`, `errors`, `log`, `target_family`, `records.schema_ids`, `records.logits_capture`, `program.frontend`
+  (the target profile, the kernel read-back and, in `meta_inventory`, the model on the meta device and the
+  export's compatibility and tensor-parallel ops) and, in `vllm_adapter`, `program.prefix_plan` and `commit`;
   `verity.definitions.registry`, `verity.commitments`, `verity.circuits.codec` and `verity_config`.
