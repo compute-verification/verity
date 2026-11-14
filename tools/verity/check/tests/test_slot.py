@@ -1349,6 +1349,26 @@ def test_memory_gb_counts_a_cgroups_page_cache_as_left(tmp_path):
     assert SLOT.memory_gb(tmp_path) == 626
 
 
+def test_slice_gib_is_the_least_cgroup_limit_over_this_process_whatever_is_used(tmp_path):
+    """cpu-8's cgroups on 14 Nov: a login's session scope at 80% of the machine (memory.max 432637382656, 402.9 GiB) under the
+    user slice's 93% (502940958720, 468.4 GiB) and an unlimited user.slice: 402, however much is in use; without the scope's
+    limit, the slice's 468; no limit, or no cgroup file, is None."""
+    (tmp_path / "proc/self").mkdir(parents=True)
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/session-1.scope\n")
+    cg = tmp_path / "sys/fs/cgroup"
+    (cg / "user.slice/user-1001.slice/session-1.scope").mkdir(parents=True)
+    (cg / "user.slice/memory.max").write_text("max\n")
+    (cg / "user.slice/user-1001.slice/memory.max").write_text("502940958720\n")
+    (cg / "user.slice/user-1001.slice/memory.current").write_text(f"{460 << 30}\n")
+    assert SLOT.slice_gib(tmp_path) == 468
+    (cg / "user.slice/user-1001.slice/session-1.scope/memory.max").write_text("432637382656\n")
+    assert SLOT.slice_gib(tmp_path) == 402
+    for d in ("user.slice/user-1001.slice/session-1.scope", "user.slice/user-1001.slice"):
+        (cg / d / "memory.max").write_text("max\n")
+    assert SLOT.slice_gib(tmp_path) is None
+    assert SLOT.slice_gib(tmp_path / "absent") is None
+
+
 def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, monkeypatch, capsys):
     """Checks that start regardless of memory are OOM-killed together under the user slice; a check whose peak doesn't fit
     waits in line instead of starting and being killed with the others."""
