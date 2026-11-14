@@ -53,7 +53,7 @@ MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("benchmarks/census")
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
-GATES = Path("benchmarks/rho/data/hardware.toml")
+GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
