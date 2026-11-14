@@ -143,6 +143,7 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
@@ -1007,16 +1008,18 @@ class Challenger:
         return out["how"]
 
     def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
-        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
-        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
+        """One-stage's R1-R6 against the challenger's own copies, then where they pass the caller's check
+        (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
+        runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
-        codes = self._of_record(name, self.record.registration,
-                                OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
-                                dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
-                                                          None, None))
+        params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])
+        args = (rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
+        codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
+        if not codes:
+            codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]

@@ -25,14 +25,14 @@ form's check comes in: the acceptance is the form's (`FormAccepts C`), the check
 it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), and the locator is the run's
 (`joinLocate`: the stages' families' fresh coins on rounds `0` to `stage`, the sessions' openings on theirs).
 
-**One premise at the form's accept.** `joinedOfLaw` takes `JoinsAt`, a structure whose fields are the pieces'
+**One premise at the form's accept.** `joinedOfDistribution` takes `JoinsAt`, a structure whose fields are the pieces'
 remaining premises, each in its owner's words, and the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of the
-period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfLaw` at
+period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfDistribution` at
 COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
 accepted play is one term of that structure. The sampling design is a hypothesis here only so that this module does not import
 its proof (`CoinMapAgree.lean`).
 
-**What `joinedOfLaw` discharges** from the fields:
+**What `joinedOfDistribution` discharges** from the fields:
 
 * the cut at the deployed two-session history, where the device's ledger orders the two sessions
   (`Sessions.cutOrder_dev₂`), with the composite's wiring in the cut's words (`Wired`, from `wiring` and `caseIsSent`:
@@ -54,7 +54,7 @@ log the check read. At the kept case they speak of the accepted plays `JoinGood`
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageSamples` is asked only of those
 plays. There each stage's one root is CUT's (`oneRoot_samples`, `oneRoot_second`, at `otherRoots`), so `StageSamples`
   takes the families alone (`stageSamples_first`, `stageSamples_second`, `DrawRoots.lean`). What the pieces conclude comes
-back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So `joinedOfLaw` takes no
+back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So `joinedOfDistribution` takes no
 `CutReads` and no coins' premise for either stage.
 
 **What the stages read is the form's accept's**, with `caseIsSent`, and no field. The check's first session is the
@@ -94,7 +94,7 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 * **Round 2's check is the one the join reads** (`sampledNone`): no accepted play's run has a statement of only its
   part's sampled proof blocks, so the run's `SecondStage.checkAny` is `SecondStage.check` (`checkAny_eq_check`). The
-  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfLaw` makes of it.
+  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfDistribution` makes of it.
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
 play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
@@ -312,7 +312,7 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
 at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from the coin
 map's distribution (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
 plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such collision. -/
-theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
+theorem joinedOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
     (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)

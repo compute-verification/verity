@@ -10,12 +10,13 @@ on the SHA-512 engine (`verity/commitments/cuda/sha512_rows/`).
 ## The call
 
 ```python
-import slots as S, slots_gpu as G
+from verity.commitments.cuda.commit_slots import slots as S, slots_gpu as G
 
 # reference (CPU): outputs[i][j] is group i's tensor j, (slots, ...) with each slot's bytes contiguous
 S.commit(context, layout, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
-# GPU, the same signature with a plan in place of (context, layout)
+# GPU, the same signature with a plan in place of (context, layout); on a CUDA device, a Plan subclass whose ENGINE's
+# runtime() is torch (verity imports none; the benchmarks' benchmarks/torch_gpu/commit_slots/torch_plan.Plan)
 plan = G.Plan(context, layout, "cuda", build=DIR)  # once a run; temp_bytes= bounds a step's temporaries
 plan = G.Plan(context, layout, "cuda", sms=32, build=DIR)  # the side stream on a green context of 32 SMs (same bytes)
 G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)

@@ -48,7 +48,7 @@ def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
     assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {
         "rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "registrations", "prestop",
-        "prestop-registrations", "budget-1", "budget-2"}
+        "prestop-registrations", "budget-1", "budget-2", "known"}
     return v["cases"]
 
 

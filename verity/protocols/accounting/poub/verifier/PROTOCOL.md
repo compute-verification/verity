@@ -1029,9 +1029,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
   the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
   computing for the node sends its result over a counted link. Memory held follows from the bits read under the
-  device model (`heldAt_of_read`). `auditor_line.py --boundary`, off by default, refuses a session's credit when the
-  certifiers' records of the boundary links over its span show other ingress; without it the line of record says it
-  is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
+  device model (`heldAt_of_read`). The line of record says it is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
   `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
   file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
   session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
