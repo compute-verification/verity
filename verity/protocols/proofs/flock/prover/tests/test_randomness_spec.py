@@ -23,7 +23,8 @@ def _key(v):
 
 def test_the_lean_spec_reproduces_the_pinned_vectors():
     """The spec, run on `verity/commitments/randomness/tests/vectors.json`'s inputs, returns every frame, key, stream, shard
-    key, uniform value, Bernoulli bit and subset the file pins."""
+    key, uniform value, Bernoulli bit and subset the file pins, and every wide key and its stream (`deriveWide`,
+    `streamWide`)."""
     assert FIXTURE["kat"] == json.loads((ROOT / "verity/commitments/randomness/tests/vectors.json").read_text())
 
 
