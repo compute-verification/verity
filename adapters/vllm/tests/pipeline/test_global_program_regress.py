@@ -400,7 +400,7 @@ def test_chronology_follows_arrivals_not_manifest_order_and_programs_every_step_
     assert len(seen) == len(set(seen)) == sum(r.cap for r in wl.requests)
     for r in wl.requests:
         assert sorted(s for rid, s in seen if rid == r.request_id) == list(range(r.cap))
-    # every member names its component segment (the step's instance set) and a global gate range inside the request's interval
+    # every member names its component segment (the step's input set) and a global gate range inside the request's interval
     am = {r["request_id"]: r for r in wl.address_map()["requests"]}
     for e in ch["engine_steps"]:
         for m in e["members"]:
