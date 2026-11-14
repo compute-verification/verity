@@ -373,9 +373,14 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
 # Put before a script: records each open and each other call that names a path (with whether it is relative to a directory's
 # descriptor), and each id call a root process makes, stood in for so the script runs as any user.
 SPY = r"""
-import builtins, json, os
+import builtins, json, os, sys
 _log = os.open(os.environ["SPY_LOG"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
 def _say(*what):
+    f = sys._getframe(1)
+    while f is not None:
+        if f.f_code.co_filename.endswith("verity_suite_reads.py"):
+            return                                          # the suite's read tracer resolving a name, not the script
+        f = f.f_back
     os.write(_log, (json.dumps([os.getpid(), *what]) + "\n").encode())
 _os_open, _open = os.open, builtins.open
 def _spy_os_open(path, flags, mode=0o777, *, dir_fd=None):
