@@ -6,7 +6,7 @@ public import Proofs.Flock.Bridge.ScopeGate
 public import Proofs.Flock.Bridge.V5.Accepted
 
 /-!
-# Sampled proofs' acceptance is in the event V5 bounds
+# SPOT's acceptance is in the event V5 bounds
 
 `SampledKSLiveV5` bounds an event of the live audit, that `verify --zk` accepts the files and the transcript
 (`Flock.Bridge.LiveAcceptsKSP`). The verifier is one-stage v2 (`Spot.OneStageZk.checkBlobs`), which runs
