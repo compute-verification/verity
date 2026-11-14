@@ -44,7 +44,10 @@ theorem file_checks :
     Flock.HmOut.loadPublic (ZkExec.zkTags inputs) D.unroll inputs.publicFile = .ok pubO ∧
     pubO.n = 32 ∧
     Layout.scopeOkH D.unroll = true ∧
-    Flock.PortRoots.checkOf (.ok D.unroll) (ZkExec.zkTags inputs) inputs.publicFile = .ok () := by
+    Flock.PortRoots.checkOf (.ok D.unroll) (ZkExec.zkTags inputs) inputs.publicFile = .ok () ∧
+    Flock.PortRoots.checkOf
+      (Flock.ProvedScope.circuitOf (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables)
+      (ZkExec.zkTags inputs) inputs.publicFile = .ok () := by
   decide +kernel
 
 set_option maxHeartbeats 0 in
@@ -90,12 +93,14 @@ theorem table_shape : Flock.Zk.shapeOk setup.2[0] = .ok () :=
 
 /-- The concrete accepted setup supplies every field of a `Live` session. -/
 theorem exists_live : ∃ A : Live,
-    A.I = inputs ∧ A.n = 32 ∧ A.desc = desc ∧ A.qr = query ∧ A.lj = law ∧ A.tb = none := by
+    A.I = inputs ∧ A.n = 32 ∧ A.desc = desc ∧ A.qr = query ∧ A.lj = law ∧ A.tb = none ∧
+      A.Lb = deployedLb ∧ A.ε = 0 ∧ A.OpensReady := by
   have hD := file_checks.1
   have hpubO := file_checks.2.1
   have hnO := file_checks.2.2.1
   have hscope := file_checks.2.2.2.1
-  have hports := file_checks.2.2.2.2
+  have hports := file_checks.2.2.2.2.1
+  have hready := file_checks.2.2.2.2.2
   have ht : inputs.tags.typed = false := by decide
   have hU : FlockSoundness.Built D.unroll.unit :=
     Hidden.built_of_parseStmt (Flock.Desc.parseStmt_of_parse hD) ((ZkExec.zkTags_typed inputs).trans ht)
@@ -153,7 +158,7 @@ theorem exists_live : ∃ A : Live,
       v := 0
       w := 0
       h := 0 }
-  exact ⟨A, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  exact ⟨A, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ⟨hready⟩⟩
 
 /-- The deployed honest sampled session. -/
 noncomputable def live : Live := Classical.choose exists_live
@@ -163,6 +168,9 @@ theorem live_n : live.n = 32 := (Classical.choose_spec exists_live).2.1
 theorem live_desc : live.desc = desc := (Classical.choose_spec exists_live).2.2.1
 theorem live_query : live.qr = query := (Classical.choose_spec exists_live).2.2.2.1
 theorem live_law : live.lj = law := (Classical.choose_spec exists_live).2.2.2.2.1
-theorem live_table : live.tb = none := (Classical.choose_spec exists_live).2.2.2.2.2
+theorem live_table : live.tb = none := (Classical.choose_spec exists_live).2.2.2.2.2.1
+theorem live_lb : live.Lb = deployedLb := (Classical.choose_spec exists_live).2.2.2.2.2.2.1
+theorem live_epsilon : live.ε = 0 := (Classical.choose_spec exists_live).2.2.2.2.2.2.2.1
+theorem live_ready : live.OpensReady := (Classical.choose_spec exists_live).2.2.2.2.2.2.2.2
 
 end Verity.Sampled.Instance.HonestSession
