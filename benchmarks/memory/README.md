@@ -23,9 +23,9 @@ verity bench memory --loopback                both processes on this machine, on
   coins come from the challenger host under period `PERIOD`, a name its ledger hasn't used. `BIND` (default `0`) is
   whether the verifier binds the store to the role's pinned checkpoint, and whether the period signs the role
   (`period-open --model`). With `0` the verifier holds no checkpoint, the period signs no model, and the store is the
-  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits nothing,
-  its `bound` check failing. The default is 0 because whether a memory figure may rest on a store bound to a
-  checkpoint is not yet decided, so no run of the bench binds one unless asked. `BIND=1` binds it.
+  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits the
+  session on its other checks, conditional on `DeveloperStore`, the developer's word that the store holds the
+  registered weights. No auditor's machine reads a checkpoint, so the default is 0. `BIND=1` binds it.
   `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
   (`7:60000:33273` is seven windows of a minute with 33,273 openings each); the verifier's ledger holds its γ as it
   does a paced session's, and the auditor's line of record has no time-held line for it, which only a paced session
@@ -33,9 +33,11 @@ verity bench memory --loopback                both processes on this machine, on
   first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's share of
   it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none), `LEAF_CTAS`
   (the node's passes by the leaf pass on that many reading CTAs, default today's pass),
-  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, and `FETCH=1`, which stages
-  the role's checkpoint on the node before checking it. The session's form is `PACED` or `UNPACED` alone: the command
-  sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from `UNPACED`. The command waits for the fire
+  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, `FETCH=1`, which stages
+  the role's checkpoint on the node before checking it, and the three hosts' addresses, which it doesn't run
+  without (`VY_CHALLENGER_1_HOST`, `VY_AUDITOR_1_HOST`, `VY_NEBIUS_2_HOST`). The session's form is `PACED` or
+  `UNPACED` alone: the command sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from
+  `UNPACED`. The command waits for the fire
   run to reach the evidence store and prints from it; interrupted, `--from` the fire run prints the same. `--dry-run`
   sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of

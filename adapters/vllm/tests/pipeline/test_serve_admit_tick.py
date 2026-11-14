@@ -13,9 +13,7 @@ import json
 import queue
 import random
 import socket
-import sys
 import threading
-import types
 from collections import deque
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -25,6 +23,7 @@ from typing import Any
 import pytest
 from verity.protocols.accounting.certifier.verifier import release as REL
 
+from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
@@ -61,7 +60,9 @@ class Sched:
         self.skipped_waiting: deque[Req] = deque()
         self.running: list[Req] = []
         self.finished_req_ids: set[str] = set()
-        self.seqs, self.steps, self.added = seqs, [], []
+        self.seqs = seqs
+        self.steps: list[list[str]] = []
+        self.added: list[str] = []
         self.scheduler_config = SimpleNamespace(policy=policy)
         self.vllm_config = SimpleNamespace(parallel_config=SimpleNamespace(data_parallel_size=dp))
 
@@ -559,7 +560,8 @@ GREEDY = b'{"prompt": [1], "temperature": 0}'
 
 class App:
     def __init__(self, status: int = 200) -> None:
-        self.status, self.seen = status, []
+        self.status = status
+        self.seen: list[dict] = []
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         self.seen.append(dict(scope["headers"]))
@@ -662,8 +664,8 @@ def test_tick_feed_refuses_a_stochastic_request_without_a_seed(tmp_path, monkeyp
 
     passing = [b'{"prompt": [1], "temperature": 0.8, "seed": 7}', b'{"prompt": [1], "temperature": 0}',
                b'{"temperature": 0.0, "seed": null}', b"not json", b"[1, 2]", b""]
-    for body in passing:
-        assert asgi(feed, scope_of("/v1/chat/completions", {}), [body[:5], body[5:]])[0]["status"] == 200
+    for whole in passing:
+        assert asgi(feed, scope_of("/v1/chat/completions", {}), [whole[:5], whole[5:]])[0]["status"] == 200
     assert asgi(feed, scope_of("/v1/models", {}), [b"{}"])[0]["status"] == 200
     assert app.bodies == [*passing, b"{}"]
 
@@ -721,7 +723,9 @@ class EngineCoreProc:
     """vLLM's ``EngineCoreProc`` as `register`'s hooks drive it."""
 
     def __init__(self, sched: Any) -> None:
-        self.scheduler, self.input_queue, self.aborts_queue = sched, queue.Queue(), queue.Queue()
+        self.scheduler = sched
+        self.input_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self.aborts_queue: queue.Queue[Any] = queue.Queue()
         self.running, self.idle_calls = True, 0
 
     def _process_input_queue(self) -> None:
@@ -746,16 +750,13 @@ def plugin(tmp_path, monkeypatch):
     """`register` over stand-ins of vLLM's scheduler and engine core modules; its hooks come off afterwards."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    sched_mod, core_mod = types.ModuleType("vllm.v1.core.sched.scheduler"), types.ModuleType("vllm.v1.engine.core")
 
     class Scheduler(Sched):
         pass
 
-    sched_mod.Scheduler, core_mod.EngineCoreProc = Scheduler, EngineCoreProc
-    for name, mod in (("vllm", types.ModuleType("vllm")), ("vllm.v1", types.ModuleType("vllm.v1")),
-                      ("vllm.v1.core", types.ModuleType("vllm.v1.core")), ("vllm.v1.core.sched", types.ModuleType("vllm.v1.core.sched")),
-                      ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), (sched_mod.__name__, sched_mod), (core_mod.__name__, core_mod)):
-        monkeypatch.setitem(sys.modules, name, mod)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
+    fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
     tp.register()
     tp.register()
     try:
@@ -853,7 +854,8 @@ class SchedEngine:
     scheduled request."""
 
     def __init__(self) -> None:
-        self.sched, self.live, self.n = Sched(), {}, 0
+        self.sched, self.n = Sched(), 0
+        self.live: dict[str, str] = {}
 
     def add_request(self, request_id: str, prompt: dict, params: Any) -> None:
         self.n += 1

@@ -404,7 +404,7 @@ def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict 
 
 
 def persist_fold(result, d, rank: int):
-    from verity_vllm.pipeline.match import persist_program
+    from verity_vllm.pipeline.match_fold import persist_program
     persist_program(result, d, profile_name="toy-tp2-rank", log_path=f"log.rank{rank}.jsonl.gz")
 
 

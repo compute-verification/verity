@@ -378,7 +378,7 @@ def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several
     evidence = {"ledger": R.ledger_lines(host.ledger.path), "main": main, "pins": test_remote.HOST_PINS,
                 "segment": segment.to_json(), "session": R.session_files(host.directory)}
     after = bytes.fromhex(reg.digest)
-    # one object for both readers: the stream's check and the component's read the same evidence under the same key
+    # one object for both readers: the stream's check and the subprotocol's read the same evidence under the same key
     assert T.coins_reason(key, main, evidence, window, "positions", after, read, lms_verify) is None
     assert T.draw_coins(key, window, "positions", after, evidence, lms_verify)[:len(read)] == read
     assert "coin opening is malformed" in T.coins_reason(key, main, {**evidence, "segment": raw}, window, "positions",
