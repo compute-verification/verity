@@ -33,6 +33,8 @@ RUN = re.compile(r'^\{"t": (\d+), "hook": "([^"]*)", "event": (?:"[^"]*"|null), 
 MODEL_OK = "AGENT_GUARD_MODEL_OK=1"
 #: the `event` of the line the model rule adds to EVENT_LOG for a turn it settles: refused once, or passed by MODEL_OK
 MODEL_REFUSAL, MODEL_PASS = "model_refusal", "model_ok"
+#: a model's family, the name a payload gives it without its effort: `claude-fable-5-2` of `claude-fable-5-2-xhigh`
+FAMILY = re.compile(r"claude-[a-z]+-\d+-\d+")
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 #: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
@@ -96,6 +98,13 @@ def agent_events(agent: str) -> list[dict]:
             if isinstance(e, dict) and e.get("conversation_id") == agent:
                 events.append(e)
     return events
+
+
+def model_family(model: str) -> str:
+    """`model`'s family (FAMILY), which the model rule compares, so that a lead moved to another effort is never told; a
+    name of no family is its own."""
+    found = FAMILY.match(model)
+    return found.group() if found else model
 
 
 def launch_model(events: list[dict]) -> str | None:

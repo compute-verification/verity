@@ -929,7 +929,8 @@ def test_a_turn_on_another_model_than_the_launchs_is_refused_once_at_its_first_c
     text = first["user_message"]
     assert first["permission"] == "deny" and text == first["agent_message"]
     assert f"this turn runs on `{OTHER}`, and you were launched on `{LAUNCH}`" in text
-    assert f"Task and `model: {LAUNCH}`" in text and "resumed by your lead" in text and "go by your brief" in text
+    assert "Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high`" in text and "never Fable 5.2" in text
+    assert f"model: {LAUNCH}" not in text and "resumed by your lead" in text and "go by your brief" in text
     assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
     assert on_model("pwd", AGENT, two, OTHER, tmp_path) == ALLOW
     (line,) = settled(event_log)
@@ -952,6 +953,22 @@ def test_an_agent_whose_turns_all_run_on_its_launch_model_is_never_refused(tmp_p
             assert on_model(command, AGENT, mine, LAUNCH, tmp_path) == ALLOW
             assert on_model(command, PEER, peers, OTHER, tmp_path) == ALLOW
     assert settled(event_log) == []
+
+
+def test_models_are_compared_by_family_never_by_effort(tmp_path, event_log):
+    """A lead moved from Extra High to Medium runs the model it was launched on: a launch on Fable 5.2 Extra High and a
+    turn on Fable 5.2 Medium pass, and so does Opus at another effort; a turn on another family is told, whatever its
+    effort, and its refusal names no Fable child."""
+    one, two, three, four = TURNS[:4]
+    assert on_model("ls", AGENT, one, "claude-fable-5-2-xhigh", tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, "claude-fable-5-2-medium", tmp_path) == ALLOW
+    assert on_model("ls", AGENT, three, "claude-fable-5-2", tmp_path) == ALLOW
+    told = on_model("ls", AGENT, four, "claude-opus-5-5-medium", tmp_path)
+    assert told["permission"] == "deny" and "you were launched on `claude-fable-5-2-xhigh`" in told["user_message"]
+    assert "model: claude-fable" not in told["user_message"]
+    assert on_model("ls", PEER, one, "claude-opus-5-5-high", tmp_path) == ALLOW
+    assert on_model("ls", PEER, two, "claude-opus-5-5-medium", tmp_path) == ALLOW
+    assert [e["conversation_id"] for e in settled(event_log)] == [AGENT]
 
 
 def test_no_launch_model_on_record_refuses_nothing(tmp_path, event_log):

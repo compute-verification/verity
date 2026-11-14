@@ -117,9 +117,10 @@ follow-up, and no delivery relies on that) and may be gone by the agent's next t
 across a long pause: an agent whose turn has ended is resumed with the text itself.
 
 It tells a cloud agent whose turn runs on another model than it was launched on (`model_reason`): a turn the agent's own
-timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. The
-first command of such a turn that would pass is refused once, naming both models and the two ways on: hand the turn's
-job to a local child started with `Task` and the launch model, or end the turn and be resumed by the lead; the rest of
+timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. Models
+are compared by family (`settings.model_family`), never by effort. The first command of such a turn that would pass is
+refused once, naming both models and the two ways on: hand the turn's job to a local child started with `Task` and
+`claude-opus-5-5-high` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
 the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command passes it too. The launch model is the one
 the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
 launch turn, takes its first turn there for the launch.
@@ -146,7 +147,7 @@ import time
 from pathlib import Path
 
 from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
-                      agent_events, launch_model, record_event)
+                      agent_events, launch_model, model_family, record_event)
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -1376,19 +1377,20 @@ CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py): this turn runs on `{model}`, and you "
               "were launched on `{launch}`, the model your first turn in this machine's event log names. A turn your own "
               "timer or a subscription starts can take another model than your launcher named. Two ways on: hand this "
-              "turn's job to a child started with Task and `model: {launch}`, local (no `environment`), so it runs on "
-              "this machine and has your checkout; or end the turn and be resumed by your lead, which keeps your launch "
-              "model. Nothing is wrong with this command: it and the rest of this turn's commands now pass, so you can "
-              "read your notes, start the child and push. If your brief names another launch model than `{launch}`, "
-              "this machine's log began after your launch (a wake or a resume put you on a new machine): go by your "
-              "brief.")
+              "turn's job to a child started with Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high` "
+              "for a fully specified task; never Fable 5.2), local (no `environment`), so it runs on this machine and "
+              "has your checkout; or end the turn and be resumed by your lead, which keeps your launch model. Nothing is "
+              "wrong with this command: it and the rest of this turn's commands now pass, so you can read your notes, "
+              "start the child and push. If your brief names another launch model than `{launch}`, this machine's log "
+              "began after your launch (a wake or a resume put you on a new machine): go by your brief.")
 
 
 def model_reason(event: dict, command: str) -> str | None:
     """The model rule: the refusal's text for the first command the hook would otherwise pass in a cloud agent's turn
-    whose model differs from its launch model (`settings.launch_model`), once a turn; else None. The refusal settles the
-    turn, and so does MODEL_OK in that command, which passes it: either adds a line to EVENT_LOG for the turn, and every
-    later command of a settled turn passes. Never refused: an agent whose turns all name one model, one with no launch
+    whose model's family differs from its launch model's (`settings.launch_model`, `settings.model_family`), once a
+    turn; else None. The refusal settles the turn, and so does MODEL_OK in that command, which passes it: either adds a
+    line to EVENT_LOG for the turn, and every later command of a settled turn passes. Never refused: an agent whose turns
+    all name one family, whatever their effort, one with no launch
     model on record, and a payload that names no model, no turn or no cloud agent. The lock on EVENT_LOG makes the check
     and the line one step, so of two commands a turn starts at once exactly one is refused; a log that can't be opened,
     locked or written refuses nothing, and says so on stderr, since a turn the rule can't record as told it can't keep to
@@ -1402,7 +1404,7 @@ def model_reason(event: dict, command: str) -> str | None:
             fcntl.flock(log, fcntl.LOCK_EX)
             events = agent_events(agent)
             launch = launch_model(events)
-            if launch is None or launch == model:
+            if launch is None or model_family(launch) == model_family(model):
                 return None
             if any(e.get("generation_id") == turn and e.get("event") in (MODEL_REFUSAL, MODEL_PASS) for e in events):
                 return None

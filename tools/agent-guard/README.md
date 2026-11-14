@@ -39,13 +39,16 @@ Each VM's log is its own.
 The model rule (`shell_hook.model_reason`) tells an agent whose turn runs on another model than it was launched on. A
 turn an agent's own timer or a subscription starts can take another model than its launcher named, and nothing in the
 turn says so. The launch model is the model the agent's first turn in this machine's event log names
-(`settings.launch_model`). In a turn whose commands name another, the first command the hook would otherwise pass is
-refused, once, with the turn's model, the launch model and the two ways on: hand the turn's job to a child started
-with `Task` and the launch model, local, so that it runs on this machine and has the checkout; or end the turn and be
+(`settings.launch_model`). Models are compared by family, never by effort (`settings.model_family`: `claude-fable-5-2`
+of `claude-fable-5-2-xhigh`), so a lead moved to another effort is not told. In a turn whose commands name another
+family, the first command the hook would otherwise pass is refused, once, with the turn's model, the launch model and
+the two ways on: hand the turn's job to a child started with `Task` and `claude-opus-5-5-high` (or
+`claude-sonnet-5-5-high` for a fully specified task; never Fable 5.2), local, so that it runs on this machine and has
+the checkout; or end the turn and be
 resumed by the lead, which keeps the launch model. The rest of the turn's commands pass, so the agent can read its
 notes, start the child and push: it is told, not locked out. `AGENT_GUARD_MODEL_OK=1` in that first command passes it
 and settles the turn the same way, for a lead that has decided the turn stays on its model. Never refused: an agent
-whose turns all name one model; a turn whose payload names no model or no turn; a local session, whose id has no
+whose turns all name one family; a turn whose payload names no model or no turn; a local session, whose id has no
 `bc-`; and an agent with no launch model on record (its first line in the log names no turn, or its first turn names
 no model). The log is one machine's. Where it starts after the agent's launch (it rotated the launch out, or a wake
 or a resume put the agent on a new machine, which holds none of its earlier turns), the first turn it holds stands
