@@ -33,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "benchmarks/word_codec"))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/poub/prover/word_codec/kv.py").parent))
 
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402

@@ -68,6 +68,12 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   row, each source's proving time at the table's prices over the plan's, and the block type that holds most of the
   difference. The plan's prices are its record's: they are no measurement the table reads, and they hold whatever its
   planner counts in a block's price. A plan that prices only some of its cells is refused.
+- **Under a sampling plan, the prover GPUs a serving GPU at two designs,** a line each naming its source: at the
+  sampling plan of record (its art), the table's total; and at the exfiltration run of record's design (the run that
+  carries `run_of_record=exfiltration-glm53-compute-audit` and no `superseded_by`), read by `verity bench
+  exfiltration`'s own reader of that run's rows: the planner's world year at 10% of total compute, whose proving is a
+  share of total compute at an audit budget β, so a serving GPU holds that share / (1 − β) prover GPUs, modeled.
+  Where the record can't be read, its line says why and the table stands.
 - **The share of the proving time each source covers.**
 - **The steady-state rows it didn't read,** under "Unread": a labelled row whose staged Definition is no block type
   of the census under its cut, at any prover count. Each is named with what holds it, the type and Definition it
@@ -249,9 +255,10 @@ until more types have runs of their own.
 
 ## The metrics
 
-`run.py`'s `METRICS` are the four rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
+`run.py`'s `METRICS` are the five rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
 the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
-workload's sampling plan of record. Under a research run, `--system spot` writes them into the run's `result.json`
+workload's sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
+(`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run, `--system spot` writes them into the run's `result.json`
 through the harness kit (`prove_records.record`) and `--system flock` writes nothing; outside one neither writes, and
 what it prints is the same either way:
 

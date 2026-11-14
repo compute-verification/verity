@@ -1,7 +1,8 @@
 """`verity_vllm.pipeline.tp.fold_match` on documents that hold less than a finished stage's: a fold that left no summary or a
 summary without its statistics, a compare or a GM-01 that wrote no document, a decomposition whose requests state no totals, a
 rank with no observer log (so no compare and no GM-01), a cross-rank check that stopped before it listed what failed, and the
-inputs that check was not given.  No stage's subprocess runs here: `_run` only returns a code, and `main` runs on stand-in stages."""
+inputs that check was not given; and the command line's options that say where the recorder's rows and a rank's further request
+Programs are.  No stage's subprocess runs here: `_run` only returns a code, and `main` runs on stand-in stages."""
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from typing import Any
 import pytest
 
 from verity_vllm.check.match import rank_match as RM
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import match as PM
 from verity_vllm.pipeline.tp import fold_match as FM
 
@@ -19,17 +21,21 @@ SUMMARY: dict[str, Any] = {"errors": 0, "unresolved": 0, "n_instances": 9, "n_st
                            "fold": {"tp": {"rank": 1, "world": 2}, "collectives": [{"step": 0, "k": 0}, {"step": 0, "k": 1}], "collectives_by_kind": {"all_reduce": 2}}}
 
 
+#: a JSON document nested past the parser's depth
+NESTED = "[" * 100_000 + "]" * 100_000
+
+
 def _exits(monkeypatch, rc: int) -> None:
     monkeypatch.setattr(FM, "_run", lambda cmd, log, timeout=None: rc)
 
 
-def _fold(tmp_path: Path, monkeypatch, summary: dict | None, rc: int = 0) -> dict:
+def _fold(tmp_path: Path, monkeypatch, summary: dict | None, rc: int = 0, text: str | None = None) -> dict:
     out = tmp_path / "rank1"
     out.mkdir()
     for name in ("program.json", "instances.jsonl"):
         (out / name).write_text("")
-    if summary is not None:
-        (out / "fold_summary.json").write_text(json.dumps(summary))
+    if summary is not None or text is not None:
+        (out / "fold_summary.json").write_text(json.dumps(summary) if text is None else text)
     _exits(monkeypatch, rc)
     return FM.fold_rank("py", tmp_path / "log.rank1.jsonl.gz", "profile", out, None)
 
@@ -53,6 +59,12 @@ def test_a_fold_whose_summary_holds_no_statistics_states_no_rank_and_no_collecti
 def test_a_fold_that_failed_before_its_summary_is_not_ok(tmp_path, monkeypatch):
     fold = _fold(tmp_path, monkeypatch, None, rc=1)
     assert (fold["ok"], fold["rc"], fold["tp"], fold["collectives"], fold["error_examples"]) == (False, 1, None, 0, [])
+
+
+@pytest.mark.parametrize("text", ["{", NESTED], ids=["not JSON", "nested past the parser's depth"])
+def test_a_fold_summary_that_does_not_parse_reads_as_none_written(tmp_path, monkeypatch, text):
+    fold = _fold(tmp_path, monkeypatch, None, text=text)
+    assert (fold["tp"], fold["collectives"], fold["collectives_by_kind"], fold["error_examples"], fold["errors"]) == (None, 0, None, [], None)
 
 
 # the compare
@@ -144,6 +156,16 @@ def test_a_compare_record_that_lists_no_request_has_no_links_for_the_rank(tmp_pa
     assert FM.links_for_rank(1, tmp_path / "build", compare, ["d1"]) is None
 
 
+@pytest.mark.parametrize("text", ["{", "[1]", NESTED, '{"world": Infinity, "links": []}', '{"rank": -Infinity, "links": []}',
+                                  '{"links": [{"k": 0, "peer_rank": Infinity}]}', '{"links": [{"k": Infinity}]}'],
+                         ids=["not JSON", "a list", "nested past the parser's depth", "an infinite world", "an infinite rank", "an infinite peer rank",
+                              "an infinite collective"])
+def test_a_links_file_that_is_not_one_leaves_the_rank_without_links(tmp_path, text):
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "tp_links.json").write_text(text)
+    assert FM.links_for_rank(1, tmp_path / "build", {}, []) is None
+
+
 # the cross-rank check's record
 
 def test_an_input_the_cross_rank_check_was_not_given_fails_it_by_name_beside_what_it_failed_itself():
@@ -180,10 +202,11 @@ FOLD = {"rc": 0, "seconds": 0.0, "ok": True, "kept": False, "errors": 0, "unreso
 CHECKED = {"verdict": "PASS", "checks": [{"name": "count", "pass": True}], "failed": [], "n_collectives": {"0": 2, "1": 2}, "peer_binding": {"a": 1, "b": 2}}
 
 
-def _main(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(0, 1), gprog: bool = True, provenance: bool = True,
-          checked: dict | None = None, summary: dict | None = None, states: dict | None = None) -> tuple[int, dict, dict, list]:
-    """`tp-fold-match` of a two-rank capture whose stages are stand-ins: (exit code, tp2_fold_match.json, tp2_rank_match.json or {},
-    the collectives the cross-rank check was given and which of its other inputs it got)."""
+def _stand_ins(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(0, 1), checked: dict | None = None,
+               summary: dict | None = None, states: dict | None = None) -> tuple[Path, Path, list]:
+    """A two-rank capture and its rank Builds `b0` and `b1` under `tmp_path`, and `tp-fold-match`'s stages as stand-ins: (the
+    capture, the output directory, the list that takes the collectives each cross-rank check is given and which of its other
+    inputs it gets)."""
     capture, out = tmp_path / "capture", tmp_path / "out"
     given: list = []
     capture.mkdir()
@@ -215,11 +238,23 @@ def _main(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(
     monkeypatch.setattr(PM, "fold_construction_args", lambda workload, dirs: [])
     monkeypatch.setattr(RM, "cross_rank_check", cross_rank_check)
     monkeypatch.setattr(RM, "own_producers_from_record", lambda path: {})
+    return capture, out, given
+
+
+def _ran(rc: int, out: Path, given: list) -> tuple[int, dict, dict, list]:
+    """What a `tp-fold-match` that exited `rc` left under `out`: (exit code, tp2_fold_match.json, tp2_rank_match.json or {}, `given`)."""
+    rank_match = out / "tp2_rank_match.json"
+    return rc, json.loads((out / "tp2_fold_match.json").read_text()), json.loads(rank_match.read_text()) if rank_match.exists() else {}, given
+
+
+def _main(tmp_path: Path, monkeypatch, *, gprog: bool = True, provenance: bool = True, **stand_ins: Any) -> tuple[int, dict, dict, list]:
+    """`tp-fold-match` of a two-rank capture whose stages are stand-ins: (exit code, tp2_fold_match.json, tp2_rank_match.json or {},
+    the collectives the cross-rank check was given and which of its other inputs it got)."""
+    capture, out, given = _stand_ins(tmp_path, monkeypatch, **stand_ins)
     rc = FM.main(FM.Options(capture=str(capture), profile="profile", out=str(out), build_rank=[str(tmp_path / "b0"), str(tmp_path / "b1")],
                             gprog_rank=["0=g0.json", "1=g1.json"] if gprog else [], workload="workload.json" if gprog else None,
                             tp2_match=str(tmp_path / "tp2_match.json") if provenance else None))
-    rank_match = out / "tp2_rank_match.json"
-    return rc, json.loads((out / "tp2_fold_match.json").read_text()), json.loads(rank_match.read_text()) if rank_match.exists() else {}, given
+    return _ran(rc, out, given)
 
 
 def test_a_fold_match_whose_every_stage_passes_passes_and_counts_the_peer_bindings(tmp_path, monkeypatch):
@@ -281,3 +316,70 @@ def test_the_inputs_the_cross_rank_check_was_not_given_fail_it_by_name_after_its
         "rank 0: no tp_links.json for the rank Program(s); the link check cannot run",
         f"rank 1: no collective recorder rows ({tmp_path / 'capture' / 'coll.rank1.jsonl'}); the value check cannot run",
         "no --tp2-match: the stored-step provenance check (received == Def(part_rank0 .. part_rank{world-1})) is REQUIRED"]
+
+
+# the command line's options for where a rank's inputs are
+
+def _command(tmp_path: Path, capture: Path, out: Path, *argv: str) -> FM.Options:
+    """What `verity-vllm tp-fold-match` reads from a command line that gives every stage its input in the two-rank spelling, and
+    `argv` after it."""
+    return cli.parse("tp-fold-match", ["--capture", str(capture), "--profile", "profile", "--out", str(out), "--build-rank0", str(tmp_path / "b0"),
+                                       "--build-rank1", str(tmp_path / "b1"), "--gprog-rank0", "g0.json", "--gprog-rank1", "g1.json",
+                                       "--workload", str(tmp_path / "workload.json"), "--tp2-match", str(tmp_path / "tp2_match.json"), *argv], {})
+
+
+def _noting(folded: list) -> Any:
+    """A stand-in for the fold's construction that notes in `folded` the Program dirs each rank's is asked for, and gives no flag."""
+    def fold_construction_args(workload, dirs):
+        folded.append(dirs)
+        return []
+    return fold_construction_args
+
+
+def test_coll_dir_names_the_directory_of_the_recorders_rows_when_it_is_not_the_capture(tmp_path, monkeypatch):
+    capture, out, given = _stand_ins(tmp_path, monkeypatch)
+    rows = tmp_path / "rows"
+    rows.mkdir()
+    for r in (0, 1):
+        (capture / f"coll.rank{r}.jsonl").rename(rows / f"coll.rank{r}.jsonl")
+    rc, doc, _, _ = _ran(FM.main(_command(tmp_path, capture, out)), out, given)
+    assert rc == 1 and doc["problems"] == [f"rank {r}: no collective recorder rows ({capture / f'coll.rank{r}.jsonl'}); the value check cannot run" for r in (0, 1)]
+    assert given[-1][1] == ["links", "provenance"]
+    rc, doc, _, _ = _ran(FM.main(_command(tmp_path, capture, out, "--coll-dir", str(rows))), out, given)
+    assert rc == 0 and doc["pass"] is True and doc["problems"] == []
+    assert given[-1][1] == ["links", "provenance", "recorder", "recorder_sha256"]
+
+
+def test_derived_rank0_and_derived_rank1_name_the_further_request_programs_of_each_of_two_ranks(tmp_path, monkeypatch):
+    capture, out, given = _stand_ins(tmp_path, monkeypatch)
+    further = {0: [_program(tmp_path, "d0a"), _program(tmp_path, "d0b")], 1: [_program(tmp_path, "d1a")]}
+    builds = {r: str(tmp_path / f"b{r}") for r in (0, 1)}
+    folded: list = []
+    compared: dict[str, list[str]] = {}
+    linked: list = []
+
+    def compare_rank(py, rank_dir, build, derived, *rest, **kw):
+        compared[str(build)] = list(derived)
+        requests = [{"request_id": f"q{i}", "derived": d} for i, d in enumerate([str(build), *derived])]
+        return {"comparator": "cb_a.batch_decomp (X-09)", "verdict": "PASS", "seconds": 0.0, "per_request": requests}
+
+    def cross_rank_check(colls, **inputs):
+        linked.append({rank: sorted(by_request) for rank, by_request in inputs["links"].items()})
+        return json.loads(json.dumps(CHECKED))
+
+    monkeypatch.setattr(FM, "compare_rank", compare_rank)
+    monkeypatch.setattr(PM, "fold_construction_args", _noting(folded))
+    monkeypatch.setattr(RM, "cross_rank_check", cross_rank_check)
+    rc, doc, _, _ = _ran(FM.main(_command(tmp_path, capture, out, *(a for r in (0, 1) for d in further[r] for a in (f"--derived-rank{r}", d)))), out, given)
+    assert rc == 0 and doc["pass"] is True and doc["problems"] == []
+    assert compared == {builds[0]: further[0], builds[1]: further[1]}
+    assert folded == [[builds[0], *further[0]], [builds[1], *further[1]]]
+    assert linked == [{0: ["q0", "q1", "q2"], 1: ["q0", "q1"]}]
+
+
+def test_a_two_rank_command_line_without_them_gives_neither_rank_a_further_program(tmp_path, monkeypatch):
+    capture, out, given = _stand_ins(tmp_path, monkeypatch)
+    folded: list = []
+    monkeypatch.setattr(PM, "fold_construction_args", _noting(folded))
+    rc, doc, _, _ = _ran(FM.main(_command(tmp_path, capture, out)), out, given)
+    assert rc == 0 and doc["pass"] is True and folded == [[str(tmp_path / "b0")], [str(tmp_path / "b1")]]

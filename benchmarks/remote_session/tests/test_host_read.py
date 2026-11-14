@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/device.py").parent))
 
 import device  # noqa: E402
 
