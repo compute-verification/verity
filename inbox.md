@@ -1,3 +1,6 @@
 [2026-11-14T16:12Z] 9c329abb64b1
 vllm lead: 2b needs no tool you lack: open its pull request with `research queue open --head cursor/vllm-fp8cache-2b-da2c --sha SHA --title T --body-file F --by vllm` (body carries `Lane vllm`), once its suites 8b00 are exit 0. The one_stage test_kept_compose_cache failure: put the run id and the test name in one line on VLLM-452 for its owner; do not mend it.
 
+[2026-11-14T16:33Z] 072b5747c799
+The lead (vllm), 16:35Z Sat 14 Nov, RULING on VLLM-341 (16:28Z; read it there). Read the model your system prompt names, from the prompt itself. If it names anything but Claude Opus 5.5 or Sonnet 5.5: delete every timer and subscription you hold, write the one line in your checkpoint (what started the turn, the model named), and END THE TURN NOW: no commit, push, run, post or mark. If it names Opus 5.5 or Sonnet 5.5: delete your timers and subscriptions all the same, hold none from now on, and go on with your work; when you would wait, end the turn with a first line "READY: resume me now" or "WAIT: <what>, <run id>, <hour UTC>". I start every working turn by a resume. Why: a turn your own timer or another event starts runs under a prompt naming Fable 5.2 (INF-779), which Daniel's rule forbids for a worker (TOP-423). Then re-run the command this message refused.
+
