@@ -78,8 +78,9 @@ REGISTRY = "fixtures/artifacts.json"
 #: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
 #: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
 STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
-#: a module that names the fixture registry's path, as the store's replica map does (`Path("fixtures") / "artifacts.json"`)
-_REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["']fixtures/artifacts\.json["']""")
+#: a module that names the fixture registry's path, whole or joined, as the store's replica map does
+#: (`Path("fixtures/artifacts.json")`)
+_REGISTRY = re.compile(r"""["']fixtures["']\s*\)?\s*/\s*["']artifacts\.json["']|["'](?:fixtures/)?artifacts\.json["']""")
 #: directories whose `test_*.py` files are data a test hands on, not tests (`suites._DATA_DIRS`)
 DATA_DIRS = frozenset({"fixtures", "data", "expected", "testdata"})
 STDLIB = frozenset(sys.stdlib_module_names)
