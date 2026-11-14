@@ -94,6 +94,6 @@
    "dir":
    "../../../../../commitments/lms/lean",
    "configFile": "lakefile.toml"}],
- "name": "remote_audit",
+ "name": "poub",
  "lakeDir": ".lake",
  "fixedToolchain": false}

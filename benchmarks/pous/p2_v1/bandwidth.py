@@ -39,7 +39,7 @@ cache under the pass's seed, so a sample of a later pass is rejected (`receipt`)
 
 **The case.** The verifier sends the session's core case before its answer (`p2_parties`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
-answer `RemoteAudit.P2Protocol`'s with `--case-exe` (`remote-audit-p2-protocol`); without it the Python only refuses,
+answer `Poub.P2Protocol`'s with `--case-exe` (`poub-p2-protocol`); without it the Python only refuses,
 so an accepted session's case is undecided (`p2_case.unjudged`). The case
 holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
 only where it went, its commitment's digest, its store and its verdict. A session the verifier refused, or one that
@@ -857,7 +857,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--readers", type=int, default=6)
     s.add_argument("--workers", type=int, default=max(1, min(12, (os.cpu_count() or 2) - 2)))
     s.add_argument("--case-dir", type=Path, help="the private directory the session's core case and its answer go to")
-    s.add_argument("--case-exe", help="remote-audit-p2-protocol, which answers the case (else an accept is "
+    s.add_argument("--case-exe", help="poub-p2-protocol, which answers the case (else an accept is "
                    "undecided: p2_case.unjudged)")
     a = ap.parse_args(argv)
     if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):

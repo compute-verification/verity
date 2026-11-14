@@ -70,7 +70,7 @@ ALLOWLIST = {
     "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
-    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
+    "tools/research/src/research/store/moves.json": 384 * 1024,  # the paths of every layout move: one entry a move, it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers

@@ -115,7 +115,7 @@ untraced = [
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
-# `remote-audit-verifier`.
+# `poub-verifier`.
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py),
 # and hands drawn's stage h1_prove's stagers.py (test_pouw_h1_drawn.py, test_pouw_h1_refusals.py).

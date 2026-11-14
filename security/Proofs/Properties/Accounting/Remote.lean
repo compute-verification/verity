@@ -20,7 +20,7 @@ are the sampler's subset mapped to distinct receipts (`sampleIsSubset`), on `Bis
 second invariant, from an accepted release on, and from it `releasedStayOut`. `Lifetime`: a third, on the windows
 appends joined, and from it `lifetimeCapped`. `Pooled`: the pooled bound the code computes, and the W the memory line
 reads, cover the draw's (`pooledCovers`, `pooledCoversRun`, `lineCoversRun`, stated in
-`Properties.RemoteAudit.Pooled`).
+`Properties.Poub.Pooled`).
 -/
 
 @[expose] public section

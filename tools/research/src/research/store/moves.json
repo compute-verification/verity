@@ -3452,6 +3452,26 @@
         "security/Proofs/InferenceOnly/WeightsSlotsWitness.lean": "security/Proofs/Slowdown/WeightsSlotsWitness.lean",
         "security/Proofs/InferenceOnly/Witnesses.lean": "security/Proofs/Slowdown/Witnesses.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Claims/Sampling/Select/SecondLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SecondSamplingDesign.lean"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/device/two_stage.py": "verity/protocols/proofs/spot/prover/audit/two_stage.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/poub/verifier/lean/RemoteAudit.lean": "verity/protocols/accounting/poub/verifier/lean/Poub.lean",
+        "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/": "verity/protocols/accounting/poub/verifier/lean/Poub/",
+        "verity/protocols/accounting/poub/verifier/tests/remote_bandwidth_fakes.py": "verity/protocols/accounting/poub/verifier/tests/poub_fakes.py",
+        "verity/protocols/accounting/poub/verifier/tests/remote_bandwidth_vectors.py": "verity/protocols/accounting/poub/verifier/tests/poub_vectors.py",
+        "verity/protocols/accounting/poub/verifier/tests/test_remote_bandwidth.py": "verity/protocols/accounting/poub/verifier/tests/test_poub.py",
+        "verity/protocols/accounting/poub/verifier/tests/test_remote_bandwidth_vectors.py": "verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py"
+      }
     }
   ]
 }

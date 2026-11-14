@@ -4,7 +4,7 @@ serving loop, and the fixture a decode kernel's sketch is held to.
     serve.py [--steps 12] [--per-window 3] [--prompt 1]   # serve the toy, print its tokens and each window's verdict
     serve.py fixture [--out receipts.json]                 # write the kernel fixture (stdout by default)
 
-**The step.** Each engine step is one pass of the audit (`remote_bandwidth.p2`). It decodes the store layer by layer
+**The step.** Each engine step is one pass of the audit (`poub.p2`). It decodes the store layer by layer
 (`store.decode_block`: block `i`'s 2,056 bytes of `C*` to its 2,054 of `W`), runs the layer's matmuls on the staging
 buffer, and, as it decodes block `i`, sketches the same 2,056 bytes under the pass's seed (`p2.Sketcher.block`, π).
 At the step's end it sums each unit's four partials (σ), hashes them to the receipts (y), commits them in the pass's

@@ -59,11 +59,11 @@ lemmas): the lock's `witnesses`.
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-open private RemoteAudit.endsOf from RemoteAudit.Plan
+open private Poub.endsOf from Poub.Plan
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 theorem check_ok {sc : Schedule.Schedule} {blocks cap : Nat} {passes : Array (Nat × Array (Nat × Nat))}
     {appends : Array (Nat × Nat)} {b : Nat} (h : Schedule.check sc blocks cap passes appends = .ok b) :
@@ -474,7 +474,7 @@ theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : 
 /-! ## The verifier's layout is where it checks -/
 
 theorem make_ends {runs : Array (Int × Int)} {blocks : ℕ} {pl : Plan} (h : Plan.make? runs blocks = some pl) :
-    pl.ends = RemoteAudit.endsOf pl.runs := by
+    pl.ends = Poub.endsOf pl.runs := by
   unfold Plan.make? at h
   simp only [Bool.not_eq_true', Option.bind_eq_bind, Option.bind_none] at h
   split at h
@@ -530,7 +530,7 @@ theorem whole_prefix (blocks : ℕ) : PrefixSums #[blocks] ((#[(0, blocks)] : Ar
 theorem planBlocks : PlanBlocks := by
   refine ⟨fun runs blocks pl h => ?_, fun blocks => planBlocks_of blocks #[(0, blocks)] #[blocks] (whole_prefix blocks)⟩
   obtain ⟨b, rs, ends⟩ := pl
-  have he : ends = RemoteAudit.endsOf rs := make_ends h
+  have he : ends = Poub.endsOf rs := make_ends h
   subst he
   exact planBlocks_of b rs _ (endsOf_prefix rs)
 
@@ -768,8 +768,8 @@ whose receipt tree holds the zero block's receipt at position 0, accept the open
 after the key is sampled; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
 deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
 
-theorem size_sha512 (b : ByteArray) : (RemoteAudit.sha512 b).size = 64 := by
-  unfold RemoteAudit.sha512 Flock.Sha512.hash
+theorem size_sha512 (b : ByteArray) : (Poub.sha512 b).size = 64 := by
+  unfold Poub.sha512 Flock.Sha512.hash
   exact Array.size_ofFn
 
 theorem size_frameHash (tag : String) (parts : List ByteArray) : (Flock.FV3.Sha512.hash tag parts).size = 64 := by
@@ -937,7 +937,7 @@ def honestCodec : Codec.Codec := ⟨Codec.P1024, 3, true⟩
 of `rows` rows, and a payload tree holding `zeroPayload` at block 0. -/
 def honestReg (node codecSeed : ByteArray) (rows : ℕ) : Registration :=
   let key := Codec.key codecSeed honestCodec
-  let pd := Flock.FV3.Sha512.Domain.make (RemoteAudit.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
+  let pd := Flock.FV3.Sha512.Domain.make (Poub.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
   { node, blocks := 130023424, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
     codecSeed, codec := honestCodec, receipt := .sketch, rows, key }
 
@@ -1110,4 +1110,4 @@ theorem steered_of_checked_nontrivial :
   obtain ⟨y, y', hne, he⟩ := Fintype.exists_ne_map_eq_of_card_lt (fun y : Fin 3 => steer () y 0) (by simp)
   exact hne (key y y' he)
 
-end Properties.RemoteAudit
+end Properties.Poub
