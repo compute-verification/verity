@@ -20,7 +20,7 @@ def test_static_reference_hosts_share_the_program_digest():
     seen = []
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
-            m = json.loads(p.read_text())
+            m = json.load(open(p))
             seen.append((str(p.relative_to(REPO)), (m.get("program") or {}).get("digest"), (m.get("construction") or {}).get("cuda_available")))
     if not seen:
         pytest.skip("reference manifests not in this checkout (sparse tree without out/gen)")

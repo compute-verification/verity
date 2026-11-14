@@ -73,6 +73,7 @@
     {"file": "tests/program/predict/test_steps.py", "kind": "ISC004", "symbol": "<module>", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "tests/program/predict/test_steps.py", "kind": "SIM300", "symbol": "_spec", "detail": "Yoda condition detected"},
     {"file": "tests/program/predict/test_template_counts.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/program/test_artifact_applicability_independent_of_record.py", "kind": "SIM115", "symbol": "test_static_reference_hosts_share_the_program_digest", "detail": "Use a context manager for opening files"},
     {"file": "tests/program/test_applicability.py", "kind": "SIM115", "symbol": "builds", "detail": "Use a context manager for opening files", "count": 4},
     {"file": "tests/program/test_derive_realhf.py", "kind": "B023", "symbol": "<module>", "detail": "Function definition does not bind loop variable `impl`", "count": 2},
     {"file": "tests/program/test_derive_realhf.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
