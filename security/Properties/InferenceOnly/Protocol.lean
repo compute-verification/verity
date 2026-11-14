@@ -5,11 +5,12 @@ public import InferenceOnlyCheck.Protocol
 /-!
 # What the inference-only policy's core protocol's acceptance means
 
-`InferenceOnlyCheck.Protocol.check` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Protocol.lean`, package `inference_only_check`) is the
-inference-only policy as a core protocol, `verity/inference-only/v0`, a subprotocol of both composites
-(`Core.Onsite.protocol`, `Core.Remote.protocol`): once the run's record names the declared circuit (`names`), it runs the
-check of record, `InferenceOnlyCheck.Theta.evaluate`, on the instance its params and evidence give (`instanceOf`) and the
-trusted input its params and commitment give (`trustedOf`).
+`InferenceOnlyCheck.Protocol.check`
+(`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Protocol.lean`, package
+`inference_only_check`) is the inference-only policy as a core protocol, `verity/inference-only/v0`, a subprotocol of
+both composites (`Core.Onsite.protocol`, `Core.Remote.protocol`): once the run's record names the registered circuit
+(`names`), it runs the check of record, `InferenceOnlyCheck.Theta.evaluate`, on the instance its params and evidence
+give (`instanceOf`) and the trusted input its params and commitment give (`trustedOf`).
 
 * `ProtocolAccepts`: on every case it accepts, the check of record accepts that instance and trusted input with a
   verdict whose `complies` is `true`, the policy check (`InferenceOnlyCheck.Desc.evaluate`) gives that same verdict on the
