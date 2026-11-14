@@ -1,6 +1,7 @@
 module
 
 public import NetworkCheck.Period
+public import Spot.OneStage
 public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
@@ -364,5 +365,28 @@ def heldMonitoringPeriod : Params :=
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
+
+/-- The one-stage answers the period check reads: each compute audit's, then each link-window's. -/
+def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)
+
+/-- What `AnswersVerified` says of a period its check accepted: each answer the check reads is the one one-stage's
+compiled verifier gives (`Spot.OneStage.protocol.answer`) on some parameters, commitment and evidence. The answer's
+digest is that commitment's, which the check holds to the registration (`answered`), and an accepting one-stage check
+holds its parameters' Program to that registration's; the parameters' query, law and δ are not yet the period's. -/
+def AnswersVerifiedAt (e : Evidence) : Prop :=
+  ∀ a ∈ answersRead e, ∃ params commitment evidence : ByteArray,
+    Spot.OneStage.protocol.answer params commitment evidence = a
+
+/-- `AnswersVerified` of the period check `chk`: `AnswersVerifiedAt` of every period `chk` accepts. -/
+def AnswersVerifiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → AnswersVerifiedAt e
+
+/-- **The period check accepts an execution phase only where the compiled Lean verifier verified every answer it
+reads**: each compute audit's and each link-window's one-stage answer is `Spot.OneStage.protocol.answer`'s on some
+inputs (`AnswersVerifiedAt`). Not yet proved: the check reads the answers as the evidence states them. -/
+def AnswersVerified : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → AnswersVerifiedAt e
 
 end Properties.NetworkPeriod
