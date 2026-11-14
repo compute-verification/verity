@@ -13,7 +13,7 @@ import dataclasses
 import hashlib
 import random
 import struct
-from functools import lru_cache
+from functools import cache
 
 import pytest
 
@@ -237,7 +237,7 @@ def _coord(K):
     return bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _layer(members):
     """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
     return OP.mixed_population_program([(_coord(K), n) for K, n in members])
