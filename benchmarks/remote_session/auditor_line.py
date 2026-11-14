@@ -2,10 +2,10 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's device signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
-`RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`poub-verifier`'s `line_record` request,
+`Poub.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `Poub.Pooled` over the
 record's samples) computes each session's line off its record from
-the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
+the inputs `verifier.recorded_inputs` reads, and `poub.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
 differ refuses the run's line, naming both values (`Disagree`). Floats appear only as the exact shares correctly
@@ -19,7 +19,7 @@ k-th root (its boundary leaves before it), so that request leaves as the root ar
 names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
 coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
 challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
-root of draw c's last window, and another window's A_g is the first request that leaves after its last root,
+root of sample c's last window, and another window's A_g is the first request that leaves after its last root,
 chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
 Both times are the challenger's monotonic clock in its release log, whose lines its close signs
 (`challenger.session_of`), and whose close, record and refused hellos the auditor's ledger sealed at the session's end
@@ -27,7 +27,7 @@ Both times are the challenger's monotonic clock in its release log, whose lines 
 after its coin, whose seed they take, and before its last root, which chains them.
 
 Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
-`lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`remote_bandwidth.pooled`)
+`lean_record`): each group's passes, its windows' receipts and samples, whose pooled bound (`poub.pooled`)
 is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
@@ -75,7 +75,7 @@ ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify
 **The store** (`bound_check`, the run's, so every session's, reported as `bound`). The verifier holds no checkpoint, so
 a run's registered store is the developer's choice. A record made while the verifier could bind it carries
 verifier.json's `binding`: the registered store is bound to the model when that binding held, refusing any hello whose
-payload root isn't that of the store the pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited*
+payload root isn't that of the store the pinned checkpoint lays out (`poub.store`, in the tree *credited*
 names, so the period's circuit commits to the code that decided it), the Lean verifier deciding it (`hold`, the
 binding's `lean`), the binding's root is the registration's, and its model, name and checkpoint_sha512, is the one the
 audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose record carries no
@@ -298,7 +298,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     naming the same value (chal_(g+1)'s, or another window's) would.
 
     Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
-    request names the last root of draw c's last window and no request names another window's by place. A_g is then
+    request names the last root of sample c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
@@ -474,7 +474,7 @@ def session_error(session: dict) -> dict:
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
     from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
     (`recorded_binding`, as `ledger.binding` reads them), reading Q off the record's sketch term (`sketch_failure`),
-    so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
+    so a record with none has no binding term here, and the rejection at its windows' requested samples (the session's
     `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total. `{"undecided": why}` where the ledger's declared outputs are undecided."""
@@ -1163,7 +1163,7 @@ def main(argv: list[str] | None = None) -> int:
                     "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either the store is "
+                         "auditor's model registry's shape (`poub.store.read_pin`); without either the store is "
                          "unbound and the line conditional on DeveloperStore")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
@@ -1180,7 +1180,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
+                    help="the poub-verifier executable (default: `lake build` it in PoUB's package)")
     ap.add_argument("--lockdown", type=Path, metavar="FILE",
                     help="infra's record of the provider's lockdown of the gate node (`read_lockdown`): a gate "
                          "session whose signed span lies inside an applied interval is conditional on "

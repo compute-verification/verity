@@ -41,7 +41,7 @@ class SetupIntegration:
     verifier's supplied 1 (`OK`), so a unit whose ok is 0 opens no root the verifier pins.
 
     `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
-    length; `sample` is the challenger's sampled block indices, drawn after the store's commitment is registered;
+    length; `sample` is the challenger's sampled block indices, sampled after the store's commitment is registered;
     `prefix` is the salt's 128-byte expansion, `store` and `weights` the store's blocks and W's rows, and `module` core's
     ``one_stage.registered`` as the caller passes it, which only `run` reads."""
 

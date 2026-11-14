@@ -386,7 +386,7 @@ def _mixed_epr(lag: int = 1):
 
 
 def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_lens=None, g6_lag=None, write_gm=True, write_tokens=True):
-    """A row directory shaped like row_pod's: <row>/match/capture/tokens.json (m1_capture's fields) + <row>/global_match.json (GM-01's)."""
+    """A row directory shaped like row_pod's: <row>/match/capture/tokens.json (match_capture's fields) + <row>/global_match.json (GM-01's)."""
     served = served if served is not None else _served({"r0": 11, "r1": 32}, {"r0"})
     row = tmp_path / "row"
     (row / "match" / "capture").mkdir(parents=True, exist_ok=True)

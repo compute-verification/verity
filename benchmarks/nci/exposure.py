@@ -1,7 +1,7 @@
 """What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and 1/eta
 across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
 and 2, and the closed forms of the memory cap mu, the inference-only policy's term nu and the cheating share chi checked against
-``tiers.evaluate``. 1/eta is not the slowdown D (``statement.dampener``, the slowdown calculator's
+``tiers.evaluate``. 1/eta is not the slowdown D (``statement.slowdown``, the slowdown calculator's
 ``slowdown.theorem.multiple_bound``): eta counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
 s = 0, g = 1 and no memory cap, D = 1 / (r + (eta - r) / MFU_0) wherever D > 1. ``statement.py`` gives the thresholds
 on D.
@@ -28,8 +28,8 @@ import tiers as T  # noqa: E402
 #: a plausible (low, high) for every parameter and where it comes from; the central value is the default. "guess" marks
 #: a bound no parameter file, calibration or measurement gives
 RANGES = {
-    "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
-    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
+    "unregistered": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
+    "free": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
     "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4"),
     "host_share": (0.0, 0.14, "without the hosts assumption (hosts carry no compute sets it to 0), against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
     "eps_agg": (1e-6, 1e-3, "delta is p/eps' at PoUW's per-window failure p, which has no value yet: 1e-6 needs p a hundredth as large for the same delta (about 3 x 2^-47 if p were 3 x 2^-40); 1e-3 lets delta fall tenfold"),
@@ -42,7 +42,7 @@ RANGES = {
     "f": (0.5, 0.99, "guess"),
     "pous_delta": (1e-6, 0.1, "guess, around today's 1/100"),
     "pous_floor": (0.0, 0.985, "0 when the slack counts it (streamed labels); 0.985 under the broken reference permutation (C8)"),
-    "disk_gb": (0.0, 8000.0, "unplugged; 8 TB of NVMe left in place (dark-compute red team)"),
+    "disk_gb": (0.0, 8000.0, "unplugged; 8 TB of NVMe left in place (the unregistered-hardware red team)"),
     "t_read": (1e-4, 1e-2, "guess, around today's 1 ms"),
     "wipe_s": (60.0, 6.048e5, "guess: every minute to weekly"),
     "hbm_gb": (640.0, 2304.0, "8 x 80 GB (H100) to 8 x 288 GB (B300); 8 x 96 GB today"),
@@ -67,7 +67,7 @@ RANGES = {
     "K": (2.2e6, 9.1e7, "calibrations kimi-k2-1m-coded, kimi-k2-1m-raw, kimi-k2-11mb-raw"),
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
     "d": (1.0, 17.0, "a run that trains its embedding; ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 under the "
-                     "open conjecture ReferenceLayered; a Dot16 step's 17 legs, no lookup read"),
+                     "open conjecture ReferenceLayered; a Dot16 step's 17 terms, no lookup read"),
     "e": (12288.0, 1.65e5, "low a guess; Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
@@ -80,13 +80,13 @@ RANGES = {
 }
 
 #: the modelled design, where the residual sits below the memory cap
-DESIGN = {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+DESIGN = {"free": 0.01, "host_share": 0.05, "clock_share": 0.0}
 SCENARIOS = {
     "defaults": {},
     "design": DESIGN,
     "host CPUs bounded": DESIGN | {"host_share": 0.0},
-    "served today": {"residual": 0.9},
-    "served today, R_wipe 4 GB": {"residual": 0.9, "pous_rounds": 12000.0, "unfilled_gb": 3.05, "pous_floor": 0.0},
+    "served today": {"free": 0.9},
+    "served today, R_wipe 4 GB": {"free": 0.9, "pous_rounds": 12000.0, "unfilled_gb": 3.05, "pous_floor": 0.0},
 }
 #: thresholds are found at the defaults and with the GPUs' residual as served today, at these tiers
 THRESHOLD_SCENARIOS = ("defaults", "served today")
@@ -108,7 +108,7 @@ KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: samples it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
 BATCHED = {"overhead": 1.6e8}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
-#: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
+#: the bound, mu against the registered part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
@@ -116,11 +116,11 @@ CHECKS = [
      "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
     ("host CPUs bounded, batched", DESIGN | BATCHED | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
-    ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
-    ("intake at line rate", {"residual": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
+    ("unregistered 0.1", DESIGN | {"unregistered": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
+    ("intake at line rate", {"free": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps the residual"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T4", "mu", "hourly wipes inside a 3.6 h window"),
-    ("side channels 3e5", WIPE_2GB | KEYED | {"residual": 0.9, "sigma": 3e5, "unfilled_gb": 0.83}, "T4", "mu",
+    ("side channels 3e5", WIPE_2GB | KEYED | {"free": 0.9, "sigma": 3e5, "unfilled_gb": 0.83}, "T4", "mu",
      "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
     ("K 1e6", {"K": 1e6}, "T1", "nu", "Lambda(K) = e"),
@@ -130,7 +130,7 @@ CHECKS = [
     ("1,000 servers, batched", DESIGN | BATCHED | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
-    ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
+    ("served, R_wipe 22 MB", {"free": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
                               "wipe_s": 1.0, "d": 65536.0}, "T3", "mu",
      "breaks: R_wipe < d b_w e, the cap floors at nu"),
     ("design", DESIGN, "T5", "chi",
@@ -195,14 +195,14 @@ def bound(p: dict, tier: str) -> float:
     """s + (1 - s)(min(r + nu, mu) + chi), mu from T3 and chi at T5. The memory cap holds the declared computation too,
     so s + min(r, mu) + nu + chi exceeds it by at most nu."""
     mech = T.TIERS[tier]
-    s = p["unmonitored"]
+    s = p["unregistered"]
     cap = mu(p, mech["exhaust"]) if mech["wipes"] else math.inf
-    return s + (1 - s) * (min(T.residual_share(p) + nu(p), cap) + (chi(p) if mech["sampled"] else 0.0))
+    return s + (1 - s) * (min(T.free_share(p) + nu(p), cap) + (chi(p) if mech["sampled"] else 0.0))
 
 
 def terms(p: dict) -> dict:
     lam_in = intake(p)
-    return {"s": p["unmonitored"], "r": T.residual_share(p), "mu": mu(p), "mu_T4": mu(p, True), "nu": nu(p),
+    return {"s": p["unregistered"], "r": T.free_share(p), "mu": mu(p), "mu_T4": mu(p, True), "nu": nu(p),
             "chi": chi(p), "R_wipe_gb": wipe_residual(p) / T.GB, "envelope_gb": envelope(p) / T.GB,
             "window_s": wipe_residual(p) / lam_in, "lambda_in": lam_in,
             "lambda_knee_bits": 2 * p["d"] * p["b_w"] * p["e"],
@@ -213,7 +213,7 @@ def check(p: dict, tier: str) -> dict:
     """Each closed form beside what evaluate() gives for it, as ``(evaluate, closed)``."""
     r = T.evaluate(p, T.TIERS[tier])
     return {"eta": (r["efficiency"], bound(p, tier)), "nu": (r["declared"], nu(p)), "chi": (r["cheat"], chi(p)),
-            "mu": (r["residual"] + r["declared"], mu(p, T.TIERS[tier]["exhaust"])), "capped": r["memory_caps_residual"]}
+            "mu": (r["free"] + r["declared"], mu(p, T.TIERS[tier]["exhaust"])), "capped": r["memory_caps_free"]}
 
 
 def elasticity(p: dict, key: str, tier: str, h: float = STEP) -> float | None:

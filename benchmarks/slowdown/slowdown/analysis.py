@@ -78,7 +78,7 @@ class _Restricted:
 
 def restrict(s: Scenario, status: str) -> Scenario:
     """`s` with only the bounds and cuts whose status is `status` or stronger, and no attacks; the uncertified and unregistered
-    gates at the elementary cap where `s_×`'s straddling premise is weaker than `status`."""
+    gates at the elementary yield where `s_×`'s straddling premise is weaker than `status`."""
     top = STATUSES.index(status)
     st = s.structure if _rank(s.structure.cites()) <= top else s.structure.elementary()
     return replace(s, regime=_Restricted(s.regime, status), bounds=tuple(b for b in s.bounds if _rank(b.cites) <= top),
@@ -88,7 +88,7 @@ def restrict(s: Scenario, status: str) -> Scenario:
 @cache
 def upto(status: str) -> Metric:
     """`LO` from only the bounds and cuts at least as strong as `status`: `upto("conditional")` drops the draft
-    statements (the straddling premise among them, so the uncertified and unregistered gates count at the elementary cap),
+    statements (the straddling premise among them, so the uncertified and unregistered gates count at the elementary yield),
     `upto("proved")` keeps only what needs no assumption."""
     if status not in STATUSES:
         raise ValueError(f"status {status!r} is not one of {STATUSES}")
@@ -280,12 +280,12 @@ def window(p: Param, widen: float = 1.0) -> tuple[float, float]:
     """A window around `p`'s plausible range: positive ranges grow by their own ratio to the power `widen` (at least a
     decade) at each end, others by ten widths; a range inside `[0, 1]` (a share, a utilization) stays inside it."""
     lo, hi = sorted((float(p.low), float(p.high)))
-    cap = 1.0 if 0 <= lo and hi <= 1 else math.inf
+    ceiling = 1.0 if 0 <= lo and hi <= 1 else math.inf
     if lo > 0:
         f = max((hi / lo) ** widen, 10.0)
-        return lo / f, min(hi * f, cap)
+        return lo / f, min(hi * f, ceiling)
     w = 10 * (hi - lo) * widen
-    return (max(lo - w, 0.0) if lo >= 0 else lo - w), min(hi + w, cap)
+    return (max(lo - w, 0.0) if lo >= 0 else lo - w), min(hi + w, ceiling)
 
 
 def position(p: Param, v: float) -> float:

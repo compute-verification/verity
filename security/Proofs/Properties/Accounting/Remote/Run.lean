@@ -18,9 +18,9 @@ invariant too.
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## Runs -/
 
@@ -632,4 +632,4 @@ theorem passesChained : PassesChained := by
   rw [← hr]
   exact ⟨h.chain, h.heads⟩
 
-end Properties.RemoteAudit
+end Properties.Poub

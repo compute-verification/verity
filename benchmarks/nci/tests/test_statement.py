@@ -20,10 +20,10 @@ EPS = P["eps_agg"]
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 #: the brief's rungs, as overrides on the defaults
 RUNGS = {
-    "Today": {"residual": 1.0},
+    "Today": {"free": 1.0},
     "PoUW's floor credit": {},
-    "Floor credit and attested clock": {"residual": 0.213, "clock_share": 0},
-    "Best plausible PoUW design": {"residual": 0.01, "clock_share": 0, "eps_w": 0.0025},
+    "Floor credit and attested clock": {"free": 0.213, "clock_share": 0},
+    "Best plausible PoUW design": {"free": 0.01, "clock_share": 0, "eps_w": 0.0025},
 }
 #: PoUW's deficit at the floor, the best design's: at r̂ = 0 all of C is certified, so the deficit is ε_W C
 EPS_W = RUNGS["Best plausible PoUW design"]["eps_w"]
@@ -31,25 +31,25 @@ WIPES = {13.0: "Streamed-label wipes, 13 GB", 6.0: "Streamed-label wipes, 6 GB",
          3.05: "Streamed-label wipes, 3.05 GB (no power removal)", 1.0: "Power removal, 1 GB"}
 
 
-def dampener(over: dict, tier: str) -> float:
-    return S.dampener(P | over, tier)
+def slowdown(over: dict, tier: str) -> float:
+    return S.slowdown(P | over, tier)
 
 
-def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
-    """Unmonitored compute trains like the unconstrained developer, and so do dark fragments of monitored capacity
-    (reference efficiency: ``evaluate`` at ``residual_mfu`` = MFU_0); the rest are counted multiplications, so
+def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
+    """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
+    (reference efficiency: ``evaluate`` at ``free_mfu`` = MFU_0); the rest are counted multiplications, so
     D = 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
     terms."""
-    p = P | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = P | {"unregistered": 0.01, "free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"], p["mfu"])
-    rest = r["residual"] + r["declared"] + r["cheat"]
-    assert T.remote_terms(p, r) == (r["unmonitored"], rest)
-    assert S.dampener(p, "T4") == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
-    assert r["residual"] == pytest.approx(p["mfu"] * T.evaluate(p, T.TIERS["T4"])["residual"], rel=1e-9)
-    assert all(S.dampener(P | {"residual": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
+    rest = r["free"] + r["declared"] + r["cheat"]
+    assert T.remote_terms(p, r) == (r["unregistered"], rest)
+    assert S.slowdown(p, "T4") == pytest.approx(1 / (r["unregistered"] + rest / p["mfu"]), rel=1e-9)
+    assert r["free"] == pytest.approx(p["mfu"] * T.evaluate(p, T.TIERS["T4"])["free"], rel=1e-9)
+    assert all(S.slowdown(P | {"free": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
 
 
-def test_the_remote_dampener_at_the_defaults():
+def test_the_remote_slowdown_at_the_defaults():
     """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
     MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
     3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
@@ -60,14 +60,14 @@ def test_the_remote_dampener_at_the_defaults():
         return S.multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[t])), reference_efficiency=False)
     for t in ("T1", "T2", "T3", "T4"):
         r = T.evaluate(P, T.TIERS[t], P["mfu"])
-        assert S.dampener(P, t) == pytest.approx(1 / (r["residual"] / P["mfu"] + r["declared"] / P["mfu"]), rel=1e-9)
-        assert r["residual"] / P["mfu"] == pytest.approx(T.residual_share(P) + LAG, rel=1e-9)
-    assert S.dampener(P, "T1") == pytest.approx(3.022, abs=1e-3)
+        assert S.slowdown(P, t) == pytest.approx(1 / (r["free"] / P["mfu"] + r["declared"] / P["mfu"]), rel=1e-9)
+        assert r["free"] / P["mfu"] == pytest.approx(T.free_share(P) + LAG, rel=1e-9)
+    assert S.slowdown(P, "T1") == pytest.approx(3.022, abs=1e-3)
     assert 1 / T.evaluate(P, T.TIERS["T1"])["efficiency"] == pytest.approx(3.04, abs=0.01)
     assert at_peak(P, "T1") == pytest.approx(1.215, abs=1e-3)
     hosts = P | {"host_share": 0.12608}
     assert all(at_peak(hosts, t) == 1.0 for t in T.TIERS)
-    assert S.dampener(hosts, "T1") == pytest.approx(2.193, abs=1e-3)
+    assert S.slowdown(hosts, "T1") == pytest.approx(2.193, abs=1e-3)
 
 
 def quantities(items: list[dict]) -> dict:
@@ -77,11 +77,11 @@ def quantities(items: list[dict]) -> dict:
 def test_the_ladder_is_evaluate_at_the_rungs():
     rows = {r["rung"]: r for r in S.ladder()}
     for name, over in RUNGS.items():
-        assert rows[name]["D"] == {t: dampener(over, t) for t in T.TIERS}, name
+        assert rows[name]["slowdown"] == {t: slowdown(over, t) for t in T.TIERS}, name
     for gb, name in WIPES.items():
         assert rows[name]["R_wipe_gb"] == pytest.approx(gb, rel=1e-9)
         for t in ("T3", "T5"):
-            assert rows[name]["D"][t] == pytest.approx(dampener(STREAMED | {"unfilled_gb": gb - 0.17}, t), rel=0.005)
+            assert rows[name]["slowdown"][t] == pytest.approx(slowdown(STREAMED | {"unfilled_gb": gb - 0.17}, t), rel=0.005)
 
 
 def test_d_is_the_hardware_multiple_of_the_binding_terms():
@@ -89,14 +89,14 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     residual and the verdict lag train at MFU_0 (reference efficiency), nu is counted multiplications."""
     rows = {r["rung"]: r for r in S.ladder()}
     nu = X.nu(P) / P["mfu"]
-    best = T.residual_share(P | RUNGS["Best plausible PoUW design"])
-    assert rows["Best plausible PoUW design"]["D"]["T1"] == pytest.approx(1 / (best + nu + LAG), rel=1e-4)
+    best = T.free_share(P | RUNGS["Best plausible PoUW design"])
+    assert rows["Best plausible PoUW design"]["slowdown"]["T1"] == pytest.approx(1 / (best + nu + LAG), rel=1e-4)
     floor = nu + EPS_W + EPS
-    assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(1 / (floor + LAG), rel=1e-4)
-    assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(1 / (floor + 60 / H), rel=1e-4)
+    assert rows["Floor (r̂ = 0, 4 GB)"]["slowdown"]["T1"] == pytest.approx(1 / (floor + LAG), rel=1e-4)
+    assert rows["Floor, one-minute verdict lag"]["slowdown"]["T3"] == pytest.approx(1 / (floor + 60 / H), rel=1e-4)
     one = P | S.streamed(1.0)
-    assert X.mu(one) > 1 and rows["Power removal, 1 GB"]["D"]["T3"] == pytest.approx(
-        1 / (T.residual_share(one) + nu + LAG), rel=1e-3)
+    assert X.mu(one) > 1 and rows["Power removal, 1 GB"]["slowdown"]["T3"] == pytest.approx(
+        1 / (T.free_share(one) + nu + LAG), rel=1e-3)
     fl = quantities(S.floor())
     assert fl["1 / (ε_W + ε′ + ν / MFU_0), the floor's limit as the verdict lag goes to 0"] == pytest.approx(
         1 / floor, rel=1e-12)
@@ -106,7 +106,7 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
 def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():
     q = P | S.BEST
     _, fleet, server = (r["value"] for r in S.slide())
-    assert fleet == pytest.approx(1 / (T.residual_share(q) + S.SDC * LAG + X.nu(q) / P["mfu"]), rel=1e-4)
+    assert fleet == pytest.approx(1 / (T.free_share(q) + S.SDC * LAG + X.nu(q) / P["mfu"]), rel=1e-4)
     assert server == pytest.approx(S.SDC * LAG / P["nodes"], rel=1e-12)
 
 
@@ -118,23 +118,23 @@ def test_the_fit_bound_rows_are_fits_with_chi_on_top():
     fb = S.fit_bound()
     for r in fb["rows"]:
         row = F.row(r["R_wipe_gb"], N, L)
-        assert (r["D_fit"], r["D_closed"], r["D_fit_train"]) == (row["D_fit"], row["D_closed"], row["D_fit_train"])
-        assert r["D_fit_T5"] == pytest.approx(max(1.0, 1 / (1 / r["D_fit"] + chi / P["mfu"])), rel=1e-3)
+        assert (r["slowdown_fit"], r["slowdown_closed"], r["slowdown_fit_train"]) == (row["slowdown_fit"], row["slowdown_closed"], row["slowdown_fit_train"])
+        assert r["slowdown_fit_T5"] == pytest.approx(max(1.0, 1 / (1 / r["slowdown_fit"] + chi / P["mfu"])), rel=1e-3)
     edge = fb["other"][-1]["value"]
     assert F.row(edge, N, L)["fit_over_closed"] == pytest.approx(1.0, rel=1e-6)
 
 
-def test_the_regimes_add_unmonitored_compute_at_full_efficiency():
+def test_the_regimes_add_unregistered_compute_at_full_efficiency():
     """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's residual, which trains at
     MFU_0 (reference efficiency) where the cap and nu are counted multiplications."""
     q = P | S.BEST
-    monitored = T.residual_share(q) + LAG + X.nu(q) / P["mfu"]
+    registered = T.free_share(q) + LAG + X.nu(q) / P["mfu"]
     mu = S.fit_mu(6.0) / P["mfu"]
-    assert mu < monitored
+    assert mu < registered
     for row in S.regimes()["rows"]:
-        s, D, six = row["s"], row["D"]["today's wipes"], row["D"]["6 GB streamed-label wipes"]
-        assert 1 / D["T3"] == pytest.approx(s + (1 - s) * monitored, rel=1e-4), row
-        assert D["T5"] == pytest.approx(max(1.0, 1 / (s + (1 - s) * (monitored + S.cheat(q) / P["mfu"]))), rel=1e-4), row
+        s, today, six = row["s"], row["slowdown"]["today's wipes"], row["slowdown"]["6 GB streamed-label wipes"]
+        assert 1 / today["T3"] == pytest.approx(s + (1 - s) * registered, rel=1e-4), row
+        assert today["T5"] == pytest.approx(max(1.0, 1 / (s + (1 - s) * (registered + S.cheat(q) / P["mfu"]))), rel=1e-4), row
         assert 1 / six["T3"] == pytest.approx(s + (1 - s) * mu, rel=1e-4), row
         assert six["T5"] == pytest.approx(max(1.0, 1 / (s + (1 - s) * (mu + S.cheat(q) / P["mfu"]))), rel=1e-4), row
 
@@ -148,11 +148,11 @@ def test_the_ladders_fit_bound_is_fit_row_at_the_memory_rungs():
     chi = S.cheat(P)
     rows = {r["rung"]: r for r in S.ladder()}
     for gb, name in WIPES.items():
-        D = F.row(gb, N, L)["D_fit"]
-        assert rows[name]["D_fit"]["T3"] == pytest.approx(D, rel=1e-9), name
-        assert rows[name]["D_fit"]["T5"] == pytest.approx(max(1.0, 1 / (1 / D + chi / P["mfu"])), rel=1e-3), name
+        bound = F.row(gb, N, L)["slowdown_fit"]
+        assert rows[name]["slowdown_fit"]["T3"] == pytest.approx(bound, rel=1e-9), name
+        assert rows[name]["slowdown_fit"]["T5"] == pytest.approx(max(1.0, 1 / (1 / bound + chi / P["mfu"])), rel=1e-3), name
     for name in RUNGS:
-        assert rows[name]["D_fit"]["T3"] == pytest.approx(rows[name]["D"]["T2"], rel=1e-9), name
+        assert rows[name]["slowdown_fit"]["T3"] == pytest.approx(rows[name]["slowdown"]["T2"], rel=1e-9), name
 
 
 def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
@@ -167,13 +167,13 @@ def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
 
 
 def test_the_recipe_multiplier_scales_the_fit_bounds_cap():
-    """As in ``tiers.evaluate``, where monitored efficiency is capped at m times the memory cap: at 6 GB the cap binds
-    on the best design, so D is MFU_0 / (m mu) by both ``statement.capped`` and ``fit.dampener``."""
+    """As in ``tiers.evaluate``, where registered efficiency is capped at m times the memory cap: at 6 GB the cap binds
+    on the best design, so D is MFU_0 / (m mu) by both ``statement.capped`` and ``fit.slowdown``."""
     mu = S.fit_mu(6.0)
     for m in (1.0, 3.0):
         q = P | S.BEST | S.streamed(6.0) | {"m": m}
-        assert S.fit_dampener(q, "T3") == pytest.approx(P["mfu"] / (m * mu), rel=1e-9), m
-        assert F.dampener(F.params(6.0) | {"m": m}, mu, 0.0) == pytest.approx(P["mfu"] / (m * mu), rel=1e-9), m
+        assert S.fit_slowdown(q, "T3") == pytest.approx(P["mfu"] / (m * mu), rel=1e-9), m
+        assert F.slowdown(F.params(6.0) | {"m": m}, mu, 0.0) == pytest.approx(P["mfu"] / (m * mu), rel=1e-9), m
 
 
 def test_alpha_falls_only_where_k_reaches_the_level_in_its_range():
@@ -181,16 +181,16 @@ def test_alpha_falls_only_where_k_reaches_the_level_in_its_range():
     assert S.alpha_falls({"below": {100.0: "always"}, "intervals": {100.0: [[lo, hi]]}}) is None
     assert S.alpha_falls({"below": {100.0: "> 5e5"}, "intervals": {100.0: [[5e5, hi]]}}) == P["K"] / 5e5
     assert S.alpha_falls({"below": {100.0: "never"}, "intervals": {100.0: []}}) == 1.0
-    assert S.dampener(P | {"K": lo}, "T3") < 100
+    assert S.slowdown(P | {"K": lo}, "T3") < 100
 
 
 def test_the_symbols_closed_forms_are_what_evaluate_uses():
     sym = {(r["symbol"], r["meaning"]): r["value"] for r in S.symbols()}
     capped = T.evaluate(P | S.streamed(1.0), T.TIERS["T3"])
-    if capped["memory_caps_residual"]:
-        assert sym[("μ̂", "at 1 GB")] == pytest.approx(capped["residual"] + capped["declared"], rel=0.01)
+    if capped["memory_caps_free"]:
+        assert sym[("μ̂", "at 1 GB")] == pytest.approx(capped["free"] + capped["declared"], rel=0.01)
     else:
-        assert sym[("μ̂", "at 1 GB")] >= capped["residual"] + capped["declared"]
+        assert sym[("μ̂", "at 1 GB")] >= capped["free"] + capped["declared"]
     assert sym[("μ̂", "at 6 GB")] == X.mu(P | S.streamed(6.0))
     assert sym[("ν = 2αΛ(K)/(κ b_a)", "NCI's term")] == pytest.approx(
         T.evaluate(P | S.BEST, T.TIERS["T1"])["declared"], rel=1e-6)
@@ -255,12 +255,12 @@ def test_it_renders_every_section_as_markdown_and_json(capsys, monkeypatch):
     md = capsys.readouterr().out
     assert md.startswith("# ") and "at commit `" in md
     for heading in ("## Slide forms", "## 0. Symbols", "## 4. The terms", "## The ladder", "## The fit bound",
-                    "## Years of growth", "## The unmonitored share by regime", "## 6. Thresholds on D",
+                    "## Years of growth", "## The unregistered share by regime", "## 6. Thresholds on D",
                     "## Known holes"):
         assert heading in md
     assert S.main(["--json"]) == 0
     s = json.loads(capsys.readouterr().out)
-    assert s["ladder"][3]["D"]["T5"] == dampener(RUNGS["Best plausible PoUW design"], "T5")
+    assert s["ladder"][3]["slowdown"]["T5"] == slowdown(RUNGS["Best plausible PoUW design"], "T5")
     assert set(s["thresholds"]) == set(X.THRESHOLD_SCENARIOS)
     x = quantities(s["exposures"])["multiple of today's proving cost at which χ reaches 1%"]
     assert S.cheat(P | {"overhead": x * P["overhead"]}) == pytest.approx(0.01, rel=1e-9)

@@ -10,7 +10,7 @@ import dataclasses
 from fractions import Fraction
 
 import pytest
-from test_remote_bandwidth import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
+from test_poub import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 
 from verity.protocols.accounting.poub.prover import audit_prover

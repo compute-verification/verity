@@ -17,7 +17,7 @@ public import Flock.Hm96
 public import Lms.Verify
 public import Properties.Remote
 public import Properties.Verity.Sha512
-public import Properties.Verity.WindowFiles
+public import Properties.Verity.ExecutionPhaseFiles
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -42,7 +42,7 @@ period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes |
 | the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | |
-| PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
+| PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | |
 | the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | |
 
@@ -69,7 +69,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   circuit, its units and its constants are what the verifier reads from the two (`Flock.Bridge.circuitOfFile`,
   `unitsOfFile`, `partsOfFile` at v2's reading of the files, `read`), so the units are the public file's population,
   and the positions are the files' and the commitment's (`place`), never the prover's world. The reading is a
-  window's (`WindowFiles`): one statement's files are a window of one member, and at a window of several members the
+  window's (`ExecutionPhaseFiles`): one statement's files are a window of one member, and at a window of several members the
   circuit is the members' side by side, their units in the members' order. Committed files without a
   file of each digest are refused (`Registered`, conjoined beside the composite's acceptance).
 * **SPOT's claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
@@ -187,7 +187,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
     else PouwCheck.Period.protocol
   | .inferenceOnly, _ => InferenceOnlyCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
-  | .poub, _ => RemoteAudit.P2Protocol.protocol
+  | .poub, _ => Poub.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
   | .wipe, _ => MemoryChallenger.WipeProtocol.protocol
 
@@ -687,8 +687,8 @@ composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
 structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- v2's reading of the committed files at the parameters: each member's circuit file and public file, the ones their
-  digests name; one statement's files are a window of one member (`WindowFiles.one`) -/
-  read : ByteArray → Array ByteArray → WindowFiles
+  digests name; one statement's files are a window of one member (`ExecutionPhaseFiles.one`) -/
+  read : ByteArray → Array ByteArray → ExecutionPhaseFiles
   /-- the circuit file's digest the parameters hold -/
   programDigest : ByteArray → Option Hash.Digest
   /-- the public file's digest the parameters hold -/

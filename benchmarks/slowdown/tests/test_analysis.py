@@ -143,7 +143,7 @@ def test_lo_grows_with_the_statuses_admitted_and_admitting_all_is_lo(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_the_slowdown(name):
+def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_bounds_the_slowdown(name):
     r = analysis.result(REG, name)
     terms = analysis.attribution(r)
     assert sum(t.share for t in terms) == pytest.approx(1.0)
@@ -226,7 +226,7 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
 
 
 def test_run_lists_omega_max_and_mu_where_the_serving_cut_sets_the_bound(tmp_path, monkeypatch, capsys):
-    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose cap the
+    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose yield the
     serving cut sets, `fanout-priced` and `fanout-split`, each cite a `draft:` statement of their own) rests on its
     structure's `ω_max` and `μ`, its boundary term's: `slowdown.md` names both declarations and `slowdown.json`'s structure record
     holds both values. A remote bound has no serving cut, so its text names neither."""
@@ -262,8 +262,8 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     run.main()
     text = capsys.readouterr().out
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
-            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
-            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
+            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the network "
+            "certifier form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
             "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
     assert "line rate, 5.01e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1
@@ -271,7 +271,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert record["reference-remote-h200"]["certified"] is None
     certified = record["onsite-w63"]["certified"]
     assert certified["r_in"] == pytest.approx(91_075) and certified["window_buckets"] == 32
-    assert certified["faulty_unit_bits"] == 356_592
+    assert certified["incorrect_block_bits"] == 356_592
     reference = run.certified(build(REG, "reference-onsite-h200"))
     assert not reference["declared"] and reference["intake"] == 1
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "
