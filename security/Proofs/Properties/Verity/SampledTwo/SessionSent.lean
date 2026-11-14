@@ -92,9 +92,12 @@ theorem session_sent (h : SpotFlock.Held) {Ω : Type} (H : Msg → Msg) (x m₀ 
       rw [List.getElem?_drop, List.getElem?_map] at hi
       rcases Nat.lt_or_ge i j with hij | hij
       · obtain ⟨c, hc⟩ := hent i hij
+        have hne := SpotFlock.coin_bytes_ne c
+        -- the coin's bytes as a variable: unifying against `c.bytes` itself unfolds its 65536 elements
+        generalize c.bytes = b at hc hne
         rw [hc] at hi
         obtain rfl := Option.some.inj hi
-        exact fun hd => SpotFlock.coin_bytes_ne c (of_decide_eq_true hd)
+        exact fun hd => hne (of_decide_eq_true hd)
       · rw [List.getElem?_eq_none (by omega)] at hi
         cases hi
     have hpa : (((SpotFlock.proverSeq h m₀ m₁ m₂ P').next x (new.map RecDeploy.histOf) ω).eval H).1 =
