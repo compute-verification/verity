@@ -20,8 +20,9 @@ or a local), others' (a name another owner declares, `[code] keep`), or by type 
 A file takes a word by `code` only when nothing else can own the word there: in Lean, no other owner's module that
 declares it is reachable through the file's imports, and no file outside ours that reaches the file spells it; in Python,
 the file imports no module outside ours that declares it, no file outside ours imports the file and spells it, and the
-file serializes no record by its fields' names. It reads source text and elaborates nothing, so the build is the
-authority. Run from the repository's root.
+file serializes no record by its fields' names. A word one of our files takes by hand is by hand in every file of ours
+linked to it by an import, either way, where either file declares it. It reads source text and elaborates nothing, so
+the build is the authority. Run from the repository's root.
 """
 from __future__ import annotations
 
@@ -246,6 +247,7 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
 
     safe: dict[str, list[str]] = {}
     hand: dict[str, str] = {}
+    whys: dict[str, tuple[set[str], dict[str, str]]] = {}
     for f in sorted(x for x in files if ours(x) and x.endswith((".lean", ".py"))):
         if not (words := code_words(f)):
             continue
@@ -270,6 +272,28 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
             if SERIALIZES.search(text(f)):
                 for w in sorted(words & py_declares(f)):
                     why.setdefault(w, f"serializes its records by field name and declares `{w}`")
+        whys[f] = (words, why)
+
+    def linked(f: str) -> set[str]:
+        """Our files a word of `f`'s may name a declaration of, or be named from: those it reaches or imports, and
+        those that reach or import it."""
+        if f.endswith(".lean"):
+            out = set(reach(f)) | {g for g in whys if g.endswith(".lean") and f in reach(g)}
+        else:
+            out = {by_module[m] for m in py_imports(f) if m in by_module}
+            out |= {g for g in whys if g.endswith(".py") and any(by_module.get(m) == f for m in py_imports(g))}
+        return {g for g in out if g in whys and g != f}
+    links = {f: linked(f) for f in whys}
+    declares = {f: (lean_declares(f) if f.endswith(".lean") else py_declares(f)) for f in whys}
+    changed = True
+    while changed:
+        changed = False
+        for f, (words, why) in whys.items():
+            for g in sorted(links[f]):
+                for w in sorted((words - set(why)) & set(whys[g][1])):
+                    if w in declares[f] or w in declares[g]:
+                        why[w], changed = f"{g}, ours, takes `{w}` by hand", True
+    for f, (words, why) in whys.items():
         if ok := sorted(words - set(why)):
             safe[f] = ok
         if why:

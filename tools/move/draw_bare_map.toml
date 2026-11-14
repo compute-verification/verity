@@ -11,7 +11,7 @@
 # that spells a bare word in code is `[code] by_hand`, renamed by hand and built. Prose is left for its own map.
 
 [rewrite]
-exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py"]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py", "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
 strings = [
@@ -56,5 +56,5 @@ keep = [
   "Sampling\\.Draws\\b",
   "Game\\.draw\\b",
 ]
-files = []
-by_hand = []
+# `[code.files]` (each file's words) and `[code.by_hand]` (each file's reason) follow, as `draw_bare.py plan --write`
+# writes them on the moved tree
