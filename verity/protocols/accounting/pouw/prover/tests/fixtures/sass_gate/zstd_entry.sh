@@ -5,7 +5,7 @@
 # of the cubin `cuobjdump -xelf` unpacks from the object, which is the test's ZSTD_CUBIN_SHA256, and fails unless the
 # same nvcc's --no-compress build holds that cubin byte for byte.
 #
-#   CUDA_HOME=/usr/local/cuda-13.3 benchmarks/pouw/tests/fixtures/sass_gate/zstd_entry.sh [OUT]
+#   CUDA_HOME=/usr/local/cuda-13.3 verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/zstd_entry.sh [OUT]
 #
 # Needs nvcc (CUDA_HOME/bin), cuobjdump (POUW_CUDA_BIN, else beside nvcc) and objcopy. OUT defaults to the fixture.
 set -euo pipefail

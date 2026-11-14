@@ -3,8 +3,8 @@ through each kernel's own `sass_gate.py`): its CLI's exit code, OUT_JSON and pri
 `fixtures/mma_gate/verdicts.json` (sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
 
 The cases: a clean listing of every kernel the gate wants (`pass`, and `pass_sm120a` for a gate given ARCH), the same with
-one of each refusal (`refused`), and the harness's real sm_120a `cuobjdump -sass` listings (`fixtures/sass_gate/plain` and
-`fast_math`) under a ptxas report of their functions. The listings are generated here from each gate's own tables, so a
+one of each refusal (`refused`), and the harness's real sm_120a `cuobjdump -sass` listings (`plain` and `fast_math`
+in `verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/`) under a ptxas report of their functions. The listings are generated here from each gate's own tables, so a
 change that means to move a verdict (a kernel added to WANT, say) rewrites the pins: `python test_mma_gate.py --write`.
 """
 from __future__ import annotations
@@ -22,6 +22,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
+SASS_FIX = ROOT / "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate"
 GATES = {"pearl_c_sm90": ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/sass_gate.py", None),
          "pearl_c_sm120": ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/sass_gate.py", None),
          "s8_linear": ("benchmarks/torch_gpu/s8_linear/sass_gate.py", None)}
@@ -157,7 +158,7 @@ def s8_linear(arch: str, bad: bool) -> tuple[str, str]:
 
 
 def real(gate: str, listing: str) -> tuple[str, str]:
-    sass = (FIX / "sass_gate" / f"{listing}.cuobjdump.txt").read_text()
+    sass = (SASS_FIX / f"{listing}.cuobjdump.txt").read_text()
     names = dict.fromkeys(re.findall(r"Function : (\w+)", sass))
     return "".join(entry(n, REAL_ARCH[gate], regs=24 + 2 * i, smem=0) for i, n in enumerate(names)), sass
 
