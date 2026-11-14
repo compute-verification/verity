@@ -1,6 +1,6 @@
-# Sampled proofs (`verity-sampled-proofs`)
+# SPOT (`verity-sampled-proofs`)
 
-Sampled proofs spot-check a committed computation. While serving, the developer commits every value that crosses a
+SPOT spot-checks a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then samples proof blocks
 on the auditor's challenger's coins, the developer proves the sampled proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`): except with

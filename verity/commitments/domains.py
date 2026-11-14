@@ -168,7 +168,7 @@ RANDOMNESS_SHARD = "verity/randomness/shard/v2"
 RANDOMNESS_DERIVE_V1 = "verity/randomness/derive/v1"
 RANDOMNESS_STREAM_V1 = "verity/randomness/stream/v1"
 
-# Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
+# Shared: SPOT's one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 ONE_STAGE_PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 ONE_STAGE_PROTOCOL_V2 = "verity/sampled-proofs/one-stage/v2"
 ONE_STAGE_SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
@@ -213,7 +213,7 @@ WORD_CODEC_KV = "verity/word-codec/kv/v0"
 # Not yet read from here: signatures and AEAD (`verity.commitments.crypto`, `Lms`)
 LMS_I = "verity/lms/v0/I"
 
-# Not yet read from here: sampled proofs and the proof system's challenger
+# Not yet read from here: SPOT and the proof system's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"
@@ -323,6 +323,7 @@ REMOTE_BANDWIDTH_CODEC = "verity/remote-bandwidth/codec/v0"
 REMOTE_BANDWIDTH_COINS = "verity/remote-bandwidth/coins/v1"
 REMOTE_BANDWIDTH_OPENINGS = "verity/remote-bandwidth/openings/v0"
 REMOTE_BANDWIDTH_P2_REGISTRATION = "verity/remote-bandwidth/p2-registration/v0"
+REMOTE_BANDWIDTH_P2_CLOSE = "verity/remote-bandwidth/p2/close/v0"
 REMOTE_BANDWIDTH_P2 = "verity/remote-bandwidth/p2/v0"
 REMOTE_BANDWIDTH_PAYLOAD = "verity/remote-bandwidth/payload/v0"
 REMOTE_BANDWIDTH_PLAN = "verity/remote-bandwidth/plan/v0"
@@ -333,6 +334,7 @@ REMOTE_BANDWIDTH_REGISTRY = "verity/remote-bandwidth/registry/v0"
 REMOTE_BANDWIDTH_SEED = "verity/remote-bandwidth/seed/v0"
 REMOTE_BANDWIDTH_SKETCH_RECEIPT = "verity/remote-bandwidth/sketch-receipt/v0"
 REMOTE_BANDWIDTH_SKETCH_SIGNS = "verity/remote-bandwidth/sketch-signs/v0"
+REMOTE_BANDWIDTH_SKETCH_SIGNS_WIDE = "verity/remote-bandwidth/sketch-signs/v1"
 REMOTE_BANDWIDTH_STUB_TILE = "verity/remote-bandwidth/stub-tile/v0"
 REMOTE_BANDWIDTH_TIMING_JITTER = "verity/remote-bandwidth/timing-jitter/v0"
 REMOTE_BANDWIDTH_PROTOCOL = "verity/remote-bandwidth/v0"

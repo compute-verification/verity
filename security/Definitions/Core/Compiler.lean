@@ -21,7 +21,7 @@ advice: the gates holding θ's values, which were committed beforehand.
   `C.N + i` of the appended circuit, each reading earlier gates of `C` or of the block (the KV cache a later phase reads,
   say). `C.append E` (`Circuit.append`) is the circuit with the block appended; `C`'s gates keep their indices.
 * **What the compiler outputs** (`Compiler.Output`): a circuit file, its registered input gates `θ`, its partition `𝓘`
-  into inference blocks, which the inference-only check reads, its partition `P` into proof blocks, which sampled proofs
+  into inference blocks, which the inference-only check reads, its partition `P` into proof blocks, which SPOT
   prove, nested in `𝓘` (`Partition.Refines`), and each gate's position in the committed trace (`pos`).
 * **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks, each proof
   block's inference block, and its gates' positions, numbered after `o`'s (`Compiler.Output.append`).

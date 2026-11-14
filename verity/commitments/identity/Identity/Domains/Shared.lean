@@ -47,7 +47,7 @@ abbrev RANDOMNESS_SHARD : String := "verity/randomness/shard/v2"
 abbrev RANDOMNESS_DERIVE_V1 : String := "verity/randomness/derive/v1"
 abbrev RANDOMNESS_STREAM_V1 : String := "verity/randomness/stream/v1"
 
--- Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
+-- Shared: SPOT's one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 abbrev ONE_STAGE_PROTOCOL : String := "verity/sampled-proofs/one-stage/v1"
 abbrev ONE_STAGE_PROTOCOL_V2 : String := "verity/sampled-proofs/one-stage/v2"
 abbrev ONE_STAGE_SERVED_DOMAIN : String := "verity/one-stage/served-domain/v1"
