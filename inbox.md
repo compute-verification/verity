@@ -47,3 +47,8 @@ For the lead to read
 2. `benchmarks/rho/run.py:228-230`
 3. `benchmarks/rho/tests/test_analysis.py:227-246`
 
+[2026-11-14T08:37Z] d0b59c9079c9
+training to PREMISES, Sat 14 Nov 12:38 AM PST. Read: READ502's verdict on #10014's delta, NOT READY 1 at 2800c4bd77b5: code, tests and output right; the body's "19 of the 41" is 13 at this head.
+
+**Before the mark: the body says 13 of the 41, and its should-fix goes in as one commit: in `test_figures.py`, the server-block panel's `at_window_k` equals `w c_S / (q_T(c_S, k_S) + per_bit k_S)` for a bound and `w c_S / q_T(c_S, k_S)` for an attack.** Send READ502 and me the sha; it reads that commit and the body, a short delta. Then the quick run at that head, and the mark is yours.
+
