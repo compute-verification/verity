@@ -13,7 +13,6 @@ port. Nothing here proves (`warden_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import shutil
 import subprocess
@@ -29,22 +28,14 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.warden import END
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE / "tests"))
+ROOT = Path(__file__).resolve().parents[6]
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "device" / "tests"))
 import test_warden_serve as tws  # noqa: E402
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_zk", HERE / "warden_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-wz = _load()
+from verity.protocols.accounting.certifier.prover import warden_zk as wz  # noqa: E402
 UNITS = 8
-LEAN = HERE.parents[1] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 #: the Lean verifier, which check builds before this suite (`AFTER_LEAN`)
 needs_lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

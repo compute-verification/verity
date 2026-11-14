@@ -24,9 +24,9 @@ import pytest
 
 HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-import connection_rows_run as CR  # noqa: E402
+from verity.protocols.accounting.certifier.device import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-import stop_verdicts as SV  # noqa: E402
+from verity.protocols.accounting.certifier.prover import stop_verdicts as SV  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import class_charge as CC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import connection_rows as C  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import content_rows as CT  # noqa: E402

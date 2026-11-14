@@ -19,10 +19,8 @@ egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`sc
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import re
-import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,23 +32,15 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
-    spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-sz = _load()
+from verity.protocols.accounting.certifier.prover import scan_zk as sz
 from verity.protocols.accounting.certifier.device import warden_serve as WS
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA
+
+ROOT = Path(__file__).resolve().parents[6]
+PERIOD_CASE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):

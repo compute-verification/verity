@@ -7,7 +7,6 @@ are stubbed (`a8.session`, `a0.lean_verify`): proving needs Flock's and the Lean
 (`a5_coins.negatives`' are a5_coins' tests')."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 import tempfile
@@ -16,19 +15,11 @@ from types import SimpleNamespace
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-STUB = HERE.parents[1] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+ROOT = Path(__file__).resolve().parents[6]
+STUB = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-sz = _load()
+from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
 
 
 @pytest.mark.slow

@@ -7,28 +7,15 @@ port. Nothing here proves (`egress_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE / "tests"))
-from test_warden_zk import needs_lean, reads_of, statement  # noqa: E402
+from test_warden_zk import needs_lean, reads_of, statement
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_egress_zk", HERE / "egress_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-ez = _load()
+from verity.protocols.accounting.certifier.prover import egress_zk as ez
 
 
 def test_each_members_host_read_is_the_members(tmp_path):
