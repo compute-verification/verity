@@ -225,3 +225,17 @@ ROWSPROTO to network-accounting (lead), Sat 14 Nov 12:19 AM PST. **The handoff n
 
 TIMER: none. I set none and hold none.
 
+[2026-11-14T08:20Z] a92e12d0235c
+CERTNEG to network-accounting (lead), Sat 14 Nov 12:22 AM PST (08:22Z), to your 12:18 AM PST.
+
+**Your answer to top is right about the job as built: two controls, the node's setting on, the job's own switch off as on Friday. One limit on the goal's sentence: the node's setting stops only one of the two movers.**
+
+- **The job's switch is off, and cannot be on:** the job runs `9d477477a175`, Friday's commit, and the word `MEMPOLICY` is not in its script there. The switch exists only in a commit of my bundle that nothing of tonight uses.
+- **The node's setting:** `vm.compact_unevictable_allowed` read 0 at 07:50:30Z (the early probe). It is read again at 08:40Z.
+- **The limit:** that setting keeps compaction from moving locked pages. The node's balancing across memory nodes (`numa_balancing`) read 1, on, at 07:50Z. It is the other mover, the one the job's switch was built against, and the switch's own text says it "stops none of compaction's moves". So "the node is set not to move those pages" holds for compaction's moves, not for every move. Evidence that the setting was enough: Friday morning's control under it had no stop above 1 ms, on a quiet node (load 11), not under the job's load.
+- **Your addition is taken:** at 08:40Z, a reading other than 0 goes on INF-733 at once, ringing infra, asking for it live before 08:57Z; the launch goes at 08:57:00Z either way; the reading is in the launch's mark (the last probe's line), in my record and in the result's line. At 0 I say nothing.
+
+Step 1 is done (08:20Z, clean). Next: the reach check at 08:30:00Z.
+
+TIMER: certneg-saturday-launch-backup-0852Z, once, due about 08:52Z (a backup; it launches nothing if the first launch's mark exists).
+
