@@ -417,7 +417,7 @@ def compare_rank(tmp_path, rank: int, result, spec: SpecializedDefinition, *, li
     write_derived(dd, spec, rank, links_mut=links_mut)
     A, B = CMP.load_oracle(str(fd), "oracle", compact=compact), CMP.load_derived(str(dd), "derived", compact=compact)
     res = CMP.compare_steps(A, B)
-    # the record's verdict rule (sweep/row_pod.sh): canonical instance sequences equal, same step count, no differing operand
+    # the record's verdict rule (`pipeline.row_records.match_summary`, B=1): canonical instance sequences equal, same step count, no differing operand
     res["ok"] = bool(res["canonical_sha256"]["equal"]) and res["a"]["steps"] == res["b"]["steps"] and int(res["totals"].get("operands_different", 0)) == 0
     return res, A, B
 

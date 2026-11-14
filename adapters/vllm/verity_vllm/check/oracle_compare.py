@@ -17,7 +17,7 @@ from the record -- the collector's own bytes never enter the expected side.
                          bytes                                                                    -> equal | MISMATCH (named; an opening
                          that does not verify is a mismatch)
     sampled_token_ids  : the committed id == the capture's SampleEnd id for that request at that step (every step, no snapshot needed)
-    not compared       : identities of a step the Match did not snapshot (row_pod MATCH_SNAP_STEPS, default 0,1), of a family the
+    not compared       : identities of a step the Match did not snapshot (the row's `--snapshot-steps`, MATCH_SNAP_STEPS: default 0,1), of a family the
                          Match has no value for (the FA2/FA3 M1 kernel-interior stream: its C2 is the tap's own bit-exact xcheck,
                          capacity FA2-01), registered inputs (weights: digest-pinned by the Build), or an op the fold did not instance
                          -> counted per reason, never silently dropped

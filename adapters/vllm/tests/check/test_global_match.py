@@ -1025,7 +1025,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
 
 
 def test_impl_module_defaults_to_the_match_of_record_and_names_what_runs(monkeypatch):
-    """MATCH_IMPL unset -> `fast` (the Match of record, row_pod.sh's export); `record` still selects the audit
+    """MATCH_IMPL unset -> `fast` (the Match of record, the row driver's export); `record` still selects the audit
     checker explicitly; an unknown name is an error.  The CLI banner names the implementation before the run."""
     monkeypatch.delenv(gm.IMPL_ENV, raising=False)
     assert gm.IMPL_DEFAULT == "fast"
@@ -1315,7 +1315,7 @@ def test_default_criterion_is_dag_and_the_sequence_verdict_is_kept_beside_it(mem
     assert ("G3", "FAIL") in alt["checks"] and "alternate_verdict" not in alt        # the alternate is one level deep
     # the verdict of record is untouched by the alternate: the primary checks all PASS
     assert res["failed_checks"] == [] and all(k["status"] == "PASS" for k in res["checks"])
-    # X-09's batch decomposition (the evidence inside, and row_pod's per-request comparator) applies the same criterion of record:
+    # X-09's batch decomposition (the evidence inside, and the row driver's per-request comparator) applies the same criterion of record:
     # the displaced request is canonical-equal by the live-cone DAG multiset, its sequence inequality stays recorded
     x = res["x09"]
     assert x["verdict"] == "PASS" and x["within_step_criterion"] == "dag"
@@ -2304,10 +2304,10 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
 
 @pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), pytest.param("fast", "3", marks=pytest.mark.slow)])
 def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path, monkeypatch, impl, workers):
-    """row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
+    """Outside the shared Match pipeline the row's driver runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
     again inside check() (the x09 block), the same work twice.  `--decomp-out` writes the document GM-01's own X-09 run
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
-    (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (row_pod's derive-and-rerun)."""
+    (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (the row driver's derive-and-rerun)."""
     monkeypatch.setenv(GMF.FLAG, impl)
     monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
@@ -2342,7 +2342,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert not ({"derived_available", "missing_derived", "extra_derived", "pipeline"} & set(recflow["x09"]))
     assert {k: v for k, v in recflow["x09"].items() if k != "seconds"} == {k: v for k, v in gmdoc["x09"].items()
                                                                           if k not in ("seconds", "derived_available", "missing_derived", "extra_derived", "pipeline")}
-    if workers == "1":   # as row_pod runs it: `python -m ...` (the record path runs in __main__, the fast path imports the module again)
+    if workers == "1":   # as the row's driver runs it: `python -m ...` (the record path runs in __main__, the fast path imports the module again)
         import subprocess
         import sys as _sys
         dout2 = tmp_path / "decomp_m.json"
@@ -2362,7 +2362,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
     doc = json.loads(dout.read_text())
     assert rc == 4 and doc["verdict"] == "MISSING_DERIVED" and doc["missing_derived"]
-    # row_pod derives the named shape and reruns with --derived: the same global Program (G1-G8 unchanged), X-09 complete again
+    # the row's driver derives the named shape and reruns with --derived: the same global Program (G1-G8 unchanged), X-09 complete again
     monkeypatch.setenv(GMF.FLAG, impl)
     rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag",
                   "--derived", dropped])
