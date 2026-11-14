@@ -21,7 +21,7 @@
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.protocols.accounting.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
+#                        there, e.g. 'python -m verity.protocols.accounting.pous.device.wipe_challenger --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a

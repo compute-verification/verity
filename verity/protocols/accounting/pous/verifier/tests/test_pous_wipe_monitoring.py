@@ -166,7 +166,7 @@ RECORD = {"format": WM.EGRESS, "covered": True, "egress_mib": 5, "egress_bits": 
 """A covered `wipe-egress/v1` record: its writer's verdict, its count and its link."""
 WINDOW = {"t0_unix_ns": 1_793_088_000_123_456_789, "t1_unix_ns": 1_793_088_183_000_001_000, "pad_ns": 10 ** 9}
 """The wipe's own session in real time, as its challenger's side reports it beside the signed session
-(`wipe_party.report`), in the fields a record's writer gives its window."""
+(`wipe_challenger.report`), in the fields a record's writer gives its window."""
 
 
 def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(counted, uncounted):
