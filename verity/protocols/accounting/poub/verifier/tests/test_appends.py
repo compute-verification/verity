@@ -12,7 +12,13 @@ import hashlib
 import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, schedule
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    receipts,
+    schedule,
+)
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset

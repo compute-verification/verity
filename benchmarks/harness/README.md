@@ -222,11 +222,12 @@ ran. Without a usable remote it refuses rather than report them missing; `--loca
 staged block type at K provers with C cores on one card, timed by `benchmarks/one_stage/server_rate.py`. The spec says
 the `workload` whose steady-state record its rows belong to, the `card`, the `cores` (C), the timed `sessions` and the
 sessions a prover runs `ahead`, the GPU `driver`'s version and the CUDA toolkit's (`cuda_toolkit`), a `setup` script,
-`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
-(`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
-counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement staged
-already: a directory on the node, or one of an artifact in the store (`art:ID/DIR`). Loading is as strict as a vLLM
-spec's.
+`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type at one statement size: the
+stager's `type` (`benchmarks/served_units/stage.py`), its statement's units `n` (its proof blocks), the `pin` (the
+SHA-512 of the block's circuit), the `provers` counts (a point each), the `warm` sessions a prover and, optionally,
+`period` and `staged`, a statement staged already: a directory on the node, or one of an artifact in the store
+(`art:ID/DIR`). Loading is as strict as a vLLM spec's. Two rows may name one type at two `n` (a full statement and a
+quarter of one, which share the `pin`); each point of such a type is `NAME-nN-kK`, and every other point `NAME-kK`.
 
 **Timed sessions.** A point times the spec's `sessions`, and at least eight a prover, the fewest the timing script
 times. Where a row's sessions file in bursts, its `period` says the
@@ -246,7 +247,8 @@ the node can't be asked before the run: the node side reads both on the node, re
 spec's, and writes what it read in the row (`versions`). The toolkit's version is `cuda_toolkit`, in the spec and in the
 row: `cuda` is the kit's name, in its host stamp, for the newest CUDA the driver serves, which is another number.
 
-**A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
+**A passed point** is a row whose `pin`, statement blocks (its `n` and `stage.blocks`), `provers` and `cores.count`
+are the point's and its spec's, and that passes the
 ten checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
 of a run of the point itself also holds the point's timed and warm sessions, its period and the versions. `plan` and
 `check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
@@ -372,12 +374,17 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   of the reps' ratios, `gamma` (the ratio less one), `n`, and the overhead's interval from the ratios' order statistics,
   exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
   six at 0.95), with its `half_width` as a share of the ratio (None where the ratio is 0).
-- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None)`:**
+- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None, *, mark=None, period=None, over=None)`:**
   appends one measurement to the run's result, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with
-  its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed
-  from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry holds
-  only where given. Under a research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, where
-  `research` reads it, whatever `out` is; outside one it is `out/result.json`.
+  its `mark`, its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was
+  computed from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry
+  holds only where given. The mark is required, one of `kit.MARKS`: `measured` (from a run of record's own records),
+  `modeled` (from a model or stated figures no run measured, or scaled past what a run covered) or `partial` (measured on
+  part of what its name covers); a value of None takes the mark it would have had. The writer also puts it first among
+  the `inputs`, the bare word unless the first input given already opens with it, since the console's Metrics tab reads
+  the mark from there until it reads `mark`. `period` and `over` say what span of time and of compute a value is
+  over, each its own field where given (`benchmarks/README.md`'s "Metrics"). Under a research run (`RESEARCH_RUN_DIR` set) the result is
+  `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, whatever `out` is; outside one it is `out/result.json`.
   **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
   (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
   `evidence`, a list of the files it stands on, as paths relative to the result's directory.
@@ -387,11 +394,12 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   result that uses none holds none.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
-verdict of record or a seal, so the writer refuses a value that isn't a number, a `why` beside a value, a verdict with no
-target, and a verdict in a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure,
-rejection). A validation is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed`
-and nothing else, which is the whole guard, and its detail says in the gates' own words what passed or failed. A result
-holds one run's measurements, one a name, and one validation.
+verdict of record or a seal, so the writer refuses a value that isn't a number, a missing or unknown mark, an unknown
+period or `over`, a `why` beside a value, a verdict with no target, and a verdict in a verifier's or a seal's words
+(accept, reject, pass, fail, seal, in any form: passing, failure, rejection). A validation is the run's own gates, never
+a protocol's security verdict: its status is `passed` or `failed` and nothing else, which is the whole guard, and its
+detail says in the gates' own words what passed or failed. A result holds one run's measurements, one a name, period
+and `over`, and one validation.
 
 ## Out of scope here
 
