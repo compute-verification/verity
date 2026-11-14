@@ -161,9 +161,9 @@ def payloads(lay: StoreLayout, src: Weights, read: Read, j0: int, n: int) -> byt
 
 def store_salt(setup: dict, layout_doc: dict, layout_sha512: str, source: bytes, commitment: bytes) -> bytes:
     """The salt an encoded store is under (`p2_store/store.py encode`'s directory, whose `setup.json` is `setup`):
-    `setup.draw_salt(source, commitment)`, the auditor's coin `source` flipped after the store's commitment. Refused unless
-    the store commits to `commitment` in this layout (`layout_sha512`, its JSON's SHA-512) under its parameters, and
-    under this coin and salt where `setup.json` records them."""
+    PoUS's salt of `source` and `commitment`, the auditor's coin `source` flipped after the store's commitment. Refused
+    unless the store commits to `commitment` in this layout (`layout_sha512`, its JSON's SHA-512) under its parameters,
+    and under this coin and salt where `setup.json` records them."""
     from verity.protocols.accounting.pous.verifier import setup as P
 
     salt = P.draw_salt(source, commitment)

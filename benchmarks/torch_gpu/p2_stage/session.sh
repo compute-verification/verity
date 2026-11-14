@@ -17,7 +17,7 @@
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
-# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
+# with `research keep`; its salt is PoUS's salt of SOURCE and COMMITMENT, the deployment's coin and commitment.
 # Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the

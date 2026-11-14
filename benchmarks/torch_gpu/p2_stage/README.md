@@ -10,7 +10,7 @@ on that buffer.
   weights stream (`benchmarks.torch_gpu.p2_stage.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
   rows to it by P2's reference decode of one label (`p2_store/store.py`'s `decode_block`), the check's ground truth.
   `open_store` takes the store: memory-accounting's encoded store (`p2_store/store.py encode`'s segment files, read by
-  `segment_rows`), under `store_salt`, `setup.draw_salt` of the coin and commitment its `setup.json` is held to; or a
+  `segment_rows`), under `store_salt`, PoUS's salt of the coin and commitment its `setup.json` is held to; or a
   development store under a public test salt. An encoded store is refused unless its `setup.json`'s `program` is the
   weights manifest's name of its weights (`weights_name`: the generator's `model`), and a manifest that gives no name
   is refused; only a caller that holds nothing to a weights manifest passes none.

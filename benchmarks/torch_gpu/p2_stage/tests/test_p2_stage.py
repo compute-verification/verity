@@ -514,10 +514,10 @@ def test_an_encoded_store_is_held_to_the_generators_manifest(tmp_path: Path, mon
 
 def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
-    """An encoded store's segment files (rows by the stand-in codec under the prefix of `draw_salt(coin, commitment)`)
-    through the driver with no stream file: each loaded tensor held to the weights manifest's SHA-256, the scales and the
-    padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
-    weights, a manifest that names none, an unfinished segment; a tensor whose digest differs fails the run."""
+    """An encoded store's segment files (rows by the stand-in codec under the prefix of PoUS's salt of the coin and
+    commitment) through the driver with no stream file: each loaded tensor held to the weights manifest's SHA-256, the
+    scales and the padding control's last block from the generator. Refused: an encode step, another commitment, a store
+    of other weights, a manifest that names none, an unfinished segment; a tensor whose digest differs fails the run."""
     import layer
     from verity.protocols.accounting.pous.verifier import setup as P
 
@@ -586,7 +586,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
         layer.main(args)
 
 
-def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw() -> None:
+def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_sample() -> None:
     import check
 
     lay = L.store_layout(layout_doc(model(64, 2, 1, 256), per_segment=11), PREFIX)

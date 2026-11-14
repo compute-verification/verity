@@ -10,7 +10,7 @@
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
   matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
 - `ENC` is an encoded store (`p2_store/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
-  its `seg/<s>.c` files, each held to its `seg/<s>.json`'s SHA-512, under the salt `setup.draw_salt` of the coin and
+  its `seg/<s>.c` files, each held to its `seg/<s>.json`'s SHA-512, under PoUS's salt of the coin and
   commitment its `setup.json` is held to (`layout.store_salt`). `DIR` is a development store instead: `c.bin`, the
   encoded rows of the layer's blocks, and `c.json` (the first block, the count, how many are encoded so far, and the
   digests of the prefix, the layout and the weights manifest), encoded here under the public test salt `HEX`.
