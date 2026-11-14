@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
+from verity_vllm.records.schema_ids import KERNEL_IDENTITY_SCHEMA
 
 __all__ = ["collect", "inductor_cache_dir", "triton_cache_dir"]
 
@@ -165,7 +166,7 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
             cubins.append(entry)
     kernel_pairs = sorted({(k["name"], k["source_sha256"]) for w in wrappers for k in w["kernels"]})
     doc: dict[str, Any] = {
-        "schema": "verity-vllm/kernel-identity/v1",
+        "schema": KERNEL_IDENTITY_SCHEMA,
         "inductor_cache_dir": inductor_dir,
         "triton_cache_dir": triton_dir,
         "vllm_compile_cache_dir": vllm_cache_dir,
