@@ -192,9 +192,9 @@ def test_a_shape_the_builder_has_no_split_count_rows_for_is_refused_before_any_p
 
 
 def test_a_match_whose_build_misses_such_a_shape_ends_as_a_build_refused_with_its_record(
-        gpu: Gpu, monkeypatch: pytest.MonkeyPatch, tmp_path: Any, capsys: pytest.CaptureFixture[str]) -> None:
+        gpu: Gpu, monkeypatch: pytest.MonkeyPatch, tmp_path: Any, caplog: pytest.LogCaptureFixture) -> None:
     """The served Match's command among its stand-ins (`test_served_match_main._Run`), with its own `build_here` and this
-    probe: a Build that misses a route at such a shape is one the command refuses.  It prints the refusal, writes it into
+    probe: a Build that misses a route at such a shape is one the command refuses.  It logs the refusal, writes it into
     match.json with the run's facts, exits 3, and writes no routes and no Build."""
     shape, reason = next(iter(UNPROBED.items()))
     build_here = sm.build_here
@@ -210,5 +210,5 @@ def test_a_match_whose_build_misses_such_a_shape_ends_as_a_build_refused_with_it
     refused = f"cuBLAS at M=4 K=128 N=64: {reason}"
     assert run.read("match.json") == {"ok": False, "build_refused": refused, "facts": {**run.facts(served=True), **held}}
     assert run.files() == ["launch_configs.json", "match.json"]
-    assert capsys.readouterr().out == MM._lines(MM.ENGINE_LINE, MM.SERVED_LINE, f"Build refused: {refused}")
+    assert MM._said(caplog) == MM._lines(MM.ENGINE_LINE, MM.SERVED_LINE, f"Build refused: {refused}")
     assert gpu.products == []
