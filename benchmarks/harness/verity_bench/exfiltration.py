@@ -110,7 +110,6 @@ the fingerprint. What it prints is the same in a run as outside one.
 from __future__ import annotations
 
 import argparse
-import importlib
 import importlib.util
 import json
 import math
@@ -298,12 +297,22 @@ DOCUMENT = "out/exfiltration.json"
 
 
 def _load(root: Path, directory: str, module: str) -> Any:
-    """A module of another benchmark's directory, which is no package: loaded by its path."""
+    """A module of another benchmark's directory, which is no package: loaded by its file's path, once a process."""
 
-    path = str(root / "benchmarks" / directory)
-    if path not in sys.path:
-        sys.path.insert(0, path)
-    return importlib.import_module(module)
+    path = root / "benchmarks" / directory / f"{module}.py"
+    if (held := sys.modules.get(module)) is not None and Path(getattr(held, "__file__", "")) == path:
+        return held
+    spec = importlib.util.spec_from_file_location(module, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"no module {module} at {path}")
+    loaded = importlib.util.module_from_spec(spec)
+    sys.modules[module] = loaded
+    try:
+        spec.loader.exec_module(loaded)
+    except BaseException:
+        del sys.modules[module]
+        raise
+    return loaded
 
 
 # ---- the compute audit's part: the planner's rows of record -----------------------------------------------------------

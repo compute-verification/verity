@@ -1,9 +1,10 @@
-/-
-Claim batching and ring switching; the batched basis `b̂` that Ligerito consumes.
--/
 module
 
 public import Flock.Piop
+
+/-!
+Claim batching and ring switching; the batched basis `b̂` that Ligerito consumes.
+-/
 
 @[expose] public section
 

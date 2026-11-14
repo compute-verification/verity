@@ -3,20 +3,20 @@
 
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
-- **The execution phase** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
+- **The execution phase** is re-started from the manifest's salt coin and every fixed operand's root (`Epoch.start`): the coin must open
   against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
-  when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the weights' root (a live
-  session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
-  carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
+  when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
+  session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution
+  phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwCheck.PearlPlus` refuses it.
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
-- **The records** (each matmul's real rows, width, excluded and voluntary rows; each weight's excluded and voluntary rows)
+- **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
   are the manifest's (`records_of`).  Their root must be the one the pass published before any sample.
 - **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
   `uniform/io-getrandombytes`), the verifier's own, sampled here after the transcript is fixed: a
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
-  B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
+  B's rows and tree levels per fixed operand, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
   ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
 - **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
@@ -32,20 +32,27 @@
 
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one sample source ("The run's
 sample" below), sampled once every pass's roots are read, keys t samples over all the passes' tickets together, and an accept credits
-the run's credited MACs at Pearl's Assumption 1, less what ε of the tickets' weight could hold at δ, in core's answer form.
+the run's credited MACs at the scheme's named assumption (`assumption_of`), less what ε of the tickets' weight could hold
+at δ, in core's answer form.
 With an execution phase record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
 retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
 (`window_class.PearlTables`), each with its call's root, the domain recomputed from the pass's salt and the call's index,
-and its rows, words and word bits; each weight w the passes read is W's ``pearl-b/<w>``, at the root the execution phase's weights'
+and its rows, words and word bits; each fixed operand w the passes read is W's ``pearl-b/<w>``, at the root the execution phase's fixed operands'
 root folds and the tiles' B rows open against, under `audit.weight_binding`'s domain, its n rows of K 32-bit words; and W
 names no other Pearl+ value but a dropped round's calls'. Any mismatch rejects the run, since a tie to roots the verdict
 didn't credit is vacuous. W states its version (`pearl_c.window.version_of`): this is version 2's tie, and a version-2 W
 that registers no ``pearl-b/`` value at all is such a mismatch, named as one (`UNTIED_WEIGHTS`): its calls may all
 match, but the run's B is no registered value, so it never reads as a tie. A W that states no version is version 1,
-written before W registered the weights: it is held to the calls alone, as it was then, and the tie names its weights
+written before W registered the fixed operands: it is held to the calls alone, as it was then, and the tie names its fixed operands
 untied (``"weights": WEIGHTS_UNTIED``, in the answer's tie and the verdict's line), so its accept never reads as a tie of
-the weights; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
+the fixed operands; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
+With the execution phase's class too (``window_class``, `served_passes.py verify --class`), the tied passes must be the class's fixed load
+(`held_to_load`: a pass a round of the class's outputs, each call's rows `window_class.PearlTables`'), or the run is
+refused before the coin in the class's own words (`off_load`); W's header names no class, so the verdict takes it as
+an input, and the tie names the class it held. A run held to a class publishes its work in the grid form (`grid_work`):
+the class's structural credit less the give-up padded up to H1's execution phase grid, at most the exact credit, which stays in
+the profile (``exact_work``) on the node.
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
@@ -101,6 +108,8 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import copy
+import dataclasses
 import hashlib
 import json
 import math
@@ -134,7 +143,7 @@ from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape, Ti
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c import K_MIN, TILE
-from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
@@ -156,7 +165,11 @@ DRAWS = 3
 PROTOCOL = "verity/pouw/pearl-plus/v1"
 RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
-ASSUMPTION = "Pearl's Assumption 1 (pearl_kw)"
+#: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
+#: (`security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean`): the scheme credits (1 − ρ)·`creditDevRev1`
+#: (`pearl_c.PearlC.credit_of`). At the H100's record it is its own named Prop.
+ASSUMPTION_DEV = "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"
+ASSUMPTION_H100 = "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
 DELTA = Fraction(1, 100)
 #: `verify_passes`' rules on an opened tile over its inert-work bound (``over_cap``): the run is rejected, or the tile is
 #: credited nothing; `served_passes.OVER_CAP` names the same two
@@ -257,8 +270,8 @@ def read(path: Path) -> tuple[dict, str, str]:
 
 
 def records_of(man: dict, matmuls) -> list[PW.UnitRecord]:
-    """The records the manifest declares, a call's and its weight's: real rows, |K|, excluded and voluntary A rows (a call's
-    ``excluded_a`` and ``voluntary_a``), and excluded and voluntary B rows (its weight's ``excluded_b`` and ``voluntary_b``)."""
+    """The records the manifest declares, a call's and its fixed operand's: real rows, |K|, excluded and voluntary A rows (a call's
+    ``excluded_a`` and ``voluntary_a``), and excluded and voluntary B rows (its fixed operand's ``excluded_b`` and ``voluntary_b``)."""
     def weight(mm):
         return man["weights"][str(mm.weight)]
     return [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]), tuple(weight(mm)["excluded_b"]),
@@ -294,18 +307,17 @@ def epoch_coins(path: Path) -> CoinCommitment | LiveCommitment:
     return (LiveCommitment if live else CoinCommitment).from_json(doc)
 
 
-def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False,
-         man: dict | None = None) -> Pass:
+def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: dict | None = None) -> Pass:
     """The pass at manifest `path`, its execution phase re-started under `coins` (`pouw_pearl_c_device.manifest_epoch`); raises
     `Refused` or ValueError on a pass that can't be checked."""
     man = read(path)[0] if man is None else man
-    PD.manifest_schema(man, recorded)
+    PD.manifest_schema(man)
     why = passes_distinct([man])
     if why is not None:
         raise Refused(why)
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
-    epoch, salt = PD.manifest_epoch(man, coins, recorded)
+    epoch, salt = PD.manifest_epoch(man, coins)
     records = records_of(man, matmuls)
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
     reason = CW.check_records(epoch, splits, records)
@@ -433,9 +445,9 @@ def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast
 
 
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
-           cross_check: int = 0, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False) -> dict:
+           cross_check: int = 0, coins: CoinCommitment | LiveCommitment | None = None) -> dict:
     """The pass's verdict, its execution phase re-started under `coins`, the execution phase's published coin commitment
-    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before the execution phase's coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    (`pouw_pearl_c_device.manifest_epoch`).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
     promoted device; otherwise the scalar reference, ``replay``), and the first of its tiles and every `cross_check`-th after
     it in the sample's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
     pass is not accepted."""
@@ -443,7 +455,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
            "replay": "batch" if fast else "scalar"}
     try:
-        p = load(path, coins, recorded, man)
+        p = load(path, coins, man)
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
@@ -491,15 +503,15 @@ def run_commitment(passes: list[Pass]) -> bytes:
 
 
 TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
-#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a weight's
+#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a fixed operand's
 TIE_PREFIXES = ("pearl-a/", "pearl-y/", "pearl-b/")
 TIE_CALLS = TIE_PREFIXES[:2]
-#: why `tie` refuses a version-2 W that ties the calls alone: it reads as untied weights, never as a tie
+#: why `tie` refuses a version-2 W that ties the calls alone: it reads as untied fixed operands, never as a tie
 UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
 #: the tie's ``weights`` for a version-1 W (`pearl_c.window.version_of`), which ties the calls alone: named in the
-#: verdict, never read as a tie of the weights
+#: verdict, never read as a tie of the fixed operands
 WEIGHTS_UNTIED = "weights untied (W v1)"
-#: why `tie` refuses a version-1 W that registers a weight's B rows
+#: why `tie` refuses a version-1 W that registers a fixed operand's B rows
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
@@ -527,9 +539,9 @@ def node_draw(root: bytes, asking: Any) -> tuple[bytes, dict]:
 def tie_entries(passes: list[Pass], rounds: list[int] | None = None, weights: bool = True) -> dict[str, dict]:
     """What an execution phase record must register for each call of the run (`tie`): A, its m16 committed rows of K FP32 words under
     `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root; then,
-    with ``weights`` (a version-2 W's), for each weight the passes read (pass by pass, by ascending id), B, its n rows of K
+    with ``weights`` (a version-2 W's), for each fixed operand the passes read (pass by pass, by ascending id), B, its n rows of K
     FP32 words under `weight_binding`'s domain, at the root the pass's execution phase commits it under. Pass i is round
-    ``rounds[i]`` (default i): its place among the served run's passes with calls. ValueError for a weight two passes
+    ``rounds[i]`` (default i): its place among the served run's passes with calls. ValueError for a fixed operand two passes
     commit under another root or shape."""
     want, ss = {}, list(range(len(passes)) if rounds is None else rounds)
     for s, p in zip(ss, passes, strict=True):
@@ -562,10 +574,10 @@ def _owner(v: str) -> str:
 
 def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: tuple[int, ...] = ()) -> dict:
     """``{"record": digest(W), "tables": n}`` for an execution phase record W at version 2 (`pearl_c.window.version_of`) that
-    registers exactly the run's calls' A rows and y and its weights' B rows (`tie_entries`, pass i as round ``rounds[i]``)
+    registers exactly the run's calls' A rows and y and its fixed operands' B rows (`tie_entries`, pass i as round ``rounds[i]``)
     among its ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside any of the ``dropped`` rounds' calls' (passes
     left out of the retention before the coin, which credit nothing). For a W at version 1, which registers no ``pearl-b/``
-    value, the tie is of the calls alone, as it was at that version, and the answer names the weights untied:
+    value, the tie is of the calls alone, as it was at that version, and the answer names the fixed operands untied:
     ``"weights": WEIGHTS_UNTIED``. ValueError naming the first mismatch otherwise."""
     if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
         raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
@@ -594,6 +606,44 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     return {"record": REG.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
 
 
+def load_class(load: Any) -> tuple[int, int, int]:
+    """An execution phase class's public caps as (slots, prompt ids, outputs) (`window_class.WindowClass`'s), each a positive
+    integer; ValueError otherwise."""
+    cls = tuple(load) if isinstance(load, (list, tuple)) else ()
+    if len(cls) != 3 or not all(type(v) is int and v >= 1 for v in cls):
+        raise ValueError(f"a window class is SLOTS, PROMPT, OUTPUTS, each a positive integer, not {load!r}")
+    return cls
+
+
+def off_load(load: tuple[int, int, int]) -> str:
+    """Why passes that aren't the class ``load``'s fixed load are refused. The text is the class's alone: it names no
+    round, call or count of the passes', which a rejection's line would publish."""
+    slots, prompt, outputs = load
+    return (f"the passes are not the fixed load of the window's class ({slots} slots, {prompt} prompt ids, {outputs} "
+            f"outputs): a pass a round of its {outputs}, each retained or dropped, every call of round 0 of "
+            f"{slots * prompt} rows and of a later round of {slots}, committed in rows padded to a multiple of {PD.ROW_ALIGN}")
+
+
+def load_rows(load: tuple[int, int, int], s: int) -> tuple[int, int]:
+    """A round-``s`` call's (rows, committed A rows) under the class's fixed load: `window_class.PearlTables`' ``rows``
+    and ``a_rows``."""
+    rows = load[0] * load[1] if s == 0 else load[0]
+    return rows, -(-rows // PD.ROW_ALIGN) * PD.ROW_ALIGN
+
+
+def held_to_load(load: tuple[int, int, int], passes: list[Pass], rounds: list[int] | None = None,
+                 dropped: tuple[int, ...] = ()) -> bool:
+    """Whether the retained passes, pass i as round ``rounds[i]`` (default i), are the class's fixed load
+    (`window_class.FixedLoad`, `PearlTables`): the retained and the ``dropped`` rounds are each of the class's
+    ``outputs`` rounds once, and every call of a retained round has that round's rows and committed A rows
+    (`load_rows`). Only then are the passes', the calls' and W's tables' counts the class's and the model's, and so
+    protocol structure."""
+    ss = list(range(len(passes)) if rounds is None else rounds)
+    if len(ss) != len(passes) or sorted([*ss, *dropped]) != list(range(load[2])):
+        return False
+    return all((r.real_rows, r.matmul.shape.m) == load_rows(load, s) for s, p in zip(ss, passes) for r in p.records)
+
+
 def epsilon(t: int, delta: Fraction, over: int = 0) -> Fraction:
     """One more than the least k with Σ_{i ≤ over} C(t, i) (k/10⁹)^i (1 − k/10⁹)^(t − i) ≤ δ, over 10⁹, exactly (at
     ``over`` = 0, (1 − ε)^t ≤ δ): of t work-weighted samples, ``over`` landed on tiles over their inert-work bound and the
@@ -619,8 +669,21 @@ def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
 
 
 def pass_macs(p: Pass) -> int:
-    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone)."""
+    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone;
+    over `whole_pass`, `structural_credit`'s)."""
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
+
+
+def assumption_of(scheme: Any) -> str:
+    """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
+    record, and at its prices where they are another device's). Only a v1 scheme has TT_OUT accounting; any other is
+    refused."""
+    if scheme.forming != "v1":
+        raise ValueError(f"{scheme.name}: only a v1 scheme is credited at a named assumption (TT_OUT rev1)")
+    own = scheme.prices == scheme.device.prices
+    if scheme.device.name == "h100" and own:
+        return ASSUMPTION_H100
+    return f"{ASSUMPTION_DEV} at {scheme.device.name}" + ("" if own else f", priced at {scheme.prices.device}")
 
 
 def _taken(passes: list[Pass], t: int, delta: Fraction, over: int) -> tuple[dict[tuple[int, int], tuple[list[int], Fraction]], Fraction]:
@@ -642,7 +705,7 @@ def _taken(passes: list[Pass], t: int, delta: Fraction, over: int) -> tuple[dict
 
 
 def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
-    """The run's credit at Pearl's Assumption 1 (`pearl_kw`): a tile that passes the rule cost its credited cells' MACs,
+    """The run's credit at the scheme's named assumption (`assumption_of`): a tile that passes the rule cost its credited cells' MACs,
     (1 − ρ) of them at the scheme's cap.  Of t samples by ticket weight, ``over`` (X_O) landed on tiles over their
     inert-work bound, credited nothing, and the rest passed: the tiles wrong or over the bound hold at most ε of the
     tickets' weight except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold
@@ -654,6 +717,43 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int 
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
     return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
             "over_cap_draws": over}
+
+
+#: the exact credit's fields the grid form replaces (`grid_work`), kept as the profile's ``exact_work``
+EXACT_WORK = ("credited", "credited_tiles", "macs")
+
+
+def whole(r: PW.UnitRecord) -> PW.UnitRecord:
+    """The record with no row excluded or given up: every real row of its call and every column of its weight, at its
+    kept width.  Under a class's fixed load (`held_to_load`) its real rows are the class's, and its shape and kept width
+    are its weight's (`clear_work.check_records`), so it holds nothing the retained values decide."""
+    return dataclasses.replace(r, excluded_a=(), excluded_b=(), voluntary_a=(), voluntary_b=())
+
+
+def whole_pass(p: Pass) -> Pass:
+    """The pass with each record `whole`."""
+    q = copy.copy(p)
+    q.records = [whole(r) for r in p.records]
+    return q
+
+
+def structural_credit(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
+    """`credit_at_assumption` over the passes with every record `whole`, at the same samples: the credit of the run that
+    excludes and gives up no row.  For passes held to a class's fixed load it is the class's and the model's, with the
+    samples' count, ``over`` and δ: protocol structure and the verdict's outputs, not the retained values."""
+    return credit_at_assumption([whole_pass(p) for p in passes], t, delta, over)
+
+
+def grid_work(structural: dict, exact: dict) -> dict:
+    """The work a run held to its class's fixed load publishes: the class's structural credit (`structural_credit`) less
+    the give-up, the credit the excluded and given-up rows took off it (``structural`` less ``exact``,
+    `credit_at_assumption`'s), padded up to H1's execution phase grid (`window.pad` at `window.GRID_BITS`; none at 0), which
+    ``give_up`` names.  Its MACs and credited tiles are the structural ones.  So the published work reads the retained
+    values through one grid level alone, and its credit is at most the exact one, since the padded give-up is at least
+    the give-up: the bound a credit carries holds at any credit at or below the exact one."""
+    gave = max(structural["credited"] - exact["credited"], 0)
+    give_up = grid_pad(gave) if gave else 0
+    return {**structural, "credited": max(structural["credited"] - give_up, 0), "give_up": give_up}
 
 
 #: the causes `uncredited_calls` splits a call's real MACs the credit leaves out by, beside the deduction's three terms
@@ -730,12 +830,13 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                   source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None,
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
-                  draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False) -> dict:
+                  draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False,
+                  window_class: tuple[int, int, int] | None = None) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the execution phase record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), sampled after, keys `draws` work-weighted tiles over every pass's tickets
     together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
-    every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ.
+    every opened tile passes the tile rule, and credits the run at its scheme's assumption (`credit_at_assumption`) at δ.
 
     ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
     ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
@@ -745,7 +846,23 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
 
     The passes are all of one salt, and each one's instance is the served one, ``k_min`` `K_MIN` at `TILE` × `TILE` tiles:
     a pass of another is a test instance's, read only with ``test_instance``, whose verdict credits nothing (``credited``
-    0), as ``--recorded``'s salt claims nothing.
+    0).
+
+    An accepted run's line names its credit (the protocol's output), the sample and the tie. How many exclusion tiles the
+    passes' given-up rows made, each replayed tile's id, the MACs the passes declare and the exact credit are the
+    retained values' to decide: they are the profile's (``exclusion_tiles``, ``tiles``, ``exact_work``) and ``verdicts``,
+    which `served_verdicts.publish` holds on the node.
+
+    ``window_class`` is the execution phase's class, (slots, prompt ids, outputs), where the run is an execution phase's (``window``): passes held
+    to W whose rows by round aren't the class's fixed load are refused (`held_to_load`, `off_load`), before the coin, and
+    the tie names the class it held (``"load"``). Without it the verdict holds the passes to no load, and its counts of
+    passes, calls and tables are structure only where something else fixed the load.
+
+    Held to a class, the work the verdict publishes (``public.work``, and the line's credit) is in the grid form
+    (`grid_work`): the class's structural credit, MACs and credited tiles (`structural_credit`), the credit less the
+    give-up padded up to H1's execution phase grid (``give_up``), so at most the exact credit. The exact one
+    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
+    node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
@@ -757,6 +874,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     returns (S, the record's ``draw``).  A given ``source`` (a test's) is recorded as the node's."""
     if over_cap not in OVER_CAP:
         raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_CAP)}")
+    cls = None if window_class is None else load_class(window_class)
+    if cls is not None:
+        if window is None:
+            raise ValueError("a class's fixed load is held with the window record the passes are tied to: no window")
     named = [read(x)[2] for x in paths]
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta), "over_cap": over_cap,
            **({"test_instance": True} if test_instance else {}),
@@ -784,6 +905,10 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
             raise ValueError(f"pass {i}'s instance is k_min {s.k_min} at {s.tile[0]} x {s.tile[1]} tiles, not the served "
                              f"{K_MIN} at {TILE} x {TILE}: a test instance is read only as one, crediting nothing")
         tied = None if window is None else tie(window, passes, rounds, dropped)
+        if cls is not None:
+            if not held_to_load(cls, passes, rounds, dropped):
+                raise ValueError(off_load(cls))
+            tied["load"] = list(cls)
     except Exception as ex:  # noqa: BLE001 - a run that can't be checked is rejected, with the reason
         return reject(f"{type(ex).__name__}: {ex}")
     if tied is not None:
@@ -841,25 +966,28 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     bad = [f"pass {i} tile {t}: {r}" for i, t, good, r, over, _ in verdicts if not good and not (over and uncredited)]
     bad += [f"pass {i} tile {t}: the batch replay's verdict is not the scalar one's" for i, t, *_, same in verdicts if same is False]
     over_draws = sum(1 for v, d in zip(verdicts, picked, strict=True) if d and v[4])
-    credit = credit_at_assumption(passes, draws, delta, over_draws)
+    exact = credit_at_assumption(passes, draws, delta, over_draws)
+    credit = exact if cls is None else grid_work(structural_credit(passes, draws, delta, over_draws), exact)
     if test_instance:
-        credit["credited"] = 0
+        credit["credited"] = exact["credited"] = 0
     out.update(scheme=scheme.name, source=source.hex(), commitment=root.hex(), replay="batch" if fast else "scalar",
                verdicts=[{"pass": i, "tile": t, "ok": g or (over and uncredited), "reason": r}
                          for i, t, g, r, over, _ in verdicts])
     if bad:
         return reject("; ".join(bad))
-    public = {"work": credit, "unit": "MAC", "assumption": ASSUMPTION, "scheme": scheme.name,
+    public = {"work": credit, "unit": "MAC", "assumption": assumption_of(scheme), "scheme": scheme.name,
               "passes": [{"transcript": p.man["commitment"]["root"], "records": p.man["records_root"], "salt": p.epoch.salt.hex(),
                           "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes],
               **({"tie": tied} if tied is not None else {}),
               **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
                "source_from": out["draw"], "over_cap": over_cap, **({"test_instance": True} if test_instance else {}),
-               "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
+               "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts],
+               **({} if cls is None else {"exact_work": {k: exact[k] for k in EXACT_WORK}})}
     ys = [r for p in passes for r in y_roots(p)]
     tie_clause = "" if tied is None else (f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
-                                          + (f", {tied['weights']}" if "weights" in tied else ""))
+                                          + (f", {tied['weights']}" if "weights" in tied else "")
+                                          + (f", at its class's fixed load ({', '.join(map(str, cls))})" if cls else ""))
     if dropped:
         tie_clause += f", {len(dropped)} passes dropped before the coin (rounds {', '.join(map(str, dropped))})"
     if over_draws:
@@ -870,11 +998,14 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         out["uncredited"] = uncredited_calls(passes, draws, delta, over_draws)
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
-               line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "
+               # the line names the credit, the protocol's output (in the grid form where a class is held), and the
+               # sample; not how many exclusion tiles the passes' given-up rows made, nor the MACs the passes declare,
+               # which the retained values decide (`profile`)
+               line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn tiles and the exclusion tiles over "
                      f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
                      f"{tie_clause}; "
-                     f"{credit['credited']:,} of {credit['macs']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
-                     f"δ {delta} (Pearl's Assumption 1); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
+                     f"{credit['credited']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
+                     f"δ {delta} ({assumption_of(scheme)}); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
     return out
 
 
@@ -890,10 +1021,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="with --fast, replay the first tile and every N-th after it, in the draw's order, on the scalar "
                         "reference too; any verdict that differs rejects the pass and exits 2 (0: none)")
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
-    p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins: its salt is its beacon's")
     a = p.parse_args(argv)
     coins = epoch_coins(a.coins) if a.coins else None
-    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins, recorded=a.recorded)
+    r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
     if r.get("cross_check_failed"):

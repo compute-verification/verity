@@ -61,7 +61,7 @@ def priced(t: P.Tied, sh: P.Shape, s: float, source: str = "the command line",
     most, fan_in = output_words(p, sh), min(k for _, _, k in sh.linears)
     words = min(s * N / fan_in, most)
     k_words = p.k + t.word_bits * words
-    one, with_words = min_cut.bound(p.c, p.k, p.n, **work), min_cut.bound(p.c, k_words, p.n, **work)
+    one, with_words = P.bound(p, sh), P.bound(p, sh, k=k_words)
     rows = []
     for r in spans(t, N):
         untied = t.untied(r["blocks"], r["seconds"])
