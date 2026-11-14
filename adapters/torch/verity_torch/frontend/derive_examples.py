@@ -6,8 +6,7 @@
 * Negatives on plain PyTorch: an op with no rule, a hidden constant, an in-place op, a custom op with no binding, a returned
   weight, data-dependent control flow, and a Mixtral-style MoE gathered by its routing index.
 
-Each class's `DERIVE_SOURCE` is the `SRC` class its derived programs carried when the class was defined in the vLLM adapter's
-`verity_vllm.program.frontend.derive_examples`, so a derived program's id is the same from either module.
+`DERIVE_SOURCE` names each class by its old place in the vLLM adapter, so moving it here changed no derived program's id.
 """
 
 from __future__ import annotations

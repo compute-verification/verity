@@ -89,11 +89,11 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
     ``design`` (one unit of each stratum when None)."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = design or {"law": "stratified", "k": 1}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    sampling_design = design or {"law": "stratified", "k": 1}
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=part)
+    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=part)
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
             "params": params}
@@ -103,22 +103,22 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
     """v1's case of a whole audit of ``program`` (SPOT difftest's accepted case): its record over the
     window's ports and their window domains, a stratified sample's first proof blocks of each stratum proved, the
     verifier's receipt, and the verdict of record ``accepted``."""
-    law, leaf = {"law": "stratified", "k": 2}, "ee" * 64
+    sampling_design, leaf = {"law": "stratified", "k": 2}, "ee" * 64
     part, population = P.partition(program, query), P.units(program, query)
     ports = {p: {"domain": R.window_domain(PO.program_sha512(program), P.digest(part), p, schema, leaves, "r-test"),
                  "leaves": leaves}
              for p, schema, leaves in (("out", "u16", 2 * population), ("x", "hm96-sha512/row/v1", population))}
     roots = {"out": "cd" * 64, "x": "ab" * 64}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
                    {"kind": "served", "row": 101, "run": "r-test"}, leaf_layer=leaf)
-    drawn = DR.derive(program, query, law)
+    drawn = DR.derive(program, query, sampling_design)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": population, "units": units}
     proved = DR.proved(draw)
     evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received="2026-10-07T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": accepted, "of_record": True}}}
-    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": leaf, "log": [], "partition": None,
+    params = {"anchors": [], "delta": "1/20", "law": sampling_design, "leaf_layer": leaf, "log": [], "partition": None,
               "ports": ports, "program": json.loads(codec.canonical_json(codec.encode_program(program))),
               "query": query, "registered": None, "scheme": S.SCHEME, "work_table": None}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
@@ -241,12 +241,12 @@ def tied_v1_case(w: dict) -> dict:
     program = P.mixed_population_program([(t, SLOTS) for t in templates],
                                          values=[(name, leaves, 16) for name, _, leaves in TABLES])
     query = P.template_instances_query(templates)
-    law, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
+    sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
     reused = {e["value"]: e for e in w["registered"]}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=R.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=P.partition(program, query), log=[w],
+    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=P.partition(program, query), log=[w],
                        registered={name: 1 for name, _, _ in TABLES},
                        outputs={name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
                        schemas={name: G.SCHEMA_V2 for name, _, _ in TABLES})
@@ -425,7 +425,7 @@ def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, 
 ])
 def test_the_lean_check_accepts_the_inference_only_case_at_its_budgets_and_not_past_them(
         tmp_path, capsys, inference_only_exe, toy_v1, change, verdict, reason):
-    """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `nci_reference`'s),
+    """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `inference_only_reference`'s),
     `inference-only check` accepts; one gate or one bit under, it rejects naming the budget. Its answer names the
     record's digest, so the case is written either way, its verdict the Lean's."""
     v1 = toy_v1
@@ -978,7 +978,7 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
     (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests
     can't catch what only the served shapes have: the class's own Definitions
-    (heads cut by key block, scans, registered reads) through `nci_reference.root_nodes` and the Lean decoder, the
+    (heads cut by key block, scans, registered reads) through `inference_only_reference.root_nodes` and the Lean decoder, the
     description's walk bound, and the size of a served Program's text through the CLI's files."""
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import Registered

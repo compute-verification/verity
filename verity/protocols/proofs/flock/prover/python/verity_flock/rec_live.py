@@ -552,10 +552,10 @@ def full_draw(program, query: dict) -> dict:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     n = sum(hi - lo for _, rs in P.strata(program, query) for lo, hi in rs)
-    law = D.derive(program, query, {"law": "stratified", "k": n})
-    if any(s["k"] != sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]):
+    sampling_design = D.derive(program, query, {"law": "stratified", "k": n})
+    if any(s["k"] != sum(hi - lo for lo, hi in s["units"]) for s in sampling_design["strata"]):
         raise ValueError("the stratified law at K = the population leaves a unit undrawn")
-    return {**law, "population": n, "units": list(range(n))}
+    return {**sampling_design, "population": n, "units": list(range(n))}
 
 
 #: `RecSetup.noInnerSample`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose

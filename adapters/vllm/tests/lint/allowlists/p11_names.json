@@ -10,7 +10,7 @@
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "module-name", "symbol": "<module>", "detail": "global_match_fast"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "flag-name", "symbol": "WriteOptions", "detail": "--tp3"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "flag-name", "symbol": "Options", "detail": "--tp2-match"},
-    {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},
+    {"file": "verity_vllm/pipeline/match_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},
     {"file": "verity_vllm/definitions/registry/__init__.py", "kind": "def-name", "symbol": "_register_lazy_families", "detail": "_b1"},
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "def-name", "symbol": "<module>", "detail": "_forward_positions_v2"},
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "def-name", "symbol": "<module>", "detail": "_forward_positions_v4"},

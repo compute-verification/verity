@@ -9,12 +9,12 @@ public import Spot.OneStageZk
 `checkSpan` decides window t from the proof system's accepted runs of PoUB's opening unit (`BlockOpeningCheck_v2`,
 `block_check.py`), one unit a draw, in place of the openings `checkWindow` reads; it never reads a block, a payload, a
 receipt leaf or a path. A span is one or more statements of the sampled proof system's one-stage audit
-(`Spot.OneStageZk`, every unit proved), each its registration record, its evidence and its public file, with each
+(`Spot.OneStageZk`, every unit proved), each its docket, its evidence and its public file, with each
 instance's verdict word and the salts of its three opened rows; the blobs hold the files the evidence names.
 
 The auditor's side (`Auditor`) is its own: the one-stage audit's parameters (its challenger, delta, program, partition
 and the registered opening circuit's SHA-512) and that circuit's ports in order, each with its row's bits (`Layout`). Of
-a statement only its public file's SHA-512 is the prover's, which the audit holds to the registration record.
+a statement only its public file's SHA-512 is the prover's, which the audit holds to the docket.
 
 The window rejects `malformed`, at no draw, unless every statement's audit accepts (`accepted`) with every instance of
 its public file proved and the statements' instances, in order, are the window's draws, one each. Then each draw
@@ -55,7 +55,7 @@ structure Instance where
   verdictSalt : ByteArray
 deriving Inhabited
 
-/-- One statement of the span: its public file's SHA-512 (lowercase hex), its registration record's and its evidence's
+/-- One statement of the span: its public file's SHA-512 (lowercase hex), its docket's and its evidence's
 bytes, and its instances in the public file's order. -/
 structure Statement where
   pub : String

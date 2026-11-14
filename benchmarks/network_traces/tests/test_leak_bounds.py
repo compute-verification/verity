@@ -6,7 +6,7 @@ K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lea
 - the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
 - a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
 - a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
-- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of rho's
+- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of the slowdown calculator's
   world fleet, the census's inference at the fleet's serving MFU;
 - a share is of one copy of the served model's weights, the workload card's parameters in FP4, labelled with what it
   is;
@@ -35,7 +35,7 @@ import leak_bounds as LB  # noqa: E402
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
-RHO = HERE.parents[1] / "benchmarks" / "rho" / "data"
+SLOWDOWN = HERE.parents[1] / "benchmarks" / "slowdown" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
 #: the warden's scan class, KO 64 (`scan_zk.CLASS`)
@@ -142,8 +142,8 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
 def test_the_census_sets_the_datacenter_and_rhos_fleet_the_world():
     dc, world = _reference("deployments.json"), _reference("adversary.json")
     assert LB.datacenter_links() == dc["machines"] == 12_500
-    fleet = tomllib.loads((RHO / "reference.toml").read_text())["fleet"]["world-h200"]
-    machine = tomllib.loads((RHO / "hardware.toml").read_text())["location"][fleet["location"]]
+    fleet = tomllib.loads((SLOWDOWN / "reference.toml").read_text())["fleet"]["world-h200"]
+    machine = tomllib.loads((SLOWDOWN / "hardware.toml").read_text())["location"][fleet["location"]]
     assert LB.world_links() == fleet["count"]["value"] == 46_870_000
     served = machine["flops"]["value"] * world["monitoring_period_s"] * fleet["mfu_serve"]["value"]
     assert LB.world_links() == pytest.approx(world["total_flop"] / served, rel=1e-4)

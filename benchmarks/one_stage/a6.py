@@ -165,7 +165,7 @@ def main() -> int:
     ranges = P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    law = D.parse_design(f"stratified:{a.k}")
+    sampling_design = D.parse_design(f"stratified:{a.k}")
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
@@ -196,9 +196,9 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's int8 Program and its served rows replace these values"}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = statement_checks(m, rec, want)
         checks[f"twin/{m['name']}"] = {"ok": m["st"]["twin"]["agrees"], "codes": [] if m["st"]["twin"]["agrees"] else ["twin"], "detail": {}}
@@ -261,17 +261,17 @@ def main() -> int:
     # negatives: each re-decides one input altered
     neg: dict[str, dict] = {}
     fewer = R2.program([(d, n) for d, (_K, n) in zip(defs, spec)], mixed=True)
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if len(defs) > 1:
-        v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+        v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{a.k + 1}")),
                         ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{a.k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["name"]
-    v = V.check(rec, program, query, law, a0.SCHEME, want,
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME, want,
                 leaf_layer=hashlib.sha512(canonical_json({**publics, first: "00" * 64})).hexdigest())
     neg["public-file-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**lean_draw, "units": lean_draw["units"][:-1] + [n_all]}, rec, rec["law"])
