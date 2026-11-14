@@ -1,7 +1,8 @@
 """The W ranks' windows of one request (`node_window.node_window`, each at its own TP rank) joined into one circuit (`join`):
 each rank's units after the rank before's in every template, its registration renamed to its own, its ingress at its
 units, and each of its peer inputs (``peers_*``) wired from what the writer rank's own window wires into the same reader
-units and rows."""
+units and rows. What the joined record states of its ranks and its free rows, by proofs' design for it (PRF-618), is
+`ranks_of` and `free_rows`; `interface.Circuit` holds neither field yet."""
 from __future__ import annotations
 
 import bisect
@@ -12,11 +13,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+from verity.circuits.codec import canonical_json
 from verity.commitments.windows import interface as IF
 
 from .build import Unexpressible
 from .node_window import _GRAIN, NAME, Free, Lowering, _ingress_census, _peer, node_window
-from .window_builder import Grain, inference
+from .window_builder import WEIGHTS, Grain, inference
 
 
 @dataclass(frozen=True)
@@ -216,4 +218,40 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     return Joined(circuit, first, tuple(free), tuple(wired), tuple(unwired))
 
 
-__all__ = ["Joined", "Rank", "join", "rank_window"]
+def ranks_of(ranks: Sequence[Rank], joined: Joined, cap: int) -> dict[str, Any]:
+    """The joined record's ``ranks`` (PRF-618): the prefix ``r<rank>/`` once, and per rank in rank order its ``window``
+    (SHA-512 of the canonical JSON of its record less its run fields, `interface.descriptor_record` at ``cap``), its
+    ``units`` per template and ``wires``, how many of the joined circuit's wires are its own. `join` puts each rank's own
+    wires in turn ahead of the ones it adds across ranks."""
+    if [x.rank for x in ranks] != list(range(len(ranks))) or sum(len(x.circuit.wires) for x in ranks) > len(joined.circuit.wires):
+        raise ValueError(f"ranks {[x.rank for x in ranks]}: not the ranks 0 .. W-1 that `join` joined into {joined.circuit.name}")
+    return {"prefix": "r<rank>/",
+            "of": [{"window": hashlib.sha512(canonical_json(IF.descriptor_record(x.circuit, cap))).hexdigest(),
+                    "units": dict(x.circuit.units), "wires": len(x.circuit.wires)} for x in ranks]}
+
+
+def free_rows(joined: Joined) -> list[dict[str, Any]]:
+    """The joined record's ``free`` (PRF-618): each reader row no declaration fills (``joined.free``), its reader units,
+    its rows ``[first, first + rows)`` of the port cut ``of`` ways, and its kind: ``peer`` (another rank's partial) or
+    ``weights`` (the weights record, read by no registered read); ``table`` and ``advice`` are kinds no window frees yet.
+    Refused (`Unexpressible`) where a free row is of no such kind: an unlowered node's, or another input's."""
+    out = []
+    for f in joined.free:
+        kind = "peer" if f.kind == "peer" else "weights" if (f.kind, f.name.split("/", 1)[-1]) == ("param", WEIGHTS) else None
+        if kind is None:
+            raise Unexpressible(f"{f.tid} {f.port} units [{f.at}, {f.at + f.count}): a free row of {f.kind} {f.name}, which "
+                                "the record's free list has no kind for")
+        first, rows, of = f.rows
+        out.append({"reader": f.tid, "port": f.port, "at": f.at, "units": f.count, "rows": [first, rows], "of": of,
+                    "kind": kind})
+    return out
+
+
+def cover_weights(joined: Joined) -> Joined:
+    """``joined`` with every ``BatchedGemm_v1`` ``w`` row that reads a rank's ``/bnk`` entry (`node_window_sparse.entry`:
+    an absorbed weight, computed from registered tensors and registered as no GPU registers it) covered by the registered
+    weights it is computed from, so that no such row is left for `free_rows`."""
+    raise NotImplementedError("circuits/request-built-as-proof-blocks: CIR-287")
+
+
+__all__ = ["Joined", "Rank", "cover_weights", "free_rows", "join", "rank_window", "ranks_of"]
