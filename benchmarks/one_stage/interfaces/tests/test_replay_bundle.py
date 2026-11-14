@@ -37,7 +37,7 @@ def bundle() -> tuple[dict, bytes]:
 
 
 @pytest.fixture(scope="module")
-def registration() -> dict:
+def docket() -> dict:
     return json.loads((FIXTURES / "drawn-unit-registration.json").read_text())
 
 
@@ -240,16 +240,16 @@ def test_a_boolean_template_replays_its_bits_in_word_order() -> None:
         assert not B.replay(unit, bytes(bad))
 
 
-def test_the_fixture_is_its_digests(bundle, registration) -> None:
+def test_the_fixture_is_its_digests(bundle, docket) -> None:
     doc, payload = bundle
     assert B.digests(doc, payload) == GOLDEN
-    assert B.check(doc, payload, registration=registration) == {}
+    assert B.check(doc, payload, docket=docket) == {}
 
 
-def test_another_registration_is_refused(bundle, registration) -> None:
+def test_another_registration_is_refused(bundle, docket) -> None:
     doc, payload = bundle
-    reg = copy.deepcopy(registration)
+    reg = copy.deepcopy(docket)
     for r in reg["roots"]:
         r["root"] = "00" * 64
-    bad = B.check(doc, payload, registration=reg)
+    bad = B.check(doc, payload, docket=reg)
     assert bad and all(v == "not the registration's root" for v in bad.values())

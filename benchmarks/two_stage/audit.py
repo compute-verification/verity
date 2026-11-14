@@ -137,19 +137,19 @@ def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
     return stream
 
 
-def sampled(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
+def sampled(stream: S.Stream, coins: StageCoins, docket: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
     """The stream's one sample of ``registration``, on the coins opened after its digest, and their segment (which ends
     the stage's turn on the session's client)."""
-    coins.commit(bytes.fromhex(registration.digest))
+    coins.commit(bytes.fromhex(docket.digest))
     try:
-        sample = stream.select(registration)
+        sample = stream.select(docket)
     finally:
         segment = coins.stages[coins.at].drawn()
     return sample, segment
 
 
-def stage_of(registration: S.WindowCommitmentRecord, sample: S.Draw) -> dict:
-    return {"registration": registration.digest, "law": dict(sample.law), "draw": sample.units}
+def stage_of(docket: S.WindowCommitmentRecord, sample: S.Draw) -> dict:
+    return {"registration": docket.digest, "law": dict(sample.law), "draw": sample.units}
 
 
 def own_ports(window: T.CS.Binding, sampled: list[int]) -> list[str]:
