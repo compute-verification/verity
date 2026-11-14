@@ -475,13 +475,13 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     *_, words = served
     params, public, _, _ = _window(words)
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    for refuse in (lambda: SC.Challenger(bare, _coins()), lambda: SC.spec_of(bare, public["level"]),
-                   lambda: _register(bare, public)):
+    for refuse in (lambda: SC.Challenger(bare, _coins(), record=ORL.Record(lean=False)),
+                   lambda: SC.spec_of(bare, public["level"]), lambda: _register(bare, public)):
         with pytest.raises(ValueError, match="no registration_deadline"):
             refuse()
     with pytest.raises(ValueError, match="carry a registration_deadline"):
-        SC.Challenger(params, _coins(), predates_deadline=True)
-    assert SC.Challenger(bare, _coins(), predates_deadline=True).predates_deadline
+        SC.Challenger(params, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
+    assert SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True).predates_deadline
     assert SC.spec_of(bare, public["level"], predates_deadline=True).check.registration_deadline is None
     assert SC.spec_of(params, public["level"]).check.registration_deadline == SC.REGISTRATION_DEADLINE
 
@@ -790,7 +790,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
                        ({**params, "context": _params(run, raw)["context"]}, base, "names its PoUW window"),
                        (params, {}, "so it is certified")):
         with pytest.raises(ValueError, match=why):
-            SC.Challenger(p, live, **kw)
+            SC.Challenger(p, live, record=ORL.Record(lean=False), **kw)
     for edit in ({"challenger_key": _coins().commitment}, {"challenger_key": ck.to_json()}, {"run_id": RUN_ID[:16]},
                  {"run_id": RUN_ID.hex()}, {"certifier_key": CS.KEY_ID}, {"certifier_key": object()}):
         with pytest.raises(ValueError, match=re.escape(SC.DEPLOYMENT_FORM)):

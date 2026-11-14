@@ -37,13 +37,13 @@ That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`se
 applies:
 
 * `zk_headline_exec_zc`: against any live prover, at any sampling design,
-  `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`;
+  `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`;
 * `zk_headline_exec_zc_execOS`: the same at the live sample (`SamplingDesign.execOS`, `drawWith`'s stratified sampling design) under A3
   (`UniformRandomBytes`), with `SamplingDesign.stratified`'s count curve for `miss(K)`.
 
 The incorrect proof blocks are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
 named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, the decoder premise at `--zk`), `hj : JointZC …`
-(`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `δ_link` is `⊤` at a
+(`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `ε_bind` is `⊤` at a
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit flips each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 -/
@@ -110,7 +110,7 @@ variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fi
 
 /-- **The `--zk` headline at verity-verify-proof's acceptance, at the compiled `--zk` table**: against any live prover `τ`,
 verity-verify-proof `--zk` accepts the live audit's transcript while the simulated prover's committed values have at least `K`
-incorrect proof blocks with probability at most `miss(K) + ε_ks + δ_link` of the compiled count curve at that prover. -/
+incorrect proof blocks with probability at most `miss(K) + ε_ks + ε_bind` of the compiled count curve at that prover. -/
 theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) {k Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, ZkLink.rateZ (planOne T S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (ZkLink.sessionZC A Hs (planOne T S R)) →

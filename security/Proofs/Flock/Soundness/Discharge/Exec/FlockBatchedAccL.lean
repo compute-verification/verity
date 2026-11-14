@@ -129,32 +129,32 @@ theorem flock_batched_knowledgeSoundEL
       (1 - rateB (plan (L.draw ω) R) j k))) (tab (L.draw ω) R u)
 
 /-- **The batched Flock audit's count curve, with the expected-time extractor**:
-`δ(K) = miss K + ε_ks(σ) + δ_link(σ)`. -/
+`δ(K) = miss K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_countEL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
-    {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
-    (hlink : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound δlink) (K : ℕ)
+    {εbind : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
+    (hlink : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound εbind) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
-      L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
+      L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + εbind (reg σ) (cont σ) :=
   extraction_audit_count (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)
     (flock_batched_knowledgeSoundEL P H E Lf plan tab decode Xc hk hr hlow) hlink K σ
 
 /-- **Sampled proof blocks of the batched Flock audit, with the expected-time extractor**, are correct up to
-`ε_ks(σ) + δ_link(σ)`. -/
+`ε_ks(σ) + ε_bind(σ)`. -/
 theorem flock_batched_sampledEL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
-    {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
-    (hlink : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound δlink)
+    {εbind : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
+    (hlink : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound εbind)
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
-      ksAvgBEL H E Lf plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
+      ksAvgBEL H E Lf plan k (reg σ) (cont σ) + εbind (reg σ) (cont σ) :=
   extraction_audit_sampled (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)
     (flock_batched_knowledgeSoundEL P H E Lf plan tab decode Xc hk hr hlow) hlink σ
 

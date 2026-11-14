@@ -44,7 +44,7 @@ sample.** Let the verifier sample the units as in `Prog.flock_headline_L` (the l
 sample's session be the plan's tables `plan S R`, and let the live session be `liveSession` over them (the challenger,
 its coins uniform per round and sampled after the round's retained bytes, on the `2J` rep streams), written out as a
 session directory by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the
-committed values of the simulated prover (`simAuditJ … τ`) with probability at most `miss(K) + ε_ks + δ_link`:
+committed values of the simulated prover (`simAuditJ … τ`) with probability at most `miss(K) + ε_ks + ε_bind`:
 `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, so `Pr[bad] = 0`. Beyond
 `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`, `hCR`),
 it takes `hdec`: the decoder is right on the sessions verity-verify-proof accepts, at the samples the sampling design makes, table by table. -/

@@ -108,7 +108,7 @@ variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 /-- **The headline at the executable at the verifier's public inputs, for one-table sessions**
 (`Prog.flock_headline_live_onX` at `AcceptsP I own`): against any live prover `τ`, verity-verify-proof accepts at `own` with
 at least `K` incorrect proof blocks of the simulated prover's committed values with probability at most
-`miss(K) + ε_ks + δ_link`, under `Prog.flock_headline_live_onX`'s hypotheses with `hdec` at `own` (`DecodesOnP`). -/
+`miss(K) + ε_ks + ε_bind`, under `Prog.flock_headline_live_onX`'s hypotheses with `hdec` at `own` (`DecodesOnP`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_onXP
     {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

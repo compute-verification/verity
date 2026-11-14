@@ -37,10 +37,10 @@ simulation keeps both (`simAuditZKOn`):
   `Pr[acc ∧ Q o.1 o.2.1]` in the live audit;
 * `zk_headline_exec_sampled`: that at `--zk`, from the decoder at the sampling design's samples; `zk_headline_exec_sampledJ` at sessions
   of `J` tables, and `simZHJ` the simulation it reads at hidden-output tables;
-* `zk_flock_sampledC_cr`: the compiled audit's sampled bound, `Pr[accept ∧ a drawn unit is incorrect] ≤ ε_ks + δ_link`
+* `zk_flock_sampledC_cr`: the compiled audit's sampled bound, `Pr[accept ∧ a drawn unit is incorrect] ≤ ε_ks + ε_bind`
   (`extraction_audit_sampled` at `analysisZC`), every term on the accepted assumptions;
 * `zk_session_sampledR`: `hwrong` for `verity-verify-proof verify --zk --registered F` sessions: no sampled proof block is incorrect in the
-  committed values `XplurZC` decodes from the rows `rsZAtS` at `simZ … τ`, except with probability `ε_ks + δ_link`.
+  committed values `XplurZC` decodes from the rows `rsZAtS` at `simZ … τ`, except with probability `ε_ks + ε_bind`.
 -/
 
 @[expose] public section
@@ -217,8 +217,8 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 /-- **The compiled `--zk` audit's sampled proof blocks are right, every term on the accepted assumptions**
 (`extraction_audit_sampled` at `analysisZC`, `zk_flock_countC_execOS_cr`'s terms): with each sampled proof block read from its
 table at its place (`place`) and the committed values the plurality value layer of `vb`,
-`Pr[accept ∧ some drawn unit is incorrect] ≤ ε_ks + δ_link`, `ε_ks = ksAvgStrictZ` under A1 for every table's finders after
-each sample (`hCR`) and `δ_link = linkBoundZC` under A2 for the link finders. -/
+`Pr[accept ∧ some drawn unit is incorrect] ≤ ε_ks + ε_bind`, `ε_ks = ksAvgStrictZ` under A1 for every table's finders after
+each sample (`hCR`) and `ε_bind = linkBoundZC` under A2 for the link finders. -/
 theorem zk_flock_sampledC_cr (hA : A.Correct) {L : SamplingDesign n}
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     {Dh : Type} {Hc : List UInt8 → Dh}
@@ -244,10 +244,10 @@ end Drawn
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **No sampled proof block of a `--zk --registered` session is incorrect, except with probability `ε_ks + δ_link`**: in
+/-- **No sampled proof block of a `--zk --registered` session is incorrect, except with probability `ε_ks + ε_bind`**: in
 `verity-verify-proof verify --zk --registered F` sessions, `own` F's ports, at the committed values `XplurZC` decodes from the
 rows `rsZAtS` (the `--zk` rows without `pub.tables = none`) at `simZ … τ`, `Pr[accept ∧ some drawn unit is incorrect] ≤
-ε_ks + δ_link`, on `Composed.zk_session_sound`'s assumptions without A3 (the sampling design's count curve is not read). This is the
+ε_ks + ε_bind`, on `Composed.zk_session_sound`'s assumptions without A3 (the sampling design's count curve is not read). This is the
 `hwrong` a registered-reads core theorem takes. -/
 theorem zk_session_sampledR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)

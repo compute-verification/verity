@@ -15,9 +15,9 @@ to the output count its request row states, the count a tied audit already count
 
 **The request row** (`request_fields`) is K slots as a struct of arrays, each field's elements in turn and each element
 least significant bit first, then zero bits to a whole 16-bit word (unread): `valid` K×1, `id` K×IW, `P` K×LW and
-`O` K×LW, the layout of `replay_chain.arrival_fields` for K arrival slots without a cap bit. A slot's `id` is the
-request's place N in the network certifier's release order, `P` its prompt's ids and `O` its outputs. A slot whose
-`valid` is 0 reads as empty whatever its other fields hold.
+`O` K×LW, the layout of `verity_vllm.compiler.replay_chain.arrival_fields` for K arrival slots without a cap bit. A
+slot's `id` is the request's place N in the network certifier's release order, `P` its prompt's ids and `O` its outputs.
+A slot whose `valid` is 0 reads as empty whatever its other fields hold.
 
 **The fails row** is `connection_rows`' (`SLOT`): slot k is u16 class ‖ u16 at, little-endian, (0, 0) where the
 connection ended in its `END` and in an empty slot, (1, n) where it ended in a `FAIL` after n `DATA` cells.

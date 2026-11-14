@@ -1,7 +1,8 @@
 """The id request has two writers: the verifier's `id_form.id_request` and the workload's declaration
 (`certifier.prover.workload.id_request`), which the adapter imports so it reads nothing of the verifier. They write
 the same bytes in the network certifier's cells (``offset=0``) and refuse the same fields, and the link frame's header
-is one format on both sides."""
+is one format on both sides. The same holds for a response's id events (`io_tie.id_event`) and its last bytes
+(`io_tie.TRAILER`), which the workload declares beside them."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import random
 import pytest
 
 from verity.protocols.accounting.certifier.prover import workload as WL
-from verity.protocols.accounting.certifier.verifier import id_form as IDF
+from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 
 U32 = (0, 1, 9, 10, 4095, (1 << 31), (1 << 32) - 1)
@@ -78,3 +79,35 @@ def test_both_agree_on_a_seeded_sweep_of_every_field():
         assert a == b, f
         wrote += a is not ValueError
     assert wrote > 1000
+
+
+def test_a_responses_last_bytes_are_one_constant():
+    assert WL.TRAILER == IT.TRAILER
+
+
+@pytest.mark.parametrize("size", (IT.ID_EVENT_BYTES, IT.ID_EVENT_BYTES + 1, IT.ID_EVENT_BYTES + 37,
+                                  4096 - HEADER.size, 4096))
+def test_both_write_the_same_id_event_over_ids_and_sizes(size):
+    for token_id in U32 + (151328, 128000, 99999999):
+        assert WL.id_event(token_id, size) == IT.id_event(token_id, size), (token_id, size)
+    assert WL.id_event(7) == IT.id_event(7)
+
+
+@pytest.mark.parametrize("args", [(-1,), (1 << 32,), (True,), (2.0,), ("7",), (7, IT.ID_EVENT_BYTES - 1), (7, 0),
+                                  (7, -5), (7, float(IT.ID_EVENT_BYTES)), (7, True), (7, None)])
+def test_both_refuse_the_same_id_event_arguments(args):
+    got = []
+    for write in (WL.id_event, IT.id_event):
+        try:
+            write(*args)
+            got.append("wrote")
+        except ValueError:
+            got.append(ValueError)
+    assert got == [ValueError, ValueError], args
+
+
+def test_both_agree_on_a_seeded_sweep_of_id_events():
+    rng = random.Random("certifier/id-event-writers")
+    for _ in range(3000):
+        token_id, size = rng.randrange(1 << 32), IT.ID_EVENT_BYTES + rng.randrange(4096)
+        assert WL.id_event(token_id, size) == IT.id_event(token_id, size), (token_id, size)
