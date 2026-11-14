@@ -2260,103 +2260,17 @@ def prove(a) -> int:
     return 0 if ok else 1
 
 
-def prove_carried(a) -> int:
-    """``prove --carried``: the carried shape's rounds (`carried`) proved in order on one verifier's log, each
-    link-window's record after the first naming the record before it: every unit sampled, each member proved --zk and
-    held by Lean, the start member's ``sin`` against the root and domain the verifier took from its log (`carry_of`).
-    The log takes a record only once its audit accepted it with every opened output 1, so no start is read from a
-    link-window the verifier refused: the link-window after one stops at `carry_of`.
-    A ``carried-<w>`` round is as expected when it is accepted with every output 1, the verdicts of record opened its
-    start against that root, its record's changed forms are refused as named, and, after the first, its start's leaf
-    is the round before's frame leaf byte for byte (`frame_leaf`); the stale round when Lean's registered reads refuse
-    its start ("does not open"). What the verifier received is scanned as every round's is (`received`)."""
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    setup = SETUPS[a.setup]
-    h = carried(out / "warden", a.warden_run, setup, a.group)
-    whole, T, cls = h.whole, h.T, setup.cls
-    summary: dict = {"source": whole.source, "warden_run": whole.run_id, "setup": setup.name, "class": asdict(cls),
-                     "params": asdict(whole.params), "T": T, "group": a.group, "shape": "carried",
-                     "admitted": whole.admitted,
-                     "anchors": {q: cls.anchor(s, s % cls.EVERY) for q, s in whole.admitted.items()},
-                     "members": {r.name: [{"name": m.name, "base": m.base, "n": m.n} for m in r.members]
-                                 for r in h.rounds},
-                     "start": {r.name: {x: r.members[0].ports["sin"][x] for x in ("value", "root", "domain")}
-                               for r in h.rounds},
-                     "host": {r.name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs}
-                                       for m in r.members] for r in h.rounds}}
-    log(f"run: {whole.source}; {setup.name}'s class, the carried shape, link-windows {whole.windows} of {T} buckets "
-        f"each a registration, admitted {whole.admitted}, anchors {summary['anchors']}; host reads as expected "
-        f"({whole.run_s} s)")
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    if a.dry:
-        log("dry: done")
-        return 0
-    M = WZ._one_stage()
-    pgs = {t: program(M, cls, t, 1, T, out / PROGRAMS[t]) for t in (CARRIED, STALE)}
-    summary["stagers"] = {f"{PROGRAMS[k]}/{tp}": {
-        "unit": g.defn.id, "lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "vus_per_block": g.st.meta["vus_per_block"],
-        "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
-    log(f"stagers: {summary['stagers']}")
-    ok, records, before = True, [], None
-    for j, r in enumerate(h.rounds):
-        pg = pgs[r.templates]
-        members = [stage(M, pg, mr, out / r.name / f"stage-{mr.name}") for mr in r.members]
-        if not r.stale and staged_wires(members):
-            raise SystemExit(f"{r.name}'s chains don't hold on its public files: {staged_wires(members)}")
-        summary.setdefault("rounds", {})[r.name] = {
-            m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
-                        "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
-        log(f"staged {r.name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}"
-                                             for m in members))
-        carry = carry_of(pg, cls, records, r.members[0].ports["sin"])
-        av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
-        res = audit(M, av, r.at, pg, r.name, members, r.trees, out / r.name, a.port and a.port + 8 * j, carry=carry)
-        if res["window_accepted"]:
-            records.append(json.loads((out / r.name / "registration.json").read_text()))
-        inst = out / r.name / "instances.bin"
-        inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
-        rec = res["received"] = received(M.a8, out / r.name / "verifier", inst, *blobs_of(members), known(members, r.at))
-        inst.unlink()
-        lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
-        negatives = res.get("registration_negatives") or {}
-        good = unseen(rec) and bool(negatives) and all(
-            x["expected"] in x["codes"] if x["expected"] else not x["codes"] for x in negatives.values())
-        if r.stale:
-            why = res["why"].get("lean-verify/start") or ""
-            good = good and not res["accepted"] and lean == {"start": False} and "registered reads" in why \
-                and "does not open" in why
-        else:
-            leaf = res["frame_leaf"] = frame_leaf(before, members[0]) if before else None
-            good = good and res["window_accepted"] and bool(lean) and all(lean.values()) \
-                and res.get("carried_start") == {CARRY: carry.root} and (leaf is None or leaf["same"])
-            before = next(m for m in members if m["name"] == "last")
-        ok &= good
-        summary["rounds"][r.name]["audit"] = res
-        held = "pinned, the empty state's" if "pinned" in carry.check else f"{CARRY_PORT} of the record before"
-        log(f"round {r.name}: start {CARRY} at {carry.root[:16]}… ({held}), registration "
-            f"{res['checks_before_draw']}, changed forms { {x: y['codes'] for x, y in negatives.items()} }, proofs "
-            f"{res['verdicts']}, audit {res.get('audit')}, the verdicts of record opened "
-            f"{ {k: (v or '')[:16] for k, v in (res.get('carried_start') or {}).items()} }, frame leaf "
-            f"{res.get('frame_leaf')}, Lean {res['why']}, verifier received {rec['verifier_bytes']} bytes, witness "
-            f"pieces found there: {rec['verifier_found'] or 'none'}, control {rec['control']['blobs_found']}; "
-            f"{'as expected' if good else 'UNEXPECTED'}")
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    summary["ok"] = ok
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    log("done: " + ("ok" if ok else "FAILED"))
-    return 0 if ok else 1
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="a group's ingress and egress proof blocks chained by registered reads, --zk")
+    p = sub.add_parser("prove", help="each link-window's start, ingress and egress proof blocks chained by registered "
+                                     "reads, --zk")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
-    p.add_argument("--port", type=int, default=0, help="round i's member j listens on PORT + (2G + 2)i + j; 0 (the "
-                                                       "default): a free port for each session")
+    p.add_argument("--port", type=int, default=0, help="round i's member j listens on PORT + S·i + j, S the most "
+                                                       "members a round has; 0 (the default): a free port for "
+                                                       "each session")
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
@@ -2364,8 +2278,8 @@ def main(argv=None) -> int:
                         "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window; "
                         "test2: test's over two link-windows, a request anchored at the second's first boundary)")
     p.add_argument("--group", type=int, default=1,
-                   help="G: link-windows 0 .. G - 1 in one registration (default 1); with --carried, each a "
-                        "registration of its own")
+                   help="G: link-windows 0 .. G - 1, each a registration of its own, its scan started from the "
+                        "state the record before it committed (default 1)")
     p.add_argument("--warden-run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
@@ -2386,10 +2300,6 @@ def main(argv=None) -> int:
     p.add_argument("--v3c", type=Path, metavar="WINDOW",
                    help="V3c's window directory (prove_path.py window-commit's): the scan reads its SCAN_STATE and "
                         "its SelectEntry_v1 chunks' o0 as its state and prog<j> trees, and proves no block round")
-    p.add_argument("--carried", action="store_true",
-                   help="the carried shape: each of the group's link-windows a registration of its own, its scan "
-                        "started from the state the record before it committed; no period check reads this shape, "
-                        "so a scan proved in it has no period")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
                                         "flags (serve, rehearse): the network certifier runs --warden-run reads, in "
                                         "the id egress form, serve's and rehearse --ids's")
@@ -2413,11 +2323,7 @@ def main(argv=None) -> int:
                     "the commit the session's host pins")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    if a.carried and (a.draw is not None or a.v3c is not None):
-        p.error("--carried samples every unit of its own trees: give neither --draw nor --v3c")
-    if a.carried and a.group < 2:
-        p.error("--carried carries a start from one link-window's record to the next: --group 2 or more")
-    return prove_carried(a) if a.carried else prove(a)
+    return prove(a)
 
 
 if __name__ == "__main__":
