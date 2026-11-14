@@ -6,14 +6,16 @@ with that budget holds; an attack gives a construction's count instead. A **serv
 server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
 its uncertified gates `U` by route, and an argument of the bound's minimum:
 
-* `serving`, one block `(c_S, k_S)`, its cap `q_T(c_S, k_S)`;
+* `serving`, one block `(c_S, k_S)`, its cap `q_T(c_S, k_S)` and the boundary term `ω_max μ k_S` (`Cut.boundary`);
 * `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q_T(c, k) + q_U(U_S)`.
 
 `q_U(U) = ω_max U / s_×` is the elementary uncertified cap, `u U` with `u` the most weight a gate can hold (`ω_max /
 s_×`, `classes.Structure`), and no block holds more than `u c`. Under a bound each server block contributes the least
-of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`:
+of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`
+(`Accounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
+remote regime):
 
-    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)} + q_U(unregistered)
+    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S) + ω_max μ k_S, n_S q_T(c, k) + q_U(S)} + q_U(unregistered)
 
 With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every server block), the
 bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its server blocks are a server over
@@ -88,6 +90,9 @@ class Cut:
     blocks: tuple[Blocks, ...] = ()
     uncertified: Mapping[str, float] = field(default_factory=dict)
     cites: tuple[str, ...] = ()
+    #: `k` of the boundary term `ω_max μ k`: the unregistered input bits of the cut's one block, each read by at most
+    #: `μ` operations counted inside it with a gate outside it, which its cap doesn't count (`ServingBlockBound`)
+    boundary: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -127,18 +132,26 @@ class Share:
 Side = Literal["bound", "attack"]
 
 
-def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = None) -> dict[str, float]:
-    """`cut`'s argument of the minimum, term by term, over `w c_S`: each block kind's `n · min(q(c, k), u c)` and each
-    route's `q_U(U) = u U` (`u` defaults to `w`)."""
+def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = None,
+          per_bit: float | None = None) -> dict[str, float]:
+    """`cut`'s argument of the minimum, term by term, over `w c_S`: each block kind's `n · min(q(c, k), u c)`, each
+    route's `q_U(U) = u U` (`u` defaults to `w`), and its boundary term `ω_max μ k` at `per_bit = ω_max μ`
+    (`classes.Structure.per_bit`)."""
     u = w if u is None else u
     full = w * block.gates
     out = {b.kind: b.count * min(cap(b.budget), u * b.budget.gates) / full for b in cut.blocks}
     for route, gates in cut.uncertified.items():
         out[route] = out.get(route, 0.0) + u * gates / full
+    if cut.boundary:
+        if per_bit is None:
+            raise ValueError(f"cut {cut.name} of {block.name} has a boundary term: pass per_bit, ω_max μ "
+                             f"(classes.Structure.per_bit)")
+        out["boundary"] = per_bit * cut.boundary / full
     return out
 
 
-def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None) -> Share:
+def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None,
+          per_bit: float | None = None) -> Share:
     """The server-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
     at `mfu`. Never more than the block's own gates hold (`u c_S`, or `mfu` of `w c_S` for a construction)."""
     u = w if u is None or side == "attack" else u
@@ -147,14 +160,15 @@ def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float
     if block.gates <= 0:
         return best
     for cut in block.cuts if side == "bound" else (block.layout,) if block.layout else ():
-        t = terms(block, cut, cap, w, u)
+        t = terms(block, cut, cap, w, u, per_bit)
         total = math.fsum(t.values())
         if total < best.value:
             best = Share(total, cut.name, t)
     return best
 
 
-def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) -> dict[str, Share]:
+def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
+              per_bit: float | None = None) -> dict[str, Share]:
     """The minimum of the global bounds: each cut name's terms summed over every server block (a block without that
     cut, or whose cut holds more than its capacity, at its capacity), the least of those sums, as each block's share."""
     u = w if u is None else u
@@ -166,7 +180,7 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) 
         shares = {}
         for b in partition.serving:
             cut = next((c for c in b.cuts if c.name == name), None)
-            t = terms(b, cut, cap, w, u) if cut and b.gates > 0 else {}
+            t = terms(b, cut, cap, w, u, per_bit) if cut and b.gates > 0 else {}
             v = math.fsum(t.values())
             shares[b.name] = Share(v, name, t) if cut and v < capacity.value else capacity
         s = math.fsum(weights[n] * v.value for n, v in shares.items())
@@ -231,18 +245,18 @@ class Overhead:
 
 def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
-             reference_efficiency: bool = True) -> Overhead:
+             reference_efficiency: bool = True, per_bit: float | None = None) -> Overhead:
     """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
     minimum of the global sums), and the unregistered leaves. `w` is the reference's weight per gate, `u` the most a gate holds
-    under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, and `reference_efficiency`
-    whether a bound counts free compute at it (`multiple_bound`)."""
+    under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, `reference_efficiency`
+    whether a bound counts free compute at it (`multiple_bound`), and `per_bit` the boundary term's `ω_max μ`."""
     u = w if u is None or side == "attack" else u
     weights = {b.name: b.count * b.gates for b in partition.serving}
     total = math.fsum(weights.values())
     if aggregate_only and side == "bound":
-        shares = aggregate(partition, cap, w, u)
+        shares = aggregate(partition, cap, w, u, per_bit)
     else:
-        shares = {b.name: local(b, cap, w, side, u) for b in partition.serving}
+        shares = {b.name: local(b, cap, w, side, u, per_bit) for b in partition.serving}
     out: dict[str, float] = {}
     for name, s in shares.items():
         for term, v in s.terms.items():

@@ -360,7 +360,7 @@ def test_the_pack_hold_sends_the_spool_out_deletes_unstarted_pods_and_drains_at_
 def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_limit(dispatch, tmp_path, monkeypatch):
     """A pod that can claim nothing idles 3 min and exits, a GPU held for no Commit."""
     monkeypatch.setenv("PACK_BUNDLE_GLOBS", f"{tmp_path}/cov/*/commit/replay_bundle_p*")
-    monkeypatch.setenv("PACK_BUNDLE_CAP_GB", "100")
+    monkeypatch.setenv("PACK_BUNDLE_LIMIT_GB", "100")
     monkeypatch.setenv("PACK_BUNDLE_EST_GB", "60")
     monkeypatch.setattr(dispatch, "quiet", lambda t=None: False)
     dispatch.PACK_COMMITS = True
