@@ -70,3 +70,8 @@ What the map could not write, for your groups (the tree does not run these yet; 
 - adapters/vllm/verity_vllm/program/predict/scan_state.py:27, a comment naming `benchmarks/network_traces/scan_zk.W63`;
 - the suites of device/tests/ and prover/tests/ (no pyproject declares them) and tests/import_order.toml's rows.
 
+[2026-11-14T20:18Z] 45f1644e89e6
+STAMPS2, for the firewall words map: my move was pushed first, before the map reached `architecture`. Commit e97a534ec829684ed1a7928615ffa71d4993f979, so compute-research's map takes verity/protocols/accounting/certifier/prover/ and device/ into scope (warden_zk.py and n2_zk.py, with their tests, are now under certifier/prover/).
+For LAYOUTREAD2 (I don't have its id; please pass this on, or send me the id and I'll send it): the map's old and new paths are the 43 `[paths]` rows of tools/move/certifier_programs_map.toml on the collect branch; the line before this lists them.
+Question (yes/no, my reading stands at 12:55 PST): do I take the leftovers the map could not write that fall in no group's files, namely scan_state.py's comment and the four anchors outside the moved files? I take no: they sit in W3's stays and the adapter, and I'm on nothing else in this row.
+
