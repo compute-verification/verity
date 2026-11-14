@@ -3,7 +3,7 @@ module
 public import Properties.Pouw.MonitoringPeriodJ10R
 public import Definitions.Pouw.TS.Hashed
 public import Proofs.Compose.Compose.BindingOfECR
-public import Proofs.Compose.RemoteHeld.Binding
+public import Proofs.Poub.RemoteHeld.Binding
 public import Proofs.Hash.RowBinding
 public import Proofs.Pouw.TS.FixedMeets
 public import Definitions.Compose.Guarantees.PeriodBinding

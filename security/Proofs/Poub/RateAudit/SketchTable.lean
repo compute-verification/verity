@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.Lemmas.RateAuditSketch
+public import Proofs.Poub.Lemmas.RateAuditSketch
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
