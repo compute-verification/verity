@@ -212,8 +212,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   the scan's transition computed from the row before it, and row 0 the state the start unit copied, the prover's word
   for none. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`);
-* in the rows form, execution phase `w` is the run's first, execution phase 0, and its scan starts from the empty state
-  (`startCheck`): its registration has an entry of its `registered` whose value is `0.sin`, the start unit's `sin`,
+* in the rows form, execution phase `w` is its period's first, and where it is the run's first, execution phase 0, its
+  scan starts from the empty state (`startCheck`): its registration has an entry of its `registered` whose value is `0.sin`, the start unit's `sin`,
   and its `window`'s
 
       "empty": {"0.sin": {"words": W, "salt": hex}, …}
@@ -221,9 +221,10 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   opens every such entry to `W` zero u16 words under its salt: that row's leaf under the entry's domain is the
   entry's root, a tree of the one leaf (`startEmpty`: the row and its salt are public). The start unit reads its
   `sin` there and copies it to row 0 of the scan's state, so the Programs anchored at bucket 0 read the empty state
-  (`Properties.NetworkPeriod.RowsStartEmpty`). A later execution phase starts from the state the one before it ended in,
-  which the check holds no start to: it refuses every execution phase but the run's first (`startCarriedRefusal`), so
-  the periods it accepts are of the run's first execution phase alone;
+  (`Properties.NetworkPeriod.RowsStateEmpty`). A later execution phase starts from the state the one before it ended in,
+  which the check holds no start to. At a period's first execution phase that is not the run's first, it charges that
+  start once, as free input at the state's full width (`start`, below); it refuses a period's later execution phase
+  (`startCarriedRefusal`), so the periods it accepts are of one execution phase each;
 * in the rows form, execution phase `w`'s tied compute audits run the class circuit (`held`): each audit its scan's
   `prog` is an output of (`tiedAudits`) has a registration naming the parameters' `circuit` as its Program. A window
   circuit's own digest binds its window's run, so it is another each window; its Program is the class's, one for the
@@ -276,13 +277,17 @@ and its δ is in
 `eps`:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
-     ["max_tokens_cap": cap,] "scans": [terms, …], "schedules": c, "windows": m}
+     ["max_tokens_cap": cap,] "scans": [terms, …], "schedules": c, "start": s, "windows": m}
 
 * `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
   response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
   request it released has `max_tokens` at most the cap (`warden`'s "The response cap",
   `NetTiming.Guarantees.ResponseCapped`). The schedule's digest, which every registration binds, binds it
   (`Schedule.digest`), and the check publishes the schedule's (`Properties.NetworkPeriod.RowsCapPublished`).
+* `start` is 0 where the period's first execution phase is the run's first, whose start the check holds to the empty
+  state, and else the scan's state's full width, the bits of the start unit's `sin` (`Scan.start`): that start is the
+  state the execution phase before it ended in, which no audit of the period holds, so `K` charges it once, as free
+  input, and an adversary-chosen start carries no more than the bits it counts.
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`CertifierSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
   sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
@@ -462,14 +467,16 @@ def rowsWfRefusal (s : Schedule) (windows : Nat) : String :=
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
 (none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs an execution
 phase's term counts, `tiedAudits`), the bits one ingress and one egress instance commit (its return: the outputs other
-units read or the client receives, and its verdict), and its slot entries' bits (`E_w`: `lanes · T / every` entries of
-its `prog` ports' type), all a tied audit's incorrect proof blocks can set. -/
+units read or the client receives, and its verdict), its slot entries' bits (`E_w`: `lanes · T / every` entries of
+its `prog` ports' type), all a tied audit's incorrect proof blocks can set, and its state's full width (`start`: the
+start unit's `sin`, the bits a period's first start that is not the run's first is charged, `startCheck`). -/
 structure Scan where
   steps : Nat
   free : Nat
   ingress : Nat
   egress : Nat
   entries : Nat
+  start : Nat
 
 /-- Which run the execution phases are: the clock form's, under Σ_sync, or the rows form's, under one schedule (and its
 digest), read by the scan whose terms are the last. -/
@@ -1016,7 +1023,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf di.ret, egress := bitsOf de.ret,
-         entries := s.lanes * nb * bitsOf ety }
+         entries := s.lanes * nb * bitsOf ety, start := bitsOf ds.params[0]!.2 }
 
 def paramsOf (j : Json) : V Params := do
   match j with
@@ -1492,7 +1499,7 @@ def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
 
 /-- The rows form's start findings, one an execution phase, in order (`startCheck`); none in the clock form. -/
 def startChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
-  | .rows .. => c.windows.zipIdx.map fun (reg, i) => startCheck (p.first + i) reg
+  | .rows .. => c.windows.zipIdx.map fun (reg, i) => startCheck (p.first + i) i reg
   | .clock _ => #[]
 
 /-- `okCheck`'s refusal, after its execution phase's number. -/
@@ -1619,8 +1626,11 @@ structure Public where
   charged : Array Facts := #[]
   /-- The schedule's response cap (`Form.maxTokensCap`), published when it has one. -/
   maxTokensCap : Option Nat := none
+  /-- The rows form's charge for its period's first start where that is not the run's first, the scan's state's full
+  width (`Scan.start`, `startCheck`), else 0: a term of its own, once a period. -/
+  start : Nat := 0
 
-def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
+def Public.K (x : Public) : Nat := x.schedules + x.cells + x.start + (x.units.map (·.bits)).foldl (· + ·) 0
 
 /-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. -/
 def Public.eps (x : Public) : Core.Ratio :=
@@ -1644,11 +1654,12 @@ def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitt
 length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each execution phase's scan's from the
 scan's terms, its facts, its tied audits' free inputs and the entry bits their incorrect proof blocks can set (`scans`,
 a triple a execution phase). The compute audits' own terms are in none: a tied audit's free inputs and incorrect proof
-blocks are in its execution phase's, and the δ of one sampled in part (`charged`) in `eps`. -/
+blocks are in its execution phase's, and the δ of one sampled in part (`charged`) in `eps`; and the period's first
+start, `start` bits where it is charged. -/
 def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
-    (jitter windows : Nat) (charged : Array Facts := #[]) : Public :=
+    (jitter windows : Nat) (charged : Array Facts := #[]) (start : Nat := 0) : Public :=
   { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
-    rows := true, schedules := capsTerm cells, windows, charged }
+    rows := true, schedules := capsTerm cells, windows, charged, start }
 
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to an execution phase's scan (`tiedOf`) and sampled
 in part, so its at most `b` incorrect proof blocks are in its execution phases' terms (`faultyEntries`) and its δ in
@@ -1679,12 +1690,13 @@ def connectionRowsCheck (p : Params) : Option (Core.Verdict × String) := match 
   | .clock _ => none
 
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts, each execution phase's scan's
-facts, tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`). -/
+facts, tied audits' free inputs and `β_w` (`faultyEntries`), the charged audits (`chargedOf`), and the state's full width
+as the period's `start` where its first execution phase is not the run's first (`startCheck`). -/
 def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
     Public :=
   rowsTerms (as.filterMap (·.toOption)) scan
     ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.cells p.jitter p.windows
-    ((Array.range as.size).filterMap (chargedOf p c as))
+    ((Array.range as.size).filterMap (chargedOf p c as)) (if p.first = 0 then 0 else scan.start)
 
 structure Profile where
   link : String
@@ -1741,7 +1753,7 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units true)] else []) ++
+    (if x.rows then [("scans", termsJson x.units true), ("start", toJson x.start)] else []) ++
     (x.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList)
 
 def profileJson (pr : Profile) : Json :=
@@ -1784,32 +1796,36 @@ def protocol : Core.Protocol where
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
 -- jitter below 2 over its 10 steps: 1562 sets of at most 3 of 21 units
 #guard atMost 21 3 == 1562 && clog2 1562 == 11
-#guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512, 0⟩
+#guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512, 0, 0⟩
   #[({ units := 21, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }, 0, 0)] #[7, 2] 2 1).K ==
   (3 + 2) + (3 + 2) + (1120 + 11 + 3 * 512 + 10)
 -- every unit sampled: no incorrect proof block, so no incorrect set and no faulty bits
-#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[] 1 1
-  ).K == 0
+#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0, 0⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[]
+  1 1).K == 0
+-- the same period where its first execution phase is not the run's first: its start, a state of 145,568 bits, charged
+-- once, in K beside the scans' terms and in no scan's
+#guard (rowsTerms #[] ⟨4, 0, 300, 512, 0, 145568⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0),
+  ({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[] 1 2 #[] 145568).K == 145568
 -- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit sampled, and its tied audit (the
 -- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
 -- entries, 1,136 bits each: K is the tied audit's 9,088
-#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 0⟩
+#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 0, 0⟩
   #[({ units := 65, drawn := 65, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136, 0)] #[] 1 1).K == 9088
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[]
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[]
   1 2).eps.toString == "2/15"
 -- w63k4: T = 32, 4 lanes, every 16, so 8 slot entries of 112 bits an execution phase; its tied audit sampled in part,
 -- with at most 2 incorrect proof blocks, which can set any entry: its execution phase's term charges E_w = 896 bits
 -- beside its free inputs
-#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
+#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112, 0⟩
   #[({ units := 65, drawn := 65, delta := ⟨1, 100⟩, wrong := 0 }, 9088, 8 * 112)] #[] 1 1).K == 9088 + 896
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
-#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
+#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
   ).eps.toString == "1/6"
 -- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), with a bound of 2 incorrect ones: charged, its
 -- execution phase's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
 #guard
-  let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
+  let scan : Scan := ⟨32, 0, 300, 512, 8 * 112, 0⟩
   let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none, none, none, false⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
@@ -1909,7 +1925,7 @@ def protocol : Core.Protocol where
 #guard
   let s : Schedule := ⟨100, 512, 27, 65, 16, 12, 47, 4, 4, 4, 32, none, none, none, false⟩
   let p := fun (w : Nat) =>
-    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, w, none⟩ : Params)
+    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0, 0⟩, w, none⟩ : Params)
   rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
     (rowsWfCheck (p (2 ^ 25))).isSome
 -- the class circuit c is held when every tied audit is registered under it, an untied audit's Program unread; not when

@@ -140,8 +140,8 @@ def test_the_rows_form_refuses_what_it_must(server):
     response cap or none), scans at two δ, a scan answered over
     other than its 2T + 1 units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output
     but no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
-    `SCAN_STATE`, one whose start is not opened to the empty state, a period that is not the run's first execution phase
-    alone, a tied audit registered under another Program than the class circuit, a scan whose ok bits are not
+    `SCAN_STATE`, one whose start is not opened to the empty state, a period of more than one execution phase, a tied
+    audit registered under another Program than the class circuit, a scan whose ok bits are not
     at the schedule's constants, and one under a schedule of one tick, which has no constants: Lean and the mirror each
     refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
@@ -343,24 +343,47 @@ def test_a_scan_whose_start_is_not_the_empty_state_is_refused(server, monkeypatc
         refused_by_lean_alone(build("rows-start-unpinned", n, small=True), server, PC.UNPINNED)
 
 
-def test_a_period_that_is_not_the_runs_first_link_window_alone_is_refused(server, monkeypatch):
-    """An execution phase after the run's first starts from the state the one before it ended in, which the check holds
-    to nothing, so the rows form refuses, in Lean and in the mirror and by name, a period of a later execution phase and
-    one of the first and the next (`PC.CARRIES`), each stating a start opened to the empty state; and a mirror that
-    takes any execution phase's start accepts what Lean refuses."""
+def test_a_period_of_more_than_one_link_window_is_refused(server, monkeypatch):
+    """An execution phase after its period's first starts from the state the one before it ended in, which the check
+    neither holds nor charges, so the rows form refuses, in Lean and in the mirror and by name, a period of the run's
+    first execution phase and the next and one of a later one and the next (`PC.CARRIES`), each stating a start opened
+    to the empty state; and a mirror that takes any execution phase's start accepts what Lean refuses."""
     carries = PC.CARRIES
     for u in carries:
         monkeypatch.setattr(PC, "CARRIES", (u,))
         for n in range(3):
             case = build("rows-start-carried", n, small=n % 2 == 0)
-            assert case["params"]["first"] + case["params"]["windows"] > 1, (u, n)
+            assert case["params"]["windows"] > 1 and (case["params"]["first"] > 0) == (u == "later"), (u, n)
             assert PC.CARRIED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.CARRIED in json.loads(out)["reason"], (u, n, out)
     monkeypatch.setattr(PC, "CARRIES", carries)
-    monkeypatch.setattr(PC, "_start_refusal", lambda w, reg: None)
+    monkeypatch.setattr(PC, "_start_refusal", lambda w, i, reg: None)
     for n in range(2):
         refused_by_lean_alone(build("rows-start-carried", n, small=True), server, PC.CARRIED)
+
+
+def test_a_period_that_does_not_begin_the_run_is_charged_its_start(server, monkeypatch):
+    """A period of one execution phase that is not the run's first starts from the state the one before it ended in,
+    which the check holds to nothing: Lean accepts it at any start it states (`PC.CHARGES`) with the mirror's public,
+    whose `start` is the scan's state's full width, the start unit's `sin`, counted once in `K`; the same period at the
+    run's first execution phase, whose start is the empty state, is charged none."""
+    for u in PC.CHARGES:
+        monkeypatch.setattr(PC, "CHARGES", (u,))
+        for n in range(2):
+            case = build("rows-start-charged", n, small=n % 2 == 0)
+            out = reference(case)
+            p = PC.params(case["params"])
+            assert p.first > 0 and p.windows == 1 and out["verdict"] == ACCEPT, (u, n, out)
+            pub = out["public"]
+            assert pub["start"] == p.scan.start > 0 and pub["K"] == pub["start"] + pub["schedules"] + pub["cells"] + sum(
+                t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] + t["faulty_entries"]
+                for t in pub["scans"]), (u, n, pub)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == pub, (u, n, got)
+    for n in range(2):
+        out = reference(build("rows-honest", n, small=n % 2 == 0))
+        assert out["verdict"] == ACCEPT and out["public"]["start"] == 0, (n, out)
 
 
 def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server, monkeypatch):
@@ -660,7 +683,8 @@ def test_each_lanes_prog_is_its_own_chunk():
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
     compute audit's output), an ingress and an egress instance's committed bits (their returns: a u16 with the state
-    and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
+    and view, or with the row), its slot entries' bits (lanes · T / every entries of its `prog` ports' width) and its
+    state's width, the start unit's `sin`, which a period that does not begin the run is charged; and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T and T instances,
     one with no start unit's template, or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
@@ -671,7 +695,8 @@ def test_the_scan_is_read_off_its_program(server):
         p, desc = PC.params(case["params"]), case["params"]["scan"]
         state, prog, view, _words = PC._scan_widths(desc)
         s, T, row = p.schedule, p.schedule.window, WR.row_bytes(p.schedule)
-        assert p.scan == PC.Scan(T, 0, 16 + state + view, 16 + 8 * row, s.lanes * (T // s.every) * prog), (n, p.scan)
+        assert p.scan == PC.Scan(T, 0, 16 + state + view, 16 + 8 * row, s.lanes * (T // s.every) * prog, state), \
+            (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))

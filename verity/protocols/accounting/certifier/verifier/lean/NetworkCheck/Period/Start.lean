@@ -69,29 +69,36 @@ def startProbe (roots : List String) (words : Nat) : Json :=
     !startEmpty (startProbe [] 1) && !startEmpty (startProbe [one, two] 1) && !startEmpty (startProbe [one] 0) &&
     !startEmpty Json.null
 
-/-- What the check says of an execution phase that is not the run's first. Its scan starts from the state the execution
-phase before it ended in, and the check holds no start to that state. -/
+/-- What the check says of an execution phase after its period's first. Its scan starts from the state the execution
+phase before it ended in, which the check neither holds nor charges. -/
 def startCarriedRefusal : String :=
-  "the scan's start is the state the link-window before it ended in, and the check holds a start only to the empty \
-    state, the run's first link-window's (startCheck): a period is the run's first link-window alone"
+  "the scan's start is the state the link-window before it ended in, and the check holds or charges a start only at \
+    its period's first link-window (startCheck): a period is one link-window"
 
-/-- Execution phase `w`'s start finding in the rows form: a refusal unless it is the run's first, execution phase 0, and
-its scan starts from the empty state (`startEmpty`). The start unit copies the registered value `startName` to row 0 of
-the scan's state, which the Programs anchored at bucket 0 read; unless the check holds that value, they read a state
-the prover chose. A later execution phase's start is the state the one before it ended in, which the check does not hold
-it to, so it refuses every execution phase but the run's first (`startCarriedRefusal`). -/
-def startCheck (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
-  if w != 0 then some (.reject, s!"window {w}: {startCarriedRefusal}")
-  else if startEmpty reg then none
+/-- Execution phase `w`'s start finding in the rows form, the `i`-th of its period: a refusal unless it is the period's
+first (`i = 0`) and, where it is the run's first (`w = 0`), its scan starts from the empty state (`startEmpty`). The
+start unit copies the registered value `startName` to row 0 of the scan's state, which the Programs anchored at
+bucket 0 read. A period's first execution phase that is not the run's first starts from the state the one before it
+ended in, which the check holds to nothing: it charges that start once, as free input at the state's full width (the
+period's `start` term, `Scan.start`), so an adversary-chosen start carries no more than the bits it counts. A later
+execution phase of a period starts from the state the one before it ended in, which the check neither holds nor
+charges, so it refuses it (`startCarriedRefusal`). -/
+def startCheck (w i : Nat) (reg : Json) : Option (Core.Verdict × String) :=
+  if i != 0 then some (.reject, s!"window {w}: {startCarriedRefusal}")
+  else if w != 0 || startEmpty reg then none
   else some (.reject, s!"window {w}: the scan's start is not the empty state: its registration has no {startName} \
     entry among its registered values, or its window.empty of {startName} is no opening of one to zero u16 words \
     under its salt at that entry's root and domain (startEmpty), so the Programs anchored at bucket 0 can read a \
     state the prover chose: register the start unit's sin as the empty state's row and give its salt")
 
+-- the run's first execution phase at the empty state and not at another; a period's first that is not the run's
+-- first at any start, charged; a period's second refused, at any execution phase
 #guard
   let one := "cc8a8f235c85967255dadcfea4db8f2534aa0a12d0c3e9c289462c14072a92cc\
     3c65bfd17a3df01f6dcb91eec5ff7a6cb18294dc0ad07ab56a1e2fcd341161e0"
-  (startCheck 0 (startProbe [one] 1)).isNone && (startCheck 0 (startProbe [one] 2)).isSome &&
-    (startCheck 1 (startProbe [one] 1)).map (·.2) == some s!"window 1: {startCarriedRefusal}"
+  (startCheck 0 0 (startProbe [one] 1)).isNone && (startCheck 0 0 (startProbe [one] 2)).isSome &&
+    (startCheck 3 0 (startProbe [one] 2)).isNone && (startCheck 3 0 Json.null).isNone &&
+    (startCheck 1 1 (startProbe [one] 1)).map (·.2) == some s!"window 1: {startCarriedRefusal}" &&
+    (startCheck 4 1 (startProbe [one] 1)).map (·.2) == some s!"window 4: {startCarriedRefusal}"
 
 end NetworkCheck.Period

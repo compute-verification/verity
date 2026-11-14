@@ -355,7 +355,9 @@ A spec-level reference for network accounting's timing channel:
   so a Program reads the states the scan's steps computed;
   `IngressScanStart`, the scan's start, commits leaf 0 by gates: the state its execution phase's record names (the
   empty state in the run's first execution phase, the previous one's last state row after it), so every bucket, the
-  first included, is `IngressScanBucket`. The period check, the
+  first included, is `IngressScanBucket`; the period check holds that state to the empty state in the run's first
+  execution phase and, in a period's first that is not the run's first, charges it once at the state's full width
+  (`startCheck`, the public's `start`). The period check, the
   step from a period's records to the network bound, reads the inference-only policy's layout check. Programs start at
   fixed slots a network timestep: a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   execution phase, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a

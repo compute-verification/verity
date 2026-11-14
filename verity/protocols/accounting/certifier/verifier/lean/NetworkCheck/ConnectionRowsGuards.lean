@@ -133,7 +133,7 @@ def plainSchedule : Schedule :=
 -- execution phase and no audit under `plainSchedule` at T = 2 is accepted, and with lengths rows it is refused by name
 #guard
   let p := fun (s : Schedule) =>
-    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩ : Params)
+    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0, 0⟩, 0, none⟩ : Params)
   let reason := fun (s : Schedule) => match check (p s) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
     | .accept .. => "accept"
     | .reject r => r

@@ -39,8 +39,9 @@ each member's ok bits
 (`<member>/o0`) at the schedule's constant (`_ok_entries`; `ok-unheld`: one execution phase's broken, `UNOKS`; `ok-equal`:
 a schedule of two ticks, where two members' are at one domain and root; `one-tick`: a schedule of one tick, which
 has no constants), answered by one-stage with a
-stratified or subset sample at the period's δ; a rows period is the run's first execution phase alone, and one that is
-not is refused (`start-carried`, `CARRIES`); the scan's Program is its generator form, stand-ins of its three templates
+stratified or subset sample at the period's δ; a rows period is one execution phase, and one of more is refused
+(`start-carried`, `CARRIES`), while one whose execution phase is not the run's first is accepted at any start, charged
+the state's full width (`start-charged`, `CHARGES`); the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
 what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the
@@ -217,12 +218,15 @@ class Params:
 class Scan:
     """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
     entries, `_wired`, whose free inputs an execution phase's term counts, `_tied_audits`), the bits one ingress and one
-    egress instance commit, and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
+    egress instance commit, its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set, and its
+    state's full width (`start`: the start unit's ``sin``, what a period's first start that is not the run's first is
+    charged, `_start_refusal`)."""
     steps: int
     free: int
     ingress: int
     egress: int
     entries: int = 0
+    start: int = 0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -696,7 +700,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
-    return Scan(T, 0, bits_of(bi["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety))
+    return Scan(T, 0, bits_of(bi["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety),
+                bits_of(bs["params"][0][1]))
 
 
 def params(j) -> Params:
@@ -1205,8 +1210,8 @@ UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 MISREAD = "the scan's state reads are not its transitions' chain"
-#: `startCheck`'s refusals, after its window's number: an execution phase that is not the run's first, and a start that
-#: is not the empty state.
+#: `startCheck`'s refusals, after its window's number: an execution phase after its period's first, and the run's first
+#: one's start that is not the empty state.
 CARRIED = "the scan's start is the state the link-window before it ended in"
 UNPINNED = "the scan's start is not the empty state"
 
@@ -1219,12 +1224,14 @@ def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
     return None
 
 
-def _start_refusal(w: int, reg: dict) -> str | None:
-    """`startCheck`'s refusal of execution phase `w`'s scan: none when it is the run's first, execution phase 0, and its
-    scan starts from the empty state (`_start_empty`)."""
-    if w != 0:
+def _start_refusal(w: int, i: int, reg: dict) -> str | None:
+    """`startCheck`'s refusal of execution phase `w`'s scan, the `i`-th of its period: none when it is its period's
+    first and, where it is the run's first, execution phase 0, its scan starts from the empty state (`_start_empty`).
+    A period's first that is not the run's first starts from a state the check holds to nothing, and is charged
+    (`public`'s ``start``)."""
+    if i != 0:
         return CARRIED
-    return None if _start_empty(reg) else UNPINNED
+    return None if w != 0 or _start_empty(reg) else UNPINNED
 
 
 #: `heldCheck`'s refusal, after its execution phase's number.
@@ -1259,12 +1266,13 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
 
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | None = None,
-           charged: list[Facts] = ()) -> dict:
+           charged: list[Facts] = (), start: int = 0) -> dict:
     """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     execution phases' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock
     form), where a compute audit's own terms are in none, a tied audit's free inputs are in its execution phase's `free`
-    and its incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit sampled in part (`charged`) is in
-    `eps`."""
+    and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit sampled in part (`charged`) is in
+    `eps`, and the period's first start, where it is not the run's first, is charged ``start``, the state's full width,
+    once."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1274,10 +1282,10 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         s = p.scan
         units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
         schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "scans": units}
+        out = {"audits": [_facts_json(f) for f in facts], "scans": units, "start": start}
         if p.schedule.max_tokens_cap is not None:
             out["max_tokens_cap"] = p.schedule.max_tokens_cap
-    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
+    K = schedules + cells + start + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
                                 + t.get("faulty_entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
@@ -1326,7 +1334,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
         findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
                      if (why := _state_refusal(p, c.audits, reg))]
         findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
-                     if (why := _start_refusal(p.first + i, reg))]
+                     if (why := _start_refusal(p.first + i, i, reg))]
         # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
         # schedule with none refuses every registration
         try:
@@ -1347,8 +1355,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
-    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values())), {
-        "link": p.link, "windows": p.windows}
+    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values()),
+                          0 if p.first == 0 else p.scan.start), {"link": p.link, "windows": p.windows}
 
 
 def reference(case) -> dict:
@@ -1400,7 +1408,7 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
-    "rows-start-unpinned": REJECT, "rows-start-carried": REJECT, "rows-circuit-swapped": REJECT,
+    "rows-start-unpinned": REJECT, "rows-start-carried": REJECT, "rows-start-charged": ACCEPT, "rows-circuit-swapped": REJECT,
     "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
@@ -1746,9 +1754,13 @@ MISREADS = ("sin-leaf", "o1-leaf", "o0-leaf", "units", "swapped", "missing", "un
 #: salt another, its words another count; no start entry, one under another name or key, one in `roots` and none in
 #: `registered`, a second at another root; or a field of another type
 UNPINS = ("row", "missing", "salt", "words", "entry", "renamed", "roots", "extra", "untyped")
-#: How `rows-start-carried` makes its period more than the run's first execution phase alone: its execution phases
-#: later ones of the run, or more execution phases after the first
+#: How `rows-start-carried` makes its period more than one execution phase: more after the run's first, or more after
+#: a later one
 CARRIES = ("later", "more")
+#: How `rows-start-charged` states the start of a period whose one execution phase is not the run's first, which the
+#: check holds to nothing and charges: the empty state's opening (None), or one of `UNPINS` that leaves the scan's state
+#: entries as they are
+CHARGES = (None, "row", "missing", "salt", "words", "entry", "extra")
 #: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
 #: leaf count; no entry for it, or for any member; its entry under another port; a second entry for it at another
@@ -2046,18 +2058,18 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     link = r.choice(["eth0", "a", "d-e"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
     carry = rp.choice(CARRIES) if m == "start-carried" else None
-    least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") or carry == "more" else 1
+    least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") or carry else 1
     least_audits = 2 if m == "state-untied" else \
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
-    # a rows period is the run's first execution phase alone (`startCheck`): more, or a later one, only where the change
-    # asks, each refused
+    # a rows period is one execution phase (`startCheck`): more only where the change asks, refused, and a later one
+    # than the run's first only where the change asks, charged its start
     n_windows = r.randint(least_windows, least_windows if small or (rows and not carry) else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
     # a rows execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
-        first = rp.randrange(1, 6) if carry == "later" else 0
+        first = rp.randrange(1, 6) if carry == "later" or m == "start-charged" else 0
     if rows:
         sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"),
                                         T={"ok-equal": EQUAL_T, "one-tick": ONE_TICK}.get(m))
@@ -2085,7 +2097,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     untie = rp.choice(UNTIES) if m == "prog-untied" else None
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
-    unpin = rp.choice(UNPINS) if m == "start-unpinned" else None
+    unpin = rp.choice(UNPINS) if m == "start-unpinned" else rp.choice(CHARGES) if m == "start-charged" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
     # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it
     trees = {i: _state_tree(rp, sched.window) for i in range(n_audits)} if rows else {}
@@ -2224,8 +2236,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
         rp.shuffle(entries)
         reads = _misread(rp, T) if aimed and m == "state-misindexed" else state_reads(T)
-        # the scan's start, the empty state at a domain of its own, which every execution phase here states: one that is
-        # not the run's first is refused whatever it states
+        # the scan's start, the empty state at a domain of its own, which every execution phase here states but where
+        # the change states another: a period's later one is refused, and one not the run's first charged, whatever it
+        # states
         start = (rp.randint(1, 3), rp.randbytes(ADV.INST.salt_bytes), rp.randbytes(64))
         (by_value, by_port, empty) = _unpinned(rp, *start, unpin) if aimed and unpin else \
             ((got := start_empty(*start))[:1], [], got[1])
