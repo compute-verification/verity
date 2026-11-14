@@ -2,7 +2,7 @@
 built here with `lake` on first use), with `streamed_wipe.verdict` beside it as the reference.
 
 `judge(signed, commitment, trusted=..., schemes=..., decide=VERDICT)` returns the verdict a caller records and each side's
-as it gave it (`{"accepted", "egress_mib", "reasons"}`), as `decide` names:
+as it gave it (`{"accepted", "reasons"}`), as `decide` names:
 
 - `lean`: the Lean's verdict; the Python's isn't computed.
 - `both`: both computed, and the Lean's verdict where they agree on every field; where they differ, a rejection naming
@@ -17,7 +17,7 @@ step judges its session here.
 The record goes as `to_json` writes its parts, `trusted` as sorted hex and `schemes` by id, each one the port verifies
 (`MemoryChallenger.KNOWN_SCHEMES`: `memory_challenger.LMS` and the test signers' ids).  Where the Lean refuses the record
 (a scheme id it doesn't verify, a field `to_json` can't have written), `verdict` raises `ValueError` and `judge` rejects
-the session with the egress saturated, which bounds nothing: it fails closed, never to the Python."""
+the session: it fails closed, never to the Python."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import verity_difftest as D
+
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 
 PACKAGE = Path(__file__).resolve().parent
@@ -63,11 +64,11 @@ def python(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: fro
            schemes: Mapping[str, Any] = sw.SCHEMES) -> dict[str, Any]:
     """The Python's verdict, in the Lean's form."""
     v = sw.verdict(signed, commitment, trusted=trusted, schemes=schemes)
-    return {"accepted": v.accepted, "egress_mib": v.egress_mib, "reasons": list(v.reasons)}
+    return {"accepted": v.accepted, "reasons": list(v.reasons)}
 
 
 def _of(side: dict[str, Any]) -> sw.Verdict:
-    return sw.Verdict(side["accepted"], tuple(side["reasons"]), side["egress_mib"])
+    return sw.Verdict(side["accepted"], tuple(side["reasons"]))
 
 
 def verdict(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
@@ -87,12 +88,15 @@ def judge(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: froz
         try:
             sides["lean"] = lean(signed, commitment, **kw)
         except ValueError as e:
-            sides["lean"] = {"accepted": False, "egress_mib": sw.EGRESS_MAX_UNITS, "reasons": [str(e)]}
+            sides["lean"] = {"accepted": False, "reasons": [str(e)]}
     if decide != "lean":
         sides["python"] = python(signed, commitment, **kw)
     if decide == "python":
         return _of(sides["python"]), sides
     if decide == "both" and sides["lean"] != sides["python"]:
         why = f"{DISAGREE}: lean {json.dumps(sides['lean'])}, python {json.dumps(sides['python'])}"
-        return sw.Verdict(False, (why,), sw.EGRESS_MAX_UNITS), sides
+        return sw.Verdict(False, (why,)), sides
     return _of(sides["lean"]), sides
+
+
+__all__ = ["DISAGREE", "EXE", "VERDICT", "VERDICTS", "judge", "lean", "python", "record", "server", "verdict"]

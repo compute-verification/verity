@@ -5,8 +5,9 @@ import json
 
 import pytest
 
-from verity_vllm.properties import fa_tap_exactness, golden, holdout, quarantine_lint
-from verity_vllm.properties.record import (
+from tests.properties import fa_tap_exactness
+from verity_vllm.properties import golden, holdout, quarantine_lint
+from verity_vllm.records.property_record import (
     BY_SCHEMA,
     REGISTRY,
     PropertyRecord,

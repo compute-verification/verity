@@ -106,7 +106,7 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
     if measured:
         writer = kit.Writer(run_dir, run_id, kit.host_stamp())
         for m in measured:
-            writer.measurement(**m, inputs=[rel])
+            writer.measurement(**m, inputs=[rel], mark="measured")
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------

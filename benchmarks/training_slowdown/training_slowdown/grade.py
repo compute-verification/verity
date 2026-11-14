@@ -483,7 +483,8 @@ def traced(record: dict, row: dict) -> dict:
     product row is priced here (`work.priced`), at the k the job classified the rows at and at each
     other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
     after the run's first update (`changed_steps`), by their tokens over its own, a `stand_in` where they differ from
-    it in structure or tokens. Of the trace it reads `TRACE`: the capture's version, the traced step's tokens, the
+    it in structure or tokens, less the positions those steps counted as repeats on the batch's tokens where they
+    counted them (`work.batch_count`). Of the trace it reads `TRACE`: the capture's version, the traced step's tokens, the
     rows with their k, their P-match check and the dial's, and the read-backs `formalism.refusal` refuses on.
 
     Beside them it reads what the trace has of `BESIDE`. With the trace's `circuit` the block's parts are the
@@ -526,8 +527,9 @@ def traced(record: dict, row: dict) -> dict:
         raise F.Refused(f"update-free prefix: E is not empty, but no step through checkpoint {row['checkpoint_step']} "
                         f"reads a weight the run changed")
     block = work.priced(tr)
-    got = work.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"])
-    label = F.TRACED_PRODUCTS
+    batch = work.batch_count(steps, work.row_positions(block["rows"]))
+    got = work.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"], batch)
+    label = F.traced_label(batch)
     structures, counts = sorted({s["struct"] for s in steps}), sorted({s["tokens"] for s in steps})
     if len(structures) > 1 or counts not in ([], [tr["tokens"]]):
         got["stand_in"] = {"structures": structures, "step_tokens": counts, "traced_tokens": tr["tokens"],
@@ -567,8 +569,9 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple
     `formalism.published` at (c, k) on its first scored checkpoint at or below its target, else on its last (`at`
     says which), read with its record's trace (`traced`), with the theorem's inputs there (`work`, the bound of
     record's: none where the record gives no slowdown or its M is empty), the capture that traced it, the figures
-    beside it that have no value (`blank`) and what the bound says of a sensitivity that sums only some of the
-    record's parts (`unmeasured`). The bound of record is the `bound` of `calculator.slowdown`'s result on the
+    beside it that have no value (`blank`), what the bound says of a sensitivity that sums only some of the
+    record's parts (`unmeasured`) and, where M left out the positions the record's steps counted as repeats on the
+    batch's tokens, that count (`repeats`, `work.batch_count`'s). The bound of record is the `bound` of `calculator.slowdown`'s result on the
     record, which ρ's products term is of too (`formalism.bound`'s `entry`). No ρ, with why, and the bound not
     available, without a search record, without a scored checkpoint, on a record whose trace `traced` refuses, or on
     one `formalism.measure` refuses or can't measure."""
@@ -596,13 +599,14 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple
         "at": "its first checkpoint reaching the gain" if at["reached"] else
               f"its last checkpoint: the search record doesn't reach {g:g}x",
         "capture": (m.products or {}).get("capture"), "provenance": run["record"].get("provenance"),
-        "work": of_record.get("work")}, of_record
+        "work": of_record.get("work")} | (
+        {"repeats": b["inputs"]["products"]["repeats"]} if b["inputs"]["products"].get("repeats") else {}), of_record
 
 
 def per_period(run_gates: float, rho: dict) -> dict:
     """The run's gates at S (`run_gates`, C·ρ) in AND gates, at a served-precision GEMM's gates an AND, and their share
     of each fleet's compute over each period (`calculator.fleets`, `calculator.periods`), with what is measured, what
-    is proved and what is scaled."""
+    is proved (on the batch, the premise `work.batch_premise` states of ρ's `repeats`) and what is scaled."""
     run_and = run_gates / gates.per_and(f"gemm/{policy.SERVED_PRECISION}")
     rows = [{"over": fl["over"], "fleet": fl["fleet"], "locations": fl["locations"], "period": name, "seconds": s,
              "fleet_and_gates": fl["and_per_s"] * s, "share": run_and / (fl["and_per_s"] * s)}
@@ -613,7 +617,8 @@ def per_period(run_gates: float, rho: dict) -> dict:
         "proved": (f"the count ρ's products term solves for the fewest blocks, {calculator.theorem()}'s first "
                    "conjunct (`HEShared`'s where its products share arrays): a lower bound at the N, O, β_w, β_x and "
                    "b_y the traced step gives, given (H), (E), the theorem's hypotheses on the circuit, which the "
-                   f"trace doesn't check, and that {work.P_BATCH}; the solving is the calculator's arithmetic, and p "
+                   f"trace doesn't check, and that {work.batch_premise(rho.get('repeats'))}; the solving is the "
+                   "calculator's arithmetic, and p "
                    "and the shares are not proved" if rho["binding_kind"] == "products" else
                    f"nothing: ρ's {rho['binding_kind']} term is computed"),
         "scaled": f"every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC at the "

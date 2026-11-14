@@ -21,7 +21,7 @@ from verity.definitions.numerics.rows import moe_sum
 from tests import fake_vllm
 from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 K, N, GQ = 256, 200, X.GROUP
 WG, MV = "HopperE4m3QgmmaDot32_v1", "HopperE4m3MmaV2Dot32_v1"
