@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.PearlPlus
-public import Properties.Pouw.PearlPlusDraw
+public import Properties.Pouw.PearlPlusSample
 public import Definitions.Core.Interaction
 public import Flock.Hash
 

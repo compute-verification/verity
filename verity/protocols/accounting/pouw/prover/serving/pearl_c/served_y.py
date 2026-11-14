@@ -1,4 +1,4 @@
-"""A call's served y, committed: its real rows (the y vLLM gets, ``y[:m]``) as A's rows are (each BF16 word widened exactly
+"""A call's served y, committed: its real rows (the y the workload gets, ``y[:m]``) as A's rows are (each BF16 word widened exactly
 to FP32, followed by its hm96 salt under the prover's key), in a ``frame-v3-sha512`` tree bound to the epoch's salt and the
 call's index, and retained beside A's (``y/<index>.rows.bf16``, ``y/<index>.tree``).  `verify_run` opens a sampled tile's
 real rows of it and holds each word to the unscale of the tile's checked U (`pearl_c_u.y`); the root is what a consumer of

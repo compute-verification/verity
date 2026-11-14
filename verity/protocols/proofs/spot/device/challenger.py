@@ -1,4 +1,4 @@
-"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the live coins of every protocol (Lean of record:
 `Spot.Challenger`, `verity/protocols/proofs/spot/verifier/lean`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
@@ -17,7 +17,7 @@ and never twice: a retry never resamples.  There is no beacon and no Fiat–Sham
 a client derives what it samples from the opened coin (`verity.commitments.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
-**Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` claim id of
+**The challenger's entropy is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` claim id of
 `verity.commitments.claim_ids` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
 `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
@@ -361,7 +361,7 @@ MAIN_FORM = ("a list of main's first-parent commits, each 40 lowercase hex (`git
 NO_MAIN = ("the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's "
            "check passed: give it the auditor's own `git rev-list --first-parent origin/main`")
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
-#: the property every coin source's claim instance is assumed of: independent uniform output
+#: the property each entropy's claim instance is assumed of: independent uniform output
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
             "claim id of verity.commitments.claim_ids), so no assumption covers its coins: a served challenger draws from a named "
@@ -380,7 +380,7 @@ def coin_claim(entropy: Any) -> str | None:
     if claim is None:
         return None
     if not (type(claim) is str and claim.startswith(f"{COIN_PROPERTY}/") and claim in claim_ids.IDS):
-        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> claim id of verity.commitments.claim_ids, "
+        raise CoinError(f"an entropy's claim is a {COIN_PROPERTY}/<instance> claim id of verity.commitments.claim_ids, "
                         f"not {claim!r}")
     return claim
 
