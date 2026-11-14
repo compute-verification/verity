@@ -5,7 +5,7 @@ public import Mathlib.Data.Finset.Card
 /-!
 # The cover theorem: the vocabulary
 
-The training dampener, stated over one Boolean circuit `C`. A run declares a cover of `C` by inference blocks: sets of
+The training slowdown, stated over one Boolean circuit `C`. A run declares a cover of `C` by inference blocks: sets of
 at most `s` gates, each reading at most `k` bits besides the registered parameters `θ`, with declared compute `s · #𝓘`.
 The cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
 training circuit needs many blocks. Nothing here reads what a gate computes, only the wiring.
@@ -78,7 +78,7 @@ def InferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) : Prop :=
 
 /-- **`𝓘` covers `C`**: every gate that is not an input gate is computed by some block of `𝓘`. The blocks may overlap,
 and a gate may be computed in several of them. The declared compute is `s · #𝓘`; tying it to hardware time is part (1)
-of the dampener's argument, not the cover theorem's. -/
+of the slowdown's argument, not the cover theorem's. -/
 def Covers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Prop :=
   ∀ g, (C.pred g).Nonempty → ∃ I ∈ 𝓘, g ∈ C.computed I
 
