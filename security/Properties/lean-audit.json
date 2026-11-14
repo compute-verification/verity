@@ -942,7 +942,7 @@
   "Pous.Period.Instantiates": "pous-ring-instantiation",
   "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
   "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
-  "Verity.Assumptions.TrustedDevice": "trusted-host",
+  "Verity.Assumptions.TrustedDevice": "trusted-device",
   "Verity.Assumptions.VerifierReadsLog": "honest-verifier"
  },
  "trust": {

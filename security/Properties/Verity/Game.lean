@@ -191,7 +191,7 @@ def rowsId : String := "verity/inference-only/rows/v1"
 /-- **What the rows check does, until a compiled check carries its id**: nothing here says (`opaque`), so no statement
 about the rows check holds by computing it, and its target at a composite that lists it is proved only from the compiled
 check that replaces this. -/
-opaque rowsUnbuilt : BlobProtocol := NciCheck.Protocol.protocol
+opaque rowsUnbuilt : BlobProtocol := InferenceOnlyCheck.Protocol.protocol
 
 /-- **The rows check**: `rowsUnbuilt` under the rows check's id. -/
 def rowsCheck : BlobProtocol := { rowsUnbuilt with id := rowsId }
@@ -922,7 +922,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
   | .inferenceOnly, o =>
-    if NciCheck.Protocol.protocolId ∈ k ∧ rowsId ∉ k then
+    if InferenceOnlyCheck.Protocol.protocolId ∈ k ∧ rowsId ∉ k then
       ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
     else rowsHeld k o.sent
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o

@@ -902,7 +902,7 @@ def _window_audit(made: tuple[dict, dict, dict], w: dict) -> tuple[dict, dict, b
     """SPOT's audit `made` (its params but δ, its record and its evidence, its log W alone) as a composite's entry at δ
     1/2, the policy's entry on its record and registered circuit (`policy_on`), and that record R, chained after W."""
     params, rec, evidence = made
-    audit = as_component(R.SAMPLED_PROOFS, form_case(OS._json({"params": {**params, "delta": "1/2"}, "record": rec,
+    audit = as_component(R.SPOT, form_case(OS._json({"params": {**params, "delta": "1/2"}, "record": rec,
                                                                "evidence": evidence})))
     policy = policy_on(audit)
     assert policy is not None
@@ -999,7 +999,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     assert got["reason"].startswith(f"{audit['id']} reject") and R.PEARL_PLUS.id not in got["reason"], got
 
 
-NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean"
 #: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
 PEARL_PLUS_REFUSED = "params: keys are not coins,"
@@ -1053,8 +1053,8 @@ def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypat
     blobs = [tmp_path / "circuit", tmp_path / "public"]
     for b, data in zip(blobs, BLOBS):
         b.write_bytes(data)
-    nci = D.build(NCI_PACKAGE, "inference-only")
-    rc, got = _checked(nci, tmp_path, "policy", _bare(policy), [])
+    inference_only = D.build(INFERENCE_ONLY_PACKAGE, "inference-only")
+    rc, got = _checked(inference_only, tmp_path, "policy", _bare(policy), [])
     want = R.INFERENCE_ONLY.answer(_bare(policy))
     assert (rc, got) == (0, want) and got["verdict"] == R.ACCEPT, (rc, got, want)
 
@@ -1069,7 +1069,7 @@ def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypat
     alpha = [1, 10 ** 9]
     weak = {**policy, "params": {**policy["params"], "alpha": alpha}}
     weak_answer = R.INFERENCE_ONLY.answer(_bare(weak))
-    rc, got = _checked(nci, tmp_path, "weak", _bare(weak), [])
+    rc, got = _checked(inference_only, tmp_path, "weak", _bare(weak), [])
     assert (rc, weak_answer["verdict"]) == (1, R.REJECT) and _but_reason(got) == _but_reason(weak_answer), (got, weak_answer)
     weak["digest"] = bytes.fromhex(weak_answer["commitment"]) if weak_answer["commitment"] else weak["root"]
     for name, cases, verdicts, named in (
@@ -1157,9 +1157,9 @@ def test_product_names_only_the_composites():
     assert len(others) == 2 ** len(every) - len(want)
     for s in others:
         assert named(s)[0] == 64, s
-    assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
-    assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
-    plain = ["verity/inference-only/rows/v1", R.PEARL_PLUS.id, R.SAMPLED_PROOFS.id]
+    assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SPOT.id])[0] == 64
+    assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SPOT.id])[0] == 64
+    plain = ["verity/inference-only/rows/v1", R.PEARL_PLUS.id, R.SPOT.id]
     for ids in (plain, plain[::-1]):
         p = subprocess.run([exe, ",".join(ids), "id"], capture_output=True, text=True)
         assert (p.returncode, p.stdout) == (64, "") and "is remote's plain sibling, refused until" in p.stderr, p.stderr

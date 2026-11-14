@@ -3371,7 +3371,7 @@ def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
     return {g: kept for g in sorted(held) if g in gaps and (kept := sorted(set(name_list(held[g])) & set(gaps[g])))}
 
 
-#: a claim id (`verity.claims`): a property of an instance, `cr/sha-512`, or a bare kebab-case id, `trusted-host`
+#: a claim id (`verity.claims`): a property of an instance, `cr/sha-512`, or a bare kebab-case id, `trusted-device`
 CLAIM_ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)?")
 
 
@@ -3403,7 +3403,7 @@ def id_failures(lock: dict, failed: set | frozenset = frozenset()) -> list[str]:
     ids = lock.get("ids", {})
     if not isinstance(ids, dict) or not all(isinstance(i, str) and CLAIM_ID.fullmatch(i) for i in ids.values()):
         return [Failure("ids.form", None, "ids: `ids` is {premise: its claim id}, each id a property of an instance "
-                        "(`cr/sha-512`) or a bare kebab-case id (`trusted-host`), as `verity.claims` cites it")]
+                        "(`cr/sha-512`) or a bare kebab-case id (`trusted-device`), as `verity.claims` cites it")]
     assumed = set(lock["assumptions"]) if isinstance(lock.get("assumptions"), dict) else set()
     return [Failure("ids.missing", p, f"ids: {p}, {'a named assumption' if p in assumed else 'a premise `trust` names'}, "
                     f"has no claim id: write {json.dumps(p)}: \"<id>\" under `ids`, the id `verity.claims` cites it by "

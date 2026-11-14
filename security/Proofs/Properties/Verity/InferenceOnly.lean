@@ -79,18 +79,18 @@ theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent} (
   exact ⟨p, r, e, ps, c, ev, hdec, _, hx, rfl, hp, hr, he⟩
 
 /-- **Remote's plain sibling lists no v0**, so `Vocab.inferenceOnlySound`'s hypothesis fails there. -/
-theorem v0_not_mem_plain : NciCheck.Protocol.protocolId ∉ Verity.Registration.Composite.plain := by decide
+theorem v0_not_mem_plain : InferenceOnlyCheck.Protocol.protocolId ∉ Verity.Registration.Composite.plain := by decide
 
 /-- **Remote's plain sibling has no v0 component**: none of its compiled checks carries v0's id, so no case of its play
 is v0's. -/
-theorem v0_not_mem_componentsOf_plain : ∀ P ∈ componentsOf .plain, P.id ≠ NciCheck.Protocol.protocolId := by
+theorem v0_not_mem_componentsOf_plain : ∀ P ∈ componentsOf .plain, P.id ≠ InferenceOnlyCheck.Protocol.protocolId := by
   rw [componentsOf_plain]
   decide
 
 /-- **`Vocab.inferenceOnlySound` doesn't reach remote's plain sibling**: its hypotheses fail there, so
 `InferenceOnlySound .plain` stays open. -/
 theorem not_inferenceOnlySound_hyp_plain :
-    ¬ (NciCheck.Protocol.protocolId ∈ Verity.Registration.Composite.plain ∧
+    ¬ (InferenceOnlyCheck.Protocol.protocolId ∈ Verity.Registration.Composite.plain ∧
       rowsId ∉ Verity.Registration.Composite.plain) :=
   fun h => v0_not_mem_plain h.1
 
@@ -101,7 +101,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 /-- **The inference-only policy's target, at every composite where v0 decides it**: for any names `V` and composite `k`
 that lists v0 and not the rows check, the probability that `k`'s verifier accepts registered files while the policy's
 case fails `PolicyHeld` is `0`, so it is within the policy's error. -/
-theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : NciCheck.Protocol.protocolId ∈ k)
+theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : InferenceOnlyCheck.Protocol.protocolId ∈ k)
     (hr : rowsId ∉ k) : V.InferenceOnlySound k := by
   intro θ F c σ
   calc Game.prob (fun o => V.Verdict k .inferenceOnly o ∧ ¬ V.Holds k θ F c σ .inferenceOnly o) (V.game θ F c) σ
