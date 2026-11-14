@@ -38,7 +38,7 @@ each sampled proof block's place in its table (`UnitPlace`), with `C` the rows t
 bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgB`), with no
 named assumption; `ε_bind` stays named (`BindSound`).
 
-`flock_batched_count`: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
+`flock_batched_count`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
 -/
 
 @[expose] public section

@@ -531,7 +531,7 @@ def test_a_record_over_an_explicit_partition_object():
     assert "R2-program" in R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
 
 
-def test_the_wrong_unit_bound_matches_worst_case_and_scales():
+def test_the_incorrect_block_bound_matches_worst_case_and_scales():
     """The profile's Subset(k) bound is the exact count, the generic worst_case rounded down, and serves N = 183,680."""
     from verity.circuits.partition import Level
     from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset

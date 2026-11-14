@@ -26,7 +26,7 @@ set_option Elab.async false
 
 For any live prover `τ` of a hidden-output plain session of `J ≥ 1` tables
 (`verity-verify-proof verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
-`Pr[verity-verify-proof accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`, each unit read at its site in the table
+`Pr[verity-verify-proof accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, each unit read at its site in the table
 it is sampled into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, outputs included, at the simulated prover
 `simAuditJ … τ` in the batched session of the `J` tables `planPHJ`:
 

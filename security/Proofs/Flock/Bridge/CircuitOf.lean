@@ -56,7 +56,7 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
   embed (by definition), and `partsOf_incorrect` its incorrect proof blocks as theirs.
-* The incorrect-units bridge: a unit incorrect in the wire values a witness opens (`openedOf`) is faulty in the sampling
+* The incorrect-blocks bridge: a unit incorrect in the wire values a witness opens (`openedOf`) is faulty in the sampling
   statement (`incorrect_subset_faulty`), because a unit that is not faulty is correct on its openings
   (`correct_of_progCorrect`), under any design and strata. So `RelS` at
   `δ = C(n − K₀, kd)/C(n, kd)` under `subset kd` leaves fewer than `K₀` incorrect proof blocks (`card_incorrect_lt_of_relS`), at every
@@ -372,7 +372,7 @@ theorem partsOf_incorrect (xs : Fin (keyCircuit D hU n).N → Bool) :
     (partsOf D hU n).incorrect (Verity.Circuit.ofBits xs) = (keyPartition D hU n).incorrect xs :=
   Verity.Partition.incorrect_ofAudit _ xs
 
-/-- **The incorrect-units bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
+/-- **The incorrect-blocks bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
 the sampling statement of the key program at constants `κ` under `subset kd`, at strata `ns` that sum to `n`, leaves
 fewer than `K₀` of `partsOf`'s units incorrect in the transcript it opens. -/
 theorem card_incorrect_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) {ns : List ℕ} (hns : ns.sum = n)

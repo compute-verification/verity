@@ -51,7 +51,7 @@ theorem linkBoundCR_eqL {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg 
   rfl
 
 /-- **The compiled-layer count curve, with `ε_bind` discharged**: at the plurality value layer,
-`Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
 and the lowering. -/
 theorem flock_batched_count_linkedL (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

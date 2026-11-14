@@ -75,11 +75,12 @@ def _fresh(root: Path, harness: str = HARNESS) -> dict:
     return out
 
 
-def _records(root: Path, units: tuple[str, ...] | None = None) -> list[Path]:
+def _records(root: Path, units: tuple[str, ...] | None = None, skip: frozenset[Path] = frozenset()) -> list[Path]:
+    """The cache's binding records, of ``units`` if given; ``skip``: files a test made unreadable, read as no record."""
     def target(p: Path) -> list:
         return json.loads(p.read_text())["key"]["request"]["target"]
     return [p for p in (root / "cache").glob("*/*/*.json")
-            if (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
+            if p not in skip and (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
 
 
 def test_a_definition_module_edit_rebuilds_exactly_the_bindings_that_read_it(tmp_path):
@@ -109,14 +110,14 @@ def test_a_missing_or_unreadable_record_rebuilds_its_binding(tmp_path):
     _bindings(root, *BINDINGS)
     _run(root, HARNESS)
     (bad,) = _records(root, ("_xor_roots",))
-    bad.write_text("{")
     (gone,) = _records(root, ("_sized_roots",))
+    bad.write_text("{")
     gone.unlink()
     _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
     out = _run(root, HARNESS)
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_sized_roots", "_xor_roots"]
     assert out["stats"]["units"]["stored"] == 2 and out["hits"] == sorted(out["values"])
-    assert len(_records(root, ("_sized_roots",))) == 1
+    assert len(_records(root, ("_sized_roots",), skip=frozenset({bad}))) == 1
 
 
 #: `units.store` with the `cache.seen` calls it makes counted (in ``<root>-seen.json``, beside the tree), and with PER_RECORD
