@@ -297,7 +297,7 @@
     {"file": "verity/protocols/accounting/certifier/verifier/tie_service.py", "count": 3},
     {"file": "verity/protocols/compose/verifier/lean/tests/reference.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/lean/scripts/difftest_vectors.py", "count": 2},
-    {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py", "count": 1},
+    {"file": "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/desc_difftest_vectors.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/network/tests/period_case.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/network/tests/test_lean_audit.py", "count": 1},
     {"file": "verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py", "count": 2},

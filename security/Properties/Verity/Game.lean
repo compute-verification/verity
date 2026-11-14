@@ -10,7 +10,7 @@ public import Definitions.Core.Game
 public import Definitions.Core.Site
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.RowLeaf
-public import Definitions.Nci
+public import Definitions.InferenceOnly
 public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
@@ -33,7 +33,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 | --- | --- | --- | --- |
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) |
-| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
+| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` | |
@@ -90,7 +90,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   chosen adaptively by the strategy's moves. Where it meets `Hash.Assumptions.LmsUnforgeable` at the compiled LMS
   verifier (`lmsVerify`), the error adds the published `ε_forge(t, Q)` (`epsForge`).
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
-  The inference-only policy's claim is `Nci.CompliesRate` at the published `Γ` and `α` of the declaration over the committed
+  The inference-only policy's claim is `InferenceOnly.CompliesRate` at the published `Γ` and `α` of the declaration over the committed
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
   boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`), doesn't keep foreign content past the survivor threshold
   the wipe publishes (`Verity.Wipe.OfRun.Kept` at `foreignBits`).
@@ -184,14 +184,14 @@ subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
   | .onsite, .sampled => some VStar.Recursive.Sampled.protocol
   | .onsite, .pouw => some PouwCheck.Period.protocol
-  | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
+  | .onsite, .inferenceOnly => some InferenceOnlyCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol
   | .onsite, .poub => some RemoteAudit.P2Protocol.protocol
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
   | .remote, .sampled => some VStar.Recursive.Sampled.protocol
   | .remote, .pouw => some PouwCheck.PearlPlus.Protocol.protocol
-  | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
+  | .remote, .inferenceOnly => some InferenceOnlyCheck.Protocol.protocol
   | .remote, _ => none
 
 /-- Composite `k`'s subprotocols: those it has a compiled check for. Remote's are a subset of onsite's. -/
@@ -838,7 +838,7 @@ transcript at `σ` (at most an `ε` share of the units unbound in it under the c
 gates (at least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
 network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
-own coins choose neither. The inference-only policy's: the declaration complies with `Nci.CompliesRate` at the published `Γ` and
+own coins choose neither. The inference-only policy's: the declaration complies with `InferenceOnly.CompliesRate` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not a period claim: a
 credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at least
@@ -855,7 +855,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
-  | .inferenceOnly, _ => Nci.CompliesRate (V.gates θ) (V.fresh θ) (V.declaration θ F)
+  | .inferenceOnly, _ => InferenceOnly.CompliesRate (V.gates θ) (V.fresh θ) (V.declaration θ F)
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
@@ -949,7 +949,7 @@ def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 remote, Pearl+'s, at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit its check published. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 
-/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.CompliesRate`
+/-- **The inference-only policy's target**: the declaration over the committed circuit complies with `InferenceOnly.CompliesRate`
 at the published `Γ` and `α`. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 

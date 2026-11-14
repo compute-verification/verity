@@ -14,8 +14,8 @@ inputs = [
   "verity/__init__.py",
   "verity/circuits",
   "security/lean-audit.json",
-  "security/Definitions/Nci/Assumptions/Layered.lean",
-  "security/Definitions/Nci/Guarantees/Layered.lean",
+  "security/Definitions/InferenceOnly/Assumptions/Layered.lean",
+  "security/Definitions/InferenceOnly/Guarantees/Layered.lean",
   "verity/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
   "security/Definitions/Core/Accel/Sm120.lean",
