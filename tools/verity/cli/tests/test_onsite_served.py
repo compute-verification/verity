@@ -1,4 +1,4 @@
-"""The served window's onsite configuration (`demos/onsite_served/config.toml`) and its table (`served_table.py`):
+"""The served window's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
 the file is the table's configuration byte for byte and names no host; the network certifier's and the inference-only
 policy's parties and channels are their manifests'; `verity run --dry-run` resolves every party, channel and piece with
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration

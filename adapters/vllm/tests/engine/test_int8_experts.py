@@ -1,7 +1,7 @@
 """`engine.int8_experts`: the exact-int8 routed experts with no vLLM.
 
-Each expert GEMM is the dense plain linear's exact op (equal to `int8_exact.plain_linear` and to the perplexity bench's
-`steps.int8_linear`, `tests/engine/ppl_oracle.py`, on the expert's routed rows), the whole layer equals the module doc's
+Each expert GEMM is the dense plain linear's exact op (equal to `int8_exact.plain_linear` and to the registered
+Definition's equations, `tests/engine/ppl_oracle.py`, on the expert's routed rows), the whole layer equals the module doc's
 definitions written out in NumPy (`int8_experts.reference`, one token at a time), every (expert, projection) is called on every
 forward in the static order, an expert no token routed to on zero rows, and each call's rows are its tokens, ascending.
 
@@ -96,7 +96,7 @@ def test_forward_equals_the_numpy_definition(m, k, scale):
 
 
 @pytest.mark.slow
-def test_each_expert_gemm_is_the_dense_plain_linear_and_steps_py():
+def test_each_expert_gemm_is_the_dense_plain_linear_and_the_definition():
     (w13b, w2b), (w13, s13, w2, s2) = _layer(3)
     rng = np.random.default_rng(4)
     x = _bf16(rng.standard_normal((24, H), dtype=np.float32))
