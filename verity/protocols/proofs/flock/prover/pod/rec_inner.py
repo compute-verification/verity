@@ -324,7 +324,7 @@ def main(argv=None) -> int:
     fg.add_argument("--level", type=int, default=0)
     fg.add_argument("--record", choices=("session", "prover"), default="session")
     rp = sp.add_parser("release-parts")
-    rp.add_argument("--statements", required=True, help="flock-verify rec-statements' output (its RECVSTAR line)")
+    rp.add_argument("--statements", required=True, help="verity-verify-proof rec-statements' output (its RECVSTAR line)")
     rp.add_argument("--windows-s", required=True, help="CLASS=SECONDS,... (release_windows_ms)")
     rr = sp.add_parser("release-report")
     rr.add_argument("--state", required=True)

@@ -108,7 +108,7 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
 /-- **The deployed event gives `wrP`'s verdict**: an accepting run of `V false` at SHA-512 decides on its messages and
 coins, and on a statement of sample `d`, if the run's reader looks up no column off `C` at table 0, `plainVerdict` holds
 at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse `--public-inputs`
-(`publicInputs_none_of_checks`), flock-verify accepts what `wrP` writes for the run (`accepts_wrP`), and that
+(`publicInputs_none_of_checks`), verity-verify-proof accepts what `wrP` writes for the run (`accepts_wrP`), and that
 transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
 (`cols_plain`). -/
 theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}

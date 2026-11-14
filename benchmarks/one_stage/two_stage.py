@@ -93,7 +93,7 @@ Usage::
         --challenger local --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] \\
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
-        --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] \\
+        --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
         [--rids IDS.json] [--firewall F] [--unlinked] [--stop RULE]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
@@ -1371,7 +1371,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                     "are built after the sample (references)")
     g.add_argument("--m0-pythonpath", required=True)
     g.add_argument("--bin", required=True, help="flock-circuit")
-    g.add_argument("--lean", required=True, help="flock-verify")
+    g.add_argument("--lean", required=True, help="verity-verify-proof")
     g.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
     g.add_argument("--stop", help=STOP_HELP)

@@ -78,7 +78,7 @@ OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 LEAN=$(sed -n 's/.*BUILD_ONLY: \(\S*\) .*/\1/p' "$O/lean/job.log" 2>/dev/null | tail -1)
-# the ZK server's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as flock-verify
+# the ZK server's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as verity-verify-proof
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 if [ -x "$LEAN" ] && [ ! -x "$FC_FIREWALL_LEAN" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

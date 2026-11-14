@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 # The challenger's live-coin part's stratified sample at `J` tables
 
 `drawOkZKHJ_of_accepts_stratified`: at a sample of the live stratified sampling design (`Law.execOS` at `stratified Kd St`) that
-flock-verify `--zk` accepts, at any number of tables, `DrawOkZKHJ` holds at `mPtsOf c.g ((∑ s, ks s) / nTab I)` link
+verity-verify-proof `--zk` accepts, at any number of tables, `DrawOkZKHJ` holds at `mPtsOf c.g ((∑ s, ks s) / nTab I)` link
 points, from the record's custody alone (`RecordsLiveZKJ`, and `DrawFileZK` at the stratified sampling design). The sample file
 decodes only to the verifier's sample of the sampled proof blocks, `∑ s, ks s` of them (`execOS_draw_card_or`; a run that reads
 past its bytes samples every unit, and then `sum_ks_of_univ`), and an accepted record's units split into the tables evenly

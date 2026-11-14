@@ -40,7 +40,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The compiled verifier in public-coin form (`RecDeploy.V`) and its record (`deployRec`)
 
-The shipped recursive verifier is the inner session, then `flock-verify verify --zk` once per V* part with that part's
+The shipped recursive verifier is the inner session, then `verity-verify-proof verify --zk` once per V* part with that part's
 recursive inputs (`--rec-inner`, `--rec-part J`, `--rec-bindings`, the inner statement's files, the inner session's
 record and the challenger's live-coin part's transcript). `RecDeploy.V` is that as one `Claims.Verifier` over Flock's live coins
 (`FlockDeploy.Coin`):
@@ -72,7 +72,7 @@ record and the challenger's live-coin part's transcript). `RecDeploy.V` is that 
   prover's, and so are V*'s shared rows (`--rec-rows`: `acc0`, `rec-top-L<l>` and `rec-c<k>`, registrations of the
   prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
   session, as the staging round's message (`encStage`); the challenger's live-coin part's transcript of the inner rounds is the
-  verifier's own (`Brings.tr`). The deployed composer (`flock-verify rec-compose`) accepts only where every part was
+  verifier's own (`Brings.tr`). The deployed composer (`verity-verify-proof rec-compose`) accepts only where every part was
   checked against one staged rows file and one set of every other input the parts share, each part at its own index
   (`ComposeParts.composed_parts`: each part is then `partRaw`'s form, up to a SHA-512 collision). That the parts'
   sessions are one run of `V` is the open condition C10 `OneRun` (`ComposeParts`), which needs the service's
@@ -917,7 +917,7 @@ theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval
 
 /-- **The acceptance theorem: at SHA-512 a session's decision is the shipped recursive check's.** Where session `s`'s
 outer verifier decides, the compiled verifier accepts the session (`.acc` at the last session, `.msg []` before it)
-exactly when this is the session's last round and the deployed `flock-verify verify --zk` with part `s`'s recursive
+exactly when this is the session's last round and the deployed `verity-verify-proof verify --zk` with part `s`'s recursive
 inputs, `Zk.verify` at the statement's recursive setup (`actO_decide`, `RecIns.setup`), accepts the record and proof
 files with the custody checks and the verdict's last refusals; else it refuses. The statement is the part's as the prover
 staged it (`ract_sess`). -/

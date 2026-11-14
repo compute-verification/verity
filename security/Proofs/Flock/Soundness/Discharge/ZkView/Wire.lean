@@ -5,7 +5,7 @@ public import Flock.ZkProof
 /-!
 # A `--zk` proof file's bytes
 
-`flock-verify verify --zk` reads each rep's proof file with `Flock.Zk.decode sh`: `bincode 1.3` of
+`verity-verify-proof verify --zk` reads each rep's proof file with `Flock.Zk.decode sh`: `bincode 1.3` of
 `(Commitment, R1csProofLigerito, InnerProof)` with the `--zk` differences (`Flock/ZkProof.lean`). `encZk sh p` is the
 file the prover writes for the decoded proof `p`: each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim and

@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# The statements: flock-verify `--zk`'s acceptance and its tables under hidden outputs
+# The statements: verity-verify-proof `--zk`'s acceptance and its tables under hidden outputs
 
 ZkExec's acceptance statements and ZkLink's `TablesAtZKLive` take `hh : I.tags.hiddenOutputs = false`: they are about
 `Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, `HmOut`) `Stmt.setupTables`
@@ -110,7 +110,7 @@ def ZkSchedOK : Prop :=
 
 variable {n : ℕ} {mPts : ℕ} {Reg : Type}
 
-/-- **Wherever flock-verify accepts a hidden-output session, the `--zk` table is the executable's**
+/-- **Wherever verity-verify-proof accepts a hidden-output session, the `--zk` table is the executable's**
 (`TablesAtZKLive` under `hh = true`). On hidden-output one-table inputs whose `--statement` tags are untyped and whose
 circuit file `HmOut.parse` accepts (at the `--zk` tags) as a circuit whose unit returns the outputs, with `wr` the challenger's
 live-coin part's record (`RecordsLiveZK`): whenever the sample `S` is `DrawOkZKH` and `verify --zk` accepts what `wr` writes for

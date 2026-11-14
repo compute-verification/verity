@@ -33,7 +33,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 `decodesOnPJ_exec`: `DecodesOnJ` at `planPJ`, table by table, at every number of tables (`DecodeZLJ.decodesOnJ_exec`
 reads `1 < count` and `planJ`'s fallback tables; here one table is the session's statement, `Composed.drawJ`). At an
-outcome flock-verify accepts, at table `j`:
+outcome verity-verify-proof accepts, at table `j`:
 
 * `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `setupOf_tablePJ` sets table `j` up with setupH under `tagsAt` at `drawJ` (`setupTables_ok` at one table,
@@ -56,7 +56,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **flock-verify sets table `j` up under its tags at its sample**, without `--zk`: at the record's sample `d`, `setupTables`
+/-- **verity-verify-proof sets table `j` up under its tags at its sample**, without `--zk`: at the record's sample `d`, `setupTables`
 at `I` has `nTab I` tables, table `j` setupH's statement under `tagsAt` at `drawJ` (`Composed.setupOf_tableJ` at the
 plain inputs). -/
 theorem setupOf_tablePJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}

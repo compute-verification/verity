@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 `Flock.SecurityProofs.EndToEndDrawn : Flock.Guarantees.EndToEndDrawn` is `zk_session_soundJ_custody_drawn_reg` with its
 last term in closed form:
 * `zk_session_soundJ_custody_drawn_reg`: one `--zk` session of `J` tables at the record's custody is sound at the sampled
-  proof blocks, `Pr[flock-verify accepts ∧ some drawn unit wrong on the public file] ≤ ε_ks + δ_link`;
+  proof blocks, `Pr[verity-verify-proof accepts ∧ some drawn unit wrong on the public file] ≤ ε_ks + δ_link`;
 * `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `δ_link` is its closed form.
 -/
 

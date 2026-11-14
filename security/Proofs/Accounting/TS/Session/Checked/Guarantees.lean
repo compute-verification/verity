@@ -43,7 +43,7 @@ for a value-checked `zTree` window, at `Accounting.Guarantees.TS.SessionSoundAt`
 `Accounting.TS.Checked.checkedLayer` (its unit `PouwH1TileZy_v1`, its check word `ok`). Of `SessionSoundAt`'s four
 premises on the layer, it proves three and the window's sampling design stays a premise:
 
-* `AcceptedLive`: the layer accepts exactly where flock-verify `--zk --registered` accepts;
+* `AcceptedLive`: the layer accepts exactly where verity-verify-proof `--zk --registered` accepts;
 * `ServedChecksHold`: the relation, the unit's Definition with `ok` registered, holds at the session's value layer
   wherever its sampled proof blocks are right (`RowsSession.RowsAt` is the circuit's evaluation there);
 * `ServedRootsLinked` at `δs = 0`: under full checking (`kd = n`) every outcome of the session's game samples every unit,
@@ -69,7 +69,7 @@ open scoped ENNReal
 
 /-- **A checked unit's proof layer is sound at `δ` through its Flock sessions, fully checked.** For any window whose
 proof `i` of round `w` on the path `x` is the Flock session `sess x w i` (a `RowsSession`) with outcome
-`out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where flock-verify `--zk --registered`
+`out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where verity-verify-proof `--zk --registered`
 accepts, opening the committed rows at the registered reads, its relation the unit's Definition with the port `ok`
 registered): given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's
 opening (`RowsSession.CR`), the window's sampling design (`Accounting.Assumptions.TS.ExecutionPhaseDesign`), and at every session full

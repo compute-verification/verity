@@ -9,7 +9,7 @@ an instance of (its stratum's name under the check's query), its public file's h
 ``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
 where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
 `verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
-``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+``--registered`` file's canonical JSON, and ``unit_draw``, which `verity-verify-proof verify` writes of the session it checked;
 and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
 split across Flock tables is refused, as one split across statements is (``second-template``).
 

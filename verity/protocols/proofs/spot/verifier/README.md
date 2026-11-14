@@ -60,7 +60,7 @@ The guarantee is knowledge soundness of the sampled audit: except with a bounded
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
 `Flock.Guarantees.SampledKSLiveV3`, stated in `security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
-that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
+that `verity-verify-proof --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
 (`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
 statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
@@ -70,7 +70,7 @@ the last two taken at the collision finders the proof builds from the prover (`T
 unfold to them), and `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`) in
 `security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`.
 
-In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
+In the one-stage form, v2's verdicts are its own run of `verity-verify-proof verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
@@ -159,7 +159,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
-- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
@@ -309,7 +309,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `check_verdicts` is given the service's Python verdict.
 - `proofs`: the proof system's own run of Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
-  `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
+  `verity-verify-proof verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
@@ -328,8 +328,8 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
-  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the laws of
-  the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
+  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
+  of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
@@ -391,7 +391,7 @@ A program's weights, constants and tables are values: committed once, under hidi
   port that reads a registered input of the verifier's own program is ever bound, and nor is any port the window's
   registered circuit record declares registered for the statement's template (its registered reads, table reads and
   openings' verdicts, outputs included: `RegBound.declaredOf`), which must be a registered port of the file. A file
-  that binds ports is verified with that record (`flock-verify --interface`), and refused without it.
+  that binds ports is verified with that record (`verity-verify-proof --interface`), and refused without it.
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
