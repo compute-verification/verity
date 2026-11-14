@@ -404,6 +404,32 @@ def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
     assert not list(out.iterdir()) and (hold / "report.json").is_file() and (hold / "n2" / "planted.json").is_file()
 
 
+def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_path):
+    """A record head's bucket counts are witness, and a port's reads are positions, protocol structure. Where both
+    begin with a run of zeros, a registered-reads file in JSON's default form holds a piece of the witness line, a
+    key's end and ten zeros, and the guard holds it though nothing of the witness is in it. The verifier's
+    registered-reads files are written without spaces (`warden_rows.reads_text`), and the same reads are then no piece
+    of the witness. The counts as the witness writes them are a find wherever they are written."""
+    from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+
+    g = _gate(tmp_path / "G" / "g1")
+    line = json.dumps({"salt_c": "ab" * 24, "head": {"window": 0, "counts": [0] * 16, "root": "ef" * 64}})
+    at = line.index('": [0, 0')
+    pad = json.dumps({"pad": "x" * (-(len(json.dumps({"pad": ""})) + 1 + at) % LG.TEXT)}) + "\n"
+    witness = (pad + line + "\n").encode()
+    piece = witness[len(pad) + at:len(pad) + at + LG.TEXT]
+    assert (len(pad) + at) % LG.TEXT == 0 and piece == b'": [' + b"0, " * 9 + b"0" and len(set(piece)) >= LG.DISTINCT
+    (g / "witness" / "certified.jsonl").write_bytes(witness)
+    reads = WR.reads_file({"prog0": {"leaves": 4, "reads": [0] * 16, "root": "cd" * 64}})
+    assert json.loads(WR.reads_text(reads)) == reads and " " not in WR.reads_text(reads)
+    run = tmp_path / "run"
+    _put(run, {"out/scan/honest/registered.json": WR.reads_text(reads).encode(),
+               "out/scan/honest/spaced.json": json.dumps(reads, sort_keys=True).encode(),
+               "out/copy.json": json.dumps({"counts": [0] * 16}).encode()})
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 3 and sorted(d["path"] for d in report["found"]) == ["out/copy.json", "out/scan/honest/spaced.json"]
+
+
 def test_the_declared_data_is_well_formed():
     """leak_guard.json, the guard's declared names and allowlist, loads, and its names are the gates' witness files that
     no record file of the chain is named after."""

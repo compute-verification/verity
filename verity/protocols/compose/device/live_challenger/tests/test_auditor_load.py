@@ -277,7 +277,9 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_neither
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert "load" not in end and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                     "load": LOAD_SUMMARY}
-    assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "certificates.jsonl"}
+    assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "cells-registrations.jsonl",
+                                 "certificates.jsonl"}
+    assert (d / "out" / "cells-registrations.jsonl").read_text() == ""
     assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == RELAY
     assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
     assert {"load.json", "load-relay.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= set(end["witness"])

@@ -1,9 +1,10 @@
 """The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
 rehearsal while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
-network certifier through the tunnel into `witness/`, publishes to `out/` only its deployment and its certificates, a
-row registration's without the registration, and writes its end, a stop of its unit included; `fetch` gives
-`witness/` to the run's own lane and
+network certifier through the tunnel into `witness/`, publishes to `out/` only its deployment, its certificates, a
+row registration's among them, and each cells' registration as the witness writes it less its wiring and its cost
+(a line the gate's one list of published keys doesn't rule fails the end and publishes no registration), and writes
+its end, a stop of its unit included; `fetch` gives `witness/` to the run's own lane and
 vy-admin alone."""
 
 from __future__ import annotations
@@ -278,7 +279,7 @@ def tar_names(blob: bytes) -> set[str]:
         return set(tar.getnames())
 
 
-def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
+def test_a_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
     run, end = run_warden(host, WARDEN_FILES, seen)
     d = host.certifier / run
@@ -295,7 +296,7 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
         "deployment.json", "endpoints.json", "cells.jsonl", "rows.jsonl", "certified.jsonl", "cells.salts",
         "requests.records", "client.json", "check.json", "rehearse.log", "tunnel.log")}
     assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
-                                 "rows-certificates.jsonl"}
+                                 "rows-certificates.jsonl", "cells-registrations.jsonl"}
     assert sorted((d / A.WITNESS / "rehearse.log").read_text().splitlines()) == sorted([STDERR, LAST_LINE])
     assert (d / A.WITNESS / "tunnel.log").read_text().splitlines() == [TUNNEL_LINE]
     out = d / "out"
@@ -313,15 +314,18 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
 def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothing_else(host):
     """Each line of `cells.jsonl` and of `rows.jsonl` stays whole in `witness/`. `out/` holds, line for line, its
     certificate under the link, direction and window its registration names (a connection rows' the link's egress),
-    or the execution phase it was refused for: no root, wiring, domain, layout or value of a registration is in
-    `out/` or the end, nor a line's cost, nor the check's summary of the costs, nor the line the rehearsal prints
-    them in."""
+    or the execution phase it was refused for; and of `cells.jsonl`, each line as the witness writes it less the
+    registration's wiring and the line's cost: the same bytes but for those two, so its root, domain, layout and
+    certificate are public. No wiring is in `out/` or the end, nor a line's cost, nor the check's summary of the
+    costs, nor the line the rehearsal prints them in, nor a root, domain, layout or value of a connection rows'
+    registration."""
     run, end = run_warden(host)
     d = host.certifier / run
     out = d / "out"
     whole = [{"registration": REGISTRATION, "cost": COST}, {"refused": [LINK, "ingress", 1], "withheld": True,
                                                             "cost": COST}]
-    assert [json.loads(x) for x in (d / A.WITNESS / "cells.jsonl").read_text().splitlines()] == whole
+    witness = (d / A.WITNESS / "cells.jsonl").read_text().splitlines()
+    assert [json.loads(x) for x in witness] == whole
     assert not (out / "cells.jsonl").exists() and not (out / "rows.jsonl").exists()
     assert [json.loads(x) for x in (out / "cells-certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"key_id": "0c" * 16, "link": LINK, "direction": "egress", "window": 0,
@@ -331,10 +335,21 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
         {"certificate": {"key_id": "0c" * 16, "link": LINK, "direction": "egress", "window": 0,
                          "digest": "9e" * 64, "signature": "e6" * 40}},
         {"refused": [LINK, "egress", 1]}]
+    published = (out / "cells-registrations.jsonl").read_text().splitlines()
+    assert [json.loads(x) for x in published] == [
+        {"registration": {k: v for k, v in REGISTRATION.items() if k != "wiring"}}, {"refused": [LINK, "ingress", 1]}]
+    assert [list(json.loads(x).get("registration", {})) for x in published] == [
+        [k for k in REGISTRATION if k != "wiring"], []]
+    wiring, cost = f'"wiring": "{REGISTRATION["wiring"]}", ', f', "cost": {json.dumps(COST)}'
+    assert witness[0].count(wiring) == witness[0].count(cost) == 1
+    assert published == [witness[0].replace(wiring, "").replace(cost, ""),
+                         witness[1].replace(', "withheld": true', "").replace(cost, "")]
+    assert not (out / "rows-registrations.jsonl").exists()
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
-    body = [REGISTRATION[k] for k in ("value", "parameters", "domain", "wiring", "root", "row_schema")]
-    body += [t[k] for t in ROWS_REGISTRATION["tables"] for k in ("value", "domain", "root")]
-    for held in (*body, "layout", "first_bucket", "tables", "cost", "row_bytes", "commit_ms", "sign_ms", "withheld",
+    for shown in (REGISTRATION[k] for k in ("value", "parameters", "domain", "root", "row_schema")):
+        assert shown.encode() in public, shown
+    body = [REGISTRATION["wiring"], *(t[k] for t in ROWS_REGISTRATION["tables"] for k in ("value", "domain", "root"))]
+    for held in (*body, "wiring", "tables", "cost", "row_bytes", "commit_ms", "sign_ms", "withheld",
                  "41.375", "7.125", "commit ms", "sign ms"):
         assert held.encode() not in public, held
 
@@ -342,19 +357,64 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     assert rc == 0 and json.loads(st)["end"] == end
 
 
-#: each file a warden run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl` and
-#: `ROW_CERTIFICATES`) by the certifier's message that carries it to the verifier
+#: each file a warden run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl`,
+#: `ROW_CERTIFICATES` and `ROW_REGISTRATIONS`) by the certifier's message that carries it to the verifier
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFICATE,
              "cells-certificates.jsonl": NC.CERTIFICATE, "rows-certificates.jsonl": NC.CERTIFICATE,
-             "groups.json": NC.GROUPS}
+             "cells-registrations.jsonl": NC.REGISTRATION, "groups.json": NC.GROUPS}
 
 
 def test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes():
     """Every file a warden run publishes is one of the certifier's messages to the verifier, and the verifier's channel
     carries those messages and the out side's record, nothing else."""
-    assert set(A.WARDEN_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values()} == set(PUBLISHED)
+    assert set(A.WARDEN_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values(),
+                                   *A.ROW_REGISTRATIONS.values()} == set(PUBLISHED)
     (to_verifier,) = (c.messages for c in NC.MANIFEST.channels if c.receiver == NC.VERIFIER)
     assert sorted(to_verifier) == sorted({*PUBLISHED.values(), NC.OUT_RECORD})
+
+
+def _line(registration=REGISTRATION, **more) -> str:
+    return json.dumps({"registration": registration, "cost": COST} | more)
+
+
+@pytest.mark.parametrize("line, why", [
+    (_line(REGISTRATION | {"note": "x"}), "the line's registration holds the key 'note', which ROW_LINE names neither"),
+    (_line(REGISTRATION | {"layout": REGISTRATION["layout"] | {"lanes": 2}}),
+     "the line's registration's layout holds the key 'lanes'"),
+    (_line(note="x"), "the line holds the key 'note'"),
+    (_line(REGISTRATION | {"root": {"of": "ab" * 64}}), "the line's registration's root is neither a string"),
+    (_line(REGISTRATION | {"rows": 600.5}), "the line's registration's rows is neither a string"),
+    (_line(REGISTRATION | {"layout": 4}), "the line's registration's layout isn't an object of the keys"),
+    (json.dumps({"registration": REGISTRATION, "cost": COST}, separators=(",", ":")),
+     "isn't one JSON object as json.dumps writes it by default"),
+], ids=["a registration's key", "a layout's key", "a line's key", "an object under a key", "a float", "no object",
+        "other separators"])
+def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line, why):
+    """The keys `out/` publishes of a cells' registration are the one list `ROW_LINE`. A line with a key the list
+    names neither as published nor as left out, at any depth, a published value that could hold such a key, or a
+    line that isn't the writer's own form, which the gate couldn't cut to the same bytes, is not published, nor is
+    any line of its file: the rehearsal's end is nonzero and says the line and what to change. The certificates
+    and the deployment are published as before."""
+    with pytest.raises(A.Unruled, match=why):
+        A.row_registration(line)
+    for torn, said in ((_line()[:-1], "the line isn't JSON"), (json.dumps([_line()]), "the line isn't one JSON object")):
+        with pytest.raises(A.Unruled, match=said):
+            A.row_registration(torn)
+    good = _line()
+    assert A.row_registration(good) == good.replace(f'"wiring": "{REGISTRATION["wiring"]}", ', "").replace(
+        f', "cost": {json.dumps(COST)}', "")
+    bad = WARDEN_FILES.replace("(out / \"rows.jsonl\")", f"(out / \"cells.jsonl\").write_text({good + chr(10)!r} + "
+                               f"{line + chr(10)!r})\n(out / \"rows.jsonl\")", 1)
+    assert bad != WARDEN_FILES
+    run, end = run_warden(host, bad)
+    d = host.certifier / run
+    assert end["rc"] == 2 and end["ended"].startswith("cells.jsonl line 2: ") and why in end["ended"]
+    assert end["ended"].endswith("; out/cells-registrations.jsonl is not written")
+    assert "unruled" not in end and end["verdict"]["accepted"] is True
+    assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
+                                 "rows-certificates.jsonl"} == {p.name for p in (d / "out").iterdir()}
+    if "ROW_LINE names neither" in end["ended"] or "holds the key" in end["ended"]:
+        assert "Rule whether it is public, and write it there (auditor.py) as PUBLIC or WITHHELD" in end["ended"]
 
 
 @pytest.mark.parametrize("argv, witness", [
@@ -369,6 +429,7 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
     rc, blob = A.gate([w.format(run=run) for w in argv], host, by="vy-admin")
     names = tar_names(blob)
     assert rc == 0 and {f"{run}/request.json", f"{run}/end.json", f"{run}/out/cells-certificates.jsonl",
+                        f"{run}/out/cells-registrations.jsonl",
                         f"{run}/out/rows-certificates.jsonl", f"{run}/out/certificates.jsonl",
                         f"{run}/out/deployment.json"} <= names
     assert not {f"{run}/out/cells.jsonl", f"{run}/out/rows.jsonl", f"{run}/out/rehearse.log",

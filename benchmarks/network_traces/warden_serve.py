@@ -93,9 +93,10 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows and row bytes),
   `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
   wiring are read off), `cells-timing.jsonl` the commit's and signature's milliseconds (witness). A line of
-  `cells.jsonl` is the run's private side whole: of a registration the auditor's gate publishes the certificate
-  alone, and its wiring and its cost are private. All of that is done by a spawned process (`PublisherProcess`),
-  which alone holds the key and
+  `cells.jsonl` is the run's private side whole: the auditor's gate publishes it as it is written here, key for key,
+  less the registration's wiring and the cost, which are private, and by a list of its own, so a key added to the
+  line fails the gate until the list rules it. All of that is done by a spawned process (`PublisherProcess`), which
+  alone holds the key and
   gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
   network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
   Before the origin `serve` runs on the C allocator (it re-executes itself with `PYTHONMALLOC=malloc`) and makes its

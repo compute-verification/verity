@@ -67,8 +67,8 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
      ``accepted on the period check`` (`chain_record.RESTS`: the scan's acceptance rests on step 5's check, which
      then decides); any other is a reject with its why.
-  4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
-     streamed ids lie in it, else reject.
+  4. The period's link-window is the scan's (``answers.json``'s one window; the chain keeps its scan's answers on its
+     private side, `chain_witness`): every window request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the machine the network certifier ran on, and the machine that ran each of
@@ -803,10 +803,16 @@ def own_rows(exe: str) -> Callable[[Path], None]:
     return rows
 
 
-def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
+def chain_witness(keep: Path, run: str) -> Path:
+    """Where the kept run's chain keeps its steps' files that hold a row registration whole, its scan's answers among
+    them: its quarantine's ``witness`` (chain_record.sh's ``$Q/witness``, `run_chain`'s CR_QUARANTINE), by step."""
+    return keep / run / "quarantine" / "witness"
+
+
+def case_of(warden: Path, scan: Path, answers: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
     from benchmarks.network_traces import scan_period as SP
     try:
-        return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit)
+        return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit, answers=answers)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
@@ -822,11 +828,11 @@ def class_circuit(v3c: Path) -> str:
         raise NotRun(f"the verifier's window-circuit record: {type(e).__name__}: {e}") from None
 
 
-def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
+def v3c_case(v3c: Path) -> Callable[[Path, Path, Path], dict]:
     """The period step's case: `case_of` with V3C/period.json as its one compute audit, held to the verifier's class
     circuit (`class_circuit`), once the chain's scan read V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun`
     for a scan of no V3c window or another, or no window-circuit record."""
-    def case(warden: Path, scan: Path) -> dict:
+    def case(warden: Path, scan: Path, answers: Path) -> dict:
         try:
             read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("window")
         except (OSError, ValueError) as e:
@@ -834,7 +840,7 @@ def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
         if read != str(v3c / "window"):
             raise NotRun(f"the chain's scan read {read or 'no'} V3c window, not {v3c / 'window'}: run the chain step "
                          "on this V3c")
-        return case_of(warden, scan, v3c / "period.json", class_circuit(v3c))
+        return case_of(warden, scan, answers, v3c / "period.json", class_circuit(v3c))
     return case
 
 
@@ -861,7 +867,7 @@ def publish(chain_out: Path, d: Path) -> None:
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int] | None,
            check: Callable[[dict, Path], dict] | None, rows: Callable[[Path], None],
-           case: Callable[[Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
+           case: Callable[[Path, Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
     ``rows`` is step 1's rows audit of the network certifier run (`own_rows`); ``chain`` is given KEEP, the run, the
     endpoint's records and the number of its link's execution phases the run holds, or is None to read the report of the
@@ -897,14 +903,15 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         doc = json.loads(report.read_text())
         if doc.get("verdict") not in ("accepted", CR.RESTS):
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
+        answers = chain_witness(keep, run) / "scan" / "answers.json"
         try:
-            (w,) = [x["window"] for x in json.loads((out / "scan" / "answers.json").read_text())["windows"]]
+            (w,) = [x["window"] for x in json.loads(answers.read_text())["windows"]]
         except (OSError, ValueError, KeyError) as e:
             raise NotRun(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
         in_link_window(certified, T, w)
         if check is None:
             return None, unpacked
-        got = check(case(warden, out / "scan"), d / "period")
+        got = check(case(warden, out / "scan", answers), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked
