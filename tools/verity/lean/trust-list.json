@@ -14,8 +14,8 @@
   "Hash.Assumptions.LmsUnforgeable": {"reason": "LMS unforgeability: the remote audit's device signatures, and pinned on-site device keys"},
   "Claims.Hm96Hiding": {"reason": "hm96 hiding (hash-derived-key), for the zero-knowledge guarantees only", "only": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed", "Flock.SecurityProofs.SessionLoopZKDeployed"]},
   "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {"reason": "hm96-sha512's salt key is outside the keys its hiding bound fails for (hash-derived-key), for the zero-knowledge guarantees only", "only": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed", "Flock.SecurityProofs.SessionLoopZKDeployed"]},
-  "FlockSoundness.Assumptions.KeyedStreamsUniform": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for the wipe's labels only", "only": ["Pous.SecurityProofs.StreamedWipe"]},
-  "Hash.Assumptions.Sha512Prf": {"reason": "SHA-512 as a PRF (prf/sha-512), for PoUS's index streams", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]}
+  "FlockSoundness.Assumptions.KeyedStreamsUniform": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for the streamed wipe's labels and PoUS only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]},
+  "Hash.Assumptions.Sha512Prf": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for PoUS's index streams and the streamed wipe's labels only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]}
  },
  "pending": {
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
