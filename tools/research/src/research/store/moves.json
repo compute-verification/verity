@@ -2396,6 +2396,15 @@
         "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
         "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/circuit/dither.py": "verity/protocols/experimental/dither/prover/dither.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.py": "verity/protocols/experimental/dither/prover/dither.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.json": "verity/protocols/experimental/dither/prover/dither.circuit-check.json",
+        "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+      }
     }
   ]
 }
