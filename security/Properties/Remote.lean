@@ -6,6 +6,7 @@ public import Properties.Composition
 public import Properties.Nci.Desc
 public import Properties.Nci.Baseline
 public import Properties.Spot
+public import VStarRecursive.Caller
 
 /-!
 # Remote's acceptance and the inference-only policy
@@ -110,6 +111,17 @@ def CaseHeld (k : Case) : Prop :=
     NciCheck.Protocol.commitmentOf k.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf k.evidence = .ok e ∧
     PolicyHeld p c e
 
+/-- **The caller's check finds nothing exactly where the record keeps the caller's facts.** On every record and every
+verifier, `VStar.Recursive.Caller.check` returns no code exactly when the record keeps `Properties.Spot.CallerHeld`
+against that verifier: its day's declared program, its window's stream, prover, seed salt, the pool's reset, week and
+spent mark with at most one reset a week, and the registration log's compiler and advice within its length, and, when
+the verifier expects values registered, the pool its window opens. Sampled proofs' one-stage form and the recursive
+audit read SPOT's acceptance through that check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's
+facts off it. -/
+def CallerCheckMeans : Prop :=
+  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+    VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
+
 /-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
 (`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
@@ -119,7 +131,7 @@ soundness the recursive audit (`RecursiveAuditC3`) states. In either form the re
 that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
 prover, the seed salt, the registered compiler and the pool's reset the verifier holds, and it opens the pool the previous window of record
 left. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
-verifier, so they are stated here, of the case the caller's check accepted. -/
+verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. -/
 def StageHeld (k : Case) : Prop :=
   (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
