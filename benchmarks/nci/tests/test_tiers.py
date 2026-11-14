@@ -90,8 +90,8 @@ def test_the_gpus_residual_leaves_pouws_deficit_to_eps_w():
 
 
 def test_unmonitored_compute_trains_at_full_efficiency():
-    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
-    assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
+    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unregistered": 0.3}, T.TIERS["T5"])
+    assert r["unregistered"] == pytest.approx(0.3, rel=1e-6)
 
 
 def test_the_declared_computation_trains_at_the_thread_bound():
@@ -224,7 +224,7 @@ def test_the_amplifier_multiplies_every_term():
     for tier in ("T1", "T5"):
         base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
         amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
-        for term in ("efficiency", "unmonitored", "residual", "declared", "cheat"):
+        for term in ("efficiency", "unregistered", "residual", "declared", "cheat"):
             assert amped[term] == pytest.approx(10 * base[term], rel=1e-9)
 
 
@@ -238,13 +238,13 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
 
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
-    """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = KEYED | BATCHED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    """m scales nu, chi and the memory cap but not the residual or unregistered compute (C2 dossier)."""
+    p = KEYED | BATCHED | {"unregistered": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
     assert 1 > amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
     assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
-    assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
+    assert amped["unregistered"] == pytest.approx(base["unregistered"], rel=1e-6)
     capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 0.83}
     assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["residual"] == pytest.approx(
         3 * T.evaluate(capped, T.TIERS["T3"])["residual"], rel=0.02)

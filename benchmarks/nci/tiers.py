@@ -1,13 +1,13 @@
 """Compute efficiency eta of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
-needs, divided by the FLOP the developer spends, monitored plus unmonitored. The developer must still compute the counted
+needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
 multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
 "Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
 
 eta <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
 proved.
 
-* s, the unmonitored compute share, trains at full efficiency.
-* r, the monitored compute residual: r-hat, the share of monitored capacity outside the compute certificate
+* s, the unregistered compute share, trains at full efficiency.
+* r, the registered compute residual: r-hat, the share of registered capacity outside the compute certificate
   (1 - W_cert/C), plus PoUW's deficit on the certified work, eps_W W_cert/C, plus the aggregation slack eps'. r-hat is
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
   peak. It trains at full efficiency unless the memory cap binds: at peak in eta, at MFU_0 in D (``evaluate``'s
@@ -26,7 +26,7 @@ proved.
   counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)).
 * The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
   the whole registered circuit, once per identity, in every tier; that capacity joins the residual. Detection must end the
-  identity and take its hardware out of use, or the capacity after the halt is unmonitored.
+  identity and take its hardware out of use, or the capacity after the halt is unregistered.
 * chi, the cheating share: with SPOT at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
@@ -39,7 +39,7 @@ proved.
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
-only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
+only the constrained terms (nu, mu and chi), not the residual or unregistered compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
 mfu, isn't computed here: it is the slowdown calculator's ``slowdown.theorem.multiple_bound`` in Lean's form
 (``InferenceOnly.Slowdown.remoteSlowdown``) on these terms (``remote_terms``) with the residual at MFU_0.
@@ -101,7 +101,7 @@ NODE_FLOPS = 8 * GPU_FLOPS
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.323, "host_share": 0.0,
+    "unregistered": 0.0, "residual": 0.323, "host_share": 0.0,
     "clock_share": 1 - CREDITED_CLOCK_HZ / CARD["clock_hz"], "eps_w": 0.00744,
     "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -118,9 +118,9 @@ DEFAULTS = {
 #: one entry per parameter: label, unit, slider range, log scale, whether the leftmost position means zero, and whether
 #: it is one of the few shown up front
 SPEC = [
-    {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
+    {"key": "unregistered", "main": True, "label": "Unregistered compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "residual", "main": True, "label": "Registered compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (the theorem's delta is p/eps' at PoUW's per-window failure p, which has no value yet: 2.7e-8 at 1e-4 if p were 3 x 2^-40; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
@@ -208,7 +208,7 @@ STATUS = [
      "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
      "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
      "shrinks with the fleet, so detection must be terminal (J = 1)."),
-    ("Unmonitored compute", "No bound: it trains at full efficiency."),
+    ("Unregistered compute", "No bound: it trains at full efficiency."),
 ]
 
 
@@ -304,7 +304,7 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
     gpm = 2 / p["kappa"]
     H = p["years"] * YEAR
     C = p["nodes"] * p["node_flops"] * H
-    s = min(p["unmonitored"], 0.999)
+    s = min(p["unregistered"], 0.999)
     U = C * s / (1 - s)
     alpha = p["K"] / p["Gamma"]
     rho_T = p["b_a"] / (alpha * lam(p, p["K"]))
@@ -342,13 +342,13 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
 
     declared = cap_T
     res_mults = residual_mfu * res_ops / gpm
-    unmon = U / gpm
-    monitored = min(p["m"] * declared + res_mults, p["m"] * region)
-    declared_part = min(p["m"] * declared, monitored)
-    res_part = monitored - declared_part
+    unreg = U / gpm
+    registered = min(p["m"] * declared + res_mults, p["m"] * region)
+    declared_part = min(p["m"] * declared, registered)
+    res_part = registered - declared_part
     spent = C + U
     amp = p["g"] * gpm / spent
-    terms = {"unmonitored": amp * unmon, "residual": amp * res_part, "declared": amp * declared_part, "cheat": amp * cheat}
+    terms = {"unregistered": amp * unreg, "residual": amp * res_part, "declared": amp * declared_part, "cheat": amp * cheat}
     capped = p["m"] * region < p["m"] * declared + res_mults
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
@@ -361,11 +361,11 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
 
 
 def remote_terms(p: dict, r: dict) -> tuple[float, float]:
-    """``evaluate``'s terms as the ``s`` and ``x`` of ``InferenceOnly.Slowdown.remoteSlowdown mfu s x``: the unmonitored share,
+    """``evaluate``'s terms as the ``s`` and ``x`` of ``InferenceOnly.Slowdown.remoteSlowdown mfu s x``: the unregistered share,
     which trains like the unconstrained developer, and the rest in counted multiplications (so at a = 1/MFU_0,
     ``multiple_bound``'s ``reference_efficiency=False``; the assumption is in ``r``'s residual, ``evaluate`` at
     ``residual_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""
-    return r["unmonitored"] / p["g"], (r["residual"] + r["declared"] + r["cheat"]) / p["g"]
+    return r["unregistered"] / p["g"], (r["residual"] + r["declared"] + r["cheat"]) / p["g"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -377,9 +377,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"spec": SPEC, "defaults": DEFAULTS, "tiers": TIERS,
                           "status": [{"piece": a, "status": b} for a, b in STATUS], "results": results}, indent=1))
         return 0
-    print(f"{'tier':5} {'efficiency':>10} {'unmonitored':>11} {'residual':>9} {'declared':>9} {'cheat':>9}  largest")
+    print(f"{'tier':5} {'efficiency':>10} {'unregistered':>12} {'residual':>9} {'declared':>9} {'cheat':>9}  largest")
     for name, r in results.items():
-        print(f"{name:5} {r['efficiency']:10.3g} {r['unmonitored']:11.3g} {r['residual']:9.3g} {r['declared']:9.3g} "
+        print(f"{name:5} {r['efficiency']:10.3g} {r['unregistered']:12.3g} {r['residual']:9.3g} {r['declared']:9.3g} "
               f"{r['cheat']:9.2g}  {r['largest']}{' (memory caps it)' if r['memory_caps_residual'] else ''}")
     return 0
 

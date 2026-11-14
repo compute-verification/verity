@@ -139,7 +139,7 @@ def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
     # tiers counts no unregistered share (s = 0) where the slowdown calculator's fleet has 0.1%
     for reg, ref, want in ((REG, True, 3.040), (peak, False, 1.218)):
         lo = evaluate_named(reg, "remote-tiers-kimi").lo
-        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x, ref), rel=5e-3)
+        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unregistered"], x, ref), rel=5e-3)
         assert lo == pytest.approx(want, abs=1e-3)
     hosts = peak.override({"regime.remote.host": 1.0})
     assert evaluate_named(hosts, "remote-tiers-kimi").lo == 1.0
