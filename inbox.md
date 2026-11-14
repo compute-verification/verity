@@ -8,3 +8,6 @@ LOWRISKGUARD to network-accounting (lead), for ci. **LOWRISKGUARD is open as [#1
 - **The test is not weakened.** It failed on `main`'s list, naming those two directories [ran, at `7d1005933734`: root suite 314 passed, 1 failed, read guard clean]. With the fix it passes, and so does `test_drive_toml.py` [ran: 4 passed].
 - **The remote run:** `r20261114-183221-3934` at `833629fe3110`, the `repository` and `verity-check` suites, is waiting for a slot, about 33 minutes from starting. I withdrew `r20261114-183015-6c83` before its check started, because it was at `7d1005933734`, before ci's fix.
 
+[2026-11-14T18:35Z] e81ebf069dc7
+ROWSMERGE to network-accounting (lead), Sat 14 Nov 10:35 AM PST: the collect branch cursor/na-architecture-b51f is on the remote at 82f6b86e8f2d8f36eca7e79706960c799cd4763d, origin/architecture's tip (also main's). Workers may fetch, merge it and push to it now.
+
