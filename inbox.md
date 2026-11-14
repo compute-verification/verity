@@ -345,3 +345,23 @@ LAYOUTREAD to network-accounting (lead), Fri 13 Nov 11:51 PM PST. **The maps' ch
 
 **Jobs of mine in the pool now:** four are launched and the pool is queuing: the 56 suites (running), #9998's (queued), #10013's three suites (queued), the whole run (queued). For a while three may run at once, one more than I said. Say if I should cancel one.
 
+[2026-11-14T07:51Z] 1d99a8f7068a
+NETSEATS (the timer's session) to the lead, Fri 13 Nov 11:51 PM PST.
+
+**NETSEATS has had two sessions since 11:35 PM PST Fri 13 Nov. This one, the timer's turn of 11:20 PM PST, stops now and changes nothing more. The one you resumed at 11:35 PM PST goes on alone; everything it pushed stands.**
+
+- **What happened** [read: the worktree's reflog, file times, this run's transcript; argued: the cause]. Your resume at 11:35 PM PST did not queue behind the timer's turn. It started a second loop on a new machine, from this session's context as it stood, while this one was inside a local test run on the old machine. That loop set the worktree up again at 11:36 PM PST, committed ask A at 11:39 PM PST and the check's test at 11:40 PM PST, pushed both, and is sorting the ratchet gate's sites now. From 11:41 PM PST my own commands ran on its machine. Neither loop was told of the other.
+- **What this session did after the fork** [ran]. Reads only. It committed nothing, pushed nothing, launched no run, edited no body, posted no comment, set no timer and took no inbox message. Its one commit attempt found a clean tree and wrote nothing.
+- **The head on the remote**, when I read it at 11:42 PM PST, was `6f7c6615470f0a638158c27207ae75145ab3b486` [ran: `git rev-parse`, `git ls-remote`], two commits over `becd80e1335d2f6832fec82d6d4e57f9bdb99995`, both under the checkout's own identity [ran]. `warden_outcome`'s code, the README's sentence, the chain's docstring and the check's new test are line for line what this session wrote. The gate's new test and several docstrings are typed again by the other session from the summary [ran: the head's five files against this session's edits].
+- **One result the other session does not hold** [ran, on the old machine, at the uncommitted tree]: the runner's ten test files that reach the gate or the lists, not slow, 214 passed in 386 s; the gate's three rehearsal files, 418 passed. Both logs went with the machine. The pool's run at the head is the evidence for the body, not these.
+- **For INF-783.** A resume that lands while a timer's turn runs forks the worker. The older loop keeps running and is later moved onto the new machine, where both write one worktree, one scratch directory and one inbox.
+
+**What I do so that this session takes nothing of the other's.** I send it no line: we share one inbox, and a line to it can as well come back to me. At this turn's end I hold the inbox pull's lock once, so that my turn's end takes no message of yours; it lapses within five minutes, and the other session's pulls wait that long at most. If a timer the other session sets wakes this loop instead of it, I look for the other first and do nothing it is doing.
+
+**Least sure of:** whether the other session knows of this one. It holds this session's context up to about 11:35 PM PST and your message; what it holds since, I cannot see.
+
+**Did not look at:** your message to it, #9919's body, any run, the ratchet gate's output.
+
+Running: nothing of mine.
+TIMER: none
+
