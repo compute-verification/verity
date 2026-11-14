@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Advantage
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
@@ -20,7 +19,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.PearlC.DeviceChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
@@ -41,7 +40,8 @@ salt's bytes `salt`, and rests on that form at W1 (`Definitions.Pouw.Assumptions
 `Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1`, and the chain-cap and U-only forms' `…W1` beside them).
 Pearl-C4's rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
 `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
-row-seed readers) are still stated over any `CostModel`. `EpsFp4Sm120_8192` is Pearl-C4's gap at 8192³ in ε form.
+row-seed readers) are still stated over any `CostModel`. `EpsSm120v1LoopCast8p72Rev1Cap1000_8192` and
+`EpsFp4Sm120_8192` are the served record's and Pearl-C4's gaps at 8192³ in ε form.
 The hidden-audit form at the served record is `Proofs.Pouw.Lemmas.PearlCFlockTile`'s.
 -/
 
@@ -60,6 +60,16 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
     Pouw.PearlC.GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
       ((1648180439 / 446072750000 : ℚ) : ℝ) δPearlC
+
+/-- **v1 under rev1 at the cap 1/1,000, 8192³, in ε form**: `GapSm120v1LoopCast8p72Rev1Cap1000_8192` at the
+advantage `ε = g/(1 − g) = 1648180439/444424569561` (0.37086%). -/
+def EpsSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gε (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
+      ((1648180439 / 444424569561 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
 
