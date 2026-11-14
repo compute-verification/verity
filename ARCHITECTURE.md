@@ -264,7 +264,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 
 | What | Today | At the end |
 | --- | --- | --- |
-| The circuits of served kernels | `verity/definitions/` | what a protocol names to `verity/circuits/ops/`, the rest to `adapters/vllm/` |
+| The circuits of served kernels | `adapters/vllm/verity_vllm/definitions/`, the circuits a protocol names among them | what a protocol names to `verity/circuits/ops/` |
 | Leftovers in `verity/`: `claims/`, `settings.py`, `composite/` | `verity/` | deleted, `tools/`, and inside `compose/` |
 | Loose files inside five protocols | beside `verifier/`, `prover/`, `device/` | inside one of the three, or out of `verity/` |
 | `fixtures/` | the root | each file beside its reader |
@@ -298,7 +298,6 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Every kernel the production settings serve has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
 | Every kind of piece in a request has a statement the Lean verifier accepts | 177 of 254 kinds, holding 99.9653% of the request's 11.28 billion pieces, by a record in the store and on a branch; `main` shows none of it yet |
 | One form of the network certifier | Two: the remote demo runs an older one, a proxy in front of the server; the onsite demo runs the device on the link |
-| The Lean takes a data sheet as a parameter | Two Lean tables restate their data sheets |
 | Every benchmark on the dashboard | 5 of 69 wired; 3 of the 5 show a value no older than their schedule allows |
 | The proofs' status on the dashboard: guarantees fully proved, open premises per lead | Printed by the Lean check only |
 | Every area of `security/` has a lead | 826 of its 4,816 files fall to lean because no lead claims them |

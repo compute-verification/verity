@@ -13,7 +13,7 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
   `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/proofs/flock/prover/pod/catalog.py`); and a migration tool under
   `adapters/vllm/tools`.
 - **Loads:** every Definition module's sidecar and pins, and the module each belongs to, `verity.circuits`,
-  `verity.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
+  `verity_vllm.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
   registers itself by a sidecar (below), and its modules that have one are then loaded like `verity`'s.
 
 ## Commands and modules
