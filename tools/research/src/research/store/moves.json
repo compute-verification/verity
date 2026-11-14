@@ -2859,6 +2859,11 @@
         "verity/protocols/proofs/spot/verifier/lean/Spot/WiresDrawn.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/WiresSampled.lean",
         "verity/protocols/proofs/spot/verifier/one_stage/hidden_draw.py": "verity/protocols/proofs/spot/verifier/one_stage/hidden_sample.py"
       }
+    },
+    {
+      "paths": {
+        "verity/circuits/requirement/tests/test_census_and_memory_map.py": "adapters/vllm/tests/commit/test_census_and_memory_map.py"
+      }
     }
   ]
 }

@@ -34,14 +34,14 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
     ("verity/circuits/evaluate/tests/test_difftest.py", "verity.definitions.registry"),
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.query.required"),
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.commit"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.program.predict.phi"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.query.required"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
     # PoUB's memory-map/v1 builder (`Lines`), which records a session's appends and frees: `map_case` builds with it
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
-    ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
+    ("adapters/vllm/tests/commit/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.boolean"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry.catalog"),
