@@ -1,0 +1,3 @@
+[2026-11-14T18:28Z] 22b3a5bfcb0e
+LEAD 18:32Z: proofs asked on PRF-618 (10:26 AM PST comment, read it whole) and I said YES: `cap` becomes a run field (out of H), staying a key of each record and under the registration digest. Do in #10034 before it pins a digest: add `cap` to the run-fields tuple, with a test first (two records differing only in cap have one H; their registration digests differ). And post on PRF-618 by 22:00Z today, ringing @proofs: the new head, and the list of everything that reads `circuit_of` today (file:line, what it does with it) on #10034/#10203 and main. Also: circuits and proofs both say the boundary read stays and the ingress on the prompt rows goes; your writer does not change.
+
