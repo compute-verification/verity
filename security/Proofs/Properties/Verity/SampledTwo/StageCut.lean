@@ -12,7 +12,7 @@ matches the play's release by release), the bytes each stage read start the coin
 stage's family after its record's digest: the first stage's (`firstShown_of`, the premise `FirstShown`) and the
 interior's (`secondShown_of`, `SecondShown`).
 
-The cut reads the first session's log with the coins `drawCoins` reads under the parameters' key (`readsLogs`), and the
+The cut reads the first session's log with the coins `sampleCoins` reads under the parameters' key (`readsLogs`), and the
 interior's with the coins the form's check computes (`OneStageZk.coinsOf`). On one window each read is the whole log;
 on two, the first session's releases come before the interior's (`logsOf`).
 
@@ -21,9 +21,9 @@ on two, the first session's releases come before the interior's (`logsOf`).
   instantiates `C`'s.
 * `CutReads`: on a play the form accepts, the cut reads at least one log. Where it reads none, `LogIsDevice` holds of
   any log, and says nothing.
-* `FirstDrawn`: the bytes the first stage read start the coins `drawCoins` reads under the parameters' key, in the
+* `FirstSampled`: the bytes the first stage read start the coins `sampleCoins` reads under the parameters' key, in the
   family of the boundary registration's challenger, from the first stage's coin evidence. The run's coin check reads
-  that key and that family (`inputOf`); that it reads them as `drawCoins` does is the run's coins' piece.
+  that key and that family (`inputOf`); that it reads them as `sampleCoins` does is the run's coins' piece.
 * `SecondAlone`: on two windows, the first session's releases hold no coins of the interior's family after the
   interior's digest. An honest run releases none there; the form does not refuse such a log today. Where it does, the
   interior's coins would follow coins of their own family that the second stage never read, and `SecondShown` would
@@ -54,12 +54,12 @@ def CutReads (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → readsLogs o.sent ≠ []
 
 /-- **The first stage read the sample the cut reads**: on a play the form accepts, the bits of the bytes the run's first
-stage read start those of the coins `drawCoins` reads under the parameters' key, on the boundary registration's
+stage read start those of the coins `sampleCoins` reads under the parameters' key, on the boundary registration's
 window, in the family of its challenger, after the boundary registration's digest. -/
-def FirstDrawn (C : CaseOf) : Prop :=
+def FirstSampled (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ i read, inputOn C o = some i → FirstRead i read →
-    ∀ p c e key d ξ, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key → firstDraws key p c e = some d →
-      drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ →
+    ∀ p c e key d ξ, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key → firstSamples key p c e = some d →
+      sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ →
       bitsOf (i.source.extract 0 read) <+: bitsOf ξ
 
 /-- **On two windows the first session releases none of the interior's coins**: on a play the form accepts whose two
@@ -67,8 +67,8 @@ sessions are on two windows, the first session's releases as the cut reads them 
 after the interior registration's digest. -/
 def SecondAlone (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ ξ r₁ d₂, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
-    firstDraws key p c e = some d₁ → drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ →
-    firstRead key p c e ξ = some r₁ → secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
+    firstSamples key p c e = some d₁ → sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ →
+    firstRead key p c e ξ = some r₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     freshCoins d₂.label d₂.after r₁ = []
 
 /-! ## The cut's reads -/
@@ -76,7 +76,7 @@ def SecondAlone (C : CaseOf) : Prop :=
 /-- The first session's read: its log's lines, and the releases with the coins placed. -/
 theorem firstRead_some {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {ξ : ByteArray} {d : Draws} {r : List Release}
-    (hd : firstDraws key p c e = some d) (h : firstRead key p c e ξ = some r) :
+    (hd : firstSamples key p c e = some d) (h : firstRead key p c e ξ = some r) :
     ∃ lines, firstLines e = .ok lines ∧ readLog d.label d.after [] ξ lines = some r := by
   unfold firstRead at h
   rw [hd] at h
@@ -87,7 +87,7 @@ theorem firstRead_some {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Par
 /-- The interior session's read: its records, its log's lines, and the releases with the coins placed. -/
 theorem secondRead_some {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {ξ : ByteArray} {d : Draws} {r : List Release}
-    (hd : secondDraws p e = some d) (h : secondRead p e bs ξ = some r) :
+    (hd : secondSamples p e = some d) (h : secondRead p e bs ξ = some r) :
     ∃ recs lines, secondRecords bs e = some recs ∧ Verity.Sampled.linesOf e.interior = .ok lines ∧
       readLog d.label d.after recs ξ lines = some r := by
   unfold secondRead at h
@@ -111,11 +111,11 @@ theorem firstLines_arr {e : VStar.Recursive.SampledTwo.Evidence} {l : List Strin
       | simp [throw, throwThe, MonadExceptOf.throw] at h
 
 /-- **The first stage's sample on the case is the cut's**: its family and digest are those of the cut's first sample. -/
-theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
+theorem firstSample_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d : Draws} (hd : Decoded k p c e)
-    (h : firstDraws key p c e = some d) : firstDraw k = some (d.label, d.after) := by
+    (h : firstSamples key p c e = some d) : firstDraw k = some (d.label, d.after) := by
   obtain ⟨hp, hc, -⟩ := hd
-  unfold firstDraws at h
+  unfold firstSamples at h
   cases hb : boundaryOf p with
   | error _ => simp [hb, Except.toOption] at h
   | ok bp =>
@@ -137,7 +137,7 @@ theorem firstDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spo
         rfl
 
 /-- **The interior's sample on the case is the cut's**: its family and digest are those of the cut's second sample. -/
-theorem secondDraw_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
+theorem secondSample_of {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {s : String} {c₂ : Spot.OneStage.Commitment} {d : Draws}
     (hd : Decoded k p c e) (hs : Flock.canon e.record = .ok s) (hc : Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂)
     (h : oneStageZkSource p.audit c₂ = some d) : secondDraw k = some (d.label, d.after) := by
@@ -173,7 +173,7 @@ theorem inputOf_interior_source (p : VStar.Recursive.SampledTwo.Params) (c : Spo
 /-! ## The stages' coins on the device's log -/
 
 /-- **The first stage's coins are on the device's log**: `FirstShown` at the cut's `LogIsDevice`. -/
-theorem firstShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hD : FirstDrawn C) :
+theorem firstShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hD : FirstSampled C) :
     FirstShown C LogIsDevice := by
   intro o ha hg i read hi hread _
   obtain ⟨k, p, c, e, _, _, _, _, hk, hd, _, _, _, _⟩ := inputOn_accepts ha hi
@@ -189,16 +189,16 @@ theorem firstShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hD : F
   have hpre := hD o ha i read hi hread _ _ _ key d₁ ξ hcase hkey hd₁ hξ
   refine ⟨d₁.label, d₁.after, ?_, ?_⟩
   · rw [hk, Option.bind_some]
-    exact firstDraw_of hd hd₁
+    exact firstSample_of hd hd₁
   unfold logsOf at hlogs
   by_cases hw : d₁.window = d₂.window
   · rw [if_pos hw] at hlogs
     have hO := hg r₁ (by rw [hlogs]; simp)
-    rw [drawn_shown hξ hls hlsl hrl hO]
+    rw [sampled_shown hξ hls hlsl hrl hO]
     exact hpre
   · rw [if_neg hw] at hlogs
     have hO := hg (r₁ ++ r₂) (by rw [hlogs]; simp)
-    exact hpre.trans (drawn_shown_append hξ hls hlsl hrl hO)
+    exact hpre.trans (sampled_shown_append hξ hls hlsl hrl hO)
 
 /-- **The interior's coins are on the device's log**: `SecondShown` at the cut's `LogIsDevice`. -/
 theorem secondShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hA : SecondAlone C) :
@@ -219,24 +219,24 @@ theorem secondShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hA : 
   obtain ⟨rfl, rfl, rfl⟩ := hpce
   obtain rfl := Except.ok.inj (hi₂.symm.trans hc₂')
   obtain rfl := Except.ok.inj (hξ₂.symm.trans hξ₂')
-  have hsrcd := secondDraws_eq hi₂ hd₂
+  have hsrcd := secondSamples_eq hi₂ hd₂
   obtain ⟨raw, hraw, rfl⟩ := oneStageZk_reads _ _ _ hsrcd _ _ hξ₂
   obtain ⟨recs, lines, -, hlines, hrl⟩ := secondRead_some hd₂ hr₂
   obtain ⟨ls, hls, hlsl⟩ := linesOf_arr hlines
   refine ⟨d₂.label, d₂.after, ?_, ?_⟩
   · rw [hk, Option.bind_some]
-    exact secondDraw_of hd hs hc₂ hsrcd
+    exact secondSample_of hd hs hc₂ hsrcd
   rw [hsrc]
   unfold logsOf at hlogs
   by_cases hw : d₁.window = d₂.window
   · rw [if_pos hw] at hlogs
     have hO := hg r₂ (by rw [hlogs]; simp)
-    rw [drawn_shown hraw hls hlsl hrl hO]
+    rw [sampled_shown hraw hls hlsl hrl hO]
     all_goals exact List.prefix_refl _
   · rw [if_neg hw] at hlogs
     have hO := hg (r₁ ++ r₂) (by rw [hlogs]; simp)
     have h₀ := hA o ha _ _ _ key d₁ ξ r₁ d₂ hcase hkey hd₁ hξ hr₁ hd₂ hw
-    rw [drawn_shown_after hraw hls hlsl hrl h₀ hO]
+    rw [sampled_shown_after hraw hls hlsl hrl h₀ hO]
     all_goals exact List.prefix_refl _
 
 end Verity.SampledTwo

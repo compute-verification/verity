@@ -1,14 +1,14 @@
-"""Sampled proofs' answer on a served window, from the one-stage records audit
-(`verity/protocols/proofs/spot/verifier/one_stage/records_audit.py`) that ran on it.
+"""SPOT's answer on a served window, from the one-stage records audit
+(`verity/protocols/proofs/spot/prover/audit/records_audit.py`) that ran on it.
 
-`answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
-commitment is the registration's digest, the verdict the audit record's, and on acceptance the profile is
+`answer` turns what the audit wrote into SPOT's core answer (``verity/sampled-proofs/one-stage/v1``): the
+commitment is the docket's digest, the verdict the audit record's, and on acceptance the profile is
 `audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the five `Spot.OneStage.check` makes
 public (the sampled proof blocks and ``proved``, the proved ones; ``bound``, the bound on incorrect ones at δ;
 ``per_template``, each template's under a stratified or work sampling design; ``complete``, the audit record's own:
 whether every verdict ran, which `audit.answer_complete` reads) and two the Lean's answer doesn't have,
 ``coins`` and ``case_v2``. A refusal before the
-sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
+sample (the records, a check on the docket, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
 its port). An audit that ended with no summary is an error (RuntimeError), not a verdict.
 
@@ -137,7 +137,7 @@ def unproved(rec: Mapping[str, Any]) -> str:
 
 
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
+    """SPOT's answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ, and its public ``coins`` whose coins the sample is on
     (`whose_coins`) and its public ``case_v2`` whether the audit wrote the case for the compiled check (`case_said`). An

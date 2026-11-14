@@ -198,7 +198,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting StrictCR
 open Flock.SecurityProofs Flock.SecurityProofs.TopFinder
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ : Type} {I : Inner}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner}
 
 /-- The held binding top at a history differs from the explicit registered top strings. -/
 def TopColl (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)

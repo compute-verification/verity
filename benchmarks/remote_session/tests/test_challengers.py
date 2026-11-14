@@ -21,7 +21,6 @@ import sys
 import threading
 from datetime import datetime, timezone
 from fractions import Fraction
-from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -41,9 +40,9 @@ from verity.protocols.accounting.poub.verifier.remote_session import verifier_pr
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
+import lean_stands_in  # noqa: E402
 from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
 from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
@@ -243,8 +242,11 @@ def test_a_served_or_gate_verifier_needs_the_verify_and_the_challengers_process_
     with pytest.raises(ValueError, match=re.escape(f"--challenger {kind} checks the challenger's signatures with the "
                                                    "LMS verify its process's entry hands in")):
         challengers.of(kind, tmp_path / "out", key, None, **flags)
-    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
-    assert source.verify is VP.lms_verify
+    if kind == "serve":
+        with pytest.raises(ValueError, match="reads its session with the LMS verify that asks the Lean"):
+            challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
+    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify, served_verify=VP.verify)
+    assert source.verify is (VP.verify if kind == "serve" else VP.lms_verify)
     if kind == "serve":
         assert source.command == ("python", "serve.py")
         with pytest.raises(ValueError, match="starts the challenger's process its entry hands in"):
@@ -255,8 +257,8 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
     got = {}
     monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
     assert VP.main(["--port", "7781"]) == 0
-    assert got == {"argv": ["--port", "7781"], "verify": VP.lms_verify,
-                   "serve": (sys.executable, str(LIVE / "serve.py"))}
+    assert got == {"argv": ["--port", "7781"], "figures": VP.timing.RTX_PRO_6000_NODE, "verify": VP.lms_verify,
+                   "served_verify": VP.verify, "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
@@ -317,7 +319,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     else:
         (tmp_path / "served").mkdir()
         serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
-        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.lms_verify)
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
     (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
@@ -356,14 +358,12 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
              pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
              model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None,
-             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None,
-             lockdown: dict | None = None) -> dict:
+             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, lockdown: dict | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None; its own keys over the honest binding's), the Lean's `hold` answering `lean` (by default bound at the
-    registration's root), the line held to `model` (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, each line
-    computed by the Lean verifier `line_by` (None: line.py alone), its credit held to the certifiers' records
-    `boundary` (`read_boundary`'s; None: not checked), and its sessions' NoOutsideCompute grounded by `lockdown`
-    (`read_lockdown`'s; None: by nothing)."""
+    registration's root), the line held to `model` (`--model-pin`'s), `peer` its --peer (None: the record's), `commit`
+    the commit its verifier ran at, each line computed by the Lean verifier `line_by` (None: line.py alone), and its
+    sessions' NoOutsideCompute grounded by `lockdown` (`read_lockdown`'s; None: by nothing)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
     binding = {} if bound is None else {"binding": {"payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held,
@@ -371,25 +371,27 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary,
-                      lockdown=lockdown)
+                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, lockdown=lockdown)
 
 
-def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
-    """`sketch_at` reads a session's SketchBound δ at F times the compressions its verifier charged the node
-    (gate run 8's session 0: 2^-51.59 at F = 1, the red team's 2^-41.59 at 2^10), at the record's F unless asked
-    another (1 for a record written before F), and the line's error there is the horizon's plus it; a session with no
-    sketch term has none."""
+def test_the_line_reads_the_sketch_at_the_queries_its_record_charged() -> None:
+    """`sketch_at` reads a session's SketchBound δ at the Q its record charged (`recorded_queries`) unless asked
+    another: 2^`queries_log2`, the prover's budget, in a record that states it (2^-15.12 at 2^80 over P = 2,118 passes
+    of N = 97,517,568 blocks), and F·C in one written before, C the compressions its verifier charged the node and F
+    its outside-compute factor, 1 where the record states none (2^-51.59 at F = 1, 2^-41.59 at 2^10).  The line's error
+    there is the horizon's plus it; a session with no sketch term has none."""
     c, p, n, horizon = 12_708_215_084_432, 2118, 97_517_568, 9.64e-10
     sf = {"compressions": c, "log2": -51.59}
     s = {"ledger": {"sketch_failure": sf, "inputs": {"passes": p, "rows": 16}, "spec": {"error": {"horizon": horizon}}}}
-    for f, want in ((1, -51.59), (2 ** 10, -41.59), (2 ** 20, -31.59)):
-        got = verifier.sketch_at(s, {"blocks": n}, f)
-        assert (got["outside"], got["compressions"], got["queries"], round(got["log2"], 2)) == (f, c, f * c, want)
+    for q, want in ((c, -51.59), (2 ** 10 * c, -41.59), (2 ** 80, -15.12)):
+        got = verifier.sketch_at(s, {"blocks": n}, q)
+        assert (got["queries"], round(got["log2"], 2)) == (q, want)
         assert got["error"] == pytest.approx(horizon + 2.0 ** got["log2"])
-    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 1)
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, c)
     sf["outside"] = 2 ** 10
-    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10)
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10 * c)
+    s["ledger"]["sketch_failure"] = {"queries_log2": al.audit.QUERIES_LOG2, "log2": -15.12}
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 80)
     assert verifier.sketch_at({"ledger": {}}, {"blocks": n}) is None
 
 
@@ -427,7 +429,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert json.loads(closed)["body"]["complete"] is defer_openings
     doc = line("lean")
     honest, dropper = doc["sessions"]
-    assert doc["sketch_outside"] == [2 ** 20] and honest["sketch"]["outside"] == 2 ** 20
+    assert doc["sketch_queries"] == [2 ** 80] and honest["sketch"]["queries"] == 2 ** 80
     assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
     assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
     for s in (honest, dropper):
@@ -463,7 +465,6 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
             "credited sessions; Σ_t adv_t (claim prf/sha-512) is named, with no value and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON
         assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
-        assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
         lines = set(al.table(doc).splitlines())
         assert {f"conditional on {n}: {what}" for n, what in al.CONDITIONAL_ON.items()} <= lines
         by = al.lv.Lean(al.lv.build(), lambda _: None)
@@ -495,8 +496,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
     assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
     for bound, model, why in (
-            (None, MODEL, "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin "
-                          "FILE), so its payload root is the prover's choice"),
+            (None, MODEL, "the verifier holds no checkpoint, so the store's payload root is the developer's choice"),
             (None, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one"),
             (MODEL, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one")):
         unbound = analysed(out, host, sessions, reg, desc, bound=bound, model=model)
@@ -535,11 +535,10 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
 
-
 def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store_and_exits_0(host, tmp_path,
                                                                                            monkeypatch, capsys):
-    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
-    verifier bound the store to none. `auditor_line.py` prints a line that credits the session on its four checks,
+    """A gate run (`gate.sh`): its period signs no model (`period-open` without `--model`) and its verifier holds no
+    checkpoint. `auditor_line.py` prints a line that credits the session on its four checks,
     conditional on DeveloperStore, printing that the verifier held no checkpoint, so the store's bytes are the
     developer's choice, and why (no model is there to bind the store to), with `"model": null, "bound": false,
     "store": "the developer's choice"` in its JSON, and exits 0."""
@@ -569,7 +568,83 @@ def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store
     assert doc["credit"]["credited_sessions"] == [0] and doc["credit"]["summary"] == "the line credits session(s) 0"
     assert doc["conditional_on"]["DeveloperStore"].startswith(words)
 
-def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
+
+LINE_PIECES = ["challenger_head", "challenger_credited", "challenger_pinned", "challenger_ledger"]
+
+
+def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_none(host, tmp_path, monkeypatch):
+    """`auditor_line` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, each gate session's
+    *credited* and *pinned* checks and its read of the ledger, and acts on its answers: an honest session the Python
+    credits is credited where the Lean agrees. Where the Lean refuses the head, or answers it otherwise than the Python,
+    the run's line is refused; where it does so for the credit, the pin or the session's read of the ledger, the
+    session earns none, naming the check."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    asked, real = [], spot_verifier.lean
+
+    def stand_in(piece: str, lean: str):
+        def lean_(name, request):
+            asked.append(name)
+            got = real(name, request)
+            if name != piece:
+                return got
+            return {"refused": "a stand-in's refusal"} if lean == "refuses" else {**got, "stand-in": True}
+        return lean_
+
+    monkeypatch.setattr(spot_verifier, "lean", stand_in("", "agrees"))
+    assert analysed(out, host, sessions, reg, desc)["sessions"][0]["credit"]["ok"]
+    assert set(asked) == set(LINE_PIECES)
+    for piece, lean in itertools.product(LINE_PIECES, ("refuses", "differs")):
+        monkeypatch.setattr(spot_verifier, "lean", stand_in(piece, lean))
+        why = (f"the Lean verifier refuses the challenger's {piece}: a stand-in's refusal" if lean == "refuses" else
+               f"the Lean verifier's {piece} is not the Python's, so neither is taken")
+        if piece == "challenger_head":
+            with pytest.raises(CoinError, match=re.escape(why)):
+                analysed(out, host, sessions, reg, desc)
+            continue
+        credit = analysed(out, host, sessions, reg, desc)["sessions"][0]["credit"]
+        assert not credit["ok"] and any(z.endswith(why) for z in credit["zero"]), (piece, lean, credit["zero"])
+
+
+def test_without_their_lean_the_ledger_complete_and_main_leave_an_honest_gate_session_undecided(host, tmp_path,
+                                                                                                 monkeypatch):
+    """With the real interfaces (`lean_stands_in.unwritten`), an honest gate session that the Python and the Lean pieces
+    written credit earns none: the ledger's windows and periods, *complete* and its verifier's commit on main are each
+    undecided, with the goal's id, and the line credits zero."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    lean_stands_in.unwritten(monkeypatch)
+    doc = analysed(out, host, sessions, reg, desc)
+    credit = doc["sessions"][0]["credit"]
+    assert doc["ledger"]["verify_ledger"] == "undecided" and coins.UNWRITTEN in doc["ledger"]["undecided"]
+    assert not credit["ok"] and credit["accepted"]["ok"] and credit["pinned"]["ok"]
+    on_main, read = coins.undecided("verifier's commit on main"), coins.undecided("ledger's windows and periods")
+    assert credit["zero"] == [f"not credited: {on_main}", f"not complete: {coins.undecided('completeness')}",
+                              f"not credited: {read}"]
+    assert doc["credit"]["credited_sessions"] == []
+
+
+def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_undecided(tmp_path, monkeypatch):
+    """`challengers.Serve` reads its session with `verifier_process.verify`: where the Python's LMS verify holds, the
+    Lean's (`lms_answer`) decides, and while that isn't written an honest session is undecided, with the goal's id,
+    and not refused as `coins`."""
+    lean_stands_in.unwritten(monkeypatch)
+    (tmp_path / "served").mkdir()
+    serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+    source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
+    (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,
+                                defer_openings=False)
+    assert not honest["accepted"] and honest["failure"]["failure"] == "undecided" and honest["challenger"]["undecided"]
+    assert honest["failure"]["reason"] == coins.undecided("served session's LMS signatures")
+
+
+def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
     session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
@@ -739,91 +814,6 @@ def test_a_session_earns_credit_only_under_the_commit_its_verifier_ran_at_on_mai
         analysed(out, host, sessions, reg, desc, commit=VERIFIER)
 
 
-BOUNDARY_GRID = GridParams(buckets=4, allocation=2, frame_bytes=64)
-#: the boundary certifiers' session
-CERTIFIER_SESSION = bytes(range(32))
-#: the verifier's messages over the session as the boundary links frame them: two frames on the uplink, none on the BMC's
-VERIFIER_FRAMES = {"uplink": [b"\x01" * 64, b"\x02" * 64], "bmc": []}
-
-
-@lru_cache(maxsize=None)
-def certifier_key() -> lms.PrivateKey:
-    return lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"boundary certifier").digest())
-
-
-def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] = ("uplink", "bmc"),
-             windows: tuple[tuple[int, int, int], ...] = ((0, 0, 1 << 62),)) -> tuple[Path, str]:
-    """A boundary file in `d` (`auditor_line.read_boundary`'s form) for `links`, whose certifier signed each link's
-    ingress window 0 letting in `let_in`'s frames (a link it doesn't name has no record), its windows `windows`
-    ((window, start_ns, end_ns) on the challenger's clock) and the verifier's frames `VERIFIER_FRAMES`; and its key's
-    pin."""
-    d.mkdir(parents=True)
-    key = certifier_key()
-    issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
-    T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(BlockGrid(link, 0,
-                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
-                              cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
-    public = lms.public_key(key)
-    (d / "boundary.json").write_text(json.dumps({
-        "links": list(links), "key": {"N": 64, "W": 1, "H": 6, "public": public.hex()},
-        "session": CERTIFIER_SESSION.hex(), "grid": {"buckets": T, "allocation": r, "frame_bytes": 64},
-        "windows": [{"window": w, "start_ns": s, "end_ns": e} for w, s, e in windows],
-        "verifier_frames": {link: {"0": [f.hex() for f in fs]} for link, fs in VERIFIER_FRAMES.items()},
-        "records": [al.certified_record_json(x) for x in records]}))
-    return d / "boundary.json", hashlib.sha512(public).hexdigest()
-
-
-def test_a_session_earns_no_credit_when_its_boundarys_certifiers_show_ingress_beside_the_verifiers_messages(
-        host, tmp_path, monkeypatch):
-    """`--boundary` (off by default): an honest session, credited without it, keeps its credit when the network
-    certifiers' signed ingress records of the gate node's boundary links over its credited span let in exactly the
-    verifier's messages, and earns none, with the reason, when they show more: a frame on a link the verifier sent
-    nothing on (a relay's helper talking to the node), frames as many as the verifier's but not its own (their root), a
-    boundary link with no record, or windows that leave the span uncovered. Either way the line stays conditional on
-    `NoOutsideCompute`. A file whose certifier key isn't the pinned one is refused."""
-    host.seal(monkeypatch, PINS)
-    out = tmp_path / "run"
-    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
-    rc, closed = host.call(["period-close", "--name", "p-1"])
-    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
-
-    def held(name: str, let_in: dict[str, list[bytes]], **kw) -> dict:
-        return analysed(out, host, sessions, reg, desc, boundary=al.read_boundary(*boundary(tmp_path / name, let_in,
-                                                                                           **kw)))
-
-    doc = held("exact", VERIFIER_FRAMES)
-    (s,) = doc["sessions"]
-    assert s["credit"]["ok"] and doc["credit"]["credited_sessions"] == [0]
-    assert s["credit"]["boundary"]["ok"] and s["credit"]["boundary"]["windows"] == [0]
-    assert doc["boundary"]["checked"] and doc["boundary"]["links"] == ["uplink", "bmc"]
-    assert doc["conditional_on"] == al.CONDITIONAL_ON
-    assert any(x.startswith(f"| 0 | {s['T']} | yes | yes | yes | yes | yes | credited: ")
-               for x in al.table(doc).splitlines())
-    relay = b"\x09" * 64
-    for name, let_in, kw, why in (
-            ("helper", {**VERIFIER_FRAMES, "bmc": [relay]}, {},
-             "bmc's ingress window 0 let in 1 frames, the verifier's messages 0"),
-            ("swapped", {**VERIFIER_FRAMES, "uplink": [b"\x01" * 64, relay]}, {},
-             "uplink's ingress window 0 let in frames other than the verifier's messages (its root is not theirs)"),
-            ("unrecorded", VERIFIER_FRAMES, {"links": ("uplink", "bmc", "nvlink")},
-             "nvlink's ingress window 0 has no record to read (no-verdict)"),
-            ("uncovered", VERIFIER_FRAMES, {"windows": ((0, 0, 1),)}, None)):
-        doc = held(name, let_in, **kw)
-        (s,) = doc["sessions"]
-        got = s["credit"]["boundary"]["reason"]
-        if why is None:
-            assert re.fullmatch(r"the certifiers' windows cover its span \[(\d+), (\d+)\] ns only to \1", got), got
-        else:
-            assert got == why
-        assert s["credit"]["zero"] == [f"not boundary: {got}"] and doc["credit"]["credited_sessions"] == []
-        assert doc["conditional_on"] == al.CONDITIONAL_ON
-    path, _ = boundary(tmp_path / "pinned", VERIFIER_FRAMES)
-    with pytest.raises(SystemExit, match="not the one --boundary-pin names"):
-        al.read_boundary(path, "00" * 64)
-
-
 def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no_outside_compute(tmp_path, host,
                                                                                                 monkeypatch):
     """With infra's lockdown record (`--lockdown`), a gate session whose span as the challenger signed it (its
@@ -884,20 +874,6 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
         (tmp_path / "bad.json").write_text(json.dumps(bad))
         with pytest.raises(SystemExit, match="is not a lockdown record"):
             al.read_lockdown(tmp_path / "bad.json")
-
-
-def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
-    """A credited span from chal_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
-    [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
-    seen = [{"released_ns": 100, "arrivals_ns": [150]}, {"released_ns": 160, "arrivals_ns": [250]}]
-
-    def check(*windows: tuple[int, int, int]) -> dict:
-        return al.boundary_check({"links": [], "windows": list(windows)}, seen)
-
-    got = check((0, 0, 120), (1, 120, 251), (7, 400, 500))
-    assert got["ok"] and got["windows"] == [0, 1] and got["span_ns"] == [100, 250]
-    assert check((0, 0, 120), (1, 121, 300))["reason"] == "the certifiers' windows cover its span [100, 250] ns only to 120"
-    assert check((0, 0, 250))["reason"] == "the certifiers' windows cover its span [100, 250] ns only to 250"
 
 
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
@@ -994,8 +970,8 @@ def test_no_error_the_auditors_line_renders_comes_without_the_prf_term_it_leaves
             {"k": 1, "T": "T=60s", "shares_auditor_clock": held, "error": e,
              "credit": {"ok": False, "zero": ["not accepted: the Lean refused it (receipt)"]}}]
     out, credit = al.credited_line(rows)
-    text = al.table({"sessions": [], "line": out, "credit": credit, "line_by": "python", "conditional_on": {},
-                     "boundary": {"checked": False, "reason": "off by default (--boundary)"}}).splitlines()
+    text = al.table({"sessions": [], "line": out, "credit": credit, "line_by": "python",
+                     "conditional_on": {}}).splitlines()
     credited, zero = (next(x for x in text if x.startswith(f"line {t}:")) for t in ("T=1s", "T=60s"))
     assert al.ledger.DELTA_FORM == "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
     assert f", error {al.ledger.DELTA_FORM}, δ = {e['total']:.3g} (2^{e['log2_total']:.2f}): " in credited
@@ -1022,7 +998,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
-    slack is split at it: at 67 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
+    slack is split at it: at 140 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
     and 2^-40.0000 before the rejection."""
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
     window = {"lengths": [2 ** 27], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": drawn}}}
@@ -1045,6 +1021,6 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     stated["ledger"]["inputs"]["slack_log2"] = al.audit.SLACK_LOG2
     slack = al.line.number(al.session_error(stated)["exact"]["delta_slack"])
     assert slack == Fraction(passes, 2 ** al.audit.SLACK_LOG2) and al.timing.log2(slack) < -55.9
-    at67 = parts["profile"] + slack + parts["sketch"]
-    assert al.timing.log2(at67) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
-    assert al.timing.log2(at67 + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)
+    stated_total = parts["profile"] + slack + parts["sketch"]
+    assert al.timing.log2(stated_total) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
+    assert al.timing.log2(stated_total + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)

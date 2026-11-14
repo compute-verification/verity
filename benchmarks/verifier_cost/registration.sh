@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # R3's cost against the window's ports: registration.py writes, per N, a valid v1 audit with N more ports (a MoE window's
 # shape; TPEVAL's w13 window at chunk cap 64 is 1,536 members, about 12k ports), and registration-time
-# (registration/Main.lean, built in a scratch Lake package against the checkout's verifier) times `Registration.check`
-# (the port index) and `Registration.checkRef` (R3 as first written) on it, refusing where their codes differ. `checkRef`
+# (registration/Main.lean, built in a scratch Lake package against the checkout's verifier) times `Docket.check`
+# (the port index) and `Docket.checkRef` (R3 as first written) on it, refusing where their codes differ. `checkRef`
 # runs only up to REF_MAX ports (default 12288). Run from a clone (the build writes the verifier's .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152

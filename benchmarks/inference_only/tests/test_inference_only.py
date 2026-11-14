@@ -12,11 +12,11 @@ import policy as P
 import pytest
 import report
 import tied as T
-from rho import lean, min_cut
+from slowdown import lean, min_cut
 from verity_vllm.check.weights_of_record import PARAM
 from verity_vllm.program.predict import block_counts as BC
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 ROPE, SILU = "RoPEHead_v1{D=16}", "SiluMul_v2{I=8}"
 NORM = 'RMSNormTriton_v5{N=8,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
@@ -52,7 +52,7 @@ def no_out(monkeypatch) -> None:
 
 def reference(inst: dict) -> dict:
     """The count's Python reference, which the count's difftest holds the Lean to, as `built.lean_count`."""
-    spec = importlib.util.spec_from_file_location("nci_reference", B.PACKAGE / "scripts" / "nci_reference.py")
+    spec = importlib.util.spec_from_file_location("inference_only_reference", B.PACKAGE / "scripts" / "inference_only_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return {"verdict": ref.check_count_detail(inst), "cost": {}}

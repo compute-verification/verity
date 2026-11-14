@@ -166,7 +166,8 @@ interior (`input_of_accepts`), the reading states its session statements (`Stmts
 of rounds and is in scope (`RoundsHeldAt`, `ScopeHeldAt`), and the held copies' two-stage design evaluates
 (`twoHolds_at`). So the template's session sets up one table, and its rounds are the link's, the last message's and
 the table's two reps' (`reps_of_scope`). -/
-theorem two_le_rounds {A : Live₂} {C : CaseOf} {S : SessionReading} (hof : HeldOfAt A C) (hst : StmtsRead A C S)
+theorem two_le_rounds {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading} (hof : HeldOfAt A C)
+    (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) {o : Verity.Exchange} (hA : FormAccepts C o) {t : ℕ}
     (ht : t < A.h.ms.length) : 2 ≤ SpotFlock.k₀ A.h t := by
   have hA' := hA
@@ -183,7 +184,8 @@ theorem two_le_rounds {A : Live₂} {C : CaseOf} {S : SessionReading} (hof : Hel
 
 /-- **`LastSlotFree` at the run's locator, from the sessions' rounds**: at a session of at least two rounds
 (`two_le_rounds`) the sessions' layout puts no stream's round on the last slot (`SessionCoins.locOf_ne_last`). -/
-theorem lastSlotFree_run_of_scope (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
+theorem lastSlotFree_run_of_scope (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
+    (Good : Verity.Exchange → Prop)
     (Ls : CoinMap.Locate) (tab : ℕ → String) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) :
     LastSlotFree A (FormAccepts C) Good (SessionCoins.runLocate A Ls tab) :=
@@ -192,7 +194,7 @@ theorem lastSlotFree_run_of_scope (A : Live₂) (C : CaseOf) (S : SessionReading
 
 /-- **`SessionMsgsAsk` at the form and the run's locator** (`sessionMsgsAsk_form`), with `LastSlotFree` from the
 sessions' rounds: every hypothesis is one the join already holds. -/
-theorem sessionMsgsAsk_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem sessionMsgsAsk_run (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String) (hplay : PlayAccepts A C S P')
     (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)

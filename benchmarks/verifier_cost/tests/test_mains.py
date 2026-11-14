@@ -4,7 +4,7 @@ A benchmark's Lean here is one file, `<name>/Main.lean`, which its script copies
 builds against a verifier's package. Nothing else reads those files, so a change to a function one of them calls leaves its
 benchmark unable to build, unnoticed until somebody next runs it. So each main is elaborated here (`lake env lean`, which
 writes nothing) in the package that holds the libraries it imports, once `lake build` has built there the modules it imports;
-and whole_run.py, whose inputs come from sampled proofs' difftest module, still writes a run that its own check accepts.
+and whole_run.py, whose inputs come from SPOT's difftest module, still writes a run that its own check accepts.
 The ledger replay's two generators are held the same way to the references they write their inputs with: the challenger
 still accepts ledger_replay.py's ledger, and PoUW's period check replays.py's period.
 
@@ -30,7 +30,7 @@ ROOT = HERE.parents[1]
 #: requires Flock's package by path). A main goes in the first that holds every library it imports, so a main that reads
 #: Flock alone builds neither of the others.
 PACKAGES = (("verity/protocols/proofs/flock/verifier", {"Flock"}),
-            ("verity/protocols/policy/inference_only/verifier/nci/lean", {"NciCheck", "Flock"}),
+            ("verity/protocols/policy/inference_only/verifier/lean", {"InferenceOnlyCheck", "Flock"}),
             ("verity/protocols/proofs/spot/verifier/lean", {"Spot", "Flock"}))
 MAINS = sorted(p.parent.name for p in HERE.glob("*/Main.lean"))
 assert MAINS, f"no <name>/Main.lean under {HERE}: this suite would hold nothing"

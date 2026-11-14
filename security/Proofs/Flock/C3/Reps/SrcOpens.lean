@@ -114,7 +114,7 @@ theorem colOf_mask {S : ℕ} {Vs : Fin S → VStmt} (i : ℕ) (Xs : (j : Fin S) 
 end cols
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
   {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {sh : Flock.Shape}
 
 local notation "ℐ" => holoInnerAt T CT st hp

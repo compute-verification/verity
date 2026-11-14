@@ -5,7 +5,6 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
                          | --sessions N [--windows W] [--window-ms MS] [--samples S])
                          [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L]
-                         [--model ROLE [--engines E] --arena-blocks A]
     vy-verifier-gate status [RUN] | fetch RUN [--transcripts] | replay RUN | stop RUN | close NODE_HEX
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-verifier-gate` (`command=`),
@@ -41,33 +40,16 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
-- **A bound run** (`--model ROLE --arena-blocks A [--engines E]`, ROLE of [A-Z0-9_], E 1..8 and verifier.py's 8 by
-  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
-  `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
-  adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
-  pinned tree (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
-  challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
-  when the role has no directory there or the pinned tree has no `models.json`; verifier.py then holds every file the
-  role's entry pins to its SHA-512 before it listens, and refuses a role the pin lacks. `<models>` is `verifier.json`'s
-  `models`, default `/var/lib/vy-verifier/models`. Infra provisions a role's directory: every file the role's entry
-  pins, at the pinned revision, as a root-held regular file (0644, in a root-held 0755 directory), copied out of a
-  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which
-  `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
-
-      hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q
-      install -d -m 0755 -o root -g root /var/lib/vy-verifier/models/QWEN25_32B_BF16
-      install -m 0644 -o root -g root /tmp/q/* /var/lib/vy-verifier/models/QWEN25_32B_BF16/
-
-  The files are held to the pin, not to where they came from: a run binds to the role once the pinned tree's
-  `models.json` pins it.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/protocols/accounting/poub/verifier/lean/tests/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/accounting/pous/verifier/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--minutes M]` the remote bandwidth audit's P2
-  party (`verity/protocols/accounting/poub/verifier/p2_party.py`, port 47612, with the registration the host names), as
+  (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M]` PoUB's
+  P2 party (`verity/protocols/accounting/poub/verifier/p2_parties.py`, port 47612, with the registration the host
+  names; with `--session SID`, the session id the auditor gives the memory challenger, it signs the session's close with
+  the block challenger's key and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
@@ -100,7 +82,7 @@ tar (`receive`), refusing the hand-off by a member's name before writing its byt
 a second copy, a file the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node
 wrote. Then it runs
 `served_verdicts.sh compose` in the pinned tree on that copy (`compose_env`: the tree built at its pin, `COMPOSE_BUILT`, its
-prebuilt sampled proofs Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
+prebuilt SPOT Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
 `FOLLOW_ANY_TREE`, the pin line's `on` as the record's `tree_on`) within `COMPOSE_MINUTES`, and answers one JSON line: the
 pin, and its $OUT's files (the final record, the composite's public part and the verdict lines, each in its published
 form), never its serve-dir copy, whose private outputs stay in the removed scratch. One compose runs at a time, none while a
@@ -162,17 +144,10 @@ SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
         "--minutes": MINUTES}
 DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--pace-pass-ms": (0.0, 1_000.0)}
-ROLE = re.compile(r"[A-Z0-9_]{1,64}")
-STORE = {"--engines": (1, 8), "--arena-blocks": (1, 1 << 25)}
-"""A bound run's store: its arenas, one a GPU of the node's 8, and each arena's 4 KiB blocks, at most 128 GiB (an RTX
-PRO 6000 has 96 GB of HBM)."""
-STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
-MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.json")
-"""Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
-PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.verifier.wipe_party", 47611),
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.device.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
-           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_party", 47612)}
-PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
+           "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
+PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""
 SESSION_ID = re.compile(r"[0-9a-f]{64}")
@@ -199,7 +174,7 @@ COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
 COMPOSE_ANSWER_BYTES = 64 << 20
 """The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
-SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin/vstar-recursive")
+SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.lake/build/bin/vstar-recursive")
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
@@ -251,11 +226,6 @@ class Host:
 
     def settings(self) -> dict:
         return json.loads(self.config.read_text())
-
-    def models(self, settings: dict) -> Path:
-        """Where infra keeps each bound role's checkpoint, `<models>/<ROLE>/`: `verifier.json`'s `models`, else
-        `root/models`."""
-        return Path(settings.get("models") or self.root / "models")
 
 
 COMPOSE_HOST = Host(root=Path("/var/lib/vy-compose"), config=Path("/etc/vy/compose.json"),
@@ -355,7 +325,7 @@ def parse_run(argv: list[str], settings: dict) -> dict:
     for flag in ("--peer", "--port", "--period", "--pin"):
         p.add_argument(flag, required=True)
     p.add_argument("--paced", nargs="+")
-    for flag in (*INTS, *DECIMALS, "--quantile", "--model", *STORE):
+    for flag in (*INTS, *DECIMALS, "--quantile"):
         p.add_argument(flag)
 
     def refuse(why: object) -> None:
@@ -405,41 +375,13 @@ def parse_run(argv: list[str], settings: dict) -> dict:
         raise Refused("run: --paced SPEC ... or --sessions N")
     elif "pace-pass-ms" in req:
         raise Refused("--pace-pass-ms is a paced run's")
-    if a.model is not None:
-        if not ROLE.fullmatch(a.model):
-            raise Refused(f"--model {a.model!r}: a role of core's pin ({MODEL_PINS}), 1 to 64 of [A-Z0-9_]")
-        req["model"] = a.model
-    for flag, (lo, hi) in STORE.items():
-        v = getattr(a, flag[2:].replace("-", "_"))
-        if v is not None:
-            if a.model is None:
-                raise Refused(f"{flag} shapes a bound run's store: it comes with --model ROLE")
-            if not STORE_INT.fullmatch(v) or not lo <= int(v) <= hi:
-                raise Refused(f"{flag} {v!r}: an integer, {lo} to {hi}")
-            req[flag[2:]] = int(v)
-    if a.model is not None and "arena-blocks" not in req:
-        raise Refused("--model needs --arena-blocks A, each arena's blocks (verifier.py's)")
     return req
-
-
-def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tuple[Path, Path]:
-    """A bound run's checkpoint, the host's `<models>/<ROLE>/`, and its pin, core's `models.json` in the pinned tree;
-    refused when either is missing. Neither is the request's: the role names both."""
-    checkpoint, pin = host.models(settings) / role, tree / MODEL_PINS
-    if not checkpoint.is_dir():
-        raise Refused(f"--model {role}: this host has no {checkpoint}, the role's checkpoint (infra provisions it, "
-                      "root-held regular files)")
-    if not pin.is_file():
-        raise Refused(f"--model {role}: the pinned tree has no {MODEL_PINS}, core's pin of each role, which the "
-                      "verifier binds the store to")
-    return checkpoint, pin
 
 
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
-    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
-    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
@@ -457,12 +399,6 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
     for key in ("host_bytes", "hbm_bytes", "ingress_bytes_per_s"):
         if key in node:
             argv += ["--" + key.replace("_", "-"), str(node[key])]
-    if "model" in req:
-        checkpoint, pin = bound_paths(host, settings, req["model"], tree)
-        argv += ["--model", req["model"], "--checkpoint", str(checkpoint), "--pin", str(pin)]
-        for key in STORE:
-            if key[2:] in req:
-                argv += [key, str(req[key[2:]])]
     if "paced" in req:
         argv += ["--paced", *req["paced"]]
     return argv
@@ -651,14 +587,16 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
-    or `--fixture` (`PARTY_FIXED`'s), one of them, and nothing of `challenger_party`'s; never a path, an address or an egress count (the
-    session signs none, and `wipe_party` takes none)."""
+    or `--fixture` (`PARTY_FIXED`'s), one of them, and `--session SID` (the session id its close is signed under, by the
+    block challenger's key and session log), and nothing of `challenger_party`'s; never a path, an address or an egress
+    count (the session signs none, and `wipe_party` takes none)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
     while args:
         flag = args.pop(0)
-        if verb == "bw_party" and flag in ("--pous-session", "--fixture") and extra:
+        held = {"--pous-record", "--registration"} & set(extra)
+        if verb == "bw_party" and flag in ("--pous-session", "--fixture") and held:
             raise Refused("bw_party holds one store: --pous-session SID or --fixture, once")
         if verb == "bw_party" and flag == "--pous-session" and args:
             sid = args.pop(0)
@@ -667,6 +605,12 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
             extra += ["--pous-record", str(host.parties / PARTIES["challenger_party"][0]), "--pous-session", sid]
         elif verb == "bw_party" and flag == "--fixture":
             extra += PARTY_FIXED[verb]
+        elif verb == "bw_party" and flag == "--session" and args and "--session" not in extra:
+            sid = args.pop(0)
+            if not SESSION_ID.fullmatch(sid):
+                raise Refused(f"bw_party --session takes the session id the auditor gives the memory challenger, 64 "
+                              f"lowercase hex digits; got {sid!r}")
+            extra += ["--challenger", str(host.parties / PARTIES["challenger_party"][0]), "--session", sid]
         elif verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
             extra += ["--streamer", "build"]
         elif verb == "wipe_party" and flag in PARTY_INTS and args and flag not in extra:
@@ -676,11 +620,12 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                 raise Refused(f"{verb} {flag} takes an integer in [{lo}, {hi}], got {v!r}")
             extra += [flag, v]
         else:
-            takes = {"wipe_party": "[--reads K] [--native] [--threads T]", "bw_party": "--pous-session SID | --fixture"}
+            takes = {"wipe_party": "[--reads K] [--native] [--threads T]",
+                     "bw_party": "(--pous-session SID | --fixture) [--session SID]"}
             raise Refused(f"{verb} takes {takes.get(verb, 'no flags')}; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
-    if verb == "bw_party" and not extra:
+    if verb == "bw_party" and not {"--pous-record", "--registration"} & set(extra):
         raise Refused("bw_party names no store: --pous-session SID holds the store the block challenger kept for PoUS "
                       "session SID, --fixture the fixture store's (a key whose forced command drops the caller's words "
                       "gives neither)")
@@ -794,7 +739,7 @@ def gate_party_log(rest: list[str], host: Host) -> dict:
     return {"party": rest[0], "log": rest[1], "lines": lines}
 
 
-KEYGEN = "import sys; from verity.protocols.accounting.pous.verifier import period; print(period.challenger(sys.argv[1]).public_key.hex())"
+KEYGEN = "import sys; from verity.protocols.accounting.pous.device import onsite; print(onsite.device_key(sys.argv[1]).public_key.hex())"
 
 
 def gate_party_key(rest: list[str], host: Host, *, own: Callable[[Path], None],
@@ -992,7 +937,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
 
 def compose_env(host: Host, scratch: Path, pinned: str, on: str | None, tree: Path = TREE) -> dict[str, str]:
     """`served_verdicts.sh compose`'s environment on the copy in `scratch`: the pinned tree built at its pin (its venv,
-    and its sampled proofs Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
+    and its SPOT Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
     pinned it from) whatever tree served, every scratch path under `scratch`."""
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(host.root), "LANG": "C.UTF-8",
            "D": str(scratch / "serve"), "OUT": str(scratch / "out"), "SERVE_ROOT": str(scratch / "root"),
@@ -1073,9 +1018,9 @@ def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on
 
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
-         "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
+         "| replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
-         "| bw_party (--pous-session SID | --fixture) [--minutes M] (the request line on stdin) "
+         "| bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous|bw [LOG] (root on the host only)")
 PARTY_LOG_REFUSED = ("party_log is read on the host only (sudo vy-verifier-gate party_log ...), never over ssh: a party's "

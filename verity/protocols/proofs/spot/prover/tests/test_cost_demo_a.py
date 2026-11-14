@@ -18,7 +18,7 @@ from verity.protocols.accounting.pouw.verifier.window import k_prime
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
 from verity.protocols.proofs.spot.verifier.consumers import location_bits
 from verity.protocols.proofs.spot.prover.optimize import Objective, certify
-from verity.commitments.windows.interface import K_MAX
+from verity.commitments.periods.interface import K_MAX
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 
@@ -101,10 +101,10 @@ def test_the_risk_is_cores_remembered():
 
 
 def test_location_is_location_bits_at_the_exact_count():
-    law = Stratified((Stratum("a", 400, 30), Stratum("b", 90, 9)))
-    profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, 0.01)
-    assert D.location(law.population, law.count_bound(0.01)) == location_bits(profile)
-    assert floor(law.harm_bound({"a": 1.0, "b": 1.0}, 0.01)) >= law.count_bound(0.01)
+    sampling_design = Stratified((Stratum("a", 400, 30), Stratum("b", 90, 9)))
+    profile = IntegrityProfile(("unit",), (sampling_design.population,), {"unit": sampling_design}, 0.01)
+    assert D.location(sampling_design.population, sampling_design.count_bound(0.01)) == location_bits(profile)
+    assert floor(sampling_design.harm_bound({"a": 1.0, "b": 1.0}, 0.01)) >= sampling_design.count_bound(0.01)
 
 
 def test_the_certificate_is_certifys_on_small_strata():
@@ -158,10 +158,10 @@ def test_m3_draws_a_uniform_eight_and_certifies_the_heaviest_units():
     o = D.m3()
     assert o["of_block"] == o["cost"] / D.SHAPE.block_s > 0
     assert o["of_budget"] == pytest.approx(o["of_block"] / D.BUDGET_SHARE)
-    law = Stratified.uniform(o["units"], D.M3_UNITS)
+    sampling_design = Stratified.uniform(o["units"], D.M3_UNITS)
     for d in D.DELTAS:
         at = o["at"][str(d)]
-        assert at["wrong_units"] == floor(law.harm_bound({"unit": 1.0}, d))
+        assert at["wrong_units"] == floor(sampling_design.harm_bound({"unit": 1.0}, d))
         assert at["wrong_units"] == pytest.approx(o["units"] * (1 - d ** (1 / D.M3_UNITS)), rel=3e-6)
         assert 0 < at["work_share"] < 1 and 0 < at["bits_share"] <= 1
     assert o["at"]["1e-06"]["free_compute"] > o["at"]["0.01"]["free_compute"]

@@ -149,7 +149,7 @@ theorem ligerito_of_residuals_at {sh : Shape} {w comb : Array F128} {cons : Nat 
               (RecAlgebra.Val.zero, RecAlgebra.Val.zero)) }
           (3 + (sh.m - 6) + 3 + (sh.kLog - 6) + (2 + extras.size) + 1) (CoinSource.ofRounds rounds) =
         .ok (((info.lg.initCh, info.lg.levels, ext), st), k') ∧
-      (CoinSource.ofRounds rounds).drawnAll k' = true ∧ st.msg = (decoded sh w comb cons).msgs.size ∧
+      (CoinSource.ofRounds rounds).sampledAll k' = true ∧ st.msg = (decoded sh w comb cons).msgs.size ∧
       st.ood = (decoded sh w comb cons).ood.size ∧ info.lg.conss = st.conss ∧
       FinalOK sh.sched info.rs.sws (decoded sh w comb cons).yr info.lg.initCh info.lg.levels ext st := by
   obtain ⟨rs', k, hrun, hres'⟩ := RecAlgebra.residuals_eq_run w comb cons hrows hS hw hc hacc

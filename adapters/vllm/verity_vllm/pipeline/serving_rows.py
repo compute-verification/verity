@@ -1,6 +1,6 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.commitments.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
@@ -18,7 +18,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": <a rate> | "subset:K" | "stratified:K" |
 "work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?:
 {<descriptor id>: cap}, "row_tables"?: true, "zk"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
-(`service.params_law`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
+(`service.params_sampling_design`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
 the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
@@ -136,8 +136,8 @@ from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import history_tables as H, index as IX, row_tables as RTB, step_rows
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import expert_rows as EX, gemm_rows as GM, history_rows as HR
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
@@ -426,7 +426,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     table = work_table_of(law, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    law, table = SV.params_law(law["rate"], program, query, table) if "rate" in law else (law, table)
+    law, table = SV.params_sampling_design(law["rate"], program, query, table) if "rate" in law else (law, table)
     window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:

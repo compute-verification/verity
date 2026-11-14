@@ -555,7 +555,7 @@ theorem shape_claims {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape?
       rw [← h]
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n4's read fact from the rows) `OpeningRead`**, at every accepted outcome where the `rec-opening` unit's
 residuals are all zero on the S and v `RecCoins.opening` builds at R's coins (two claims of value zero, the passes

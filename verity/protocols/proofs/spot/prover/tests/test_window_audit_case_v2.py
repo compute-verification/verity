@@ -93,7 +93,7 @@ def test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its
 def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other_members(tmp_path):
     """`v2_proof` names the one sampled member's statement, its circuit pin, the public file's digest it was staged
     with and its registered file, read; the window's other members and its registered circuit record add nothing to it:
-    v2 holds that public file's units to the registration's population, so a window of several members is refused
+    v2 holds that public file's units to the docket's population, so a window of several members is refused
     there, never given a form of its own."""
     def member(k: int, base: int, n: int, reads: dict | None = None) -> dict:
         d = tmp_path / f"m{k}"
@@ -123,7 +123,7 @@ def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other
     assert held["proof"] == got["proof"]
 
 
-def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
+def test_v2_names_the_public_file_as_it_was_staged_before_the_sample(tmp_path):
     """The case's public digest is the one a5 took when it staged the member, before the sample, never the file's digest
     read after it: a public file changed since names another file, which v2 finds in no blob."""
     (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
@@ -204,7 +204,7 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
 
 
 def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
-    """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    """SPOT refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
     monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
@@ -313,7 +313,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     sample that ends can miss it, its fewest none. Under `subset:2` a sample that ends holds at most 2 of a member, one
     count of link points, and can miss each of the three, so each is recorded refused (one that runs out of coins fails
     the window: `a5.draw_ran_out`). Under `subset:39` a sample that ends misses none and gives each one count, so none
-    is. A sampling design that doesn't apply refuses every member, recorded with why. The registration's check is
+    is. A sampling design that doesn't apply refuses every member, recorded with why. The docket's check is
     handed those members (`a5.link_members`), and refuses the recorded ones, where the audit's case is of the
     per-member form (`a5.per_member`): several members under `--zk` sessions, where `a5.members_proof` writes one."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
@@ -342,24 +342,24 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 
 
-def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
-    """`a5.link_points` records the registration's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
-    which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
+def test_a5_records_a_sampling_design_none_of_whose_samples_ends(monkeypatch):
+    """`a5.link_points` records the docket's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
+    which `coins.sampling_design_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
-    monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
+    monkeypatch.setattr(a5.CC, "sampling_design_problem", lambda sampling_design, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
     assert a5.link_points({"k": 41, "law": "subset"}, 40, [m]) == {"members": 1, "error": LP.NEVER_ENDS}
 
 
-def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
+def test_a5_records_whether_the_sample_ran_out_of_the_challengers_coins():
     """`a5.draw_ran_out`, which fails the window: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
     no word; a sampling design that doesn't apply records why."""
-    law = {"k": 9, "law": "subset"}
-    assert a5.draw_ran_out(law, 10, bytes(64)) is True
-    assert a5.draw_ran_out(law, 10, bytes(256)) is False
+    sampling_design = {"k": 9, "law": "subset"}
+    assert a5.draw_ran_out(sampling_design, 10, bytes(64)) is True
+    assert a5.draw_ran_out(sampling_design, 10, bytes(256)) is False
     assert a5.draw_ran_out({"k": 11, "law": "subset"}, 10, bytes(256)) == "a subset draw of 11 exceeds the population of 10"
 
 

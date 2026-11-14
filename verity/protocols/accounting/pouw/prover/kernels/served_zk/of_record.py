@@ -20,6 +20,10 @@ A disagreement raises `Disagree`, which the challenger turns into the refusal ``
 is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
 or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
 undone.
+
+Verity imports neither Lean's executables nor the canonical JSON the two sides are compared in (`verity_difftest`): a
+`Record`'s `canonical` and `start` raise here, and `benchmarks/pouw/served_zk/of_record_lean.py`'s `Record` supplies
+them.
 """
 from __future__ import annotations
 
@@ -30,8 +34,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-import verity_difftest as D
-
 from verity.circuits import codec
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as V
@@ -39,8 +41,13 @@ from verity.protocols.accounting.pouw.verifier import verifier as V
 REPO = Path(__file__).resolve().parents[7]
 POUW = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 PIECES = REPO / "verity/protocols/proofs/spot/verifier/lean"
+CALLER = REPO / "verity/protocols/proofs/spot_flock/verifier/lean"
 DISAGREE = "lean-python-disagree"
-CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "prelude", "answer")
+NEEDS_DIFFTEST = ("Record.{} needs verity_difftest, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
+                  "benchmarks/pouw/served_zk/of_record_lean.py's Record supplies it")
+#: a check's outcome on one input: ``("output", its canonical JSON)`` or ``("reject", why)``
+Outcome = tuple[str, str]
+CHECKS = ("registered", "registration", "caller", "public", "pass", "draw", "opening", "prelude", "answer")
 
 
 class Disagree(Exception):
@@ -53,22 +60,11 @@ class Disagree(Exception):
         return f"{DISAGREE}: {self.check}"
 
 
-def hexed(j: Any) -> str:
-    return D.canonical(j).encode().hex()
-
-
-def _python(f: Callable[[Any], Any], x: Any) -> D.Outcome:
-    try:
-        return "output", D.canonical(f(copy.deepcopy(x)))
-    except (ValueError, TypeError, KeyError) as e:
-        return "reject", f"{type(e).__name__}: {e}"
-
-
-def _same(lean: D.Outcome, py: D.Outcome) -> bool:
+def _same(lean: Outcome, py: Outcome) -> bool:
     return lean == py if lean[0] == "output" else py[0] == "reject"
 
 
-def _value(o: D.Outcome) -> Any:
+def _value(o: Outcome) -> Any:
     return json.loads(o[1]) if o[0] == "output" else {"refused": o[1]}
 
 
@@ -153,18 +149,37 @@ def py_draw(x: dict) -> dict | None:
 class Record:
     """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
     `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
-    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
+    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``,
+    ``spot-flock-caller``)."""
 
     def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
         self.lean = V.RECORD_VERDICT == "lean" if lean is None else lean
         self.exes = dict(exes or {})
         self.witness: list[dict] = []
-        self._servers: dict[str, D.Server] = {}
+        self._servers: dict[str, Any] = {}
 
-    def _server(self, exe: str, package: Path, *args: str) -> D.Server:
+    def canonical(self, j: Any) -> str:
+        """The canonical JSON text of `j` (`verity_difftest.canonical`, as `Flock.canon` writes it); `TypeError` outside
+        its domain."""
+        raise NotImplementedError(NEEDS_DIFFTEST.format("canonical"))
+
+    def start(self, exe: str, package: Path, *args: str) -> Any:
+        """A server of Lean's executable `exe` in the Lake package `package`, with `args` (`verity_difftest.Server` on
+        `self.exes`' path for it, or its `build`)."""
+        raise NotImplementedError(NEEDS_DIFFTEST.format("start"))
+
+    def hexed(self, j: Any) -> str:
+        return self.canonical(j).encode().hex()
+
+    def _python(self, f: Callable[[Any], Any], x: Any) -> Outcome:
+        try:
+            return "output", self.canonical(f(copy.deepcopy(x)))
+        except (ValueError, TypeError, KeyError) as e:
+            return "reject", f"{type(e).__name__}: {e}"
+
+    def _server(self, exe: str, package: Path, *args: str) -> Any:
         if exe not in self._servers:
-            path = self.exes.get(exe) or D.build(package, exe)
-            self._servers[exe] = D.Server([str(path), *args])
+            self._servers[exe] = self.start(exe, package, *args)
         return self._servers[exe]
 
     def close(self) -> None:
@@ -178,7 +193,7 @@ class Record:
 
     def _piece(self, check: str, exe: str, package: Path, fn: str, x: Any, reference: Callable[[Any], Any]) -> Any:
         """Lean's output on `x` (`{"refused": why}` for an input it refuses), once Python's agrees."""
-        py = _python(reference, x)
+        py = self._python(reference, x)
         if not self.lean:
             self._note(check, _value(py), None, None)
             return _value(py)
@@ -199,6 +214,13 @@ class Record:
         out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: registration_answer(python()))
         return out.get("codes", ["registration"])
+
+    def caller(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
+        """The caller's codes (`VStar.Recursive.Caller.check`) for `record` against `params`, the registration's;
+        `python` is the reference's call (`caller.check`), its `Verdict`."""
+        out = self._piece("caller", "spot-flock-caller", CALLER, "caller", {"params": params, "record": record},
+                          lambda _: {"codes": list(python().codes)})
+        return out.get("codes", ["caller"])
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:
         """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``
@@ -232,12 +254,12 @@ class Record:
             self._note("answer", py, None, None)
             return py
         lean = self._server("pouw-check", POUW, "serve").exchange(case)
-        same = D.canonical(lean) == D.canonical(py)
+        same = self.canonical(lean) == self.canonical(py)
         self._note("answer", py, lean, same)
         if not same:
             raise Disagree("answer", lean, py)
         return lean
 
 
-__all__ = ["CHECKS", "DISAGREE", "Disagree", "Record", "core_params", "hexed", "public_params", "registration_params",
+__all__ = ["CHECKS", "DISAGREE", "Disagree", "Outcome", "Record", "core_params", "public_params", "registration_params",
            "service_answer"]

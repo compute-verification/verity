@@ -80,7 +80,7 @@ at every R, and a `static_assert` bounds R to 1..64.
 - **The CPU reference has no dial.** `egemm_ref.py` recomputes the one-round fold. A receipt at R > 1 is checked on the
   device only (the product against cuBLASLt and the poisoned control), until `xin_receipts` and `xin13_receipts` loop
   their absorb as the kernel does.
-- **What `egemm_depthr_check.py` tests.** For the same-word R-round fold it searches one family of changes to a committed
+- **What `benchmarks/pouw/theory/egemm_depthr_check.py` tests.** For the same-word R-round fold it searches one family of changes to a committed
   word (5n + 2 a word at width n: each limb's single bit flips, a +1 on the two added limbs, a paired flip on the two
   XOR-in limbs) for a change that no state sees: at width 8 over every odd key pair, at widths 10 and 12 over keys the
   reduced `key_ok_r11` admits, and at 32 bits on sampled states, for R up to 5. It passes when it finds none on a key
@@ -102,25 +102,24 @@ at every R, and a `static_assert` bounds R to 1..64.
 | `egemm.cu`, `cgemm.cu`, `cwgemm.cu`, `cpv.cu`, `apv.cu`, `fattn.cu`, `d2sgemm.cu`, `egemm80.cu`, `prof.cu` | the kernels and their drivers; each header defines its arms and its commands |
 | `*_ref.py` | the CPU references: each recomputes its kernel's gate dump from the inputs and the key alone |
 | `receipt_folds_r9.py` | the reference of the two receipt folds below duo, which `egemm_ref.py` loads only at its pinned sha256: it is not edited |
-| `egemm_depthr_check.py` | the search above; `python3 egemm_depthr_check.py` runs it and exits 0 when every check passes |
-| `eps_profile.py`, `vprod_profile.py` | a run's `ncu` sections as executed instructions by class, against the ACCEL model |
 | `summary.py`, `prof_summary.py`, `egemm80.py` | `run.sh`'s, `profile.sh`'s and `run80.sh`'s summaries; `egemm80.py gate` is the sm_80 SASS gate |
-| `flash_ref.py` | plain attention's time under torch, `fattn.cu`'s baseline |
-| `tests/` | the suite `uv run tools/verity/check/suites.py verity/protocols/accounting/pouw/prover/kernels/edited_gemm` runs: the eight CPU judges of the kernels' gates (`egemm_ref.py`, `cgemm_ref.py`, `cwgemm_ref.py`, `cpv_ref.py`, `apv_ref.py`, `fattn_ref.py`, `egemm80_ref.py`, `d2sgemm_ref.py`) on made-up gate directories, `egemm_ref.py` against the receipts reference, the summaries, `eps_profile.py` (priced with the ACCEL model's census) and `vprod_profile.py` on made-up run directories, `egemm80.py`'s SASS gate, the depth-R check, and that a reference started by its path leaves `sys.path` and the module names `derive` and `ref` alone |
+| `tests/` | the suite `uv run tools/check/suites.py verity/protocols/accounting/pouw/prover/kernels/edited_gemm` runs: the eight CPU judges of the kernels' gates (`egemm_ref.py`, `cgemm_ref.py`, `cwgemm_ref.py`, `cpv_ref.py`, `apv_ref.py`, `fattn_ref.py`, `egemm80_ref.py`, `d2sgemm_ref.py`) on made-up gate directories, `egemm_ref.py` against the receipts reference, the summaries, `egemm80.py`'s SASS gate, and that a reference started by its path leaves `sys.path` and the module names `derive` and `ref` alone |
 
 ## What other code reads
 
 `egemm.cu` and `prof.cu` include `masked_gemm/lpgemm.cu`; `cgemm.cu` and `d2sgemm.cu` include `egemm.cu`; `cwgemm.cu`,
 `cpv.cu` and `apv.cu` include `cgemm.cu`; `fattn.cu` includes `apv.cu`. Four references (`egemm_ref.py`, `cgemm_ref.py`,
 `d2sgemm_ref.py`, `egemm80_ref.py`) load `floored_gemm/derive.py` from its file for its `tile_receipts`, putting
-nothing on `sys.path`, and the Dither-C and P V references recompute through
-`benchmarks/pouw/theory/checked_strip.py`, which `cgemm_ref.py` loads the same way. Inside the directory,
-`cwgemm_ref.py`, `cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, `apv_ref.py` imports `cpv_ref.py`'s
-`patch_cols`, and `vprod_profile.py` imports `eps_profile.py`; each module another script imports lists in `__all__`
+nothing on `sys.path`, and the Dither-C and P V references recompute through `co_words.py` (the words
+`benchmarks/pouw/theory/checked_strip.py` analyses, which loads it back), which `cgemm_ref.py` loads the same way. Inside the directory,
+`cwgemm_ref.py`, `cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, and `apv_ref.py` imports `cpv_ref.py`'s
+`patch_cols`, as `verity`'s modules; each module another script imports lists in `__all__`
 what they read of it (the suite's tests read more of a module than its list). From outside the directory,
 `verity/protocols/accounting/pouw/verifier/receipts/receipt_conform.py --adopter egemm_ref` checks `egemm_ref.py`'s `xin_keys`,
-`xin13_receipts` and `tile_receipts` (the suite runs that check too), `benchmarks/pouw/theory/`'s fold checks import
-`egemm_depthr_check.py`'s `key_ok_r11` and `key_ok_r11_32`, `adapters/vllm/tests/engine/` loads `fattn_ref.py` by path
+`xin13_receipts` and `tile_receipts` (the suite runs that check too), `adapters/vllm/tests/engine/` loads `fattn_ref.py` by path
 as the int8 attention's oracle, and the ACCEL model's honest profiles under `benchmarks/machine_model/data/` are
-written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The Python here touches no GPU but `flash_ref.py`;
-the job scripts do the rest.
+written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The Python here touches no GPU; the job scripts do
+the rest. What measures these kernels rather than judging them is in `benchmarks/pouw/edited_gemm_profile/`:
+`eps_profile.py` and `vprod_profile.py` (a run's `ncu` sections as executed instructions by class, against the ACCEL
+model) and `flash_ref.py` (plain attention's time under torch, `fattn.cu`'s baseline), which the job scripts run from
+there, with their tests in the pouw suite.

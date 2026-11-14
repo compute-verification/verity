@@ -24,9 +24,11 @@ from verity.circuits import codec
 from verity.circuits.refs import Affine, Strided
 
 from verity_vllm.check import gates as G
+from verity_vllm.errors import Refused
 from verity_vllm.observe import events as EV
 from verity_vllm.observe import log as LOG
 from verity_vllm.observe.fold import fold as FOLD
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import MoEFusedExpertsPadded
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.pipeline import match_fold as MF
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -39,10 +41,6 @@ REQUESTS = [{"request_id": "r0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}
 ROOTS = [("model.w", "weight"), ("model.w", "weight"), ("scale.x", "weight"), ("model.b", "buffer"), ("scale.y", "buffer"), ("prompt[r0]", "prompt_token"),
          ("prompt[r1]", "prompt_token"), ("pos", "position"), ("one", "const")]
 SUMMARY = {"spec": {"Add": 2, "Mul": 2}, "error_classes": {"opaque": 1}, "error_examples": ["e"], "params": 9, "ret_type": "Array"}
-
-
-class MoEFusedExpertsPadded:
-    """A pattern by the name the summary reads the scope's pattern from."""
 
 
 class Linear:
@@ -157,7 +155,7 @@ def test_a_declared_moe_construction_folds_under_the_profile_s_hook_and_is_refus
 
     def hook(profile, construction):
         hooked.append((profile.patterns, construction))
-        return _profile(MoEFusedExpertsPadded())
+        return _profile(MoEFusedExpertsPadded(config={}))
 
     base = _profile(Linear())
     profiles("hooked", PROFILE=base, with_moe_construction=hook)
@@ -185,7 +183,7 @@ def test_the_programs_options_reach_the_profile_and_a_pouw_run_folds_pouw_s_call
     assert calls[-1]["profile"].registered_values is True and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["PouwLinear", "Linear"]
     MF.fold_summary_result(_log(tmp_path, notes={"protocols": ["other:x"]}), "stand_in")
     assert calls[-1]["profile"].registered_values is False and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["Linear"]
-    with pytest.raises(SystemExit, match=r"^sampler construction 'no-such' is not one of \["):
+    with pytest.raises(Refused, match=r"^sampler construction 'no-such' is not one of \["):
         MF.fold_summary_result(tmp_path / "no-log-is-read.jsonl.gz", "stand_in", sampler_construction="no-such")
 
 

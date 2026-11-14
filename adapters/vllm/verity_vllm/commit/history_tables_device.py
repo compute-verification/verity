@@ -1,5 +1,5 @@
 """`history.HistoryTable` on the GPU (`Table` with a ``device``) and its CPU twin (`Table` without one): a history table's tree
-built, appended to and opened by `row_table.cuh`'s history functions (in `row_table_kernels.CUDA_DIR`), the device's through
+built, appended to and opened by `row_table.cuh`'s history functions (in PoUW's `kernels/pouw_cuda/`, `serving.ROW_TABLE_CUDA_DIR`), the device's through
 `row_table.cu`'s ``rt_hist_*`` kernels and the twin's through `row_table_host.cpp`, the same build `row_tables_device` loads.
 
 A `Table` reads as `history.HistoryTable` does where `commit.history_tables.Histories` reads one (its ``make``): ``rows``,
@@ -20,13 +20,21 @@ import numpy as np
 from verity.commitments import history as HT
 from verity.commitments import hm96
 
-from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as D
+from verity.protocols.accounting.pouw.prover.serving import (
+    ROW_TABLE_SEG_BYTES,
+    RowTableLibrary,
+    hm_tables,
+    leaf_prefixes,
+    row_table_host_lib,
+    u64_words,
+)
 
 __all__ = ["Hist", "Table"]
 
 SALT_BYTES = hm96.SHA512.salt_bytes
 #: a row's bytes at most (`row_table.cuh`'s ``HIST_MAX_SEGS`` segments)
-MAX_ROW_BYTES = 8 * D.SEG_BYTES
+MAX_ROW_BYTES = 8 * ROW_TABLE_SEG_BYTES
+_u32, _u64 = (np.ctypeslib.ndpointer(t, flags="C_CONTIGUOUS") for t in (np.uint32, np.uint64))
 
 
 class Hist(ctypes.Structure):
@@ -41,11 +49,11 @@ _hp = ctypes.POINTER(Hist)
 
 @cache
 def _host() -> ctypes.CDLL:
-    lib = D.host_lib()
-    lib.rt_hist_init_host.argtypes = [_hp, D._u64]
-    lib.rt_hist_append_host.argtypes = [_hp, ctypes.c_uint64, ctypes.c_uint32, ctypes.c_void_p, D._u64, D._u64, D._u64,
-                                        D._u64, D._u32]
-    lib.rt_hist_paths_host.argtypes = [_hp, D._u64, D._u32, ctypes.c_uint32, D._u64]
+    lib = row_table_host_lib()
+    lib.rt_hist_init_host.argtypes = [_hp, _u64]
+    lib.rt_hist_append_host.argtypes = [_hp, ctypes.c_uint64, ctypes.c_uint32, ctypes.c_void_p, _u64, _u64, _u64,
+                                        _u64, _u32]
+    lib.rt_hist_paths_host.argtypes = [_hp, _u64, _u32, ctypes.c_uint32, _u64]
     for f in (lib.rt_hist_init_host, lib.rt_hist_append_host, lib.rt_hist_paths_host):
         f.restype = ctypes.c_int
     return lib
@@ -84,8 +92,8 @@ class Table:
         self.bcs: list[bytes] = []
         pad = hm96.SHA512.tree_leaf(hm96.SHA512.default_key, HT.placeholder(words))
         h = self._h = Hist()
-        h.did[:] = D._words(self.domain.domain_id).tolist()
-        h.pad[:] = D._words(pad).tolist()
+        h.did[:] = u64_words(self.domain.domain_id).tolist()
+        h.pad[:] = u64_words(pad).tolist()
         h.cap, h.L, h.depth = capacity, 2 * words, capacity.bit_length() - 1
         nodes = 8 * (2 * capacity - 1)
         if device is None:
@@ -97,7 +105,7 @@ class Table:
 
             self._torch = torch
             dev = torch.device("cuda", device) if isinstance(device, int) else torch.device(device)
-            self._dev = D.DeviceLibrary.of(torch, dev.index if dev.index is not None else torch.cuda.current_device())
+            self._dev = RowTableLibrary.of(torch, dev.index if dev.index is not None else torch.cuda.current_device())
             _device(self._dev.lib)
             with torch.cuda.stream(self._dev.stream):
                 self._tree = torch.empty(nodes, dtype=torch.int64, device=self._dev.hm.device)
@@ -138,7 +146,7 @@ class Table:
         bcs, ys = np.zeros(16 * k, dtype=np.uint64), np.frombuffer(salt, dtype="<u4").astype(np.uint32)
         if self._dev is None:
             self._check("rt_hist_append_host", _host().rt_hist_append_host(
-                ctypes.byref(self._h), at, k, host.ctypes.data, D._hm(), D._prefixes(), self._tree, bcs, ys))
+                ctypes.byref(self._h), at, k, host.ctypes.data, hm_tables(), leaf_prefixes(), self._tree, bcs, ys))
         else:
             self._device_append(self._dev, rows if on_device else None, host, at, k, bcs, ys)
         self.rows += [r.copy() for r in host]
@@ -146,7 +154,7 @@ class Table:
         self.bcs += [_bytes(bcs[16 * i:16 * i + 16], ">u8") for i in range(k)]
         return range(at, at + k)
 
-    def _device_append(self, d: D.DeviceLibrary, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray,
+    def _device_append(self, d: RowTableLibrary, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray,
                        ys: np.ndarray) -> None:
         torch = self._torch
         written = torch.cuda.Event()

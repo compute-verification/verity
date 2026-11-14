@@ -19,12 +19,15 @@ import torch
 
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.types import Array, Value as Bits
+from verity.circuits.types import Array
+from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, boundary_windows as BW
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import boundary_windows as BW
 from verity_vllm.records.boundary_tables import ROOTS
 
 RUN = "a" * 128
@@ -350,7 +353,8 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
     alone names and places every table, and both verifiers accept the registration against it, which lists every root
     before any coin. The class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines)
     try:
         finish(sched)
@@ -386,7 +390,8 @@ def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_pat
     block's return under the block's id, a verdict an output, then its tables; both verifiers accept the registration
     against the challenger's copy of the layout, and the class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, _tables, lines = *built(), []
+    make, _tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=SAME, verdicts=True)
     try:
         finish(sched)
@@ -450,8 +455,8 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
         bw.stop()
     finally:
         hooks.uninstall()
-    assert [x["error"] for x in lines] == ["ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
-                                           "are incomplete: step 9: ValueError: no slot"] * 2
+    assert [x["error"] for x in lines] == [("ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
+                                            "are incomplete: step 9: ValueError: no slot")] * 2
     assert not list(tmp_path.rglob(BR.COMMIT))
     L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=CAP)
     entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
@@ -510,7 +515,8 @@ def modes(root) -> set[tuple[str, int]]:
 def kept_window(tmp_path) -> tuple[BT.Kept, list]:
     """`finish`'s window served with rank 0 keeping its tables under ``tmp_path``/node: the kept files and the tables."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     kept = BT.Kept(tmp_path / "node" / "tables")
     bw, sched, hooks = windows(tmp_path / "out", hook.latents, make, lines, kept)
     try:

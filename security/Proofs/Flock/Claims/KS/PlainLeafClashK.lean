@@ -32,7 +32,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Claims.KS.PlainSampleK
 
 /-!
 # The live self-clash at plain SHA-512 leaves, at `VK keep`
@@ -49,10 +49,10 @@ verifier, and is not restated here.
 
 @[expose] public section
 
-namespace Claims.Bridge.PlainDraw
+namespace Claims.Bridge.PlainSample
 
 open _root_.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
-  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtDraw
+  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtSample
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -63,8 +63,8 @@ open DecodeZL HiddenExec HiddenDec in
 theorem clash₀_wrPDHUK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtDK keep I (some (dj S)) (wrPDK keep I (dj S) o))
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
@@ -84,8 +84,8 @@ reps'**, at `keep` (`laterEntries_wrPDHU`). -/
 theorem laterEntries_wrPDHUK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtDK keep I (some (dj S)) (wrPDK keep I (dj S) o))
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
@@ -102,8 +102,8 @@ entries**, at `keep` (`laterClash_wrPDHU`). -/
 theorem laterClash_wrPDHUK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtDK keep I (some (dj S)) (wrPDK keep I (dj S) o))
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
@@ -114,13 +114,13 @@ theorem laterClash_wrPDHUK (keep : Bool → Bool)
     LaterEntriesClashK keep I (dj S) (wrPDK keep I (dj S) o) :=
   laterEntriesClashK_ofU keep (laterEntries_wrPDHUK keep ht hc dj x₀ hT hS R o hacc pend' hp) hcl
 
-end Claims.Bridge.PlainDraw
+end Claims.Bridge.PlainSample
 
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
   Claims.Bridge.Live
 open Lean (Json)
 

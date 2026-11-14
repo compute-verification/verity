@@ -1,7 +1,7 @@
-"""A served window's two-stage audit as `two_stage.py` drives it: one size class's boundary registration
+"""A served window's two-stage audit as `two_stage.py` drives it: one size class's boundary docket
 (`verity_vllm.pipeline.boundary_rows`) on its two-stage stream, sampled on a test's own challenger (`fake_challenger`);
 the replay side's stream again from ``stage1.json`` alone, sampling the same spans on the bytes the first stage read; the
-interior registration over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what
+interior docket over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what
 `resume` refuses. A toy check template of one gate's worth."""
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def _class(check=PAIR, inline: bool = False) -> BR.Committed:
 
 
 def _interior(layout: BR.Layout, previous: str, program: Program | None = None) -> tuple[dict, dict]:
-    """The replay side's interior registration over the Q sampled spans' proof blocks (PAIR's instances, or
+    """The replay side's interior docket over the Q sampled spans' proof blocks (PAIR's instances, or
     ``program``'s, a window of templates'), at stand-in roots."""
     m = Q * P.units(Program(layout.replay), layout.query)
     program, query = program or P.population_program(PAIR, m), layout.query
@@ -105,10 +105,10 @@ def _samples_q(got: TS.First) -> bool:
 
 
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
-    """The first stage samples Q of the class's N spans on the challenger's coins after the boundary registration;
-    ``stage1.json`` alone gives the replay side the same registration and sample on the bytes it read; its interior
-    registration is logged after it, and the second stage samples K proof blocks in each sampled span on the next
-    challenger's coins, opened after the interior registration's digest."""
+    """The first stage samples Q of the class's N spans on the challenger's coins after the boundary docket;
+    ``stage1.json`` alone gives the replay side the same docket and sample on the bytes it read; its interior
+    docket is logged after it, and the second stage samples K proof blocks in each sampled span on the next
+    challenger's coins, opened after the interior docket's digest."""
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
@@ -164,7 +164,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
     _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
-    assert second.law == S.second_law(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
+    assert second.law == S.second_sampling_design(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
 
@@ -233,7 +233,7 @@ def test_resume_refuses_another_rule_registration_or_sample():
 def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     """`resume` names the family of the first stage's challenges from the class's layout (`family_of`) and the
     session's root from the record's window, the run the first stage registers under (`_first_all`). A hand-off that
-    names the same, or names neither, resumes to the same registration and sample under them. Refused: a first
+    names the same, or names neither, resumes to the same docket and sample under them. Refused: a first
     stage on a source of another family (`first` holds its source to the place's); a hand-off that names another
     family; a hand-off that names another session root than its record's; a caller's root that is not the record's; and a
     record whose window is of another run, or names another class, than the class's commitment."""
@@ -699,7 +699,7 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     """After a stop class's first stage its stop record registers on a one-stage stream of the verifier's stop block
     whose log starts with the class's boundary record: one stop block a span, `b.stop` its one port, its inputs that
     record's `b.request` and `b.egress` as output values. It is sampled at a rate over the class's N stop blocks on
-    coins opened after its own registration's digest, of the family of its stop blocks' place. Refused: a boundary
+    coins opened after its own docket's digest, of the family of its stop blocks' place. Refused: a boundary
     record that is another class's, another rule than the commitment's, a sampling design that is a fixed count, and
     a source of another family than that place's, the class's spans' among them."""
     pub = json.loads(json.dumps(_stop_class().public()))
@@ -730,15 +730,15 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
 
 
 def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
-    """`stop_order` on a session's published evidence: it holds when the log shows the boundary registration's coins,
-    then the stop registration's, each in a family of its own, and the stop sample read exactly the latter. It names
-    why otherwise: no published log; no family; a coin released after the stop registration left unread, or bytes that
-    are not those coins'; the boundary registration's coins handed in as the stop sample's, or the stop sample's held
-    to the boundary registration's family; another window's root; another challenger key than the session's, no key,
+    """`stop_order` on a session's published evidence: it holds when the log shows the boundary docket's coins,
+    then the stop docket's, each in a family of its own, and the stop sample read exactly the latter. It names
+    why otherwise: no published log; no family; a coin released after the stop docket left unread, or bytes that
+    are not those coins'; the boundary docket's coins handed in as the stop sample's, or the stop sample's held
+    to the boundary docket's family; another window's root; another challenger key than the session's, no key,
     evidence that names a key, even the session's own, and another copy of main's history than the evidence carries;
     a log the challenger's close does not sign (a
-    prover's own ordering of the same lines); the stop registration's coins released first; no coin after the boundary
-    registration at all; and a stop sample whose family holds the boundary registration's coins before its own, the
+    prover's own ordering of the same lines); the stop docket's coins released first; no coin after the boundary
+    docket at all; and a stop sample whose family holds the boundary docket's coins before its own, the
     one family a prover that registers again after reading would use."""
     b, s = "b0" * 64, "c0" * 64
 

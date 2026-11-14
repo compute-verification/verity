@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.DeployInputs
 public import Proofs.Flock.Claims.ZK.Reference
-public import Proofs.Flock.Recursive.FirewallWire
+public import Proofs.Flock.Recursive.ZkServerWire
 public import Proofs.Flock.SessionLoop.ConcreteNet
 public import Properties.Flock.Nets
 import all Init.Data.String.Defs
@@ -66,7 +66,7 @@ theorem run_rdBytes {b : ByteArray} (h : b.size < 2 ^ 64) (rest : Claims.Msg) :
 theorem run_rdStr {s : String} (h : s.toUTF8.size < 2 ^ 64) (rest : Claims.Msg) :
     rdStr.run (encStr s ++ rest) = some (s, rest) := by
   rw [rdStr, encStr, run_bind_some (run_rdBytes h rest),
-    FlockSoundness.Discharge.Recursion.FirewallWire.fromUTF8?_toUTF8]
+    FlockSoundness.Discharge.Recursion.ZkServerWire.fromUTF8?_toUTF8]
   rfl
 
 theorem run_rdBool (b : Bool) (rest : Claims.Msg) : rdBool.run (encBool b ++ rest) = some (b, rest) := by

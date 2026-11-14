@@ -37,7 +37,8 @@ theorem partition_wired (A : Live₂) (s : Claims.Sampling.AuditStatement) : ∃
 /-- **The held copies' design evaluates wherever a play is accepted** under `HeldOfAt`: the accepted play's run passed
 its population check (`RunsAs.population_of_accepted`), at which the copies `heldOf` builds evaluate their design
 (`HeldOf.twoHolds_of_pop`). -/
-theorem twoHolds_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem twoHolds_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) : SpotFlock.RunsAs.Round2.TwoHolds A.h := by
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -63,7 +64,7 @@ theorem recordGood {c : ByteArray} {cm : Spot.OneStage.Commitment} (h : Spot.One
   unfold Spot.OneStage.commitmentOf at h
   rcases hj : Core.canonicalJson c with e | j
   · simp [hj, Bind.bind, Except.bind] at h
-  rcases hd : Spot.Registration.digest j with e | d
+  rcases hd : Spot.Docket.digest j with e | d
   · cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   subst h

@@ -22,8 +22,8 @@ one table of `A.kd` units (`RefOk`, `numsOk_of_refOk`):
   have one `n` give one set of numbers (`nums_congr`), the reference sample file's (`d₀`) among them.
 
 And what `RefOk`'s unit count reads at a sample v2 accepts: a sample file's units are its `units` field's
-(`unitsAt_size`), a sample by a sampling design `LawOn` holds samples `A.kd` units (`drawn_length`), and a session's sample that
-`ProvedScope.drawLaw` keeps proves its sampled proof blocks alone (`proved_of_drawLaw`).
+(`unitsAt_size`), a sample by a sampling design `SamplingDesignOn` holds samples `A.kd` units (`sampled_length`), and a session's sample that
+`ProvedScope.sampleDesign` keeps proves its sampled proof blocks alone (`proved_of_sampleDesign`).
 -/
 
 @[expose] public section
@@ -111,9 +111,9 @@ theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.ar
   simp only [_root_.Spot.getD, _root_.Spot.field?, hg, Except.toOption, Option.getD_some]
 
 /-- **A sample file's units, as v2 credits them, are as many as its sample's**: `unitsAt` reads one unit per entry of the
-sample's `units` field, which `UnitDraw.ofJson` reads as its units. -/
-theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
-    (hu : _root_.Properties.Spot.Units.unitsAt h j = some xs) (hD : Flock.Draw.UnitDraw.ofJson j = .ok D) :
+sample's `units` field, which `UnitSample.ofJson` reads as its units. -/
+theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitSample}
+    (hu : _root_.Properties.Spot.Units.unitsAt h j = some xs) (hD : Flock.Draw.UnitSample.ofJson j = .ok D) :
     xs.size = D.units.size := by
   obtain ⟨⟨a, ha, hm⟩, -, -⟩ := FlockSoundness.Discharge.Composed.ofJson_shape hD
   have hga := getD_of_arr ha
@@ -126,32 +126,32 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
   cases hX
   rw [Verity.QSort.size_qsort, size_mapM_option hus, size_mapM_except hm]
 
-/-- **The coins sample `A.kd` units** where the sample ends: `A`'s law is on its strata and samples `A.kd` (`Live.hlaw`). -/
-theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.Spot.Draw.drawUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
+/-- **The coins sample `A.kd` units** where the sample ends: `A`'s sampling design is on its strata and samples `A.kd` (`Live.hlaw`). -/
+theorem sampled_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
+    (h : _root_.Spot.Draw.sampleUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
   unfold drawn
   simp only [h, Array.length_toList]
-  exact _root_.Properties.Spot.SecurityProofs.drawUnits_size A.hlaw h
+  exact _root_.Properties.Spot.SecurityProofs.sampleUnits_size A.hlaw h
 
-/-- **A sample `ProvedScope.drawLaw` keeps proves its sampled proof blocks alone**: it is by a subset or stratified sampling design, whose
+/-- **A sample `ProvedScope.sampleDesign` keeps proves its sampled proof blocks alone**: it is by a subset or stratified sampling design, whose
 samples carry no closure. -/
-theorem proved_of_drawLaw {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitDraw}
-    (hD : Flock.Draw.UnitDraw.ofJson (Flock.norm J) = .ok D)
-    (h : Flock.ProvedScope.drawLaw true T false (some (Flock.norm J)) = .ok ()) : D.proved = D.units := by
-  unfold Flock.ProvedScope.drawLaw at h
+theorem proved_of_sampleDesign {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitSample}
+    (hD : Flock.Draw.UnitSample.ofJson (Flock.norm J) = .ok D)
+    (h : Flock.ProvedScope.sampleDesign true T false (some (Flock.norm J)) = .ok ()) : D.proved = D.units := by
+  unfold Flock.ProvedScope.sampleDesign at h
   try dsimp only at h
   rw [hD] at h
   try dsimp only at h
-  cases hw : Flock.ProvedScope.lawWhy true T false D with
+  cases hw : Flock.ProvedScope.samplingDesignWhy true T false D with
   | some why => rw [hw] at h; cases h
   | none =>
     have hcl : D.closure = #[] := by
-      cases hl : D.law with
+      cases hl : D.samplingDesign with
       | subset k => exact (FlockComplete.ZkTables.good_subset (FlockDeploy.wf_norm J) hD hl).2
       | stratified K St => exact FlockComplete.ZkTables.closure_stratified (FlockDeploy.wf_norm J) hD hl
-      | bernoulli a b => simp [Flock.ProvedScope.lawWhy, hl] at hw
-      | work K ws => simp [Flock.ProvedScope.lawWhy, hl] at hw
-    unfold Flock.Draw.UnitDraw.proved
+      | bernoulli a b => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
+      | work K ws => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
+    unfold Flock.Draw.UnitSample.proved
     rw [hcl]
     rfl
 

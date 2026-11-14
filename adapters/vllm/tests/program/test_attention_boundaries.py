@@ -17,7 +17,7 @@ import pytest
 
 from tests.lint._imports import core_less_definitions as _core
 
-PKG = "verity.definitions.registry"
+PKG = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(PKG)
 assert _SPEC is not None and _SPEC.origin is not None, PKG
 REGISTRY = Path(_SPEC.origin).parent
@@ -50,7 +50,7 @@ THIRD_PARTY = {"numpy"}
 #: which holds the kernels and the private circuits too
 CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
+EVIDENCE = "verity_vllm.definitions.evidence"
 
 
 def _verity(name: str) -> bool:
@@ -128,13 +128,13 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
         "from verity.circuits.defs import composite\n"
-        "from verity.definitions.registry import prims as P, targets\n"
-        "from verity.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity_vllm.definitions.registry import prims as P, targets\n"
+        "from verity_vllm.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity.circuits.kernels import tc\n"
         "from verity.circuits.private_circuits import universal\n"
         "from verity_vllm.config import X\n\n\n"
-        "def f():\n    from verity.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
+        "def f():\n    from verity_vllm.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
-        "imports verity_vllm.config", "imports verity.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER",
+        "imports verity_vllm.config", "imports verity_vllm.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER",
         "imports verity.circuits.kernels", "imports verity.circuits.private_circuits"])

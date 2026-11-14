@@ -8,10 +8,10 @@ proved: Flock's composer needs a row past 111 bytes in every template, which tak
 (`TokenFeed_v1`) and a vocabulary of at least 448 (the token select). H1's window Program is a stand-in digest, since the tie
 reads only its digest, its open root and its tables' names.
 
-* **W**, H1's window registration (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
+* **W**, H1's window docket (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
   way from the served values (`chunk_words` of each call's int8 codes and scale over M slots, call after call; `ids_words`
   of the step's input ids), committed under H1's run key at H1's nonces and domains (round 0's ids bound to the session).
-* **R**, the audited window's registration, as `prove_path.py window-commit --window-registration W --h1-key` makes it:
+* **R**, the audited window's docket, as `prove_path.py window-commit --window-registration W --h1-key` makes it:
   the window circuit with H1's tables (`window_circuit.lower` with `Tables`), its units filled from the same values
   (`window_rows.Rows`), its tables W's rebuilt from the rows its proof blocks make (`pouw_h1_commit.reuse`), recorded,
   committed and written through `interface.Window` as a v2 record chained right after W.
@@ -36,9 +36,9 @@ v1's, and those of two of remote's three subprotocols, the inference-only policy
 accept theirs, each naming R's digest, and the period's window names R (`served_cases.period_case`, the record tie remote
 checks). The v1 case's verdict of record is an accepting stand-in reporting R's tables' roots as their readers opened them:
 the proof blocks' proofs aren't run here, so the audit holds no case of one-stage v2, the audit on the proofs themselves.
-That is the only case remote's third subprotocol, sampled proofs, takes (`VStar.Recursive.Sampled` refuses one-stage v1's,
+That is the only case remote's third subprotocol, SPOT, takes (`VStar.Recursive.Sampled` refuses one-stage v1's,
 whose verdicts are the evidence's own), so `served_cases` refuses to write it. `composite.py remote` on the two cases the
-serve dir has of remote's subprotocols rejects naming sampled proofs missing: a composition answers no subprotocol's case
+serve dir has of remote's subprotocols rejects naming SPOT missing: a composition answers no subprotocol's case
 while one has none (`Core.Composition.run`), so remote reads neither the policy's case nor the period's, whose Lean
 refuses it for want of an H1 window's proofs, and holds no tie, which it does only where no subprotocol rejects
 (`Core.Composition.holdTies`). So no test here hands remote a whole composition: the tie is `served_cases`' check, not
@@ -78,11 +78,11 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 K, M, CALLS, ROUNDS = 2048, 32, 3, 2
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": K, "intermediate_size": 256,
@@ -99,7 +99,7 @@ H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 #: the V3c window's run root
 RUN = "ab" * 64
-LAW = D.parse_design("stratified:1")
+SAMPLING_DESIGN = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped row: round 1's o-projection's (call 1 of the round) first slot
 FLIP = ("row-table/1/k2048", M * 1)
@@ -107,7 +107,7 @@ RECORDS = pytest.mark.skipif(not settings.REMOTETIE, reason="VERITY_PROVE_PATH_R
                              "toy's 11,252 proof blocks and builds the Lean verifiers that check them, a few minutes")
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
-#: why `served_cases` writes no sampled proofs case from the toy's audit (`served_cases.v2_case`)
+#: why `served_cases` writes no SPOT case from the toy's audit (`served_cases.v2_case`)
 NO_V2_CASE = "no v2 case: the audit's a5 writes no case-v2.json (a5.case_v2)"
 
 
@@ -171,7 +171,7 @@ class _Served(SV.Served):
 
 
 def _window(a_words: dict[int, np.ndarray], id_words: dict[int, np.ndarray]) -> SimpleNamespace:
-    """H1's window with these tables committed as `pouw_h1_served.Served` commits them, and its registration W."""
+    """H1's window with these tables committed as `pouw_h1_served.Served` commits them, and its docket W."""
     a = {s: NR.commit(H1, f"{SV.PREFIX}a/{K}@{s}", w, H1_KEY, SV.nonce(s * CALLS, "a"), keep_rows=True, window=OPEN)
          for s, w in a_words.items()}
     ids = {s: NR.commit(H1, f"{SV.PREFIX}ids@{s}", w, H1_KEY, SV.IDS_NONCE + s, keep_rows=True,
@@ -257,7 +257,7 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
 
 
 @pytest.mark.slow
-def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_drawn_and_off_its_definition(toy):
+def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_sampled_and_off_its_definition(toy):
     """W' (round 1's o-projection row flipped in one bit) differs from W at that leaf alone, so the honest reader's row,
     committed under that leaf's salt, opens against no root W' registers, and `reuse` refuses W'. Its reader is the one
     proof block of its template (`Int8RowQuant_v5` at round 1 and the o-projection's R), a stratum of its own whose sample
@@ -272,7 +272,7 @@ def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_dr
     (tid, port, u), = [k for k, v in _reads(toy.low.circuit).items() if v == FLIP]
     units = toy.low.circuit.units
     assert units[tid] == 1 and "ROUND=1" in tid and port == "o2" and u == 0
-    assert D.stratum_k(LAW["k"], units[tid], sum(units.values())) == 1
+    assert D.stratum_k(SAMPLING_DESIGN["k"], units[tid], sum(units.values())) == 1
     j = next(j for j, r in toy.low.programs[0].packed.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).reshape(-1)[K + 1:].astype("<u4").view("<u2")
@@ -284,14 +284,14 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     """The toy's window recorded, committed and written as window-commit writes it after W (R in its
     ``registration.json``), and the verifier's own window from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
+    win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.h1.W))
-    mine, _doc = IF.of_records(out, LAW, RA.catalog_resolve)
+    mine, _doc = IF.of_records(out, SAMPLING_DESIGN, RA.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
                            leaf_layer=CS.leaf_layer(publics))
@@ -318,7 +318,7 @@ def _words(c) -> dict[str, int]:
 def _check(written, toy, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, with the log [W] and each table an output value reusing W's."""
     mine, dW, words = written.mine, REG.digest(W), _words(toy.low.circuit)
-    return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
+    return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
                      registered=words, outputs={p: {"record": dW, "value": _names()[p]} for p in words}, window_root=OPEN)
 
 
@@ -387,7 +387,7 @@ def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
     roots as the ones its readers opened against, standing in for their proofs."""
     mine, words = written.mine, _words(toy.low.circuit)
     program, query = mine.program, mine.query
-    drawn = D.derive(program, query, LAW)
+    drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": P.units(program, query), "units": units}
     proved = D.proved(draw)
@@ -396,7 +396,7 @@ def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
                 "receipt": REG.receipt(R, "v", received="2000-01-01T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
-    params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
+    params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
                            registered=words, scheme=CS.SCHEME)
     params |= {"outputs": {p: {"record": REG.digest(W), "value": _names()[p]} for p in words}, "window_root": OPEN,
                "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]}
@@ -457,7 +457,7 @@ def _answer(lean, id: str) -> dict:
 
 def _remote(lean, out: Path, period: Path) -> tuple[int, dict, list[str]]:
     """`composite.py remote` on the cases the serve dir has of remote's subprotocols, the policy's and ``period`` (its
-    sampled proofs case is not written): its exit, remote's Lean answer and the subprotocols the composite names missing."""
+    SPOT case is not written): its exit, remote's Lean answer and the subprotocols the composite names missing."""
     SC = lean.one.SC
     cases = [lean.private / SC.DIRS[SC.INFERENCE_ONLY], period]
     with contextlib.redirect_stdout(io.StringIO()):
@@ -474,8 +474,8 @@ def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(t
     on the log [W] (its log record reader takes W, and its R1-R7 accept R chained right after W with each table an output
     value of W's), and the policy's Lean accepts its case, whose log is H1's through W; both name R's digest. The period
     names R as its window's Commit record (`served_cases.period_case`), and its Lean refuses it for want of an H1 window's
-    proofs. The fourth is remote's sampled proofs case, one-stage v2's: the toy's audit ran no proof, so it holds none.
-    Remote, on the policy's case and the period's, rejects naming sampled proofs missing: it reads no subprotocol's case
+    proofs. The fourth is remote's SPOT case, one-stage v2's: the toy's audit ran no proof, so it holds none.
+    Remote, on the policy's case and the period's, rejects naming SPOT missing: it reads no subprotocol's case
     while one has none. So its answer here is that refusal and not the period's, and this test does not check that remote
     carries a subprotocol's refusal or holds its own tie."""
     SC, d = lean.one.SC, REG.digest(written.R)
@@ -499,7 +499,7 @@ def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(t
 def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, tmp_path):
     """A period whose window names H1's W as its Commit record is refused by `served_cases` (remote's record tie) before any
     composite. Handed to remote anyway, beside the policy's case on R, it is rejected as the period naming R is: remote
-    names sampled proofs missing, whose case the toy's audit doesn't write, and reads no subprotocol's case while one has
+    names SPOT missing, whose case the toy's audit doesn't write, and reads no subprotocol's case while one has
     none. So its answer here is that refusal and not the period's, nothing of remote's tells the two periods apart on
     this toy, and `served_cases`' refusal is the only check here that a period naming W goes no further."""
     SC = lean.one.SC
@@ -516,7 +516,7 @@ def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, t
 @RECORDS
 def test_one_stage_s_lean_accepts_a_flipped_w_s_record_only_on_its_own_log(toy, written, lean, tmp_path):
     """The R' written by hand after W' (the flipped row's) is accepted by one-stage's Lean on the log [W'], as R1-R7 accept
-    it: no record holds a row. On the log [W] its registration is refused."""
+    it: no record holds a row. On the log [W] its docket is refused."""
     SC, W2 = lean.one.SC, _flipped(toy.h1).W
     R2 = _by_hand(toy, written, W2)
     got, _ = SC.lean_answer(lean.exes.v1, _v1_case(lean.one, toy, written, W2, R2), tmp_path)

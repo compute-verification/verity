@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 public import Proofs.Flock.Claims.KS.ZkOffSC
 public import Proofs.Flock.Claims.KS.ZkSessionW
 import Mathlib.Algebra.Order.Floor.Extended
@@ -111,10 +111,10 @@ theorem not_offW_of_entries {I : Inputs} {d : Lean.Json} {t : Exec.Transcript} {
 output is accepted and, at table `j₀` at its own cap, opens no level-0 position off `C` on a witness lane without a
 self-clash (`runsAtZCJ_live_entries`, `not_offW_of_entries`). -/
 theorem runsAtZCJ_live_offW (I : Inputs) (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
-    (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) (j₀ : ℕ) {N : ℕ} (C : Fin N → List 𝔽) :
+    (L : SamplingDesign n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, SampleOkZKJ I dj mPts (L.draw ω)) (j₀ : ℕ) {N : ℕ} (C : Fin N → List 𝔽) :
     RunsOnZCJW (K := 𝕂) execArith hs512 (planZJ dj y₀) (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
       (fun S R o => AcceptsAt I (dj S) (wr S R o) ∧ ZkTxNoOff I (dj S) j₀ C (wr S R o))
@@ -135,7 +135,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   {opn : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → OpensZ 𝔽 D Sl}
   {dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg}
   {fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg}
-  {capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D} {L : Law n}
+  {capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D} {L : SamplingDesign n}
   {acc : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Prop}
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
@@ -176,10 +176,10 @@ variable {n mPts : ℕ} {Reg : Type}
 outputs: `runsAtZCJ_live_offW` from `runsAtZCJH_live_entries`. -/
 theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) (j₀ : ℕ) {N : ℕ} (C : Fin N → List 𝔽) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) (j₀ : ℕ) {N : ℕ} (C : Fin N → List 𝔽) :
     RunsOnZCJW (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
       (fun S R o => AcceptsAt I (dj S) (wr S R o) ∧ ZkTxNoOff I (dj S) j₀ C (wr S R o))
@@ -288,7 +288,7 @@ theorem decodesTableW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
       (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
       (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
-  have hok := drawOkZKJ_empty hT.1 dj hs
+  have hok := sampleOkZKJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ := setupZJ_of_setupAt hT.1 ht dj hs hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJW
     (Composed.runsAtZCJ_live_offW (Reg := Unit) I ht dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
@@ -316,7 +316,7 @@ theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT 
       (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
       (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
-  have hok := drawOkZKHJ_empty hT.1 dj hs
+  have hok := sampleOkZKHJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ :=
     setupZHJ_of_setupAt hT.1 ht dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJW

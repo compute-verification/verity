@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 
 from verity.protocols.proofs.spot.prover.cost import served_window as S
-from inputs import K_MAX, block_k_log, cap
-from verity.commitments.windows.interface import MASK_LOG
+from verity.protocols.proofs.spot.prover.cost.inputs import K_MAX, block_k_log, cap
+from verity.commitments.periods.interface import MASK_LOG
 
 
 @pytest.fixture(scope="module")

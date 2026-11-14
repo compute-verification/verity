@@ -10,12 +10,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from verity.circuits.constants import program_data
 from verity.circuits.program import Program
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import dense as DN
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import dense as DN
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     vllm_ruleset,

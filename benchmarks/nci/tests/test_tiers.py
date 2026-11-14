@@ -30,15 +30,14 @@ CAPACITY_FACTOR = 1
 #: carries config.json's shapes only), so this is the dtype ReferenceLayered states
 EMBED_BITS = 16
 
-def test_the_gpus_read_the_accel_models_card_table():
-    """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
-    the card file's `clock.sm`: so the clock term is 0, the server's peak is 8 cards at the table's FP8 rate (7.485e15
-    FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
-    lean = (ROOT / "security/Definitions/Core/Accel/Sm120.lean").read_text()
-    sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
-    mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
-    assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
-    sm = load_card("rtx-pro-6000-server")["clock"]["sm"]
+def test_the_gpus_read_the_card_file():
+    """`CARD` is the RTX PRO 6000 Server Edition's card file's SMs, tensor rate and tensor clock ceiling (its sheet-form
+    `f_max`), and PoUW credits the card file's `clock.sm`: so the clock term is 0, the server's peak is 8 cards at the
+    card's FP8 rate (7.485e15 FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
+    card = load_card("rtx-pro-6000-server")
+    assert T.CARD == {"sms": number(card["sm"]["count"]), "tensor": number(card["rate"]["tensor"]),
+                      "clock_hz": number(card["clock"]["tensor"]) * 10**6}
+    sm = card["clock"]["sm"]
     assert sm["unit"] == "MHz"
     assert T.CREDITED_CLOCK_HZ == number(sm) * 10**6
     assert T.DEFAULTS["clock_share"] == 0.0
@@ -66,7 +65,7 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
 
 
 def test_the_residual_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds: a certificate
+    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `InferenceOnly.Guarantees.SlowdownRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
     p = T.DEFAULTS | {"residual": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
@@ -252,8 +251,8 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
 
 
 def test_reference_layered_at_kimi_k2():
-    """The falsification test of the conjecture `Nci.Assumptions.ReferenceLayered`: the parameters it states are Kimi
-    K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded`
+    """The falsification test of the conjecture `InferenceOnly.Assumptions.ReferenceLayered`: the parameters it states are Kimi
+    K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `InferenceOnly.SecurityProofs.ReferenceThreaded`
     derives from them at S = K. A keyed reference circuit written as the declarations are computes each matrix-product
     entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
     on sm_90 and sm_120), whose width is the activations it reads; its roots are each chain's steps after the first,
@@ -286,11 +285,11 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "security" / "Definitions" / "Nci"
+    nci = ROOT / "security" / "Definitions" / "InferenceOnly"
     layered = (nci / "Assumptions/Layered.lean").read_text()
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * {EMBED_BITS}))" in layered
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
     entry = json.loads((ROOT / "security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
-    assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}
+    assert entry["InferenceOnly.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

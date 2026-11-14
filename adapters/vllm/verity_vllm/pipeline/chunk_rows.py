@@ -2,7 +2,7 @@
 (`unit_rows`), a chunk's member (`unit_member`), table reads (`reads`) and statement (`statement`), the most of them one
 flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into
 its chunks (`split`).  The window's chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
-(``verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
+(``verity/protocols/proofs/spot/prover/audit/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
 `serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
 partition file whose ``zk`` says its window is for such sessions and that names a template of that form."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 #: flock-circuit's spec shape (`verity/protocols/proofs/flock/prover/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
@@ -126,7 +126,8 @@ def zk_refusal(tp: Any) -> str | None:
     if statement(tp).get("reads") != "slots" or not (tables := slot_tables(tp.fn)):
         return None
     from verity.circuits.codec import descriptor_id
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     try:
         fix = f"name its Boolean version {descriptor_id(BB.boolean_version(tp.fn))}"

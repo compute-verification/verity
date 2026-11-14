@@ -1092,7 +1092,7 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
   have h := c.card_image_le Finset.univ (I + X) fun E _ => add_le_add (hc E).1 (hc E).2
   rwa [Nat.card_coe_set_eq, Set.ncard_eq_toFinset_card', Set.toFinset_range]
 
-/-- **The remote audit at the deployed parameters with a store per pass, with stacking**,
+/-- **PoUB at the deployed parameters with a store per pass, with stacking**,
 `Accounting.Guarantees.StackedRunConservationSketchDeployed`. -/
 theorem StackedRunConservationSketchDeployed :
     Accounting.Guarantees.StackedRunConservationSketchDeployed := by
@@ -1138,7 +1138,7 @@ theorem StackedRunConservationSketchDeployed :
   rw [show 8 * 12 = 96 from rfl]
   ring
 
-/-- **The remote audit with relaying side sources on a programmed store, with stacking**,
+/-- **PoUB with relaying side sources on a programmed store, with stacking**,
 `Accounting.Guarantees.StackedRunConservationRelay`. -/
 theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservationRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
@@ -1172,7 +1172,7 @@ theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservati
   · simp only [div_eq_mul_inv]
     ring
 
-/-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement**,
+/-- **Stacked PoUB at the deployed parameters, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
@@ -1186,7 +1186,7 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
   simp only [Nat.cast_mul, Nat.cast_ofNat] at h
   exact h
 
-/-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement**,
+/-- **Stacked PoUB with relaying side sources, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier

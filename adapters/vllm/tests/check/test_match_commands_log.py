@@ -25,7 +25,7 @@ import os
 import tempfile
 
 import pytest
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check import test_global_match as tgm

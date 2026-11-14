@@ -65,11 +65,11 @@ def _held(verdicts: dict, outputs: tuple = ()) -> tuple[Verdict, Verdict]:
 
 def test_every_check_runs_both_and_records_them():
     _, reg, draw = _drawn()
-    program, law = P.population_program(PAIR, 6), {"law": "subset", "k": 2}
-    for v, py in ((V.check(_record(), program, QUERY, law, S.SCHEME, _ports(6)),
-                   R.check(_record(), program, QUERY, law, S.SCHEME, _ports(6))),
-                  (V.check(_record(), P.population_program(PAIR, 5), QUERY, law, S.SCHEME, _ports(6)),
-                   R.check(_record(), P.population_program(PAIR, 5), QUERY, law, S.SCHEME, _ports(6))),
+    program, sampling_design = P.population_program(PAIR, 6), {"law": "subset", "k": 2}
+    for v, py in ((V.check(_record(), program, QUERY, sampling_design, S.SCHEME, _ports(6)),
+                   R.check(_record(), program, QUERY, sampling_design, S.SCHEME, _ports(6))),
+                  (V.check(_record(), P.population_program(PAIR, 5), QUERY, sampling_design, S.SCHEME, _ports(6)),
+                   R.check(_record(), P.population_program(PAIR, 5), QUERY, sampling_design, S.SCHEME, _ports(6))),
                   (V.check_draw(draw.draw, reg.record, draw.law), D.check_draw(draw.draw, reg.record, draw.law)),
                   (V.check_draw({**draw.draw, "units": [0, 6]}, reg.record, draw.law),
                    D.check_draw({**draw.draw, "units": [0, 6]}, reg.record, draw.law)),
@@ -97,16 +97,16 @@ def test_the_declared_day_is_held_by_both():
     another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the
     Python; and the Lean refuses the parameters the Python refuses (`registration._declarations`): a day without
     declarations or the other way round, a day that isn't a natural number, and a declaration not of the view's form."""
-    rec, program, law = _record(), P.population_program(PAIR, 6), {"law": "subset", "k": 2}
+    rec, program, sampling_design = _record(), P.population_program(PAIR, 6), {"law": "subset", "k": 2}
     mine = {"blocks": [PAIR.id], "day": 0, "program": rec["program"]}
     other = {"blocks": [], "day": 1, "program": "0" * 128}
     for day, declared, codes in ((0, [mine, other], ()), (1, [mine, other], ("R2-declared",)),
                                  (2, [mine, other], ("R2-undeclared",)), (0, [], ("R2-undeclared",)),
                                  (0, [mine, {**other, "day": 0}], ("R2-declared-twice",))):
-        v = V.check(rec, program, QUERY, law, S.SCHEME, _ports(6), day=day, declarations=declared)
+        v = V.check(rec, program, QUERY, sampling_design, S.SCHEME, _ports(6), day=day, declarations=declared)
         side = {"ok": not codes, "codes": list(codes)}
         assert v.codes == codes and v.verifiers == {"of_record": "lean", "lean": side, "python": side}
-    params = V._params(program, QUERY, law, S.SCHEME, _ports(6), None, (), (), None, None, None)
+    params = V._params(program, QUERY, sampling_design, S.SCHEME, _ports(6), None, (), (), None, None, None)
     assert V.lean("registration", {"params": params, "record": rec})["codes"] == []
     for change in ({"day": 0}, {"declarations": [mine]}, {"day": -1, "declarations": [mine]},
                    {"day": True, "declarations": [mine]}, {"day": 0, "declarations": None},
@@ -114,12 +114,12 @@ def test_the_declared_day_is_held_by_both():
                    {"day": 0, "declarations": [{**mine, "program": 7}]}):
         assert "refused" in V.lean("registration", {"params": {**params, **change}, "record": rec}), change
         with pytest.raises(ValueError, match="declar"):
-            R.check(rec, program, QUERY, law, S.SCHEME, _ports(6), day=change.get("day"),
+            R.check(rec, program, QUERY, sampling_design, S.SCHEME, _ports(6), day=change.get("day"),
                     declarations=change.get("declarations"))
 
 
 def _window(design: dict, counts=(2, 18)) -> tuple:
-    """A registration under `design` of a window of two templates, `counts` proof blocks of PAIR then of OTHER: the
+    """A docket under `design` of a window of two templates, `counts` proof blocks of PAIR then of OTHER: the
     record, its program, its query and its ports."""
     program = P.mixed_population_program(list(zip((PAIR, OTHER), counts)))
     query = P.template_instances_query((PAIR, OTHER))
@@ -132,11 +132,11 @@ def _window(design: dict, counts=(2, 18)) -> tuple:
 
 
 def test_the_per_member_forms_link_points_are_held_by_both():
-    """`link-points` by the verifier (`registration.check`'s ``members``, `Registration.linkRefused`), after R8, on a
+    """`link-points` by the verifier (`registration.check`'s ``members``, `Docket.linkRefused`), after R8, on a
     window of two members at one unit a proof block, PAIR's proof blocks then OTHER's: two and eighteen, or ten each.
     A row is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the
     members a sample that ends misses (fewest none) and the members whose fewest and most open different link points
-    (3 up to eight proof blocks, 4 up to sixteen, 5 past). The Lean and the Python both refuse the registration, for
+    (3 up to eight proof blocks, 4 up to sixteen, 5 past). The Lean and the Python both refuse the docket, for
     `link-points` alone and naming the members of either list, and pass it where both lists are empty:
 
     * a stratum inside each member (`stratified:10`), or a subset that leaves out one proof block (`subset:19`): no
@@ -160,7 +160,7 @@ def test_the_per_member_forms_link_points_are_held_by_both():
         rec, program, query, ports = _window(design, counts)
         n = sum(counts)
         members, past = [([[0, counts[0]]], 1), ([[counts[0], n]], 1)], [([[0, counts[0]]], 1), ([[counts[0], n + 1]], 1)]
-        assert LP.bounds(*LP.law_of(program, query, design), members) == bounds, design
+        assert LP.bounds(*LP.sampling_design_of(program, query, design), members) == bounds, design
         assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, design
         assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, design
         refused = sorted({*missed, *differ})
@@ -177,9 +177,9 @@ def test_the_per_member_forms_link_points_are_held_by_both():
 
 def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
     """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
-    the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
-    right, one wrong, one at a port the registration doesn't name, and a port registered twice, read at its last root;
-    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which the value's is
+    the Lean compiles on a hash map of the docket's roots, against the Python's whole: the sessions' roots all
+    right, one wrong, one at a port the docket doesn't name, and a port registered twice, read at its last root;
+    and verdicts reporting reads of the docket's own port and of a value it doesn't name, of which the value's is
     dropped and the port's taken at that port's root (`Record.lessOwnReads`) and kept, refused, at another."""
     _, reg, draw = _drawn()
     rec = reg.record
@@ -238,7 +238,7 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
 
 
-def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
+def test_the_sample_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
     seen = []
     real = V.lean
     monkeypatch.setattr(V, "lean", lambda f, value: (seen.append(value) if f == "select" else None) or real(f, value))
@@ -247,10 +247,10 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     assert asked["rule"] == {"rule": "law", "law": "rate:1/3"} and asked["query"] == dict(QUERY)
     got = real("select", asked)
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
-    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("rate:1/2"), {"law": "subset", "k": 3})):
+    for rule, sampling_design in ((S.All(), {"law": "subset", "k": 6}), (S.SamplingDesign("rate:1/2"), {"law": "subset", "k": 3})):
         seen.clear()
         s = _stream(_spec(rule))
-        d = s.select(s.register(_record(law=law), _ports(6)))
+        d = s.select(s.register(_record(sampling_design=sampling_design), _ports(6)))
         (asked,) = seen
         got = real("select", asked)
         assert d.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"]))
@@ -311,7 +311,7 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
 def test_the_leans_coins_are_a_challengers_entropy_and_never_a_streams(monkeypatch):
     """The Lean verifier's `IO.getRandomBytes` (A3, `verifier.coins`) is a challenger's entropy, never a stream's own
     coins: a stream given it, or no coins, refuses (`NO_OWN_COINS`). A challenger on it commits to its coins, and a
-    stream sampling from that challenger has the Lean's sample of record on coins it released after the registration."""
+    stream sampling from that challenger has the Lean's sample of record on coins it released after the docket."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
     for coins in (None, V.coins):
@@ -355,6 +355,15 @@ def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
         V.coins(8)
 
 
+def test_the_executable_answers_only_the_verifiers_pieces():
+    """The executable answers `Pieces.verifier`'s names, the challenger's ledger and session checks among them, and
+    refuses as unknown a piece the difftest executable serves beside them, which `lean` takes as a refusal."""
+    for fn in ("challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"):
+        assert "unknown fn" not in json.dumps(V.lean(fn, {})), fn
+    for fn in ("challenger_day", "challenger_read", "challenger_trusted", "decode", "wires"):
+        assert f'"unknown fn: {fn}"' in V.lean(fn, {})["refused"], fn
+
+
 def test_lean_that_cannot_run_fails_closed(monkeypatch):
     _, reg, draw = _drawn()
 
@@ -365,7 +374,7 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
     assert v.codes == (V.DISAGREE,) and v.verifiers["lean"] == {"refused": "lake is not on the PATH"}
     rec = V.audit_record(**_args(reg, draw))
     assert not rec["accepted"] and rec["verifiers"]["lean"] == {"refused": "lake is not on the PATH"}
-    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH"}
+    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH", "answered": False}
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():
@@ -384,7 +393,7 @@ def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):
     decides otherwise, or holds another state after it, the op is refused (`disagree`, naming both), and so is every op
     after it."""
     stream, reg, draw = _drawn()
-    assert stream._rule_entries == [{"order": 0, "registration": S._registration_token(reg), "draw": S._draw_token(draw),
+    assert stream._rule_entries == [{"order": 0, "registration": S._docket_token(reg), "draw": S._draw_token(draw),
                                      "proved": len(draw.proved), "drawn_at": stream._entries[0].drawn_at,
                                      "delivered": False, "session": None, "final": False}]
     _lean_answering(monkeypatch, "stream", lambda got: {**got, "decision": {"ok": "late"}})

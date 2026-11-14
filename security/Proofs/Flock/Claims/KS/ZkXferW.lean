@@ -296,14 +296,14 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a sample (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
+carries a sample (`acc_sample_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
 accepts with no opening off `C` on a witness lane unless it self-clashes. -/
 theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
     ZkLiveAccWJ x := by
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨d, hd⟩ := acc_draw_of_setup hno hset
+  obtain ⟨d, hd⟩ := acc_sample_of_setup hno hset
   obtain ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ :=
     hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
   refine ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
@@ -322,7 +322,7 @@ theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha5
 end Gen
 
 /-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a sample (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
+carries a sample (`acc_sample_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
 accepts with no opening off `C` on a witness lane unless it self-clashes. -/
 theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :

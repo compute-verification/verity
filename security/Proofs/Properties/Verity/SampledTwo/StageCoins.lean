@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.SampledTwo.StageAlone
 The two pieces of the projection that read the stages' coins (`ProjectionOf`'s `CoinsAgree` at `.first` and
 `.second`), at the form's reading (`formReading`) and the cut's `LogIsDevice`: `coinsAgree_first_log` and
 `coinsAgree_second_log`. Each rests on the coin map's reading of its rounds (`DevFirst`, `DevSecond`) and on
-`StageCut`'s premises (`CaseIsSent`, `CutReads`, and `FirstDrawn` or `SecondAlone`). On two windows the second
+`StageCut`'s premises (`CaseIsSent`, `CutReads`, and `FirstSampled` or `SecondAlone`). On two windows the second
 stage's piece also holds from the form's check where it reads the cut's first session (`coinsAgree_second_matches`,
 `StageAlone`'s `SessionMatches` in place of `SecondAlone`).
 -/
@@ -22,7 +22,7 @@ namespace Verity.SampledTwo
 reads it. -/
 theorem coinsAgree_first_log (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin)
-    (hC : CaseIsSent C) (hR : CutReads C) (hD : FirstDrawn C) (hDev : DevFirst C dev) :
+    (hC : CaseIsSent C) (hR : CutReads C) (hD : FirstSampled C) (hDev : DevFirst C dev) :
     CoinsAgree A (formReading A C S dev) (FormAccepts C) LogIsDevice .first :=
   coinsAgree_first_of A C S dev LogIsDevice (firstShown_of C hC hR hD) hDev
 

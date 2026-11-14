@@ -6,7 +6,7 @@ public import RemoteAudit.P2
 public import RemoteAudit.P2Session
 public import RemoteAudit.Registry
 public import RemoteAudit.Schedule
-public import RemoteAudit.Store
+public import RemoteAudit.Span
 public import RemoteAudit.Wire
 
 /-!
@@ -17,16 +17,17 @@ strings lowercase hex, indices integers): a whole session's events (`session`: e
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
 opening, a leaf's receipt, a window's draws and a registration's digest), the registration `audit.register` makes
 with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
-closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
-canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
-the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), `line.py`'s memory
-line (`line` of groups and windows given, `line_record` read off an accepted session's record, `RemoteAudit.Line`:
-rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
+closes, and `registry/v0` both ways), `line.py`'s memory line (`line` of groups and windows given, `line_record` read
+off an accepted session's record, `RemoteAudit.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled
+bound, which the line
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
 `p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
-`p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
+`p2_parties.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
+The span's check (`RemoteAudit.Span`): on a session run to its draws, the rows the verifier derives for each draw
+(`span_public`), the window decided on public files taken as accepted (`span_held`), and decided from the statements
+the proof system's audit must accept (`span`).
 `remote-audit-difftest` serves them.
 -/
 
@@ -374,120 +375,6 @@ private def refusedOr (x : Except String Json) : Json :=
   | .ok v => v
   | .error why => Json.mkObj [("refused", .str why)]
 
-/-- `store.pin_of` (`model_pin` with `model`) on a pin file's bytes `data`, read from `path`. -/
-def pinFn (j : Json) : V Json := do
-  let data ← hex j "data"
-  let path ← J.str j "path" "input"
-  let role ← match ← J.get j "role" "input" with
-    | .null => pure none
-    | v => some <$> J.asStr v "role"
-  let model ← J.bool j "model" "input"
-  let pin ← match model, role with
-    | true, some r => pure (Store.modelPin data path r)
-    | true, none => throw "a binding's pin is a role's"
-    | false, r => pure (Store.pinOf data path r)
-  pure (refusedOr ((fun p => Json.mkObj [("pin", p.toJson)]) <$> pin))
-
-/-- `store.canonical_json` of a value with no number. -/
-def canonicalJsonFn (j : Json) : V Json := do
-  let some s := Store.pyJson (← J.get j "value" "input") | throw "a value with a number"
-  pure (.str s)
-
-/-- `store.checkpoint_sha512` of `{file: string}`, with the canonical JSON it hashes. -/
-def checkpointFn (j : Json) : V Json := do
-  let .obj kvs ← J.get j "files" "input" | throw "files is an object"
-  let files ← kvs.toArray.mapM fun (f, h) => do pure (f, ← J.asStr h "files")
-  pure (Json.mkObj [("canonical", .str (Store.filesJson files)), ("sha512", .str (Store.checkpointSha512 files))])
-
-def storeSaltFn (j : Json) : V Json := do
-  let c ← nat j "c"
-  if c ≥ 2 ^ 64 then throw "a block index is a u64"
-  pure (hexJ (Store.storeSalt (← hex j "key") (← hex j "label") c))
-
-/-- An arena's weights blocks' digests, `digests` as a list of 64-byte strings, as one string of 64 bytes a block. -/
-def digestsOf (j : Json) : V ByteArray := do
-  let ds ← hexes j "digests"
-  if ds.isEmpty || ds.any (·.size ≠ 64) then throw "an arena's weights are one or more blocks' digests of 64 bytes"
-  pure (ds.foldl (· ++ ·) ByteArray.empty)
-
-/-- `store.expected_root` of a store of `engines` arenas of `arena_blocks`, then `host_blocks`, its subtrees of
-`2^chunk_log2` leaves on `workers` threads. -/
-def expectedRootFn (j : Json) : V Json := do
-  let digests ← digestsOf j
-  let (engines, arenaBlocks, host) := (← nat j "engines", ← nat j "arena_blocks", ← nat j "host_blocks")
-  let node ← hex j "node"
-  if engines = 0 || arenaBlocks < Store.weightsOf digests then throw "a store is one or more arenas of at least the weights"
-  if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
-  pure (hexJ (Store.expectedRoot engines arenaBlocks host digests node (← hex j "key") (← nat j "workers")
-    (← nat j "chunk_log2")))
-
-def regionOf (j : Json) : V Store.Region := do
-  let xs ← J.asArr j "layout"
-  if xs.size ≠ 4 then throw "a region is [kind, tier, first, blocks]"
-  let kind ← J.asStr xs[0]! "kind"
-  let tier ← J.asStr xs[1]! "tier"
-  if !["weights", "kv", "filler", "activations"].contains kind || !["hbm", "host"].contains tier then
-    throw "a region's kind and tier are regions_of's"
-  pure (kind, tier, ← J.asInt xs[2]! "first", ← J.asInt xs[3]! "blocks")
-
-def regionJ (r : Store.Region) : Json := .arr #[.str r.1, .str r.2.1, toJson r.2.2.1, toJson r.2.2.2]
-
-/-- `Binding.hold`'s outcome as the verifier answers it: the regions bound, or why not, and the expected root
-`record()` keeps. -/
-def heldJ (h : Store.Held) : Json :=
-  Json.mkObj [match h.regions with
-      | .ok rs => ("regions", .arr (rs.map regionJ))
-      | .error why => ("refused", .str why),
-    ("expected_root", match h.expectedRoot with | some r => hexJ r | none => .null)]
-
-/-- A hello's store as `Binding.hold` reads it: `{"node", "blocks", "payload_root", "key", "layout"}`, the key the
-verifier's payload key and the layout `null` or `regions_of`'s regions as `[kind, tier, first, blocks]`. -/
-def helloOf (j : Json) : V (ByteArray × Int × ByteArray × ByteArray × Option (Array Store.Region)) := do
-  let layout ← match ← J.get j "layout" "input" with
-    | .null => pure none
-    | v => some <$> (← J.asArr v "layout").mapM regionOf
-  pure (← hex j "node", ← int j "blocks", ← hex j "payload_root", ← hex j "key", layout)
-
-/-- `Binding.hold` of the binding `b` on a hello (`helloOf`), the root on `workers` threads. -/
-def holdOf (b : Store.Binding) (hello : Json) (workers : Nat) : V Json := do
-  let (node, blocks, root, key, layout) ← helloOf hello
-  pure (heldJ (b.hold node blocks root key layout workers))
-
-/-- What the verifier answers of a binding it starts (`Store.bind`): the pin and the weights blocks, or why not. -/
-def boundJ : Except String Store.Binding → Json
-  | .ok b => Json.mkObj [("pin", b.pin.toJson), ("weights_blocks", toJson (Store.weightsOf b.digests))]
-  | .error why => Json.mkObj [("refused", .str why)]
-
-/-- The binding of `role` over an arena of the weights blocks' digests `digests` and `engines` arenas of
-`arena_blocks` (`Store`'s check as `Binding` starts), then `Binding.hold` of a hello: the regions bound, or why not,
-and the expected root `record()` keeps. -/
-def holdFn (j : Json) : V Json := do
-  let role ← J.str j "role" "input"
-  let digests ← digestsOf j
-  let (engines, arenaBlocks) := (← int j "engines", ← int j "arena_blocks")
-  let hello ← helloOf j
-  match Store.shape engines arenaBlocks (Store.weightsOf digests) with
-  | .error why => pure (Json.mkObj [("refused", .str why), ("expected_root", .null)])
-  | .ok () =>
-    let (node, blocks, root, key, layout) := hello
-    pure (heldJ (Store.hold role digests engines.toNat arenaBlocks.toNat node blocks root key layout))
-
-/-- The verifier's binding as its process runs it (`RemoteAudit.Verifier`'s `bind` and `hold`): `{"data", "path",
-"role", "digests", "engines", "arena_blocks", "workers", "hellos"}` to what `bind` answers (`bind`) and, once bound,
-what `hold` answers of each hello (`holds`, `helloOf`'s). -/
-def bindingFn (j : Json) : V Json := do
-  let data ← hex j "data"
-  let path ← J.str j "path" "input"
-  let role ← J.str j "role" "input"
-  let digests ← digestsOf j
-  let (engines, arenaBlocks, workers) := (← int j "engines", ← int j "arena_blocks", ← nat j "workers")
-  let hellos ← J.arr j "hellos" "input"
-  let b := Store.bind data path role digests engines arenaBlocks
-  let holds ← match b with
-    | .ok b => hellos.mapM (holdOf b · workers)
-    | .error _ => pure #[]
-  pure (Json.mkObj [("bind", boundJ b), ("holds", .arr holds)])
-
 private def ratIn (j : Json) (k ctx : String) : V Rat := do
   match ← J.get j k ctx with
   | .num n => pure ((← J.asInt (.num n) s!"{ctx}.{k}" : Int) : Rat)
@@ -763,7 +650,7 @@ hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Sessio
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
 The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
 or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
-session `{"refused": "request", "reason": why}` (`P2Session.heldTo`'s, `p2_party.params_of`'s words). -/
+session `{"refused": "request", "reason": why}` (`P2Session.heldTo`'s, `p2_parties.params_of`'s words). -/
 def p2SessionFn (j : Json) : V Json := do
   let .ok held := P2Session.heldOf (← hex j "registration") | pure (Json.mkObj [("refused", .str "registration")])
   let auditor ← match ← J.get j "session" "input" with
@@ -791,15 +678,64 @@ def p2SessionFn (j : Json) : V Json := do
     s := s'
   pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
 
+/-- The session `j` gives (`sessionFn`'s input) run through its events by `Session.run`, and its window `t`. -/
+private def drawnSession (j : Json) : V (Session.State × Int) := do
+  let reg ← registrationOf (← J.get j "registration" "input")
+  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+  let events ← (← J.arr j "events" "input").mapM eventOf
+  let (_, s) ← Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
+  pure (s, ← int j "t")
+
+private def layoutOf (j : Json) : V Span.Layout := do
+  let ps ← (← J.arr j "layout" "input").mapM fun p => do
+    let xs ← J.asArr p "port"
+    if xs.size ≠ 2 then throw "a port is [name, bits]"
+    pure (← J.asStr xs[0]! "port", ← J.asNat xs[1]! "bits")
+  pure ⟨ps⟩
+
+private def instanceOf (j : Json) : V Span.Instance := do
+  pure { verdict := ← nat j "verdict", pubSalt := ← hex j "pub_salt", signsSalt := ← hex j "signs_salt",
+         verdictSalt := ← hex j "verdict_salt" }
+
+private def instancesOf (j : Json) : V (Array Span.Instance) := do (← J.arr j "instances" "input").mapM instanceOf
+
+private def spanResultJ (x : Session.Result × Session.State) : Json :=
+  Json.mkObj [("result", resultJ x.1), ("outcome", match x.2.outcome with | some o => .str o | none => .null)]
+
+/-- `{session…, "t"}`: window t's draws and, for each, the `pub` and `signs` rows the verifier derives
+(`Span.publicWords`, `Span.signWords`); refused for a window with no draws awaiting their check. -/
+def spanPublicFn (j : Json) : V Json := do
+  let (s, t) ← drawnSession j
+  let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"
+  pure (Json.mkObj [("draws", .arr (drawn.map pairJ)), ("rows", .arr (drawn.map fun (i, p) =>
+    Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))]))])
+
+/-- `{session…, "t", "layout", "held": [{"public", "instances"}]}`: window t decided by `Span.spanHeld` on the public
+files given, taken as accepted (`Session.verifyHeld`). -/
+def spanHeldFn (j : Json) : V Json := do
+  let (s, t) ← drawnSession j
+  let held ← (← J.arr j "held" "input").mapM fun h => do pure (← hex h "public", ← instancesOf h)
+  pure (spanResultJ (Session.verifyHeld s t (← layoutOf j) held))
+
+/-- `{session…, "t", "auditor": {"params", "layout"}, "span": {"statements": [{"pub", "record", "evidence",
+"instances"}], "blobs"}}`: window t decided from the span (`Session.verifySpan`). -/
+def spanFn (j : Json) : V Json := do
+  let (s, t) ← drawnSession j
+  let a ← J.get j "auditor" "input"
+  let x ← J.get j "span" "input"
+  let statements ← (← J.arr x "statements" "span").mapM fun st => do
+    pure { pub := ← J.str st "pub" "statement", record := ← hex st "record", evidence := ← hex st "evidence",
+           instances := ← instancesOf st : Span.Statement }
+  let sp : Span.Span := { statements, blobs := ← hexes x "blobs" }
+  pure (spanResultJ (Session.verifySpan s t { params := ← J.get a "params" "auditor", layout := ← layoutOf a } sp))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
   ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
-  ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
-  ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
-  ("p2_session", p2SessionFn)]
+  ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 
 end RemoteAudit.Difftest

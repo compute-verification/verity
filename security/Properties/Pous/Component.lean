@@ -27,8 +27,8 @@ Each statement below is one step of it, about one function of the code, in the s
   runs' trees and blocks hold a SHA-512 collision (`forkStrings`): the fork form of the commit-then-coin step, which
   makes `AuditsOf`'s `commitment`, `store` and `digests` functions of the coins before PoUS's.
 
-The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is no component of onsite yet; its statements are
-the same steps for the composition that takes it.
+The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite's component too
+(`Core.Onsite.components`); its statements are the same steps.
 
 * `WipeChecked`: the signed session passes every check of the wipe judge of record (`StreamedWipe.verdict`), as
   propositions: a signature under a trusted key on the session's message, the session's commitment, batch size 1,

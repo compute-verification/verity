@@ -1,5 +1,5 @@
 """Pearl+'s tie end to end on a toy: Pearl+'s window record W over a window's passes and the window circuit, cut at its
-linears, that audits them, registered as the remote composite reads them (the audited window's registration R chained
+linears, that audits them, registered as the remote composite reads them (the audited window's docket R chained
 right after W, each of Pearl+'s values an output value of W's).
 
 **The toy** (`toy`): a one-layer bf16 Llama of hidden 128 (two heads of 64, one KV head) and vocabulary 512 on the H200, at
@@ -14,7 +14,7 @@ gate/up and down), and its 895 units of 58 templates are proof blocks Flock's co
   fields W and the verdict's W check read.
 * **W**, Pearl+'s window record over them (`pearl_c.window.record`), which Pearl+'s verdict holds to the roots its passes
   credited (`verify_run.tie`).
-* **R**, the audited window's registration, as window-commit makes it: the cut circuit's units filled from the same
+* **R**, the audited window's docket, as window-commit makes it: the cut circuit's units filled from the same
   values, its values W's rebuilt from the rows its proof blocks make (`pearl_c.window.reuse`), recorded, committed and
   written through `interface.Window` as a v2 record chained right after W.
 
@@ -35,7 +35,7 @@ refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by han
 holds a row, so the flipped row is refused by its reader's proof alone.
 
 **Lean** (opt-in as the records, on a machine with Lean's toolchain): one-stage's Lean verifier (`served_cases.V1_LEAN`) on
-a5's v1 case of R with the tie's params accepts R on [W], refuses its registration on [W'], and accepts R' on [W']. The
+a5's v1 case of R with the tie's params accepts R on [W], refuses its docket on [W'], and accepts R' on [W']. The
 case's verdict of record is an accepting stand-in reporting R's values' roots as their readers opened them; the proofs of
 a sample of R's proof blocks, through both one-stage verifiers, are `records_audit.py audit --tie W`'s.
 
@@ -68,11 +68,11 @@ from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
@@ -90,7 +90,7 @@ KEY, SALT_KEY = bytes(range(32)), bytes(range(64, 96))
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-LAW = D.parse_design("stratified:1")
+SAMPLING_DESIGN = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)
@@ -276,7 +276,7 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
         _reuse(toy, flipped.W, flipped.manifests)
     (tid, port, u), = [k for k, v in _reads(c).items() if v == FLIP[:2]]
     assert c.units[tid] == 1 and "ROUND=1" in tid and "CALL=1" in tid and port == "o0" and u == 0
-    assert D.stratum_k(LAW["k"], c.units[tid], sum(c.units.values())) == 1
+    assert D.stratum_k(SAMPLING_DESIGN["k"], c.units[tid], sum(c.units.values())) == 1
     j = next(j for j, r in toy.low.programs[0].arows.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).astype("<u4").view("<u2").reshape(-1)
@@ -288,14 +288,14 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     """The toy's window recorded, committed and written as window-commit writes it after W (R in its
     ``registration.json``), and the verifier's own window and circuit record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
+    win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
-    mine, doc = IF.of_records(out, LAW, RA.catalog_resolve)
+    mine, doc = IF.of_records(out, SAMPLING_DESIGN, RA.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
                            leaf_layer=CS.leaf_layer(publics))
@@ -311,7 +311,7 @@ def _check(written, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as records_audit ties it (`tie_of`, no prefix)."""
     tied, _pins = RA.tie_of(written.doc, W, None)
     mine = written.mine
-    return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
+    return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
                      tied["log"], registered=tied["registered"], outputs=tied["outputs"], schemas=tied["schemas"],
                      window_root=RUN)
 
@@ -371,7 +371,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
     against, standing in for their proofs."""
     mine, (tied, _pins) = written.mine, RA.tie_of(written.doc, W, None)
     program, query = mine.program, mine.query
-    drawn = D.derive(program, query, LAW)
+    drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": P.units(program, query), "units": units}
     proved = D.proved(draw)
@@ -380,7 +380,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
                 "receipt": REG.receipt(R, "v", received="2000-01-01T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
-    params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
+    params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
                            registered=tied["registered"], scheme=CS.SCHEME, outputs=tied["outputs"], schemas=tied["schemas"])
     params |= {"window_root": RUN}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),
@@ -398,7 +398,7 @@ def lean() -> SimpleNamespace:
 @RECORDS
 def test_one_stage_s_lean_accepts_r_on_w_and_refuses_it_on_a_w_of_another_root(toy, written, lean, tmp_path):
     """One-stage's Lean verifier accepts R tied to W (its log record reader takes Pearl+'s W, and its R1-R7 take each value
-    as W's 32-bit ``row-seg/v1`` entry) and names R's digest; tied to W' it refuses R's registration; and it accepts R'
+    as W's 32-bit ``row-seg/v1`` entry) and names R's digest; tied to W' it refuses R's docket; and it accepts R'
     tied to W', as R1-R7 do."""
     SC, flipped = lean.one.SC, _flipped(toy)
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, toy.W, written.R), tmp_path)

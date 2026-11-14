@@ -49,13 +49,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, comb, floor, inf, log, log2, nextafter
 from pathlib import Path
-
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
 
 from verity.protocols.proofs.spot.prover.cost import h200 as H
 
@@ -242,7 +239,7 @@ class _Memo(Stratum):
         return _RISK[key]
 
 
-def law(sizes: dict[str, int], cands: list[Candidate]) -> Stratified:
+def sampling_design(sizes: dict[str, int], cands: list[Candidate]) -> Stratified:
     return Stratified(tuple(_Memo(c.template, c.units, sizes[c.template]) for c in cands if c.template in sizes))
 
 
@@ -271,7 +268,7 @@ def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Object
     `count_bound` the leak is at least `certify`'s."""
     chosen = [c for c in cands if c.template in sizes]
     d = objective.delta
-    st = law(sizes, chosen)
+    st = sampling_design(sizes, chosen)
     harm = st.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
     work = st.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
     count = floor(st.harm_bound({c.template: 1.0 for c in chosen}, d))
