@@ -511,8 +511,9 @@ def test_a_v2_binding_past_its_range_is_refused_by_name(bad) -> None:
         BC.opening_rows_v2(_v2(P1024, **bad))
 
 
-#: each row bound of `LEVELS` with a costliest split at its level bound (one tree at its width limit, another the rest)
-COSTLIEST = {16: (28, 32, 4), 64: (1, 32, 19)}
+#: each row bound of `LEVELS` with the costliest split of its levels bound (`block_check`'s docstring: one tree filled to its
+#: 32 levels first)
+COSTLIEST = {16: (1, 31, 32), 64: (1, 19, 32)}
 
 
 @pytest.mark.parametrize("rows", sorted(BC.LEVELS))
@@ -529,7 +530,7 @@ def test_v2s_costliest_legal_bindings_are_admitted_and_a_level_more_refused(rows
                 S = SimpleNamespace(N=field[0], C=field[1], K=3, MASKED=1, BYTES=4096, ROWS=n, LEAF=16,
                                     **dict(zip(("DR", "DP", "DV"), split)))
                 assert BC.opening_rows_v2(S)
-        for more in (dict(DR=dr, DP=dp, DV=dv + 1), dict(DR=dr, DP=dv + 1, DV=dp)):
+        for more in (dict(DR=dr + 1, DP=dp, DV=dv), dict(DR=dr, DP=dp + 1, DV=dv)):
             want = (f"^BlockOpeningCheck_v2: DR \\+ DP \\+ DV is at most {top} levels at {low} to {rows} sketch rows, not "
                     f"{top + 1}: ")
             with pytest.raises(ValueError, match=want):
