@@ -32,7 +32,7 @@ CERTIFIER_PRIVATE).
 certifier's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
 reads of it and the period's compute audit), each whole, so a file in either that no declaration covers is a finding;
 and the window circuit's inputs and count, each the verifier's: the registered compiler (`COMPILER`), the advice
-registration (`ADVICE_REGISTRATION`, its length held to the cap: `padded`), the weights registration (`WEIGHTS`) and each
+registration (`ADVICE_REGISTRATION`, its length held to `cap_bits`: `padded`), the weights registration (`WEIGHTS`) and each
 class's count (`COUNT`). None of them reads the advice: an advice binding, a compile, an unpadded length or a φ that
 carries a workload is a finding.
 
@@ -190,7 +190,7 @@ PERIOD = {**under("answer", ONE_STAGE), "free": S, "steps": S, **under("program"
 #: its period audit)
 V3C_DOCS: dict[str, dict[str, Any]] = {"summary.json": SUMMARY_DOC, "window/audit.json": AUDIT_RECORD,
                                        "registration.json": REGISTRATION, "period.json": PERIOD}
-#: the run's registered compiler (`prove_path.compiler_doc`): its name, digest and cap, the compiler it wraps and the
+#: the run's registered compiler (`prove_path.compiler_doc`): its name, digest and `cap_bits`, the compiler it wraps and the
 #: server's code, its model's transfer gates, the default seed and φ (the model, target, TP, sampling, engine and
 #: execution), all structure. φ's workload is the requests', which a registered φ never carries: nothing under it is
 #: declared
@@ -201,7 +201,7 @@ COMPILER = {
 }
 #: a window's advice registration as the run publishes it (`served_verdicts.public_registration`): its binding's compiler
 #: and the registered compiler, structure; the advice's root and each weight's root (`registered_roots`), hiding
-#: commitments; the advice's length and rows, which `padded` holds to the cap; and the window commit it names
+#: commitments; the advice's length and rows, which `padded` holds to `cap_bits`; and the window commit it names
 ADVICE_REGISTRATION = {
     "schema": S, "scheme": S, "binding.compiler.name": S, "binding.compiler.digest": S, "binding.advice.root": M,
     "binding.advice.bits": S, **{f"compiler.{k}": S for k in ("name", "digest", "cap_bits", "inner.name", "inner.digest")},
@@ -317,22 +317,22 @@ def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Fi
 
 
 def padded(rel: str, reg: Any) -> list[Finding]:
-    """The advice registration's length at its cap (`served_verdicts.public_registration`): ``binding.advice.bits`` its
+    """The advice registration's length at its limit (`served_verdicts.public_registration`): ``binding.advice.bits`` its
     compiler's ``cap_bits`` and ``rows`` the rows those fill, else a finding, the advice's own length being the
     window's."""
     try:
-        cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+        limit, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
         got = {"binding.advice.bits": reg["binding"]["advice"]["bits"], "rows": reg["rows"]}
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
-        return [Finding(rel, "binding.advice.bits", "no length the cap can be read against")]
-    want = {"binding.advice.bits": cap, "rows": -(-cap // row_bits) if row_bits > 0 else None}
-    return [Finding(rel, k, "the advice's own length, not the cap's") for k in got if got[k] != want[k]]
+        return [Finding(rel, "binding.advice.bits", "no length cap_bits can be read against")]
+    want = {"binding.advice.bits": limit, "rows": -(-limit // row_bits) if row_bits > 0 else None}
+    return [Finding(rel, k, "the advice's own length, not cap_bits") for k in got if got[k] != want[k]]
 
 
 def received(out: Path) -> tuple[list[Finding], Counter]:
     """What a verifier on another machine reads of a served run's ``out`` (module docstring): each dir of
     `RECEIVED_DIRS` scanned whole, each path of `RECEIVED` by its declaration, the advice registration's length held to
-    its cap (`padded`). A dir or file missing is no finding: what reads it reads its absence."""
+    its limit (`padded`). A dir or file missing is no finding: what reads it reads its absence."""
     kinds, found = Counter(), []
     for sub, docs in RECEIVED_DIRS.items():
         if (out / sub).is_dir():
