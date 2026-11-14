@@ -361,6 +361,14 @@ by their cgroup scope (what `research cancel` and a timeout stop), `pyspy.py` du
 `source_identity.py` records which source tree each imported package resolves to. Outside `research`, `infra/ops` reads
 `telemetry.job`'s secret-name pattern, and the vLLM integration's tests import `source_identity`.
 
+`telemetry/fixtures/run_fixtures.sh` checks the classifier against the real kernel, which `tests/test_telemetry.py` feeds
+synthetic evidence: each case (`oom_own`, `timeout`, `guardian`, `bystander`, `forkshare`, `writer`, `sampler_killed`,
+`sampler_denied`, `truncated`, `spans`) runs a workload under `tele run`, the memory hog, shared mapping, buffered writer and
+span emitter beside it (`hog.py`, `forkshare.py`, `writer.py`, `spans.py`), and writes what `failure.json` concluded beside the
+case's expectation to `OUT/SUMMARY.txt`. Nothing starts it. Run it by hand after a change to how an attempt's end is classified
+or its cgroup read (`classify.py`, `cgroup.py`, `sample.py`), as root in a Linux pod of its own whose cgroup (v2) has a memory
+limit, since its cases drive that cgroup to an OOM kill: `bash src/research/telemetry/fixtures/run_fixtures.sh OUT [CASE...]`.
+
 ### The Job queue: `research jobs`
 
 `src/research/jobs/` is the client side of the Job queue, the control app's `/api/jobs`: batch, unattended work on pods, where a
