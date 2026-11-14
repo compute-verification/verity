@@ -412,7 +412,7 @@ def test_each_lanes_prog_is_its_own_chunk():
     entries port, of 2 leaves, of one pinned template of 4 members; not with the lanes swapped, a chunk of other
     leaves, lane 1's tree missing, or another template's chunk 1; and the scan's lane-1 tree alone ties the audit."""
     s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2),
-                              audits=[PC.Audit(0, 0, "", 4, 0, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
+                              audits=[PC.Audit(0, 0, "", 4, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
 
     def reg(*ports) -> dict:
         return {"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"} for q, root, n in ports]}
@@ -657,7 +657,7 @@ def test_the_rows_forms_bound_counts_what_it_says():
     8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit sampled in part with at most 2
     incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
     them."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", 1, WardenParams(),
+    p = Params((PC.Audit(0, 3, "", 10),), (7, 2), 0, 2, "a", None, b"", "", 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
     (scan,) = out["scans"]
@@ -669,7 +669,7 @@ def test_the_rows_forms_bound_counts_what_it_says():
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
     assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
-    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
+    w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
     tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
     assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)

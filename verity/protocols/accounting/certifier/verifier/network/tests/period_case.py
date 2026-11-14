@@ -153,14 +153,13 @@ SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0eb
 @dataclasses.dataclass(frozen=True)
 class Audit:
     """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
-    SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
+    SHA-512, its units (its root's template instances) and its slot entries'
     templates (`entries`: each root template node calling `SlotEntry_v1` or `SelectEntry_v1`, by descriptor id, members
     and closure digest, `slot_entry_digest`)."""
     free: int
     steps: int
     program: str
     units: int
-    bits: int
     entries: tuple[tuple[str, int, str], ...] = ()
 
 
@@ -495,13 +494,12 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
-    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in nodes
-             if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    units = [_members(x) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
+    return Audit(free, steps, program_sha512(j), sum(units), entries)
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
