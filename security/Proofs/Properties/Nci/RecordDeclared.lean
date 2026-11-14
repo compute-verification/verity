@@ -177,10 +177,11 @@ theorem declared_open {W : Spot.Wires.Wiring} {ds : List Decl} {roots : List Tab
 
 /-- One more port of the last opening, with its declaration. -/
 theorem declared_port {W : Spot.Wires.Wiring} {a : Array Decl} {roots : List TableRead} {os : List Opening}
-    (reader table key : String) (ports : List String) (verdict : String) (start units : Nat) (p : String)
-    (bits : Nat) (h : Declared W a.toList roots (os ++ [⟨reader, table, key, ports, verdict, start, units⟩])) :
+    (reader table key : String) (ports : List String) (verdict : String) (row : Option String) (start units : Nat)
+    (p : String) (bits : Nat)
+    (h : Declared W a.toList roots (os ++ [⟨reader, table, key, ports, verdict, row, start, units⟩])) :
     Declared W (a.push ⟨rect reader p start units (W.cutsOf reader p), bits, .opening os.length⟩).toList roots
-      (os ++ [⟨reader, table, key, ports ++ [p], verdict, start, units⟩]) := by
+      (os ++ [⟨reader, table, key, ports ++ [p], verdict, row, start, units⟩]) := by
   obtain ⟨hr, ho⟩ := h
   rw [Array.toList_push]
   refine ⟨fun rd hrd => ?_, fun e he i hi => ?_⟩
@@ -198,7 +199,7 @@ theorem declared_port {W : Spot.Wires.Wiring} {a : Array Decl} {roots : List Tab
         rw [List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero,
           Option.some.injEq] at ho'
         subst ho'
-        exact ⟨⟨reader, table, key, ports ++ [p], verdict, start, units⟩,
+        exact ⟨⟨reader, table, key, ports ++ [p], verdict, row, start, units⟩,
           by rw [List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero], q,
           List.mem_append_left _ hq, hw⟩
     · rw [List.mem_singleton.1 he] at hi
@@ -210,21 +211,21 @@ theorem declared_port {W : Spot.Wires.Wiring} {a : Array Decl} {roots : List Tab
 /-- An opening, read after the others: the loop over its ports, each step of which declares one port's rectangle
 for the opening the declarations will name next, keeps what the walk keeps. -/
 theorem declared_opening {W : Spot.Wires.Wiring} {roots : List TableRead} {os : List Opening} {α : Type}
-    (reader table key verdict : String) (start units : Nat)
+    (reader table key verdict : String) (row : Option String) (start units : Nat)
     {f : α → Array Decl × List String → Except String (ForInStep (Array Decl × List String))}
     (hf : ∀ x s s', f x s = .ok s' → ∃ p bits, s' = .yield
       (s.1.push ⟨rect reader p start units (W.cutsOf reader p), bits, .opening os.length⟩, s.2 ++ [p]))
     (l : Array α) (a a' : Array Decl) (ports : List String) (h : Declared W a.toList roots os)
     (hl : forIn l (a, []) f = .ok (a', ports)) :
-    Declared W a'.toList roots (os ++ [⟨reader, table, key, ports, verdict, start, units⟩]) := by
+    Declared W a'.toList roots (os ++ [⟨reader, table, key, ports, verdict, row, start, units⟩]) := by
   rw [← Array.forIn_toList] at hl
   exact forIn_list_prefix
-    (fun _ s => Declared W s.1.toList roots (os ++ [⟨reader, table, key, s.2, verdict, start, units⟩])) f
+    (fun _ s => Declared W s.1.toList roots (os ++ [⟨reader, table, key, s.2, verdict, row, start, units⟩])) f
     l.toList [] _ _
     (by
       intro _ x s s' hs hx
       obtain ⟨p, bits, rfl⟩ := hf x s s' hx
-      exact ⟨_, rfl, declared_port reader table key s.2 verdict start units p bits hs⟩)
+      exact ⟨_, rfl, declared_port reader table key s.2 verdict row start units p bits hs⟩)
     (declared_open _ h) hl
 
 /-- **Which declaration a table read and an opening's port are**, of the declarations `inputsOf` returns: each
@@ -266,7 +267,7 @@ theorem inputsOf_declared {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} 
     all_goals try (cases hs; done)
     rename_i hin
     cases hs
-    exact ⟨_, rfl, declared_opening _ _ _ _ _ _ (by
+    exact ⟨_, rfl, declared_opening _ _ _ _ _ _ _ (by
       intro pj s' s'' hs'
       repeat' split at hs'
       all_goals try (cases hs'; done)
