@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The sampled audit's charge: the leak bound when step proof blocks are sampled
 
-Theorem 3's bounds on `constantRate` (`Guarantees`) count runs that the Program accepts exactly. A sampled
+Theorem 3's count on `constantRate` counts runs that the Program accepts exactly. A sampled
 audit gives that only at `δ ≥ miss(1)`, where no unit may be faulty. At a smaller `δ` it gives `Accepted` by the
 circuit's Program (`circuitProgram`) with advice also held at the incorrect proof blocks' committed gates
 (`SampledAuditAccepted`, `Guarantees/SampledAudit`). `EncardAccSeqsSampledLe` counts those runs: the charge adds the

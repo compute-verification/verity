@@ -42,8 +42,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
-  check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
-  period by `network-period check` and writes its accepted answer as the block record's certifier entry.
+  check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` writes a
+  period's accepted answer as the block record's certifier entry.
   `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
   runbook (below).
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).

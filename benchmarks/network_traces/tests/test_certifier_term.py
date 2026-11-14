@@ -1,7 +1,7 @@
 """leak_bounds' scaling by requests, which `verity bench certifier_term` prints: the network certifier's terms at the
 load of a node, the reference datacenter and the world, each check's by its own rule.
 
-- the scan's terms are the rows form's and N2's the clock form's, held here to the Lean's `clog2` on a hand-worked
+- the scan's terms are the rows form's, held here to the Lean's `clog2` on a hand-worked
   execution phase, and the table to a hand-worked world of three machines, in exact arithmetic;
 - each of the three changes zeroes what it should and leaves the rest, the failed connections' pooled charge bounds
   the count it states, and the design's term is the jitter, that charge and the count;
@@ -48,7 +48,7 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS  # n
 PHASES = {"week": 4_725, "month": 20_250, "year": 246_375}
 #: the design before its stop block has been sampled, the one row with no stop block
 NO_STOP = "design, no stop block"
-NAMES = ("scan", "N2", "lengths", "timing", "entries", "all three", NO_STOP, "design")
+NAMES = ("scan", "lengths", "timing", "entries", "all three", NO_STOP, "design")
 #: the label's short form, as a column's header at D_j = 1 and a row's printed name carry it
 CARD = "simulated set-time card"
 
@@ -98,18 +98,6 @@ def test_the_scans_terms_are_the_rows_forms_on_a_hand_worked_execution_phase():
     assert LB.terms(Fraction(7, 2), Fraction(1, 4), cells=1_001, steps=32, dj=2).certifier == 35 + 35 + 8
 
 
-def test_n2s_terms_are_the_clock_forms_on_a_hand_worked_link():
-    """One link of 5 execution phases under 128 syncs: ⌈log2 128^5⌉ = 35 bits of schedules, no fail cell, and the
-    jitter a step a bucket. The schedules are a ceiling over a link's phases, not a phase's ceiling summed."""
-    assert LB.clock_terms(1, 5, syncs=128, steps=32, dj=2) == LB.Terms(35, 0, 160, None)
-    assert LB.clock_terms(3, 5, syncs=128, steps=32).certifier == 105
-    assert LB.clock_terms(1, 5, syncs=1, steps=32) == LB.Terms(0, 0, 0, None)
-    for syncs, phases in ((3, 5), (3, 4_725), (100, 7), (129, 1)):
-        assert LB.clock_terms(1, phases, syncs=syncs, steps=1).schedules == clog2(syncs ** phases)
-    assert LB.clock_terms(1, 5, syncs=3, steps=1).schedules == 8 < 5 * clog2(3)
-    assert LB.clock_terms(2, Fraction(9, 2), syncs=128, steps=32, dj=2) == LB.Terms(2 * 32, 0, 2 * 144, None)
-
-
 def test_the_failed_connections_pooled_charge_bounds_the_count_it_states():
     """Of 8 connections of at most 7 cells, at most 2 fail in 1 + 8·8 + 28·64 = 1,857 ways, 10.9 bits; the charge is
     2·(log2(8e/2) + log2 8) = 10 + 2·log2 e, and no failure is charged nothing."""
@@ -147,27 +135,23 @@ def test_the_assumed_class_has_the_scans_widths():
 
 
 def test_the_table_on_a_hand_worked_world():
-    """10 requests a link's execution phase, 10 bits a connection, 18,048 bits a slot entry, 32 buckets a phase, 7
-    bits of N2's schedules a phase."""
+    """10 requests a link's execution phase, 10 bits a connection, 18,048 bits a slot entry, 32 buckets a phase."""
     got = rows(small())
-    assert len(got) == 3 * 3 * 8 and tuple(LB.ROWS) == NAMES and {k[2] for k in got} == set(NAMES)
+    assert len(got) == 3 * 3 * 7 and tuple(LB.ROWS) == NAMES and {k[2] for k in got} == set(NAMES)
     for scope, machines in (("node", 1), ("datacenter", 2), ("world", 3)):
         for period, n in PHASES.items():
-            r, n2 = got[scope, period, "scan"], got[scope, period, "N2"]
+            r = got[scope, period, "scan"]
             phases, requests = machines * n, machines * n * 10
             assert (r.scope.machines, r.scope.gpus, r.phases, r.requests) == (machines, 8 * machines, phases, requests)
             assert r.eps == Fraction(phases, 739_125) / 2 ** 20
             for dj, jitter in ((1, 0), (2, 32 * phases)):
                 assert r.terms[dj] == LB.Terms(10 * requests, 10 * requests, jitter, 18_048 * requests)
                 assert r.terms[dj].certifier == 20 * requests + jitter
-                assert n2.terms[dj] == LB.Terms(7 * phases, 0, jitter, None)
     week, year = got["node", "week", "scan"], got["world", "year", "scan"]
     assert week.terms[2] == LB.Terms(472_500, 472_500, 151_200, 852_768_000) and week.terms[2].certifier == 1_096_200
     assert year.requests == 7_391_250 and year.phases == 739_125
     assert (year.terms[1].certifier, year.terms[2].certifier) == (147_825_000, 171_477_000)
     assert year.terms[2].certifier == 3 * got["node", "year", "scan"].terms[2].certifier
-    assert got["world", "year", "N2"].terms[2].certifier == 7 * 739_125 + 32 * 739_125 == 28_825_875
-    assert rows(small(syncs=1))["world", "year", "N2"].terms[1].certifier == 0
 
 
 def test_each_change_zeroes_what_it_should_and_leaves_the_rest():
@@ -287,16 +271,15 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     served = seconds * fleet["mfu_serve"]["value"] * peak["flop_per_second"] / flop
     assert inp["world_requests"].value == pytest.approx(served, rel=1e-12) and inp["world_requests"].mark == "modeled"
     for name in ("response_ids", "id_bits", "phase_buckets", "bucket_s", "connections", "links", "failure_rate",
-                 "lanes", "classes", "delay", "ingress_buckets", "syncs"):
+                 "lanes", "classes", "delay", "ingress_buckets"):
         assert inp[name].mark == "assumed"
-    assert [inp[k].value for k in ("response_ids", "id_bits", "phase_buckets", "bucket_s", "lanes", "syncs")] == [
-        4_096, 18, 1_280, LB.TAU, None, 128]
-    assert LB.TAU == Fraction(1, 10) and "calibration.py" in inp["syncs"].source
-    assert (ROOT / "verity/protocols/accounting/certifier/verifier/calibration.py").is_file()
-    given = LB.inputs(world_requests=1e16, response_ids=875, syncs=16, lanes=512)
+    assert [inp[k].value for k in ("response_ids", "id_bits", "phase_buckets", "bucket_s", "lanes")] == [
+        4_096, 18, 1_280, LB.TAU, None]
+    assert LB.TAU == Fraction(1, 10)
+    given = LB.inputs(world_requests=1e16, response_ids=875, lanes=512)
     assert (given["world_requests"].value, given["world_requests"].mark) == (1e16, "assumed")
-    assert [given[k].value for k in ("response_ids", "syncs", "lanes")] == [875, 16, 512]
-    assert "--syncs" in given["syncs"].source and "--lanes" in given["lanes"].source
+    assert [given[k].value for k in ("response_ids", "lanes")] == [875, 512]
+    assert "--lanes" in given["lanes"].source
 
 
 def test_the_counts_schedule_is_the_cost_runners_by_default_and_each_part_is_an_input():
@@ -539,11 +522,11 @@ def test_every_row_names_its_request_count():
         assert name != "given" or (inp["world_requests"].value, inp["world_requests"].mark) == (1e16, "assumed")
         doc = LB.document(inp)
         assert doc["request_count"] == doc["inputs"]["request_count"]["value"] == name
-        assert len(doc["rows"]) == 72 and {r["request_count"] for r in doc["rows"]} == {name}
+        assert len(doc["rows"]) == 63 and {r["request_count"] for r in doc["rows"]} == {name}
         text = LB.render(doc).splitlines()
         assert sum(line.startswith(f"Request count {name}: {LB.COUNTS[name]}. Every row names") for line in text) == 1
         body = [line.split("|") for line in text if line.startswith(("| node ", "| datacenter ", "| world "))]
-        assert len(body) == 9 + 72 + 72 and all(name in (c.strip() for c in cells[3:5]) for cells in body)
+        assert len(body) == 9 + 63 + 63 and all(name in (c.strip() for c in cells[3:5]) for cells in body)
         heads = [line for line in text if line.startswith("| scope ")]
         assert len(heads) == 3 and all("| request count |" in line for line in heads)
     assert list(LB.COUNTS) == [*LB.REQUESTS, "given"] and LB.REQUESTS[0] == "plan"
@@ -562,8 +545,8 @@ def test_a_scope_serves_the_worlds_requests_in_proportion_to_its_gpu_seconds():
 
 
 def test_nothing_counted_by_capacity_scales_with_the_requests():
-    """Twice the requests are twice the scan's schedules and fail cells and nothing else: the jitter and N2's
-    schedules are by link, and with the lanes given so are the entries, every slot's, 512 lanes × 1,280 / 16 strides
+    """Twice the requests are twice the scan's schedules and fail cells and nothing else: the jitter is by link, and
+    with the lanes given so are the entries, every slot's, 512 lanes × 1,280 / 16 strides
     of 73,776 bits a link's execution phase."""
     once, twice = (rows(LB.inputs(world_requests=n * 10 ** 16, lanes=512)) for n in (1, 2))
     for key, r in once.items():
@@ -572,12 +555,10 @@ def test_nothing_counted_by_capacity_scales_with_the_requests():
         for dj in LB.JITTERS:
             a, b = r.terms[dj], t.terms[dj]
             assert (b.jitter, b.entries) == (a.jitter, a.entries)
-            assert (b.schedules, b.cells) == ((a.schedules, a.cells) if key[2] == "N2" else
-                                              (2 * a.schedules, 2 * a.cells))
+            assert (b.schedules, b.cells) == (2 * a.schedules, 2 * a.cells)
     world = once["world", "year", "scan"]
     assert world.terms[1].entries == world.phases * 512 * 80 * 73_776
     assert once["node", "week", "scan"].terms[1].entries == 4_725 * 512 * 80 * 73_776
-    assert once["world", "year", "N2"].terms[1] == LB.Terms(7 * world.phases, 0, 0, None)
     least = rows(LB.inputs(world_requests=10 ** 16))["world", "year", "scan"].terms[1].entries
     assert least == 73_776 * 10 ** 16 < world.terms[1].entries
 
@@ -644,7 +625,7 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert doc["target"] == {"value": 300.0, "unit": "GB", "bits_a_phase": 300 * LB.GB / 739_125,
                              "bits_a_request": 300 * LB.GB / 7_391_250}
     assert doc["weights"]["value"] == LB.WEIGHTS.bits / LB.GB
-    assert doc["phase"] == {"seconds": 128.0, "buckets": 32, "requests": 10.0, "connection_bits": 10, "sync_bits": 7,
+    assert doc["phase"] == {"seconds": 128.0, "buckets": 32, "requests": 10.0, "connection_bits": 10,
                             "entry_bits": 18_048}
     assert doc["failure_rate_at_target"] == 1.0 and "one entry a request" in doc["entries_rule"]
     assert set(doc["inputs"]) == set(small()) and all(set(i) == {"value", "unit", "mark", "source"}
@@ -652,10 +633,10 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert list(doc["legend"]) == list(NAMES) and all(
         set(k) == {"standing", "mark", "counts"} for k in doc["legend"].values())
     assert [k["standing"] for k in doc["legend"].values()] == [
-        "on main", "on main", *["a change to the scan"] * 4, *["a design with no run behind it"] * 2]
-    assert "by request" in doc["legend"]["scan"]["counts"] and "by link" in doc["legend"]["N2"]["counts"]
+        "on main", *["a change to the scan"] * 4, *["a design with no run behind it"] * 2]
+    assert "by request" in doc["legend"]["scan"]["counts"]
     by = {(r["scope"], r["period"], r["row"]): r for r in doc["rows"]}
-    assert len(by) == 72 and all(r["covers"] == 1.0 and r["standing"] == doc["legend"][r["row"]]["standing"]
+    assert len(by) == 63 and all(r["covers"] == 1.0 and r["standing"] == doc["legend"][r["row"]]["standing"]
                                  for r in by.values())
     r = by["world", "year", "scan"]
     assert (r["machines"], r["gpu_seconds"], r["requests"], r["phases"]) == (3, 24 * 31_536_000, 7_391_250, 739_125)
@@ -666,8 +647,7 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
                               "bits_a_phase": 232.0, "bits_a_request": 23.2}
     assert r["entries"]["bits"] == 18_048 * 7_391_250
     assert all(by["world", "year", name]["entries"] is None
-               for name in ("entries", "all three", NO_STOP, "design", "N2"))
-    assert by["world", "year", "N2"]["term"]["2"]["bits_a_phase"] == 39.0
+               for name in ("entries", "all three", NO_STOP, "design"))
     count = by["world", "year", "design"]["count"]
     assert count == {"bits": 739_125 * (6 * math.log2(11)), "GB": 739_125 * (6 * math.log2(11)) / LB.GB}
     assert by["world", "year", "design"]["term"]["2"]["bits"] == pytest.approx(23_652_000 + count["bits"], rel=1e-12)
@@ -687,13 +667,13 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
         f"- scan (on main; run, not proved): {doc['legend']['scan']['counts']}"]
     json.dumps(doc)
     few = LB.document(small(), only=["world"], periods=["year", "week"])
-    assert [(x["scope"], x["period"]) for x in few["rows"]] == [("world", "week")] * 8 + [("world", "year")] * 8
+    assert [(x["scope"], x["period"]) for x in few["rows"]] == [("world", "week")] * 7 + [("world", "year")] * 7
     assert few["value"] == doc["value"]
     text = LB.render(doc)
     assert "commit c0ffee, run r1" in text and "## The terms in GB" in text and "## The terms in bits" in text
     assert "the compute side's" in text and f"| world      | year   | all three, {CARD} |" in text
     assert f"| world      | year   | {NO_STOP} " in text and f"| world      | year   | timing, {CARD} " in text
-    assert "- design (a design with no run behind it): " in text and "- N2 (on main): " in text
+    assert "- design (a design with no run behind it): " in text
     assert f"- {NO_STOP} (a design with no run behind it): " in text
     assert "| lanes " in text and "| none " in text
     assert f"| world | year   | all three, {CARD} |" in LB.render(few) and "| node" not in LB.render(few)
@@ -756,7 +736,7 @@ def test_the_term_of_record_comes_first_in_both_tables():
     one, n = f"D_j = 1, {CARD}", LB._n
     text = LB.render(LB.document(small(), only=["world"], periods=["year"]))
     scopes, gb, bits = tables(text)
-    assert [len(t) for t in (scopes, gb, bits)] == [1, 8, 8]
+    assert [len(t) for t in (scopes, gb, bits)] == [1, 7, 7]
     assert list(gb[0]) == [
         "scope", "period", "row", "request count", "schedules", "cells", "count", "jitter, D_j = 2",
         f"jitter, {one}", "term, D_j = 2", "x target, D_j = 2", "x weights, D_j = 2", f"term, {one}",
@@ -802,7 +782,7 @@ def test_a_row_that_rests_on_the_set_time_card_carries_the_label():
     for inp in (small(), small(failure_rate=Fraction(1, 100), lanes=5), LB.inputs(), LB.inputs(failure_rate=rate),
                 LB.inputs(requests="census"), LB.inputs(world_requests=1.778e16, response_ids=1_024)):
         doc = LB.document(inp)
-        assert len(doc["rows"]) == 72 and [r["row"] for r in doc["rows"][:8]] == list(NAMES)
+        assert len(doc["rows"]) == 63 and [r["row"] for r in doc["rows"][:7]] == list(NAMES)
         for r in doc["rows"]:
             assert r["row"] in NAMES and r["with_set_time_card"] == (LB.SET_TIME if r["row"] in carries else None)
             assert (r["jitter"]["2"]["bits"] == 0) == (r["row"] in carries) and r["jitter"]["1"]["bits"] == 0
@@ -822,7 +802,7 @@ def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert LB.main(["--json", "--commit", "c0ffee", "--run", "r1", "--world-requests", "1e16"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc == json.loads(json.dumps(LB.document(LB.inputs(world_requests=1e16), commit="c0ffee", run="r1")))
-    assert doc["with_set_time_card"]["value"] == 2 * 13 * 1e16 / LB.GB and len(doc["rows"]) == 72
+    assert doc["with_set_time_card"]["value"] == 2 * 13 * 1e16 / LB.GB and len(doc["rows"]) == 63
     assert doc["value"] == pytest.approx((2 * 13 * 1e16 + 1_280 * 46_870_000 * 246_375) / LB.GB, rel=1e-12)
     assert doc["target"]["bits_a_phase"] == pytest.approx(300 * LB.GB / (46_870_000 * 246_375))
     assert doc["failure_rate_at_target"] is None and doc["count"]["world_year"]["of_target"] > 1
@@ -833,12 +813,12 @@ def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert 1e-6 < rate < 1e-5 and LB.failed(1e16, 1e16 * rate, 4_097) == pytest.approx(300 * LB.GB)
     assert LB.main(["--scope", "world", "--period", "year", "--commit", "c0ffee", "--failure-rate", "1/1000",
                     "--response-ids", "875", "--target-gb", "150", "--phase-buckets", "32", "--bucket-s", "4",
-                    "--syncs", "16", "--lanes", "512", "--classes", "2", "--delay", "7", "--ingress-buckets",
+                    "--lanes", "512", "--classes", "2", "--delay", "7", "--ingress-buckets",
                     "1"]) == 0
     text = capsys.readouterr().out
     assert "| world | year   | scan " in text and "| node " not in text and "The target is 150 GB" in text
     assert "each charged 10 bits for its schedule" in text and "| failure_rate " in text
-    assert "N2's schedules are 4 bits" in text and "512 lanes x 2 strides" in text
+    assert "512 lanes x 2 strides" in text
     assert "A link's execution phase is 128 s of 32 buckets" in text
     assert ("each of 2 content classes holds, one of R + 1 values a class, so a link's execution phase is charged "
             f"2 x log2(R + 1) = {LB._n(2 * math.log2(2_049))} bits, whatever it serves. R = 2,048 is the most "
@@ -868,8 +848,6 @@ def test_refusals():
         LB.terms(1, 1, cells=65, steps=32, failures=2)
     with pytest.raises(ValueError, match="egress cells are an integer from 0"):
         LB.terms(1, 1, cells=6.5, steps=32)
-    with pytest.raises(ValueError, match="a positive integer of syncs"):
-        LB.clock_terms(1, 1, syncs=0, steps=32)
     with pytest.raises(ValueError, match="IDB = 33"):
         LB.Assumed(KO=1, IDB=33, T=32, tau=4)
     with pytest.raises(ValueError, match="failure rate is in \\[0, 1\\]"):

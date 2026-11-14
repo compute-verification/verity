@@ -43,7 +43,7 @@ is behind one network certifier. Over a monitoring period a scope serves GPU-sec
 `COUNTS`, and every row names its one: by default the sampling plan's (`plan`), so that the rows count the requests
 the compute audit's plan prices; the census's where a caller asks; or none, where a caller gives the world's requests
 a year. No run has certified a class for that model, so the class is assumed (`Assumed`): the most ids a response
-holds, an id's bits, and an execution phase's buckets. `table` counts each of the eight `ROWS` by its check's own
+holds, an id's bits, and an execution phase's buckets. `table` counts each of the seven `ROWS` by its check's own
 rule, and never by requests what a check counts by capacity:
 
 * the scan, `rowsTerms`'s terms (`terms`). The network certifier's own are the schedules and the fail cells,
@@ -57,9 +57,6 @@ rule, and never by requests what a check counts by capacity:
   slot's entry at its whole width (`ingress_scan.entry_bits`), lanes × T / EVERY of them a link's execution phase, a
   count by capacity that needs the class's lanes; with none given the entries are one a request, the least the check
   can charge;
-* N2, the clock form's terms (`clock_terms`): the schedules are ⌈log2 #Σ_sync^m⌉ over a link's m execution phases,
-  counted by link whatever it serves; its parameters list no connection, so it has no fail cell; and the jitter is
-  the scan's, a step a bucket;
 * the scan under each of `CHANGES`, the three changes to its check, and under all three: a response's length held to
   its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
   ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
@@ -101,7 +98,6 @@ table and its JSON.
 from __future__ import annotations
 
 import argparse
-import inspect
 import json
 import math
 import shutil
@@ -116,7 +112,6 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
-from verity.protocols.accounting.certifier.verifier import calibration
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity import protocol
 
@@ -263,20 +258,6 @@ def terms(connections: Any, scans: Any, *, cells: int, steps: int, dj: int = 1, 
     return Terms(0 if held and stop else connections * cell,
                  failed(connections, failures, cells) if held else connections * cell,
                  0 if "timing" in changes else scans * jitter, None if "entries" in changes else entries)
-
-
-def clock_terms(links: Any, phases: Any, *, syncs: int, steps: int, dj: int = 1) -> Terms:
-    """The clock form's terms (the monitoring-period check's `terms`, beside its `rowsTerms`) over ``links`` links of
-    ``phases`` execution phases each: the schedules, ⌈log2 syncs^phases⌉ a link, every assignment of a sync of Σ_sync
-    to its execution phases; no fail cell, its parameters listing no connection; and the jitter, ⌈log2 dj^steps⌉ an
-    execution phase, a step a bucket as the scan's. The entries are None: N2 holds counts, and what its link carries
-    is the compute side's."""
-    if type(syncs) is not int or syncs < 1 or not (links >= 0 and phases >= 0):
-        raise ValueError(f"Σ_sync holds a positive integer of syncs, and links and execution phases are at least 0, "
-                         f"not {syncs!r}, {links!r} and {phases!r}")
-    exact = syncs & (syncs - 1) == 0
-    a_link = math.ceil(phases * (syncs.bit_length() - 1) if exact else phases * math.log2(syncs))
-    return Terms(links * a_link, 0, links * phases * _jitter(dj, steps), None)
 
 
 class Bound(NamedTuple):
@@ -548,12 +529,12 @@ REQUESTS = ("plan", "census")
 
 class Kind(NamedTuple):
     """One of `ROWS`: where it stands (a check on main, a change to the scan's check, or a design), the changes it
-    makes to the scan's check (`CHANGES`; None for the clock form, which is another check), what it counts and by
+    makes to the scan's check (`CHANGES`), what it counts and by
     which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), whether its
     check reads the head that states each content class's held rows, so that it is charged the count (`counted`),
     and the mark its accept carries (`RUN_NOT_PROVED`; None where it carries none)."""
     standing: str
-    changes: tuple[str, ...] | None
+    changes: tuple[str, ...]
     counts: str
     stop: bool = True
     count: bool = False
@@ -567,17 +548,13 @@ NO_COUNT = ("it is charged no count: its tables are of the lengths rows' form 1,
 #: scans' δ
 SCAN_ACCEPT = ("its accept is run, not proved: it rests on verdicts the scan's driver hands the compiled record check, "
                "and nothing compiled ties them to the sessions' runs")
-#: a scope's eight rows over a monitoring period: the two checks on main, the scan under each of `CHANGES` and under
+#: a scope's seven rows over a monitoring period: the check on main, the scan under each of `CHANGES` and under
 #: all three, and the design, without its stop block and with it
 ROWS = {
     "scan": Kind("on main", (),
                  "the rows form on the network certifier's own run, as the check charges it: a schedule and a fail "
                  "cell for each connection of the period's parameters, counted by request, and the jitter of each "
                  f"link's execution phase; {SCAN_ACCEPT}", mark=RUN_NOT_PROVED),
-    "N2": Kind("on main", None,
-               "the clock form: the schedules, ⌈log2 #Σ_sync^m⌉ over a link's m execution phases, counted by link "
-               "whatever it serves; no fail cell, its parameters listing no connection; and the jitter of each "
-               "link's execution phase"),
     **{name: Kind("a change to the scan", (name,), what + (f"; {NO_COUNT}" if name == "lengths" else ""))
        for name, what in CHANGES.items()},
     "all three": Kind("a change to the scan", tuple(CHANGES),
@@ -670,7 +647,7 @@ def plan() -> dict[str, Input]:
 def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets: int = BUCKETS,
            bucket_s: float | Fraction = TAU, failure_rate: float | Fraction = 0, requests: str = "plan",
            world_requests: float | None = None, scan_delta: float | Fraction | None = None,
-           syncs: int | None = None, lanes: int | None = None, classes: int = CLASSES, delay: int = DELAY,
+           lanes: int | None = None, classes: int = CLASSES, delay: int = DELAY,
            ingress_buckets: int | None = None) -> dict[str, Input]:
     """Every input of the scaling by requests, each marked (`MARKS`) with its source.
 
@@ -687,7 +664,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     ``classes``, ``delay`` and ``ingress_buckets`` are the rest of the schedule the count is at: its content classes,
     the buckets from a connection's admission to its first egress cell's, and the buckets a release is within of its
     connection's admission, by default the delay's; each is by default the lengths rows' cost runner's
-    (`COST_RUNNER`). ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is
+    (`COST_RUNNER`). ``failure_rate`` is
     the share of connections that fail, which only the rows with the lengths held read, and ``scan_delta`` each
     execution phase's scan's δ: a caller's, or with None the one at which the row that pools the most execution
     phases carries `PERIOD_ERROR`, which `period_delta` reads from these inputs; either is assumed, no scan
@@ -706,7 +683,6 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
                          f"{RHO_HARDWARE} {gpus['value']}")
     work = "" if not card["provisional"] else ", provisional"
     macs = card["value"]["served_macs_per_token"]
-    chosen = inspect.signature(calibration.choose_sync_set).parameters
     out = {
         "world_machines": Input(round(count["value"]), "machine", _MARK[count["status"]],
                                 f"{RHO} fleet.{WORLD}.count: {count['source']}"),
@@ -765,11 +741,6 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
                                  f"no certified {MODEL} class: the buckets a release is within of its connection's "
                                  f"admission; by default the delay's, as {COST_RUNNER} cost sets it "
                                  "(--ingress-buckets)"),
-        "syncs": Input(chosen["n_delta"].default * chosen["n_rho"].default if syncs is None else syncs, "sync",
-                       "assumed",
-                       "N2's #Σ_sync, the most a calibration chooses by default: "
-                       "verity/protocols/accounting/certifier/verifier/calibration.py choose_sync_set's n_delta x n_rho"
-                       if syncs is None else "N2's #Σ_sync, given (--syncs)"),
         "failure_rate": Input(failure_rate, "failure/connection", "assumed",
                               "none measured: the share of connections that fail, which the rows with the lengths "
                               "held charge pooled (--failure-rate)"),
@@ -887,7 +858,7 @@ def table(inp: Mapping[str, Input]) -> list[Row]:
     given, never by requests what a check counts by capacity. The count (`counted`) is by link, for each of its
     execution phases, on the rows whose check reads the head that states it (`Kind.count`). A row's ε is its
     execution phases' scans' δ summed, each scan at `period_delta`'s."""
-    cls, lanes, syncs = _class(inp), inp["lanes"].value, inp["syncs"].value
+    cls, lanes = _class(inp), inp["lanes"].value
     failing, scan_delta = Fraction(inp["failure_rate"].value), period_delta(inp).delta
     if not (0 <= failing <= 1 and 0 < scan_delta < 1 and inp["world_requests"].value >= 0):
         raise ValueError(f"the failure rate is in [0, 1], the scan's δ in (0, 1) and the world's requests at least 0, "
@@ -902,16 +873,12 @@ def table(inp: Mapping[str, Input]) -> list[Row]:
         for period, s in PERIODS.items():
             requests = a_gpu_second * scope.gpus * s
             connections = requests * inp["connections"].value
-            links, each = scope.machines * inp["links"].value, Fraction(s) / cls.phase_s
-            phases = links * each
+            phases = scope.machines * inp["links"].value * Fraction(s) / cls.phase_s
             entries = requests * cls.entry if lanes is None else phases * lanes * (cls.T // EVERY) * cls.entry
             for name, kind in ROWS.items():
-                if kind.changes is None:
-                    at = {dj: clock_terms(links, each, syncs=syncs, steps=cls.T, dj=dj) for dj in JITTERS}
-                else:
-                    at = {dj: terms(connections, phases, cells=cls.cells, steps=cls.T, dj=dj, entries=entries,
-                                    changes=kind.changes, failures=failing * connections, stop=kind.stop)
-                          for dj in JITTERS}
+                at = {dj: terms(connections, phases, cells=cls.cells, steps=cls.T, dj=dj, entries=entries,
+                                changes=kind.changes, failures=failing * connections, stop=kind.stop)
+                      for dj in JITTERS}
                 if kind.count:
                     at = {dj: t._replace(count=float(phases) * a_phase) for dj, t in at.items()}
                 rows.append(Row(scope, period, name, requests, phases, at, phases * scan_delta))
@@ -1009,7 +976,6 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
             "weights": {"value": WEIGHTS.bits / GB, "unit": "GB", "label": WEIGHTS.label},
             "phase": {"seconds": float(cls.phase_s), "buckets": cls.T,
                       "requests": head["requests"] / head["phases"], "connection_bits": cls.cell,
-                      "sync_bits": clock_terms(1, 1, syncs=inp["syncs"].value, steps=cls.T).schedules,
                       "entry_bits": cls.entry},
             "count": {"rows": [name for name, kind in ROWS.items() if kind.count], "classes": count.classes,
                       "lanes": count.lanes, "lanes_given": count.given, "delay": delay, "ingress_buckets": ingress,
@@ -1106,8 +1072,8 @@ def render(doc: dict) -> str:
           for name, k in doc["legend"].items()),
         f"The entries as the scan's check charges them today: {doc['entries_rule']}.",
         f"A link's execution phase is {_n(ph['seconds'])} s of {_n(ph['buckets'])} buckets: {_n(ph['requests'])} "
-        f"requests, each charged {ph['connection_bits']} bits for its schedule and again for its fail cell; N2's "
-        f"schedules are {_n(ph['sync_bits'])} bits; the jitter is {_n(ph['buckets'])} bits at D_j = {OF_RECORD}, and "
+        f"requests, each charged {ph['connection_bits']} bits for its schedule and again for its fail cell; the "
+        f"jitter is {_n(ph['buckets'])} bits at D_j = {OF_RECORD}, and "
         f"0 at D_j = 1 {card['label']}; a slot entry is {_n(ph['entry_bits'])} bits.",
         f"The count, on the rows {' and '.join(f'`{name}`' for name in ct['rows'])}: the head of a link's execution "
         "phase states how many of "
@@ -1189,9 +1155,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="verity bench certifier_term",
         description=f"The network certifier's term for {MODEL} at the load of a node, the census's reference "
-                    "datacenter and the world, over a week, a month and a year, in bits and GB: as each check on "
+                    "datacenter and the world, over a week, a month and a year, in bits and GB: as the check on "
                     "main charges it by its own rule, under each of three changes to the scan's check, and for the "
-                    "design that has no run behind it, without its stop block and with it: eight rows a scope and "
+                    "design that has no run behind it, without its stop block and with it: seven rows a scope and "
                     f"monitoring period. The term of record is the one at D_j = {OF_RECORD}, two release schedules; "
                     f"the term at D_j = 1 is printed as \"{SET_TIME}\".")
     ap.add_argument("--json", action="store_true",
@@ -1218,8 +1184,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--ingress-buckets", type=int, metavar="I",
                     help="the buckets a release is within of its connection's admission, which the count's R reads "
                          "(default: the delay's)")
-    ap.add_argument("--syncs", type=int, metavar="N",
-                    help="N2's #Σ_sync (default: the most a calibration chooses)")
     ap.add_argument("--failure-rate", type=Fraction, default=Fraction(0), metavar="F",
                     help="the share of connections that fail, charged pooled where the lengths are held (default 0)")
     ap.add_argument("--requests", choices=REQUESTS, default=REQUESTS[0],
@@ -1241,7 +1205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     inp = inputs(response_ids=a.response_ids, id_bits=a.id_bits, buckets=a.phase_buckets, bucket_s=a.bucket_s,
                  failure_rate=a.failure_rate, requests=a.requests, world_requests=a.world_requests,
-                 scan_delta=a.scan_delta, syncs=a.syncs, lanes=a.lanes, classes=a.classes, delay=a.delay,
+                 scan_delta=a.scan_delta, lanes=a.lanes, classes=a.classes, delay=a.delay,
                  ingress_buckets=a.ingress_buckets)
     doc = document(inp, target_gb=a.target_gb, commit=a.commit or _head(), run=a.run, only=a.scope or (),
                    periods=a.period or ())

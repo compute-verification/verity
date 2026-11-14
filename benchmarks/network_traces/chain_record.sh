@@ -47,9 +47,8 @@
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
-#      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period
-#      is built, and an accepted report whose answer is this chain's and network-period's own on its case also writes
-#      $OUT/report/block.json, the block record's certifier entry (chain_record.block_entry)
+#      X.case.json beside it, a path or a name under inputs/): the report's --period-answer, whose block says why it
+#      writes no certifier entry (chain_record.block_entry)
 #      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
@@ -158,10 +157,9 @@ mkdir -p "$OUT/gates"
   ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
-(cd verity/protocols/accounting/certifier/verifier/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
+(cd verity/protocols/accounting/certifier/verifier/lean && lake build network-records) \
   > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
 export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-records
-[ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-period
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 if [ "${CR_PATH:-}" = warden ]; then
   "$PY" "$CR" certs --warden-run "$WARDEN" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
@@ -282,7 +280,7 @@ PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
   $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   $( [ "${CR_PATH:-}" = warden ] && echo --tie "$OUT/tie/summary.json") \
-  ${PA:+--period-answer "$PA"} ${CR_SERVER:+--server "$CR_SERVER"} --out "$OUT/report" | tee -a "$OUT/job.log"
+  ${PA:+--period-answer "$PA"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 cat "$OUT/report/report.md" | tee -a "$OUT/job.log" | cut -c1-600
 log "chain: done, rc $rc"

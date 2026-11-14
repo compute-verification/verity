@@ -97,7 +97,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/tests/test_retention.py": 2,
     "tools/research/tests/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
-    "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 2,
+    "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 1,
     "benchmarks/numerical/tests/bench/data/flock-cells/6d1295ed.json": 3,
     "benchmarks/numerical/tests/bench/data/flock-cells/d1961ba4.json": 3,
     "benchmarks/numerical/tests/bench/data/flock-runs/r20260925-233818-a37e/job.json": 1,

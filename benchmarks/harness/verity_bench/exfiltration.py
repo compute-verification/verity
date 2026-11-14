@@ -189,7 +189,7 @@ RESPONSE_IDS = 1024
 #: a row's parts of total compute; `wait` is a part of `serve`
 PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
 #: the network certifier's rows the two parts are summed under, and what each is called beside the compute audit's
-TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges it today",
+TOGETHER = {"scan": "as the scan's check charges it today",
             "all three": "with the lengths held by a stop block, the timing taken once and the entries charged through "
                          "the compute audit",
             "design, no stop block": "by the design no run has behind it, before a served audit has sampled a stop block",

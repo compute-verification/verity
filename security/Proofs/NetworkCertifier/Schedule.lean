@@ -13,9 +13,7 @@ import Proofs.NetworkCertifier.Counting
 `docs/network-transparency/timing-channel.md` §2.4, for `constantRate` (`Definitions.NetworkCertifier.Schedule`). Its
 advice is one value per execution block, so `encard_accSeqs_le_advice` applies as it stands. Causality
 (`constantRate_rows_causal`: a step's rows read only its block's advice) sharpens it to the blocks the counted steps
-reach. Each count is stated for any finite advice per block and for strings of `k` bits (`_bits`), the protocol's.
-
-The witness at the end shows that the blocks bound is met exactly by a covert sender.
+reach. `oneFrame` is a schedule of one frame of one execution block.
 -/
 
 @[expose] public section
@@ -26,23 +24,12 @@ open Finset
 
 variable {L K S : ℕ} {Z In Act Wire : Type}
 
-/-- Strings of `k` bits for each of `E` execution blocks number `2^(E·k)`. -/
-theorem card_bits_pow (E k : ℕ) : Fintype.card (Fin k → Bool) ^ E = 2 ^ (E * k) := by
-  rw [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, ← pow_mul, Nat.mul_comm k E]
-
 theorem encard_accSeqs_le_constantRate {Adv : Type} [Fintype Adv] (T g E : ℕ)
     (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤
       ((Fintype.card Adv ^ E * D ^ n : ℕ) : ℕ∞) := by
   have := encard_accSeqs_le_advice (constantRate (S := S) T g E frames) op n D
   rwa [Fintype.card_fun, Fintype.card_fin] at this
-
-theorem encard_accSeqs_le_constantRate_bits (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
-    (n D : ℕ) :
-    (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞) := by
-  have := encard_accSeqs_le_constantRate (S := S) T g E frames op n D
-  rwa [card_bits_pow] at this
 
 /-! ### Causality: a step's rows read only its execution block's advice -/
 
@@ -111,88 +98,9 @@ theorem encard_accSeqs_le_constantRate_executionPhases {Adv : Type} [Fintype Adv
         rw [card_product, Fintype.card_piFinset]
         simp
 
-theorem encard_accSeqs_le_constantRate_executionPhases_bits (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
-    (n D m : ℕ) (hm : n ≤ m * (g * T)) :
-    (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞) := by
-  have := encard_accSeqs_le_constantRate_executionPhases (S := S) T g E frames op n D m hm
-  rwa [card_bits_pow] at this
-
-theorem encard_decodable_le_constantRate {Adv : Type} [Fintype Adv]
-    (I : Interaction L K S Z In Act Wire) (T g E : ℕ)
-    (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (n D m : ℕ) (hm : n ≤ m * (g * T))
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op n (I.obsRun z n))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z) :
-    Zs.encard ≤ ((Fintype.card Adv ^ min E m * D ^ n : ℕ) : ℕ∞) := by
-  calc Zs.encard
-      ≤ {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo (constantRate (S := S) T g E frames) I.op n o}.encard :=
-        encard_decodable_le I _ n view hW2 Zs hacc dec hdec
-    _ ≤ (AccSeqs (constantRate (S := S) T g E frames) I.op n D).encard := by
-        apply Set.encard_le_encard
-        rintro o ⟨z, rfl, ha⟩
-        refine ⟨I.length_obsRun z n, ?_, ha⟩
-        intro x hx
-        obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun z n x hx
-        exact hJ k xs as
-    _ ≤ _ := encard_accSeqs_le_constantRate_executionPhases T g E frames I.op n D m hm
-
-theorem encard_decodable_le_constantRate_bits
-    (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
-    (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (n D m : ℕ) (hm : n ≤ m * (g * T))
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op n (I.obsRun z n))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z) :
-    Zs.encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞) := by
-  have := encard_decodable_le_constantRate I T g E frames n D m hm view hW2 hJ Zs hacc dec hdec
-  rwa [card_bits_pow] at this
-
-/-! ## Witness: the blocks bound is met -/
-
 /-- One frame of one execution block, sent at bucket 1 if the block's one advice bit is set and at bucket 0
 otherwise. -/
 def oneFrame : List Unit → Fin 1 → (Fin 1 → Bool) → Fin 1 → List LogicalFrame :=
   fun _ _ v _ => [⟨[true], if v 0 then 1 else 0⟩]
-
-/-- The covert sender of the joint witness: its secret bit picks the bucket its one frame leaves in. -/
-def delayObs (k : ℕ) (_ : List Unit) (as : List Bool) : Obs 1 1 1 :=
-  { rows := fun _ _ => if decide (k = 0) = !(as.getD 0 false) then some [true] else none
-    jitter := 0
-    status := fun _ => Status.complete }
-
-def delayCertifier : Certifier 1 1 1 Unit Bool (Obs 1 1 1) where
-  obs := delayObs
-  wire := delayObs
-  fault _ := False
-
-def delayInteraction : Interaction 1 1 1 Bool Unit Bool (Obs 1 1 1) where
-  certifier := delayCertifier
-  op _ _ := ()
-  snd z _ _ := z
-
-instance instDecidableAcceptedOneFrame (k : ℕ) (op : ℕ → List (Obs 1 1 1) → Unit) (o : List (Obs 1 1 1))
-    (a : Fin 1 → Fin 1 → Bool) : Decidable (Accepted (constantRate (S := 1) 2 1 1 oneFrame) op k o a) := by
-  unfold Accepted; infer_instance
-
-/-- **The blocks bound is met by a covert sender.** One execution block of two buckets (`g = 1`, `T = 2`),
-`oneFrame`, and one advice bit. The sender's secret bit delays its frame by one bucket, and each run is accepted with
-the matching bit. Every hypothesis of `EncardDecodableLeConstantRate` holds (W2, J with `D = 1`, acceptance, a wire
-decoder, the monitoring period's `n = 2` steps within `m = 1` block), and both secrets are decoded, which is the bound
-`2^(min(E, m)·k) · D^n = 2^1 · 1^2`. -/
-theorem constantRate_joint_witness :
-    Regenerates delayInteraction.certifier (fun _ o => o) ∧ JitterBounded delayInteraction.certifier 1 ∧
-      (∀ z ∈ (Set.univ : Set Bool),
-        AcceptedUpTo (constantRate (S := 1) 2 1 1 oneFrame) delayInteraction.op 2 (delayInteraction.obsRun z 2)) ∧
-      (∀ z ∈ (Set.univ : Set Bool),
-        (fun w : List (Obs 1 1 1) => (w.head?.map fun x => decide (x.rows 0 0 = none)).getD false)
-          (delayInteraction.wireRun z 2) = z) ∧
-      2 ≤ 1 * (1 * 2) ∧ (Set.univ : Set Bool).encard = ((2 ^ (min 1 1 * 1) * 1 ^ 2 : ℕ) : ℕ∞) := by
-  refine ⟨fun _ _ _ => rfl, fun _ _ _ => by simp [delayInteraction, delayCertifier, delayObs], ?_, ?_, by decide, ?_⟩
-  · intro z _
-    exact ⟨fun _ _ => z, by cases z <;> decide +kernel⟩
-  · intro z _
-    cases z <;> decide +kernel
-  · rw [Set.encard_univ, ENat.card_eq_coe_fintype_card]
-    decide +kernel
 
 end NetTiming
