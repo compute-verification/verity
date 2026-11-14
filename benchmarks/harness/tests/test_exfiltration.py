@@ -1459,7 +1459,7 @@ def with_verdicts(tmp: Path, verdicts: list[dict] | str, run: str = HOLDER,
 def reader():
     """The stop verdicts' reader, as the command loads it."""
 
-    return E._reader(REPO)
+    return E._reader()
 
 
 @pytest.fixture

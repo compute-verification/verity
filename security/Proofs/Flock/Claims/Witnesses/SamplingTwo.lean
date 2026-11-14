@@ -226,7 +226,7 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
     by_cases hX : ∃ v ∈ X, v < 2
     · obtain ⟨v, hvX, hv2⟩ := hX
       have hn : ∀ e : Fin ((twoLTwo Coin).V.k x) → Coin,
-          ¬ ∀ u ∈ (twoLTwo Coin).checked x (forkOn ((twoLTwo Coin).stage2 x) r e), u ∉ X := by
+          ¬ ∀ u ∈ (twoLTwo Coin).checked x (forkOn ((twoLTwo Coin).secondStage x) r e), u ∉ X := by
         intro e hall
         refine hall v ?_ hvX
         show v ∈ [0, 1]

@@ -4,6 +4,7 @@ after that root, the prover's commitment. `pouw_h1_challenger` reads a window's 
 """
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -22,6 +23,7 @@ from verity.protocols.proofs.spot.device.challenger import (
 
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
+_log = logging.getLogger(__name__)
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 #: why a window's sampling coin has no session to be read from
 NO_DRAW_SESSION = ("the verifier names no draw session: a window's draw coin is its own draw session's, opened withheld "
@@ -91,7 +93,8 @@ def draw_files(commits: Mapping[str, Any], ledger: Any, fetch: Any, verify: Any)
     try:
         tree = fetch(ledger.pinned({"root": root}, verify).session) if isinstance(root, str) else None
         return None if tree is None else remote.session_files(Path(tree) / "out")
-    except CoinError:
+    except CoinError as e:
+        _log.warning("draw_files: no sample session's files on root %s: %s", root, e)
         return None
 
 

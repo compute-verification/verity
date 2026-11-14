@@ -115,7 +115,7 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
     assert _samples_q(got) and got.read
-    handoff = json.loads(json.dumps(got.stage1()))
+    handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
@@ -132,7 +132,7 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     c = _class(WRAP, inline=True)
     got = TS.first(c.public(), WRAP, RULE, _placed(c.layout))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
-    again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(got.first_stage())), WRAP, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     _, second = again.second(*_interior(again.layout, again.registration.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
@@ -161,7 +161,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 
     got = TS.first(c.public(), BOTH, rule, _placed(c.layout))
     assert got.stream.cells == (2 * N_RHO, N_RHO) and got.stream.counts == (3, 1)
-    handoff = json.loads(json.dumps(got.stage1()))
+    handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["rule"]["k"] == ks
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
@@ -220,16 +220,16 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 def test_resume_refuses_another_rule_registration_or_sample():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
-    stage1 = json.loads(json.dumps(got.stage1()))
+    first_stage = json.loads(json.dumps(got.first_stage()))
     with pytest.raises(ValueError, match="hand-off"):
-        TS.resume({**stage1, "format": "other"}, PAIR)
+        TS.resume({**first_stage, "format": "other"}, PAIR)
     with pytest.raises(ValueError, match="Spec"):
-        TS.resume({**stage1, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
+        TS.resume({**first_stage, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
     with pytest.raises(ValueError, match="registers to another digest"):
-        TS.resume({**stage1, "registration": "00" * 64}, PAIR)
+        TS.resume({**first_stage, "registration": "00" * 64}, PAIR)
     others = [u for u in range(N) if u not in got.sample.units][:Q]
     with pytest.raises(ValueError, match="other spans"):
-        TS.resume({**stage1, "units": others}, PAIR)
+        TS.resume({**first_stage, "units": others}, PAIR)
 
 
 def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
@@ -242,7 +242,7 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     c = _class()
     pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
     got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
-    hand = json.loads(json.dumps(got.stage1()))
+    hand = json.loads(json.dumps(got.first_stage()))
     assert hand["family"] == mine and "window_root" not in hand and TS.first_root(hand) == pub["run"]
     for handoff in (hand, {**hand, "window_root": pub["run"]}, {k: v for k, v in hand.items() if k != "family"}):
         again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
@@ -327,7 +327,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     assert [(r["port"], r["leaves"]) for r in got.record["roots"]][:3] == [("b.ingress", N), ("b.egress", N), (name, N * N_RHO)]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert _samples_q(got)
-    again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(got.first_stage())), SAME, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
 
 
@@ -912,7 +912,7 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
             opened.append({"name": name, "turns": turns})
             return manager, turns, finisher
         monkeypatch.setattr(AC, "start", start)
-        a = _args(out, stage1=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
+        a = _args(out, first_stage=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
                   rids=None, proofs=None, unlinked=False, kept=None, stop=json.dumps(STOP.to_json()), **more)
         assert TS._second(a) == 1
         return json.loads((out / "summary.json").read_text())

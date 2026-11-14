@@ -1,13 +1,13 @@
 """Compute accounting's credit rule for a served linear: a served call earns credit only if the y
-the linear hands back to vLLM is the credited kernel's own output, the same GEMM invocation that wrote the credited z, and
+the linear hands back to the serving engine is the credited kernel's own output, the same GEMM invocation that wrote the credited z, and
 no other GEMM ran for that linear.  Pearl-C's e2e gate holds served y to its own ``run.gemm``
 (`benchmarks/pouw/pearl_c_vllm/e2e.py`); this is the same rule for H1, read from the call's trace.  H1 adds the value
 check of the z it commits (`pouw_h1_records.reason`, refused as ``credit: z-records: ...``): its z/y records'
 y is dq of their z and the served y is theirs.
 
-* **The trace** (`trace`, the workload's: `tensors.H1Device.trace`; the PyTorch adapter's is a `TorchDispatchMode`) around
-  one linear call (its ``apply``).  Every op the dispatcher sees is
-  an invocation of the call's trace, in order; a custom op made with ``torch.library.custom_op`` runs its Python
+* **The trace** (`trace`, the workload's: `tensors.H1Device.trace`; the device adapter's is a dispatch mode) around
+  one linear call (its ``apply``).  Every op the device library's dispatcher sees is
+  an invocation of the call's trace, in order; a custom op registered with a Python implementation runs that
   implementation inside the mode, so the ops it runs are seen too, attributed to it.  Each invocation records the tensors it
   wrote (`_written`: its fresh results and the arguments its schema marks written; a view writes nothing) by storage, and
   the GEMMs inside it (`GEMMS`: ``aten::_int_mm``, ``aten::mm``, ``aten::_scaled_mm`` and the rest of the matmul family; an
@@ -19,9 +19,9 @@ y is dq of their z and the served y is theirs.
       credit: gemm-count: <linear> <n> GEMMs (<op>, <op> in <op>, ...); only the credited kernel's is allowed
 
   ``<untraced>`` is a tensor no traced op wrote, ``<none>`` a z the path never computed.
-* **What it sees.** Only ops through torch's dispatcher.  A kernel launched outside it (a cubin through the driver) writes
+* **What it sees.** Only ops through the device library's dispatcher.  A kernel launched outside it (a cubin through the driver) writes
   nothing the trace sees, so its output is ``<untraced>`` and earns nothing: a fused kernel is credited once it is a
-  dispatcher op (``torch.library``) returning its z and its y.  Ops run `outside` the trace are not seen either; that is
+  dispatcher op (a registered custom op) returning its z and its y.  Ops run `outside` the trace are not seen either; that is
   for work beside the call that writes neither its y nor its z and runs no GEMM, so its verdict is the same without it.
 """
 from __future__ import annotations

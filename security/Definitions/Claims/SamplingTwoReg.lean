@@ -91,13 +91,13 @@ open Classical in
 /-- **The committed interior** of replay block `ρ` at the prover's tape `ω` and the run's coins `r`, a definition nobody
 runs: at gate `g`, the value the extractions open there under `ρ`'s interior roots most often (`iopensAt`), over the
 second stage's coins and the extractor's coins, at `r`'s coins off the second stage (`true` on a tie, and where none
-opens `g`). It reads the statement, the prover, `ω` and `r` off `stage2` only, so the prover fixes it after the first
+opens `g`). It reads the statement, the prover, `ω` and `r` off `secondStage` only, so the prover fixes it after the first
 stage's coins and before the second stage's. -/
 noncomputable def iregVal (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (ρ g : ℕ) : Bool :=
   let p : Bool → ℝ := fun b =>
     Pr fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      L.iopensAt H P x ω (forkOn (L.stage2 x) r ec.1) ec.2 ρ g = some b
+      L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ g = some b
   decide (p false ≤ p true)
 
 /-! ## 3. The committed incorrect set -/
@@ -134,20 +134,20 @@ noncomputable def BconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) : FinderFa
       ne := ⟨(Classical.arbitrary _, fun _ => default, (fun _ => default, Classical.arbitrary _),
         (fun _ => default, Classical.arbitrary _))⟩
       out := fun q =>
-        findColl (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
-          ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2))
+        findColl (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
+          ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2))
       cost := fun q =>
-        (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).pLog.length +
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).vLog.length +
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).pLog.length +
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).vLog.length +
-          ((L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2).eval H
+        (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).pLog.length +
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).vLog.length +
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).pLog.length +
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).vLog.length +
+          ((L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2).eval H
               (run H P L.V x q.1)).2.1 +
-          ((L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2).eval H
+          ((L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2).eval H
               (run H P L.V x q.1)).2.1 }
 
 /-- **The committed form's error at two stages**: `Compiled.εreg`'s four terms and the committed interior's binding

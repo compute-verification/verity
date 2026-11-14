@@ -2,7 +2,7 @@
 
 PoUW's H1 scheme on a served model's int8 linears. The package's docstring states the scheme, and each module's docstring
 says what the module holds. Its receipts (`Receipts`) and the device halves of its registered rows, call tables and
-records are the workload's (`verity_torch.pouw.h1`), reached through the H1 device the workload hands in
+records are the workload's (the device adapter's), reached through the H1 device the workload hands in
 (`serving.tensors.h1_device`).
 
 ## Interface

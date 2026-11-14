@@ -68,8 +68,7 @@ from the pin, never computed, since tracing the gadgets takes minutes: a size cl
 names none (`@unpinned`), and no proof of its proof block is accepted, while its verdict of record in the clear is
 unchanged.
 
-N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
-retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `verity/protocols/accounting/certifier/prover/scan_zk.py`
+N3, the content check, a prototype evaluated in the clear and in no proof-system Spec, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `verity/protocols/accounting/certifier/prover/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
 **The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof
