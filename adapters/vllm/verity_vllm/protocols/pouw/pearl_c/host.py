@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -348,7 +349,7 @@ class _Arena:
                 for ring in self.rings:
                     got = ring.take(size)
                     if got is not None:
-                        return (lambda: self._give(ring, got[0])), got[1]
+                        return partial(self._give, ring, got[0]), got[1]
                 self.cv.wait()
 
     def _give(self, ring: _Ring, region: list) -> None:
