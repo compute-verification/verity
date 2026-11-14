@@ -107,7 +107,7 @@ now, and the diff is reviewed.
 | this package (below) | Definitions and Programs, their encoding, queries, evaluation, partitions and accounting views |
 | [`ops`](./ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
 | [`silicon`](./silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
-| [`targets`](./../definitions/circuits/targets/README.md) | the subcircuits a proof system is asked to prove |
+| [`targets`](./targets/README.md) | the subcircuits a proof system is asked to prove |
 | [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) helpers that write gates |
 | [`verity.definitions`](../definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
 | [`verity.circuits.private_circuits`](./private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |

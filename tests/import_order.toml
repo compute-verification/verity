@@ -166,14 +166,14 @@ trusted = true
 [[place]]
 paths = [
     "verity/circuits",
-    "verity/definitions/circuits/boolean/memcheck.py",
-    "verity/definitions/circuits/census.py",
-    "verity/definitions/circuits/constants.py",
-    "verity/definitions/circuits/library.py",
-    "verity/definitions/circuits/operations.py",
-    "verity/definitions/circuits/requirement.py",
-    "verity/definitions/circuits/requirement_units.py",
-    "verity/definitions/circuits/stacking.py",
+    "verity/circuits/boolean/memcheck.py",
+    "verity/circuits/census.py",
+    "verity/circuits/constants.py",
+    "verity/circuits/library.py",
+    "verity/circuits/operations.py",
+    "verity/circuits/requirement.py",
+    "verity/circuits/requirement_units.py",
+    "verity/circuits/stacking.py",
 ]
 
 [[place]]
@@ -188,8 +188,8 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/commitments",
-    "verity/definitions/commitments/gates/attest.py",
-    "verity/definitions/commitments/gates/block_key.py",
+    "verity/commitments/gates/attest.py",
+    "verity/commitments/gates/block_key.py",
     "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py",
     "verity/protocols/poub/verifier/commitments/gates/block_check.py",
 ]
@@ -250,7 +250,7 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/definitions/circuits/targets",
+    "verity/circuits/targets",
 ]
 loads = [
     "verity/circuits/silicon",

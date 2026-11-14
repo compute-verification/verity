@@ -583,7 +583,7 @@ def test_another_mufu_or_another_form_of_ex2_is_still_refused(new, why):
 def test_the_exception_names_the_definition_and_table_its_runs_measured():
     """The shipped exception is MufuEx2Ftz_v1 over the library's ex2 table, the evaluator the sweep's digests came from;
     another id or table is another Definition, which needs its own run. No other toolkit excepts anything."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
     from verity.circuits.ops import mufu
 
     p = SG.load_pins()
