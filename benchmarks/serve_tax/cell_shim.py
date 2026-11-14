@@ -27,6 +27,8 @@ whole, its client having closed first. No prompt and no token id is kept.
 
     python cell_shim.py --deployment CERTIFIER_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
         [--listen 127.0.0.1:0]
+
+The certifier's listener is read from ``endpoints.json`` beside ``--deployment``, which its serve command writes there.
 """
 from __future__ import annotations
 
@@ -50,6 +52,8 @@ from verity.protocols.accounting.certifier.verifier.warden import (DATA, END, FA
 
 #: the longest request body taken
 BODY_BYTES = 1 << 24
+#: the file beside the certifier's ``deployment.json`` that names its listener (`warden_serve.ENDPOINTS`)
+ENDPOINTS = "endpoints.json"
 #: what an id request holds for the sampling fields a greedy body doesn't name: neither changes a greedy answer
 SENT = {"top_p": 1.0, "seed": 0}
 #: the fields taken and not sent: how the answer is framed (the shim streams, and counts the usage itself), and
@@ -301,7 +305,8 @@ def address(text: str) -> tuple[str, int]:
 
 async def serve(a: argparse.Namespace) -> None:
     dep = json.loads(Path(a.deployment).read_text())
-    certifier, cell_bytes = tuple(dep["listen"]), dep["params"]["cell_bytes"]
+    certifier = tuple(json.loads((Path(a.deployment).parent / ENDPOINTS).read_text())["listen"])
+    cell_bytes = dep["params"]["cell_bytes"]
     with open(a.log, "a", buffering=1) as fh:
         shim = HttpShim(lambda: asyncio.open_connection(*certifier), cell_bytes, tokenizer(a.tokenizer),
                         lambda record: fh.write(json.dumps(record) + "\n"), origin=dep["origin_unix"])

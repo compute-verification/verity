@@ -555,8 +555,8 @@ def warden_modules():
     return warden, warden_serve
 
 
-async def drive_warden(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
-                       drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
+async def drive_warden(deployment: dict, endpoints: dict, served: str, requests: list[dict], arrivals: list[float],
+                       ids: list[str], out: Path, drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
     """`drive` through the warden: from the warden's origin, each request at its arrival on a connection of its own to the
     warden's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the warden's
     close. client.jsonl has `drive`'s fields (`read_response`) and each request's warden ordinal and outcome, and
@@ -572,8 +572,8 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
 
     warden, ws = warden_modules()
     params = warden.WardenParams(**deployment["params"])
-    B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(deployment["listen"])
-    host = "%s:%d" % tuple(deployment["upstream"])
+    B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(endpoints["listen"])
+    host = "%s:%d" % tuple(endpoints["upstream"])
     loop = asyncio.get_running_loop()
     affinity = os.sched_getaffinity(0)
     if cpus:
@@ -844,10 +844,11 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         else:
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
             warden, dep = start_warden(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
+            ends = warden_modules()[1].read_endpoints(d / "warden" / "deployment.json")
             end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
             meta["warden"] = {"where": WARDEN_WHERE, "egress_base": egress_base(warden_modules()[0]), "params": dep["params"],
                               "digest": dep["digest"], "windows": dep["windows"], "origin_unix": dep["origin_unix"],
-                              "listen": dep["listen"], "slack_s": dep.get("slack"),
+                              "listen": ends["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
             if tick:
@@ -858,9 +859,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
                                         f"warden:{warden.pid}", f"client:{os.getpid()}", f"server={server.pid}",
                                         *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
-            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay} from the "
+            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {ends['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
-            meta |= asyncio.run(drive_warden(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
+            meta |= asyncio.run(drive_warden(dep, ends, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
                 meta["warden"]["rc"] = warden.wait(max(0.0, end - time.time()) + WARDEN_END_S)

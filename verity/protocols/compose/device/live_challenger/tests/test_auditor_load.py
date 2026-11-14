@@ -120,6 +120,26 @@ def test_a_store_write_whose_unit_is_stopped_stops_its_writer_and_writes_its_end
     assert end["store"] is None and set(end["files"]) == {"rehearse.log"}
 
 
+def test_a_store_write_whose_unit_is_stopped_fails_though_its_writer_exits_0_on_the_signal(host, stop_held, tmp_path):
+    """A stopped run is a failed one whatever its writer returns: a writer that exits 0 on the unit's SIGTERM still
+    leaves the run's rc nonzero."""
+    host.store.mkdir()
+    rc, out = gate(host, ["weights-write", "--shape", "tiny"])
+    ready = tmp_path / "ready"
+    os.mkfifo(ready)
+
+    def wait(proc, seconds):
+        open(ready).close()
+        os.kill(os.getpid(), signal.SIGTERM)
+        return proc.wait()
+
+    writer = ("import signal, sys\nsignal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+              f"open({str(ready)!r}, 'w').close()\nsignal.pause()")
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1, wait=wait,
+                          command=lambda req, out, store: [sys.executable, "-c", writer])
+    assert end["rc"] == 2 and end["ended"] == A.STOPPED
+
+
 @pytest.mark.parametrize("bad, why", [
     (["--program", "9E" * 64], "the reading program's digest, 128 lowercase hex digits"),
     (["--program", "9e" * 63], "the reading program's digest, 128 lowercase hex digits"),
@@ -217,7 +237,8 @@ LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
 RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
 #: a stand-in for `warden_serve.py rehearse --load-store`'s files: public, then witness
 LOAD_FILES = (
-    '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
+    '(out / "deployment.json").write_text(json.dumps({"session": "00" * 32}))\n'
+    '(out / "endpoints.json").write_text(json.dumps({"upstream": url}))\n'
     '(out / "cells.jsonl").write_text("")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT!r}}}) + "\\n")\n'
     '(out / "load.json").write_text(json.dumps({"format": "load/v1", "registrations": [{"root": "ab" * 64}]}))\n'
@@ -227,7 +248,7 @@ LOAD_FILES = (
     f'"summary": {{"requests": 4, "load": {LOAD_SUMMARY!r}}}}}))\n')
 
 
-def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_registrations_and_relay_alone(stored):
+def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_registrations_alone(stored):
     rc, out = gate(stored, LOAD)
     run = json.loads(out)["run"]
     tunnels, sinks, ups, seen = [], [], [], []
@@ -250,10 +271,12 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_reg
     assert req["load"]["shape"] == "tiny" and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert kw == {"sinks": [("127.0.0.1", p) for p in locals_], "store": stored.store}
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
-    assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
-                                                       "load": LOAD_SUMMARY}
-    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json",
-                                 "load-relay.json", "tunnel.log", "rehearse.log"}
+    assert "load" not in end and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
+                                                    "load": LOAD_SUMMARY}
+    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json", "tunnel.log",
+                                 "rehearse.log"}
+    assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == RELAY and "load-relay.json" in end["witness"]
+    assert not (d / "out" / "load-relay.json").exists()
     assert json.loads((d / "out" / "load.json").read_text())["registrations"] == [{"root": "ab" * 64}]
     assert "load-heads.json" in end["witness"]
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()

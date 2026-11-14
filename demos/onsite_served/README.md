@@ -58,7 +58,7 @@ deploy bindings:
 | `H1_GATE`, `H1_PEER`, `H1_KEY_SHA512` | PoUW | `challenger.pouw`: `gate` (the gate command), `peer`, `key-sha512`; `POUW_CMD` is the runner's default then |
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
-| `SERVE_ARGS` (`--protocol ids --id-payload 503`), `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`); the front sends its requests in the id form, which serve-openai answers only under those flags, every other request as before |
+| `SERVE_ARGS` (`--protocol ids --id-payload 503`), `CERTIFIER_FRONT`, `CERTIFIER_CHAIN_CMD`, `CERTIFIER_PERIOD_CMD`, `V3C_CLASS`, `CLASSES` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`); the front sends its requests in the id form, which serve-openai answers only under those flags, every other request as before; the piece runs split around V3c, at the certifier's scan class (`V3C_CLASS`, which `CLASSES` holds beside the default class), so its period check reads V3c's audit of the served window |
 | `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND`, `WIPE_KEY_SHA512` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command`, `key-sha512` |
 | `COMPOSITE` (empty) | the run | set unless the caller's environment names `COMPOSITE` or `COMPOSE_OFF_NODE=0`: the runner composes off the node, where onsite's composite can't be made, so the run asks for none (`served_table.composite`) |
 | `OUT` | the run | `STATE/out`, the served window's public record |

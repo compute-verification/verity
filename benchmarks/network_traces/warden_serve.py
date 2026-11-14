@@ -67,7 +67,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--max-tokens-cap N]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
-  digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
+  digest, the origin) and beside it `endpoints.json` (the listener and the endpoint, which a client reads and nothing
+  publishes), runs the network certifier for `--windows` windows, each bucket released by its
   pacer `--paced-ms` after its boundary (`warden`'s "The pacer"; 0: written on the network certifier's loop), and writes
   `warden.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
   windows, and each bucket's pacer report, `paced`). Each window's records go to `requests.records`,
@@ -75,9 +76,9 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   (`certificate.Issuer`, with the network certifier's parameters digest) into `certified.jsonl`, except a window in
   which the network certifier refused a connection, whose records and rows it certifies and signs none of (`warden`'s
   "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
-  (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, row bytes, commit and sign
-  ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
-  wiring are read off). All of that is done by a spawned process (`PublisherProcess`), which alone holds the key and
+  (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows and row bytes),
+  `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
+  wiring are read off), `cells-timing.jsonl` the commit's and signature's milliseconds (witness). All of that is done by a spawned process (`PublisherProcess`), which alone holds the key and
   gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
   network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
   Before the origin `serve` runs on the C allocator (it re-executes itself with `PYTHONMALLOC=malloc`) and makes its
@@ -119,9 +120,9 @@ its ssh starts until the ssh has exited, so its forward never ends at a port ano
 made before the relay serves waits at that socket, and the relay takes it as it starts; one made after the relay stops
 waits there, unread, until the caller closes the socket. It makes no request, so it asks the endpoint nothing before a
 client does, and writes no `traffic.json`, `client.log` or `client.json`.
-- *Where a client connects, and what tells it the relay is ready.* `serve` writes `deployment.json` once it listens:
-  the listener, the schedule, the session, the key, the run id, `windows` and `origin_unix`, bucket 0's start,
-  `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
+- *Where a client connects, and what tells it the relay is ready.* `serve` writes `endpoints.json` (the listener) and
+  then `deployment.json` once it listens: the schedule, the session, the key, the run id, `windows` and `origin_unix`,
+  bucket 0's start, `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
   peer's client port, which the gate's `status` names with the deployment) and speaks cells through the shim
   above. One that connects before the origin waits in the queue.
 - *The end.* The relay ticks windows · T buckets from the origin and stops; nothing ends it earlier. A connection
@@ -206,8 +207,8 @@ from verity.protocols.accounting.certifier.verifier.grid import GridParams, Bloc
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_PATH
 from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS, INTEGER_FIELDS, Shim, Warden,
     WardenParams, cells)
-from verity.protocols.accounting.certifier.verifier.relay_check import (CERTIFIED, EGRESS, FAILS, INGRESS, KIND_CHARS,
-    LINK, _quantiles, check)
+from verity.protocols.accounting.certifier.verifier.relay_check import (CELLS_TIMING, CERTIFIED, EGRESS, ENDPOINTS,
+    FAILS, INGRESS, KIND_CHARS, LINK, _quantiles, check)
 
 HERE = Path(__file__).resolve().parent
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
@@ -565,21 +566,24 @@ class Publisher:
 
     def attest(self, record: BlockGrid, link: str, direction: Direction, withheld: bool = False) -> None:
         """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
-        line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost), the salts to
-        `cells.salts` (witness)."""
+        line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost: its rows and a
+        row's bytes), the salts to `cells.salts` and the commit's and signature's milliseconds to `CELLS_TIMING`
+        (witness both)."""
         t0 = time.perf_counter()
         cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
         head = cells_.head
         t1 = time.perf_counter()
         cert = None if withheld else self.issuer.sign(link, direction, record.window, head.digest())
         t2 = time.perf_counter()
-        cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0]), "commit_ms": round((t1 - t0) * 1000, 3),
-                "sign_ms": round((t2 - t1) * 1000, 3)}
+        cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0])}
         line = (_refused(link, direction, record.window, withheld) if cert is None
                 else {"registration": WR.registration(head, cert, self.params)})
         bf.write_blobs(self.out / "cells.salts", cells_.witness)
         with open(self.out / "cells.jsonl", "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
+        with open(self.out / CELLS_TIMING, "a") as fh:
+            fh.write(json.dumps({"link": link, "direction": direction.value, "window": record.window,
+                                 "commit_ms": round((t1 - t0) * 1000, 3), "sign_ms": round((t2 - t1) * 1000, 3)}) + "\n")
 
     def close(self) -> list:
         return list(self.issuer.refused)
@@ -749,14 +753,23 @@ class PublisherProcess:
 
 
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
-                      listen: tuple[str, int], upstream: tuple[str, int], slack: float,
-                      run_id: bytes | None = None) -> dict:
+                      slack: float, run_id: bytes | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the network certifier's public key and session, the schedule's
-    parameters and their digest, the origin and where it listened, and the run id its server's requests carry."""
+    parameters and their digest, the origin, and the run id its server's requests carry. Its addresses are
+    `endpoints_record`'s."""
     return {"key": RF.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
-            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream),
-            "run_id": None if run_id is None else run_id.hex()}
+            "origin_unix": origin_unix, "windows": windows, "run_id": None if run_id is None else run_id.hex()}
+
+
+def endpoints_record(listen: tuple[str, int], upstream: tuple[str, int]) -> dict:
+    """`ENDPOINTS`: where the network certifier listened and the endpoint it relays to, which a client reads."""
+    return {"listen": list(listen), "upstream": list(upstream)}
+
+
+def read_endpoints(deployment: Path) -> dict:
+    """The run's `ENDPOINTS`, beside its `deployment` file."""
+    return json.loads((deployment.parent / ENDPOINTS).read_text())
 
 
 def _memlock(libc) -> str:
@@ -865,11 +878,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
-                                   windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
-                                   upstream=upstream, slack=slack, run_id=warden.run_id)
+                                   windows=windows, slack=slack, run_id=warden.run_id)
+    endpoints = endpoints_record((listen[0], server.sockets[0].getsockname()[1]), upstream)
+    (out / ENDPOINTS).write_text(json.dumps(endpoints, indent=1))
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
     warden.hand_lengths = publish.lengths
-    announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
+    announce({"listening": endpoints["listen"], "deployment": str(out / "deployment.json")})
     try:
         await warden.run()
     finally:
@@ -911,13 +925,13 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
             "response": parse_response(data) if id_payload is None else parse_id_response(data, id_payload)}
 
 
-async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
+async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
-    shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its network-certifier-form id
-    request (`id_form.id_request`, offset 0) and its response read as id-form."""
+    shim, to the listener `endpoints` names; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is
+    sent as its network-certifier-form id request (`id_form.id_request`, offset 0) and its response read as id-form."""
     params = WardenParams(**deployment["params"])
-    origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
-    host = "%s:%d" % tuple(deployment["upstream"])
+    origin, listen = deployment["origin_unix"], tuple(endpoints["listen"])
+    host = "%s:%d" % tuple(endpoints["upstream"])
 
     async def one(index: int, item: dict) -> dict:
         ids = "ids" in item
@@ -955,8 +969,7 @@ def table(result: dict) -> str:
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
             f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}; ticker D episodes "
             f"{s.get('ticker_stalls') or 'not probed'}; cell rows {s['cell_rows']['registered']}/"
-            f"{s['cell_rows']['of']} link-windows registered, {s['cell_rows']['rows']} rows a window, commit ms "
-            f"{s['cell_rows']['commit_ms']}, sign ms {s['cell_rows']['sign_ms']}")
+            f"{s['cell_rows']['of']} link-windows registered, {s['cell_rows']['rows']} rows a window")
 
 
 # The rehearsal.
@@ -1275,7 +1288,7 @@ def main(argv=None) -> int:
         _quiet_runtime()
         traffic = json.loads(args.traffic.read_text())
         reserve_fds(len(traffic) + FD_MARGIN)
-        asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))
+        asyncio.run(client(json.loads(args.deployment.read_text()), read_endpoints(args.deployment), traffic, args.out))
         return 0
     if args.command == "check":
         result = check(args.run)

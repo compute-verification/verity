@@ -1038,6 +1038,8 @@ SESSION_GATE = r'''#!PYTHON
 import io, json, os, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+if any("${" in w for w in sys.argv[1:-1]):
+    sys.exit(f"stub ssh: an unfilled destination in {sys.argv[1:-1]!r}")
 with open(d / "asked", "a") as f:
     f.write(cmd + "\n")
 if cmd.startswith("relay-session "):
@@ -1183,6 +1185,23 @@ def test_a_session_this_trees_gate_refuses_is_refused_before_the_gate_is_asked(t
     assert CP.main(_front(tmp_path, *flags)) == 2
     assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(why)
     assert _asked(tmp_path) == [] and list((tmp_path / "serve" / CP.PRIVATE).iterdir()) == []
+
+
+def test_a_sessions_front_at_the_default_gate_reaches_the_address_the_environment_holds_and_unset_is_refused(
+        tmp_path, monkeypatch):
+    """``front --session`` at `SS.GATE` fills its host from the environment before the gate is asked, so the kept
+    relay, which ``close`` reads its gate from, names the address; unset, the front is refused by the variable's name
+    and asks nothing."""
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    monkeypatch.delenv("VY_CHALLENGER_1_HOST")
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, gate=CP.SS.GATE)) == 2
+    assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(
+        "VY_CHALLENGER_1_HOST is unset: the gate is ")
+    assert _asked(tmp_path) == [] and not (tmp_path / "serve" / CP.PRIVATE / RUN).exists()
+    monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, gate=CP.SS.GATE)) == 0
+    assert json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / CP.RELAY).read_text())["gate"] == LIVE_GATE
+    assert len(_asked(tmp_path)) == 2
 
 
 def test_a_session_the_gate_doesnt_start_opens_none(tmp_path, monkeypatch):
@@ -1369,3 +1388,18 @@ def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
     assert order == [(1, 2, True), (3, 4, False), (5, 6, True)]
     with pytest.raises(SystemExit, match="one --to for each --listen"):
         CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])
+
+
+def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
+    """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
+    SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
+    lanes and EVERY."""
+    import scan_zk as SZ
+
+    spec = importlib.util.spec_from_file_location("served_table", ROOT / "demos/onsite_served/served_table.py")
+    table = importlib.util.module_from_spec(spec)
+    sys.modules["served_table"] = table
+    spec.loader.exec_module(table)
+    setup = SZ.SETUPS[CP.V3C_SCAN_CLASS]
+    c = setup.cls
+    assert table.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"

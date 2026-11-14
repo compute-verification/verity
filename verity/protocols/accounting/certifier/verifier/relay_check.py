@@ -20,6 +20,14 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
+#: the local file beside `deployment.json` that holds the run's two addresses (`endpoints_record`), never published
+ENDPOINTS = "endpoints.json"
+#: a deployment's fields that are addresses, which `ENDPOINTS` holds and the published deployment never does
+ADDRESSES = ("listen", "upstream")
+#: the witness file beside `cells.salts` that holds each registration's commit and sign milliseconds
+CELLS_TIMING = "cells-timing.jsonl"
+#: the device's timings, which a registration (`cells.jsonl`) never carries: a commit's time varies with what it commits
+TIMINGS = ("commit_ms", "sign_ms")
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -78,19 +86,30 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
             ok = False
             if doc is not None and w in by_window:
                 costs.append(doc["cost"])
+                timed = [k for k in TIMINGS if k in doc["cost"]]
                 try:
                     head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
                     ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
                 except ValueError as e:
                     problems.append(f"{name} window {w}'s cells: {e}")
+                if timed:
+                    ok = False
+                    problems.append(f"{name} window {w}'s registration carries the device's {', '.join(timed)}: "
+                                    f"its timings go in {CELLS_TIMING}")
             ok_n += ok
             if not ok:
                 problems.append(f"{name} window {w}'s cells aren't registered")
     summary = {"registered": ok_n, "of": 2 * dep["windows"], "rows": sorted({c["rows"] for c in costs}),
-               "row_bytes": sorted({c["row_bytes"] for c in costs}),
-               "commit_ms": _quantiles([c["commit_ms"] for c in costs]),
-               "sign_ms": _quantiles([c["sign_ms"] for c in costs])}
+               "row_bytes": sorted({c["row_bytes"] for c in costs})}
     return summary, problems
+
+
+def cell_timing(run: Path) -> dict:
+    """The quantiles of each registration's commit and sign milliseconds (`CELLS_TIMING`, witness), which the check's
+    summary holds apart from `cell_rows`, the counts a run's end carries."""
+    path = run / CELLS_TIMING
+    lines = [json.loads(x) for x in path.read_text().splitlines()] if path.is_file() else []
+    return {k: _quantiles([d[k] for d in lines]) for k in TIMINGS}
 
 
 def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
@@ -139,6 +158,8 @@ def check(run: Path) -> dict:
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
     problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
+    problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
+                 for k in ADDRESSES if k in dep]
     load, load_problems = check_load(run, dep, key, session)
     problems += load_problems
     windows = []
@@ -199,6 +220,7 @@ def check(run: Path) -> dict:
         "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
         "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
+        "cell_timing": cell_timing(run),
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
