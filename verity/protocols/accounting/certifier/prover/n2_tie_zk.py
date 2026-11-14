@@ -7,7 +7,7 @@ and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
-    python verity/protocols/accounting/certifier/prover/n2_tie_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR
+    python benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
@@ -59,26 +59,20 @@ import hashlib
 import json
 import os
 import re
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-import leak_scan as LS  # noqa: E402
-import n2_zk as Z  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import io_request as Q, service as SVC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as Z
+from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC
+from verity.protocols.accounting.certifier.verifier import io_request as Q, service as SVC
+from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, id_request
+from verity.protocols.accounting.certifier.verifier.certificate import Direction
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows: IoTieRequest_v1{B=512,L=2,R=2}, the pinned size class
@@ -185,8 +179,7 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
-    from verity.protocols.accounting.certifier.device import warden_serve as WS
-    from verity.protocols.accounting.certifier.verifier import record_files as RF
+    from verity.protocols.accounting.certifier.verifier import blob_files as bf, record_files as RF
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
@@ -194,9 +187,9 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {r.window: r for r in (RF.unpack_record(b, params.cell_bytes)
-                                     for b in WS.bf.read_blobs(_found(run, f"{RC.INGRESS}.records")))}
+                                     for b in bf.read_blobs(_found(run, f"{RC.INGRESS}.records")))}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
-    salts = WS.bf.read_blobs(_found(run, "cells.salts"))
+    salts = bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     regs = {doc["registration"]["window"]: (doc["registration"], blob) for doc, blob in zip(lines, salts)

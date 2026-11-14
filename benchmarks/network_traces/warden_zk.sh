@@ -36,7 +36,7 @@ log "wzk: warden-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
 mkdir -p "$OUT/run"
 for f in deployment.json certified.jsonl cells.jsonl check.json warden.json; do [ -f "$RUN/$f" ] && cp "$RUN/$f" "$OUT/run/"; done
 log "wzk: proving, units ${WZ_UNITS:-16}${WZ_DRY:+, dry}"
-"$PY" -m verity.protocols.accounting.certifier.prover.warden_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
+"$PY" benchmarks/network_traces/zk_drivers.py warden_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
   --units "${WZ_UNITS:-16}" ${WZ_DRY:+--dry} 2>&1 | tee -a "$OUT/wzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/wzk"
