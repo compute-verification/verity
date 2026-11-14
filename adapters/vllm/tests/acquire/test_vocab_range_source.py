@@ -3,6 +3,7 @@ arithmetic on int32 and int64 ids, it commits `<site>/vocab_range` only inside t
 another range or a padded shard, and `attach` refuses a manifest without the family."""
 from __future__ import annotations
 
+import importlib.util
 import types
 from typing import Any
 
@@ -30,6 +31,12 @@ class Recorder:
 
     def attach_source(self, src):
         self.sources.append(src)
+
+
+def exactness_in_tree(source: Any) -> bool:
+    """Whether each class a source declares ends its evidence on a module that the tree has: the one that holds the exactness check of
+    what the source commits.  A name that is no module sends the declaration's reader nowhere."""
+    return all(importlib.util.find_spec(d["evidence"].rsplit(" ", 1)[-1]) is not None for d in source.declaration_classes())
 
 
 def _model():
@@ -71,6 +78,7 @@ def test_the_source_commits_only_inside_the_site_during_a_step():
     fn(None, ids, None, 0, VS, 0, VS, VS)                       # not the manifest's range
     fn(None, ids, None, VS, 2 * VS, 64, 2 * VS, 2 * VS)         # a padded shard
     assert len(com.acquired) == 1 and len(com.errors) == 2 and len(launches) == 6
+    assert exactness_in_tree(src)
 
 
 def test_attach_refuses_a_manifest_without_vocab_range_and_adds_the_required_class():
