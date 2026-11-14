@@ -7,7 +7,7 @@
 # set -u alone: each step's failure is its own exit, and the last is exec.
 set -u
 node=${VQ_GRAPH2_NODE:-vy-nebius-cpu-7}
-export PYTHONPATH=${PYTHONPATH:-$HOME/src/tools/research/src}
+export PYTHONPATH=${PYTHONPATH:-$HOME/src/infra/research/src}
 line=$("${VQ_PYTHON:-python3.12}" -m research pods ssh "$node" --print) || exit 1
 eval "ssh=($line)"
 q= sq="'\\''"

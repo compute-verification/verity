@@ -668,7 +668,7 @@ def test_a_command_that_comes_for_an_empty_entry_as_it_is_removed_makes_it_again
     monkeypatch.setattr(Path, "mkdir", another_pruner_after_it)
     ran, err = run_shim(repo, cache, capsys)
     assert seen == [False], "the other pruner removed it between this command's mkdir and its open"
-    assert ran[0] == str(home / "tree/tools/research/src") and err.count("\n") == 1
+    assert ran[0] == str(home / "tree/infra/research/src") and err.count("\n") == 1
     assert whole(home) and entries(cache) == sorted([*newer, home])
 
 

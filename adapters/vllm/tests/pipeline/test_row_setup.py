@@ -723,7 +723,7 @@ def test_a_store_named_by_a_relative_path_reaches_the_stages_as_an_absolute_one(
 def test_the_research_cli_is_the_one_named_else_the_one_on_the_path_else_the_interpreters_module(tmp_path, monkeypatch):
     """The module is run with the tree's own copy of the tool on its path only where the interpreter cannot import it and the tree
     has one."""
-    bin_dir, empty, src = tmp_path / "bin", tmp_path / "empty", tmp_path / "tree" / "tools" / "research" / "src"
+    bin_dir, empty, src = tmp_path / "bin", tmp_path / "empty", tmp_path / "tree" / "infra" / "research" / "src"
     bin_dir.mkdir()
     empty.mkdir()
     exe = bin_dir / "research"
