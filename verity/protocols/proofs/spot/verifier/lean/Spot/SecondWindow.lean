@@ -23,10 +23,16 @@
 * **The form**: it runs behind `Spot.SecondStage.FORM`, the one switch, and is refused last (`two-stage-form`) while
   that is off.
 
-Built: the readers, the parts, `ranks-wire-tree` and `second-table-rows` (`Spot.SecondStage.tableRowsFailures` over the
-joined record's wires, so a registered read that lists `table_rows` is refused here as round 2's reader refuses it).
-The other per-session checks refuse with their codes (`Spot.Ranks.NOT_BUILT`), so nothing passes, and no guarantee
-reads this module.
+* **A member's session** (`ownFor`) is `Spot.SecondStage`'s part of one block: the member's units in its rank's
+  window, the interior its rank's docket record (`Given.dockets`). Each port it reads through a wire reads through the
+  one its units read it through (`wireFor`, the one rule every check reads a wire by), so `second-header`'s bindings,
+  `second-values`' run fields and `second-read` agree on it. `Spot.SecondStage.stmtCodes` runs as it is but for
+  `second-read`, which reads the window's rows (`windowReadOk`): a wired port the writer's output port in the docket
+  of the writer unit's rank, at that unit's rank-local row. A port a boundary read links is refused until round 1's
+  boundary rows are read here. Statements are the sampled members', by position (`second-statement`, `second-order`,
+  `second-cover`), and `second-table-rows` is `Spot.SecondStage.tableRowsFailures` over the joined record's wires.
+
+No guarantee reads this module.
 -/
 module
 
@@ -162,11 +168,153 @@ def wireTreeFailures (rs : Spot.Ranks.Ranks) (rec : Json) (ms : Array Spot.Ranks
 def ownOf (rec : Json) : Spot.SecondStage.Own :=
   { sample := #[], parts := none, interior := .null, boundary := .null, drawn := #[], wires := wiresOf? rec }
 
-/-- The per-session failures of statements `ss` against members `ms`: `second-table-rows` as `Spot.SecondStage` reads
-it (`tableRowsFailures`), over the joined record's wires; the rest refused until built. -/
-def sessionFailures (rec : Json) (_ : Array Spot.Ranks.Member) (ss : List Json) : List (String × Json) :=
-  ((SESSION_CODES.filter (· != "second-table-rows")).map fun c => (c, Json.str Spot.Ranks.NOT_BUILT)) ++
-    Spot.SecondStage.tableRowsFailures (ownOf rec) ss
+/-- What round 2 holds of the run beside the joined record and its ranks, as `Spot.SecondStage.Own` holds it of an
+interior run: each rank's docket record, in rank order (its ports' roots and domains, its program, partition and
+`window.run`); round 1's boundary record; what the verdicts of record name of each session they accepted
+(`Spot.SecondStage.verifiedOf`); and the auditor's reference header and registered reads of each template, taken as
+given. -/
+structure Given where
+  dockets : Array Json
+  boundary : Json := .null
+  verified : Array Spot.SecondStage.Checked := #[]
+  refs : Array (String × Json) := #[]
+  refReads : Array (String × Json) := #[]
+
+/-- **The wire a member reads a port through**, the one rule every per-session check reads a wire by: of the joined
+record's wires `ws` reading template `t`'s port `port`, those meeting the member's units `[lo, lo + n)` (the joined
+circuit's). None meets them: `some none`, the port is no wired port of the member's. All of one writer's output port,
+uncut, together covering every unit: `some (some w)`. Else none: the member reads the port through two writers, or
+partly through none, and no one session's header binds the port. A port two writer templates write, each over its
+own reader units (a select's first step and the rest), is then one writer a member wherever the member rule cuts at
+their bounds. Work per wire, never per unit. -/
+def wireFor (ws : Array Spot.Wires.Wire) (t port : String) (lo n : Nat) : Option (Option Spot.SecondStage.Wire) :=
+  let meet := ws.filter fun w => w.reader == t && w.port == port && w.readsIn (t, lo, n)
+  match meet[0]? with
+  | none => some none
+  | some w0 =>
+    let covered := meet.foldl (fun c w => c + (min (lo + n) (w.start + w.readerUnits) - max lo w.start)) 0
+    if meet.all (fun w => w.writer == w0.writer && w.out == w0.out && w.cuts == 1) && covered == n then
+      some (some ⟨t, port, w0.writer, w0.out⟩)
+    else none
+
+/-- Member `m`'s wires, its units from `lo` in the joined circuit: one a wired port of its template (`wireFor`); none
+where a port has no one wire. -/
+def memberWires (ws : Array Spot.Wires.Wire) (m : Spot.Ranks.Member) (lo : Nat) :
+    Option (Array Spot.SecondStage.Wire) :=
+  (distinct ((ws.filter (·.reader == m.template)).map (·.port))).foldlM (fun acc p => do
+    match ← wireFor ws m.template p lo m.units with
+    | some w => pure (acc.push w)
+    | none => pure acc) #[]
+
+/-- The writer template and unit joined unit `u` of template `t` reads at port `port`: the one of the joined record's
+wires `ws` whose reader units hold `u`, at its first row. -/
+def writerUnit (ws : Array Spot.Wires.Wire) (t port : String) (u : Nat) : Option (String × Int) := do
+  let w ← ws.find? fun w =>
+    w.reader == t && w.port == port && decide (w.start ≤ u) && decide (u < w.start + w.readerUnits)
+  pure (w.writer, w.writerAt ((u - w.start) * w.cuts))
+
+/-- Member `m`'s session as `Spot.SecondStage` reads a part's: one block (`sample` `#[0]`), its part `m`'s units in
+its rank's window, the interior its rank's docket record, its sample the sampled units `drawn` of its template in that
+window, its links the joined record's `links` of its template, and its wires `wires` (`memberWires`). -/
+def ownFor (g : Given) (links : Array Spot.SecondStage.Link) (m : Spot.Ranks.Member) (drawn : Array Nat)
+    (wires : Array Spot.SecondStage.Wire) : Spot.SecondStage.Own :=
+  { sample := #[0], parts := some #[⟨m.template, m.base, m.units⟩], interior := g.dockets.getD m.rank .null,
+    boundary := g.boundary, drawn, links := some (links.filter (·.template == m.template)), verified := g.verified,
+    refs := g.refs, refReads := g.refReads, wires := some wires }
+
+/-- A wired port's registered read `e` in the window form, for part `p` of rank `r` reading through `w`: the writer's
+output port of the docket of the rank that holds the writer unit the part's first unit reads, at its root, domain and
+leaves, each slot only its writer unit's row there (`writerUnit`, rank-local), every slot's writer in that rank. -/
+def wiredReadOk (rs : Spot.Ranks.Ranks) (ws : Array Spot.Wires.Wire) (dockets : Array Json)
+    (p : Spot.SecondStage.Part) (r : Nat) (w : Spot.SecondStage.Wire) (v : String) (e : Json) : Bool :=
+  let first := (rs.segment p.template r).1
+  (do
+    let (_, x0) ← writerUnit ws p.template w.port (first + p.lo)
+    let r' ← if x0 < 0 then none else rs.rankOf w.writer x0.toNat x0.toNat
+    let d := dockets.getD r' .null
+    let wfirst := (rs.segment w.writer r').1
+    let (_, x) ← (Spot.Record.byPort d).find? (·.1 == v)
+    let leaves ← nat? (getD x "leaves")
+    pure (v == Spot.SecondStage.portOf (Spot.SecondStage.byTemplate d) w.writer w.wport &&
+      Spot.SecondStage.sameAt e x && Spot.SecondStage.placedOk 1 p e leaves fun u => do
+        let (_, y) ← writerUnit ws p.template w.port (first + u)
+        if decide ((wfirst : Int) ≤ y) && rs.rankOf w.writer y.toNat y.toNat == some r' then some (y.toNat - wfirst)
+        else none) : Option Bool).getD false
+
+/-- **`second-read` in the window form**: member part `p` of rank `r`'s session port `port` may read registered-reads
+entry `e`: a port a wire names (`wireFor`), only the writer's output port in its rank's docket (`wiredReadOk`); a port
+no link or wire names, its own port of its rank's docket, each slot only its own first row in a tree of the rank's
+units of its template, or a value either record registers, never a boundary port; a port a boundary read links,
+refused until round 1's boundary rows are read here. -/
+def windowReadOk (rs : Spot.Ranks.Ranks) (ws : Array Spot.Wires.Wire) (dockets : Array Json)
+    (own : Spot.SecondStage.Own) (named : Bool) (p : Spot.SecondStage.Part) (r : Nat) (port : String) (e : Json) :
+    Bool :=
+  let units := (rs.segment p.template r).2 - (rs.segment p.template r).1
+  match getD e "value", Spot.SecondStage.linkOf own p.template port, Spot.SecondStage.wireOf own p.template port with
+  | .str _, some _, _ => false
+  | .str v, none, some w => wiredReadOk rs ws dockets p r w v e
+  | .str v, none, none =>
+    match (Spot.Record.byPort own.interior).find? (·.1 == v), (Spot.Record.byPort own.boundary).find? (·.1 == v) with
+    | some (_, x), _ => v == Spot.SecondStage.portOf named p.template port && Spot.SecondStage.sameAt e x &&
+        Spot.SecondStage.rowsOk 1 p e units fun u => some u
+    | none, some _ => false
+    | none, none =>
+      match Spot.SecondStage.registeredEntry own.boundary v <|> Spot.SecondStage.registeredEntry own.interior v with
+      | some x => Spot.SecondStage.sameAt e x
+      | none => false
+  | _, _, _ => false
+
+/-- Member `m`'s position among its rank's docket members, the `k` of its session's input set `served/<run>/m<k>`. -/
+def positionOf (regs : Array Spot.Ranks.Registered) (m : Spot.Ranks.Member) : Nat :=
+  match regs.find? (·.rank == m.rank) with
+  | some g => (g.members.findIdx? fun h => h.key == m.template ++ "/c" ++ toString m.index).getD g.members.size
+  | none => 0
+
+/-- Statement `s`'s failing checks against member `m`'s session `own`: `Spot.SecondStage.stmtCodes` of its part, but
+`second-read` in the window form (`windowReadOk`, with `linkedRead` and `wiredRead`). -/
+def memberCodes (rs : Spot.Ranks.Ranks) (ws : Array Spot.Wires.Wire) (g : Given) (own : Spot.SecondStage.Own)
+    (m : Spot.Ranks.Member) (k : Nat) (s : Spot.SecondStage.Stmt) : List String :=
+  let named := Spot.SecondStage.byTemplate own.interior
+  let p : Spot.SecondStage.Part := ⟨m.template, m.base, m.units⟩
+  let reads := entries (getD s.registered "ports")
+  let read := reads.all (fun (port, e) => windowReadOk rs ws g.dockets own named p m.rank port e) &&
+    Spot.SecondStage.linkedRead own m.template reads && Spot.SecondStage.wiredRead own m.template reads
+  ((Spot.SecondStage.stmtCodes own named k p s).filter (· != "second-read")) ++ (if read then [] else ["second-read"])
+
+def TWO_WRITERS_WHY : String :=
+  "the member reads a port through two writers, or partly through none: no one session's header binds it"
+
+def DESIGN_WHY : String := "the joined record's wires or boundary reads are none: no session reads by them"
+
+/-- The per-session failures of statements `ss` against the sampled members `ms`, the `i`-th statement the `i`-th
+member's session (`partsOf?`'s order): `second-statement`, `second-order` (a statement for another template than its
+member's, or for no member) and `second-cover` (a member no statement is for), else its member's codes
+(`memberCodes`); then `second-table-rows` as `Spot.SecondStage` reads it over the joined record's wires. -/
+def sessionFailures (g : Given) (rs : Spot.Ranks.Ranks) (regs : Array Spot.Ranks.Registered) (rec : Json)
+    (ms : Array Spot.Ranks.Member) (sample : Array (String × Nat)) (ss : List Json) : List (String × Json) :=
+  let detail := Spot.SecondStage.detailOf
+  let each := match linksOf? rec, patternsOf? rec with
+    | some links, some ws => (List.range (max ms.size ss.length)).flatMap fun i =>
+      match ms[i]?, ss[i]? with
+      | some m, none => [("second-cover", detail i (.str m.template))]
+      | none, some _ => [("second-order", detail i .null)]
+      | none, none => []
+      | some m, some j => match Spot.SecondStage.Stmt.ofJson? j with
+        | none => [("second-statement", detail i .null)]
+        | some s =>
+          if s.template != m.template then [("second-order", detail i (.str s.template))] else
+          let first := (rs.segment m.template m.rank).1
+          let lo := first + m.base
+          match memberWires ws m lo with
+          | none => [("second-read", Json.mkObj [("statement", Lean.toJson i), ("template", .str s.template),
+              ("why", .str TWO_WRITERS_WHY)])]
+          | some wires =>
+            let mine := sample.filter fun (t, u) => t == m.template && decide (lo ≤ u) && decide (u < lo + m.units)
+            let drawn := mine.map fun (_, u) => u - first
+            (memberCodes rs ws g (ownFor g links m drawn wires) m (positionOf regs m) s).map
+              fun c => (c, detail i (.str s.template))
+    | _, _ => [("second-read", Json.str DESIGN_WHY)]
+  each ++ Spot.SecondStage.tableRowsFailures (ownOf rec) ss
 
 section Example
 
@@ -216,17 +364,57 @@ end Example
   let stmt := Json.mkObj [("draw", Json.mkObj []), ("header", Json.mkObj []),
     ("registered", Json.mkObj [("ports", Json.mkObj [("tok", Json.mkObj [("table_rows", num 4)])])]),
     ("template", .str "A")]
-  let why (j : Json) : List String := (sessionFailures j #[] [stmt]).filterMap fun (c, d) =>
-    if c == "second-table-rows" then (match getD d "why" with | .str w => some w | _ => none) else none
+  let why (j : Json) : List String :=
+    (sessionFailures { dockets := #[] } exRanks exRegs j #[] #[] [stmt]).filterMap fun (c, d) =>
+      if c == "second-table-rows" then (match getD d "why" with | .str w => some w | _ => none) else none
   why (Json.mkObj [("wires", .arr #[wireJ 0 0 "tok"])]) == [Spot.SecondStage.KEY_ROWS_WHY] &&
     why (Json.mkObj [("wires", .arr #[wireJ 0 0])]) == [Spot.SecondStage.TABLE_ROWS_WHY]
 
+-- A port two select templates write, `F` over step 1's reader unit and `L` over the rest: a member of step 1's unit
+-- reads it through `F`, one of the rest through `L`, one spanning both through neither, nor one partly unwired.
+#guard
+  let sel (writer : String) (a : Nat) : Spot.Wires.Wire :=
+    { reader := "A", port := "live", writer, out := "o0", start := a, radix := [1], base := 0, step := [1], cut0 := 0,
+      cuts := 1 }
+  let ws := #[sel "F" 0, sel "L" 1]
+  let w (x : String) : Option (Option Spot.SecondStage.Wire) := some (some ⟨"A", "live", x, "o0"⟩)
+  wireFor ws "A" "live" 0 1 == w "F" && wireFor ws "A" "live" 1 1 == w "L" && wireFor ws "A" "live" 0 2 == none &&
+    wireFor ws "A" "x" 0 2 == some none && wireFor #[sel "F" 0] "A" "live" 0 2 == none
+-- Rank 0's member `A/c0` reads port `x` through a join wire from rank 1's `B` units 2 and 3: rank 1's docket's `B/o0`
+-- at rows 0 and 1; port `y`, unwired, its own rank's `A/y` at its own rows.
+#guard
+  let root (port r : String) : Json :=
+    Json.mkObj [("domain", .str ("d" ++ r)), ("leaves", num 2), ("port", .str port), ("root", .str r)]
+  let dockets := #[Json.mkObj [("roots", .arr #[root "A/y" "a0"])], Json.mkObj [("roots", .arr #[root "B/o0" "b1"])]]
+  let ws : Array Spot.Wires.Wire := #[{ reader := "A", port := "x", writer := "B", out := "o0", start := 0,
+    radix := [2], base := 2, step := [1], cut0 := 0, cuts := 1 }]
+  let own := ownFor { dockets } #[] ⟨0, "A", 0, 0, 2⟩ #[0] #[⟨"A", "x", "B", "o0"⟩]
+  let e (v r : String) (reads : List Nat) : Json := Json.mkObj [("domain", .str ("d" ++ r)), ("leaves", num 2),
+    ("reads", .arr (reads.map num).toArray), ("root", .str r), ("value", .str v)]
+  let ok (port : String) (j : Json) : Bool := windowReadOk exRanks ws dockets own true ⟨"A", 0, 2⟩ 0 port j
+  ok "x" (e "B/o0" "b1" [0, 1]) && !ok "x" (e "B/o0" "b1" [1, 0]) && !ok "x" (e "A/y" "a0" [0, 1]) &&
+    ok "y" (e "A/y" "a0" [0, 1]) && !ok "y" (e "A/y" "a0" [1, 0]) && !ok "y" (e "B/o0" "b1" [0, 1])
+-- The statements by position: a member that reads `live` through both selects, a missing statement, one for another
+-- template.
+#guard
+  let selJ (writer : String) (a : Nat) : Json := Json.mkObj [("at", num a), ("base", num 0), ("out", .str "o0"),
+    ("port", .str "live"), ("radix", .arr #[num 1]), ("reader", .str "A"), ("step", .arr #[num 1]),
+    ("writer", .str writer)]
+  let rec2 := Json.mkObj [("wires", .arr #[selJ "F" 0, selJ "L" 1])]
+  let stmt (t : String) : Json := Json.mkObj [("draw", Json.mkObj []), ("header", Json.mkObj []),
+    ("registered", .null), ("template", .str t)]
+  let codes (ss : List Json) : List String :=
+    (sessionFailures { dockets := #[] } exRanks exRegs rec2 #[⟨0, "A", 0, 0, 2⟩] #[("A", 1)] ss).map (·.1)
+  codes [stmt "A"] == ["second-read"] && codes [] == ["second-cover"] && codes [stmt "B"] == ["second-order"] &&
+    codes [stmt "A", stmt "A"] == ["second-read", "second-order"]
+
 def PARTS_WHY : String := "a sampled unit is in no rank member"
 
-/-- Every failure of statements `stmts` over the joined record `rec`, its ranks' records `records`, served records
-`served` and registrations `regs` at the serve's root `root`, `logged` whether a registration is in the log before the
-period's challenge; when there is none and the form isn't allowed, its refusal. -/
-def failures (allow : Bool) (rec : Json) (records : Array Json) (served : Array (String × String))
+/-- Every failure of statements `stmts` over the joined record `rec` and what round 2 holds beside it `g`, its ranks'
+records `records`, served records `served` and registrations `regs` at the serve's root `root`, `logged` whether a
+registration is in the log before the period's challenge, and the sampled units `sample`; when there is none and the
+form isn't allowed, its refusal. -/
+def failures (allow : Bool) (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))
     (stmts : List Json) : List (String × Json) :=
   let ranks := Spot.Ranks.failures rec records served regs root logged
@@ -234,14 +422,14 @@ def failures (allow : Bool) (rec : Json) (records : Array Json) (served : Array 
     | none => ranks
     | some rs => match partsOf? rs regs sample with
       | none => ranks ++ [("ranks-members", Json.str PARTS_WHY)]
-      | some ms => ranks ++ wireTreeFailures rs rec ms ++ sessionFailures rec ms stmts
+      | some ms => ranks ++ wireTreeFailures rs rec ms ++ sessionFailures g rs regs rec ms sample stmts
   if found.isEmpty && !allow then [("two-stage-form", Json.str Spot.SecondStage.FORM_WHY)] else found
 
 /-- **Round 2's check over the joined record** (module docstring), the form allowed when `allow` (`Spot.SecondStage.FORM`
 in the run): each code once, with the detail it first failed with. -/
-def check (allow : Bool) (rec : Json) (records : Array Json) (served : Array (String × String))
+def check (allow : Bool) (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))
     (stmts : List Json) : Check :=
-  (failures allow rec records served regs root logged sample stmts).foldl (fun c x => c.fail x.1 x.2) {}
+  (failures allow g rec records served regs root logged sample stmts).foldl (fun c x => c.fail x.1 x.2) {}
 
 end Spot.SecondWindow

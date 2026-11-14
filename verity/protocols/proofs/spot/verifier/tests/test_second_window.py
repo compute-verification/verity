@@ -49,9 +49,9 @@ def test_an_honest_pair_passes_and_each_edit_fails_one_code():
         ["ranks-members", *built]
     assert codes(record={**RECORD, "templates": [["T", 4]]}) == ["ranks-units", *built]
     assert codes(record={**RECORD, "ranks": {**RANKS, "prefix": "r/"}}) == ["ranks-shape"]
-    assert [c for c, _ in W.failures(False, RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [], [])] == \
-        [c for c in W.SESSION_CODES if c != "second-table-rows"]
-    assert [c for c, _ in W.failures(False, RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [("T", 5)], [])] == \
+    assert [c for c, _ in W.failures(False, W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [], [])] == \
+        ["two-stage-form"]
+    assert [c for c, _ in W.failures(False, W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [("T", 5)], [])] == \
         ["ranks-members"]
 
 
@@ -119,6 +119,53 @@ def test_table_rows_are_refused_as_round_2_refuses_them():
     stmt = {"draw": {}, "header": {}, "registered": {"ports": {"tok": {"table_rows": 4}}}, "template": "A"}
 
     def why(record: dict) -> list[str]:
-        return [d["why"] for c, d in W.session_failures(record, [stmt]) if c == "second-table-rows"]
+        return [d["why"] for c, d in W.session_failures(W.Given(dockets=()), EX_RANKS, EX_REGS, record, [], [], [stmt])
+                if c == "second-table-rows"]
     assert why({"wires": [wire(0, 0, "tok")]}) == [W.SS.KEY_ROWS_WHY]
     assert why({"wires": [wire(0, 0)]}) == [W.SS.TABLE_ROWS_WHY]
+
+
+def _w(reader: str, port: str, writer: str, at: int, radix: int, base: int) -> dict:
+    return W._pattern({"at": at, "base": base, "out": "o0", "port": port, "radix": [radix], "reader": reader,
+                       "step": [1], "writer": writer})
+
+
+def test_a_port_two_selects_write_is_read_through_the_one_its_units_read():
+    """`Spot.SecondWindow`'s `#guard` on `wireFor`."""
+    ws = [_w("A", "live", "F", 0, 1, 0), _w("A", "live", "L", 1, 1, 0)]
+    assert W.wire_for(ws, "A", "live", 0, 1) == (W.SS.Wire("A", "live", "F", "o0"),)
+    assert W.wire_for(ws, "A", "live", 1, 1) == (W.SS.Wire("A", "live", "L", "o0"),)
+    assert W.wire_for(ws, "A", "live", 0, 2) is None and W.wire_for(ws, "A", "x", 0, 2) == (None,)
+    assert W.wire_for(ws[:1], "A", "live", 0, 2) is None
+
+
+def test_a_wired_read_opens_the_writer_ranks_tree_and_an_own_read_its_own():
+    """`Spot.SecondWindow`'s `#guard` on `windowReadOk`."""
+    def root(port: str, r: str) -> dict:
+        return {"domain": "d" + r, "leaves": 2, "port": port, "root": r}
+    dockets = ({"roots": [root("A/y", "a0")]}, {"roots": [root("B/o0", "b1")]})
+    ws = [_w("A", "x", "B", 0, 2, 2)]
+    own = W.own_for(W.Given(dockets=dockets), [], (0, "A", 0, 0, 2), [0], [W.SS.Wire("A", "x", "B", "o0")])
+
+    def e(v: str, r: str, reads: list) -> dict:
+        return {"domain": "d" + r, "leaves": 2, "reads": reads, "root": r, "value": v}
+
+    def ok(port: str, j: dict) -> bool:
+        return W.window_read_ok(EX_RANKS, ws, dockets, own, True, W.SS.Part("A", 0, 2), 0, port, j)
+    assert ok("x", e("B/o0", "b1", [0, 1])) and not ok("x", e("B/o0", "b1", [1, 0])) and not ok("x", e("A/y", "a0", [0, 1]))
+    assert ok("y", e("A/y", "a0", [0, 1])) and not ok("y", e("A/y", "a0", [1, 0])) and not ok("y", e("B/o0", "b1", [0, 1]))
+
+
+def test_the_statements_are_the_sampled_members_by_position():
+    """`Spot.SecondWindow`'s `#guard` on `sessionFailures`."""
+    sel = [{"at": a, "base": 0, "out": "o0", "port": "live", "radix": [1], "reader": "A", "step": [1], "writer": x}
+           for x, a in (("F", 0), ("L", 1))]
+
+    def stmt(t: str) -> dict:
+        return {"draw": {}, "header": {}, "registered": None, "template": t}
+
+    def codes(ss: list) -> list[str]:
+        return [c for c, _ in W.session_failures(W.Given(dockets=()), EX_RANKS, EX_REGS, {"wires": sel},
+                                                 [(0, "A", 0, 0, 2)], [("A", 1)], ss)]
+    assert codes([stmt("A")]) == ["second-read"] and codes([]) == ["second-cover"]
+    assert codes([stmt("B")]) == ["second-order"] and codes([stmt("A"), stmt("A")]) == ["second-read", "second-order"]

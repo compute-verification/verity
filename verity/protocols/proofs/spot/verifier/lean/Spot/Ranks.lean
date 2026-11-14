@@ -303,18 +303,18 @@ def NO_REGISTERED : Json :=
   Json.mkObj [("openings", .arr #[]), ("params", Json.mkObj []), ("reads", .arr #[]), ("roots", .arr #[]),
     ("tables", .arr #[])]
 
-def present : Json → Bool
-  | .null => false
-  | _ => true
+/-- The keys of a rank record's `registered` the join names, each by its rule (`joinedRegistered`): a rank's record
+with any other (values, histories, supplied parameters) is refused until the join names it. -/
+def REGISTERED_KEYS : List String := ["formats", "openings", "params", "reads", "roots", "tables"]
 
 def registeredOf (doc : Json) : Json := match getD doc "registered" with | .null => NO_REGISTERED | g => g
 
 /-- The joined record's `registered` as the ranks' records (`records`, in rank order) make it: each rank's parameters,
 tables and formats named `r<r>/…`, and its registered reads, table reads and openings at its units, naming them so,
-in rank order; none where a rank's has values or histories, which no rank's window declares. -/
+in rank order; none where a rank's has a key the join names no rule for (`REGISTERED_KEYS`). -/
 def joinedRegistered (rs : Ranks) (records : Array Json) : Option Json := do
   let regs := (List.range rs.of.size).map fun r => (r, registeredOf (records.getD r .null))
-  if regs.any fun (_, g) => present (getD g "values") || present (getD g "histories") then none
+  if regs.any fun (_, g) => (entries g).any fun (k, _) => !REGISTERED_KEYS.contains k then none
   let each (f : Nat → Json → Array Json) : Array Json := regs.foldl (fun acc (r, g) => acc ++ f r g) #[]
   let named (k : String) : Array (String × Json) :=
     regs.foldl (fun acc (r, g) => acc ++ (entries (getD g k)).map fun (n, v) => (rankPrefix r ++ n, v)) #[]
@@ -331,7 +331,7 @@ def joinedRegistered (rs : Ranks) (records : Array Json) : Option Json := do
 
 def READS_WHY : String :=
   "the joined record's registered declarations are not its ranks', each named r<r>/... and at its rank's units, in " ++
-  "rank order, or a rank's record has values or histories"
+  "rank order, or a rank's record declares what the join names no rule for (values, histories, supplied parameters)"
 
 /-- `ranks-reads`: the joined record `rec`'s `registered` is the one its ranks' records make (`joinedRegistered`). -/
 def readsOk (rs : Ranks) (rec : Json) (records : Array Json) : Bool :=
