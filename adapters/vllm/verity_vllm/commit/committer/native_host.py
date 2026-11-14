@@ -541,8 +541,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return step_rows.ctx_digest(self.run_id, step)
 
     def _select_modules(self) -> list[tuple[str, Any]]:
+        model = self.model
+        assert model is not None, "no model to select modules of: give the committer an engine, or set `model` on the offline core"
         out = []
-        for name, m in self.model.named_modules():
+        for name, m in model.named_modules():
             names = _mro_names(m)
             if names & SKIP_CLASSES:
                 continue
@@ -606,13 +608,14 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         """The manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
         output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
         here and left unbound (coverage names it).  [v2 acquire] under a plan: the plan's consumer-input sites not among the selected modules."""
-        if getattr(self, "model", None) is None:
+        model = getattr(self, "model", None)
+        if model is None:
             return []
         wanted = self.plan_inputs if self.plan_inputs is not None else set(self.acquire_inputs)
         if not wanted:
             return []
         selected = {n for n, _m in self._modules}
-        mods = dict(self.model.named_modules())
+        mods = dict(model.named_modules())
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:
@@ -635,7 +638,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         roots: list[Any]
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
-        items = list(self.model.named_parameters()) + list(self.model.named_buffers())
+        model = self.model
+        assert model is not None, "no model to register the weights of: give the committer an engine, or set `model` on the offline core"
+        items = list(model.named_parameters()) + list(model.named_buffers())
         for name, p in items:
             if not isinstance(p, torch.Tensor) or id(p) in seen or p.numel() == 0:
                 continue
@@ -1177,6 +1182,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             off = -(-len(buf) // self.ALIGN) * self.ALIGN
             buf += b"\0" * (off - len(buf))
             m.stream_off = off
+            assert m.host is not None, f"{m.name}: no host copy to pack (the direct staging path packs each tensor's host bytes)"
             buf += bytes(m.host)
         return memoryview(bytes(buf))
 
