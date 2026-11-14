@@ -178,6 +178,8 @@ def test_a_structure_states_mu_and_none_defaults_it():
     for name in reg.names("structure"):
         st = classes.structure(reg, name)
         assert st.per_bit == st.omega_max * reg[f"structure.{name}.mu"]
+    doubled = classes.structure(reg.override({"structure.reference.mu": 2}), "reference")
+    assert doubled.per_bit == 2 * doubled.omega_max
     without = Registry({p.key: p for p in reg.params() if p.key != "structure.reference.mu"})
     with pytest.raises(ValueError, match="structure.reference states no mu"):
         classes.structure(without, "reference")
