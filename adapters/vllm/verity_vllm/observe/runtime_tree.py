@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.log import write
 from verity_vllm.records.runtime_tree import RuntimeTree, runtime_tree_of
 
 __all__ = ["Options", "main", "meta_runtime_tree"]
@@ -63,5 +64,5 @@ def main(a: Options) -> int:
     rt = meta_runtime_tree(a.model, a.revision, dtype=a.dtype, max_model_len=a.max_model_len, tensor_parallel_size=a.tp, attention_backend=a.attention_backend,
                            sampler_module=a.sampler_module, runner_facts=facts)
     rt.save(a.out)
-    print(json.dumps({"modules": len(rt.modules), "buffers": len(rt.buffers), "out": a.out}), flush=True)
+    write(json.dumps({"modules": len(rt.modules), "buffers": len(rt.buffers), "out": a.out}))
     return 0

@@ -1,8 +1,9 @@
 """The challenger's host on this machine: the ``host`` capability of SPOT's challenger party
 (`verity.protocols.proofs.spot.verifier.parties`).
 
-`Host(root, main).start()` makes a development challenger host (`a5_coins.Local`: the auditor device's own reserve, admit
-and run, then `serve.py`, with no tunnel) under ``root``, which must not exist yet: its LMS key, its signed ledger and its
+`Host(root, main, local).start()` makes a development challenger host (``local``, its caller's
+`local_challenger.Local`: the auditor device's own reserve, admit and run, then `serve.py`, with no tunnel, which this
+file loads none of) under ``root``, which must not exist yet: its LMS key, its signed ledger and its
 pins log, pinned on main's first-parent line ``main`` (`a5_coins.on_main`). It answers on loopback TCP, on a thread of
 this process, until `stop`. Its coins are the challenger's own (`serve.py`), never the verifier's or the prover's, but
 its host is whatever machine runs it, so a run that places it with the prover's parties states its coins as
@@ -32,6 +33,7 @@ import json
 import socket
 import threading
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from verity.protocols.proofs.spot.device import challenger_session as AC
@@ -41,13 +43,13 @@ MAX_LINE = 1 << 16
 
 
 class Party:
-    """The challenger's host and its one open session."""
+    """The challenger's host and its one open session, made by `local` (`local_challenger.Local`)."""
 
-    def __init__(self, root: Path, main: list[str]) -> None:
+    def __init__(self, root: Path, main: list[str], local: Callable[[Path, list[str]], Any]) -> None:
         if root.exists():
             raise SystemExit(f"{root} exists: a challenger host's root is made once, so give a fresh one")
         root.mkdir(parents=True)
-        self.local = AC.Local(root, main)
+        self.local = local(root, main)
         self.open_root: str | None = None
         self.roots: set[str] = set()
 
@@ -102,15 +104,16 @@ def serve(party: Party, srv: socket.socket) -> None:
 
 
 class Host:
-    """The challenger party's ``host``: `Party` under ``root``, served on ``listen`` from `start` until `stop`."""
+    """The challenger party's ``host``: `Party` under ``root``, made by `local`, served on ``listen`` from `start` until `stop`."""
 
-    def __init__(self, root: Path, main: list[str], listen: str = "127.0.0.1:0") -> None:
-        self.root, self.main, self.listen = root, main, listen
+    def __init__(self, root: Path, main: list[str], local: Callable[[Path, list[str]], Any],
+                 listen: str = "127.0.0.1:0") -> None:
+        self.root, self.main, self.local, self.listen = root, main, local, listen
         self.address: str | None = None
         self.thread: threading.Thread | None = None
 
     def start(self) -> dict[str, str]:
-        party = Party(self.root, self.main)
+        party = Party(self.root, self.main, self.local)
         host, port = self.listen.rsplit(":", 1)
         srv = socket.create_server((host, int(port)))
         self.address = "%s:%d" % srv.getsockname()[:2]
