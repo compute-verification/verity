@@ -798,7 +798,7 @@ the timed audit and the simulator with the dense codec as default.
   `AuditSecure` holds at a state of `⌊ρ|C|⌋` bits with bound `δ + ε`.
 - **Proofs:** `security/Proofs/Pous/`, checked by Verity's `tools/verity/lean/check.py` against `lean-audit.json`.
   `security/Proofs/Pous.lean` proves `Pous.Guarantees.X` as `Pous.SecurityProofs.X`.
-- **Untrusted submissions:** `grade.sh FILE Pous.Guarantees.X` grades one file against one guarantee (`../lean/README.md`).
+- **Untrusted submissions:** `grade.sh FILE Pous.Guarantees.X` grades one file against one guarantee (`../../../../tools/pous_grader/README.md`).
 
 ### The band
 
