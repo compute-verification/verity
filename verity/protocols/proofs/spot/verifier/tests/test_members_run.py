@@ -40,6 +40,8 @@ ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
 RECORD = {"population": 5, "scheme": SCHEME,
           "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": f"{m}/out", "root": ROOTS[m][0]} for m in (A, B)]}
 SAMPLED = {A: [1], B: [0, 2]}
+#: each member's rows in its circuit's META and its public file, each its name and words
+ROWS = (("x", 4), ("out", 4))
 
 
 def header(member: str, **changes) -> dict:
@@ -53,15 +55,23 @@ class Window:
     each tree's link, one round and its closing round before the next tree's first, and the per-member parameters and
     evidence over them. `headers` are the members' public files' headers (`header`'s by default)."""
 
-    def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B)) -> None:
+    def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B), wired: dict | None = None,
+                 strings=None) -> None:
+        """`wired`: each member's ``wired``, where it names one; `strings(member, unit, row)`: the string of each
+        unit's rows ``x`` and ``out`` (`ROWS`) in the members' public files, which hold none without it."""
         self.at, self.files = at, []
         challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
         log = [json.dumps({"event": "commitment", "root": challenger.commitment.root.hex()})]
         statements, members = [], {}
         for k, name in enumerate((A, B)):
-            public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
-            members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA {\"vus_per_block\": 4}\n" + name.encode()),
+            n = sum(hi - lo for lo, hi in UNITS[name])
+            rows = b"".join(strings(name, u, p) for u in range(n) for p, _ in ROWS) if strings else b"the rows"
+            public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\n" + rows
+            meta = json.dumps({"vus_per_block": 4, "ports": [[p, w, 1, 1] for p, w in ROWS]}).encode()
+            members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA " + meta + b"\n" + name.encode()),
                              "public": self.put(public), "registered": None, "units": UNITS[name], "vus_per_block": 4}
+            if name in (wired or {}):
+                members[name]["wired"] = wired[name]
             if name not in sessions:
                 continue
             tree, line = challenger.sample_tree(SPEC, bytes([k]) * CT.NONCE_BYTES)
@@ -288,3 +298,90 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(program=P.population_program(PAIR, 5))
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
+
+
+def _string(member: str, unit: int, row: str) -> bytes:
+    """Member `member`'s unit `unit`'s string of row `row`: member B's ``x`` rows its writers', A's ``out`` rows."""
+    if member == B and row == "x":
+        member, unit, row = A, unit, "out"
+    return hashlib.sha512(f"{member} {unit} {row}".encode()).digest() * 2
+
+
+def _wire(**changes) -> dict:
+    """Member B's units 0 and 1 read their row ``x`` as row ``out`` of member A's units 0 and 1."""
+    return {"port": "x", "writer": A, "out": "out", "at": 0, "radix": [2], "base": 0, "step": [1]} | changes
+
+
+def _wires(at, wire: dict, strings=_string):
+    at.mkdir()
+    w = Window(at, wired={B: [wire]}, strings=strings)
+    run, refused = w.run()
+    assert refused is None and run.all
+    wired = M.wires_why(w.params, w.evidence, M.blobs_of(w.files))
+    return wired, M.run_reason(run, refused, wired)
+
+
+def test_a_wire_a_swapped_writer_and_a_flipped_string_are_each_refused_by_name_before_the_forms_refusal(tmp_path):
+    """A run every session accepts, whose member B (units 2 to 4) reads its row ``x`` by a wire of member A's row
+    ``out``, sampled at B's units 0 and 2: refused by `WIRES_SAMPLED` for a wire the wiring's check refuses, a writer
+    swapped, or a wired string with one bit flipped, where it would otherwise be refused for its form alone. A string
+    flipped at a unit the sample missed is not seen."""
+    assert _wires(tmp_path / "held", _wire()) == (None, M.ALL_PASSED)
+    assert _wires(tmp_path / "wire", _wire(writer="c/c0")) == (
+        f"{M.WIRES_SAMPLED}: the members' wiring is refused: template at wire 0",
+        f"proofs: {M.WIRES_SAMPLED}: the members' wiring is refused: template at wire 0")
+    assert _wires(tmp_path / "swapped", _wire(base=1, step=[-1]))[1] == (
+        f"proofs: {M.WIRES_SAMPLED}: member {B}'s sampled unit 0: its row x is not row out of member {A}'s unit 1")
+
+    def flipped(at: int):
+        def strings(member: str, unit: int, row: str) -> bytes:
+            s = bytearray(_string(member, unit, row))
+            s[5] ^= (member, unit, row) == (B, at, "x")
+            return bytes(s)
+        return strings
+    assert _wires(tmp_path / "flipped", _wire(), flipped(0))[1] == (
+        f"proofs: {M.WIRES_SAMPLED}: member {B}'s sampled unit 0: its row x is not row out of member {A}'s unit 0")
+    assert _wires(tmp_path / "unsampled", _wire(), flipped(1)) == (None, M.ALL_PASSED)
+
+
+def test_a_window_no_member_of_which_names_a_wire_reads_no_file_for_the_wiring(tmp_path):
+    w = Window(tmp_path)
+    assert M.wires_why(w.params, w.evidence, {}) is None
+
+
+def _rows(rows: dict[str, list[bytes]]):
+    return [(p, 4) for p in rows], lambda p, u: rows[p][u] if p in rows and 0 <= u < len(rows[p]) else None
+
+
+@pytest.mark.parametrize("wire, bx, units, why", [
+    (_wire(writer="a", step=[1]), None, [0, 1, 2, 3], None),
+    (_wire(writer="c", step=[1]), None, [2], "the members' wiring is refused: template at wire 0"),
+    (_wire(writer="a", out="y", step=[1]), None, [2], "the members' wiring is refused: port at wire 0"),
+    (_wire(writer="a", base=1, step=[1]), None, [2], "the members' wiring is refused: bounds at wire 0"),
+    (_wire(writer="a", base=1, step=[-1]), None, [3], "member b's sampled unit 1: its row x is not row out of member a's unit 0"),
+    (_wire(writer="a", step=[1]), [b"\1", b"\3"], [0, 3], "member b's sampled unit 1: its row x is not row out of member a's unit 1"),
+    (_wire(writer="a", step=[1]), [b"\1", b"\3"], [0, 1, 2], None),
+    (_wire(writer="a", step=[0]), None, [2], None),
+    (_wire(writer="a", step=[0]), None, [3], "member b's sampled unit 1: its row x is not row out of member a's unit 0"),
+])
+def test_the_wiring_on_its_rows_is_leans_on_the_same_cases(wire, bx, units, why):
+    """`wired_why` on `OneStageZk`'s own cases of `wiresHeldOn` (its ``#guard`` lines), with their reasons: member
+    ``a`` (units 0 and 1) writes row ``out``, member ``b`` (units 2 and 3) reads it at row ``x`` by the wire."""
+    ms = {"a": {"units": [[0, 2]]}, "b": {"units": [[2, 4]], "wired": [wire]}}
+    rows = {"a": _rows({"out": [b"\1", b"\2"]}), "b": _rows({"x": bx or [b"\1", b"\2"]})}
+    assert M.wired_why(ms, rows, units) == (None if why is None else f"{M.WIRES_SAMPLED}: {why}")
+
+
+@pytest.mark.parametrize("wires, code", [
+    ([_wire(writer="a", step=[1]), _wire(writer="a", at=1, radix=[1])], ("overlap", None)),
+    ([_wire(writer="a", step=[1]), {**_wire(writer="b", port="y", out="x", step=[1]), "reader": "a"}], ("cycle", 1)),
+    ([{**_wire(writer="b", port="x", out="out", radix=[1], step=[0]), "at": 1}], None),
+    ([{**_wire(writer="b", port="x", out="out", radix=[1], base=1, step=[0]), "at": 1}], ("order", 0)),
+])
+def test_the_wirings_own_check_refuses_overlaps_and_cycles_with_leans_codes(wires, code):
+    """`wiring_refusal`'s order and overlap codes, which `Spot.Wires.check` gives on these wires: two wires of one row
+    of one unit, a cycle between members (named by the first wire into the template the walk ends on), and a member
+    reading itself, at a unit before its reader (in order) or at the same unit (out of order)."""
+    templates = {"a": (2, {"out": 4, "y": 4}), "b": (2, {"x": 4, "out": 4})}
+    full = [{"reader": "b", "c0": 0, "c": 1, **w} for w in wires]
+    assert M.wiring_refusal(templates, full) == code

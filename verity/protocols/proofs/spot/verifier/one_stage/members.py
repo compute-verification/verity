@@ -16,6 +16,14 @@ files. It refuses with Lean's reason where Lean refuses, and accepts nothing eit
 findings, which the audit above it (v1's check at the coins, then the refusal) reads. Each session's verdict is the
 Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `proofs.verify` runs it).
 
+`wires_why` is the Python of `OneStageZk.wiresHeld`, the step after the run and before v1's check at the coins: where a
+member names wires (its ``wired``, each a `Spot.Wires` wire's record but its ``reader``, which is the member), the
+members' wiring passes the wiring's own check (`wiring_refusal`, `Spot.Wires.check` in its closed form, each member a
+template of its units and every row of its public file both a row it reads by and one it is read at) and each sampled
+unit's wired rows hold their writers' strings (`wired_why`, `Spot.Wires.Summary.drawnOk`), else `WIRES_SAMPLED`
+refuses before `MULTI_REFUSED` (`run_reason`). The wiring is the verifier's parameter; no statement may read it as the
+policy's wiring until a check ties the two.
+
 Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
 the reads Lean's `Member.statement` makes of them, then what a session's verdict checks of the files alone
 (`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the sample missed is refused there as
@@ -51,6 +59,7 @@ Where it is not Lean's step for step, each on a case neither side accepts:
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import tempfile
@@ -132,6 +141,11 @@ MEMBER_UNITS = ("units: the public file's units.indices are not exactly the memb
                 "table is the member's i-th unit")
 #: `OneStageZk.provedHeld`'s refusal
 PROVED_UNITS = "the units the sessions proved are not the evidence's proved_units"
+#: `OneStageZk.WIRES_SAMPLED`: the refusal of the members' wiring
+WIRES_SAMPLED = "wires-sampled"
+#: `Flock.HmRow.BC_BYTES`: a row's string in a public file
+BC_BYTES = 128
+_WIRE_KEYS = frozenset({"port", "writer", "out", "at", "radix", "base", "step"})
 #: the heads of the two refusals `Flock.KsScope.checkOf` and the scope (`Flock.ProvedScope.checkOf`) word alike, of
 #: files neither reads: a circuit that does not parse, a public file that does not load
 UNREAD = ("refused: a circuit that does not parse (", "refused: a public file that does not load (")
@@ -213,6 +227,27 @@ def _count(m: Mapping[str, Any]) -> int:
     return sum(hi - lo for lo, hi in m["units"])
 
 
+def _wired_of(name: str, wired: Any) -> list[dict[str, Any]] | None:
+    """`OneStageZk.wiredOf`: the member `name`'s wires, each its record with its reader the member and its cut as
+    ``c0`` and ``c`` (``[0, 1]`` where it names none); None where Lean refuses them."""
+    if type(wired) is not list:
+        return None
+    out = []
+    for w in wired:
+        if not isinstance(w, dict) or set(w) - {"cut"} != _WIRE_KEYS:
+            return None
+        radix, step, cut = w["radix"], w["step"], w.get("cut", [0, 1])
+        if (not all(type(w[k]) is str for k in ("port", "writer", "out")) or not _nat(w["at"])
+                or type(w["base"]) is not int or type(radix) is not list or type(step) is not list
+                or not all(_nat(r) for r in radix) or not all(type(s) is int for s in step)
+                or not radix or len(radix) != len(step) or min(radix) < 1
+                or type(cut) is not list or len(cut) != 2 or not all(_nat(x) for x in cut) or cut[1] < 1):
+            return None
+        out.append({"reader": name, "port": w["port"], "writer": w["writer"], "out": w["out"], "at": w["at"],
+                    "radix": radix, "base": w["base"], "step": step, "c0": cut[0], "c": cut[1]})
+    return out
+
+
 def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
     """The parameters' members and the evidence's statements, as the per-member parsers leave them; `Outside` where
     they are not in that form."""
@@ -225,8 +260,9 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
               and type(evidence["proved_units"]) is list and isinstance(evidence["coins"], dict)
               and isinstance(params["challenger"], dict) and isinstance(params["partition"], dict)
               and isinstance(params["program"], dict))
-        for m in ms.values() if ok else ():
-            ok = ok and (set(m) == {"circuit", "public", "registered", "units", "vus_per_block"}
+        for name, m in ms.items() if ok else ():
+            ok = ok and (set(m) - {"wired"} == {"circuit", "public", "registered", "units", "vus_per_block"}
+                         and ("wired" not in m or _wired_of(name, m["wired"]) is not None)
                          and type(m["circuit"]) is str and type(m["public"]) is str
                          and (m["registered"] is None or isinstance(m["registered"], dict))
                          and type(m["units"]) is list and bool(m["units"])
@@ -645,16 +681,207 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         return None, str(e)
 
 
-def run_reason(run: Run | None, refused: str | None) -> str | None:
-    """What `refusal` answers on a case whose per-member run is `members_run`'s `(run, refused)`, where v1's check at
-    the coins passes on everything else: the run's refusal under ``proofs:``; `ALL_PASSED` where every session
-    accepted; and None where a session did not, which v1's check answers by its verdict's name."""
+def _units(w: Mapping[str, Any]) -> int:
+    return math.prod(w["radix"])
+
+
+def _writer_at(w: Mapping[str, Any], i: int) -> int:
+    """`Spot.Wires.Wire.writerAt`: reader index `i`'s writer unit, `i`'s digits in mixed radix, the first the slowest."""
+    out = w["base"]
+    for r, s in zip(reversed(w["radix"]), reversed(w["step"])):
+        out += (i % r) * s
+        i //= r
+    return out
+
+
+def _box(w: Mapping[str, Any], lo: int, hi: int) -> tuple[int, int]:
+    """`Spot.Wires.Wire.box`: bounds on the writers of reader indices `lo` to `hi`, digit by digit, the fastest first."""
+    pairs = list(zip(reversed(w["radix"]), reversed(w["step"])))
+    low = high = w["base"]
+    for k, (r, s) in enumerate(pairs):
+        if lo // r == hi // r:
+            q, rest = lo // r, 0
+            for r2, s2 in pairs[k + 1:]:
+                rest += q % r2 * s2
+                q //= r2
+            return low + min(lo % r * s, hi % r * s) + rest, high + max(lo % r * s, hi % r * s) + rest
+        low, high, lo, hi = low + min(0, s * (r - 1)), high + max(0, s * (r - 1)), lo // r, hi // r
+    return low, high
+
+
+def _kahn(templates: Mapping[str, Any], wires: Sequence[Mapping[str, Any]]) -> list[tuple[str, int, int]] | tuple[str, int]:
+    """`Spot.Wires.kahn`: the templates placed one by one, the first by name that reads none not yet placed by a wire
+    from another, each cut at the first and the end reader unit of each wire it reads itself by; where every one left
+    reads one, the cycle's refusal, naming the first wire from one left of the template that walking back from the
+    first one left, as many steps as there are left, ends on."""
+    rest, placed = sorted(templates), []
+
+    def into(t: str) -> list[int]:
+        return [i for i, w in enumerate(wires) if w["reader"] == t and w["writer"] in rest and w["writer"] != t]
+
+    while rest:
+        free = [t for t in rest if not into(t)]
+        if free:
+            rest.remove(free[0])
+            placed.append(free[0])
+            continue
+        t = rest[0]
+        for _ in range(len(rest)):
+            t = wires[into(t)[0]]["writer"]
+        return "cycle", into(t)[0]
+    order = []
+    for t in placed:
+        n = templates[t][0]
+        cs = sorted({0, n, *(min(x, n) for w in wires if w["reader"] == t == w["writer"]
+                             for x in (w["at"], w["at"] + _units(w) // w["c"]))})
+        order += [(t, a, b - a) for a, b in zip(cs, cs[1:])] or [(t, 0, n)]
+    return order
+
+
+def _ordered(order: Sequence[tuple[str, int, int]], w: Mapping[str, Any]) -> bool:
+    """`Spot.Wires.orderedWire`: for each range meeting the wire's reader units, every range of its writer meeting the
+    bounds on the writers it reads there ranks below it."""
+    end = w["at"] + _units(w) // w["c"]
+    for a, (t, p0, n) in enumerate(order):
+        if t != w["reader"] or not max(p0, w["at"]) < min(p0 + n, end):
+            continue
+        lo, hi = _box(w, (max(p0, w["at"]) - w["at"]) * w["c"], (min(p0 + n, end) - w["at"]) * w["c"] - 1)
+        lo, hi = max(lo, 0), max(hi, 0) + 1
+        if any(b >= a for b, (s, q0, m) in enumerate(order) if s == w["writer"] and max(q0, lo) < min(q0 + m, hi)):
+            return False
+    return True
+
+
+def wiring_refusal(templates: Mapping[str, tuple[int, Mapping[str, int]]],
+                   wires: Sequence[Mapping[str, Any]]) -> tuple[str, int | None] | None:
+    """`Spot.Wires.check` on templates of no cut, each its units and its rows' words (every row both one it reads by and
+    one it is read at), and the wires (`_wired_of`'s): the refusal's code and wire, or None. Wire by wire its templates
+    (``template``), rows (``port``), rows of its cut (``cut``), words (``width``) and bounds in closed form
+    (``bounds``); then ``overlap`` pair by pair; then the order `_kahn` derives (``cycle``), each wire in it
+    (``order``)."""
+    for i, w in enumerate(wires):
+        if w["reader"] not in templates or w["writer"] not in templates:
+            return "template", i
+        (rn, rows), (wn, outs) = templates[w["reader"]], templates[w["writer"]]
+        if w["port"] not in rows or w["out"] not in outs:
+            return "port", i
+        if not (w["c0"] + w["c"] <= 1 and (w["c"] == 1 or w["radix"][-1] == w["c"]) and _units(w) % w["c"] == 0):
+            return "cut", i
+        if rows[w["port"]] != outs[w["out"]]:
+            return "width", i
+        reach = [s * (r - 1) for r, s in zip(w["radix"], w["step"])]
+        if not (w["at"] + _units(w) // w["c"] <= rn and 0 <= w["base"] + sum(min(0, x) for x in reach)
+                and w["base"] + sum(max(0, x) for x in reach) < wn):
+            return "bounds", i
+    for i, a in enumerate(wires):
+        for b in wires[i + 1:]:
+            if (a["reader"] == b["reader"] and a["port"] == b["port"]
+                    and max(a["at"], b["at"]) < min(a["at"] + _units(a) // a["c"], b["at"] + _units(b) // b["c"])
+                    and max(a["c0"], b["c0"]) < min(a["c0"] + a["c"], b["c0"] + b["c"])):
+                return "overlap", None
+    order = _kahn(templates, wires)
+    if isinstance(order, tuple):
+        return order
+    return next((("order", i) for i, w in enumerate(wires) if not _ordered(order, w)), None)
+
+
+def _local(m: Mapping[str, Any], x: int) -> int | None:
+    """`OneStageZk.Member.localOf`: the population's unit `x` as member `m`'s own unit index."""
+    at = 0
+    for lo, hi in m["units"]:
+        if lo <= x < hi:
+            return at + x - lo
+        at += hi - lo
+    return None
+
+
+def wired_why(ms: Mapping[str, Mapping[str, Any]], rows: Mapping[str, tuple[list[tuple[str, int]], Callable[[str, int], bytes | None]]],
+              units: Sequence[int]) -> str | None:
+    """`OneStageZk.wiresHeldOn`: the members `ms` (by name, in order, as `_parsed` leaves them) on their rows `rows`
+    (each member's rows, its name and words, and the string of its unit's row), at the sampled units `units` (the
+    population's): `WIRES_SAMPLED`'s refusal naming the wiring's code and wire (`wiring_refusal`), or the first
+    sampled unit's wired row that is not its writer's row; None where none is."""
+    wires = [w for name, m in ms.items() for w in (_wired_of(name, m["wired"]) if "wired" in m else [])]
+    templates = {name: (_count(m), dict(rows[name][0])) for name, m in ms.items()}
+    if (r := wiring_refusal(templates, wires)) is not None:
+        return f"{WIRES_SAMPLED}: the members' wiring is refused: {r[0]}" + (f" at wire {r[1]}" if r[1] is not None else "")
+    for x in units:
+        t, u = next(((name, u) for name, m in ms.items() if (u := _local(m, x)) is not None), (None, None))
+        if t is None:
+            continue
+        for w in wires:
+            if not (w["reader"] == t and w["at"] <= u < w["at"] + _units(w) // w["c"]):
+                continue
+            for j in range(w["c"]):
+                v = _writer_at(w, (u - w["at"]) * w["c"] + j)
+                mine, theirs = rows[t][1](w["port"], u), rows[w["writer"]][1](w["out"], v) if v >= 0 else None
+                if mine is None or theirs is None or mine != theirs:
+                    return (f"{WIRES_SAMPLED}: member {t}'s sampled unit {u}: its row {w['port']} is not row {w['out']} "
+                            f"of member {w['writer']}'s unit {v}")
+    return None
+
+
+def member_rows(circuit: Path, public: Path) -> tuple[list[tuple[str, int]], Callable[[str, int], bytes | None]]:
+    """`OneStageZk.Member.rows` on files the run held: the circuit's rows (META ``ports``), each its name and words,
+    and the string of a unit's row in the public file (`OneStageZk.bcAt`): a shared-row file's, the row of the port's
+    table its ref names. `Outside` where the files are not read so."""
+    try:
+        ports = [(p[0], p[1]) for p in _meta(circuit)["ports"]]
+        with open(public, "rb") as f:
+            header = json.loads(f.readline().removesuffix(b"\n").decode())
+            body = f.read()
+        n, shared = header["instances"], header.get("shared_rows")
+        names = [p for p, _ in ports]
+        counts = [shared[p] for p in names] if shared is not None else None
+    except (ValueError, KeyError, TypeError, IndexError):
+        raise Outside("a wired member's circuit or public file is not read as the run read it") from None
+
+    def bc(port: str, u: int) -> bytes | None:
+        if port not in names or not 0 <= u < n:
+            return None
+        j, np_ = names.index(port), len(names)
+        if counts is None:
+            row = u * np_ + j
+        else:
+            at = BC_BYTES * sum(counts) + 4 * (u * np_ + j)
+            row = sum(counts[:j]) + int.from_bytes(body[at:at + 4], "little")
+        got = body[BC_BYTES * row:BC_BYTES * (row + 1)]
+        return got if len(got) == BC_BYTES else None
+
+    return ports, bc
+
+
+def wires_why(params: Mapping[str, Any], evidence: Mapping[str, Any], blobs: Mapping[str, Path]) -> str | None:
+    """`OneStageZk.wiresHeld` on the parameters `params` and the evidence `evidence` (as their parsers read them) and
+    the files `blobs`, after `members_run` returned a run: None where no member names a wire, else every member's rows
+    (`member_rows`) and `wired_why` at the evidence's ``proved_units``. The reason `refusal` prints after ``proofs:``
+    (`run_reason`)."""
+    ms, _ = _parsed(params, evidence)
+    if not any(m.get("wired") for m in ms.values()):
+        return None
+    rows = {}
+    for name, m in ms.items():
+        try:
+            rows[name] = member_rows(_blob(blobs, m["circuit"], "circuit"), _blob(blobs, m["public"], "public file"))
+        except _Refused as e:
+            return f"member {name}: {e}"
+    return wired_why(ms, rows, evidence["proved_units"])
+
+
+def run_reason(run: Run | None, refused: str | None, wired: str | None = None) -> str | None:
+    """What `refusal` answers on a case whose per-member run is `members_run`'s `(run, refused)` and whose wiring's
+    refusal is `wired` (`wires_why`), where v1's check at the coins passes on everything else: the run's refusal under
+    ``proofs:``, then the wiring's; `ALL_PASSED` where every session accepted; and None where a session did not, which
+    v1's check answers by its verdict's name."""
     if run is None:
         return f"proofs: {refused}"
+    if wired is not None:
+        return f"proofs: {wired}"
     return ALL_PASSED if run.all else None
 
 
-__all__ = ["ALL_PASSED", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "MULTI_REFUSED", "NO_CHALLENGER",
-           "Outside", "POPULATION_ORDER", "PROVED_UNITS", "REFUSAL", "ROW_TABLES", "Run", "Statement", "TABLES",
-           "TABLE_PORT", "UNREAD", "blobs_of", "case_refusal", "files_why", "flock_form", "flock_verdict", "members_run",
-           "population_why", "refusal", "run_reason"]
+__all__ = ["ALL_PASSED", "BC_BYTES", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "MULTI_REFUSED",
+           "NO_CHALLENGER", "Outside", "POPULATION_ORDER", "PROVED_UNITS", "REFUSAL", "ROW_TABLES", "Run", "Statement",
+           "TABLES", "TABLE_PORT", "UNREAD", "WIRES_SAMPLED", "blobs_of", "case_refusal", "files_why", "flock_form",
+           "flock_verdict", "member_rows", "members_run", "population_why", "refusal", "run_reason", "wired_why",
+           "wires_why", "wiring_refusal"]
