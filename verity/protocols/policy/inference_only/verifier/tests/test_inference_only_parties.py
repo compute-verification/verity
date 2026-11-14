@@ -14,7 +14,7 @@ from verity.channel import Refused
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 
-LEAN = Path(__file__).resolve().parents[1] / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[1] / "lean"
 SITE = site_of([{"name": "auditor", "owner": "auditor", "provides": ["component"]},
                 {"name": "node", "owner": "developer", "provides": ["component"]}])
 
