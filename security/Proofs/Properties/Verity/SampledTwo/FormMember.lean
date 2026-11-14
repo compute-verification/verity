@@ -136,7 +136,7 @@ theorem units_of_population {f : ByteArray} {hd : Json} (hH : SpotFlock.headerOf
   cases hgi : Spot.getD (Spot.getD hd "units") "indices" <;>
     cases hgm : Spot.nat? (Spot.getD hd "instances") <;>
     simp only [Spot.SecondStage.populationOk, hgi, hgm, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq,
-      reduceCtorEq, Bool.false_eq_true] at hpo
+      Bool.false_eq_true] at hpo
   rename_i is m
   obtain ⟨-, hlist⟩ := hpo
   rw [hgi] at hEi
