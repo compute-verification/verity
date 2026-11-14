@@ -865,7 +865,7 @@ theorem any_of_idxOf_lt {S : State} {n : Nat} {s : String} (h : (names S).idxOf 
   simp only [names, List.getElem_map, Array.getElem_toList] at hget
   simpa using hget
 
-theorem reach_draw {S : State} {P : Placed} (hR : Reach S P) (d : Option Lean.Json) : Reach { S with draw := d } P :=
+theorem reach_sample {S : State} {P : Placed} (hR : Reach S P) (d : Option Lean.Json) : Reach { S with draw := d } P :=
   { reg := hR.reg, unsent := hR.unsent, sess := hR.sess, grouped := hR.grouped, size := hR.size,
     opens_le := hR.opens_le, opens_pos := hR.opens_pos, link_pos := hR.link_pos, link_two := hR.link_two,
     link_opens := hR.link_opens, le_plan := hR.le_plan, idx := hR.idx }
@@ -1021,7 +1021,7 @@ theorem reach_step {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env}
       simp only [afterAnswer, Placed.after]
       rcases answer_register st r with h1 | ⟨d, h1⟩
       · exact .inl h1
-      · rw [h1]; exact .inr (reach_draw (reach_register hR) d)
+      · rw [h1]; exact .inr (reach_sample (reach_register hR) d)
   | link =>
     rcases stepK_frame_go (by simp) (by simp) (by simp) (by simp) hr hgo with hst | ⟨r, hst, hpl⟩
     · exact .inl hst

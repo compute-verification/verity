@@ -32,7 +32,7 @@ as `Composed.zk_session_soundJ` makes them under `--zk`:
   `ProvedScope.lawWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
   (`Law.subset_miss`), under A3 at its one byte source;
 * the tags, the record and the samples are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),
-  `DecodeZLJ.RecordsLiveJ` and `DrawOkPJ`, the challenger's live-coin part's sample setting each table up at its part.
+  `DecodeZLJ.RecordsLiveJ` and `SampleOkPJ`, the challenger's live-coin part's sample setting each table up at its part.
 
 The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the knowledge finders (`hKS`) and
 `ecr/sha-512` for the link finders (`hCR`), with A6 the live session itself.
@@ -55,7 +55,7 @@ variable {mPts n : ℕ} {Reg : Type}
 theorem plain_session_soundJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -66,7 +66,7 @@ theorem plain_session_soundJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     -- the count curve's parameters

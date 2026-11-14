@@ -35,7 +35,7 @@ acceptance gives it.
 * `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample verity-verify-proof
   sets up has its statement's range, which `Stmt.setupH` and `Stmt.setupHidden` check (`checkInRange`:
   `setupH_inRange`, `Hidden.Spec.inRange`). A refused sample's table is a reference setup's statement with `contra`'s two
-  regions added (`DrawSetup.refused`), which is why the range is two regions wider.
+  regions added (`SampleSetup.refused`), which is why the range is two regions wider.
 * `SoundExec205`, `SoundExecH205`, `SoundExecHR205`: `SoundExec`, `SoundExecH` and `SoundExecHR` at `ksAvgStrict205`,
   which they give by monotonicity (`SoundExec.to205`, `SoundExecH.to205`, `SoundExecHR.to205`). `SoundExecH205` and
   `SoundExecHR205` are split as `SoundExecH` is, by whether the circuit's wires feed its unit or outputs
@@ -196,7 +196,7 @@ variable {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
 
 /-- **A table at a sample setup's statement is in the wide range** when its regions number at most two more than the
 statement's: `Stmt.setupH` checks the statement's range (`setupH_inRange`). -/
-theorem DrawSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetup I mPts S d)
+theorem SampleSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetup I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hlen : regs.length ≤ x.st.regions.size + 2) :
     ((x.specAt ht regs hregs).S.shape mPts).InRangeWide := by
@@ -208,7 +208,7 @@ theorem DrawSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : D
 
 /-- **Every table of the one-table plan is in the wide range**: the sample's table has its statement's regions, and a
 refused sample's table the reference setup's and `contra`'s two. -/
-theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type} (S : Finset (Fin n)) (R : Reg) (j : Fin (planAt (Reg := Reg) ht dj x₀ S R).length) :
     (((planAt (Reg := Reg) ht dj x₀ S R).get j).S.shape mPts).InRangeWide := by
   rcases j with ⟨_ | i, hi⟩
@@ -216,8 +216,8 @@ theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (F
     rcases tableAt_cases ht dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
     · exact x.specAt_inRangeWide ht (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
         (by rw [FlockVBridge.Family.length_regionsOf]; omega)
-    · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
-        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
+    · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ SampleSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
+        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [SampleSetup.contra])
   · have h1 : (planAt (Reg := Reg) ht dj x₀ S R).length = 1 := rfl
     omega
 
@@ -227,13 +227,13 @@ namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model Refine Audit
 open FlockSoundness.Discharge.Exec (Inputs)
-open FlockSoundness.Discharge.Integrate (DrawSetup)
+open FlockSoundness.Discharge.Integrate (SampleSetup)
 
 variable {n mPts : ℕ} {I : Inputs}
 
 /-- **A table at a hidden-output sample setup's statement is in the wide range** when its regions number at most two more
 than the statement's: `Stmt.setupHidden` checks the statement's range (`Hidden.Spec.inRange`). -/
-theorem DrawSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetupH I mPts S d)
+theorem SampleSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetupH I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hlen : regs.length ≤ x.st.regions.size + 2) :
     ((x.specAt regs hregs).S.shape mPts).InRangeWide := by
@@ -245,7 +245,7 @@ theorem DrawSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : 
 
 /-- **Every table of the hidden-output one-table plan is in the wide range** (`planAt_inRangeWide`'s twin). -/
 theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type} (S : Finset (Fin n)) (R : Reg)
+    (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type} (S : Finset (Fin n)) (R : Reg)
     (j : Fin (planAtH (Reg := Reg) dj x₀ S R).length) :
     (((planAtH (Reg := Reg) dj x₀ S R).get j).S.shape mPts).InRangeWide := by
   rcases j with ⟨_ | i, hi⟩
@@ -253,8 +253,8 @@ theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (
     rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
     · exact x.specAt_inRangeWide (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
         (by rw [FlockVBridge.Family.length_regionsOf]; omega)
-    · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
-        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
+    · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ SampleSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
+        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [SampleSetup.contra])
   · have h1 : (planAtH (Reg := Reg) dj x₀ S R).length = 1 := rfl
     omega
 
@@ -273,7 +273,7 @@ set_option linter.unusedVariables false in
 def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type}
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
@@ -337,7 +337,7 @@ exactly, and `η` added to the miss term. -/
 def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type}
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
     (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
@@ -422,9 +422,9 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -483,9 +483,9 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -551,9 +551,9 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -614,9 +614,9 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -699,9 +699,9 @@ def SoundExecHRU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -766,9 +766,9 @@ def SoundExecHRU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
@@ -841,9 +841,9 @@ def SoundExecHRG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
@@ -911,9 +911,9 @@ def SoundExecHRG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),

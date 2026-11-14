@@ -41,7 +41,7 @@ def OutputsCommittedTailChecked : Prop :=
     tags.typed = false → tags.isTmpl = false →
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    ∀ {D : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
@@ -62,8 +62,8 @@ def OutputsBindingTailChecked : Prop :=
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
+    ∀ {D D' : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    Draw.UnitSample.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
@@ -93,7 +93,7 @@ def OutputsCommittedV2Checked : Prop :=
     tags.typed = false → tags.isTmpl = false →
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    ∀ {D : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
     st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
@@ -116,8 +116,8 @@ def OutputsBindingV2Checked : Prop :=
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
+    ∀ {D D' : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    Draw.UnitSample.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
     st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
@@ -149,7 +149,7 @@ def OutputsCommittedWideChecked : Prop :=
     tags.typed = false → tags.isTmpl = false →
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    ∀ {D : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
     st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
@@ -172,8 +172,8 @@ def OutputsBindingWideChecked : Prop :=
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
-    ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
+    ∀ {D D' : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    Draw.UnitSample.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     (∀ p ∈ st.c.ports.toList, p.segs = none) →
     st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →

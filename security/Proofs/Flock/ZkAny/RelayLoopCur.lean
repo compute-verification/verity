@@ -327,7 +327,7 @@ theorem ofLoop_cfgAlike (T : ZKMal.CoinLayer.TableData)
     unfold startOf
     rw [hx]
     exact hst
-  unfold LeanRelease.cfg LeanRelease.drawsAt
+  unfold LeanRelease.cfg LeanRelease.samplesAt
   rw [hrk, hc']
   have e1 : (ofLoop T L₀ real).lay x (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = lay := by
     show ((startOf x (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1).toOption.map (·.1)).getD default = lay

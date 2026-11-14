@@ -23,7 +23,7 @@ from verity.circuits.defs import bind
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.definitions.registry.b1_tp2 import AllReduce2
-from verity.commitments.windows import rows as SR
+from verity.commitments.periods import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -109,7 +109,7 @@ def test_each_chunk_opens_both_ranks_registered_partials_at_the_token_rows(tmp_p
     assert len({b for t in parts.values() for req in t for v in req for b in v.bcs}) == len(AT.RANKS) * Q * K * T
 
 
-def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(tmp_path, parts) -> None:
+def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest(tmp_path, parts) -> None:
     mine, c, regs, _wins = committed(tmp_path, parts)
     for r in AT.RANKS:
         tg, rid = mine[r].members[0].template, mine[r].members[-1].template

@@ -5,7 +5,7 @@ of a read sources leaf ``base + sum(d[k] * step[k])`` over ``i``'s mixed-radix d
 the ``row`` leaves from there. A read is dense when it has a leaf, no digit of radix 0 or a negative step but at radix 1,
 and its leaves are a run from the least, each once; the field is written when every read is dense and their leaves
 together are ``[0, leaves)``, each once (the reference is copied here rather than imported from
-`verity.commitments.windows.boundary`: a verifier's tests import no prover code)."""
+`verity.commitments.periods.boundary`: a verifier's tests import no prover code)."""
 
 from __future__ import annotations
 

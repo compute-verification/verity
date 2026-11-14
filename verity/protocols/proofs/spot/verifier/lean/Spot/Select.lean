@@ -293,14 +293,14 @@ def secondProblem (sample : Array Nat) (ns ks : Array Nat) : Option String :=
   else none
 
 /-- `service.select_second`: the second stage on the coins `src`, read after the interior registration's digest: the
-sample object of `secondLaw` over the interior's `sample.size · Σ n_t` proof blocks (`Draw.drawFirstRead`), held to
+sample object of `secondLaw` over the interior's `sample.size · Σ n_t` proof blocks (`Draw.sampleFirstRead`), held to
 `Draw.checkDraw`, and the number of bytes it read. An error where the Python raises: `secondProblem`, or a sample the
 coins don't end. -/
 def selectSecond (sample : Array Nat) (ns ks : Array Nat) (src : ByteArray) : V (Json × Nat) := do
   if let some e := secondProblem sample ns ks then throw e
   let law := secondLaw sample ns ks
   let m := sample.size * ns.toList.sum
-  let (draw, read) ← Draw.drawFirstRead law m src
+  let (draw, read) ← Draw.sampleFirstRead law m src
   let codes := Draw.checkDraw draw (Lean.toJson m) law
   if !codes.isEmpty then throw s!"the second stage's draw is not well formed under its law: {codes}"
   return (draw, read)
@@ -333,12 +333,12 @@ a rule `resolve` gives (`parseDesign` refuses a rate sampling design itself): th
 sample object over the population of `p` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the sampled
 proof blocks, then a work sample's closure) and the number of bytes of `src` it read. The sampling design is the rule's over that population,
 expanded (`Draw.derive`, with the work `table`); `All` samples every unit and reads nothing, any other rule samples its Flock
-sampling design by `Draw.drawUnits`, as `Draw.drawFirstRead` does: the sampling design `Draw.flockLaw` reads from the sampling design object, or, for
+sampling design by `Draw.sampleUnits`, as `Draw.sampleFirstRead` does: the sampling design `Draw.flockLaw` reads from the sampling design object, or, for
 `stratified` and `work`, once `flockLaw` accepts that object, the expansion it was written from (`Draw.deriveLaw`), the
 same sampling design. With the closure map `cm`, a work sample carries
 the sampled proof blocks' closure (`Flock.Draw.closureOf`) when it is not empty. An error where the Python raises: the query
 doesn't apply, the rule's sampling design or its expansion is refused, a closure map is given for another sampling design or names a unit outside
-the population, the sample is refused (`drawFirstRead`), or it is not well formed under the sampling design (`Draw.checkDraw`). -/
+the population, the sample is refused (`sampleFirstRead`), or it is not well formed under the sampling design (`Draw.checkDraw`). -/
 def select (rule : Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Json × Array Nat × Nat) := do
   let n ← Partition.units p query
@@ -352,7 +352,7 @@ def select (rule : Rule) (p : Program) (query : Json) (table : Option Json) (cm 
     | .all => pure (Array.range n, 0)
     | _ => do
       let parsed ← Draw.flockLaw law n
-      Draw.drawUnits (derived.getD parsed) n src
+      Draw.sampleUnits (derived.getD parsed) n src
   let draw := Json.mkObj ((entries law).toList ++ [("population", Lean.toJson n), ("units", natsJson units)])
   let closure := match cm with
     | some cm => Flock.Draw.closureOf (cm.foldl (fun m (u, cs) => m.insert u.toNat (cs.map Int.toNat)) {}) units

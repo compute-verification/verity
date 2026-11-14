@@ -23,7 +23,7 @@ challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the 
 
 A window's seed salt is a family of its own (`SEED_SALT_FAMILY`), which no sample reads: one coin, released after the
 window's open root, before the window serves (`draw_seed_salt`), and read back by the verifier from the challenger's log
-(`seed_salt_of`).  Every docket of the window names it as a certified input (`one_stage.registration`'s R6), which
+(`seed_salt_of`).  Every docket of the window names it as a certified input (`one_stage.docket`'s R6), which
 the window's circuits may read: a value they would otherwise take as the server's choice.
 """
 
@@ -350,7 +350,7 @@ DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: 
 
 
 def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
-    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    """Lean `Challenger.sampleCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
     The key, the window and the family are the verifier's, so a prover can't sign a ledger of its own; the copy of
     main's history is the evidence's, which `coins_reason` holds to its caller's. The session must be a withheld one

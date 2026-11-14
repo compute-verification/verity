@@ -15,7 +15,7 @@ the session. The prover's choices are adaptive, so the number of rounds is a sto
 For a prover strategy `s`, `lifePlay A N s` is its run tree (`Adaptive.Play`), each round's incorrect
 proof blocks being those of its committed transcript (`Analysis.committedOf`), which the prover's state at
 registration fixes before the round's sample. It is faithful: its acceptance is the lifetime's
-(`life_accept`). Each round's drawn-unit bound is `audit_drawn` (`drawn_lifePlay`), so `harm_budget`
+(`life_accept`). Each round's drawn-unit bound is `audit_sampled` (`sampled_lifePlay`), so `harm_budget`
 gives the lifetime's bound (`life_harm_budget`):
 $$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{wrong}(X_t)) \ge H\Big]
   \le e^{-\lambda H} + \sum_{m < N} (\varepsilon_{ks,m} + \delta_{link,m}).$$
@@ -65,12 +65,12 @@ theorem laws_ofBindPlay {α β : Type} {N : ℕ} {S : Law n → Prop} (f : α �
   | .send _ k, s => laws_ofBindPlay f cont hc (k s.1) s.2
   | @Game.coin _ _ _ _ k, s => fun c => laws_ofBindPlay f cont hc (k c) (s c)
 
-theorem drawn_ofBindPlay {α β : Type} {N : ℕ} {err : ℕ → ℝ≥0∞} (f : α → Game β)
+theorem sampled_ofBindPlay {α β : Type} {N : ℕ} {err : ℕ → ℝ≥0∞} (f : α → Game β)
     (cont : (a : α) → Strategy (f a) → Play n N) (hc : ∀ a t, (cont a t).Drawn err) :
     ∀ (g : Game α) (s : Strategy (g.bind f)), (ofBindPlay f cont g s).Drawn err
   | .ret a, s => hc a s
-  | .send _ k, s => drawn_ofBindPlay f cont hc (k s.1) s.2
-  | @Game.coin _ _ _ _ k, s => fun c => drawn_ofBindPlay f cont hc (k c) (s c)
+  | .send _ k, s => sampled_ofBindPlay f cont hc (k s.1) s.2
+  | @Game.coin _ _ _ _ k, s => fun c => sampled_ofBindPlay f cont hc (k c) (s c)
 
 theorem pass_ofBindPlay {α β : Type} {N : ℕ} (f : α → Game β) (cont : (a : α) → Strategy (f a) → Play n N)
     (P : α → Prop) (hc : ∀ a t, (cont a t).pass = prob P (.ret a) PUnit.unit) :
@@ -99,7 +99,7 @@ theorem laws_contPlay {next : Game Bool} {N : ℕ} {rest : Strategy next → Pla
   | true, t => hrest t
   | false, _ => trivial
 
-theorem drawn_contPlay {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N} {err : ℕ → ℝ≥0∞}
+theorem sampled_contPlay {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N} {err : ℕ → ℝ≥0∞}
     (hrest : ∀ t, (rest t).Drawn err) :
     ∀ (b : Bool) (t : Strategy (cond b next (.ret false))), (contPlay rest b t).Drawn err
   | true, t => hrest t
@@ -175,7 +175,7 @@ theorem prEv_roundPlay (A : Analysis L Reg session) (h : Fin n → ℝ) (Ev : Bo
   rfl
 
 /-- One round's drawn-unit term is the audit's drawn-unit event. -/
-theorem drawn_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+theorem sampled_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     (hpass : ∀ t, (rest t).pass = 1) (B D : Finset (Fin n)) (g : Game Bool)
     (s : Strategy ((g.map fun ok => (ok, D)).bind (afterAudit next))) :
     (if Disjoint D B then 0 else
@@ -191,18 +191,18 @@ theorem drawn_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n
       (pass_contPlay hpass), prob_map]
     exact le_antisymm (prob_mono (fun _ ho => ⟨ho, fun h' => hd h'.symm⟩) _ _) (prob_mono (fun _ ho => ho.1) _ _)
 
-theorem drawn_roundPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+theorem sampled_roundPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     (roundPlay A rest t).Drawn err := by
   refine ⟨?_, fun ω => ?_⟩
   · refine le_trans (le_of_eq ?_)
-      ((audit_drawn A hks hlink (Strategy.ofBind (afterAudit next) (audit L Reg session) t)).trans hN)
+      ((audit_sampled A hks hlink (Strategy.ofBind (afterAudit next) (audit L Reg session) t)).trans hN)
     refine Eq.trans ?_ (prob_audit_bind _ t).symm
-    exact congrArg avg (funext fun ω => drawn_term hpass _ (L.draw ω) (session (L.draw ω) t.1) (t.2 ω))
-  · exact drawn_ofBindPlay (afterAudit next) (fun o => contPlay rest o.1)
-      (fun o t' => drawn_contPlay hrest o.1 t') _ (t.2 ω)
+    exact congrArg avg (funext fun ω => sampled_term hpass _ (L.draw ω) (session (L.draw ω) t.1) (t.2 ω))
+  · exact sampled_ofBindPlay (afterAudit next) (fun o => contPlay rest o.1)
+      (fun o t' => sampled_contPlay hrest o.1 t') _ (t.2 ω)
 
 theorem laws_roundPlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S L) {next : Game Bool} {N : ℕ}
     {rest : Strategy next → Play n N} (hrest : ∀ t, (rest t).Laws S)
@@ -227,13 +227,13 @@ theorem laws_goPlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S L)
   | true, t => laws_roundPlay A hL hrest t
   | false, _ => trivial
 
-theorem drawn_goPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+theorem sampled_goPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) :
     ∀ (go : Bool) (t : Strategy (cond go ((audit L Reg session).bind (afterAudit next)) (.ret true))),
       (goPlay A rest go t).Drawn err
-  | true, t => drawn_roundPlay A hks hlink hpass hrest hN t
+  | true, t => sampled_roundPlay A hks hlink hpass hrest hN t
   | false, _ => trivial
 
 theorem pass_goPlay (A : Analysis L Reg session) {next : Game Bool} {N : ℕ} (rest : Strategy next → Play n N) :
@@ -258,11 +258,11 @@ theorem laws_stagePlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S
     (stagePlay A rest s).Laws S :=
   laws_goPlay A hL hrest s.1 s.2
 
-theorem drawn_stagePlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+theorem sampled_stagePlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) (s : Strategy (stage L Reg session next)) : (stagePlay A rest s).Drawn err :=
-  drawn_goPlay A hks hlink hpass hrest hN s.1 s.2
+  sampled_goPlay A hks hlink hpass hrest hN s.1 s.2
 
 theorem pass_stagePlay (A : Analysis L Reg session) {next : Game Bool} {N : ℕ} (rest : Strategy next → Play n N)
     (s : Strategy (stage L Reg session next)) : (stagePlay A rest s).pass = 1 :=
@@ -300,11 +300,11 @@ theorem pass_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) :
       simp [pass_stop]
   | N + 1, s => pass_stagePlay (A N) (lifePlay A N) s
 
-theorem drawn_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
+theorem sampled_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
     (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m)) :
     ∀ (N : ℕ) (s : Strategy (life L Reg session N)), (lifePlay A N s).Drawn fun m => εks m + δlink m
   | 0, _ => trivial
-  | N + 1, s => drawn_stagePlay (A N) (hks N) (hlink N) (pass_lifePlay A N) (drawn_lifePlay A hks hlink N) le_rfl s
+  | N + 1, s => sampled_stagePlay (A N) (hks N) (hlink N) (pass_lifePlay A N) (sampled_lifePlay A hks hlink N) le_rfl s
 
 /-- **The run tree is faithful**: it accepts exactly when the lifetime does. -/
 theorem life_accept (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) (h : Fin n → ℝ) :
@@ -324,7 +324,7 @@ theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) 
     (lifePlay A N s).prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤
       ENNReal.ofReal (Real.exp (-(lam * H))) + ∑ m ∈ range N, (εks m + δlink m) :=
   harm_budget hlam0 hlam H (lifePlay A N s) (laws_lifePlay (S := fun L' => L'.Design π) A hL N s)
-    (drawn_lifePlay A hks hlink N s)
+    (sampled_lifePlay A hks hlink N s)
 
 end Life
 

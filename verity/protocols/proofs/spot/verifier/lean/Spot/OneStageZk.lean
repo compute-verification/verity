@@ -22,7 +22,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `verity-verify-proof --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
   up: the tables the session `run` sets up reads are the registered circuit's. The per-member form holds each member
   to its own circuit's tables instead (below, **per member**);
-* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
+* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.sampleCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a sample other than the one they give before v1's `check`;
 * **trees** (`treesOf`, `orderHeld`, `treesHeld`): the coin trees that same session's signed release log shows the
@@ -59,7 +59,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file no blob holds is that session's reject, as a file `verity-verify-proof` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
-  `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
+  `sampleFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
   accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
   statement's check does (`checkMembersAt_accept`). v1's check reads the members there
@@ -133,7 +133,7 @@ public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
 public import Spot.FilePart
-public import Spot.WiresDrawn
+public import Spot.WiresSampled
 public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
 public import Flock
@@ -144,7 +144,7 @@ meta import Spot.OneStage
 meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
-meta import Spot.WiresDrawn
+meta import Spot.WiresSampled
 meta import Spot.OneStageZkStatement
 meta import Flock
 meta import Flock.JsonParse
@@ -544,7 +544,7 @@ partition's ranges `rs` (each its template, first unit and count), the members `
 count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring is one
 range of `rs` of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
 every wired row of every unit of the sample is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's
-check on the sample's units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
+check on the sample's units by `Spot.Wires.sampledOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
 slot and the port the row names (`rowName`), is the writer's output row's in the writer's member's, neither empty
 (else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
 def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))

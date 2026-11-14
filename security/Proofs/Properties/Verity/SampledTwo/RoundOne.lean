@@ -10,7 +10,7 @@ public import Proofs.Properties.Verity.SampledTwo.DrawRoots
 public import Proofs.Properties.Verity.SampledTwo.GoodCase
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.OS
-public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Flock.Bridge.SampledLaw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -29,7 +29,7 @@ stratum's sample reads at least 64 bytes, so an accepted case's second-stage byt
 
 **The log before round 1 ends at that coin.** No opening of a coin tree comes before the sample's coins
 (`sample_before_openings`, from `SessionCoins.readLinkFirst`), and every coin of the second stage's family answers the
-interior registration's digest (`CoinMap.StageDraws`). So the first release the locator puts on a round at least 1 is
+interior registration's digest (`CoinMap.StageSamples`). So the first release the locator puts on a round at least 1 is
 the family's first coin, on round 1 (`before_one_second`).
 
 * `Properties.Spot.SecurityProofs.second_design_strata`: the second stage's design, as the check parses it, has a
@@ -148,9 +148,9 @@ theorem kind_subset (m : ℕ) : kindOf (_root_.VStar.Recursive.SampledTwo.subset
 design, at a verifier whose own design is the subset one, exists only where `src` holds 64 bytes. -/
 theorem second_sample_size (v : _root_.Spot.Registration.Verifier) (m : ℕ) (sample ns ks : Array ℕ) (n : ℕ)
     (src : ByteArray) (units : Array ℕ) (read : ℕ)
-    (h : _root_.Spot.OneStage.drawnFrom { v with law := _root_.VStar.Recursive.SampledTwo.subsetDesign m }
+    (h : _root_.Spot.OneStage.sampledFrom { v with law := _root_.VStar.Recursive.SampledTwo.subsetDesign m }
       (Select.secondLaw sample ns ks) n src = .ok (units, read)) : 64 ≤ src.size := by
-  unfold _root_.Spot.OneStage.drawnFrom at h
+  unfold _root_.Spot.OneStage.sampledFrom at h
   obtain ⟨derived, hd, h⟩ := bind_eq_ok.1 h
   obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
   obtain ⟨l, hl, h⟩ := bind_eq_ok.1 h
@@ -158,7 +158,7 @@ theorem second_sample_size (v : _root_.Spot.Registration.Verifier) (m : ℕ) (sa
   rw [Option.getD_none] at hl
   obtain ⟨ws, rfl, hws⟩ := second_design_strata sample ns ks n parsed hp
   obtain rfl := (_root_.Flock.Bridge.coveredDesign_ok hl).1
-  have hseq := drawUnits_seq _ n src units read h
+  have hseq := sampleUnits_seq _ n src units read h
   have := seqMiss_work_size 1 ws n _ src 0 hws hseq
   omega
 
@@ -276,7 +276,7 @@ theorem interior_tagged {k : Case} (h : AcceptsOn k) :
     rw [hs₂]
     rfl
   · intro label after hsd
-    obtain ⟨key, c₂', -, hint, rfl⟩ := secondDraw_parts (c := cm) ⟨h1, h2, h3⟩ hsd
+    obtain ⟨key, c₂', -, hint, rfl⟩ := secondSample_parts (c := cm) ⟨h1, h2, h3⟩ hsd
     obtain rfl : c₂ = c₂' := Except.ok.inj ((interiorOf_of hs hc₂).symm.trans hint)
     rw [← hdo]
     rfl
@@ -367,7 +367,7 @@ theorem sample_before_openings (C : CaseOf) (Good : Verity.Exchange → Prop) (h
   have hA' := hA
   obtain ⟨k', hk', _, c', _, _, _, ⟨-, hc', -⟩, -⟩ := hA'
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
-  have hsd : secondDraw k = some (d.label, d.after) := secondDraw_of (c := c') ⟨hp, hc', he⟩ hs hc₂ hsrc
+  have hsd : secondDraw k = some (d.label, d.after) := secondSample_of (c := c') ⟨hp, hc', he⟩ hs hc₂ hsrc
   rw [hk, Option.bind_some, hsd] at hd
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hd)
   obtain ⟨q, l', hql, hq, hF⟩ := hlog o hA hG l hl
@@ -386,10 +386,10 @@ theorem sample_before_openings (C : CaseOf) (Good : Verity.Exchange → Prop) (h
 is the device's, at the run's locator over two families that differ, the first release put on a round at least 1 is
 a coin of the second stage's family, and it answers the digest the second stage's coins are released after. The
 second stage reads a coin (`interior_tagged`), the log shows it (`SecondShown`), every coin of the family answers the
-one digest (`CoinMap.StageDraws`), and no opening comes before it (`sample_before_openings`). -/
+one digest (`CoinMap.StageSamples`), and no opening comes before it (`sample_before_openings`). -/
 theorem before_one_second (A : Live₂) (C : CaseOf) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)
     (Good : Verity.Exchange → Prop) (hne : ℓ₁ ≠ ℓ₂) (hShow : SecondShown C Good)
-    (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
+    (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
     (hRd : SessionCoins.InteriorReads C) (hlog : SessionCoins.InteriorLogged C Good) {o : Verity.Exchange}
     (hA : FormAccepts C o) (hG : Good o) :
     ∃ after, (C o).bind secondDraw = some (ℓ₂, after) ∧
@@ -473,7 +473,7 @@ whose log the check read is the device's shows a string that has its digest. -/
 theorem showsAt_form_one (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)
     (Good : Verity.Exchange → Prop) (hne : ℓ₁ ≠ ℓ₂) (hShow : SecondShown C Good)
-    (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
+    (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
     (hRd : SessionCoins.InteriorReads C) (hlog : SessionCoins.InteriorLogged C Good)
     (Dg raw : Verity.Exchange → ℕ → Option (List Msg))
     (hd : ∀ o, FormAccepts C o → Good o → Dg o 1 = Messages.endAnswers

@@ -164,7 +164,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``; an embedding shard's over ``vocab``,
     the whole vocabulary's rows and the rank's first token."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving import registered_commit
 
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":
@@ -174,7 +174,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
         E, N, K = (int(x) for x in shape)
         return table_words(words, what, E, N, K, 1, n, b)
 
-    return {param: H1R.commit(digest, param, rows(b, what, n), key, nonce[param],
+    return {param: registered_commit(digest, param, rows(b, what, n), key, nonce[param],
                               schema=G.SCHEMA_V2 if what == "bnk" else G.SCHEMA_SEG).entry() for b, param, what, n in tables}
 
 

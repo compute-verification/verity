@@ -1,6 +1,6 @@
 """Which of H1's modules load the live circuit when imported alone: the four of `LOADERS`.  A Definition enters the
 Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
-(`verity.commitments.windows.interface.resolve`) answers for it from then on.  The live circuit
+(`verity.commitments.periods.interface.resolve`) answers for it from then on.  The live circuit
 (`verity.protocols.accounting.pouw.prover.circuit.live`) builds its Definitions as it loads, so a module that comes to load it at its
 head changes what that reader answers in every process that imports the module.  The modules that stage a window's sampled
 proof blocks rebuild their values through `served`: they import it where they rebuild one and never at their head.  Each

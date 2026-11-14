@@ -23,7 +23,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments import history as HT
-from verity.commitments.windows import history as HW, interface as I, rows as CS
+from verity.commitments.periods import history as HW, interface as I, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))

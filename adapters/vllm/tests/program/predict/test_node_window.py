@@ -12,7 +12,7 @@ import json
 import re
 
 import pytest
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.accounting.certifier.verifier import advice as I1
 
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config

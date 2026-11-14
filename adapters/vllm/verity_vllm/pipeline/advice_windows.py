@@ -61,7 +61,7 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments import advice as AC
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"

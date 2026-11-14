@@ -164,32 +164,32 @@ def recordDraw (record : String) : Option Json :=
 
 /-- The spec a recursive inner session's record decodes against, `spec` and `st` the inner statement's without a sample and
 `setupAt d` the statement at sample `d`: `spec` for a record without a sample (whose session `verify` refuses last in its
-verdict, `RecSetup.innerDrawn`), and for a record whose sample proves every one of
+verdict, `RecSetup.innerSampled`), and for a record whose sample proves every one of
 `st`'s units, in order, the sampled statement's spec (the challenger's live-coin part's full sample, `rec_live.full_draw`, which `verify`
 holds to its own sampling design with `--stratified`, `--program` and `--partition`). The sampled statement has `st`'s units, `m` and
 regions; its header carries the sample, so its Σ and Hello are its own. A sample that leaves a unit out is refused: V*
 recurses on an inner session that proves every unit. -/
-def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (record : String) : V SessionSpec := do
+def sampledSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (record : String) : V SessionSpec := do
   let some d := recordDraw record | return spec
-  let D ← Draw.UnitDraw.ofJson d
+  let D ← Draw.UnitSample.ofJson d
   if D.proved != Array.range st.n then
     throw s!"the session's draw proves {D.proved.size} units, not every one of the statement's {st.n} in order"
   return (← setupAt d).spec
 
-/-- `drawnSpec` at the inner files: the inner statement set up at the record's sample as `Files.stmt` sets it up without one. -/
-def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
-  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition)
+/-- `sampledSpec` at the inner files: the inner statement set up at the record's sample as `Files.stmt` sets it up without one. -/
+def Files.sampledSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
+  RecCoins.sampledSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition)
     f.program) spec st f.record
 
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
 on the challenger's live-coin part's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded (at the record's full
-sample when it has one, `Files.drawnSpec`). -/
+sample when it has one, `Files.sampledSpec`). -/
 def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, st) ← f.stmt unit
   if let some i := f.inner then
     if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
   if let .error e := Zk.schedule st.wideLeaf st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
-  let spec ← match f.drawnSpec spec st with
+  let spec ← match f.sampledSpec spec st with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's draw: {e}"
   let sess ← match Record.decode spec f.record with
