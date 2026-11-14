@@ -266,13 +266,19 @@ def _poub_session(cfg, params, bound):
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"SERVE_ARGS": ID_FORM,
             "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -325,8 +331,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
-                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
                                  "warden in front of serve-openai before the requests"),

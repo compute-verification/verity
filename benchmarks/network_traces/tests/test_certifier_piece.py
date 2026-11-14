@@ -1386,3 +1386,18 @@ def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
     assert order == [(1, 2, True), (3, 4, False), (5, 6, True)]
     with pytest.raises(SystemExit, match="one --to for each --listen"):
         CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])
+
+
+def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
+    """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
+    SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
+    lanes and EVERY."""
+    import scan_zk as SZ
+
+    spec = importlib.util.spec_from_file_location("served_table", ROOT / "demos/onsite_served/served_table.py")
+    table = importlib.util.module_from_spec(spec)
+    sys.modules["served_table"] = table
+    spec.loader.exec_module(table)
+    setup = SZ.SETUPS[CP.V3C_SCAN_CLASS]
+    c = setup.cls
+    assert table.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"
