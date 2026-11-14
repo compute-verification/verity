@@ -9,7 +9,7 @@ before its root, each append encoded under its own coin, and each chunk resident
 a zero or stale coin, re-sends an append, appends after the last close or withholds a chunk it appended is rejected; a
 second registration of a node the verifier holds live is refused with its reason.  The verifier's clock is the prover's
 passes, a tick each (`PassClock`).  The loop itself is tested here; the adapter's
-`tests/protocols/remote_bandwidth/test_commit_session.py` tests only its `CommitSession`, which runs this loop in
+`tests/protocols/poub/test_commit_session.py` tests only its `CommitSession`, which runs this loop in
 lockstep with the Commit's run, and imports this file's helpers to do it."""
 from __future__ import annotations
 
