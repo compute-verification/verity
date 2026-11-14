@@ -2874,10 +2874,15 @@
         "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
         "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
         "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
+        "benchmarks/one_stage/a5_memo.py": "verity/protocols/proofs/spot/verifier/one_stage/check_memo.py",
+        "benchmarks/one_stage/compose_circuit.py": "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py",
+        "benchmarks/prove_path/records_audit.py": "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py",
         "benchmarks/one_stage/r2_population.py": "verity/protocols/proofs/spot/verifier/tests/other_population.py",
         "benchmarks/one_stage/tests/test_member_trees.py": "verity/protocols/proofs/spot/verifier/tests/test_one_stage_member_trees.py",
+        "benchmarks/one_stage/tests/test_a5_memo.py": "verity/protocols/proofs/spot/verifier/tests/test_check_memo.py",
         "benchmarks/one_stage/tests/test_r2_population.py": "verity/protocols/proofs/spot/verifier/tests/test_other_population.py",
         "benchmarks/one_stage/tests/test_verdict_record.py": "verity/protocols/proofs/spot/verifier/tests/test_verdict_record.py",
+        "benchmarks/prove_path/tests/test_records_audit.py": "verity/protocols/proofs/spot/verifier/tests/test_records_audit.py",
         "benchmarks/prove_path/tests/test_pearltie.py": "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py",
         "benchmarks/prove_path/tests/test_remotetie.py": "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py",
         "benchmarks/prove_path/tests/settings.py": "verity/protocols/proofs/spot/verifier/tests/settings.py",
@@ -2935,6 +2940,11 @@
         "benchmarks/sampling_plan/tests/test_recursion.py": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py",
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/commitments/windows/": "verity/commitments/periods/"
       }
     }
   ]

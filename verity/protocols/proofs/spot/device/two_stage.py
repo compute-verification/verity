@@ -115,7 +115,7 @@ Usage::
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
-        [--rids IDS.json] [--firewall F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]
+        [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
@@ -170,7 +170,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
 from verity_vllm.pipeline import interior_links as IL, interior_rows as IR
 
@@ -1539,12 +1539,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--m0-pythonpath", required=True)
     g.add_argument("--bin", required=True, help="flock-circuit")
     g.add_argument("--lean", required=True, help="verity-verify-proof")
-    g.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
+    g.add_argument("--zk-server", help="Lean's flock-zk-server: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
     g.add_argument("--stop", help=STOP_HELP)
     g.add_argument("--devices", help="the audit's proof server's cards, their indices comma-separated (0,1): a prover a "
                                      "card (`flock-circuit prove --zk --gpu`, a device build); without it one CPU prover. "
-                                     "Never with --firewall, whose sessions prove on the CPU")
+                                     "Never with --zk-server, whose sessions prove on the CPU")
     g.add_argument("--replay-record", help="the record the replay wrote beside --capture (replay.json): its seconds and "
                                            "cards go in the summary's `replay`, which this command has no clock over")
     g.add_argument("--delta", type=float, default=0.5)

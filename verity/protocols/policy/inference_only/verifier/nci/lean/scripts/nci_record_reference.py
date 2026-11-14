@@ -25,7 +25,7 @@ nothing shows inside its block or θ is fresh; and it counts whole, 16 bits a wo
 
 Five rules are no expansion. The wires' own check is SPOT's (`Spot.Wires.check`, which the Lean runs on the wires as
 `Spot.Wires.Wiring.ofJson` reads them); here it is Python's statement of the same rule,
-`verity.commitments.windows.interface.check_wires`. θ's rule, a pinned reader's layout and the rule for a table opening are the
+`verity.commitments.periods.interface.check_wires`. θ's rule, a pinned reader's layout and the rule for a table opening are the
 Lean's, restated (`theta`, `layout` and `roles`, `held`): nothing unrolls a registration log, and a layout is read from
 a template's signature. A Definition's closure digest is the period check's (`closure_digest`).
 
@@ -369,9 +369,9 @@ def spot_instance(templates: list[Template], rec: dict, order=None) -> dict:
 
 
 def wires_of(templates: list[Template], rec: dict, order) -> tuple[list[dict], dict]:
-    """The record's wires and cuts, refused (`wires`) as `verity.commitments.windows.interface.check_wires` refuses them, under
+    """The record's wires and cuts, refused (`wires`) as `verity.commitments.periods.interface.check_wires` refuses them, under
     the record's order, else the instance's (`order`: a one-entry tuple where the instance gives one)."""
-    import verity.commitments.windows.interface as IF
+    import verity.commitments.periods.interface as IF
     spot = spot_instance(templates, rec, order)
     lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
                     t.units) for t in templates}

@@ -763,7 +763,7 @@ def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list
     """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb
     proof blocks (``<descriptor id>/c<j>``, block b slot j·nb + b's entry, the window's slots lane-major), its rows and
     salts that member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then
-    their salts, `verity.commitments.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
+    their salts, `verity.commitments.periods.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
     its registration's ``roots`` name and to the scan's lane j ``entries``."""
     nb, NE = len(entries[0]), IS.entry_bits(cls)
     ms = [m for m in win.get("members") or () if str(m.get("template", "")).startswith(SELECT_ENTRY + "{")]

@@ -1,4 +1,4 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.periods.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
@@ -97,7 +97,7 @@ the cache's key covers both; the audit with ``--compose-cache`` then composes no
 quotes the warm's beside it.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --firewall flock-firewall \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
@@ -193,7 +193,7 @@ from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
-from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
+from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -1188,7 +1188,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
-    p.add_argument("--firewall", required=True)
+    p.add_argument("--zk-server", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "

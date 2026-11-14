@@ -32,7 +32,7 @@ import case_files as CF  # noqa: E402
 
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
-from verity.commitments.windows import interface as IF  # noqa: E402
+from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R  # noqa: E402
 

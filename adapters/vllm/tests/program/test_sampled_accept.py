@@ -318,7 +318,7 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
     """GLM-5.3's layout with five draft tokens: twelve Definitions; each draft row's lanes once in a head and once in a part
     or the row end, every row's lanes once in the resample, each read one row of `ROW` lanes; a wire names a unit already
     written and one of its outputs; no unit is past a proof block's rows (`interface.check_proof_block`)."""
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     k, v = 5, 154880
     plan = A.plan(k, v)

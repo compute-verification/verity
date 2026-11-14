@@ -19,7 +19,7 @@ untraced = [
 ]
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
-    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
+    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
 ]
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [
@@ -115,7 +115,7 @@ inputs = [
     "verity/protocols/accounting/pouw/verifier/window.py",
     "verity/protocol.py",
     "verity/channel.py",
-    "verity/commitments/windows",
+    "verity/commitments/periods",
     "verity/circuits",
     "verity/circuits/kernels",
     "verity/commitments",

@@ -55,7 +55,7 @@ import pytest
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -252,7 +252,7 @@ def test_a_single_gpu_window_proves_the_templates_its_compiler_lists_whole(monke
 
 def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch):
     run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
-           "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", "o"]
+           "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", "o"]
     gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
     for refused in ([], ["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
         with pytest.raises(SystemExit):
@@ -1852,7 +1852,7 @@ def test_the_verifiers_i2_reads_only_builds_it_wrote_itself_and_the_provers_its_
     got = []
     monkeypatch.setattr(PP, "audit", lambda a: got.append(a) or 0)
     run = ["--serve-run", str(s.run), "--window", "0", "--row-dir", str(rows), "--windows", "w", "--partition", "p", "--template-sets",
-           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
            "--challenger", "local", "--main", "m.txt"]
     assert PP.main(["audit", *run]) == 0 and PP.main(["audit", *run, "--vllm-python", "pinned-python"]) == 0
     assert [a.builds for a in got] == [str(tmp_path / "out" / "builds")] * 2
