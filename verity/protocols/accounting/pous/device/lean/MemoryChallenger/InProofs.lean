@@ -1,0 +1,143 @@
+module
+
+public import MemoryChallenger.Verdict
+
+/-!
+# The session checked inside proofs
+
+`pous.verifier.session_proofs`: the session's verdict from the outcomes of `k + 2` proofs, linked only by their committed
+rows, so that the memory challenger's signed record never reaches the verifier in the clear. Unit 0 is the signature's
+(`PousSessionSig_v1{N, W, H}`: key, m, sig), unit 1 the signed digest's (`PousSessionDigest_v1{k, HEAD, LIMIT}`: head,
+domain, ctx, the `⌈k/2⌉` records rows, m) and unit `j + 2` round `j`'s (`PousRound_v1{blockBytes, j % 2}`: row, records,
+j, i). The verifier checks in the clear the scheme, the key and every round's coin opening (`clearOk`), each proof
+accepted and of its program, each public input against the value it computes (`knownOk`), and the links: unit 0's `m`
+is unit 1's last row, and round `j`'s records row is unit 1's row `3 + j / 2` (`linksOk`). The reasons are the Python's,
+word for word.
+-/
+
+@[expose] public section
+
+namespace MemoryChallenger.InProofs
+
+open Flock
+
+/-- One unit's proof as its verifier left it: its program, whether it was accepted, each parameter's committed row, and
+the parameters public in the proof with their values, in parameter order. -/
+structure UnitOutcome where
+  program : String
+  accepted : Bool
+  rows : Array ByteArray
+  known : Array (Nat × ByteArray)
+  deriving Inhabited
+
+/-- Unit 0's, unit 1's and each round's outcome. -/
+structure SessionProofs where
+  signature : UnitOutcome
+  digest : UnitOutcome
+  rounds : Array UnitOutcome
+  deriving Inhabited
+
+/-- The signed header of a session that ended complete after its `k` rounds. -/
+def headOf (c : SessionCommitment) : ByteArray := (header c COMPLETE c.k).toUTF8
+
+/-- What `memory_challenger_message` hashes before the record: the role's tag, `I` and the session id's field. -/
+def ctxOf (c : SessionCommitment) (publicKey : ByteArray) : ByteArray :=
+  field MEMORY_CHALLENGER_TAG.toUTF8 ++ publicKey.extract 0 16 ++ field (field c.session)
+
+/-- `n` bytes of `x`, least significant first: an integer row's bytes. -/
+def le (n x : Nat) : ByteArray := ByteArray.mk ((Array.range n).map fun i => (x / 256 ^ i % 256).toUInt8)
+
+def recordsRows (k : Nat) : Nat := (k + 1) / 2
+
+/-- Unit 0's, unit 1's and each round's program. -/
+def programs (c : SessionCommitment) (p : Lms.Params) : String × String × Array String :=
+  (s!"PousSessionSig_v1\{{p.N},{p.W},{p.H}}", s!"PousSessionDigest_v1\{{c.k},{(headOf c).size},{c.limitNs}}",
+   (Array.range c.k).map fun j => s!"PousRound_v1\{{c.blockBytes},{j % 2}}")
+
+def byJ (openings : Array CoinOpening) (j : Nat) : Option CoinOpening := openings.findRev? (·.j == j)
+
+/-- `clear_reasons`: the scheme accepted, the key trusted, and every round's last opening opens its committed coin. -/
+def clearReasons (schemes : Schemes) (trusted : List ByteArray) (c : SessionCommitment) (openings : Array CoinOpening)
+    (scheme : String) (publicKey : ByteArray) : Array String := Id.run do
+  let mut reasons : Array String := #[]
+  match schemes.lookup scheme with
+  | none => reasons := reasons.push s!"signature scheme {pyRepr scheme} is not accepted"
+  | some _ =>
+    if !trusted.contains publicKey then
+      reasons := reasons.push "the session is signed by a key that is not a trusted memory challenger's"
+  for j in [0:c.k] do
+    let ok := match byJ openings j with
+      | some o => verifyCoin c o
+      | none => false
+    if !ok then reasons := reasons.push s!"round {j}'s index is not its committed coin"
+  return reasons
+
+def clearOk (schemes : Schemes) (trusted : List ByteArray) (c : SessionCommitment) (openings : Array CoinOpening)
+    (scheme : String) (publicKey : ByteArray) : Bool :=
+  (clearReasons schemes trusted c openings scheme publicKey).isEmpty
+
+/-- `link_reasons`: the shape, then unit 0's `m` is unit 1's last row and round `j`'s records row is unit 1's row
+`3 + j / 2`. -/
+def linkReasons (c : SessionCommitment) (proofs : SessionProofs) : Array String := Id.run do
+  let d := proofs.digest.rows
+  if proofs.rounds.size != c.k || d.size != 4 + recordsRows c.k || proofs.signature.rows.size != 3 then
+    return #[s!"the session's proofs are not one signature's, one signed digest's over {recordsRows c.k} records rows " ++
+      s!"and {c.k} rounds'"]
+  let mut reasons : Array String := #[]
+  if proofs.signature.rows[1]! != d[d.size - 1]! then
+    reasons := reasons.push "the signed message is not the signed digest's"
+  for j in [0:proofs.rounds.size] do
+    let out := proofs.rounds[j]!
+    if out.rows.size != 4 || out.rows[1]! != d[3 + j / 2]! then
+      reasons := reasons.push s!"round {j}'s record is not the signed digest's"
+  return reasons
+
+def linksOk (c : SessionCommitment) (proofs : SessionProofs) : Bool := (linkReasons c proofs).isEmpty
+
+/-- `known_reasons`: each public input is the value the verifier computes, and each round's row the registered row at
+its opened index (`registered i`, none past C's blocks). -/
+def knownReasons (c : SessionCommitment) (openings : Array CoinOpening) (publicKey : ByteArray) (proofs : SessionProofs)
+    (registered : Nat → Option ByteArray) : Array String := Id.run do
+  let mut reasons : Array String := #[]
+  let mut want : Array (UnitOutcome × String × Array (Nat × ByteArray)) :=
+    #[(proofs.signature, "the signature's", #[(0, publicKey)]),
+      (proofs.digest, "the signed digest's",
+        #[(0, headOf c), (1, (domain RECORD_BINDING c.session c.k).id), (2, ctxOf c publicKey)])]
+  for j in [0:proofs.rounds.size] do
+    let out := proofs.rounds[j]!
+    match byJ openings j with
+    | none => pure ()
+    | some o =>
+      want := want.push (out, s!"round {j}'s", #[(2, le 4 j), (3, le 8 o.index)])
+      let row := if o.index < c.blocks then registered o.index else none
+      let same := match row with
+        | some r => out.rows.size ≥ 1 && out.rows[0]! == r
+        | none => false
+      if !same then reasons := reasons.push s!"round {j}'s row is not the registered row at its index"
+  for (out, name, values) in want do
+    if out.known != values then reasons := reasons.push s!"{name} public inputs are not the session's"
+  return reasons
+
+/-- `check_session`: the session's verdict from its proofs. It fails closed; which rounds were late or wrong stays inside
+the proofs. -/
+def sessionInProofs (schemes : Schemes) (trusted : List ByteArray) (registered : Nat → Option ByteArray)
+    (c : SessionCommitment) (openings : Array CoinOpening) (scheme : String) (publicKey : ByteArray)
+    (proofs : SessionProofs) : Verdict := Id.run do
+  let mut reasons := clearReasons schemes trusted c openings scheme publicKey
+  match schemes.lookup scheme with
+  | none => pure ()
+  | some p =>
+    let (sig, dig, rounds) := programs c p
+    let mut units : Array (UnitOutcome × String × String) :=
+      #[(proofs.signature, sig, "the signature's"), (proofs.digest, dig, "the signed digest's")]
+    for j in [0:min proofs.rounds.size c.k] do
+      units := units.push (proofs.rounds[j]!, rounds[j]!, s!"round {j}'s")
+    for (out, program, name) in units do
+      if out.program != program || !out.accepted then
+        reasons := reasons.push s!"{name} proof is not an accepted proof of {program}"
+  let links := linkReasons c proofs
+  reasons := reasons ++ links
+  if links.isEmpty then reasons := reasons ++ knownReasons c openings publicKey proofs registered
+  return (Findings.mk reasons 0 0, acceptIf reasons.isEmpty)
+
+end MemoryChallenger.InProofs
