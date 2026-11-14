@@ -30,7 +30,6 @@ answer's reason. The slow test makes the inference-only case on the 4,32,4 class
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import shutil
 import stat
@@ -57,11 +56,7 @@ from verity.commitments.crypto import lms
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import served_cases as SC  # noqa: E402
-
-_spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
-RP = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = RP
-_spec.loader.exec_module(RP)
+from v1_case import RP, v1_case  # noqa: E402
 
 LAKE = shutil.which("lake") is not None
 lean = pytest.mark.skipif(not LAKE, reason="no Lean toolchain")
@@ -77,20 +72,6 @@ INF = SC.INFERENCE_ONLY
 V1 = SC.V1
 SAMPLED = SC.SAMPLED
 UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
-
-
-def v1_case(program, query, previous: str | None = None) -> dict:
-    """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``."""
-    part = P.partition(program, query)
-    ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = {"law": "stratified", "k": 1}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
-                   {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
-                   registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=part)
-    evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
-    return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
-            "params": params}
 
 
 def audited_v1_case(program, query, accepted: bool = True) -> dict:

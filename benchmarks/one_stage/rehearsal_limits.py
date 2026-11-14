@@ -15,11 +15,10 @@ built here, in a scope of its own as `served_cases.lean_answer` runs every check
 - with ``--rejects``, at POLICY's alpha = k/c and gamma = c (the count rule's numbers, in Boolean gates) and at alpha = k
   over the profile's gamma: the verdict and its reason at each.
 
-The case's audit record is a stand-in naming that Program, the one the suite's class test makes (`test_served_cases.py`'s
-``v1_case``): the check reads the Program and its division, and nothing of a served window. OUT gets one JSON object,
+The case's audit record is a stand-in naming that Program, the one the suite's class test makes (`v1_case.py`): the
+check reads the Program and its division, and nothing of a served window. OUT gets one JSON object,
 written after the Program's digest and again after the profile, so a later failure keeps both. Nothing here reads a run.
 """
-import importlib.util
 import json
 import resource
 import sys
@@ -38,16 +37,12 @@ def main(argv: list[str]) -> int:
     rejects = "--rejects" in argv[5:]
 
     import prove_path as PP
+    import served_cases as SC
     from verity.circuits import codec
     from verity.circuits.types import type_from_json
     from verity_vllm.program.predict.window_circuit import class_circuit
+    from v1_case import v1_case
     from verity_vllm.program.predict.window_class import PearlTables
-
-    spec = importlib.util.spec_from_file_location("served_cases_tests", HERE / "tests" / "test_served_cases.py")
-    T = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = T
-    spec.loader.exec_module(T)
-    SC = T.SC
 
     doc: dict = {"class": cls_arg, "scheme": scheme or None, "seconds": {}}
 
@@ -64,7 +59,7 @@ def main(argv: list[str]) -> int:
     circuit = timed("circuit", lambda: class_circuit(registered, PP.window_class_of(cls_arg),
                                                      tables=PearlTables(scheme) if scheme else None))
     program, query = timed("program", circuit.program)
-    v1 = timed("v1", lambda: T.v1_case(program, query))
+    v1 = timed("v1", lambda: v1_case(program, query))
     # a window's case carries its program function's parameters where values are registered (replay.py)
     v1["params"]["parameters"] = [[n, t.to_json()] for n, t in program.fn.signature()[0]]
     desc = v1["params"]["program"]
