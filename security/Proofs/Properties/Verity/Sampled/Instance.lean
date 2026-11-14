@@ -31,7 +31,7 @@ device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_tar
   runs none (`deltaOf`). Each premise is
   asked of the finders built from the one strategy `error` is at. The other subprotocols' names are the base's, so
   PoUW's target is the base's (`pouwSound_of_base`). The wires' statement (`Vocab.WiresSound`) reads the deployed
-  extractor and sampled proofs' error at it, so it is taken at the deployed vocabulary; where the deployment runs no
+  extractor and SPOT's error at it, so it is taken at the deployed vocabulary; where the deployment runs no
   session that error is `⊤` and it holds (`wiresSound_of_none`).
 * **The extractor** (`Instance.vocab`): the session's at the projected strategy.
 * **The coupling** (`couplingTarget_at`, at the constructions `constructionsAt` assembles at the deployed device's
@@ -721,7 +721,7 @@ theorem pouwSound_of_base (k : Verity.Registration.Composite) (h : I.base.PouwSo
 
 /-! ## The wires' statement where the deployment runs no session -/
 
-/-- At parameters where the deployment runs no session, sampled proofs' error at the deployed vocabulary is `⊤`: its
+/-- At parameters where the deployment runs no session, SPOT's error at the deployed vocabulary is `⊤`: its
 published δ is (`deltaOf_none`). -/
 theorem error_sampled_of_none {θ : ByteArray} (h : I.session θ = none) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((I.vocab K).game θ F c)) : (I.vocab K).error .sampled θ F c σ = ⊤ := by
@@ -730,7 +730,7 @@ theorem error_sampled_of_none {θ : ByteArray} (h : I.session θ = none) (F : Ar
   · exact top_unique (le_add_right (le_add_right (le_of_eq (I.deltaOf_none h _).symm)))
   · rfl
 
-/-- **The wires' statement at a deployment that runs no session**: twice sampled proofs' error is `⊤` at every
+/-- **The wires' statement at a deployment that runs no session**: twice SPOT's error is `⊤` at every
 parameters, so the statement bounds nothing there and holds. -/
 theorem wiresSound_of_none (k : Verity.Registration.Composite) (h : ∀ θ, I.session θ = none) :
     (I.vocab K).WiresSound k := by

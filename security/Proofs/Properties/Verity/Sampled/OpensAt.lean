@@ -482,7 +482,7 @@ open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
 reading (`Instance.Honest.inst`), whose coin commitment holds the family v2's parameters name
 (`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's PoUW target
-holds. It concludes neither statement on the committed files: the instance runs sessions, whose sampled proofs' error
+holds. It concludes neither statement on the committed files: the instance runs sessions, whose SPOT's error
 is finite, so the wires' statement bounds something there and holds only by its proof, and `GateARow` reads no
 deployment, so no instance concludes it. -/
 theorem remote_soundness_deployedReady_honest :

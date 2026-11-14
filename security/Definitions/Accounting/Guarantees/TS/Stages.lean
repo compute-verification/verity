@@ -4,7 +4,7 @@ public import Definitions.Accounting.Guarantees.TS
 public import Definitions.Accounting.Assumptions.Stages
 
 /-!
-# Sampled proofs under per-stage coins (trusted)
+# SPOT under per-stage coins (trusted)
 
 STEER-PROOF's route A, each `def G : Prop` proved as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Stages`:
@@ -60,7 +60,7 @@ def CompilerStage : Prop :=
         Z.epsSample H.prog lam (r / Real.log (1 / p)) p (δ - S * (δbind + nπ * δzk)) S) *
         (1 - Z.epsSched H) * (1 - Z.epsClock H)) ≤ δ
 
-/-- **D-ideal under per-stage coins and sampled proofs.** As `CompilerStage` with work-weighted samples (each unit's work
+/-- **D-ideal under per-stage coins and SPOT.** As `CompilerStage` with work-weighted samples (each unit's work
 weight at most its sample probability): every accepted run satisfies (2.7), D-ideal's bound, with no `ε_sample`. -/
 def StageIdeal : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]

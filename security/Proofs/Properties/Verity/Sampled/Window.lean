@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 
 /-!
-# Sampled proofs' leg over a window of several members, each its own session
+# SPOT's leg over a window of several members, each its own session
 
 `Verity.Vocab.SpotSound` where a window's one sample covers several members and one-stage v2 verifies each member in
 its own `--zk` session, one after another: the leg `Proofs.Properties.Verity.Sampled.Target` proves at one session, at

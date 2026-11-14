@@ -31,8 +31,8 @@ row to the output row the record wires it to. The statement reads the wiring on 
   it accepts of the writer's leaf hold the same bits.
 
 A unit is then held (`Properties.Spot.WiredCorrect`) when the transcript binds it (`Accounting.unbound`) and no wire
-into it fails (`Properties.Spot.miswired`), and the claim (`Vocab.WiresHold`) is sampled proofs' at twice its share:
-at most a `2ε` share of the units not held. The target is the claim at twice sampled proofs' error.
+into it fails (`Properties.Spot.miswired`), and the claim (`Vocab.WiresHold`) is SPOT's at twice its share:
+at most a `2ε` share of the units not held. The target is the claim at twice SPOT's error.
 -/
 
 @[expose] public section
@@ -122,13 +122,13 @@ noncomputable def unheld (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) 
 /-- **The wires' claim** in the play of `σ` that ended with `o`, at composite `k`: for every case of the policy in
 the play's messages (`PolicyCase`) and every wiring its record names (`RecordWiring`), at most a `2ε` share of the
 committed units are not held in the extractor's transcript (`unheld`): unbound in it, or reading a row that is not
-the row the wiring gives it. `ε` is sampled proofs' published share.
+the row the wiring gives it. `ε` is SPOT's published share.
 
 What it does not say:
 
 * **Anything of a record whose rows are its members'.** A record of several members names a member's roots by the
   member's name and numbers a template's units inside the member; this reads a root by the row's name alone and a
-  unit by its index in the committed circuit, so of such a record it says sampled proofs' claim at twice its share
+  unit by its index in the committed circuit, so of such a record it says SPOT's claim at twice its share
   and no more.
 * **That a unit's rows are the Program's gates.** It holds a wired row to its writer's row; that a unit's file
   computes its template is not in it.
@@ -139,14 +139,14 @@ What it does not say:
   claim holds of every play.
 * **Anything of a record that names no wiring.** Where the record's `window.circuit` is the SHA-512 of no text
   that parses to a wiring (`RecordWiring` holds of no `W`), the claim holds of the play and says nothing, not even
-  sampled proofs' share. -/
+  SPOT's share. -/
 def WiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (o : Exchange) : Prop :=
   ∀ p r e, PolicyCase k o.sent p r e → ∀ W, RecordWiring r.record W →
     ((V.unheld θ F c r.record W (V.extract θ F c σ)).card : ℝ) ≤ 2 * (V.certOf θ).ε * V.units θ F
 
 /-- **The wires' target at composite `k`**: at all `θ`, `F` and `c`, for every strategy, the probability that
-sampled proofs' verdict at `k` accepts while the wires' claim fails (`WiresHold`) is at most twice sampled proofs'
+SPOT's verdict at `k` accepts while the wires' claim fails (`WiresHold`) is at most twice SPOT's
 error at that strategy. No compiled check holds a sampled unit's wired rows to their writers' rows today
 (`Spot.Wires.Summary.drawnOk` states that check, and no protocol calls it), so no theorem proves it. -/
 def WiresSound (k : Verity.Registration.Composite) : Prop :=

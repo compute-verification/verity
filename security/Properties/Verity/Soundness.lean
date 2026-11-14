@@ -40,7 +40,7 @@ The verdicts are not free fields: in the causal game after the parameters, the c
 (`Vocab.game`), subprotocol `a` accepts at composite `k` when the files pass the commit phase's check, `k` accepted what
 the prover sent as a `same` composition, and `a`'s compiled check accepts its own case in it (`Vocab.Verdict`). The
 event is the verifier's acceptance (`Accepts k`) while the claim of one of `k`'s subprotocols fails
-(`Vocab.Holds`, sampled proofs' on the fixed extractor's transcript), with no break in it: each subprotocol's error at a
+(`Vocab.Holds`, SPOT's on the fixed extractor's transcript), with no break in it: each subprotocol's error at a
 strategy is its published `δ` plus its collision term at the probability that its fixed finder outputs a SHA-512
 collision (`Vocab.error`).
 
@@ -48,7 +48,7 @@ collision (`Vocab.error`).
 targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols. `Soundness` is it at onsite's list,
 with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
 `BandwidthAuditSound`, `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's
-composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (sampled proofs, and PoUW, which
+composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (SPOT, and PoUW, which
 at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that
 tie the inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
 `Properties.Verity.Committed`). They are proved by `Properties.Composition` (a composite's acceptance is its
@@ -81,7 +81,7 @@ def SoundnessOf : Prop :=
     (∀ a ∈ subprotocols k, V.Target k a) → V.SoundnessAt k
 
 /-- **Soundness at onsite's verifier, from its seven subprotocols' targets**: `SoundnessOf` at onsite's list, each
-target by its name. If sampled proofs, PoUW, the inference-only policy, PoUS, PoUB-P2, the network certifier and the
+target by its name. If SPOT, PoUW, the inference-only policy, PoUS, PoUB-P2, the network certifier and the
 wipe each meet their target at onsite, then the probability that onsite's compiled verifier accepts files that passed
 the commit phase's check while one of the period's claims fails (more than an `ε` share of the units unbound in the
 extractor's transcript, fewer than `W` gates computed after their coin, a case of the policy whose Program doesn't
@@ -93,12 +93,11 @@ def Soundness : Prop :=
     V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
       V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
-/-- **Soundness at remote's verifier, from two targets and the two statements on the committed files.** If sampled
-proofs and PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit
+/-- **Soundness at remote's verifier, from two targets and the two statements on the committed files.** If SPOT and PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit
 Pearl+'s check published) each meet their target at remote, the record's wiring is the wiring the committed units are
-held to (`Vocab.WiresSound`, at twice sampled proofs' share and error), and the committed circuit has one gate a row
+held to (`Vocab.WiresSound`, at twice SPOT's share and error), and the committed circuit has one gate a row
 (`GateARow`), then the probability that remote's compiled verifier accepts files that passed the commit phase's check
-while the claim of sampled proofs, PoUW or the inference-only policy fails is at most their three errors at that
+while the claim of SPOT, PoUW or the inference-only policy fails is at most their three errors at that
 strategy summed.
 
 The inference-only policy's target is no hypothesis: its claim is on the case as sent, of which it is proved

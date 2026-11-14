@@ -24,7 +24,7 @@ lacks (the case's wires are the committed record's wires, and the case's unit is
 `Vocab.Holds` names with what else the claim leaves unsaid. Onsite's soundness keeps this target as a hypothesis.
 Remote's (`remote_soundness_of_subprotocols`, here) applies it, and takes in its place the two statements those checks
 would establish (`Vocab.WiresSound`, `GateARow`), which no clause of its conclusion reads and nothing proves: the
-union bound at remote's three subprotocols, sampled proofs' and PoUW's targets as given and the policy's as proved.
+union bound at remote's three subprotocols, SPOT's and PoUW's targets as given and the policy's as proved.
 
 Its witnesses are at the idle deployment (`Properties.Verity.Idle`): the two targets and the wires' statement hold at
 `Idle.unbounded`, where every error is `⊤` (`remote_soundness_of_subprotocols_honest`), and its conclusion fails at

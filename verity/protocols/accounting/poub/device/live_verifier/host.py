@@ -100,7 +100,7 @@ tar (`receive`), refusing the hand-off by a member's name before writing its byt
 a second copy, a file the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node
 wrote. Then it runs
 `served_verdicts.sh compose` in the pinned tree on that copy (`compose_env`: the tree built at its pin, `COMPOSE_BUILT`, its
-prebuilt sampled proofs Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
+prebuilt SPOT Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
 `FOLLOW_ANY_TREE`, the pin line's `on` as the record's `tree_on`) within `COMPOSE_MINUTES`, and answers one JSON line: the
 pin, and its $OUT's files (the final record, the composite's public part and the verdict lines, each in its published
 form), never its serve-dir copy, whose private outputs stay in the removed scratch. One compose runs at a time, none while a
@@ -950,7 +950,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
 
 def compose_env(host: Host, scratch: Path, pinned: str, on: str | None, tree: Path = TREE) -> dict[str, str]:
     """`served_verdicts.sh compose`'s environment on the copy in `scratch`: the pinned tree built at its pin (its venv,
-    and its sampled proofs Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
+    and its SPOT Lean where pin time built it), the record at this tree's commit (and ``on``, the branch infra
     pinned it from) whatever tree served, every scratch path under `scratch`."""
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(host.root), "LANG": "C.UTF-8",
            "D": str(scratch / "serve"), "OUT": str(scratch / "out"), "SERVE_ROOT": str(scratch / "root"),

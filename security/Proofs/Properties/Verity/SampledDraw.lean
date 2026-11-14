@@ -9,13 +9,13 @@ public import Init.Internal.Order.While
 /-!
 # The sample: a sampled verdict's units are the live audit's sample at the play's coins
 
-The sample's piece of `CouplingTarget`. In a play of the period's game whose parameters name sampled proofs' one-stage
-form (`ParamsAt`), where sampled proofs' case (`VStar.Recursive.Sampled.protocol`, whose one-stage form is v2,
+The sample's piece of `CouplingTarget`. In a play of the period's game whose parameters name SPOT's one-stage
+form (`ParamsAt`), where SPOT's case (`VStar.Recursive.Sampled.protocol`, whose one-stage form is v2,
 `Spot.OneStageZk`) accepts in what the prover sent, and the device's log as the sampled check read it is the
 play's (`Vocab.Logged`), the units v2 drew are the live audit's sample at any sample whose bytes start with the play's
 coins of the sample's family released after the registration's digest.
 
-* **v2's acceptance** (`case_drew`, `drew_of`): sampled proofs' case in what the prover sent decodes (`V2Case`), in
+* **v2's acceptance** (`case_drew`, `drew_of`): SPOT's case in what the prover sent decodes (`V2Case`), in
   the one-stage form the composite's parameters name, since the components' ids are distinct (`params_of_case`); v2
   read its coins `ξ` under the challenger its parameters name and accepted at them (`V2Accepts`), so it drew the
   evidence's units from
@@ -367,7 +367,7 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
   · split at h
     all_goals exact ⟨_, _, _, by assumption⟩
 
-/-! ## v2's case at sampled proofs' component -/
+/-! ## v2's case at SPOT's component -/
 
 theorem find?_nodup {β : Type} {f : β → String} : ∀ {l : List β} {y : β}, (l.map f).Nodup → y ∈ l →
     l.find? (fun x => f x == f y) = some y
@@ -418,15 +418,15 @@ theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd 
   rw [h] at h1
   exact Option.some.inj (h1.symm.trans h2)
 
-/-- **Sampled proofs' case in what the prover sent composite `k`**: the three byte strings decode, and one of the
-components' cases, at its parameters `a`, its commitment `b` and its evidence `e`, is sampled proofs'
+/-- **SPOT's case in what the prover sent composite `k`**: the three byte strings decode, and one of the
+components' cases, at its parameters `a`, its commitment `b` and its evidence `e`, is SPOT's
 (`VStar.Recursive.Sampled.protocol`) on the blobs sent (`CaseAccepts`' case without its acceptance). -/
 def V2Case (k : Verity.Registration.Composite) (s : Verity.Sent) (a b e : ByteArray) : Prop :=
   ∃ ps c ev, Verity.Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
     x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray s.blobs) ∧
       a = x.2.1.params.toUTF8 ∧ b = x.2.2.commitment ∧ e = x.2.2.evidence
 
-/-- **v2 accepts at the coins it read** on the blobs `bs`: `a`, `b` and `e` decode, in sampled proofs' one-stage form,
+/-- **v2 accepts at the coins it read** on the blobs `bs`: `a`, `b` and `e` decode, in SPOT's one-stage form,
 to `p`, `c` and `ev`, v2 reads the coins `ξ` under the challenger its parameters name (`dr`,
 `Properties.Challenger.oneStageZkSource`), and its check at them accepts. -/
 def V2Accepts (bs : Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.Params)
@@ -462,7 +462,7 @@ theorem dispatch_evidence {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     | (cases h; exact ⟨_, by assumption⟩)
 
 /-- **The case's parameters are the composite's one-stage parameters**: in a composition composite `k` accepted, the
-parameters sampled proofs' case decodes to are the ones `ParamsAt` reads, since the components' ids are distinct. -/
+parameters SPOT's case decodes to are the ones `ParamsAt` reads, since the components' ids are distinct. -/
 theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e) {P : VStar.Recursive.Sampled.Params}
     (hp : (Core.canonicalJson a >>= VStar.Recursive.Sampled.paramsOfJson) = .ok P)
@@ -484,7 +484,7 @@ theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   exact (Except.ok.inj (hyp.symm.trans hp)).symm
 
 /-- **v2's case accepts only at coins it read under its parameters' challenger**, in a composition composite `k`
-accepted whose parameters name sampled proofs' one-stage form (`ParamsAt`). -/
+accepted whose parameters name SPOT's one-stage form (`ParamsAt`). -/
 theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Verity.SameAccepts k s)
     {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt s.params p₀)
     (h : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol s) :
@@ -581,14 +581,14 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
   rw [← hl log (Option.mem_def.2 hlog)]
   exact hs
 
-/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`Verity.component_eq_some`). -/
+/-- **A sampled verdict that accepts is SPOT's case accepting** (`Verity.component_eq_some`). -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol o.sent := by
   obtain ⟨-, -, P, hP, hc⟩ := h
   obtain rfl : P = VStar.Recursive.Sampled.protocol := (Verity.component_eq_some.1 hP).2
   exact hc
 
-/-- **The sample in a play**: where the play's parameters name sampled proofs' one-stage form, the sampled verdict
+/-- **The sample in a play**: where the play's parameters name SPOT's one-stage form, the sampled verdict
 accepts and the sampled check's read of the device's log is the play's, v2 drew `units` from coins `ξ` read under `dr`
 whose bits start the play's coins of `dr`'s family released after `dr`'s digest. -/
 theorem logged_sample {V : Vocab d α} {k : Verity.Registration.Composite} (hR : SampleRead k (V.coinsRead .sampled))
@@ -625,7 +625,7 @@ theorem sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr
   rw [ht, hL, hn]
   exact sampleUnits_append L n ξ t units read hdu
 
-/-- **The sample's piece of `CouplingTarget`**: in a play whose parameters name sampled proofs' one-stage form, where
+/-- **The sample's piece of `CouplingTarget`**: in a play whose parameters name SPOT's one-stage form, where
 the sampled verdict accepts and the sampled check's read of the device's log is the play's, v2 drew `units` under the
 sampling design `L` over `n` units from coins read under `dr`; at a session with that sampling design and population, widened by a projection's
 coins, every sample whose bytes start with the play's coins of `dr`'s family released after `dr`'s digest samples exactly
