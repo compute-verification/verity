@@ -213,8 +213,10 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 ## What it writes and what loads it
 
-`periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
-Neither writes a file unless told where.
+`periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there,
+and, on a run with the onsite scenario at the registry as it is, that scenario's lower bound over a year of the world's
+compute into the run's result under the metric `metrics.toml` declares (`periods.write_metric`). Neither writes a file unless told
+where.
 
 This package has an import root of its own (`distribution` in `tests/import_order.toml`). A loader puts this directory on
 `sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
