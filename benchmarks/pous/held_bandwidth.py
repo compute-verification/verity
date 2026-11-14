@@ -8,7 +8,9 @@ is encoded.
 (`challenger_party.keep`, `p2_party.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
 declared them before that session, and the root the session bound. Its plan is the whole store. The prover's `Held`
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
-which `p2_case.same_store` holds to PoUS's run case.
+which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
+memory challenger claims in its session log before the first coin and under which it signs the case's close of the
+verifier's log (`p2_party.Closer`).
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
 pass's signs (`p2_v1.bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
@@ -33,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -228,7 +231,8 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
             private: Path, public: Path, bind: bytes, window: int, pous_case: Mapping[str, Any] | None = None,
             case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S) -> dict[str, Any]:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
-    ``--pous-session`` and PoUS's session id `sid` are added; its port reached at `party_host`), under `request_`: the
+    ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session, under
+    which the memory challenger signs the case's close; its port reached at `party_host`), under `request_`: the
     case and everything naming the store to `private` (0700, files 0600), the public answer and a summary to `public`
     (``answer.json``, ``bandwidth.json``); the public answer, also returned. With `pous_case` (PoUS's run case), a case
     whose store isn't PoUS's (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean
@@ -239,7 +243,8 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
     os.chmod(private, 0o700)
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
-    command = f"{party} --pous-session {sid.hex()}"
+    p2_session = secrets.token_bytes(32)
+    command = f"{party} --pous-session {sid.hex()} --session {p2_session.hex()}"
     summary: dict[str, Any] = {"window": window, "request": dict(request_), "party_host": party_host,
                                "pous_session": "the PoUS session the PoUS piece ran (its id private)",
                                "private": str(private), "decided_by": period.decided_by(None)}
@@ -265,7 +270,7 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
         "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
         "registration": None if prover is None else p2_party.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
-        "pous_session": sid.hex(), "party": command, "party_host": party_host}, 0o600)
+        "pous_session": sid.hex(), "session": p2_session.hex(), "party": command, "party_host": party_host}, 0o600)
     summary |= {"setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3),
                 "verifier_rc": rc, "passes": len(prover.steps) if prover else 0,
                 "pass_s": [s["pass_s"] for s in prover.steps] if prover else []}

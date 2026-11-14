@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import importlib.util
+from functools import cache
 import json
 import shutil
 import socket
@@ -22,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_lean, p2_party, receipts
@@ -34,6 +37,38 @@ NODE = b"p2-node-under-test"
 STEP_NS = 400
 TOY = {"windows": 2, "passes": 2, "samples": 4, "window_ns": 2 * STEP_NS, "deadline_ns": STEP_NS}
 """The auditor's session parameters these sessions are held to (`p2_party.session`'s `auditor`)."""
+SESSION_ID = hashlib.sha512(b"p2-party-test/session").digest()[:32]
+"""The session id the auditor gives the memory challenger for a session (`p2_party.Closer`)."""
+
+
+SIGNER = Path(__file__).resolve().parents[7] / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py"
+
+
+@cache
+def signer(label: bytes = b"p2-party-test/memory-challenger"):
+    """The memory challenger's key at S1's deployed parameters, which the case's check verifies at
+    (`pous_test_signer.AtLeaf`)."""
+    spec = importlib.util.spec_from_file_location("pous_test_signer", SIGNER)
+    ts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ts)
+    return ts.AtLeaf(label)
+
+
+class MemoryLog:
+    """`memory_challenger.SessionLog` in memory: it refuses an id it holds."""
+
+    def __init__(self) -> None:
+        self.ids: set[bytes] = set()
+
+    def claim(self, session: bytes) -> None:
+        if session in self.ids:
+            raise mc.SessionLogError("the session id is already in the log")
+        self.ids.add(session)
+
+
+def closer(log=None, session: bytes = SESSION_ID) -> p2_party.Closer:
+    """The memory challenger signing a session's close: `signer()`, on a fresh log unless `log` is given."""
+    return p2_party.Closer(signer(), MemoryLog() if log is None else log, session)
 
 
 class Clock:
@@ -136,9 +171,11 @@ class Lying:
 
 
 def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Plan | None = None,
-        lean_of=lambda lean: lean, auditor: dict = TOY) -> tuple[dict, dict]:
+        lean_of=lambda lean: lean, auditor: dict = TOY, closer_: p2_party.Closer | None = None) -> tuple[dict, dict]:
     """One session over a socket pair: the verifier's side in a thread, its Lean (`lean_of` of it) holding the
-    registration file with `plan` and the auditor's session parameters `auditor`, the prover's here; both answers."""
+    registration file with `plan` and the auditor's session parameters `auditor`, its close signed by `closer_`
+    (`closer()` by default), the prover's here; both answers."""
+    closer_ = closer() if closer_ is None else closer_
     clock = Clock()
     a, b = socket.socketpair()
     data = json.dumps(p2_party.registration_json(store.registration, plan)).encode()
@@ -149,7 +186,7 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
             reg, held = p2_party.hold(lean, data, auditor=auditor)
             got["answer"] = p2_party.session(r, w, reg, coins=b"\x07" * 64, lean=lean_of(lean), plan=held,
                                              clock=clock, sleep_until=clock.sleep_until, host="auditor-under-test",
-                                             auditor=auditor)
+                                             auditor=auditor, closer=closer_)
 
     th = threading.Thread(target=verifier)
     th.start()
@@ -338,3 +375,31 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     CP.keep(tmp_path, bare, CS.request_of(NODE.decode(), point, reg.root))
     with pytest.raises(ValueError, match="has no setup"):
         p2_party.pous_record(tmp_path, bare.hex())
+
+
+def test_a_session_id_the_memory_challenger_has_used_is_refused_before_any_coin(exe, store, tmp_path) -> None:
+    """The memory challenger's session log (`memory_challenger.SessionLog`) records the auditor's id before the first
+    coin; a second session under that id is refused before the request is read, and no coin is released for it."""
+    mc.SessionLog.create(tmp_path / "sessions")
+    log = mc.SessionLog(tmp_path / "sessions")
+    _, first = run(exe, store, lambda c: Prover(store, c), request(store), closer_=closer(log))
+    assert first["verdict"] == "accept", first
+    assert SESSION_ID.hex() in (tmp_path / "sessions").read_text().split()
+    prover = []
+    _, again = run(exe, store, lambda c: prover.append(Prover(store, c)) or prover[-1], request(store),
+                   closer_=closer(log))
+    assert again["verdict"] == "refused" and again["reason"].startswith("the memory challenger refuses the session id")
+    assert prover[0].held is None and prover[0].ended is None
+
+
+def test_the_party_takes_a_challenger_and_a_session_id_together_for_one_session(store, tmp_path) -> None:
+    path = tmp_path / "registration.json"
+    path.write_text(json.dumps(p2_party.registration_json(store.registration)))
+    base = ["--registration", str(path)]
+    for flags, why in ((["--stdio", "--challenger", str(tmp_path)], "--challenger and --session go together"),
+                       (["--stdio", "--session", SESSION_ID.hex()], "--challenger and --session go together"),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", "ab"], "64 lowercase hex"),
+                       (["--listen", "127.0.0.1:0", "--sessions", "2", "--challenger", str(tmp_path), "--session",
+                         SESSION_ID.hex()], "--sessions 1")):
+        p = subprocess.run([sys.executable, "-m", p2_party.MODULE, *base, *flags], capture_output=True, text=True)
+        assert p.returncode == 2 and why in p.stderr, (flags, p.stderr)

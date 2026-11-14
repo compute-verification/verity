@@ -107,7 +107,10 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     space = pous.audit("n0", held, COINS, **kw)
     other = pous.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
                      **kw)
-    reads = p2_case.case_of(p2_party.registration_json(reg, None), REQUEST | {"node": reg.node.hex()}, 10 ** 9, [])
+    sid = hashlib.sha512(b"a P2 session").digest()[:32]
+    reads = p2_case.case_of(p2_party.registration_json(reg, None), REQUEST | {"node": reg.node.hex()}, 10 ** 9, [],
+                            session=sid, trusted=[kw["signer"].public_key],
+                            close=p2_case.close_of(kw["signer"], sid, []))
     c = Clock()
     generic = P.session("n0", P.Local("n0", hashlib.shake_256(b"a tiny MLP's weights").digest(2 * 4032 - 17),
                                       entropy=_entropy(b"salts")), COINS, windows=1, clock=c, sleep_until=c.sleep_until)

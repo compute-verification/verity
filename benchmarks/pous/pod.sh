@@ -5,7 +5,7 @@
 #   bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
 #   bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_store's libp2v1.so with CGBN)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v4 on the same library, audited by protocol.TimedAudit
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
@@ -19,7 +19,7 @@
 #          FIT_CPUS=... FIT_MODEL=<id, or a snapshot directory when the HF cache has no refs>]   # p2_v1/scale.py into $OUT:
 #          the device encode rate, the store of 2^e blocks audited, vLLM beside it
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-store P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' -- encode --store DIR --seed ...
-#          p2_v1/store.py's command after the literal --, run on the library with every GPU the run sees (`encode`, `verify
+#          p2_store/store.py's command after the literal --, run on the library with every GPU the run sees (`encode`, `verify
 #          --decode`, `spot`); --out is $OUT, and DIR, the store, is scratch outside the run directory
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
@@ -219,7 +219,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
      || [ "$IMPL" = p2-scale ] || [ "$IMPL" = p2-store ]; then
   gpu_env || exit 3
   record_host
-  # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
+  # P2 v1's library (verity/protocols/accounting/pous/prover/p2/p2_store): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
   # gmpy2's wheel's in band-gpu's venv: nothing is installed on the system), the device's arch
   ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
   GMPINC=
@@ -229,25 +229,27 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
   fi
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
-  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  git -C "$CG" checkout -q "$(cat verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
   # keyed by the nvcc and the sources' bytes: a .so another toolkit or source built is never adopted, and every checkout of the
   # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout);
   # and by P2FAST, the Makefile's FAST when it is set: '-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' expands the v4 keys
-  P2KEY=$({ cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit}
+  P2KEY=$({ cat verity/protocols/accounting/pous/prover/p2/p2_store/Makefile verity/protocols/accounting/pous/prover/p2/p2_store/p2v1.cu verity/protocols/accounting/pous/prover/p2/p2_store/p2keys.cuh \
+              verity/protocols/accounting/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/accounting/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu \
+              verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit
             [ -z "${P2FAST+x}" ] || echo "FAST=$P2FAST"; } | sha256sum | cut -c1-12)
   P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2KEY
   if [ -f "$P2LIB/libp2v1.so" ]; then echo "adopted $P2LIB/libp2v1.so" > "$O/p2v1-make.log"
-  else make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
+  else make -C "$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)" NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   if [ "$IMPL" = p2-store ]; then
     while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done
-    [ $# -ge 2 ] || { echo "p2-store runs p2_v1/store.py's command after a literal --"; exit 2; }
+    [ $# -ge 2 ] || { echo "p2-store runs p2_store/store.py's command after a literal --"; exit 2; }
     shift
-    "$PY" benchmarks/pous/p2_v1/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
+    "$PY" verity/protocols/accounting/pous/prover/p2/p2_store/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
     clocks after
     exit $RC
   fi

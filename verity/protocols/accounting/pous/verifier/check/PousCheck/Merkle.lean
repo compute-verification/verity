@@ -9,7 +9,7 @@ The SHA-512 Merkle tree whose root binds the stored blocks:
 
 ~~~text
 R(c)        = SHA512(P(8·|c|) || c)                                   sha512/row/v2, P = Flock.HmRow.rowPrefixV2
-leaf(i)     = SHA512(0x00 || salt[32] || u64be(s) || u16be(v) || R(c_i))      the spec's (benchmarks/pous/p2_v1/reference.py)
+leaf(i)     = SHA512(0x00 || salt[32] || u64be(s) || u16be(v) || R(c_i))      the spec's (protocols/pous/verifier/p2_v1/reference.py)
 packageLeaf = SHA512(0x00 || salt[24] || u64le(s) || u16le(v) || R(c_i))      the package's (protocols/pous/verifier.py)
 node(l, r)  = SHA512(0x01 || l || r)
 ~~~

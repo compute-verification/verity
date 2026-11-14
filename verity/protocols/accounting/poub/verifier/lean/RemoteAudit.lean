@@ -36,7 +36,7 @@ to (`audit.py` and what it calls, by `tests/`):
 The modules the executables are built on are not imported here, and each is a root of the Lean check of its own
 (`roots` in `lean-audit.json`): `RemoteAudit.Difftest` (`remote-audit-difftest`), `RemoteAudit.Verifier`
 (`remote-audit-verifier`), `RemoteAudit.Protocol` (`remote-audit-protocol`) and `RemoteAudit.P2Protocol`
-(`remote-audit-p2-protocol`).
+(`remote-audit-p2-protocol`), with the bytes of P2's close and their lemmas (`RemoteAudit.P2Close`).
 -/
 
 @[expose] public section
