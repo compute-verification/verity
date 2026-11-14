@@ -944,12 +944,12 @@ word), theta being registered."""
 
 
 def _inference_only() -> Any:
-    """The inference-only policy's Python check (`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py`), the
+    """The inference-only policy's Python check (`verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py`), the
     reference its Lean check, `InferenceOnlyCheck`, is held to."""
     name = "lifecycle_inference_only_reference"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py")
+            name, ROOT / "verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py")
         m = importlib.util.module_from_spec(spec)
         sys.modules[name] = m
         spec.loader.exec_module(m)

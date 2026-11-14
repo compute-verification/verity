@@ -463,7 +463,7 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/protocols/policy/inference_only/verifier/inference_only/",
+        "verity/protocols/policy/inference_only/verifier/",
         "verity/protocols/accounting/certifier/",
         "verity/protocols/accounting/certifier/prover/",
         "verity/protocols/accounting/certifier/device/",

@@ -2394,7 +2394,7 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-NCI_CHECK = "verity/protocols/policy/inference_only/verifier/inference_only/lean/.lake/build/bin/nci-check"
+NCI_CHECK = "verity/protocols/policy/inference_only/verifier/lean/.lake/build/bin/nci-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:

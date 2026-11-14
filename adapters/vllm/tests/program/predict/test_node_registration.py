@@ -27,7 +27,7 @@ from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict.node import build_node_program, node_parameters
 
 _spec = importlib.util.spec_from_file_location(
-    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py")
 assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)

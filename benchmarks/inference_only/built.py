@@ -45,7 +45,7 @@ MODEL = "verity-int8/Llama-3.2-1B-INT8"
 H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
