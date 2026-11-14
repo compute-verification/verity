@@ -220,33 +220,32 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     model = Model(w0, w1)
     coins = _coins()
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
-    comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
-    opt = comp.get("pouw")
-    key = pouw._SALT_KEYS["pouw:ncp-v1"]
-    rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
-    roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
-    plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
-    assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
-    declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
-    c = opt.commitment()
-    assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
-    assert c["weights_root"] == weights_root(roots).hex()
-    opening = CoinOpening.from_json(c["salt_opening"])
-    assert CoinCommitment.from_json(c["coins"]) == coins.commitment
-    assert coin_reason(coins.commitment, opening, "salt", weights_root(roots)) is None
-    assert c["salt"] == Epoch.start(declared, roots, coins.commitment, opening).salt.hex()
-    with pytest.raises(DomainError):                         # install opened the salt coin, and a coin opens once
-        coins.open("salt", weights_root(roots))
-    assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
-    assert len(hooks.live("pouw:ncp-v1")) == 2
+    with PO.install(model, _serve("pouw:ncp-v1", settings=settings)) as comp:
+        opt = comp.get("pouw")
+        key = pouw._SALT_KEYS["pouw:ncp-v1"]
+        rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
+        roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
+        plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
+        assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
+        declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
+        c = opt.commitment()
+        assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
+        assert c["weights_root"] == weights_root(roots).hex()
+        opening = CoinOpening.from_json(c["salt_opening"])
+        assert CoinCommitment.from_json(c["coins"]) == coins.commitment
+        assert coin_reason(coins.commitment, opening, "salt", weights_root(roots)) is None
+        assert c["salt"] == Epoch.start(declared, roots, coins.commitment, opening).salt.hex()
+        with pytest.raises(DomainError):                         # install opened the salt coin, and a coin opens once
+            coins.open("salt", weights_root(roots))
+        assert comp.record()["protocols"][0]["weights"] == comp.weight_commitments["pouw:ncp-v1"]
+        assert len(hooks.live("pouw:ncp-v1")) == 2
 
-    x, bias = rng.standard_normal((5, K), np.float32), rng.standard_normal(N, np.float32)
-    layer = model.layers[0]
-    assert np.array_equal(layer.quant_method.apply(layer, x, bias), _int7_linear(x, w0, bias))
-    info = opt.info()
-    assert (info["units"], info["tiles"], info["padded_rows"]) == (1, N // 16, 11)
+        x, bias = rng.standard_normal((5, K), np.float32), rng.standard_normal(N, np.float32)
+        layer = model.layers[0]
+        assert np.array_equal(layer.quant_method.apply(layer, x, bias), _int7_linear(x, w0, bias))
+        info = opt.info()
+        assert (info["units"], info["tiles"], info["padded_rows"]) == (1, N // 16, 11)
 
-    comp.close()
     assert hooks.live("pouw:ncp-v1") == () and "apply" not in vars(layer.quant_method)
     c = opt.commitment()
     assert c["units"] == 1 and c["tiles"] == N // 16 and len(bytes.fromhex(c["transcript_root"])) > 0

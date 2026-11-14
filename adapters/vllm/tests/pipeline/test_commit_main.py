@@ -10,7 +10,9 @@ Stood in, each because it needs a GPU, vLLM, the run store or a Program of recor
 build and its version facts, vLLM's sampling parameters, the two `torch.cuda` calls that raise with no device, the sources'
 attachment (`commit_attach.attach_of_record` refuses a Commit with no required-value manifest), the binding record and, where
 a test says so, a run's verdict.  This machine's memory and the command line are stood in too, and `commit`'s clock is one the
-stand-ins move (`Clock`), so every number in a row is one the test states.
+stand-ins move (`Clock`), so every number in a row is one the test states.  So is the full collection `main` asks the cyclic
+collector for before each run (`gc.collect`): it is counted and not made, since each would walk every object the test process
+holds.
 
 Held: the files `main` writes, `verdict.json`, `runs.jsonl`, `steps.jsonl` and `summary.json` whole (a run's root and its coins
 against what the committer and `commit_coins` gave), what each stand-in was handed, the last line printed, and how `main`
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import gc
 import hashlib
 import json
 import os
@@ -170,6 +173,7 @@ class Core:
 
     def __init__(self, model: Model, clock: Clock) -> None:
         self.model, self.clock = model, clock
+        self.steps = 0
         self.live: dict[str, tuple[list[int], list[int], int]] = {}
         self.vllm_config = SimpleNamespace(
             scheduler_config=SimpleNamespace(async_scheduling=True), compilation_config=SimpleNamespace(mode="NONE", cudagraph_mode="NONE"),
@@ -185,6 +189,7 @@ class Core:
         ids = list(self.live)
         scores = self.model(torch.tensor([(self.live[i][1] or self.live[i][0])[-1] for i in ids]))
         self.clock.take(1.0)
+        self.steps += 1
         outs = []
         for i, token in zip(ids, scores.argmax(-1).tolist()):
             _, tokens, most = self.live[i]
@@ -305,7 +310,8 @@ def committer_2(eng: SimpleNamespace, run_id: str) -> Committer:
 def stand_ins(monkeypatch, tmp_path):
     """The stand-ins of the module docstring.  ``calls`` keeps what `main` handed each: the engine's build, each committer's
     attachment, each binding record, each run's verdict.  ``verdicts`` is what the runs' verdicts return in order, the last
-    one for every later run, or None for the real `commit_verdict`, whose answers ``answers`` keeps."""
+    one for every later run, or None for the real `commit_verdict`, whose answers ``answers`` keeps.  ``collected`` keeps the
+    engine steps taken when each full collection was asked for."""
     for name in ENVIRON:
         monkeypatch.setenv(name, "")
         monkeypatch.delenv(name)
@@ -313,7 +319,7 @@ def stand_ins(monkeypatch, tmp_path):
     MADE.clear()
     MAKE.clear()
     clock = Clock()
-    s = SimpleNamespace(calls=[], verdicts=None, answers=[], clock=clock, engine=engine(clock), environ=set(os.environ))
+    s = SimpleNamespace(calls=[], verdicts=None, answers=[], collected=[], clock=clock, engine=engine(clock), environ=set(os.environ))
     real_verdict = commit.commit_verdict
 
     def build_engine(checkpoints, **kw):
@@ -334,11 +340,17 @@ def stand_ins(monkeypatch, tmp_path):
         s.answers.append(real_verdict(record, tokens_equal, **kw) if s.verdicts is None else s.verdicts[min(len(s.answers), len(s.verdicts) - 1)])
         return s.answers[-1]
 
+    def collect(generation=2):
+        assert generation == 2, "main asks for a full collection"
+        s.collected.append(s.engine.llm.llm_engine.steps)
+        return 0
+
     for owner, name, value in [(source_identity, "precheck", lambda command, out=None: copy.deepcopy(SOURCE_IDENTITY)),
                                (va, "build_engine", build_engine), (va, "versions_doc", lambda eng: {"vllm": "stand-in"}),
                                (va, "sampling_params", lambda req, sampling: SimpleNamespace(max_tokens=int(req["max_tokens"]))),
                                (SV, "require", lambda llm, wl, target, out: dict(SERVED)),
                                (torch.cuda, "synchronize", lambda: None), (torch.cuda, "reset_peak_memory_stats", lambda: None),
+                               (gc, "collect", collect),
                                (commit, "git_head", lambda: None), (commit, "nvidia_smi_used_mib", lambda: None), (commit, "rss_kb", lambda: RSS),
                                (commit, "attach_of_record", attach_of_record), (commit, "binding_record", binding_record),
                                (commit, "commit_verdict", commit_verdict), (commit, "time", clock), (sys, "argv", list(ARGV))]:
@@ -494,6 +506,15 @@ def test_a_paired_commit_that_passes(tmp_path, stand_ins, capsys):
         ("commit_verdict", {"tokens_equal": True, "min_openings": 4, "declaration": said, "required_classes": CLASSES})]
     extra = sorted(n for n in os.environ if n not in stand_ins.environ and n not in ENVIRON)
     assert extra == [], "main wrote a name the fixture does not take back"
+
+
+def test_a_full_collection_is_asked_for_once_before_each_run(tmp_path, stand_ins, capsys):
+    """`main` asks the cyclic collector for a full collection before each run of a pair and at no other time: the six engine
+    steps of the two warm-ups, the control's and the committer's, are taken when the first is asked for, and a run's three
+    more at each later one."""
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and len(ended.rows()) == 4 and stand_ins.collected == [6, 9, 12, 15]
 
 
 def test_only_the_control_arm(tmp_path, stand_ins, capsys):
