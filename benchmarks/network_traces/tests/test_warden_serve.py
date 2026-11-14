@@ -1001,6 +1001,95 @@ def test_a_session_given_its_callers_listener_hands_it_to_serve_which_serves_on_
     held.close()
 
 
+def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_names_and_binds_none(
+        tmp_path, monkeypatch, capsys):
+    """`serve --listen-fd FD` through `main` and `serve` themselves, on the command `session` issues for a listener
+    its caller holds: `main` makes the socket FD names, and `serve` gives it to the relay's server. The relay, its
+    publisher, the stall probe and the process's preparation are stood in for, so nothing ticks: the relay here ends
+    once its handler has answered one connection. That connection is one made to the caller's listener before
+    `serve` started, the deployment and the line `serve` prints name the caller's port, and the caller's socket
+    still listens once `serve` has returned. With either link cut, the flag to the socket or the socket to the
+    server, `serve` binds `--listen`, which is the caller's own address and is taken."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    args, _, _ = _session(tmp_path, 1)
+    held = A.held_listener()
+    args.listen, args.listen_fd = held.getsockname(), os.dup(held.fileno())
+
+    class Started(Exception):
+        pass
+
+    def popen(argv, **kw):
+        raise Started(argv, kw)
+
+    monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=popen, PIPE=None))
+    with pytest.raises(Started) as started:
+        ws.rehearse(args)
+    serve, kw = started.value.args
+    assert kw["pass_fds"] == (args.listen_fd,)
+
+    public, got = ws.cs.signer(tmp_path / "key", 4).public_key(), []
+
+    class Publisher:
+        """`PublisherProcess` with no process: the key's public half, and nothing published."""
+
+        usage = feeder = None
+        process = types.SimpleNamespace(pid=None)
+
+        def __init__(self, *a, **kw) -> None:
+            self.key = public
+
+        def __call__(self, *a) -> None:
+            pass
+
+        withhold = release = lengths = __call__
+
+        def close(self) -> list:
+            return []
+
+    class Relay:
+        """The relay's stand-in: its run ends once its handler has answered one connection."""
+
+        run_id, lateness, log, ordinals, refused, refused_windows, ticks, releases = bytes(16), [], [], 0, 0, set(), 0, []
+
+        def __init__(self, *a, **kw) -> None:
+            self.answered = asyncio.Event()
+
+        async def handle(self, reader, writer) -> None:
+            got.append(await reader.readexactly(5))
+            writer.write(b"served")
+            await writer.drain()
+            writer.close()
+            self.answered.set()
+
+        async def run(self) -> None:
+            await self.answered.wait()
+
+    monkeypatch.setattr(ws, "PublisherProcess", Publisher)
+    monkeypatch.setattr(ws, "Warden", Relay)
+    monkeypatch.setattr(ws, "prepare_process", lambda params: {})
+    monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
+    monkeypatch.setattr(ws.ar, "_quiet_runtime", lambda: None)
+    for name in ("PYTHONMALLOC", ws.C_ALLOCATOR):
+        monkeypatch.delenv(name, raising=False)
+    early = socket.create_connection(held.getsockname())
+    early.sendall(b"early")
+    capsys.readouterr()
+    assert ws.main(serve[2:]) == 0
+    assert got == [b"early"] and early.recv(6) == b"served"
+    a = ws.parser().parse_args(serve[2:])
+    said = json.loads(capsys.readouterr().out.splitlines()[0])
+    assert said["listening"] == list(held.getsockname())
+    assert json.loads((a.out / "deployment.json").read_text())["listen"] == list(held.getsockname())
+    with socket.create_connection(held.getsockname()) as late:
+        late.sendall(b"late")
+        conn, _ = held.accept()
+        assert conn.recv(4) == b"late"
+        conn.close()
+    early.close()
+    held.close()
+
+
 def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_which(tmp_path):
     """A session stops at its last execution phase's end and cuts what is open, and the records say what each was. One
     admitted at bucket s with s + D inside the run and no room to end (the first bucket past windows · T − span − 1)
