@@ -11,3 +11,8 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 
 [modules]
 "adapters.vllm.tests.engine.int8_kscale_gpu" = "benchmarks.ppl.int8_kscale_gpu"
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]
