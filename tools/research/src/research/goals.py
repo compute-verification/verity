@@ -16,6 +16,11 @@
                                              # what they wait on or titled past ten words; each line names its fix;
                                              # exit 1 when anything is found
                                              # (goals_audit.py)
+  research goals blockers [--owner LANE ...] [--top N] [--since DUMP] [--from FILE.json] [--now TIME] [--json]
+                                             # the open goals with a blockers text, ranked by the tier-1 goals and then
+                                             # all open goals waiting on each; --since DUMP (a file or an art: id, as
+                                             # `research velocity` reads) says which are standing, new, changed or
+                                             # cleared since (goals_blockers.py)
 
 The plan is one graph of goals. A goal is an outcome with one owner: a headline for a title (three to six plain words,
 no number; the writing-goals skill has the rule), a due date, a day meaning its end or a time with its offset such as
@@ -191,6 +196,13 @@ def main(argv: list[str], route: Route | None = None) -> int:
     au.add_argument("--from", dest="file", metavar="FILE.json", help="a saved `research goals show --json` instead of the page")
     au.add_argument("--now", metavar="TIME", help="the time to audit at, with its offset (default: now)")
     au.add_argument("--json", action="store_true")
+    bl = sub.add_parser("blockers", help="the open goals with a blockers text, ranked by what waits on each (goals_blockers.py)")
+    bl.add_argument("--owner", action="append", default=[], metavar="LANE", help="only this lead's goals; repeat for more")
+    bl.add_argument("--top", type=int, default=20, metavar="N", help="print the first N (default 20)")
+    bl.add_argument("--since", metavar="DUMP", help="an earlier dump of the page: a file (.json or .json.gz) or an art: id")
+    bl.add_argument("--from", dest="file", metavar="FILE.json", help="a saved `research goals show --json` instead of the page")
+    bl.add_argument("--now", metavar="TIME", help="the time to read at, with its offset (default: now)")
+    bl.add_argument("--json", action="store_true", help="the rows in full, with the tier-1 goals above each")
     ns = p.parse_args(argv)
     route = route or Route(ns.url)
     try:
@@ -198,15 +210,32 @@ def main(argv: list[str], route: Route | None = None) -> int:
             goals = route.call()
             print(json.dumps(goals, indent=1, ensure_ascii=False) if ns.json else show(goals))
             return 0
-        if ns.cmd == "audit":
-            from . import goals_audit
-
+        if ns.cmd in ("audit", "blockers"):
             goals = json.loads(Path(ns.file).read_text()) if ns.file else route.call()
             if not isinstance(goals, list):
                 raise SlackError(f"{ns.file}: expected a JSON list of goals, as `research goals show --json` prints")
             now = datetime.fromisoformat(ns.now) if ns.now else datetime.now(UTC)
             if now.tzinfo is None:
                 raise SlackError(f"--now {ns.now}: give its offset, as in 2026-11-05T10:00-08:00")
+        if ns.cmd == "blockers":
+            from . import goals_blockers, velocity
+
+            found = goals_blockers.rows(goals, now, ns.owner)
+            moved, source = None, ""
+            if ns.since:
+                try:
+                    earlier = velocity.load(ns.since)
+                except velocity.Unread as e:
+                    raise SlackError(str(e)) from None
+                moved = goals_blockers.since(found, goals, earlier["goals"], ns.owner)
+                source = f"{earlier['source']} (taken {velocity.pst(earlier['taken'])})"
+            total, shown = goals_blockers.summary(found), found[:max(ns.top, 0)]
+            print(json.dumps({"now": now.isoformat(), "rows": shown, "summary": total} | ({"since": moved, "source": source} if moved is not None else {}),
+                             indent=1, ensure_ascii=False) if ns.json else goals_blockers.render(shown, total, moved, source))
+            return 0
+        if ns.cmd == "audit":
+            from . import goals_audit
+
             leads = goals_audit.findings(goals, now, ns.owner)
             leads = {o: v for o, v in leads.items() if not ns.owner or o in ns.owner}
             print(json.dumps({"now": now.isoformat(), "leads": leads, "counts": goals_audit.tally(leads)}, indent=1, ensure_ascii=False)

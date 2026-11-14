@@ -49,6 +49,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -1040,6 +1041,8 @@ def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_tak
 
 SID = "s20261026T221500Z-ab12"
 GATE = "ssh -i KEY -o BatchMode=yes research@gate"
+#: the challenger host's address as the environment holds it (VY_CHALLENGER_1_HOST), here a documentation address
+CHALLENGER_HOST = "192.0.2.21"
 
 
 def _h1_serve_dir(tmp_path: Path, coin_source: str = "challenger", tied: bool = True) -> Path:
@@ -2619,7 +2622,8 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
            "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
-           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0"}
+           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0",
+           "VY_CHALLENGER_1_HOST": CHALLENGER_HOST}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -3396,9 +3400,10 @@ PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager
 def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
     """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
     record, runs served_compare.py with no GPU on the serve dir, the row of record, V3C's class, Pearl+'s scheme, PRED and
-    the row's Build of record, against W in pearlplus/w<k>/: its verdicts in the serve dir's served-compare/, copied to
-    $OUT, its lines published (W's path naming no window) and its exit the step's. One that dies before a verdict says
-    NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without PEARLPLUS_TIE it isn't run."""
+    the row's Build of record, against W in pearlplus/w<k>/, at the run's REV: its verdicts in the serve dir's
+    served-compare/, copied to $OUT, its lines published (W's path naming no window) and its exit the step's. One that
+    dies before a verdict says NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without
+    PEARLPLUS_TIE it isn't run."""
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
@@ -3411,7 +3416,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     rc = {"unequal": 1, "died": 2}.get(case, 0)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
-           **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
+           "REV": "ccf98f3652864935e2973dd22fe15fffd514f865", **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
     run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "served-compare", "7"], cwd=tree, env=env,
                          check=False, capture_output=True, text=True)
     lines = run.stdout.splitlines()
@@ -3425,7 +3430,8 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     assert re.fullmatch("[0-9a-f]{128}:[0-9a-f]{128}", at.pop("--of-record"))
     assert (called["cuda"], at) == ("", {
         "--serve": str(d), "--row": PEARL_ROW, "--class": W63K4, "--pearl-tables": "pearl-c-h100-v1-h3",
-        "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare"})
+        "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare",
+        "--revision": "ccf98f3652864935e2973dd22fe15fffd514f865"})
     published = tmp_path / "out" / "served-compare" / "served_compare.json"
     if case == "died":
         assert (run.returncode, lines) == (2, ["SERVED-COMPARE: NOT EQUAL (served_compare.py exit 2: served_compare.py: died "
@@ -3470,7 +3476,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     _rc, default = _serve_argv(tmp_path / "default", {k: v for k, v in {**PEARL_TIES, **cubin}.items()
                                                       if k != "PEARLC_CHALLENGER_GATE"})
     assert default[default.index("--challenger-gate") + 1] == (
-        f"ssh -i {tmp_path / 'default'}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84")
+        f"ssh -i {tmp_path / 'default'}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@{CHALLENGER_HOST}")
     assert (default[default.index("--challenger-peer") + 1], default[default.index("--challenger-lane") + 1]) == (
         "vy-dc-h200", "vllm")
 
@@ -4673,8 +4679,9 @@ print(json.dumps({"pinned": "c0" * 20, "pin": {"on": "remote"},
 def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3cs_audit_ran(tmp_path):
     """`served_verdicts.sh gate-compose PIECES VERDICT HOST` on a deferral's serve dir (its follow-on's copy, V3c's audit
     there) writes the hand-off at the settings the deferral recorded, not the environment's, HOST where V3c's audit ran,
-    and sends it to the compose gate. Without HOST where the serve dir holds V3c's audit, or with a setting other than
-    the deferral's, it is refused and sends nothing."""
+    and sends it to the compose gate. Without HOST where the serve dir holds V3c's audit, with a setting other than
+    the deferral's, or on the default gate command while VY_AUDITOR_2_HOST, the compose node's address, is unset, it is
+    refused and sends nothing."""
     verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
     (tmp_path / "served-out" / "record").mkdir(parents=True)
     (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
@@ -4701,6 +4708,10 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
     assert gate_compose("clash", "cpu-6", K="8") == (3, [
         "GATE-COMPOSE refused: the hand-off is written at the deferral's settings (the serve dir's "
         "private/deferred/deferred.env), and the environment sets another K: unset it"])
+    assert gate_compose("no-address", "cpu-6", COMPOSE_GATE="") == (3, [
+        "PREFLIGHT: VY_AUDITOR_2_HOST is unset, the address of the host the default gate command reaches (ssh -i "
+        f"{tmp_path}/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@): set it, or give the gate's "
+        "whole command"])
     assert not seen.exists() and not dc.exists()
     assert gate_compose("out", "cpu-6") == (0, [
         HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
@@ -5012,6 +5023,10 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 
 IDS = "--protocol ids --id-payload 503"
+#: the runner's refusal of a front in front of an endpoint that is off the id form
+OFF_IDS = ("PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under "
+           f"SERVE_ARGS='{IDS}'")
+SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 
 
 @pytest.mark.parametrize("load, front, takes, serve_args, line", [
@@ -5021,8 +5036,7 @@ IDS = "--protocol ids --id-payload 503"
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
                                                              "tree's certifier front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
-    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
-     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", OFF_IDS),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
         tmp_path, load, front, takes, serve_args, line):
@@ -5035,6 +5049,50 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+SESSION = {"LOAD": "session", "CERTIFIER_FRONT": FRONT + " --session --client-port 18191 --windows 8",
+           "LOAD_CMD": "the-callers-load", "CERTIFIER_CLOSE": SESSION_CLOSE, "SERVE_ARGS": IDS}
+SESSION_TAKES = "--gate --warmup --bucket-ms --session --client-port --windows"
+NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens "
+              "(certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes "
+              "(certifier_piece.py close), and {} is unset")
+
+
+@pytest.mark.parametrize("env, takes, line", [
+    (SESSION, SESSION_TAKES, None),
+    ({**SESSION, "CERTIFIER_FRONT": ""}, SESSION_TAKES, NO_SESSION.format("CERTIFIER_FRONT")),
+    ({**SESSION, "LOAD_CMD": ""}, SESSION_TAKES, NO_SESSION.format("LOAD_CMD")),
+    ({**SESSION, "CERTIFIER_CLOSE": ""}, SESSION_TAKES, NO_SESSION.format("CERTIFIER_CLOSE")),
+    ({**SESSION, "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
+     "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no "
+     "--session, so its front would send a group of its own"),
+    (SESSION, "--gate --warmup --bucket-ms --client-port --windows",
+     "PREFLIGHT: CERTIFIER_FRONT passes --session, which this tree's certifier front doesn't take"),
+    ({**SESSION, "SERVE_ARGS": ""}, SESSION_TAKES, OFF_IDS),
+    ({**SESSION, "LOAD": "varied", "CERTIFIER_CLOSE": "", "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
+     "PREFLIGHT: LOAD_CMD is LOAD=session's, and LOAD is varied: unset it"),
+    ({**SESSION, "LOAD": "fixed", "LOAD_CMD": "", "CERTIFIER_FRONT": ""}, SESSION_TAKES,
+     "PREFLIGHT: CERTIFIER_CLOSE is LOAD=session's, and LOAD is fixed: unset it"),
+    ({**SESSION, "LOAD": "front", "LOAD_CMD": "", "CERTIFIER_CLOSE": ""}, SESSION_TAKES,
+     "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is "
+     "front, which sends none through it: LOAD=session, or a front without --session"),
+], ids=["a session", "no front", "no load", "no close", "a front without --session", "a tree whose front takes none",
+        "an endpoint off the id form", "a load under varied", "a close under fixed", "a session's front under front"])
+def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_load(tmp_path, env, takes, line):
+    """LOAD=session starts only with its three commands, a front that passes ``--session`` and that this tree's
+    front takes, on an endpoint in the id form; under every other LOAD a session's load, its close and a front that
+    passes ``--session`` are each refused, so no run of another load starts a relay session."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
+                        env={"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
+                             "OUT": str(tmp_path / "out"), **env}).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
 
@@ -5804,7 +5862,8 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
 
 def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
-    under a no-op `sleep`: the exit status and that argv."""
+    under a no-op `sleep`, the challenger host's address in its environment: the exit status and that argv (none when
+    serve-openai wasn't started)."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
@@ -5816,10 +5875,46 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
-           "OUT": str(tmp_path / "out"), **env}
+           "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
-    return rc, (tmp_path / "argv").read_text().splitlines()
+    return rc, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
+
+
+NO_HOST = ("PREFLIGHT: VY_CHALLENGER_1_HOST is unset, the address of the host the default gate command reaches (ssh -i "
+           "{home}/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@): set it, or give the gate's "
+           "whole command")
+
+
+@pytest.mark.parametrize("env", [{}, {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_KERNEL": "pearl_c_sm90",
+                                      "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}], ids=["h1", "pearlplus"])
+def test_a_serve_on_the_lanes_default_gate_reads_the_challenger_hosts_address_from_the_environment(tmp_path, env):
+    """No file holds the challenger host's address: the lane's default gate command (H1_GATE's under h1,
+    PEARLC_CHALLENGER_GATE's under pearlplus) is research@ the address VY_CHALLENGER_1_HOST holds, and with it unset the
+    serve is refused by the variable's name before serve-openai starts. A gate given whole, or none, reads no address."""
+    rc, argv = _serve_argv(tmp_path / "held", env)
+    assert rc == 10 and argv[argv.index("--challenger-gate") + 1].endswith(f" research@{CHALLENGER_HOST}"), (rc, argv)
+    rc, argv = _serve_argv(tmp_path / "unset", {**env, "VY_CHALLENGER_1_HOST": ""})
+    assert (rc, argv) == (3, [])
+    said = (tmp_path / "unset" / "out" / "verdicts.txt").read_text().splitlines()
+    assert said == [NO_HOST.format(home=tmp_path / "unset")]
+    name = "PEARLC_CHALLENGER_GATE" if env else "H1_GATE"
+    for gate in (GATE, ""):
+        rc, argv = _serve_argv(tmp_path / f"given-{bool(gate)}", {**env, name: gate, "VY_CHALLENGER_1_HOST": ""})
+        assert rc == 10 and ("--challenger-gate" in argv) == bool(gate), (rc, argv)
+        assert not gate or argv[argv.index("--challenger-gate") + 1] == GATE
+
+
+def test_the_preflight_refuses_a_run_on_the_lanes_default_gate_without_the_challenger_hosts_address(tmp_path):
+    """The run that serves asks the gate before it leases the card, so its preflight refuses the lane's default gate
+    command while VY_CHALLENGER_1_HOST is unset, and passes with it; V3c alone on a kept serve dir asks no gate and runs
+    without the address."""
+    rc, lines, order, _limits = _v3c(tmp_path / "unset", (), PREFLIGHT_ONLY="1", H1_GATE=None, VY_CHALLENGER_1_HOST=None)
+    assert (rc, lines, order) == (3, [NO_HOST.format(home=tmp_path / "unset")], [])
+    rc, lines, order, _limits = _v3c(tmp_path / "held", (), PREFLIGHT_ONLY="1", H1_GATE=None)
+    assert (rc, order) == (0, []) and lines[0].startswith("PREFLIGHT passed"), lines
+    rc, lines, _order, _limits = _v3c(tmp_path / "v3c", H1_GATE=None, VY_CHALLENGER_1_HOST=None)
+    assert not [line for line in lines if "VY_CHALLENGER_1_HOST" in line], lines
 
 
 @pytest.mark.parametrize("env, budget", [
@@ -5854,6 +5949,162 @@ def test_serve_openai_declares_the_day_only_under_day(tmp_path, env, flags):
     rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
     assert rc == 10 and [x for x in argv if x.startswith("--day")] == flags[::2], (rc, argv)
     assert all(argv[argv.index(f) + 1] == v for f, v in zip(flags[::2], flags[1::2]))
+
+
+def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh serve` in a toy tree whose venv python stands in for every command the runner issues through
+    it: serve-openai listens with one window closed and sealed and holds until the runner stops it, the load answers
+    each of its 4 requests, the weights' registration refuses, the certifier's front under ``--session`` leaves an open
+    relay session in the serve dir (or, with FRONT_REFUSES set, exits 2 and leaves none), its close keeps a fetch
+    beside it (exit 2 with none open) and every other command exits 0. The exit status, each
+    command issued through that python in order and the lines the runner published, ``TMP`` for ``tmp_path`` in both.
+    The runner's `sleep` returns once the endpoint listens, so nothing here waits on a clock."""
+    tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    session = tmp_path / "serve" / "private" / "certifier" / "run-1"
+    for d in (tree / "adapters" / "vllm", bin_, venv):
+        d.mkdir(parents=True)
+    for fifo in ("ready", "hold"):
+        os.mkfifo(tmp_path / fifo)
+    python = (f"printf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
+              "case \"$*\" in\n"
+              f"  '-c '*) echo {RELEASE_RUN}; exit 0 ;;\n"
+              "  *'verity_vllm.pipeline.cli serve-openai'*)\n"
+              f"    echo $$ > {tmp_path}/pid\n"
+              "    while [ $# -gt 0 ]; do [ \"$1\" = --out ] && d=$2; shift; done\n"
+              "    echo '{}' > \"$d/windows.jsonl\"; echo '{}' > \"$d/seals.jsonl\"\n"
+              "    echo 'SERVE-OPENAI listening'\n"
+              f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
+              "  *serve_load.py*) echo '4/4 ok'; exit 0 ;;\n"
+              "  *weights-registration*) exit 1 ;;\n"
+              "  *'certifier_piece.py front '*' --session '*)\n"
+              "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
+              f"    mkdir -p {session} && echo '{{}}' > {session}/relay.json ;;\n"
+              f"  *'certifier_piece.py close '*) [ -f {session}/relay.json ] || exit 2; : > {session}/fetch.tar.gz ;;\n"
+              "  *) exit 0 ;;\n"
+              "esac")
+    for path, body in ((venv / "python", python), (bin_ / "sleep", f"[ -e {tmp_path}/up ] || read _ < {tmp_path}/ready")):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
+    try:
+        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                            capture_output=True).returncode
+    finally:  # an endpoint the runner left up is ended here, by its own pid and only while it is still that stand-in
+        pid = int((tmp_path / "pid").read_text()) if (tmp_path / "pid").is_file() else None
+        with contextlib.suppress(OSError):
+            if pid and str(venv / "python").encode() in Path("/proc", str(pid), "cmdline").read_bytes():
+                os.kill(pid, signal.SIGKILL)
+    said = tmp_path / "out" / "verdicts.txt"
+    return rc, *(f.read_text().replace(str(tmp_path), "TMP").splitlines() if f.is_file() else []
+                 for f in (tmp_path / "calls", said))
+
+
+RELEASE_RUN = "5e" * 16
+#: what `served_verdicts.sh serve` issues through the venv's python at its defaults with H1 off, in order: the endpoint,
+#: the weights' registration, the load's release run and the load; a front's call and its line come before the load
+SERVE_OPENAI = (
+    "-m verity_vllm.pipeline.cli serve-openai --model verity-int8/Llama-3.2-1B-INT8 --revision "
+    "15b0976d400d796ee589e7737d03a919526bf800 --out TMP/serve --port 18190 --precision verity_int8 --run-id local "
+    "--scheme rows-sha512 --seal --max-num-batched-tokens 512 --window-steps 256 --required-manifest "
+    "TMP/serve/predicted/manifest.json --hidden-so "
+    "/workspace/research/vllm-composed-h200int8/fa2/build/fa3_matReqG/verity_fa3_matReqG.so --norm-tap-so "
+    "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_norm_tap.so --tap-cap-mb 2048 --admit "
+    "release-order --window-requests 4 --max-model-len 512 --window-gb 32 --disk-floor-gb 100 --seal-hold-gb 32 "
+    "--seal-warm-gb 0")
+WEIGHTS_REGISTRATION = (
+    "benchmarks/prove_path/prove_path.py weights-registration --serve-run TMP/serve --checkpoint-dir "
+    "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
+    "--key TMP/serve/private/weights.key --out TMP/serve/weights_registration.json --deployment-record "
+    "TMP/serve/deployment-registration.json")
+NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
+SERVE_LOAD = ("TMP/tree/demos/vllm/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 {load} "
+              f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
+VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
+FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")
+REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --gate local'
+FRONT_CALL = "benchmarks/network_traces/certifier_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
+FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
+SAID_UP = ["SERVE SERVE-OPENAI listening",
+           "NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free "
+           "(weights-registration exit 1: )"]
+SAID_FRONT = ["CERTIFIER-FRONT (exit 0): "]
+SAID_LOAD = [f"REQUESTS (exit 0, release run {RELEASE_RUN}): every request answered",
+             "TIMINGS: no TMP/serve/load.timings.json"]
+SAID_STOPPED = ["SERVE stopped (exit 143): every closed window sealed"]
+
+
+#: each LOAD the runner had before a session's, with and without a rehearsal's front: its settings, what the serve step
+#: issues after the endpoint and the weights' registration, and what it says between coming up and stopping
+LOADS = pytest.mark.parametrize("env, issued, said", [
+    ({}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
+    ({"LOAD": "varied"}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
+    ({"LOAD": "fixed"}, [NEW_RELEASE_RUN, FIXED_LOAD], SAID_LOAD),
+    ({"LOAD": "front", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE], SAID_FRONT),
+    ({"CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, VARIED_LOAD], SAID_FRONT + SAID_LOAD),
+    ({"LOAD": "fixed", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, FIXED_LOAD],
+     SAID_FRONT + SAID_LOAD),
+], ids=["default", "varied", "fixed", "front", "varied behind a rehearsal's front", "fixed behind a rehearsal's front"])
+
+
+@LOADS
+def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path, env, issued, said):
+    """Under LOAD varied (the default), fixed and front, with and without a rehearsal's front, the serve step issues
+    through the venv's python exactly these commands in this order and publishes exactly these lines: the endpoint, the
+    weights' registration, the front's call and its line where one is set, the load's release run and the load. A change
+    to the runner that alters one of them under these loads fails here."""
+    rc, calls, lines = _serve_calls(tmp_path, env)
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert lines == SAID_UP + said + SAID_STOPPED
+
+
+def _notes(tmp_path: Path, what: str, rc: int = 0) -> str:
+    """A caller's command that notes ``what`` and its arguments beside the commands `_serve_calls` returns, then exits
+    ``rc``."""
+    return f'echo "{what}: $*" >> {tmp_path}/calls; exit {rc}'
+
+
+@LOADS
+def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_path, env, issued, said):
+    """A run that isn't LOAD=session starts no relay session's command: with a session's load and close named in its
+    environment (which the preflight refuses), the serve step runs neither, calls the certifier's piece only where the
+    caller's own rehearsal front does, and issues and says what it does without them."""
+    rc, calls, lines = _serve_calls(tmp_path, {**env, "LOAD_CMD": _notes(tmp_path, "a session's load"),
+                                               "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert lines == SAID_UP + said + SAID_STOPPED
+    assert not [c for c in calls if "--session" in c or "certifier_piece.py close" in c or "a session's" in c]
+    assert sum("certifier_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
+
+
+SESSION_FRONT = REHEARSAL_FRONT + " --session --client-port 18191 --windows 8"
+SESSION_FRONT_CALL = FRONT_CALL + " --session --client-port 18191 --windows 8"
+CLOSE_CALL = "benchmarks/network_traces/certifier_piece.py close TMP/serve TMP/serve/private/certifier-front"
+CALLERS_LOAD = "the caller's load: TMP/serve/private/certifier/run-1/relay.json TMP/serve"
+SAID_SENT = ("REQUESTS (exit {rc}): the caller's load, sent through the network certifier's relay session (the serve "
+             "dir's load.log, on the node)")
+
+
+@pytest.mark.parametrize("extra, load_rc, rc, issued, said", [
+    ({}, 0, 0, [SESSION_FRONT_CALL, CALLERS_LOAD, CLOSE_CALL, FRONT_LINE],
+     [SAID_SENT.format(rc=0), "CERTIFIER-FRONT (exit 0): "]),
+    ({}, 5, 1, [SESSION_FRONT_CALL, CALLERS_LOAD, CLOSE_CALL, FRONT_LINE],
+     [SAID_SENT.format(rc=5), "CERTIFIER-FRONT (exit 0): "]),
+    ({"FRONT_REFUSES": "1"}, 0, 1, [SESSION_FRONT_CALL, CLOSE_CALL, FRONT_LINE],
+     ["REQUESTS: none sent: the front opened no relay session (exit 2)", "CERTIFIER-FRONT (exit 2): "]),
+], ids=["a session", "the caller's load fails", "the front opens no session"])
+def test_a_sessions_serve_step_runs_the_callers_load_between_the_front_and_the_close_and_sends_none_itself(
+        tmp_path, extra, load_rc, rc, issued, said):
+    """Under LOAD=session the serve step calls the front, which opens the relay session, then the caller's load with
+    the open session's relay.json and the serve dir, then the close, whose exit the CERTIFIER-FRONT line says; it
+    makes no release run and sends no load of its own. A load that fails fails the step after the close has run; a
+    front that opened no session runs no load, and the close still says why."""
+    got, calls, lines = _serve_calls(tmp_path, {"LOAD": "session", "CERTIFIER_FRONT": SESSION_FRONT,
+                                                "LOAD_CMD": _notes(tmp_path, "the caller's load", load_rc),
+                                                "CERTIFIER_CLOSE": SESSION_CLOSE, **extra})
+    assert got == rc and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (got, calls)
+    assert lines == SAID_UP + said + SAID_STOPPED
+    assert not [c for c in calls if "serve_load.py" in c or c == NEW_RELEASE_RUN]
 
 
 class _Response:
