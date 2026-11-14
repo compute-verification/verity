@@ -21,9 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 
@@ -31,17 +29,12 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.warden import REFUSED, Released, WardenParams
 
+from verity.protocols.accounting.certifier.device.tests import verdict_records as TSV
 from verity.protocols.accounting.certifier.device.tests.relay_runs import _run, ws
 from verity.protocols.accounting.certifier.device import connection_rows_run, runner_parts as rp
 from verity.protocols.accounting.certifier.verifier import link_frame, warden_rows as WR
 from verity.protocols.accounting.certifier.verifier import (connection_rows_check as CRC, record_files as RF,
     relay_check as RC)
-
-_tsv = importlib.util.spec_from_file_location(
-    "test_stop_verdicts",
-    Path(__file__).resolve().parents[2] / "prover/tests/test_stop_verdicts.py")
-TSV = importlib.util.module_from_spec(_tsv)
-_tsv.loader.exec_module(TSV)
 
 crr = connection_rows_run
 #: the reader of the registrations' file, and its tests' records
@@ -299,7 +292,7 @@ def test_the_check_refuses_rows_that_arent_the_runs(tmp_path):
     assert "execution phase 0's connection rows aren't its records' releases" in refused(out, other_id)
 
 
-def answer(tmp, file, registrations: list[dict]) -> TSV.LB.Stop:
+def answer(tmp, file, registrations: list[dict]) -> SV.Stop:
     """The reader's answer (`stop_verdicts.of_runs`) on a run that holds the registrations' file as the check left
     it at `file`, or none where it left none, with the four verdicts of every class of each of `registrations`'
     heads, their verifiers' controls and the serve's registrations."""
