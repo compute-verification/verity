@@ -670,15 +670,15 @@ def test_a_run_on_a_machine_that_limits_sessions_needs_a_limit_of_its_own(tmp_pa
     ssh.service, which has no per-run limit. The machine's session-.scope.d MemoryMax is the
     limit a run expects; a run with no finite memory.max, or in a service's cgroup, has none of its own. A machine without the drop-in
     asks nothing."""
-    from research.telemetry.cgroup import session_cap, uncapped
+    from research.telemetry.cgroup import session_limit, uncapped
 
     drop = tmp_path / "session-.scope.d"
-    assert session_cap(drop) is None
+    assert session_limit(drop) is None
     drop.mkdir()
     (drop / "50-vy-job-memory.conf").write_text("# a comment\n[Scope]\nMemoryMax=900G\nMemorySwapMax=0\n")
-    assert session_cap(drop) == "900G"
+    assert session_limit(drop) == "900G"
     (drop / "60-off.conf").write_text("[Scope]\nMemoryMax=infinity\n")
-    assert session_cap(drop) is None, "the last one systemd reads wins"
+    assert session_limit(drop) is None, "the last one systemd reads wins"
     (drop / "60-off.conf").unlink()
 
     session = {"path": "/user.slice/user-1001.slice/session-9.scope", "memory_max_kind": "finite", "memory_max_bytes": 900 << 30}
@@ -695,7 +695,7 @@ def test_tele_run_never_starts_a_workload_without_its_memory_limit(tmp_path, mon
     """The guard runs before the spawn: status failed with the reason, a no_memory_limit mark, exit 75, and the workload never ran."""
     from research.telemetry import run as trun
 
-    monkeypatch.setattr(trun, "session_cap", lambda: "900G")
+    monkeypatch.setattr(trun, "session_limit", lambda: "900G")
     monkeypatch.setattr(trun.Cgroup, "limits", lambda self: {"path": "/system.slice/ssh.service", "memory_max_kind": "finite"})
     ran = tmp_path / "ran"
     d = tmp_path / "a"

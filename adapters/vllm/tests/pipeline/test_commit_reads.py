@@ -1,7 +1,7 @@
 """`verity_vllm.pipeline.commit` on records that leave a block out: the stop rule of record over versions that record no engine
-arguments, the summary over an instrumented run with no Commit record, and the readers `main` reads a workload, a stop rule of
-record, a collector's extra, a run's Commit record, an oracle compare and the versions through, and the engine's schedule of
-record where the collector recorded no request rows.  A block that is absent, null, empty or zero reads alike: each is tested
+arguments or a workload whose file is gone, the summary over an instrumented run with no Commit record, and the readers `main`
+reads a workload, a stop rule of record, a collector's extra, a run's Commit record, an oracle compare and the versions through,
+and the engine's schedule of record where the collector recorded no request rows.  A block that is absent, null, empty or zero reads alike: each is tested
 for its truth.  The stand-in engine, the workload and the rows are `test_commit_main.py`'s.  CPU only."""
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from tests.pipeline.test_commit_main import (
 )
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import commit
+from verity_vllm.records.workload import Workload
 
 ABSENT = "<absent>"
 #: what stands in a block's place where a record has none: the block left out, null, and each empty or zero value
@@ -64,6 +65,19 @@ def test_an_engine_that_resolved_another_scheduling_is_named_and_the_lag_is_left
     rule = stop_rule(tmp_path, {"engine_kwargs": {"async_scheduling": False}})
     assert rule == {**STOP_RULE, "lag": None, "engine_lag": 0, "async_scheduling": False, "notes": [OTHER_SCHEDULER]}
     assert capsys.readouterr().out.splitlines() == [f"[delta] {OTHER_SCHEDULER}"]
+
+
+def test_a_workload_whose_file_is_gone_declares_no_stop_rule_and_says_why(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / "workload.json").write_text(json.dumps(WORKLOAD))
+    wl = va.load_workload(tmp_path / "workload.json")
+    (tmp_path / "workload.json").unlink()
+    with pytest.raises(FileNotFoundError) as raised:
+        Workload.load(wl["source"])
+    unavailable = f"stop rule of record unavailable ({raised.value!r}): early-stopped requests fail by name"
+    rule = commit.stop_rule_of_record(engine(Clock()), wl, {"engine_kwargs": {"async_scheduling": True}})
+    assert rule == {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "async_scheduling": None, "notes": [unavailable],
+                    "srule": None}
+    assert capsys.readouterr().out.splitlines() == [f"[delta] {unavailable}"]
 
 
 def summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows: list[Record]) -> Record:

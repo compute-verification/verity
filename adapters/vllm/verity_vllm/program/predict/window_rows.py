@@ -63,7 +63,7 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.check.replay.checks import check_rows
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS

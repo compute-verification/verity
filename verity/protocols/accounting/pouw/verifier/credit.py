@@ -382,8 +382,8 @@ BODY = ("the window's circuit's units are not its record's tiles: its root's nod
         "one (h1window.program's body)")
 #: a sampled proof block's proof outcome: the verifier's verdict for the session that proved it
 PROOF_KEYS = ("program", "registered", "unit", "verdict")
-PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier "
-               "of record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the "
+PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier"
+               "'s verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the "
                "circuit's descriptor it verified the session against, and registered its finding, each registered port's "
                "{value, root}, port and value printable ASCII and root a SHA-512 digest")
 LOG_FORM = "the round log is not a nonempty list"
@@ -448,7 +448,7 @@ LIVE_BODY = ("the window's live circuit's units are not its rounds: its root's n
              "calls of PouwLiveSlots_v2{T=…}, a composite of that id bound to its record's T alone, S its record's "
              "(circuit.live.program_v2's body)")
 LIVE_PROOFS_FORM = ("the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the "
-                    "verifier of record's verdict for round s's live@<s> session, unit s: verdict accept or reject, "
+                    "verifier's verdict for round s's live@<s> session, unit s: verdict accept or reject, "
                     "program the SHA-512 of the live descriptor, registered its finding")
 LIVE_PREFIX = ("the window's live Program's PREFIX is not its circuit's, so the tables its units read are not the "
                "window's: build the live Program under the window Program's PREFIX")
@@ -1757,7 +1757,7 @@ def _judged(layout: dict, c: int, reg: dict, got: list[PF.Finding], out: list[di
     start = sum(sizes[:c])
     for f in got:
         if not f.accepted:
-            return ("failed", f"call {c}'s session {f.session} was rejected by the verifier of record ({f.why}): a "
+            return ("failed", f"call {c}'s session {f.session} was rejected by the verifier ({f.why}): a "
                               "failed drawn unit refuses the whole window, not only its call (no partial credit, and "
                               "no retry)")
         pub = reg["ports"][PUB_PORT]
@@ -2084,8 +2084,8 @@ def _leaf_judged(ask: dict, got: list[PF.Finding], held: dict) -> tuple[str, str
     want = sorted((p, e["value"], e["root"]) for p, e in reg["ports"].items())
     for f in got:
         if not f.accepted:
-            return ("failed", f"drawn leaf {u}'s {ask['leaf']} session {f.session} was rejected by the verifier of "
-                              f"record ({f.why}): a failed statement refuses the whole window (no partial credit, and "
+            return ("failed", f"drawn leaf {u}'s {ask['leaf']} session {f.session} was rejected by the verifier"
+                              f" ({f.why}): a failed statement refuses the whole window (no partial credit, and "
                               "no retry)")
         if tuple(f.units) != (0,) or f.program != ask["partition"]["program"]:
             return ("proof", f"drawn leaf {u}'s {ask['leaf']} session {f.session} proved units {list(f.units)} of "
@@ -2167,7 +2167,7 @@ def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, windo
                     break
             got = V.lean("credit-verified", {**q, "runs": runs})
     except V.LeanError as e:
-        return None, ("proof", f"the Lean verifier of record could not judge the window's statements, so the window "
+        return None, ("proof", f"the Lean verifier could not judge the window's statements, so the window "
                                f"stays refused: {e}")
     return (None, tuple(got["refused"])) if "refused" in got else (got["outcomes"], None)
 
@@ -2404,8 +2404,8 @@ def _live_verified(files: Any, run: Run) -> Lived:
                 return None, (why[0], f"round {s}'s live@{s}: {why[1]}")
             for f in found:
                 if not f.accepted:
-                    return None, (LIVE, f"round {s}'s live@{s} session {f.session} was rejected by the verifier of "
-                                        f"record ({f.why}): its served rows m_s = {ms[s]} are not proved (no retry)")
+                    return None, (LIVE, f"round {s}'s live@{s} session {f.session} was rejected by the verifier"
+                                        f" ({f.why}): its served rows m_s = {ms[s]} are not proved (no retry)")
                 if tuple(f.units) != (s,):
                     return None, (LIVE, f"round {s}'s live@{s} session {f.session} proved units {list(f.units)}, not "
                                         f"unit {s}: round s's statement proves its own round's unit")
@@ -2466,7 +2466,7 @@ def _lean_live_verified(files: Any, entries: Any, run: Run) -> Lived:
                         break
                 got = V.lean("credit-live-verified", {**q, "runs": runs})
         except V.LeanError as e:
-            return None, (LIVE, f"the Lean verifier of record could not judge the window's live statements, so the "
+            return None, (LIVE, f"the Lean verifier could not judge the window's live statements, so the "
                                 f"window stays refused: {e}")
         return (None, tuple(got["refused"])) if "refused" in got else (got["outcomes"], None)
     return lived
@@ -2594,14 +2594,14 @@ def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: d
 
 def no_fixed_length(name: str) -> str:
     return (f"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, {{max_tokens, stop}}), so "
-            "its windows are not of record: a row of record serves each request's public max_tokens whatever it "
+            "its windows are not of record: a workload of record serves each request's public max_tokens whatever it "
             f"samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop "
             f"{Wd.STOP_FIXED}")
 
 
 def eos_keyed_row(name: str, stop: str) -> str:
     return (f"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {Wd.STOP_FIXED} (ignore_eos, "
-            "circuits' public-cap done source): a row of record is done only at each request's public max_tokens, "
+            "circuits' public-cap done source): a workload of record is done only at each request's public max_tokens, "
             "never at an EOS token")
 
 
@@ -2948,7 +2948,7 @@ def _lean_committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[s
     try:
         got = V.lean("credit-committed-files", {"ledger": ledger, "name": name})
     except V.LeanError as e:
-        return None, ("circuit", f"the Lean verifier of record could not read period {name}'s committed circuit files, "
+        return None, ("circuit", f"the Lean verifier could not read period {name}'s committed circuit files, "
                                  f"so the period earns nothing: {e}")
     return (None, tuple(got["refused"])) if "refused" in got else (got["files"], None)
 
@@ -3165,10 +3165,12 @@ def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> t
 
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
-    """The verdict of record on passes credited together: the Lean `PouwPearlPlus.passesDistinct`'s (Pearl+'s run
-    verdict reads it), which no interface here reaches yet, so this raises (`verifier.not_written`);
-    `passes_distinct_twin` is its Python twin."""
-    return V.not_written("passes_distinct", "PouwPearlPlus.passesDistinct")
+    """The verdict of record on passes credited together, (code, why) or None: Pearl+'s Lean
+    `PouwCheck.PearlPlus.passesDistinct`'s, the one its run verdict reads (`verifier.of_record` on ``passes-distinct``),
+    with `passes_distinct_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    why = passes_distinct_twin(passes)
+    said = V.of_record("passes-distinct", {"passes": passes}, None if why is None else {"refused": list(why)})
+    return None if said is None else tuple(said["refused"])
 
 
 def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,

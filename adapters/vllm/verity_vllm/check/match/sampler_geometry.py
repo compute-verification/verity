@@ -5,6 +5,8 @@ from __future__ import annotations
 import collections
 import re
 
+from verity_vllm.program.sampling_event import family_of
+
 _S_STATIC_RE = re.compile(r"[{,]S=(\d+)(?=[,}])")
 _TOPP_FAMILY = "GumbelTopPTokenSelect_v1"
 _SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the Const32[S] operand
@@ -142,7 +144,6 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     from verity.definitions.registry.sampling_vocab import SHARED_GREEDY
     from verity.definitions.registry.topp_geometry import registered_splits
 
-    from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)
     n_topp = 0

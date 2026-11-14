@@ -902,7 +902,7 @@ def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
 def test_the_commit_record_is_bound_under_calls_root():
     """The Commit record's digest is its format's tagged SHA-512 of its bytes (`registration.digest`), and `calls_root`
     binds it after the manifest and the served trees' digest, as vllm's `pouw_h1.calls_root` must, byte for byte."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
     d = cases.window_instance(random.Random("honest/bound"))
     raw = bytes.fromhex(d["commit"])
     (digest, _reg), _ = Cr.commit_of(d["commit"])

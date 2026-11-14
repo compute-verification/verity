@@ -17,8 +17,8 @@ balance_floor = 25
 exempt = ["vy-control-"]
 
 [budgets]
-"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4, by = "daniel 2026-09-23" }
-"vy-a-big-" = { cap_usd = 100, expires = 2026-09-24T20:00:00Z, max_pod_hours = 48 }
+"vy-a-" = { limit_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4, by = "daniel 2026-09-23" }
+"vy-a-big-" = { limit_usd = 100, expires = 2026-09-24T20:00:00Z, max_pod_hours = 48 }
 """
 
 
@@ -26,7 +26,7 @@ def test_a_file_parses_into_lines_and_guard_settings():
     b = B.parse(GOOD)
     assert b.project == ("vy",) and b.exempt == ("vy-control-",) and b.balance_floor == 25 and b.terminate_uncovered and b.uncovered_grace_min == 15
     a = b.lines["vy-a-"]
-    assert (a.cap_usd, a.max_pod_hours, a.by, a.expires) == (3.0, 4.0, "daniel 2026-09-23", T0 + 86400)
+    assert (a.limit_usd, a.max_pod_hours, a.by, a.expires) == (3.0, 4.0, "daniel 2026-09-23", T0 + 86400)
     assert b.lines["vy-a-big-"].expires == T0 + 86400, "a TOML datetime and an ISO string are the same expiry"
     assert a.live(T0) and not a.live(T0 + 86400)
 
@@ -40,11 +40,11 @@ def test_the_longest_prefix_covers_and_other_names_are_not_the_projects():
 
 
 @pytest.mark.parametrize("text, problem", [
-    ('[budgets]\n"vy-a-" = { cap = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }', "cap not a line key"),
-    ('[budgets]\n"vy-a-" = { cap_usd = 3, max_pod_hours = 4 }', "missing expires"),
-    ('[budgets]\n"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00", max_pod_hours = 4 }', "not ISO 8601 with a zone"),
-    ('[budgets]\n"vy-a-" = { cap_usd = -1, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }', "cap_usd is not a number"),
-    ('[budgets]\n"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 0 }', "max_pod_hours is not a positive"),
+    ('[budgets]\n"vy-a-" = { limit = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }', "limit not a line key"),
+    ('[budgets]\n"vy-a-" = { limit_usd = 3, max_pod_hours = 4 }', "missing expires"),
+    ('[budgets]\n"vy-a-" = { limit_usd = 3, expires = "2026-09-24T20:00", max_pod_hours = 4 }', "not ISO 8601 with a zone"),
+    ('[budgets]\n"vy-a-" = { limit_usd = -1, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }', "limit_usd is not a number"),
+    ('[budgets]\n"vy-a-" = { limit_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 0 }', "max_pod_hours is not a positive"),
     ('[guard]\nprojects = ["vy"]', "'projects' is not a setting"),
     ('[guard]\nterminate_uncovered = "yes"', "terminate_uncovered is not true or false"),
     ('[budget]\n', "unknown table or key 'budget'"),
@@ -78,7 +78,7 @@ def notes(tmp_path):
 def test_a_notes_clone_is_read_from_its_origin_so_only_a_pushed_line_counts(notes):
     b, where = B.load(notes)
     assert set(b.lines) == {"vy-a-", "vy-a-big-"} and "origin/main" in where
-    (notes / "budgets.toml").write_text(GOOD + '"vy-new-" = { cap_usd = 1, expires = "2026-09-24T20:00Z", max_pod_hours = 1 }\n')
+    (notes / "budgets.toml").write_text(GOOD + '"vy-new-" = { limit_usd = 1, expires = "2026-09-24T20:00Z", max_pod_hours = 1 }\n')
     assert "vy-new-" not in B.load(notes)[0].lines, "committed or not, a line nobody pushed is not a line"
     _git(notes, "commit", "-qam", "vy-new-")
     assert "vy-new-" not in B.load(notes)[0].lines
@@ -114,7 +114,7 @@ def test_the_gate_refuses_while_the_guard_cannot_refresh_its_budgets():
 
 def test_the_gate_refuses_a_name_no_line_covers_and_says_how_to_add_one():
     why = B.gate("vy-b-1-veritor-campaign", 1, guard_state(), T0)
-    assert "no budget line covers 'vy-b-1-veritor-campaign'" in why and '"vy-b-1-" = { cap_usd = 5' in why and "push it" in why
+    assert "no budget line covers 'vy-b-1-veritor-campaign'" in why and '"vy-b-1-" = { limit_usd = 5' in why and "push it" in why
 
 
 def test_the_gate_refuses_an_expired_or_spent_line_and_a_lease_past_its_max_age():
@@ -142,4 +142,27 @@ def test_read_guard_state_reads_a_local_file(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_GUARD_HOST", "local")
     monkeypatch.setenv("RESEARCH_GUARD_STATE", str(f))
     state, _clock = B.read_guard_state()
-    assert state["budgets"]["lines"]["vy-a-"]["cap_usd"] == 3.0
+    assert state["budgets"]["lines"]["vy-a-"]["limit_usd"] == 3.0
+
+
+OLD = GOOD.replace("limit_usd = 3,", "cap_usd = 3,").replace("limit_usd = 100,", "cap_usd = 100, cap_usd_per_day = 7,")
+
+
+def test_a_line_that_still_names_the_old_keys_is_read_as_the_new_ones():
+    b = B.parse(OLD)
+    assert (b.lines["vy-a-"].limit_usd, b.lines["vy-a-big-"].limit_usd, b.lines["vy-a-big-"].limit_usd_per_day) == (3.0, 100.0, 7.0)
+    assert b.old_keys == ("cap_usd", "cap_usd_per_day") and B.parse(GOOD).old_keys == ()
+    assert set(b.view()["lines"]["vy-a-"]) >= {"limit_usd", "limit_usd_per_day"} and "cap_usd" not in b.view()["lines"]["vy-a-"], \
+        "the view, which the guard writes into its state, names the new keys only"
+    both = B.parse(GOOD.replace("limit_usd = 3,", "limit_usd = 3, cap_usd = 9,"))
+    assert both.lines["vy-a-"].limit_usd == 3.0, "the new key wins over the old one"
+
+
+def test_the_gate_reads_a_state_an_older_guard_wrote_with_the_old_keys():
+    state = guard_state(vy_a={"spent": 3.0})
+    for ln in state["budgets"]["lines"].values():
+        ln["cap_usd"] = ln.pop("limit_usd")
+        ln["cap_usd_per_day"] = ln.pop("limit_usd_per_day")
+    assert B.limits(state["budgets"]["lines"]["vy-a-"]) == (3.0, None)
+    assert "at its limit ($3.00 of $3)" in B.gate("vy-a-1", 1, state, T0)
+    assert B.gate("vy-a-big-1", 5, state, T0) is None

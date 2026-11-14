@@ -1,4 +1,4 @@
-"""Stage 2 of the padded MoE: the complete small padded block.
+"""Phase 2 of the padded MoE: the complete small padded block.
 
 Four experts, top-1 AND top-2, the Program built before any route (`moe_pad.block`), every admitted route walked in full
 (`moe_pad.admitted_routes`: 4 at top-1, 12 ordered at top-2), each demonstrated on the reference evaluator (`serve3_reference.materialize`:

@@ -1,14 +1,15 @@
 """The recursion bench's numbers (``metrics.toml``): ``run.py run`` with its job wrapped so that the run records them.
 
-    python3 benchmarks/recursion_e2e/record.py run [run.py run's options]   one recorded run, as `run.py run` launches it
-    python3 benchmarks/recursion_e2e/record.py job KEY=VALUE...              the run's command: job.sh, then its numbers
+    uv run python benchmarks/recursion_e2e/record.py run [run.py run's options]   one recorded run, as `run.py run` launches it
+    python3 benchmarks/recursion_e2e/record.py job KEY=VALUE...                    the run's command: job.sh, then its numbers
 
 ``job`` runs job.sh with its arguments, forwarding a SIGTERM to it (job.sh then writes the result so far), and then, in a
 research run, writes `METRICS` from job.sh's result (``$OUT/recursion_e2e.json``) into the run's ``result.json`` through
 the harness kit (`record`), exiting with job.sh's status, so that `run.py` and job.sh's own result step stay free of
 the kit.
 
-Stdlib only with the kit and ``verity_config``, which it puts on the path from the tree: the node's ``python3`` runs it.
+Stdlib only with the kit and ``verity_config``: the node's ``python3`` runs it under the research run, whose
+``PYTHONPATH`` holds the shipped tree's workspace roots, and ``uv run`` runs it at the launcher (``metrics.toml``).
 """
 from __future__ import annotations
 
@@ -18,13 +19,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path += [str(HERE.parent / "harness"), str(HERE.parents[1] / "tools" / "config")]
+import rec_profile as RP
+import rec_table as RT
+import run as R
+from verity_bench import kit, settings
 
-import rec_profile as RP  # noqa: E402
-import rec_table as RT  # noqa: E402
-import run as R  # noqa: E402
-from verity_bench import kit, settings  # noqa: E402
+HERE = Path(__file__).resolve().parent
 
 #: the metrics `benchmarks/recursion_e2e/metrics.toml` holds this benchmark to, by id: each the figure of the result's
 #: headline it names, in seconds (`record`)

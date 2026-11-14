@@ -45,10 +45,10 @@ from verity.protocols.accounting.pouw.verifier.protocol import (
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as pouw_h1
-from verity_vllm.protocols.pouw import lead as pouw_lead
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import kernel as PPK
+from verity.protocols.accounting.pouw.prover.serving import h1 as pouw_h1
+from verity.protocols.accounting.pouw.prover.serving import lead as pouw_lead
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
 
@@ -116,7 +116,7 @@ def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
     scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
-    on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
+    on = {"pouw": {"device": "cuda", "kernel": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120"}}
     assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
     assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
     commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings=on)

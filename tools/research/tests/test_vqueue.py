@@ -566,7 +566,7 @@ def test_a_flaky_or_own_failure_is_still_a_fail():
         assert kinds(acts) == [Eject, Drop, Build] and acts[1].outcome.state == FAIL, (kind, acts)
 
 
-def test_an_infra_split_caps_its_suspects_as_a_fail_does_and_sets_none_aside():
+def test_an_infra_split_limits_its_suspects_as_a_fail_does_and_sets_none_aside():
     """An `infra-split` outcome bounds its suspects' batches at half its suspects, as a fail's does, and, unlike a PR set aside
     (`infra`), puts none of them last or alone."""
     split = Outcome((1, 2, 3, 4), heads(1, 2, 3, 4), INFRA_SPLIT, (1, 2, 3, 4), MAIN)
@@ -1213,7 +1213,7 @@ def test_a_lean_batch_opens_whether_or_not_prs_with_no_lean_change_wait_and_hold
     """Admitted with no pin: the Lean PRs first in rank, up to `lean`, open a batch of their own though PRs with no Lean
     change wait: staged beside theirs with a records run; with none, the tick's one build, theirs the next, and the next
     Lean batch on that.  With no wide PR (`Snapshot.wide` empty, as a missing or empty `--wide-file` reads, or naming only
-    PRs the cap doesn't count or that aren't ready), the cap alone makes every Lean batch."""
+    PRs the limit doesn't count or that aren't ready), the limit alone makes every Lean batch."""
     ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6, lean=True)]
     s = snap(ready=ready, lean=lean, batch=5, depth=3, wide=wide)
     assert decide(replace(s, records=True)) == [Build(first, MAIN, 3, records=True), Build((3, 5), MAIN, 3)]
@@ -1224,8 +1224,8 @@ def test_a_lean_batch_opens_whether_or_not_prs_with_no_lean_change_wait_and_hold
     assert decide(replace(s, candidates=on)) == [Build(then, "q2", 1)]
 
 
-def test_a_lean_batch_and_a_batch_of_prs_with_no_lean_change_share_no_member_and_a_suspect_s_cap_bounds_its_own_kind():
-    """No batch mixes the two, whatever the cap, so no Lean failure drops a PR with no Lean change: a suspect of a failed
+def test_a_lean_batch_and_a_batch_of_prs_with_no_lean_change_share_no_member_and_a_suspect_s_limit_bounds_its_own_kind():
+    """No batch mixes the two, whatever the limit, so no Lean failure drops a PR with no Lean change: a suspect of a failed
     outcome bounds the batch of its kind, and the other is built whole beside it."""
     ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4)]
     s = snap(ready=ready, lean=3, history=[Outcome((2, 4), heads(2, 4), FAIL, (2, 4), MAIN)], records=True)
@@ -1250,8 +1250,8 @@ def test_a_lean_pr_set_aside_opens_a_batch_only_in_its_turn_behind_every_pr_a_ba
 
 
 def test_a_batch_taking_a_wide_pr_takes_no_other_lean_pr():
-    """A: a wide PR (`Snapshot.wide`, one the `lean` cap counts) fills that cap.  A Lean batch taking it takes no other PR
-    the cap counts, and one that took such a PR first leaves the wide one for a later batch."""
+    """A: a wide PR (`Snapshot.wide`, one the `lean` limit counts) fills that limit.  A Lean batch taking it takes no other PR
+    the limit counts, and one that took such a PR first leaves the wide one for a later batch."""
     ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4), pr(5, lean=True)]
     s = snap(ready=ready, lean=3, batch=5, depth=3)
     assert decide(replace(s, wide=frozenset({1}))) == [Build((1,), MAIN, 3)]
@@ -1265,7 +1265,7 @@ def test_a_batch_on_a_candidate_holding_a_wide_pr_takes_no_lean_pr_and_prs_with_
     """B: while a candidate on main's chain holds a wide PR, no Lean batch opens on it, or on a candidate above it, staged or
     not, wide or not, and the PRs with no Lean change are built as ever; with only Lean PRs waiting, none is built, and
     `Wait` says why.  A candidate holding Lean PRs none of which is wide keeps nothing out: a wide PR goes on the chain it
-    is in, filling its batch's cap."""
+    is in, filling its batch's limit."""
     ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6)]
     for records in (False, True):
         assert decide(snap(cand("q1", MAIN, 1), ready=ready, lean=3, depth=3, wide={1, 4}, records=records)) == [
@@ -1303,7 +1303,7 @@ def test_at_lean_0_a_lean_pr_opens_no_batch_whatever_its_rank_unless_pinned_and_
     """`lean` 0 admits no Lean PR without a pin: one ranked first (rank is drive's priority file, then mark time, so a stale
     or empty file ranks a Lean PR marked long ago first) goes in no batch, the PRs with no Lean change are built, and then
     nothing, with no `Wait`.  Pinned (`Snapshot.pinned`), it opens a batch of pinned Lean PRs only, staged beside the PRs
-    with no Lean change with a records run, ahead of them with none.  Under a cap above 0 it opens one with no pin."""
+    with no Lean change with a records run, ahead of them with none.  Under a limit above 0 it opens one with no pin."""
     ready = [pr(10, rank=0), pr(20, rank=1, lean=True), pr(30, rank=2)]
     on = snap(cand("q1", MAIN, 10), ready=ready, lean=0)
     assert decide(on) == [Build((30,), "q1", 1)]
@@ -1318,9 +1318,9 @@ def test_at_lean_0_a_lean_pr_opens_no_batch_whatever_its_rank_unless_pinned_and_
     assert decide(snap(ready=first, lean=3)) == [Build((20, 40), MAIN, 2)]
 
 
-def test_a_pinned_lean_batch_takes_only_pinned_lean_prs_in_rank_order_up_to_batch_under_no_lean_cap():
+def test_a_pinned_lean_batch_takes_only_pinned_lean_prs_in_rank_order_up_to_batch_under_no_lean_limit():
     """A batch of pinned Lean PRs takes no unpinned Lean PR and no PR with no Lean change, pinned or not, so its Lean failure
-    drops none of them; the `lean` cap doesn't count its members, at 0 either, and `batch` bounds it."""
+    drops none of them; the `lean` limit doesn't count its members, at 0 either, and `batch` bounds it."""
     ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4, lean=True), pr(5, lean=True), pr(6, lean=True)]
     for lean in (0, 1, 3):
         assert decide(snap(ready=ready, lean=lean, batch=6, pinned={1, 2, 4, 5, 6})) == [Build((1, 4, 5, 6), MAIN, 2)]
@@ -1344,8 +1344,8 @@ def test_with_no_records_run_a_lean_batch_goes_on_main_or_on_a_top_candidate_hol
 
 
 def test_with_no_records_run_a_lean_pr_waiting_for_a_top_with_no_lean_change_and_nothing_else_to_take_builds_nothing_and_wait_says_why():
-    """While a pinned Lean PR waits so, no unpinned one goes, under any cap: the tick builds nothing, and `Wait` says why,
-    naming the batch that waits, the pinned PRs' or, with none pinned, the first in rank under the cap.  With a records run
+    """While a pinned Lean PR waits so, no unpinned one goes, under any limit: the tick builds nothing, and `Wait` says why,
+    naming the batch that waits, the pinned PRs' or, with none pinned, the first in rank under the limit.  With a records run
     nothing waits for a top: the batch is staged on it."""
     ready = [pr(1, lean=True), pr(2, lean=True), pr(6, lean=True)]
     s = snap(cand("q1", MAIN, 1), ready=ready, lean=3)
@@ -1372,11 +1372,11 @@ def test_a_pinned_wide_pr_goes_alone_and_a_chain_holding_a_wide_pr_opens_no_pinn
              "Lean change is ready to take")]
 
 
-def test_a_pinned_lean_pr_set_aside_or_on_main_at_its_head_opens_no_pinned_batch_and_a_suspect_keeps_its_cap():
+def test_a_pinned_lean_pr_set_aside_or_on_main_at_its_head_opens_no_pinned_batch_and_a_suspect_keeps_its_limit():
     """Only a pinned Lean PR that a batch may take makes a Lean batch the pinned PRs' alone, as `_batch` reads PRs with no
     Lean change: one set aside (`infra`) or on `main` (`pass`) at its head doesn't, so at `lean` 0 none opens ahead of the
-    PRs with no Lean change, and under a cap the Lean PR with no pin goes; at a new head it does.  Set aside, it is built
-    again in its turn, at `lean` 0 too.  A suspect's cap bounds a pinned batch it heads."""
+    PRs with no Lean change, and under a limit the Lean PR with no pin goes; at a new head it does.  Set aside, it is built
+    again in its turn, at `lean` 0 too.  A suspect's limit bounds a pinned batch it heads."""
     ready = [pr(1, lean=True), pr(2), pr(3, lean=True)]
     for state in (INFRA, PASS):
         held = Outcome((1,), heads(1), state, (1,) if state == INFRA else (), MAIN)
@@ -1400,14 +1400,14 @@ def test_a_failed_batch_of_six_with_no_culprit_comes_back_as_threes_then_ones():
     assert decide(snap(cand("q2", MAIN, 1), ready=ready, history=[six, three])) == [Build((2,), "q2", 1)]
 
 
-def test_a_suspect_with_cap_one_waits_for_a_batch_it_heads_and_goes_alone():
+def test_a_suspect_with_limit_one_waits_for_a_batch_it_heads_and_goes_alone():
     lone = Outcome((3,), heads(3), FAIL, (3,))
     ready = prs(1, 3, 4, 5)
     assert decide(snap(ready=ready, history=[lone])) == [Build((1, 4, 5), MAIN, 2)]
     assert decide(snap(cand("q1", MAIN, 1, 4, 5), ready=ready, history=[lone])) == [Build((3,), "q1", 1)]
 
 
-def test_a_cap_comes_from_the_newest_outcome_holding_the_pr_at_its_head():
+def test_a_limit_comes_from_the_newest_outcome_holding_the_pr_at_its_head():
     pair = Outcome((1, 3), heads(1, 3), FAIL, (1, 3))
     assert decide(snap(ready=prs(1, 2, 3), history=[pair])) == [Build((1,), MAIN, 2)]
     assert decide(snap(ready=[pr(1, "h1b"), pr(2), pr(3)], history=[pair])) == [Build((1, 2), MAIN, 2)]
@@ -1821,7 +1821,7 @@ class World:
     again, never for a Lean input a PR built while a batch was staged changed (`Ready.lean_input`); and a build after it
     (`Build.after`) goes on what it put on the chain, or nowhere when it staged the batch again.  No check reads stale
     records, so only the invariants catch them.  A staged batch keeps the PRs changing a Lean input out of the builds
-    beside it, each behind one staged batch at most (`waits`).  ``lean`` is the `lean` cap, in place of the seed's (1 or
+    beside it, each behind one staged batch at most (`waits`).  ``lean`` is the `lean` limit, in place of the seed's (1 or
     3): at 0 no batch takes a Lean PR the pins file doesn't name, and the world is done without them."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
@@ -2382,7 +2382,7 @@ class World:
             first = pinned or [r.number for r in waiting if r.lean and s.lean]
             assert not pinned or set(leans) <= s.pinned, f"{where}: a Lean PR built while a pinned Lean PR waited"
             assert pinned or len(leans) <= s.lean or not first and set(leans) <= s.pinned, (
-                f"{where}: a Lean batch over the `lean` cap")
+                f"{where}: a Lean batch over the `lean` limit")
             assert not first or a.members[0] in opens(first), f"{where}: a Lean batch not opened by the Lean PR first in rank"
             plain = [r for r in waiting if not r.lean]
             assert first or not plain, f"{where}: a Lean PR set aside built while a PR with no Lean change waited"
@@ -2908,7 +2908,7 @@ def test_decide_without_a_part_of_what_a_tick_builds_breaks_its_invariant_of_the
     """The invariants on a tick's builds (`World.admits`) hold `decide` to each part of the rule: a policy that builds no
     batch of PRs with no Lean change in the tick that stages a Lean one, or nothing in the tick that puts a staged batch on
     main's chain, or stages no Lean batch while PRs with no Lean change are built, or admits no Lean PR without a pin
-    under a `lean` cap above 0, or stages a Lean batch while a PR changing a Lean input waits, breaks the invariant that
+    under a `lean` limit above 0, or stages a Lean batch while a PR changing a Lean input waits, breaks the invariant that
     names it in some seed."""
     policy, breaks = PARTS[part]
     with pytest.raises(AssertionError, match=breaks):
@@ -3011,7 +3011,7 @@ def test_decide_reading_no_wide_prs_builds_a_lean_pr_beside_or_above_a_wide_one_
 def test_the_simulated_queue_with_pins_builds_pinned_lean_batches_alone_at_most_every_second_build_and_settles():
     """With about half the Lean PRs pinned (`Snapshot.pinned`), the pins file naming a PR with no Lean change now and then, and
     wide PRs in every third seed, with no records run: every invariant holds, among them that a batch holding a pinned Lean
-    PR it may take holds only pinned Lean PRs, under no `lean` cap; that no other Lean PR is built while a pinned one
+    PR it may take holds only pinned Lean PRs, under no `lean` limit; that no other Lean PR is built while a pinned one
     waits; that a Lean batch goes on `main` or on a top candidate holding no Lean change; and that a tick builds nothing,
     saying why (`Wait`), only while a Lean PR waits for such a top, or for a wide one to land, with nothing else to take.
     Every scenario settles within `ticks`."""
@@ -3029,8 +3029,8 @@ def test_the_simulated_queue_with_pins_builds_pinned_lean_batches_alone_at_most_
                                                  ("every PR pinned", lambda s: frozenset(r.number for r in s.ready))])
 def test_decide_misreading_the_pins_breaks_an_invariant_of_the_simulated_queue(misread, pinned):
     """The pins invariants hold `decide` to `Snapshot.pinned`: handed snapshots pinning nothing, or every PR, it builds a Lean
-    PR while a pinned one waits, or a Lean batch over the `lean` cap, in some seed."""
-    with pytest.raises(AssertionError, match="a Lean PR built while a pinned Lean PR waited|a Lean batch over the `lean` cap"):
+    PR while a pinned one waits, or a Lean batch over the `lean` limit, in some seed."""
+    with pytest.raises(AssertionError, match="a Lean PR built while a pinned Lean PR waited|a Lean batch over the `lean` limit"):
         for seed in SEEDS:
             _settle(World(seed, wide=seed % 3 == 0, pinned=True, policy=lambda s: decide(replace(s, pinned=pinned(s)))))
 
@@ -3075,7 +3075,7 @@ MISREADS: dict[str, Callable[[Snapshot], Snapshot] | Fetch] = {
         s, lambda f: f if f.base_tests is None else replace(f, base_tests=f.base_tests | f.tests)),
     "main passing what a candidate above another fails": lambda s: _failures(s, lambda f: replace(f, main_tests=frozenset())),
     "no history": lambda s: replace(s, history=()),
-    "no Lean cap": lambda s: replace(s, lean=s.batch),
+    "no Lean limit": lambda s: replace(s, lean=s.batch),
     "every change as Lean": lambda s: replace(s, ready=tuple(replace(r, lean=True) for r in s.ready)),
     "nothing pulled": lambda s: replace(s, pulled=frozenset()),
     "no files as built": lambda s: replace(s, flying=()),

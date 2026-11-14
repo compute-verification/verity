@@ -8,6 +8,7 @@
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed subprotocol's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
+    [[pin]]     party, protocol, scheme, key-sha512  an auditor's device key, optional: see below
     [[channel]] from, to, messages, after            after: the messages sent before this channel's
 
 A file states only its choices: a subprotocol's parameters and the workload's default to what the subprotocol or the
@@ -26,6 +27,15 @@ parameters' schema) are handed in by the caller: this module imports no protocol
 name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
 needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
+
+A pin is the key the auditor pinned for one of its devices: the party as the configuration names it (never a host,
+which the deploy bindings hold), the listed subprotocol whose sessions the key signs (one party may hold a key for each),
+the signature scheme's id (`SCHEMES`) and the SHA-512 of the public key, 128 lowercase hex digits. `check` refuses by name
+a malformed hash (``pin-hash``), an unknown scheme (``pin-scheme``), a party the configuration doesn't list
+(``pin-party``) or that isn't the auditor's (``pin-principal``), a subprotocol that isn't listed or doesn't declare the
+party (``pin-protocol``), and a second pin of one party for one subprotocol (``repeated-pin``). The checked
+configuration holds its pins sorted by party and subprotocol, and no ``pin`` key when the file states none, so a
+configuration without pins hashes as one of a format without them would. The pins are inside what the hash covers.
 
 The canonical form is canonical JSON of the checked configuration (sorted keys, no whitespace, UTF-8, no float), and its
 hash is SHA-512 of that form without the transport-only fields (`TRANSPORT`: a party's address and listen port, and
@@ -48,11 +58,17 @@ from verity.channel import Refused
 FORMAT = "verity/config/v0"
 #: the transport-only fields, by table: hashed out, so that they can change without changing the configuration
 TRANSPORT = {"party": ("address", "listen"), "channel": ("dial",)}
-TOP = ("channel", "format", "params", "party", "program", "protocols", "service", "workload")
-#: the top-level keys a file must state: the rest default (``params``: each subprotocol's own)
+TOP = ("channel", "format", "params", "party", "pin", "program", "protocols", "service", "workload")
+#: the top-level keys a file must state: the rest default (``params``: each subprotocol's own; ``pin``: none)
 REQUIRED = ("channel", "format", "party", "program", "protocols", "service", "workload")
 PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
+PIN = ("key-sha512", "party", "protocol", "scheme")
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
+#: the signature schemes a pinned key may be of, by id: LMS over SHA-512 (`verity.commitments.domains`'s
+#: ``LMS_SHA512_N64_W1_H20``, which this module doesn't load)
+SCHEMES = ("lms-sha512/n64-w1-h20/v0",)
+#: the principal whose devices a pin may name
+AUDITOR = "auditor"
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite and remote (v1,
 #: Pearl+'s run verdict its work), the only two protocol soundness covers
@@ -61,6 +77,7 @@ COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
+_SHA512 = re.compile(r"[0-9a-f]{128}")
 
 
 def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -233,14 +250,16 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
     got = _parties(cfg["party"], parties)
+    pins = _pins(cfg.get("pin", []), got, listed)
     links = _channels(cfg["channel"], channels)
     for c in listed:
         for a, b in c.colocated:
             if got[a]["machine"] != got[b]["machine"]:
                 raise Refused("placement", f"{c.name} runs {a} and {b} on one machine, not on {got[a]['machine']} and "
                                            f"{got[b]['machine']}")
-    return {**dict(cfg), "protocols": list(names), "params": params, "workload": {"name": wname, "params": wparams},
-            "party": list(got.values()), "channel": links}
+    out = {**{k: v for k, v in cfg.items() if k != "pin"}, "protocols": list(names), "params": params,
+           "workload": {"name": wname, "params": wparams}, "party": list(got.values()), "channel": links}
+    return {**out, "pin": pins} if pins else out
 
 
 def composite(names: Sequence[str], components: Mapping[str, Component]) -> str:
@@ -284,6 +303,36 @@ def _parties(entries: Any, declared_parties: Mapping[str, Role]) -> dict[str, di
     if missing := sorted(set(declared_parties) - set(got)):
         raise Refused("missing-party", ", ".join(missing))
     return got
+
+
+def _pins(entries: Any, parties: Mapping[str, Mapping[str, Any]], listed: Sequence[Component]) -> list[dict]:
+    """The pins (module docstring) checked against the configuration's ``parties`` and the ``listed`` subprotocols,
+    sorted by party and subprotocol."""
+    if not isinstance(entries, list):
+        raise Refused("type", "[[pin]] is an array of tables")
+    declares = {c.name: {r.name for r in c.parties} for c in listed}
+    got: dict[tuple[str, str], dict] = {}
+    for i, p in enumerate(entries):
+        _keys(f"[[pin]] {i}", p, PIN, PIN)
+        party, protocol = _str(f"[[pin]] {i} party", p["party"]), _str(f"[[pin]] {i} protocol", p["protocol"])
+        if party not in parties:
+            raise Refused("pin-party", f"{party}: the configuration has no such party (its parties: "
+                                       f"{', '.join(parties)})")
+        if (principal := parties[party]["principal"]) != AUDITOR:
+            raise Refused("pin-principal", f"{party} is the {principal}'s: a pin is a key of the {AUDITOR}'s device")
+        if party not in declares.get(protocol, ()):
+            raise Refused("pin-protocol", f"{party}'s key for {protocol}: no listed subprotocol of that name declares "
+                                          f"{party} (those that do: "
+                                          f"{', '.join(n for n, ps in declares.items() if party in ps) or 'none'})")
+        if (party, protocol) in got:
+            raise Refused("repeated-pin", f"{party} for {protocol}")
+        if p["scheme"] not in SCHEMES:
+            raise Refused("pin-scheme", f"{party} for {protocol}: scheme {p['scheme']!r} (known: {', '.join(SCHEMES)})")
+        if not isinstance(p["key-sha512"], str) or not _SHA512.fullmatch(p["key-sha512"]):
+            raise Refused("pin-hash", f"{party} for {protocol}: key-sha512 is a public key's SHA-512 in 128 lowercase "
+                                      f"hex digits, not {p['key-sha512']!r}")
+        got[party, protocol] = dict(p)
+    return [got[k] for k in sorted(got)]
 
 
 def _channels(entries: Any, declared_channels: Mapping[tuple[str, str], Channel]) -> list[dict]:
@@ -399,11 +448,12 @@ def render(cfg: Mapping[str, Any], header: Sequence[str] = ()) -> str:
         _render_table(lines, k, cfg[k])
     for pid, p in cfg.get("params", {}).items():
         _render_table(lines, f"params.{_bare(pid)}", p)
-    for k in ("party", "channel"):
-        for e in cfg[k]:
+    for k in ("party", "pin", "channel"):
+        for e in cfg.get(k, []):
             lines += ["", f"[[{k}]]", *(f"{_bare(f)} = {_value(v)}" for f, v in e.items())]
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "REQUIRED", "TOP", "TRANSPORT", "Component", "Workload",
-           "canonical", "check", "composite", "declared", "digest", "hashed", "new", "parse", "render"]
+__all__ = ["AUDITOR", "CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "PIN", "REQUIRED", "SCHEMES", "TOP",
+           "TRANSPORT", "Component", "Workload", "canonical", "check", "composite", "declared", "digest", "hashed", "new",
+           "parse", "render"]

@@ -21,7 +21,7 @@ NOW = budgets.parse_time("2026-10-19T18:30:00Z")
 
 def guard_state(expires="2026-10-24T21:00:00Z", last_ok=NOW - 30) -> dict:
     return {"last_ok_poll": last_ok, "lines": {},
-            "budgets": {"source": "budgets.toml", "lines": {"vy-glm53-": {"prefix": "vy-glm53-", "cap_usd": 24000, "expires": expires,
+            "budgets": {"source": "budgets.toml", "lines": {"vy-glm53-": {"prefix": "vy-glm53-", "limit_usd": 24000, "expires": expires,
                                                                            "max_pod_hours": 192}}}}
 
 

@@ -1180,7 +1180,7 @@ def test_budgets_are_fetched_from_the_notes_origin_with_the_token(cloud_vm, monk
     from research.pods import budgets as B
 
     origin, a, b = cloud_vm
-    (b / B.FILE).write_text('[budgets]\n"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }\n')
+    (b / B.FILE).write_text('[budgets]\n"vy-a-" = { limit_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4 }\n')
     assert NS.sync(b, secrets=[])["pushed"]
     with pytest.raises(OSError):
         B.read(a)

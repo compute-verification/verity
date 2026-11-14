@@ -44,13 +44,13 @@ slots, and the Lean verifier accepts a session whose last message alone was chan
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import XINV, inv, kmul, mul, phi8
 
-__all__ = ["ACC_NAMES", "Claim", "CoinSource", "claim_names", "H_ROUND", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fold_points", "GfPorts",
+__all__ = ["ACC_NAMES", "Claim", "CoinSource", "claim_names", "H_ROUND", "Lin", "Proof", "Schedule", "Shape", "consistency", "decode", "fast100", "fast100_wide", "fold_points", "GfPorts",
            "free_names", "h_round", "messages", "query_rows", "rep_rounds", "residuals", "rounds", "run", "structure", "symbolic", "T_NAME",
            "verifier_rows", "witness"]
 
@@ -103,6 +103,18 @@ def fast100(m: int) -> Schedule:
         ls.append(Level(rate, q, cols, d, st, st[0], k0 if l == 0 else 4))
         cols -= 3
     return Schedule(m, n, k0, tuple(ls), ls[-1].cols)
+
+
+def fast100_wide(m: int) -> Schedule:
+    """The wide-leaf schedule (`Flock.fast100Wide`), a statement version of its own beside `fast100`'s: a table of 2^32 to
+    2^35 bits folds ``m - 25`` lanes at level 0, so its codeword stays at 2^19 symbols, and its levels are m = 31's; up to
+    m = 31 it is `fast100`. No session here selects it: a recursion's inner sessions are `fast100`'s."""
+    if m <= 31:
+        return fast100(m)
+    if m > 35:
+        raise ValueError(f"m = {m}: no fast100 schedule")
+    s = fast100(31)
+    return replace(s, m=m, n=m - 7, k0=m - 25, levels=(replace(s.levels[0], lanes=m - 25),) + s.levels[1:])
 
 
 @dataclass(frozen=True)

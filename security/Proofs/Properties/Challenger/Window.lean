@@ -38,7 +38,7 @@ open Lean (Json)
 open Std.Do
 open Spot Spot.Challenger
 open FlockDeploy (JsonEquiv)
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj be64_size)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj be64_size)
 open Properties.Pouw.LiveSalt.Coin (enc enc_inj taggedBytes tagged_ok)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok recordOfJson_spec mapM_spec
   none_spec failure_spec toOption_spec ledgerTag_spec nat_spec some_pure_spec forIn_array_zipIdx_ok wp_ite restart

@@ -27,8 +27,8 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120
 
 # the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
-from clear_audit import Prover  # noqa: E402
-import clear_work as CW  # noqa: E402
+from clear_audit import Prover
+import clear_work as CW
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0")
 K = 128
@@ -163,7 +163,8 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         total = Fraction(0)
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows))
+            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows),
+                                 [formed(s.k)] * len(cols))
             assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
             assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
@@ -173,7 +174,8 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
     assert (len(rows), len(cols)) == (15, 16)
-    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 16
+    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 16, [formed(K)] * 15, [formed(K)] * 16)[1] == (
+        S.cap * CW.cell_credit(S, r) * 15 * 16)
 
 
 def test_records_bind_every_field_and_the_splits():

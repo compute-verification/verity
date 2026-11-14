@@ -29,11 +29,11 @@ from typing import Any
 import numpy as np
 from verity.commitments.windows import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 from verity_vllm.records.weights_registration import WeightsRegistration
 
 from .common import _arr_shape

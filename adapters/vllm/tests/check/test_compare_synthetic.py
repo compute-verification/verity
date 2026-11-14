@@ -63,7 +63,7 @@ def _evaluate_program(result, weights: ToyWeights) -> dict[int, int]:
 
 def _write_snapshots(result, t: dict[int, int], root: Path, corrupt_node: int | None = None) -> None:
     """Snapshot every instance's outputs (after the event) and operand views (as its own event's inputs), from the
-    transcript.  Files hold raw element bytes in the row-major logical order of the view (DESIGN §3)."""
+    transcript.  Files hold raw element bytes in the row-major logical order of the view."""
     circuit = result.program.circuit
     n_in = len(result.program.root.body.nodes) - len(result.body.nodes)
     entries = []

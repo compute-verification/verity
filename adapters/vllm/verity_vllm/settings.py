@@ -184,7 +184,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_ADMIT_OTHER_FACTOR", float, 2.0, VALUE, "admission: the other planned bytes' safety factor"),
     S("VERITY_ADMIT_OVER_BOUND", one, False, VALUE, "admission: 1 runs a Commit whose plan is over its bound (recorded as an override)"),
     S("VERITY_ADMIT_SLACK_GIB", float, 6.0, VALUE, "admission: GiB of host memory kept free"),
-    S("VERITY_CENSUS_GPU_UTIL", float, None, VALUE, "the kernel census engine's gpu_memory_utilization"),
     S("VERITY_DRAWS_POLL_S", float, 0.2, WHERE, "seconds between scans of serve-openai's --draws-dir (`serve_release.DrawDir`)"),
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
     S("VERITY_SWITCH", float, None, DEBUG, "the interpreter's switch interval in seconds (a GIL-interference experiment)"),

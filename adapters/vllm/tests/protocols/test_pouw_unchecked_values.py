@@ -21,13 +21,13 @@ from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
 
 from verity_vllm import protocols as PO
 from verity_vllm.protocols import pouw as P
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import graphs as PG
-from verity_vllm.protocols.pouw.pearl_c import kernel as PK
-from verity_vllm.protocols.pouw.pearl_c import lanes as L
-from verity_vllm.protocols.pouw.pearl_c import manifest as PM
-from verity_vllm.protocols.pouw.pearl_c.host import joined
-from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PG
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as L
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PM
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import joined
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import WholeStep
 
 NO_BASE = r"unsupported operand type\(s\) for -: 'int' and 'NoneType'"
 

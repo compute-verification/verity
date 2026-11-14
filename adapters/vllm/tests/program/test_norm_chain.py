@@ -32,14 +32,18 @@ BF = torch.bfloat16
 EPS = 1e-6
 
 
-class GemmaNorm(nn.Module):
-    """vLLM `GemmaRMSNorm.forward_native` verbatim (layernorm.py + ir/ops/layernorm.py): `(1 + w.float()) * rms_norm(x)`, the
-    residual form returning `(normed, residual)`."""
+class _NormWeights(nn.Module):
+    """A norm's bf16 weight and epsilon, which each norm below reads in its own `forward`."""
 
     def __init__(self, H: int, eps: float = EPS) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.zeros(H, dtype=BF), requires_grad=False)
         self.variance_epsilon = eps
+
+
+class GemmaNorm(_NormWeights):
+    """vLLM `GemmaRMSNorm.forward_native` verbatim (layernorm.py + ir/ops/layernorm.py): `(1 + w.float()) * rms_norm(x)`, the
+    residual form returning `(normed, residual)`."""
 
     def forward(self, x, residual=None):
         weight = self.weight.float() + 1.0
@@ -56,7 +60,7 @@ class GemmaNorm(nn.Module):
         return x.to(orig_dtype), x_residual
 
 
-class CubeNorm(GemmaNorm):
+class CubeNorm(_NormWeights):
     """`pow(x, 3)` in place of the square: no registered kind."""
 
     def forward(self, x):
@@ -330,7 +334,7 @@ class Variance(nn.Module):
         return x.to(torch.float32).pow(2).mean(dim=-1, keepdim=True)
 
 
-class LlamaStyleNorm(GemmaNorm):
+class LlamaStyleNorm(_NormWeights):
     """`w * x/rms(x)` (RMSNorm) in place of Gemma's `(1 + w) * x/rms(x)`: a weight-semantics perturbation the comparison must catch."""
 
     def forward(self, x):

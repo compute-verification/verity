@@ -3,7 +3,7 @@ module
 public import Properties.Pous.Component
 public import Proofs.Properties.Pous.RunAt
 public import Proofs.Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Device.Lms
+public import Proofs.Properties.Certifier.Device.Lms
 public import Mathlib.Tactic.SplitIfs
 public import Proofs.Core.CanonUtf8
 import all Init.Data.Array.QSort.Basic
@@ -101,7 +101,7 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
     · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
-    cases hp : Lean.Json.parse s with
+    cases hp : Flock.JsonParse.parse s with
     | error e =>
       simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
       split at h <;> cases h

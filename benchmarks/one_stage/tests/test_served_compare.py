@@ -63,7 +63,7 @@ def _round() -> dict:
 def _written(version: int = 2) -> tuple[dict, dict]:
     """W as its writer writes it at ``version`` over one retained pass (`_round`), and the facts of a circuit cut at that
     pass's calls: its Pearl+ values at their sizes, a weight, and each call's (K, N, W)."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     man = _round()
     params = {**{PWR.a_value(0, c): u["m"] * u["k"] * 2 for c, u in enumerate(man["matmuls"])},
@@ -78,7 +78,7 @@ def test_cut_takes_ws_b_rows_of_the_weights_the_cuts_calls_read_and_no_other_val
     once, which the circuit never reads: CUT passes where each is N rows of K words for a call's (K, N), every call's
     (K, N) has a weight and none has more weights than calls. A weight at version 1, a weight of rows no call reads, a
     weight past its shape's calls, a call's shape with no weight and a value that is neither are each named."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     w, facts = _written(1 if case.startswith("v1") else PWR.VERSION)
     params, calls = facts["params"], facts["calls"]

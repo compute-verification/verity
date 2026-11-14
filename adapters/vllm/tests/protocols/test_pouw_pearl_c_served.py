@@ -52,11 +52,11 @@ from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.pearl_c import manifest as PPM
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PPM
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"
@@ -447,7 +447,7 @@ class _GateSession:
         session = R.open_session(self.challenger, KEY, f"{CH.HOST}.{sid}",
                                  lambda m: lms.sign_at(PRIVATE, self.gate.take(), m).encode(), self.directory, sid)
         ours, theirs = socket.socketpair()
-        self._thread = threading.Thread(target=self._serve, args=(ours, session))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
         self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))

@@ -492,7 +492,8 @@ theorem sampled_oneStage_accepts {p₀ : Spot.OneStageZk.Params} {c : Spot.OneSt
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
     ∃ e₀, e = .inl e₀ ∧ Spot.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
   cases e with
-  | inl e₀ => exact ⟨e₀, rfl, h⟩
+  | inl e₀ => exact ⟨e₀, rfl, (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record
+      p₀.base.verifier (Spot.OneStageZk.checkBlobs p₀ c e₀ bs) = .accept pub prof from h)).2⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
@@ -538,8 +539,9 @@ theorem recVerdict_verdict (V : Vocab d α) (k : Verity.Registration.Composite) 
     (h : RecVerdict V k o) : V.Verdict k .sampled o := by
   obtain ⟨hreg, hrec, a, cb, eb, ⟨ps, b, ev, hdec, x, hx, h1, ha, hc, he⟩, hda, -⟩ := h
   subst ha hc he
-  refine ⟨hreg, hrec, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
-  cases k <;> rfl
+  exact ⟨hreg, hrec, VStar.Recursive.Sampled.protocol,
+    Verity.component_of_onBlobs (a := .sampled) (List.of_mem_zip hx).1 h1, ps, b, ev, hdec, x, hx, h1,
+    by rw [h1]; exact hda⟩
 
 /-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the challenger's live-coin part's record), with the
 inner decoder `decI` and the outer decoder `decO` that fix its extractor. -/

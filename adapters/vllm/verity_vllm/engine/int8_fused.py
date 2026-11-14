@@ -2,7 +2,7 @@
 `quant_rows`, one Triton kernel bit for bit `int8_exact.quantize_rows`, and `scaled_mm`, one Triton GEMM whose epilogue is
 `int8_exact.dequantize`, so the exact linear is two launches a call (stock vLLM int8's count) instead of the torch bodies'
 roughly fourteen.  Both write into caller-owned buffers, allocate nothing and are graph-capturable once compiled.  Built and
-gated in `benchmarks/hash/exactlin` (kgate.py: bit-exact against int8_exact on the served shapes; replay.py: against the
+gated in `benchmarks/kernels/exactlin` (kgate.py: bit-exact against int8_exact on the served shapes; replay.py: against the
 Definitions' replay evaluators).
 
 For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s statement):

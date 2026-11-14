@@ -60,11 +60,12 @@ Match imports from it), `match_fold` (`INSTANCES_FORM_ENV`, `INSTANCES_SCHEMA`, 
 (`run_stage`), `match_workload` (`fold_construction_args`), `program_cache` (`key`, `lookup`, `publish`,
 `restore`), `served_match` (`ServedCommit`), `vu_store` (`after_replay`) and `workload_file` (`workload_file`,
 which the benchmarks import). One module states no `__all__`: `vu_export`, which only `program_graph` and
-`vu_store` read. `match` imports private names of the two modules it reads,
+`vu_store` read. `match` imports private names of two of the modules it reads,
 `match_workload`'s `_workload_doc`, `_workload_enforce_eager`, `_workload_engine_args`, `_workload_execution` and
 `_workload_expected_steps` and `match_fold`'s `_jsonable`. It binds no name of another module that its own text does
-not read; tests still read three that it does read through it: `fold_summary_result`, `persist_program` and
-`run_stage`.
+not read; tests still read six that it does read through it: `fold_summary_result`, `persist_program`, `run_stage`
+and `match_workload`'s `_workload_doc`, `_workload_enforce_eager` and `_workload_execution`. Tests also reach three
+modules under the names it gives them: `EXP` (`experiment`), `G` (`check.gates`) and `GL` (`gpu_lease`).
 
 ## The Commit and its replay
 

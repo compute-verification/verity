@@ -1,4 +1,4 @@
-"""Pearl-C's sm_90a tree off the card (benchmarks/pouw/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+"""Pearl-C's sm_90a tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
 tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
 fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
@@ -26,7 +26,8 @@ from verity_config.settings import of
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+POUW = Path(__file__).resolve().parents[1]
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
@@ -196,7 +197,7 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
         else:
             monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
         assert anew("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
-        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+        assert of(POUW / "settings.py").PEARLC_BF16_ROWS is on
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 

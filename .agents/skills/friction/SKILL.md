@@ -165,7 +165,7 @@ Protocols and claims:
   from SPOT, its transfers' covert capacity, in three terms reported apart: side channels, the timing channel (which the
   network certifier mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-device` gives
-  both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  both the cells and the records (`security/Definitions/Certifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
   class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet.

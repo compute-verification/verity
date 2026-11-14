@@ -31,8 +31,8 @@ from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 
 
 def _load(name: str, path: Path):
@@ -209,7 +209,7 @@ def test_the_development_build_is_build_sh_s_cubin_and_gates(tmp_path, monkeypat
     monkeypatch.setattr(OA.subprocess, "run", run)
     out = tmp_path / "pearl-plus-cubin"
     assert OA.build_dev(out) == out / "pearl_c_sm90.cubin"
-    assert runs == [["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)]]
+    assert runs == [["bash", str(OA.KERNEL / "build.sh"), str(out)]]
     with pytest.raises(RuntimeError, match=r"build.sh exited 1 \(see .*pearl-plus-cubin.log\): send the cubin"):
         OA.build_dev(out)
 

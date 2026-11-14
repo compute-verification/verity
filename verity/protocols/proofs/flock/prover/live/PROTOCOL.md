@@ -13,6 +13,16 @@ Code:
   split prover and verifier), and the CPU prover's 64-bit nonzero offsets (`lincheck::CscCircuit`, `r1cs::flatten_csr`), so
   one matrix may hold more than 2^32 nonzeros. The GPU prover's are 32-bit: `--gpu` refuses a circuit past them
   (`circuit::GPU_NNZ_MAX`).
+- `../flock-wide-b684b12.patch` and `src/wide_leaf.rs`: the wide level-0 leaf (`--wide-leaf`), a statement version of its own
+  with its own `profile` and domain tags. It has two statements, the circuit statement and the templated one; the typed
+  statement has no wide form, and `--wide-leaf` refuses it. A table of 2^32 to 2^35 bits commits level 0 as `2^(m − 25)` lanes, 2^19 leaves at
+  every size, and the levels after it are `m = 31`'s; a smaller table keeps fast100's parameters. The patch adds the four
+  Ligerito configs to upstream, Fast100's own derivation at that `initial_k`, selected by `log_batch_size`. Behind the ZK
+  server the Lean session loop is set up under the statement's wide name (`verity/flock-circuit+wide-leaf` or
+  `verity/flock-circuit/tmpl+wide-leaf`, `wide_leaf::lean_statement`); an `FC_FIREWALL_STATEMENT` naming any other, and a
+  seed-injection build, which has no wide name, are refused before the loop starts. The Lean verifier takes a wide
+  statement only under `--zk` and outside a recursive session, so a plain `--wide-leaf` session is accepted by the Rust
+  session verifier (`serve`) and refused by the Lean one.
 
 **Claim.** Every message a session sends is masked, committed or public, and the audit (`zkaudit`) attributes every
 byte. The target notion is VEIL's special honest-verifier zero knowledge for the whole session (both repetitions),
@@ -871,7 +881,7 @@ The session's `Hello` is Lean's too: the loop's, on the statement's files (`--st
 nonce the loop samples from the OS, the Lean `CoinLayer.helloJson`. A setup it refuses stops the session before it sends
 anything. `flock-firewall hello` computes the same `Hello` on its own (`test_lean_hello.py`): each `draw LEN` and the
 auditor's sample (or `null`) is answered `ok N` and the `Hello`, or `refused WHY`, and `draw LEN NONCE` fixes the nonce.
-`FC_FIREWALL_STATEMENT` names the Lean statement (by default the build's, `+seed-injection` under that feature), and `FC_FIREWALL_HELLO_ARGS` adds arguments:
+`FC_FIREWALL_STATEMENT` names the Lean statement (by default the build's, `+seed-injection` under that feature, and under `--wide-leaf` the statement's wide name, which it may only repeat), and `FC_FIREWALL_HELLO_ARGS` adds arguments:
 `--partition F --program F` for a statement whose setup reads them, and the verifier's own sampling-design inputs as
 `verity-verify-proof verify` takes them, which a stratified, work or closure sample sets up only on (U2, U3): `--stratified K`,
 `--work K --work-table F`, `--closure F`.

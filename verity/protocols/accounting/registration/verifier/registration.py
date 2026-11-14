@@ -1,4 +1,4 @@
-"""The registration log in Python: `Core.Registration` (`../../../interface/CoreProtocol/Registration.lean`), the type
+"""The registration log in Python: `Core.Registration` (`lean/RegistrationLog.lean`), the type
 every subprotocol and both composites read, entry for entry and refusal for refusal. The composition suite's difftest
 holds this module to the Lean (`../../../compose/verifier/lean/tests/test_registration_difftest.py`).
 

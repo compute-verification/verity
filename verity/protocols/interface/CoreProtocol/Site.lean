@@ -340,11 +340,19 @@ end Site
 
 namespace Site.Registration
 
-/-- The composite a site's log is registered for. -/
-inductive Composite
-  | onsite
-  | remote
-  deriving DecidableEq, Repr
+/-- **A composite**: the ids of the protocols it composes, in the order of their ids, the spec's
+`Verity.Registration.Composite`: both are `List String`, so a composite here is the spec's. A site's log is registered
+for one. -/
+abbrev Composite : Type := List String
+
+/-- **Onsite**, the spec's `Verity.Registration.Composite.onsite`: the ids of `Core.Onsite.components`. -/
+def Composite.onsite : Composite :=
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+    "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
+
+/-- **Remote**, the spec's `Verity.Registration.Composite.remote`: the ids of `Core.Remote.V1.components`. -/
+def Composite.remote : Composite :=
+  ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
 /-- The digests the log names things by: a sheet's, an entry's, and the head of a composite's empty log. -/
 structure Digests where
@@ -709,8 +717,11 @@ def Tier.name : Tier → String
 def Owner.name : Owner → String
   | .prover => "prover" | .auditor => "auditor"
 
-def Registration.Composite.name : Registration.Composite → String
-  | .onsite => "onsite" | .remote => "remote"
+/-- A composite's name in `verity.core.site` (`COMPOSITES`): onsite's and remote's. No other list has a name there, so
+it is named by its ids, comma-separated, and no log read from JSON is registered for it (`Registration.Composite.ofJson`
+reads the two names). -/
+def Registration.Composite.name (c : Registration.Composite) : String :=
+  if c = .onsite then "onsite" else if c = .remote then "remote" else ",".intercalate c
 
 /-- A refusal's name in `verity.core.site` (`REFUSALS`): the constructor's, in kebab case. -/
 def Registration.Refusal.name : Registration.Refusal → String
