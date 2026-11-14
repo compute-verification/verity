@@ -384,7 +384,7 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
   block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
-  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, the `bound` of
+  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.slowdown_of`, the `bound` of
   `calculator.slowdown`'s result). ρ's products term is this bound, so where products bind ρ is it and S is p times
   it. It is "not available", with what is missing, where the search record
   gives the bound no traced step to read;

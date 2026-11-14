@@ -314,8 +314,8 @@ class Certifier:
         r_in ≤ windowBits / (T τ_b) = (lanes ⌈T / (D + 1)⌉ requestBits + T lanes ⌈log₂(r + 2)⌉) / (T τ_b)
         r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
 
-    (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the Lean statement
-    `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
+    (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the draft statement
+    `draft:per-server-ingress`, not yet in Lean; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
     `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
