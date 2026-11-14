@@ -116,3 +116,19 @@ def test_pearl_pass_bytes_unchanged(tmp_path):
         (tmp_path / f"before-{name}").write_text(text)
         M.write(tmp_path / f"after-{name}", "PearlPass", text.encode())
         assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
+
+
+def test_h1_registration_bytes_unchanged(tmp_path):
+    w = {"schema": "h1-registration/v1", "window": 0, "prev": None, "roots": {"advice": "02" * 64}, "note": "é"}
+    lines = [{"kind": "declaration", "digest": "03" * 64}, {"window": 0, "kind": "registration",
+                                                             "file": "w0/registration.json", "digest": "04" * 64}]
+    (tmp_path / "before.json").write_text(json.dumps(w, indent=1) + "\n")
+    M.write(tmp_path / "after.json", "H1Registration", (json.dumps(w, indent=1) + "\n").encode())
+    assert (tmp_path / "after.json").read_bytes() == (tmp_path / "before.json").read_bytes()
+    assert json.loads(M.read(tmp_path / "after.json", "H1Registration")) == w
+    for line in lines:
+        with open(tmp_path / "before.jsonl", "a") as fh:
+            fh.write(json.dumps(line) + "\n")
+        M.append(tmp_path / "after.jsonl", "H1Registration", json.dumps(line).encode())
+    assert (tmp_path / "after.jsonl").read_bytes() == (tmp_path / "before.jsonl").read_bytes()
+    assert [json.loads(x) for x in M.lines(tmp_path / "after.jsonl", "H1Registration")] == lines
