@@ -4,7 +4,7 @@ sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 ta
 * **M1 stream** (`VERITY_TAP=3`): the kernel materialises the selected classes into one flat u32 buffer whose layout is
   arithmetic in (HB = b*h slabs, M = seqlen_q rows, NB = key-block cap) -- `StreamLayout` below mirrors
   `Verity_mat_layout` in `verity_tap.h`; every canonical (class, slab, row, col | block, lane | d) position is one word.
-  The commitment is a Merkle tree (the served node/lift rule, `verity_vllm.commit.scheme`) over
+  The commitment is a Merkle tree (production node/lift rule, `verity_vllm.commit.scheme`) over
   fixed-size chunks of that buffer; leaf = SHA-256(16-word header || chunk words) where the header carries the chunk
   index, the launch tag and the geometry, so a leaf is bound to its position, not to a multiset.
 * **H1 digests** (`VERITY_TAP=4`): every kernel thread hashes, per visited 128-key block, its own register words with a
@@ -12,7 +12,7 @@ sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 ta
   validity); only the 32-byte digests leave the SM.  `ThreadLeafCommitment` builds the tree over those digests; an
   opening reveals the thread leaf's message (regenerated on replay from the M1 stream / the Definition) plus a path.
 
-Validity conditions: (1) binding under SHA-256 (leaf) + the served Merkle rule (nodes); (2) the leaf
+Validity conditions: (1) binding under SHA-256 (leaf) + the production Merkle rule (nodes); (2) the leaf
 preimage contains the position header the verifier derives itself from the claimed identity, and a word's offset inside
 the leaf is fixed by the layout -- identity/position, not a multiset; (3) openings fold to the *prechallenge* root;
 (4) `test_hidden_stream.py` rejects altered / reordered / substituted words, substituted leaves, wrong launch tag.
