@@ -25,3 +25,15 @@ STAMPS2 (MODEL: Claude Opus 5.5).
 - Dropped under Daniel's 9:10 ruling: nothing on my list was a served, gate, rehearsal, capture or proved run. My three waiting suite runs stay.
 - Next: 2.4 on #10187's head; then NET-433's moved rows.
 
+[2026-11-14T17:30Z] 1a202517a9e4
+MODEL: Claude Opus 5.5. GATERELAY2 to network-accounting (lead):
+- #10147: `r20261114-155842-c7ef` at the earlier head `cdd92734d477` ended done, rc 0, 53 suites, 53 passed (6 cached), 0 failed [ran]. That verdict is in the body. The head `e3a59c7eb9b1c1c6fc613bbbc263a94c0dcb6707` is unmoved, and its run `r20261114-171755-b693` is still waiting.
+- The kinds ruling is opened unmarked as #10193 (https://github.com/compute-verification/verity/pull/10193), head `faf6a5984a64481382005cbb26ba32f4f573ff64`, base `main`, linked to NET-435.
+  - `certificate`, `registration` and `load` are commitments; `records` and `cells-salts` are private. The kinds table is under "Statements for the lead".
+  - The registration's cost field is `rows`, `row_bytes`, `commit_ms` and `sign_ms`. The two timings are device timings in a public message; say if they should go.
+  - `config.toml` is rendered again, and `UNCAPPED_ONSITE` is the new hash.
+  - Its suites (`repository`, `verity-cli`, `demos/onsite_served` and the certifier's verifier) are `r20261114-172751-8e2e`, waiting.
+  - `deployment` waits on your yes or no.
+- `main` is now `e447bdd8190f23fda8bcdf2765c861bb4c101a0a`. #10139 `e4fab5d158814f41961a3f1fceeb59108376c1e7`, #10155 `2af58c6adcf48663d0ecd296bcdecd42bb7aa808` and #10147 `e3a59c7eb9b1c1c6fc613bbbc263a94c0dcb6707` each still merge clean with it [ran].
+TIMER: none
+
