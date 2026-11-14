@@ -11,5 +11,9 @@ exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", 
 
 [[words_in]]
 files = ["security/Proofs/Pous/PeriodWitnesses.lean"]
-words = { "certifiedBlock" = "certifiedStoreBlock", "certifiedBlock_eq" = "certifiedStoreBlock_eq",
-          "certifiedBlock_size" = "certifiedStoreBlock_size", "certifiedBlock_digest" = "certifiedStoreBlock_digest" }
+
+[words_in.words]
+"certifiedBlock" = "certifiedStoreBlock"
+"certifiedBlock_eq" = "certifiedStoreBlock_eq"
+"certifiedBlock_size" = "certifiedStoreBlock_size"
+"certifiedBlock_digest" = "certifiedStoreBlock_digest"
