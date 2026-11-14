@@ -119,7 +119,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
 Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness` and `Verity.RemoteSoundness`
-(`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
+(`Properties.Verity.Soundness`) compose them: onsite's from its seven, remote's from sampled proofs' and PoUW's and, in
+the policy's place, the two statements that tie its clause to the committed files (`Properties.Verity.Committed`).
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
@@ -862,15 +863,16 @@ blocks each have at most `Γ` gates and read at most `α` fresh input bits per g
 
 The clause is proved of the case as sent (`Vocab.inferenceOnlySound`), and of nothing more: what links that case to the
 committed files is two checks the verifier lacks, which no code enforces, so the clause says nothing of the committed
-files until both exist. Neither is a premise of the claim.
+files until both exist. Neither is a premise of the claim. What each would establish is a named `Prop` of
+`Properties.Verity.Committed`, stated and not proved, which remote's soundness takes as a hypothesis.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
    a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled proof blocks, and no
-   protocol calls it.
+   protocol calls it. The statement on the wired rows is `Vocab.WiresSound`.
 2. **The case's unit is the committed `Γ`'s unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the
    committed files' circuit (`computed`). No check holds the one unit to the other, or gives how many of those a
-   Program gate is.
+   Program gate is. The statement on the committed side, a row of the file is one gate of that circuit, is `GateARow`.
 
 What else it does not say:
 
@@ -990,8 +992,8 @@ def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 `Properties.Remote.PolicyHeld`, the policy on the Program its compiled check judges, at the policy's own `Γ` and `α`
 (`Holds`, which lists what that leaves unsaid). `Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent,
 for every vocabulary at both composites: the composite's acceptance holds each of its cases to its check's, so the event
-is empty. The link from that case to the committed files is the two checks `Holds` names as missing, so the composites'
-soundness still counts this target in its trust gap. -/
+is empty. The link from that case to the committed files is the two checks `Holds` names as missing: onsite's soundness
+still takes this target as a hypothesis, and remote's takes the two statements those checks would establish. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 
 /-- **PoUS's target**: at least `S` bits of device memory held on average. -/

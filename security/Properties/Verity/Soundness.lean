@@ -1,6 +1,7 @@
 module
 
 public import Properties.Verity.Game
+public import Properties.Verity.Committed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -46,11 +47,12 @@ collision (`Vocab.error`).
 `SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
 with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
 (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote's composite of record
-(`Core.Remote.V1.protocol`, `verity/remote/v1`), from its three (sampled proofs, PoUW, which at remote is Pearl+'s run
-verdict and its claim in MACs at the credit its check published, and the inference-only policy). They are proved by
-`Properties.Composition` (a composite's acceptance is its subprotocols' and its record's) and the union bound over one
-strategy in one game.
+`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's composite of record
+(`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (sampled proofs, and PoUW, which at remote is
+Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that tie the
+inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
+`Properties.Verity.Committed`). They are proved by `Properties.Composition` (a composite's acceptance is its
+subprotocols' and its record's) and the union bound over one strategy in one game.
 
 Each target is a hypothesis until its subprotocol's piece proves it at its compiled check, and `Vocab`'s fields are given
 until each piece defines its own: v2's reading of the committed files, the positions, the coin commitment's families and
@@ -58,7 +60,8 @@ the device's log each subprotocol read, the extractor and the finders, the gates
 play read at its boundary, and the published certificates, thresholds, errors and collision terms. The inference-only
 policy's target reads none of them: its claim is on its own case in the play's messages, and
 `Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent. The link from that case to the committed files is
-two checks the verifier lacks (`Vocab.Holds` names them), so the target stays a hypothesis here.
+two checks the verifier lacks (`Vocab.Holds` names them). At remote the two statements they would establish are
+hypotheses in the target's place, each stated and not proved; at onsite the target stays a hypothesis.
 -/
 
 @[expose] public section
@@ -89,15 +92,25 @@ def Soundness : Prop :=
     V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
       V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
-/-- **Soundness at remote's verifier: `SoundnessOf` at `verity/remote/v1`.** If sampled proofs, PoUW
-(`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit Pearl+'s check
-published) and the inference-only policy each meet their target at remote, then the probability that remote's compiled
-verifier accepts files that passed the commit phase's check while one of their claims fails is at most their three
-errors at that strategy summed. Discharging `V.PouwSound .remote` reads Pearl+'s properties in
-`Properties.Pouw.PearlPlus` (`AcceptMeans`, proved as `acceptMeans`, and `WorkIsTheCredit`, `DrawIsOnItsStreams` and
-`CoinBytesGiveUniformTickets`, unproved); that is the Pearl+ target's proof, not this statement's. -/
+/-- **Soundness at remote's verifier, from two targets and the two statements on the committed files.** If sampled
+proofs and PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit
+Pearl+'s check published) each meet their target at remote, the record's wiring is the wiring the committed units are
+held to (`Vocab.WiresSound`, at twice sampled proofs' share and error), and the committed circuit has one gate a row
+(`GateARow`), then the probability that remote's compiled verifier accepts files that passed the commit phase's check
+while the claim of sampled proofs, PoUW or the inference-only policy fails is at most their three errors at that
+strategy summed.
+
+The inference-only policy's target is no hypothesis: its claim is on the case as sent, of which it is proved
+(`Vocab.inferenceOnlySound`). The two statements are what that leaves unsaid of the committed files, and neither is
+proved. The conclusion's clause for the policy is still the one on the case as sent, and no clause of it reads either
+statement: they stand among the hypotheses so that what remote's soundness rests on names them, and a conclusion on
+the committed files waits on their proofs.
+
+Discharging `V.PouwSound .remote` reads Pearl+'s properties in `Properties.Pouw.PearlPlus` (`AcceptMeans`, proved as
+`acceptMeans`, and `WorkIsTheCredit`, `DrawIsOnItsStreams` and `CoinBytesGiveUniformTickets`, unproved); that is the
+Pearl+ target's proof, not this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SpotSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
+    V.SpotSound .remote → V.PouwSound .remote → V.WiresSound .remote → GateARow → V.SoundnessAt .remote
 
 end Verity

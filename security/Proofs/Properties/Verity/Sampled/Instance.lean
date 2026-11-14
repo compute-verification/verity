@@ -28,7 +28,9 @@ device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_tar
   strategy (`premisesOf`), no loss, and the session's δ (`Live.delta`) at the deployment's session, `⊤` where it
   runs none (`deltaOf`). Each premise is
   asked of the finders built from the one strategy `error` is at. The other subprotocols' names are the base's, so
-  their targets are the base's (`pouwSound_of_base`, `inferenceOnlySound_of_base`).
+  PoUW's target is the base's (`pouwSound_of_base`). The wires' statement (`Vocab.WiresSound`) reads the deployed
+  extractor and sampled proofs' error at it, so it is taken at the deployed vocabulary; where the deployment runs no
+  session that error is `⊤` and it holds (`wiresSound_of_none`).
 * **The extractor** (`Instance.vocab`): the session's at the projected strategy.
 * **The coupling** (`couplingTarget_at`, at the constructions `constructionsAt` assembles at the deployed device's
   history): `couplingTargetAt_counts` at the stage, whose signer premise is the base's (`Instance.signer`), whose
@@ -589,14 +591,29 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
   rw [I.sessions_of hA hs] at hS
   cases hS
 
-/-! ## The other subprotocols' targets are the base's -/
+/-! ## PoUW's target is the base's -/
 
 theorem pouwSound_of_base (k : Verity.Registration.Composite) (h : I.base.PouwSound k) : (I.vocab K).PouwSound k :=
   h
 
-theorem inferenceOnlySound_of_base (k : Verity.Registration.Composite) (h : I.base.InferenceOnlySound k) :
-    (I.vocab K).InferenceOnlySound k :=
-  h
+/-! ## The wires' statement where the deployment runs no session -/
+
+/-- At parameters where the deployment runs no session, sampled proofs' error at the deployed vocabulary is `⊤`: its
+published δ is (`deltaOf_none`). -/
+theorem error_sampled_of_none {θ : ByteArray} (h : I.session θ = none) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy ((I.vocab K).game θ F c)) : (I.vocab K).error .sampled θ F c σ = ⊤ := by
+  unfold Vocab.error Accounting.condError
+  split_ifs
+  · exact top_unique (le_add_right (le_add_right (le_of_eq (I.deltaOf_none h _).symm)))
+  · rfl
+
+/-- **The wires' statement at a deployment that runs no session**: twice sampled proofs' error is `⊤` at every
+parameters, so the statement bounds nothing there and holds. -/
+theorem wiresSound_of_none (k : Verity.Registration.Composite) (h : ∀ θ, I.session θ = none) :
+    (I.vocab K).WiresSound k := by
+  intro θ F c σ
+  rw [I.error_sampled_of_none K (h θ), ENNReal.mul_top (by norm_num)]
+  exact le_top
 
 /-- **The coupling at the deployed vocabulary is the stage's**: the period's game, the verdict and the constructions are
 the same. -/
@@ -656,18 +673,18 @@ end Instance
 that passed the commit phase's check while one of its three claims fails with probability at most their errors summed,
 at the vocabulary `Instance.vocab` builds from the deployment and `K`, wherever the commitment format's openings
 (`OpensAt`), the registered files' file check (`RegisteredFiles`), v2's session at the registered files (`SessionAt`),
-the coupling at each session (`CouplingTarget`, at the stage), and the base's PoUW and inference-only targets hold. The premises at the finders `K` builds from a strategy are `error`'s condition
-at that strategy. -/
+the coupling at each session (`CouplingTarget`, at the stage), the base's PoUW target and the two statements on the
+committed files (`Vocab.WiresSound` at this vocabulary, `GateARow`) hold. The premises at the finders `K` builds from a
+strategy are `error`'s condition at that strategy. -/
 theorem remote_soundness_deployed (I : Instance d α) (K : Constructions I.base)
     (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
     (hC : ∀ θ F A, I.sessions θ F = some A → CouplingTarget (I.stage K) .remote (I.liftStage K) A θ F)
-    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hW : I.base.PouwSound .remote) (hWi : (I.vocab K).WiresSound .remote) (hG : Verity.GateARow) :
     (I.vocab K).SoundnessAt .remote :=
   Verity.remote_soundness_of_targets (I.vocab K) (I.deployed K hKr hKf hO) (I.covers K .remote hRg hSa)
-    (fun θ F A h => I.couplingTarget_lift K .remote (hC θ F A h)) (I.pouwSound_of_base K .remote hW)
-    (I.inferenceOnlySound_of_base K .remote hI)
+    (fun θ F A h => I.couplingTarget_lift K .remote (hC θ F A h)) (I.pouwSound_of_base K .remote hW) hWi hG
 
 /-- **`remote_soundness_deployed` at the binding's constructions** (`Binding.withBinding`): any constructions with
 the binding's read finder and forger, so those two premises hold by definition. -/
@@ -675,10 +692,11 @@ theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constr
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
     (hC : ∀ θ F A, I.sessions θ F = some A →
       CouplingTarget (I.stage (Binding.withBinding K₀ I.dev)) .remote (I.liftStage (Binding.withBinding K₀ I.dev)) A θ F)
-    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hW : I.base.PouwSound .remote) (hWi : (I.vocab (Binding.withBinding K₀ I.dev)).WiresSound .remote)
+    (hG : Verity.GateARow) :
     (I.vocab (Binding.withBinding K₀ I.dev)).SoundnessAt .remote :=
   remote_soundness_deployed I (Binding.withBinding K₀ I.dev) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hRg hSa
-    hC hW hI
+    hC hW hWi hG
 
 /-- **`remote_soundness_deployed` at the deployment's constructions** (`Instance.constructionsAt`): the coupling at
 each session is `couplingTarget_at`'s, so of it what is left is the device's log opening only the record's rounds
@@ -689,10 +707,12 @@ theorem remote_soundness_deployedAt (I : Instance d α) (K₀ : Constructions I.
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
     (hOR : I.LogOpensRecorded .remote)
-    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hW : I.base.PouwSound .remote)
+    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).WiresSound .remote)
+    (hG : Verity.GateARow) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployed I _ (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hRg hSa
-    (I.couplingTarget_at K₀ .remote reg record recordDigest hOR) hW hI
+    (I.couplingTarget_at K₀ .remote reg record recordDigest hOR) hW hWi hG
 
 /-! ## An instance: v2's reading on the idle device -/
 

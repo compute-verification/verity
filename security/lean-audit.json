@@ -3300,6 +3300,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.GateARow": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
+  },
   "Verity.Partition.Correct": {
    "owner": "@proofs",
    "digest": "71598c961502ae6e52b3f9f9b0a38c000a3208215229ba18bfb4531b5533b322",
@@ -3348,12 +3353,6 @@
    "issue": "PRF-579",
    "due": "2026-11-20"
   },
-  "Verity.Vocab.InferenceOnlySound": {
-   "owner": "@lean",
-   "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Vocab.Opens": {
    "owner": "@proofs",
    "digest": "dc9e98de8f4dd3c8d8e67112689b4467fc5ce5da8864de1d8fef43a123d101bf",
@@ -3365,6 +3364,11 @@
    "digest": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Vocab.WiresSound": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
   },
   "Verity.Wipe.OfRun.Preserves": {
    "owner": "@lean",
@@ -3619,7 +3623,10 @@
   "Properties.Challenger",
   "Properties.Verity.Idle",
   "Properties.Remote",
-  "Properties.Nci"
+  "Properties.Nci",
+  "Properties.Verity.Committed",
+  "Properties.Spot.Wires",
+  "NciCheck.RecordText"
  ],
  "claims": {
   "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],
@@ -5697,7 +5704,8 @@
  },
  "witnesses_assumed": {
   "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
-  "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); until Lean proves it, the honest witness takes it."
+  "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); until Lean proves it, the honest witness takes it.",
+  "Verity.GateARow": "not an assumption about the world but an unproved count over code that reads no deployment: every unit of `Flock.Bridge.circuitOfFile`, at files that parse, has `Spot.FilePart.ofCircuit`'s `m` gates; no instance concludes it, so until Lean proves it a witness leaves it as it stands."
  },
  "layers": {
   "Definitions.Core": {
@@ -28650,7 +28658,7 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved; InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis",
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW target (Verity.Vocab.PouwSound at remote), until each is proved; the inference-only policy's target is proved of the sent case (Verity.Vocab.inferenceOnlySound) and applied; in its place it takes the two statements that tie the sent case to the committed files, each stated and not proved, which no clause of its conclusion reads: the record's wiring is the wiring the committed units are held to, at twice sampled proofs' share and error, at the deployed vocabulary (Verity.Vocab.WiresSound), and the committed circuit has one gate a row (Verity.GateARow)",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",

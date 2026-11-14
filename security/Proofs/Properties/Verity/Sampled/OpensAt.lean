@@ -266,30 +266,36 @@ end Instance
 /-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
 `opensAt_of_sessions`, and its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`; of
 the coupling, `couplingTarget_at`'s, what is left is the device's log opening only the record's rounds
-(`LogOpensRecorded`). -/
+(`LogOpensRecorded`). The two statements on the committed files (`Vocab.WiresSound` at the deployed vocabulary,
+`GateARow`) are taken as they stand: no clause of the conclusion reads either, and neither is proved. -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hready : I.SessionsReady) (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
-    (hOR : I.LogOpensRecorded .remote) (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hOR : I.LogOpensRecorded .remote) (hW : I.base.PouwSound .remote)
+    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).WiresSound .remote)
+    (hG : Verity.GateARow) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
-    (I.sessionAt_of_registered .remote hSr) hOR hW hI
+    (I.sessionAt_of_registered .remote hSr) hOR hW hWi hG
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
 reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
-premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
+premise speaks of the sessions the deployment runs, the base's PoUW target holds at `⊤`, and the wires' statement
+holds at the deployed vocabulary of any constructions, where sampled proofs' error is `⊤` at no session. `GateARow`
+reads no deployment, so no instance concludes it. -/
 theorem remote_soundness_deployedReady_honest :
     (Instance.Honest.inst ⊤ fun _ => none).SessionsReady ∧ (Instance.Honest.inst ⊤ fun _ => none).RegisteredFiles ∧
       (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).LogOpensRecorded .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
+      ∀ K, ((Instance.Honest.inst ⊤ fun _ => none).vocab K).WiresSound .remote :=
   ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
     Instance.Honest.sessionRegistered_none ⊤ .remote, Instance.Honest.logOpensRecorded_none ⊤ .remote,
-    Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
+    Instance.Honest.target_top .remote .pouw,
+    fun K => (Instance.Honest.inst ⊤ fun _ => none).wiresSound_of_none K .remote fun _ => rfl⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
 fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/
