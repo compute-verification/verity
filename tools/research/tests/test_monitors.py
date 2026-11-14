@@ -1142,7 +1142,7 @@ def write_run(root: Path, rid: str, *, command, state="failed", rc=1, steps=(), 
 
 
 def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_ones_first_failing_line(tmp_path):
-    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    slot = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"]
     log = "collected 3\nE   AssertionError: x\nsomething failed here\nFAILED tests/test_a.py::test_b - AssertionError\n"
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="running", rc=None,
               steps=[{"step": "lints", "status": "passed"}, {"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log",
@@ -1150,7 +1150,7 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
     write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=143,
               failure={"class": "CANCELLED_DEADMAN", "why": "no heartbeat for 10 min"})
     write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="done", rc=0, steps=[{"step": "pytest", "status": "passed"}])
-    write_run(tmp_path, "r20261003-200000-dddd", command=["python3", "tools/verity/check/check.py"], state="failed")
+    write_run(tmp_path, "r20261003-200000-dddd", command=["python3", "tools/check/check.py"], state="failed")
     write_run(tmp_path, "r20261003-200000-1111", command=slot, state="failed", rc=M.NOT_STARTED)  # a twin that left its line
     write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="running", rc=None,
               steps=[{"step": "lean-audit", "status": "failed", "log": "lean-audit.log"}],
@@ -1180,7 +1180,7 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
 def test_the_reader_takes_no_stopped_step_for_the_failed_one(tmp_path):
     """r20261026-141511-8d3f: drive cancelled the after-landing run for a failed suite, and lean-agreement, stopped with an empty
     log, was posted as the step that failed, its first failing line `none`. A stopped step found nothing: the run is a cancel."""
-    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    slot = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143,
               steps=[{"step": "lean-build", "status": "passed"},
                      {"step": "lean-agreement", "status": "stopped", "rc": -15, "log": "lean-agreement.log"},
@@ -1199,7 +1199,7 @@ def test_the_reader_takes_no_stopped_step_for_the_failed_one(tmp_path):
 def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_step_failed(tmp_path):
     """`research run` writes failure.json a few seconds after status.json; read in between, a hand cancel would be posted as
     "unclassified: no reason recorded". One whose classification never comes is still listed, later."""
-    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    slot = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143)
     d = tmp_path / "runs" / "r20261003-200000-aaaa"
 
@@ -1219,7 +1219,7 @@ def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_
 def test_the_reader_names_a_suites_runs_failed_suite_as_it_happens_from_its_stdout(tmp_path):
     """A suites.py run writes no steps.jsonl: its first failed suite, and that suite's first failing line, come from stdout.log
     while it still runs, not an hour later when the run ends."""
-    slot = ["python3", "tools/verity/check/slot.py", "--", "bash", "-c", "uv run python tools/verity/check/suites.py --changed x"]
+    slot = ["python3", "tools/check/slot.py", "--", "bash", "-c", "uv run python tools/check/suites.py --changed x"]
     out = ("suites: the change from x touches 3\npassed  verity-numerical   1093 passed in 39 s\n"
            "failed  verity-ops         61 passed, 1 failed in 5 s\n        E       assert False\n"
            "        FAILED tests/test_keeper.py::test_a - assert False\n        log: /tmp/x.log\n"
@@ -1247,7 +1247,7 @@ def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_faile
     can fail first: the gate's lines come with the row whichever step failed first, at most `RATCHET_LINES` of them.  A gate
     that passed gives none, and one that failed with no log, or none on disk, an empty list; its log is read to its first
     8 MiB (`log_bytes`), as every log the reader opens."""
-    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    slot = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=1,
               steps=[{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"},
                      {"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}],
@@ -1458,7 +1458,7 @@ def test_an_oom_kill_is_named_with_the_run_its_scope_held_and_who_sent_it_even_a
     root = machine_root(tmp_path, {"session-5807.scope": (rid, 500 * 2**30)})
     req = root / M.REQUESTS.lstrip("/") / rid
     req.mkdir(parents=True)
-    (req / "request.json").write_text(json.dumps({"command": ["python3", "tools/verity/check/slot.py", "--by",
+    (req / "request.json").write_text(json.dumps({"command": ["python3", "tools/check/slot.py", "--by",
                                                               "https://cursor.com/agents/bc-x", "--", "uv"]}))
     quiet = Run((has("journalctl"), (0, "1791420000.1 host kernel: Linux version\n", "")))
     memo: dict = {}
@@ -1618,7 +1618,7 @@ def test_the_daily_line_counts_yesterdays_full_checks_infrastructure_ended_and_p
         q = root / M.REQUESTS.lstrip("/") / rid
         q.mkdir(parents=True)
         (q / "request.json").write_text(json.dumps({"command": cmd, "harness_args": []}))
-    check = ["python3", "tools/verity/check/slot.py", "--by", "x", "--", "uv", "run"]
+    check = ["python3", "tools/check/slot.py", "--by", "x", "--", "uv", "run"]
     run("r20261007-100000-0001", "SUCCESS", "done", check)
     run("r20261007-110000-0002", "CGROUP_OOM_ATTRIBUTED", "failed", check)
     run("r20261007-120000-0003", None, None, check)                       # its machine went down under it

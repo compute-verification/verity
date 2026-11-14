@@ -147,7 +147,7 @@ def test_the_lean_pool_a_command_takes_a_slot_of():
     audit = ["python3", "tools/verity/lean/check.py", "--build", "--update", "security"]
     assert auto.lean_pool(audit) == "audit" and auto.lean_pool(audit, ["LEAN_SLOT_POOL=check"]) == "check"
     assert auto.lean_pool(["python3", "tools/verity/lean/check.py", "security"]) is None, "without --build it takes no slot"
-    assert auto.lean_pool(["python3", "tools/verity/check/check.py", "--build"]) is None, "the whole check is not the Lean check"
+    assert auto.lean_pool(["python3", "tools/check/check.py", "--build"]) is None, "the whole check is not the Lean check"
     assert auto.lean_pool([*changed, "--inputs-key", "security"]) is None
     assert auto.lean_pool(["uv", "run", "pytest", "tools/verity/lean/tests/test_lean_changed.py", "-k", "records"]) is None
     assert auto.lean_pool(["bash", "-c", "echo 'an unclosed quote"]) is None
@@ -839,7 +839,7 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     (kw,) = launched
     assert placed == [] and kw["machine_name"] == CPU1 and kw["project"] == "verity" and kw["mem_gb"] is None and kw["queue"] is None
     assert kw["command"][:2] == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots"]
-    assert kw["command"][2:6] == ["python3", "tools/verity/check/slot.py", "--by", "auto"]
+    assert kw["command"][2:6] == ["python3", "tools/check/slot.py", "--by", "auto"]
     assert kw["command"][kw["command"].index("--run-max") + 1] == "3600" and kw["command"][-5:] == ["nice", "-n", "19", "pytest", "-q"]
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
@@ -996,7 +996,7 @@ def test_a_run_of_many_suites_is_placed_and_counted_in_a_line_by_what_it_reserve
     monkeypatch.setattr(remote, "queue_placement", _refusing([]))
     monkeypatch.chdir(_suites_repo(tmp_path))
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
-    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    suites = ["uv", "run", "tools/check/suites.py"]
     slot_py = _slot_py()
     assert main([*runs, "--", *suites]) == 3
     assert main([*runs, "--mem-gb", "64", "--", *suites]) == 3
@@ -1027,7 +1027,7 @@ def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites
     repo = _suites_repo(tmp_path)
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
-    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    suites = ["uv", "run", "tools/check/suites.py"]
     assert main([*runs, "--", *suites]) == 3
     (kw,) = launched
     cmd = kw["command"]
@@ -1447,7 +1447,7 @@ def _on_auto(monkeypatch, tmp_path: Path, docs: dict, answers: dict) -> tuple[li
     ("RunnerFailed", NOT_STARTED),
     ("CannotStart", "could not prepare the launch (OSError: [Errno 30] Read-only file system: 'launcher.log'); not starting r1"),
     ("CannotStart", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (the line above says why), and "
-                    "tools/verity/check/suites.py needs a git checkout", RAISED)],
+                    "tools/check/suites.py needs a git checkout", RAISED)],
     ids=["its-runner-not-started", "as-an-older-shipped-package-says-it", "its-launch-not-prepared", "no-git-for-a-checkout"])
 def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on_the_second_and_says_so(
         refusal, tmp_path, monkeypatch, capsys):
@@ -1498,7 +1498,7 @@ def test_a_job_placed_again_past_a_machine_that_starts_no_run_keeps_each_placeme
 @pytest.mark.parametrize("refusal", [
     ("Refused", "/src has uncommitted changes; commit them (an unpushed commit is fine) or the snapshot would be mislabeled as HEAD", RAISED),
     ("Refused", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (RESEARCH_SHIP=stream), and "
-                "tools/verity/check/suites.py needs a git checkout", RAISED),
+                "tools/check/suites.py needs a git checkout", RAISED),
     ("SourceNotReady", "source tree manifest mismatch after extraction: 1 missing, 0 extra (e.g. ['a.py']); nothing is READY", RAISED),
     ("Refused", "3 deliveries of the staged request failed; it may or may not have started: Connection reset by peer", RAISED),
     ("RunnerFailed", "the runner exited 2 before writing job.json: research run: error: unrecognized arguments: --no-such-flag"),

@@ -78,7 +78,7 @@ def test_the_verifiers_rows_are_the_writers(attn, part, tmp_path, which):
     takes the verifier about 14 minutes in one process, so `typed-rows` runs here in four parts, side by side
     (`TypedRowsPart.lean`, whose theorems make them pass exactly when `typed-rows` does): `rows` checks every layout and
     writes the rows, `order0` and `order1` check the unit's logical order, and `parts` its parts. Each part derives the
-    layouts again, so each still takes minutes and is marked `slow` (`tools/verity/check/suites.py --quick` leaves it out);
+    layouts again, so each still takes minutes and is marked `slow` (`tools/check/suites.py --quick` leaves it out);
     GEMM's derivation (`test_lean_typed_template.py`) is not."""
     p = subprocess.run([str(part), which, str(attn / "circuit.txt"), "--tables", str(attn / "tables"),
                         "--out", str(tmp_path / "rows")], capture_output=True, text=True)

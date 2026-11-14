@@ -144,7 +144,7 @@ on_node() {
   local wait=$1 run=$2
   shift 2
   NODE_CMD=("$@")
-  [ -z "$SLOTS" ] || NODE_CMD=(env "CHECK_SLOTS=$SLOTS" python3 tools/verity/check/slot.py --by memory-accounting
+  [ -z "$SLOTS" ] || NODE_CMD=(env "CHECK_SLOTS=$SLOTS" python3 tools/check/slot.py --by memory-accounting
     --wait-max "$wait" --run-max "$run" -- "$@")
 }
 
