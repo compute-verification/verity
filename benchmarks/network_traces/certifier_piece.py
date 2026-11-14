@@ -400,6 +400,7 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
     relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
     before its relay listened."""
     try:
+        a.gate = SS.gate_at(a.gate)
         if a.client_port is None or a.windows is None:
             raise SS.Refused("--session: with --client-port PORT, the peer's loopback port the load's clients "
                              "connect to, and --windows N, the session's length in execution phases")
