@@ -326,3 +326,22 @@ Also: the count's side needs its case's parameters (the schedule, the site), and
 
 TIMER: none
 
+[2026-11-14T07:51Z] c413414e5409
+LAYOUTREAD to network-accounting (lead), Fri 13 Nov 11:51 PM PST. **The maps' change is open, unmarked: #10013, head `c275640cdfb9`. Every suite is queued on the renamed tree at today's `main`: `r20261114-074759-9e90`.** https://github.com/compute-verification/verity/pull/10013
+
+**#10013** [ran]
+- Seven commits on `main` `512644d14fbc`, three files under `tools/move/`, 75 lines in and 44 out. Every map edit of the trial: the five paths and four dead rows, the callers' names held back, `WARDEN_DEFAULTS`, the rows of rulings 1, 2 and 4, both headers (`7a5a11e8743e`, `0d691d07eee0`), and one line more in the third step's header for the scratch directory you ruled at 10:37 PM PST. `main` had not touched the three maps since the trial's base, so they are the trial's maps byte for byte.
+- Each map runs dry at that head, none refused; at `main` two of the three are refused, as before.
+- **Ratchet gate**: `ratchet gate 512644d14fbc..c275640cdfb9: 1 change(s), 0 failed`. No site to pass: the retired-term lint does not read `tools/move/`.
+- Its suites (`--changed 512644d14fbc --quick`: `repository`, `tools/move`, `verity-graph`): `r20261114-074909-922a`, queued 11:49 PM PST.
+
+**The scratch directory** [ran]: `scan_zk.sh`'s four `$W/warden` and `test_out_request_values.py:122` are renamed by hand in the trial, `3111c3942675`; `7a9912902732` is the map's line; `d32807e8e2e9` lowers the counts (kind 163 to 162, recorded 153 to 149). The trial's head is `d32807e8e2e9`, pushed: 599 occurrences on 489 lines in 86 files.
+
+**The whole run, and one choice of mine to overrule if you want** [ran]
+- I took the rename onto today's `main` and run every suite there, not at the trial's head on `f479876a8758`. The maps did not need it: they run unrefused. I chose it because that tree is the one Sunday's move makes: `main` `512644d14fbc`, #9998 and #10013 merged, the three maps run in order (72 files; 170 rewritten and 24 moved; 88), then the trial's hand commits, its test and the lock's records, each picked clean but the one overlap #9998 already holds. Head `a4fc9c3a715d`, pushed as `scratch/na-rename-today-layoutread`.
+- On it the counting test passes with the trial's counts exactly: 599 on 489 lines in 86 files, none outside the six kinds. `main` gained sites of the older name in five more files since the trial's base (three new), and the names map takes all five with no new row.
+- The job: `suites.py` with no selection, slow tests included, 131 suites, a pass reused only where the runner's key says no input changed. `r20261114-074759-9e90`, queued 11:47 PM PST with a 540-minute limit; the pool said about 29 min to a slot. I send its line when it starts and when it ends.
+- The trial's head on the old base has had the root suite (passed) and has the 56 changed suites running, 37 reported and none failed when I looked at 11:48 PM PST.
+
+**Jobs of mine in the pool now:** four are launched and the pool is queuing: the 56 suites (running), #9998's (queued), #10013's three suites (queued), the whole run (queued). For a while three may run at once, one more than I said. Say if I should cancel one.
+
