@@ -121,8 +121,8 @@ def test_the_named_wipes(deployed_server):
         params = WC.commitment_of(json.loads(bytes.fromhex(C.build(name)["commitment"]))).params
         assert seen[name]["public"] == WP.uncounted(params), name
         assert seen[name]["profile"]["gaps"] == WP.writer_gap(evidence["egress_mib"]) == [
-            f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
-            "signed: no wipe is certified on it until the check that composes the wipe with the network certifier"], name
+            (f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
+             "signed: no wipe is certified on it until the check that composes the wipe with the network certifier")], name
     assert json.loads(bytes.fromhex(C.build("zero-egress")["evidence"]))["egress_mib"] == 0
     assert not seen["zero-egress"]["public"]["certified"]
     none = seen["uncounted"]
@@ -131,8 +131,8 @@ def test_the_named_wipes(deployed_server):
                                         sw.EGRESS_MAX_UNITS)
     assert not none["public"]["certified"] and none["public"]["egress_mib"] == sw.EGRESS_MAX_UNITS
     assert none["public"]["foreign_bits"] == none["public"]["memory_bits"] and none["public"]["eps"] == "0"
-    assert none["profile"]["gaps"] == [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
-                                       f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
+    assert none["profile"]["gaps"] == [(f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
+                                        f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing")]
     outside = json.loads(bytes.fromhex(C.build("egress-range")["evidence"]))["egress_mib"]
     assert not 0 <= outside <= sw.EGRESS_MAX_UNITS
     assert seen["egress-range"]["reason"] == WP.EGRESS_RANGE.format(outside, sw.EGRESS_MAX_UNITS)
