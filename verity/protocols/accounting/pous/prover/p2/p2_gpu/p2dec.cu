@@ -13,7 +13,7 @@
 //   P2_PARTS=1 (default) squares with CGBN's cgbn_sqr_wide; 2 or 4 is the tuned Karatsuba path below.
 // Run:   p2dec params.bin specials.bin sample.bin payload_bytes reps [c.bin [seeds.bin]]   (seeds.bin with -DP2_DERIVE:
 //        u32 segments, u32 blocks per segment, then 32 bytes per segment)
-// -DP2_LIBRARY leaves out this file's kernels and main, so another file (../p2_v1/p2v1.cu) can build on its squaring.
+// -DP2_LIBRARY leaves out this file's kernels and main, so another file (../p2_store/p2v1.cu) can build on its squaring.
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
