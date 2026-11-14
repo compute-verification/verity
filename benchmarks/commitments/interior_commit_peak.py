@@ -44,6 +44,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import rows as SR
+from verity_config.settings import SHARED
 
 RESULT_SCHEMA = "research/result/v0.1"
 ARMS = ("whole", "streamed")
@@ -82,10 +83,11 @@ class Rows:
 
 def window(spans: int, units: int, words: int) -> SR.Binding:
     """The interior's window: ``spans`` chunk members of one template, each ``units`` units reading one row of ``x`` and
-    writing one of ``y``; a member's ``x`` after the first is the output rows of the member before, with no tree."""
+    writing one of ``y``; a member's ``x`` after the first is the output rows of the member before, with no tree. It names
+    no sampling design: no registration is made of it."""
     program, query = SR.population_program([(TEMPLATE, spans * units)])
     tid = descriptor_id(TEMPLATE)
-    return SR.Binding(program, query, {"law": "subset", "k": spans * units}, RUN, tuple(
+    return SR.Binding(program, query, {}, RUN, tuple(
         SR.Member(tid, (("x", words),), (("y", words),), units, s * units, tables=(("x", units),), name=f"{tid}/c{s}",
                   schemas=(("x", V2), ("y", V2)), wired_trees=False,
                   wired=(("x", "y", tuple(range((s - 1) * units, s * units))),) if s else ())
@@ -140,14 +142,14 @@ def main(argv: list[str] | None = None) -> int:
     ports = 2 * ns.spans - (ns.spans - 1)
     summary = {"spans": ns.spans, "units": ns.units, "words": ns.words, "workers": ns.workers, "leaves": 2 * ns.spans * ns.units,
                "row_bytes": 2 * ns.words * ns.units * ports, "salt_bytes": SR.SALT_BYTES * ns.units * ports, "arms": arms}
-    out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
+    out = ns.out or SHARED.RESEARCH_RUN_DIR
     if out and not ns.arm:
         d = Path(out)
         d.mkdir(parents=True, exist_ok=True)
         (d / "interior_commit_peak.json").write_text(json.dumps(summary, indent=1) + "\n")
         result: dict[str, Any] = {
             "schema": RESULT_SCHEMA,
-            "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
+            "run_id": SHARED.RESEARCH_RUN_ID or "local",
             "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "interior_commit_peak", "scheme": SR.SCHEME, "row_schema": V2,
                                      "spans": ns.spans, "units": ns.units, "words": ns.words, "workers": ns.workers,

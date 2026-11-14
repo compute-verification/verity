@@ -1845,6 +1845,11 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
         mixed.close(salt_key=bytes(32))
 
 
+def _cut(circuit: I.Circuit, cap: int = 2, registered: dict | None = None) -> I.Window:
+    """``circuit``'s window under the tests' run, in members of at most ``cap`` units."""
+    return I.Window(circuit, RUN, LAW, cap, registered=registered)
+
+
 def _handed(win: I.Window) -> tuple[CS.Binding, list[dict], dict]:
     """What `Window.close` hands `rows.commit` under the tests' salt key: the window, each member's rows and its keywords."""
     got = []
@@ -1881,11 +1886,11 @@ def _by_reference_windows() -> dict[str, tuple[I.Window, CS.Binding, list[dict],
     shared-row members' wired ports with no tree (``wired_trees`` false)."""
     plain = window()[0]
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
-    fed = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    fed = _cut(circuit, registered={"w": w})
     fed.record(SRC, feed_ins, feed)
     fed.record(GEMM, [None, None], outs)
     ins8, outs8, ins, outs = sliced_values()
-    cut = I.Window(sliced(), RUN, LAW, 2)
+    cut = _cut(sliced())
     cut.record(G8, ins8, outs8)
     cut.record(GEMM, [None, ins[1]], outs)
     got = {name: (win, *_handed(win)) for name, win in (("plain", plain), ("fed", fed), ("cut", cut))}
@@ -1990,7 +1995,7 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
 
     n, chunk = 2048, 64
     monkeypatch.setattr(CS, "VALUE_CHUNK", 1)
-    w = I.Window(I.Circuit("test", ((COORD, n),)), RUN, LAW, n).window
+    w = _cut(I.Circuit("test", ((COORD, n),)), n).window
     size = CS.window_bytes(w.members)
     total = size["public"] + size["private"]
 
@@ -2026,14 +2031,10 @@ def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
     """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `Window.close` hands
     them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
-    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win = _cut(circuit, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
-    given = []
-    with monkeypatch.context() as mp:
-        mp.setattr(CS, "commit", lambda window, data, **_: given.append((window, data)))
-        win.close(salt_key=bytes(32))
-    ((window, data),) = given
+    window, data, _kw = _handed(win)
     return window, data, w
 
 
