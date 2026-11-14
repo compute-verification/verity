@@ -19,7 +19,9 @@ cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at th
 certificate can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
 less. `registered` gives the parameters the registered hardware (`site`): the site of a registration log's view, in
 which the link joins a host and a network certifier that registers the key, and the head of the log it was read at.
-A change to the registered hardware takes its forms in turn by the seed (`SITE_FORMS`).
+A change to the registered hardware takes its forms in turn by the seed (`SITE_FORMS`). With `between`, the two marks are on
+the messages of what runs between them (a wipe's start and end messages) in place of sampled ones, and with `alone` the
+registered host has the link as its one link.
 
 This is test-side Python (it imports `verity_difftest`, which the certifier's package may not), so it lives beside
 the count's difftest (`test_network_span_protocol.py`)."""
@@ -127,9 +129,10 @@ def _refusing(f: Callable[[Any], Any]) -> Callable[[Any], Any]:
     return decode
 
 
-def reference(case: Any) -> dict:
-    """The mirror's outcome of one `serve` case."""
-    return P.answer(span.ID, case, params=_refusing(span.params), commitment=_refusing(span.commitment),
+def reference(case: Any, params: Callable[[Any], span.Params] = span.params) -> dict:
+    """The mirror's outcome of one `serve` case. `params` decodes the parameters in place of the count's own decoder,
+    as a composition that holds them to more does."""
+    return P.answer(span.ID, case, params=_refusing(params), commitment=_refusing(span.commitment),
                     evidence=_refusing(lambda b: span.evidence(P.canonical_json(b))), check=span.check,
                     digest=span.digest)
 
@@ -170,12 +173,13 @@ SITE_FORMS = {"site-link": 6, "site-key": 5, "site-alone": 2, "site-form": 23}
 
 
 def site(r: random.Random, link: str, key: str, elsewhere: str,
-         joins: tuple[str, str] | None = ("node0", "cert0")) -> dict:
+         joins: tuple[str, str] | None = ("node0", "cert0"), alone: bool = False) -> dict:
     """The site of a registration log's view, as the Site's JSON writes it: the host `node0` behind the network
     certifier `cert0`, which registers `key` and splits the host's uplink in the link `link` and its other half, to the
     outside; a second host behind a second certifier, on the link `elsewhere`; a link between the two hosts and the
     second host's bare uplink. `joins`: what the link `link` joins in place of the host and its certifier, or None for
-    a site with no such link."""
+    a site with no such link. `alone`: the site without the link between the two hosts, so that the link `link` is the
+    host's one link."""
     def loc(i: str, kind: str, **more: Any) -> dict:
         return {"bytes": 0, "id": i, "key": "", "kind": kind, "owner": "prover", "parent": "site0", "sheet": "",
                 "tier": None} | more
@@ -190,6 +194,8 @@ def site(r: random.Random, link: str, key: str, elsewhere: str,
     links = [joined("out0", "cert0", R.OUTSIDE, 100), joined(elsewhere, "cert1", "node1", 40),
              joined("out1", "cert1", R.OUTSIDE, 40), joined("hh0", "node0", "node1", 400),
              joined("bare0", "node1", R.OUTSIDE, 10)]
+    if alone:
+        del links[3]
     if joins is not None:
         links.insert(r.randrange(len(links) + 1), joined(link, *joins, r.randint(1, 1000)))
     return {"links": links, "locs": locs, "sheets": []}
@@ -201,8 +207,13 @@ def _other_schedule(r: random.Random, s: Schedule) -> Schedule:
     return dataclasses.replace(s, **{f: getattr(s, f) + 1})
 
 
-def build(m: str, seed: int) -> dict:
-    """A span with the one change `m` (`EXPECT`), sampled from `seed`."""
+def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], bytes] | None = None,
+          alone: bool = False) -> dict:
+    """A span with the one change `m` (`EXPECT`), sampled from `seed`. `between` is what runs between the two marks,
+    in place of their sampled messages: it is handed the network certifier's mark source, which marks the start
+    message it is called on and returns the start certificate's bytes (`Certificate.encode`), and it returns the end
+    message, which the end mark is then on. `alone`: the registered hardware's host has the link as its one link
+    (`site`)."""
     if m not in EXPECT:
         raise ValueError(f"a change is one of {MUTATIONS}, not {m!r}")
     r = random.Random(f"network-span {m} {seed}")
@@ -236,7 +247,19 @@ def build(m: str, seed: int) -> dict:
         salt, message = r.randbytes(SALT_BYTES), r.randbytes(DIGEST_BYTES)
         return CertifiedMark(message, salt, by.sign(name, d, w, digest(salt, message)))
 
-    marks = [own.mark(link, w, r.randbytes(DIGEST_BYTES)) for w in (start, end)]
+    if between is None:
+        marks = [own.mark(link, w, r.randbytes(DIGEST_BYTES)) for w in (start, end)]
+    else:
+        marks = []
+
+        def source(message: bytes) -> bytes:
+            marks.append(own.mark(link, start, message))
+            return marks[0].certificate.encode()
+
+        end_message = between(source)
+        if not marks:
+            raise ValueError("what ran between the marks never asked for its start mark")
+        marks = [marks[0], own.mark(link, end, end_message)]
     which = r.randrange(2)
     at, old = (start, end)[which], marks[which]
     if m == "mark-link":
@@ -373,7 +396,8 @@ def build(m: str, seed: int) -> dict:
                                    registered_key + "0", ""])
         joins = form([None, ("cert0", R.OUTSIDE), ("node0", "node1"), ("node0", R.OUTSIDE), ("cert0", "cert1"),
                       ("cert0", "node9")]) if m == "site-link" else ("node0", "cert0")
-        params |= {"head": r.randbytes(DIGEST_BYTES).hex(), "site": site(r, link, registered_key, elsewhere, joins)}
+        params |= {"head": r.randbytes(DIGEST_BYTES).hex(),
+                   "site": site(r, link, registered_key, elsewhere, joins, alone)}
         if m == "site-alone":
             del params[form(["head", "site"])]
         elif m == "site-form":
