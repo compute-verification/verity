@@ -38,6 +38,8 @@ from typing import TYPE_CHECKING
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
 from verity_config.settings import SHARED
 
+from verity.device import load_card, number, rate
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -48,6 +50,14 @@ RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
 DTYPES = ("bf16", "e4m3", "nvfp4")
 
+
+def tensor_reading(card: dict, fmt: str) -> float:
+    """`card`'s dense peak of `fmt` in flop/s (two a MAC) at its tensor pipe's reading, `clock.tensor`, named."""
+    return float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"])))
+
+
+H200 = load_card("h200-sxm-141gb")
+
 #: Datasheet dense tensor-core peaks (flop/s) with FP32 accumulate, keyed by a regex on `torch.cuda.get_device_name`; first match
 #: wins.  Each entry's source is its results' `spec_source`; tests/test_native_peak.py holds the table to every census line.
 SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
@@ -57,10 +67,11 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
      "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate; Hopper has no FP4"),
     (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12, "nvfp4": None}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate; Hopper has no FP4"),
-    # H200 SXM: the H100 SXM5's tensor cores and clocks (census has no H200 line); the H200 NVL's peaks are lower.
-    (r"H200(?!.*NVL)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
-     "NVIDIA H200 data sheet, H200 SXM dense (BF16 1,979 / FP8 3,958 TFLOPS with sparsity, halved to the Hopper whitepaper's "
-     "989.4 / 1978.9), FP32 accumulate; Hopper has no FP4"),
+    # H200 SXM: its card at the tensor pipe's reading, the reading the data sheet's dense figures are at (census has no H200
+    # line); the H200 NVL's peaks are lower.
+    (r"H200(?!.*NVL)", {"bf16": tensor_reading(H200, "bf16"), "e4m3": tensor_reading(H200, "e4m3"), "nvfp4": None},
+     "hardware/cards/h200-sxm-141gb.toml at the tensor pipe's reading: 2 x sm.count x rate.tensor x clock.tensor / weight.<dtype> "
+     "(the NVIDIA H200 data sheet's H200 SXM dense figures, sparse halved), FP32 accumulate; Hopper has no FP4"),
     (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
     # benchmarks/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".

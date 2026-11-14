@@ -11,7 +11,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from research.pythonpath import package_paths, workspace_root
 from research.store.tool import Tool
+
+TREE = workspace_root(__file__)
 
 SCRIPT = "measure.py"
 
@@ -39,7 +42,8 @@ def parse(argv: list[str]) -> dict:
 NATIVE_PEAK = Tool(
     name="native_peak", version="1",
     command=["python", "benchmarks/native_peak/measure.py"],
-    closure=["benchmarks/native_peak/**"],
+    closure=["benchmarks/native_peak/**", *package_paths(TREE, "verity", "device.py", "channel.py", "errors.py"),
+             "hardware/cards/h200-sxm-141gb.toml"],
     key_params=["dtype", "sizes", "warmup", "reps", "sustain_s"],
     key_conditions=["hw.family"],
     produces=["native-peak/v1", "run-files/v1"],
