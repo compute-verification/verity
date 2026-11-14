@@ -93,7 +93,7 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
-              circuit: str | None = None) -> dict:
+              circuit: str | None = None, answers: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
@@ -101,7 +101,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     in place of ``answers.json``'s. With ``v3c``, ``circuit`` is required: the class circuit, the Program digest of the
     verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's registration. Without
     ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check refuses first (with no
-    block audit, none, whose parameters the check refuses)."""
+    block audit, none, whose parameters the check refuses). ``answers`` is the scan's ``answers.json`` where ``scan``
+    doesn't hold it: a chain record keeps it on its private side (chain_record.sh), for the row registrations it
+    carries whole."""
     if v3c is not None and circuit is None:
         raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
@@ -110,7 +112,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     if "start" not in dep:
         raise SystemExit(f"{run}: deployment.json holds no signed start, and the period check reads each listed entry's "
                          "session's: take a run whose network certifier certified its session's start")
-    doc = json.loads((scan / "answers.json").read_text())
+    doc = json.loads((answers or scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]
     elif circuit is None and doc.get("audits"):

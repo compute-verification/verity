@@ -548,3 +548,13 @@ def test_a_live_request_takes_the_frames_asked_for():
         head, _, raw = out.partition(b"\r\n\r\n")
         assert int(head.split(b"content-length: ")[1]) == len(raw)
         assert __import__("json").loads(raw) == body | {"user": "b64.3.7"}
+
+
+def test_a_usage_record_holds_its_cpus_as_one_string_of_ranges():
+    """`cpu_ranges` writes CPU indices in the kernel's list form, which `_cpu_list` reads back, and a process's usage
+    record holds its affinity so: a string, never a list of integers."""
+    assert [ar.cpu_ranges(c) for c in ([], [5], [3, 0, 1, 2, 8, 10, 11], range(120))] == ["", "5", "0-3,8,10-11", "0-119"]
+    for cpus in ({5}, {0, 1, 2, 3, 8, 10, 11}, set(range(1, 64, 2))):
+        assert ar._cpu_list(ar.cpu_ranges(cpus)) == cpus
+    usage = ar._usage()
+    assert isinstance(usage["cpus"], str) and ar._cpu_list(usage["cpus"]) == __import__("os").sched_getaffinity(0)

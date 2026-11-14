@@ -74,8 +74,8 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
         def __init__(self, out, key_dir, session, *args, **kwargs) -> None:
             on_disk = json.loads((key_dir / ws.DEVICE).read_text())
             super().__init__(out, key_dir, session, *args, **kwargs)
-            signed.append((session, kwargs["base_ms"], on_disk["count_ms"], session.hex() in on_disk["sessions"],
-                           clocks[session].reads))
+            signed.append((session, kwargs["base_ms"], kwargs["ordinal"], on_disk["count_ms"],
+                           session.hex() in on_disk["sessions"], clocks[session].reads))
 
     monkeypatch.setattr(ws, "PublisherProcess", Publishing)
 
@@ -94,7 +94,7 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
     log = asyncio.run(run(tmp_path / "first", SESSION, first))
     assert seen["second"] == (0, [])
     assert log["ticks"] == PARAMS.window and log["lateness_ms"]["over_slack"] == 0
-    assert _start(tmp_path / "first")["base_ms"] == 0
+    assert (_start(tmp_path / "first")["base_ms"], _start(tmp_path / "first")["ordinal"]) == (0, 0)
     with DeviceState(key / ws.DEVICE, public) as state:
         assert state.count_ms == SPAN_MS
 
@@ -106,17 +106,19 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
         assert state.count_ms == SPAN_MS
 
     asyncio.run(run(tmp_path / "third", THIRD, StepClock(7.0), windows=2))
-    assert _start(tmp_path / "third")["base_ms"] == SPAN_MS
+    assert (_start(tmp_path / "third")["base_ms"], _start(tmp_path / "third")["ordinal"]) == (SPAN_MS, 1)
     with DeviceState(key / ws.DEVICE, public) as state:
         assert state.count_ms == 3 * SPAN_MS
-    # only the two runs that started asked for a signature; each one's whole span and its id were on disk by then,
-    # and the clock had been read once, for the refusal of a host without it: the origin is read after the start
-    assert signed == [(SESSION, 0, SPAN_MS, True, 1), (THIRD, SPAN_MS, 3 * SPAN_MS, True, 1)]
+    # only the two runs that started asked for a signature, the refused ones taking no ordinal; each one's whole span
+    # and its id were on disk by then, and the clock had been read once, for the refusal of a host without it: the
+    # origin is read after the start
+    assert signed == [(SESSION, 0, 0, SPAN_MS, True, 1), (THIRD, SPAN_MS, 1, 3 * SPAN_MS, True, 1)]
 
     for out, session, base in ((tmp_path / "first", SESSION, 0), (tmp_path / "third", THIRD, SPAN_MS)):
         dep = json.loads((out / "deployment.json").read_text())
         start = ws.start_from_json(dep["start"])
-        assert start.verify(ws.cs.read_public(dep["key"]), session, ws.LINK, PARAMS.digest) and start.base_ms == base
+        assert start.verify(ws.cs.read_public(dep["key"]), session, ws.LINK, PARAMS.digest)
+        assert (start.base_ms, start.ordinal) == (base, {0: 0, SPAN_MS: 1}[base])
         assert dep["origin_raw"] == {0: 101.0, SPAN_MS: 8.0}[base] and dep["origin_unix"] == 1.0
         (out / "client.json").write_text(json.dumps({"connections": []}))
         result = ws.check(out)
@@ -130,7 +132,7 @@ def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one
     signer = ws.cs.signer(key)
     try:
         issuer = ws.Issuer(signer, SESSION)
-        start = ws.start_json(ws.certify_start(issuer, 5, PARAMS))
+        start = ws.start_json(ws.certify_start(issuer, 5, 2, PARAMS))
         public = signer.public_key()
     finally:
         signer.close()
@@ -145,6 +147,7 @@ def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one
         ({"base_ms": None, "certified": False}, ["the session's start isn't certified (no start's certificate)"])
     assert problems(None) == ["the session's start isn't certified (no start's certificate)"]
     assert problems(start | {"base_ms": 6}) == ["the session's start isn't certified (opening)"]
+    assert problems(start | {"ordinal": 1}) == ["the session's start isn't certified (opening)"]
     assert problems(start | {"schedule": "00" * 64}) == ["the session's start isn't certified (schedule)"]
     assert problems(start, session=OTHER) == ["the session's start isn't certified (signature)"]
     other = ws.replace(PARAMS, slots=PARAMS.slots + 1)

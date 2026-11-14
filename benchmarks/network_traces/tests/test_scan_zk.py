@@ -536,7 +536,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
     signer = sz.LmsSigner.create(sz.lms.keygen(sz.lms.Params(64, 1, 6), hashlib.sha512(seed).digest()),
                                  out.parent / f"{out.name}-signer.json")
     issuer = sz.Issuer(signer, sz.SESSION)
-    start = WS.start_json(WS.certify_start(issuer, 0, setup.params))  # signed before any record, as the publisher's
+    start = WS.start_json(WS.certify_start(issuer, 0, 0, setup.params))  # signed before any record, as the publisher's
     by = {(r.link, r.window): r for r in (*served.ingress, *served.egress)}
     pub = WS.Publisher(out, issuer, setup.params,
                        lambda link, d, r, *a: sz.WR.Cells.of(link, d, by[r.link, r.window], *a))

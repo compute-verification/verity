@@ -1,6 +1,6 @@
 """The network certifier's manifest on the deployment layer (`verity.runtime`): its parties and the two
 channels that carry what the device hands another party, which a deployment configuration's table declares from
-here. It is the manifest alone: the device's party and the `ProtocolDef` are `device_party`'s.
+here. It is the manifest alone: the device's party and the `ProtocolDef` are `../device/device_party.py`'s.
 
 ~~~text
 network-certifier -> workers    out-opening {link, window}, the output value's witness its body (private)
@@ -18,7 +18,7 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
   gives it a clock (its grids release each bucket at a time fixed on its own clock), its own randomness (the
   capability `coins`: every salt it hides a record or a row under) and a signing key (`certificate.Signer`, whose
   one-time leaves sign each closed execution phase). Its pacer, its issuer and its link for the challenges
-  (`coin_link`) are processes of the one device, not parties.
+  (`../device/coin_link.py`) are processes of the one device, not parties.
 - **The workers** (`WORKERS`, the developer's) and **the verifier** (`VERIFIER`, the auditor's) are SPOT's parties,
   each declared here as SPOT declares it (`spot.verifier.parties.MANIFEST`).
 - The challenger stays SPOT's party. It runs on the network certifier's device, the auditor's, which a
