@@ -66,8 +66,8 @@
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
-  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Pous.Component",
+  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.Accounting.Remote",
   "Proofs.Properties.Accounting.Remote.Coins",
@@ -170,9 +170,6 @@
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
-  "Proofs.Properties.Verity.Subprotocols",
-  "Proofs.Properties.Verity.Coupling",
-  "Proofs.Properties.Flock.Nets",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -180,7 +177,11 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
-  "Proofs.Properties.Verity.Recursive.Audit"
+  "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.InferenceOnly",
+  "Proofs.Properties.Verity.Coupling",
+  "Proofs.Properties.Flock.Nets"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
