@@ -278,6 +278,27 @@ def test_a_piece_that_builds_its_judge_stamps_the_build(node, tmp_path) -> None:
                           "exit 0"]
 
 
+@pytest.mark.parametrize("create", [1, 2])
+def test_a_file_that_changes_as_the_copy_reads_it_still_builds_the_judge(node, tmp_path, create) -> None:
+    """tar's exit 1 on the copy, a file that changed as it read it (another suite's import writing ``__pycache__``
+    beside the tree's Python), still builds `wipe-protocol` and runs the piece; 2, a copy that failed, stops it (exit
+    7, saying so) before the judge's build or any card. The stand-in `tar` copies as tar does, then exits so."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    _exe(Path(node["FAKE_BIN"]) / "tar", f'#!/usr/bin/env bash\n{shlex.quote(shutil.which("tar"))} "$@" || exit\n'
+                                         f'[ "$3" != -c ] || exit {create}\n')
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    if create == 1:
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (tmp_path / "lake.log").read_text().split(" ", 1)[1] == "build wipe-protocol\n"
+        assert _stamps(d)[:3] == ["start", "built wipe-protocol", "asked for the card"]
+    else:
+        assert r.returncode == 7 and "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build" in r.stdout
+        assert not (tmp_path / "lake.log").exists() and not (tmp_path / "lease.log").exists()
+        assert _stamps(d) == ["start"]
+
+
 @pytest.mark.parametrize("apps, used", [("4242, 70212 MiB", "70300"), ("", "2048")])
 def test_a_card_that_isnt_idle_is_refused(node, tmp_path, apps, used) -> None:
     """A process on the card, or more of its memory in use than WIPE_IDLE_MIB: refused before demo.sh runs (exit 3, the
