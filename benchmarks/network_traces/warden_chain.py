@@ -38,7 +38,6 @@ import warden_serve as WS
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import service as SVC
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import DATA
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
@@ -160,7 +159,7 @@ def io(run: Path) -> dict:
                 except ValueError as e:
                     violations.append([rec.window * T + t, f"an ingress cell that isn't the warden's: {e}"])
                     continue
-                if kind in (DATA, W.END) and q not in end:
+                if kind in (W.DATA, W.END) and q not in end:
                     data[q] += payload
                     if kind == W.END:
                         end[q] = rec.window * T + t
