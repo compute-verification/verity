@@ -13,6 +13,7 @@ if not torch.cuda.is_available():
 
 from tests.protocols import test_pouw_lead as T  # noqa: E402
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.lead import rows_device as LD  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.errors import Refused  # noqa: E402
@@ -52,7 +53,7 @@ class DeviceBackend:
         size = 64 * -(-c.m // 64) * BN * -(-c.n // BN) * S
         ex = self.rng.integers(-(2**31), 2**31, size=size, dtype=np.int64).astype("<i4")
         if self.words_on is None:
-            self.words_on = L.DeviceWords(self.ext, self.hasher, dom, torch.cuda.current_stream().cuda_stream)
+            self.words_on = LD.DeviceWords(self.ext, self.hasher, dom, torch.cuda.current_stream().cuda_stream)
         self.words_on.add(torch.from_numpy(ex).cuda(), c.m, c.n, S, BN)
         self.streams.append(L.stream(ex, c.m, c.n, S, BN))
         return T._plain(layer, xq, s_a)

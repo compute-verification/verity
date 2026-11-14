@@ -175,7 +175,7 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 `γL` at each stop the projection reaches and its `γ` at each submission decoded there are within `Γ` at the stop's
 node, the play's end costs nothing, the start leaves the tape from the first stop fresh and is the uniform tape, the
 stops' term over the window is within the charge along a play over a uniform tape. -/
-theorem executionPhaseErr_le_of_charge (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseErr_le_of_charge (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
     {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞} {b : ℝ≥0∞}
@@ -203,17 +203,17 @@ theorem executionPhaseErr_le_of_charge (W : Window) (t : ℕ) (rd : Reading W.ro
     _ ≤ b := hb
 
 /-- **From no tree open, the potential is the window's hiding term** (`treePotential_nil`). -/
-theorem Window.treePotential_nil (W : Window) : treePotential e [] = W.hidingTerm := by
+theorem ExecutionPhase.treePotential_nil (W : ExecutionPhase) : treePotential e [] = W.hidingTerm := by
   have h : ENNReal.ofReal (1 / 2 ^ 257) = ((2 : ℝ≥0∞) ^ 257)⁻¹ := by
     rw [one_div, ENNReal.ofReal_inv_of_pos (by positivity), ENNReal.ofReal_pow (by norm_num),
       ENNReal.ofReal_ofNat]
-  rw [treePotential, treesErr, leafTerm, h, Window.hidingTerm, maxLeaves]
+  rw [treePotential, treesErr, leafTerm, h, ExecutionPhase.hidingTerm, maxLeaves]
   simp only [List.map_nil, List.sum_nil, zero_add, treeLines, Nat.sub_zero, Nat.cast_mul, div_eq_mul_inv]
   ring
 
 /-- **The sample-coupled start over the window averages any reading of the tape to its uniform average**, wherever
 the sample's coins are uniform (`avg_sampleMap_start`). -/
-theorem avg_executionPhaseSampleMap_start (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem avg_executionPhaseSampleMap_start (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H)
     (H : CoinTape (V.game θ F c) σ → ℝ≥0∞) :
@@ -228,7 +228,7 @@ theorem avg_executionPhaseSampleMap_start (W : Window) (rd : Reading W.rounds) (
 (`sampleMap_couples_at`): the joint distribution's tape off `linkEmptyAt` and `roundEmptyAt` at every member's stops is within
 the openings' gaps and empty classes at the stops' counts over the stops of the uniform tape, wherever the sample's
 coins are uniform. -/
-theorem executionPhaseSampleMap_couples_at (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseSampleMap_couples_at (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (label : String) (after : ByteArray) {m : ℕ}
     (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
@@ -256,7 +256,7 @@ theorem executionPhaseSampleMap_couples_at (W : Window) (t : ℕ) (rd : Reading 
 stop releases, is within the hiding term** at every strategy (`couplesErr_sampleMap_le_at`): each stop's gap and empty
 class at its count are within its node's class error at any count the frame asks for, and the class errors along a
 play are within the potential from no tree open, however many members' sessions the play runs. -/
-theorem executionPhaseErr_sampleMap_le_at (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseErr_sampleMap_le_at (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (label : String) (after : ByteArray) {m : ℕ}
     (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
@@ -284,11 +284,11 @@ cut `P` and `Q`, off `linkEmptyAt` and `roundEmptyAt` at every member's stops, w
 the stops' term (`executionPhaseSampleMap_couples_at`), within the hiding term at every strategy
 (`executionPhaseErr_sampleMap_le_at`), wherever the window's coins are uniform. -/
 theorem executionPhaseCouplingTarget_of_sample_at (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
-    (κ : (W : Window) → W.Ω → Fin m → Fin 512 → Bool) (W : Window) (P : Exchange → Prop) (θ : ByteArray)
+    (κ : (W : ExecutionPhase) → W.Ω → Fin m → Fin 512 → Bool) (W : ExecutionPhase) (P : Exchange → Prop) (θ : ByteArray)
     (F : Array ByteArray) (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ W ω)) = avg H)
     (ha : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),

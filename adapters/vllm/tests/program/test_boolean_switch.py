@@ -241,7 +241,7 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     import torch
 
     from verity_torch.frontend.boolean import derived
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     class M(torch.nn.Module):
         def forward(self, x, y):

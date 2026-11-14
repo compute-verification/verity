@@ -78,7 +78,7 @@ public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemotePeriod
 public import Definitions.Slowdown.Assumptions.Capability
 public import Definitions.Slowdown.Guarantees.Capability
-public import Definitions.Accounting.Guarantees.Coverage
+public import Definitions.Slowdown.Guarantees.Coverage
 public import Definitions.Slowdown.Guarantees.Covering
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut
@@ -98,10 +98,10 @@ public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Flock.Guarantees
 public import Definitions.Accounting.Assumptions.Remote
 public import Definitions.Accounting.Assumptions.RemoteOutside
-public import Definitions.Accounting.Assumptions.CreditedWords
+public import Definitions.Pouw.Assumptions.CreditedWords
 public import Definitions.Accounting.Assumptions.RemoteP2
 public import Definitions.Accounting.Assumptions.Parties
-public import Definitions.Accounting.Assumptions.TS.Fixed
+public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees

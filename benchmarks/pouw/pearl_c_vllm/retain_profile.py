@@ -247,12 +247,14 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
 
         from verity.protocols.accounting.pouw.verifier import verifier
         from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
         draw = random.Random(args.seed)
         verifier.coins = draw.randbytes
         PPD.new_salt_key = lambda scheme: draw.randbytes(32)
     if args.wait_ends:
         from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-        PPD.PearlCDeviceRun.retain_behind = False
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+        PPDR.PearlCDeviceRun.retain_behind = False
     prof = _Profile()
     parts = _install(prof)
     t = time.perf_counter()
