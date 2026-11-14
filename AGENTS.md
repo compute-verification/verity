@@ -265,6 +265,9 @@ who acts on it under the loop's `--gate check` (to no one under graph2), and a l
 owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
 Landing.
 
+An owner closes its own PR once `main` holds its change or another PR carries it, with one line naming the commit or PR
+that holds it. Nobody is asked first, and a superseded PR is not left open as a record: the closed PR is the record.
+
 ## Lean
 
 - **Soundness is one theorem.** Protocol soundness (`Verity.Soundness`) is to be one theorem over everything the compiled
