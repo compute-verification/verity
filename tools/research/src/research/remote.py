@@ -159,7 +159,7 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
-_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
+_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is the HEAD and `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
 SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (a laptop -> pod link can run at 130-220 KB/s)
@@ -1039,20 +1039,28 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
     doc = read_ready(Path(path))
     if doc["identity"] != identity:
         raise SourceNotReady(f"{path}/{READY_FILE} names identity {doc['identity']}, the run asked for {identity}; refusing to execute")
-    if dirt := tracked_dirt(Path(path)):
+    if dirt := tracked_dirt(Path(path), identity):
         raise SourceNotReady(f"{path} is shared by every run of {identity}, and an earlier run edited its tracked files ({', '.join(dirt[:3])}); "
                              f"refusing to execute from it: relaunch (the launcher sets it aside and ships the commit afresh), or use --cwd clone")
     return doc
 
 
-def tracked_dirt(path: Path) -> list[str]:
-    """The tracked paths of a shipped checkout that differ from its commit (one run's edit to the shared per-commit tree would
-    otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
-    no .git, has nothing to compare and gives none."""
+def _head_dirt(head: str, identity: str) -> list[str]:
+    """The dirt of a shipped checkout whose HEAD (`git rev-parse --verify -q HEAD`, empty when it names no commit) is not the commit
+    the tree is named for: `git status` compares the files with whatever HEAD names, so a run's `git checkout OTHER` there leaves it
+    silent over OTHER's files.  A detached HEAD or a branch at `identity` is the commit."""
+    return [] if head == identity else [f"HEAD is at {head or 'no commit'}, not at {identity}"]
+
+
+def tracked_dirt(path: Path, identity: str) -> list[str]:
+    """What makes a shipped checkout no longer `identity`'s (one run's change to the shared per-commit tree would otherwise reach
+    every later run of that commit): a HEAD that is not `identity` (`_head_dirt`), then the tracked paths that differ from HEAD.
+    Untracked and ignored build output is not dirt; a tree shipped as an archive, with no .git, has nothing to compare and gives none."""
     if not (Path(path) / ".git").exists():
         return []
+    head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=path, capture_output=True, text=True).stdout.strip()
     r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=path, capture_output=True, text=True)
-    return [line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else []
+    return _head_dirt(head, identity) + ([line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else [])
 
 
 def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: str) -> dict[str, Any]:
@@ -1061,11 +1069,13 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
-    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
-    no longer match its commit; the doc then carries the first such paths under `dirt`."""
+    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout that is no longer
+    its commit's: its HEAD is not the identity READY.json names, or its tracked files don't match HEAD; the doc then carries what
+    was found, as `tracked_dirt` lists it (HEAD, then the first such paths), under `dirt`."""
     q = shlex.quote(dest)
     r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
-                                  f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
+                                  f"if [ -e {q}/.git ]; then echo \"HEAD $(git -C {q} rev-parse --verify -q HEAD 2>/dev/null)\"; "
+                                  f"git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
                                   f"elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
     out, _, dirt = r.stdout.decode(errors="replace").partition(_DIRT_MARK)
     out = out.strip()
@@ -1079,8 +1089,9 @@ def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None
         doc = json.loads(out)
     except ValueError:
         raise SourceNotReady(f"{dest}/{READY_FILE} is not JSON; inspect the machine") from None
-    if paths := [line[3:] for line in dirt.splitlines() if line.strip()]:
-        return "dirty", {**doc, "dirt": paths}
+    lines = [line for line in dirt.splitlines() if line.strip()]          # of a checkout: `HEAD <commit>`, then `git status`
+    if lines and (found := _head_dirt(lines[0][5:], doc.get("identity")) + [line[3:] for line in lines[1:]]):
+        return "dirty", {**doc, "dirt": found}
     return "ready", doc
 
 
@@ -1228,16 +1239,16 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
     return partial, None, True
 
 
-_RC_DIRT = 77                                  # _add_git: the tree's tracked files are not the commit's (its .git stays, so the probe sees dirt)
+_RC_DIRT = 77                                  # _add_git: the tree's HEAD or tracked files are not the commit's (its .git stays, so the probe sees dirt)
 
 
 def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> str | None:
     """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, so every later run of the commit finds
     one (a `--cwd clone` run clones it; `suites.py` keys from git's view of it): the commit is pushed as `_ship_git` pushes it, and a
     `--no-checkout` shared clone's .git, detached at `sha` with its index, is renamed into the tree whole, so runs of the commit
-    sharing it are never moved and no file of theirs is written.  Its tracked files must then be the commit's
-    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree whose
-    files differ keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
+    sharing it are never moved and no file of theirs is written.  Its HEAD and its tracked files must then be the commit's
+    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree where
+    either differs keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
     else why not."""
     repo = f"{root}/{POD_GIT_REPO}"
     if not tree:
@@ -1308,8 +1319,9 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
-      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
-         run edited, which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
+      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout an earlier run left at another
+         commit (its HEAD is not the identity) or whose tracked files it edited, which is moved to <root>/src/.quarantine/ and shipped
+         afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -2163,8 +2175,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
            gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
-           auto: dict[str, Any] | None = None) -> dict[str, Any]:
+           auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `mem_limit` (--mem-limit-gb): the memory limit the launch states, `{"gb", "by"}`, which the runner's memory mark is made
+    against (research.memmark); it limits nothing.
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
@@ -2226,6 +2240,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
+        if mem_limit and tool_pkg is not None and not (tool_pkg / "memmark.py").exists():
+            raise Refused(f"--mem-limit-gb: the research package in {source} predates the memory mark (no research/memmark.py); the "
+                          f"run's record would not say what was stated.  Commit a tree that has it, or drop --mem-limit-gb")
         if preflight_tool and not knows_preflight(tool_pkg):
             raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
                           f"a tree that has it, or drop --preflight")
@@ -2297,6 +2314,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
+                   **({"mem_limit": mem_limit} if mem_limit else {}),
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),

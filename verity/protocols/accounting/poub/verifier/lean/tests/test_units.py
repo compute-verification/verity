@@ -2,7 +2,7 @@
 sampled inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.commitments.verify_opening`
-over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`AuditRun.close`'s), a
+over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's samples (`AuditRun.close`'s), a
 registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed sampled
 from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
@@ -15,14 +15,21 @@ import itertools
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
+from verity.commitments import (
+    Commitment,
+    CommitmentDomain,
+    MerkleTree,
+    Opening,
+    RangeIndexedDomain,
+    verify_opening,
+)
+from verity.commitments.randomness import derive
 from verity.protocols.accounting.poub.verifier import audit, codec, receipts
 from verity.protocols.accounting.poub.verifier.receipts import Plan
-from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, verify_opening
-from verity.commitments.randomness import derive
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -85,37 +92,37 @@ def codec_decode(v) -> str | None:
 
 
 @st.composite
-def decode_inputs(draw) -> dict:
-    v = dict(draw(st.sampled_from(encoded())))
-    edit = draw(st.integers(0, 12))
+def decode_inputs(take) -> dict:
+    v = dict(take(st.sampled_from(encoded())))
+    edit = take(st.integers(0, 12))
     if edit == 1:
-        v["j"] += draw(st.sampled_from([1, -1]))
+        v["j"] += take(st.sampled_from([1, -1]))
     elif edit == 2:
         b = bytearray.fromhex(v["block"])
-        b[draw(st.integers(0, 4095))] ^= 1 << draw(st.integers(0, 6))
+        b[take(st.integers(0, 4095))] ^= 1 << take(st.integers(0, 6))
         v["block"] = b.hex()
     elif edit == 3:
         v["block"] = "ff" * 128 + v["block"][256:]
     elif edit == 4:
-        v["digest"] = draw(sized(64)) if v["digest"] else hashlib.sha512(b"x").hexdigest()
+        v["digest"] = take(sized(64)) if v["digest"] else hashlib.sha512(b"x").hexdigest()
     elif edit == 5:
-        v["coin"] = None if v["coin"] else draw(sized(32))
+        v["coin"] = None if v["coin"] else take(sized(32))
     elif edit == 6:
         v["digest"] = None
     elif edit == 7:
-        v["seed"] = draw(sized(32))
+        v["seed"] = take(sized(32))
     elif edit == 8:
-        v["block"] = draw(sized(codec.BLOCK_BYTES))
+        v["block"] = take(sized(codec.BLOCK_BYTES))
     elif edit == 9:
-        v["j"] = draw(st.sampled_from([codec.WORD_INDICES // 64 - 1, codec.WORD_INDICES // 32 - 1, 2 ** 64, -1]))
+        v["j"] = take(st.sampled_from([codec.WORD_INDICES // 64 - 1, codec.WORD_INDICES // 32 - 1, 2 ** 64, -1]))
     elif edit == 10:
-        v["codec"] = draw(st.sampled_from([{"field": "p256", "rounds": 2, "masked": False},
+        v["codec"] = take(st.sampled_from([{"field": "p256", "rounds": 2, "masked": False},
                                            {"field": "p512", "rounds": 1, "masked": False},
                                            {"field": "p512", "rounds": 2, "masked": 1}, M.codec_json(codec.DEFAULT)]))
     elif edit == 11:
-        v["block"] = draw(blocks()).hex()
+        v["block"] = take(blocks()).hex()
     elif edit == 12:
-        del v[draw(st.sampled_from(sorted(v)))]
+        del v[take(st.sampled_from(sorted(v)))]
     return v
 
 
@@ -143,31 +150,31 @@ RUN = st.lists(st.integers(-1, 12), min_size=2, max_size=2)
 RUNS = st.lists(RUN, max_size=5)
 
 
-def fault(draw, n: int) -> int:
+def fault(take, n: int) -> int:
     """Which of `n` faults an input carries, 1 … `n`, or 0 for none, about half the time."""
-    f = draw(st.integers(0, 2 * n))
+    f = take(st.integers(0, 2 * n))
     return f if f <= n else 0
 
 
 @st.composite
-def plan_runs(draw, extent: int) -> list:
+def plan_runs(take, extent: int) -> list:
     """A plan of distinct chunks of a store of `extent`, in a sampled order."""
-    order = draw(st.permutations(sorted(draw(st.sets(st.integers(0, min(extent, 2 ** 64 - 1) - 1), min_size=1,
+    order = take(st.permutations(sorted(take(st.sets(st.integers(0, min(extent, 2 ** 64 - 1) - 1), min_size=1,
                                                      max_size=10)))))
     return [list(r) for r in Plan.of(order, min(extent, 2 ** 64 - 1)).runs]
 
 
 @st.composite
-def plan_inputs(draw) -> dict:
-    f = fault(draw, 3)
-    blocks = draw(st.integers(1, 14) | st.just(2 ** 64 - 1))
-    runs = draw(RUNS) if f == 1 else draw(plan_runs(blocks))
+def plan_inputs(take) -> dict:
+    f = fault(take, 3)
+    blocks = take(st.integers(1, 14) | st.just(2 ** 64 - 1))
+    runs = take(RUNS) if f == 1 else take(plan_runs(blocks))
     if f == 2:
-        blocks = draw(st.sampled_from([0, 2 ** 64]))
+        blocks = take(st.sampled_from([0, 2 ** 64]))
     length = sum(c for _, c in runs if isinstance(c, int))
     inside = st.lists(st.integers(0, length - 1), max_size=6) if length > 0 else st.just([])
     return {"runs": runs, "blocks": blocks,
-            "positions": draw(st.lists(st.integers(-1, max(length, 0) + 1), min_size=1, max_size=3) if f == 3
+            "positions": take(st.lists(st.integers(-1, max(length, 0) + 1), min_size=1, max_size=3) if f == 3
                               else inside)}
 
 
@@ -184,23 +191,23 @@ def plan_changed(v) -> list:
 
 
 @st.composite
-def change_inputs(draw) -> dict:
+def change_inputs(take) -> dict:
     """A plan's change: chunks it holds removed along its runs and chunks it then doesn't hold added, or one of a
     shrinking store, sampled runs for the change, a change that removes every chunk, or sampled runs for the plan."""
-    f = fault(draw, 4)
-    blocks = draw(st.integers(1, 10))
-    extent = blocks - 1 if f == 1 else blocks + draw(st.integers(0, 4))
-    runs = draw(plan_runs(blocks))
+    f = fault(take, 4)
+    blocks = take(st.integers(1, 10))
+    extent = blocks - 1 if f == 1 else blocks + take(st.integers(0, 4))
+    runs = take(plan_runs(blocks))
     held = {a + u for a, c in runs for u in range(c)}
-    gone = held if f == 3 else draw(st.sets(st.sampled_from(sorted(held)), max_size=min(4, len(held) - 1)))
-    more = draw(st.sets(st.integers(0, max(extent, 1) - 1), max_size=4)) - (held - gone)
+    gone = held if f == 3 else take(st.sets(st.sampled_from(sorted(held)), max_size=min(4, len(held) - 1)))
+    more = take(st.sets(st.integers(0, max(extent, 1) - 1), max_size=4)) - (held - gone)
     removed = [list(r) for a, c in sorted(tuple(r) for r in runs) if gone & set(range(a, a + c))
                for r in Plan.of(sorted(gone & set(range(a, a + c))), a + c).runs]
     added = [list(r) for r in (Plan.of(sorted(more), max(more) + 1).runs if more else ())]
     if f == 2:
-        removed, added = draw(RUNS), draw(RUNS)
+        removed, added = take(RUNS), take(RUNS)
     if f == 4:
-        runs = draw(RUNS)
+        runs = take(RUNS)
     return {"runs": runs, "blocks": blocks, "added": added, "removed": removed, "extent": extent}
 
 
@@ -216,24 +223,24 @@ def receipt(v) -> str:
 
 
 @st.composite
-def receipt_inputs(draw) -> dict:
+def receipt_inputs(take) -> dict:
     """A receipt of either kind at its rows, or one of an unknown kind, rows the kind doesn't take, a seed or a chunk
     of the wrong size, or a chunk index past u64."""
-    kind = draw(st.sampled_from([receipts.SKETCH_SHA512, receipts.BLOCK_SHA512]))
-    v = {"kind": kind, "rows": draw(st.sampled_from([16, 64] if kind == receipts.SKETCH_SHA512 else [0])),
-         "seed": expand(draw(st.binary(max_size=8)), 64).hex(), "j": draw(st.integers(0, 2 ** 64 - 1)),
-         "block": draw(blocks()).hex()}
-    f = fault(draw, 5)
+    kind = take(st.sampled_from([receipts.SKETCH_SHA512, receipts.BLOCK_SHA512]))
+    v = {"kind": kind, "rows": take(st.sampled_from([16, 64] if kind == receipts.SKETCH_SHA512 else [0])),
+         "seed": expand(take(st.binary(max_size=8)), 64).hex(), "j": take(st.integers(0, 2 ** 64 - 1)),
+         "block": take(blocks()).hex()}
+    f = fault(take, 5)
     if f == 1:
         v["kind"] = "x"
     elif f == 2:
-        v["rows"] = draw(st.sampled_from([0, 32] if kind == receipts.SKETCH_SHA512 else [16, 64]))
+        v["rows"] = take(st.sampled_from([0, 32] if kind == receipts.SKETCH_SHA512 else [16, 64]))
     elif f == 3:
-        v["seed"] = draw(st.sampled_from(["", "00" * 63, "00" * 65, "0"]))
+        v["seed"] = take(st.sampled_from(["", "00" * 63, "00" * 65, "0"]))
     elif f == 4:
         v["j"] = 2 ** 64
     elif f == 5:
-        v["block"] = v["block"][:draw(st.sampled_from([0, 2, 8190]))]
+        v["block"] = v["block"][:take(st.sampled_from([0, 2, 8190]))]
     return v
 
 
@@ -251,40 +258,40 @@ def opening(v) -> bool:
 
 
 @st.composite
-def opening_inputs(draw) -> dict:
+def opening_inputs(take) -> dict:
     """An opening of a sampled tree over a range domain, as is or with one field changed."""
-    binding = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([64, 64, 32])))
-    owner, start, count = draw(st.sampled_from([0, -1, -2, 3])), draw(st.integers(0, 40)), draw(st.integers(1, 20))
-    schema = draw(st.sampled_from([receipts.SCHEMA, "verity/remote-bandwidth/coins/v0"]))
+    binding = expand(take(st.binary(max_size=8)), take(st.sampled_from([64, 64, 32])))
+    owner, start, count = take(st.sampled_from([0, -1, -2, 3])), take(st.integers(0, 40)), take(st.integers(1, 20))
+    schema = take(st.sampled_from([receipts.SCHEMA, "verity/remote-bandwidth/coins/v0"]))
     d = CommitmentDomain(binding, owner, RangeIndexedDomain(start, start + count), hash="sha512")
-    values = {start + u: expand(b"%d" % u, draw(st.integers(0, 3)) * 64) for u in range(count)}
+    values = {start + u: expand(b"%d" % u, take(st.integers(0, 3)) * 64) for u in range(count)}
     tree = MerkleTree(d, values, lambda _p: schema)
-    position = start + draw(st.integers(0, count - 1))
+    position = start + take(st.integers(0, count - 1))
     v = {"binding": binding.hex(), "owner": owner, "start": start, "count": count, "root": tree.commitment.root.hex(),
          "position": position, "value": values[position].hex(), "path": [x.hex() for x in tree.open(position).path],
          "schema": schema}
-    edit = fault(draw, 10)
+    edit = fault(take, 10)
     if edit == 1:
-        v["position"] = draw(st.sampled_from([position + 1, position - 1, start + count, start - 1]))
+        v["position"] = take(st.sampled_from([position + 1, position - 1, start + count, start - 1]))
     elif edit == 2:
         v["value"] = (bytes.fromhex(v["value"]) + b"\0").hex()
     elif edit == 3 and v["path"]:
-        k = draw(st.integers(0, len(v["path"]) - 1))
-        v["path"][k] = draw(st.sampled_from([hashlib.sha512(b"x").hexdigest(), "00" * 32, "00" * 63]))
+        k = take(st.integers(0, len(v["path"]) - 1))
+        v["path"][k] = take(st.sampled_from([hashlib.sha512(b"x").hexdigest(), "00" * 32, "00" * 63]))
     elif edit == 4:
-        v["path"] = v["path"][:-1] if v["path"] and draw(st.booleans()) else v["path"] + ["00" * 64]
+        v["path"] = v["path"][:-1] if v["path"] and take(st.booleans()) else v["path"] + ["00" * 64]
     elif edit == 5:
-        v["root"] = draw(st.sampled_from(["00" * 64, "00" * 32, "00" * 31, v["root"][:-2] + "00"]))
+        v["root"] = take(st.sampled_from(["00" * 64, "00" * 32, "00" * 31, v["root"][:-2] + "00"]))
     elif edit == 6:
-        v["start"] = draw(st.sampled_from([start + 1, max(start - 1, 0)]))
+        v["start"] = take(st.sampled_from([start + 1, max(start - 1, 0)]))
     elif edit == 7:
-        v["count"] = draw(st.sampled_from([count + 1, count - 1, 0]))
+        v["count"] = take(st.sampled_from([count + 1, count - 1, 0]))
     elif edit == 8:
-        v["owner"] = draw(st.sampled_from([owner + 1, -3, 7]))
+        v["owner"] = take(st.sampled_from([owner + 1, -3, 7]))
     elif edit == 9:
         v["schema"] = "hm96-sha512/row/v1"
     elif edit == 10:
-        v["binding"] = draw(st.sampled_from([binding[:-1].hex(), (binding[:32] if len(binding) == 64 else binding * 2).hex()]))
+        v["binding"] = take(st.sampled_from([binding[:-1].hex(), (binding[:32] if len(binding) == 64 else binding * 2).hex()]))
     return v
 
 
@@ -299,13 +306,13 @@ def leaf_receipt(v) -> str | None:
 
 
 @st.composite
-def leaf_inputs(draw) -> dict:
-    positions = draw(st.integers(0, 40))
-    p = draw(mostly(st.integers(0, positions + 2), st.just(-1), 9))
+def leaf_inputs(take) -> dict:
+    positions = take(st.integers(0, 40))
+    p = take(mostly(st.integers(0, positions + 2), st.just(-1), 9))
     c = max(p, 0) // receipts.PER_LEAF
     size = 64 * min(receipts.PER_LEAF, positions - receipts.PER_LEAF * c)
-    n = draw(mostly(st.just(size), st.sampled_from([0, 64, max(size, 0) + 64, max(size - 1, 0), 1024])))
-    return {"leaf": expand(draw(st.binary(max_size=4)), max(n, 0)).hex(), "p": p, "positions": positions}
+    n = take(mostly(st.just(size), st.sampled_from([0, 64, max(size, 0) + 64, max(size - 1, 0), 1024])))
+    return {"leaf": expand(take(st.binary(max_size=4)), max(n, 0)).hex(), "p": p, "positions": positions}
 
 
 def test_leaf_receipt(server) -> None:
@@ -314,7 +321,7 @@ def test_leaf_receipt(server) -> None:
 
 
 def draws(v) -> list:
-    """`AuditRun.close`'s draw from window t's openings coin, on the passes' lengths."""
+    """`AuditRun.close`'s sample from window t's openings coin, on the passes' lengths."""
     coin, registration, t, samples = M.hex_(v, "coin"), M.hex_(v, "registration"), M.nat(v, "window"), M.nat(v, "samples")
     lengths = M._list(v, "lengths")
     if not lengths or any(not isinstance(n, int) or isinstance(n, bool) or n < 1 for n in lengths):
@@ -329,14 +336,14 @@ def draws(v) -> list:
 
 
 @st.composite
-def draws_inputs(draw) -> dict:
+def draws_inputs(take) -> dict:
     """A coin of one or more bytes (`derive` refuses an empty one, which no session has), and lengths now and then
     empty or with a pass of none."""
-    lengths = draw(mostly(st.lists(st.integers(1, 40), min_size=1, max_size=4),
+    lengths = take(mostly(st.lists(st.integers(1, 40), min_size=1, max_size=4),
                           st.sampled_from([[], [0], [3, 0], [-1]])))
-    return {"coin": expand(draw(st.binary(max_size=8)), draw(st.sampled_from([32, 32, 1, 64]))).hex(),
-            "registration": draw(sized(64, near=False)), "window": draw(st.integers(0, 2 ** 33)),
-            "samples": draw(mostly(st.integers(1, 60), st.just(0), 9)), "lengths": lengths}
+    return {"coin": expand(take(st.binary(max_size=8)), take(st.sampled_from([32, 32, 1, 64]))).hex(),
+            "registration": take(sized(64, near=False)), "window": take(st.integers(0, 2 ** 33)),
+            "samples": take(mostly(st.integers(1, 60), st.just(0), 9)), "lengths": lengths}
 
 
 def test_draws(server) -> None:
@@ -350,20 +357,20 @@ def registration_digest(v) -> str:
 
 
 @st.composite
-def registration_inputs(draw) -> dict:
-    kind = draw(st.sampled_from(receipts.KINDS))
-    c = draw(st.sampled_from(CODECS))
-    v = {"node": expand(draw(st.binary(max_size=8)), draw(st.integers(1, 64))).hex(),
-         "blocks": draw(st.sampled_from([1, 6, 2 ** 20, c.max_blocks])),
-         "payload_root": expand(draw(st.binary(max_size=8)), 64).hex(),
-         "codec_seed": expand(draw(st.binary(max_size=8)), 32).hex(), "codec": M.codec_json(c), "receipt": kind,
+def registration_inputs(take) -> dict:
+    kind = take(st.sampled_from(receipts.KINDS))
+    c = take(st.sampled_from(CODECS))
+    v = {"node": expand(take(st.binary(max_size=8)), take(st.integers(1, 64))).hex(),
+         "blocks": take(st.sampled_from([1, 6, 2 ** 20, c.max_blocks])),
+         "payload_root": expand(take(st.binary(max_size=8)), 64).hex(),
+         "codec_seed": expand(take(st.binary(max_size=8)), 32).hex(), "codec": M.codec_json(c), "receipt": kind,
          "bind": False, "layout": receipts.LAYOUT,
-         "rows": draw(st.sampled_from([16, 64])) if kind == receipts.SKETCH_SHA512 else 0}
-    edit = fault(draw, 9)
+         "rows": take(st.sampled_from([16, 64])) if kind == receipts.SKETCH_SHA512 else 0}
+    edit = fault(take, 9)
     if edit == 1:
-        v["node"] = draw(st.sampled_from(["", "00" * 65]))
+        v["node"] = take(st.sampled_from(["", "00" * 65]))
     elif edit == 2:
-        v["blocks"] = draw(st.sampled_from([0, c.max_blocks + 1, 2 ** 64]))
+        v["blocks"] = take(st.sampled_from([0, c.max_blocks + 1, 2 ** 64]))
     elif edit == 3:
         v["payload_root"] = "00" * 63
     elif edit == 4:
@@ -373,11 +380,11 @@ def registration_inputs(draw) -> dict:
     elif edit == 6:
         v["layout"] = "fused/v0"
     elif edit == 7:
-        v["rows"] = draw(st.sampled_from([0, 16, 32, 64]))
+        v["rows"] = take(st.sampled_from([0, 16, 32, 64]))
     elif edit == 8:
-        v["receipt"] = draw(st.sampled_from(["x", *receipts.KINDS]))
+        v["receipt"] = take(st.sampled_from(["x", *receipts.KINDS]))
     elif edit == 9:
-        del v[draw(st.sampled_from(sorted(v)))]
+        del v[take(st.sampled_from(sorted(v)))]
     return v
 
 
@@ -399,18 +406,18 @@ def register(v) -> dict:
 
 
 @st.composite
-def register_inputs(draw) -> dict:
-    v = draw(registration_inputs())
+def register_inputs(take) -> dict:
+    v = take(registration_inputs())
     v.pop("codec_seed", None)
-    v["source"] = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([1, 21, 64]))).hex()
-    v["nonce"] = expand(draw(st.binary(max_size=8)), audit.NONCE_BYTES).hex()
-    edit = fault(draw, 3)
+    v["source"] = expand(take(st.binary(max_size=8)), take(st.sampled_from([1, 21, 64]))).hex()
+    v["nonce"] = expand(take(st.binary(max_size=8)), audit.NONCE_BYTES).hex()
+    edit = fault(take, 3)
     if edit == 1:
         v["source"] = ""
     elif edit == 2:
-        v["nonce"] = draw(st.sampled_from(["", "00" * 31, "00" * 33]))
+        v["nonce"] = take(st.sampled_from(["", "00" * 31, "00" * 33]))
     elif edit == 3:
-        del v[draw(st.sampled_from(["source", "nonce"]))]
+        del v[take(st.sampled_from(["source", "nonce"]))]
     return v
 
 

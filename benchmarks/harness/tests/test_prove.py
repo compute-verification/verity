@@ -12,7 +12,8 @@ count a row with the fields the command reads: a statement's mean GPU-seconds as
 one GPU, a report that was stopped or timed out as a void row whose prover exited nonzero, and one with a session not
 accepted as a void row with a refused session. `server-reports/RUN/` holds the runs' reports themselves, as the store does,
 for the reader of runs from before `rate.json`. `refusals/rate/rate.json` is made up: one row that is a steady-state
-measurement and one of each way a row isn't. The figures pinned below hold this code's arithmetic to a computation done
+measurement and one of each way a row isn't. `exfiltration/RUN/rows.jsonl` is the exfiltration run of record's world
+year rows of its figure's case, cut to the fields `verity bench exfiltration`'s reader reads. The figures pinned below hold this code's arithmetic to a computation done
 independently of it on the same records; they publish no measurement, and what the command says of a workload is what
 it prints from the store's records of record."""
 
@@ -28,9 +29,11 @@ import shutil
 import sys
 from dataclasses import replace
 from pathlib import Path
+from statistics import linear_regression
 
 import pytest
 
+from verity_bench import exfiltration as E
 from verity_bench import kit
 from verity_bench import lean_verify as L
 from verity_bench import prove as P
@@ -124,7 +127,9 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     gemm = by[GEMM64].cost
     assert (gemm.source, gemm.seconds, gemm.record, gemm.staged) == (P.STEADY, 1.0, "r20260102-000000-0002", "gemm64")
     assert gemm.verifier_seconds == 0.5 and gemm.at_steady_rate is None and gemm.provers == 1
-    assert gemm.note == "`gemm64` (`Gemm_v1{K=64,N=1,DOT=Dot_v1}`), 1 prover, full statements (out/rate/rate.json)"
+    assert gemm.note == ("`gemm64` (`Gemm_v1{K=64,N=1,DOT=Dot_v1}`), 1 prover, full statements (out/rate/rate.json); "
+                         "another size, statements 4/8 full (r20260103-000000-0003)")
+    assert gemm.sizes == ((8, 8.0, "r20260102-000000-0002"), (4, 6.0, "r20260103-000000-0003"))
     assert gemm.definition == P.definition_id(GEMM64) and by[GEMM32].cost.definition is None
 
     # the card measures the K=64 GEMM alone: K=32 is another type, so it and the cut's block are modeled from k_log, at
@@ -152,6 +157,42 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     assert all(c.at_steady_rate is None for c in alone.values())
     # with no card either, nothing is priced
     assert {r.cost.source for r in P.Flock().table(census).rows} == {P.MISSING}
+
+
+def test_a_types_rows_at_other_statement_sizes_are_its_sizes_and_move_no_figure():
+    """A type's measured rows at its prover count and cores that timed statements of another size are carried beside
+    the row that prices it, one a size, the most blocks first: the pricing row's run's where it timed that size, else
+    the newest. A row at other cores or provers, one refused, and one staged in another Definition are no size of it.
+    The sizes move no figure, and a type timed at one size has none."""
+
+    census = P.Census.of(CENSUS)
+    gemm, norm = P.definition_id(GEMM64), P.definition_id(NORM)
+    run, newer, newest = "r20260102-000000-0002", "r20260103-000000-0003", "r20260104-000000-0004"
+    sizes = (
+        steady("gemm64", gemm, run, 8, 8.0),                                    # prices the type
+        steady("gemm64", gemm, run, 2, 3.0),                                    # a quarter, the pricing row's run
+        steady("gemm64", gemm, newest, 2, 2.5),                                 # a newer quarter
+        steady("gemm64", gemm, newer, 4, 6.0),                                  # a half, another run
+        steady("gemm64", gemm, newest, 1, 1.0, cores=24),                       # other cores
+        steady("gemm64", gemm, newest, 1, 1.0, provers=2),                      # another prover count
+        steady("gemm64", gemm, newest, 1, None, refused="timed out"),
+        steady("gemm64", gemm, newest, 1, 1.0, form="Gemm_v2{K=64,N=1,DOT=Dot_v2}"),
+        steady("norm", norm, run, 8, 24.0, k_log=22),
+    )
+    table = P.Flock(sizes, SESSIONS, "art:card").table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert by[GEMM64].sizes == ((8, 8.0, run), (4, 6.0, newer), (2, 3.0, run))
+    assert by[GEMM64].note.endswith(f"full statements (out/rate/rate.json); another size, statements 4/8 full ({newer}); "
+                                    f"another size, statements 2/8 full ({run})")
+    assert by[NORM].sizes == () and "another size" not in by[NORM].note
+    one = P.Flock((sizes[0], sizes[-1]), SESSIONS, "art:card").table(census)
+    assert [replace(r, cost=replace(r.cost, sizes=(), note="")) for r in table.rows] == [
+        replace(r, cost=replace(r.cost, note="")) for r in one.rows]
+    rows = {r["block"]: r for r in P.report(table, 1.0)["rows"]}
+    assert rows[GEMM64]["sizes"] == [{"blocks": 8, "statement_seconds": 8.0, "record": run},
+                                     {"blocks": 4, "statement_seconds": 6.0, "record": newer},
+                                     {"blocks": 2, "statement_seconds": 3.0, "record": run}]
+    assert rows[NORM]["sizes"] is None and rows[GEMM32]["sizes"] is None
 
 
 def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_measured_for_them():
@@ -996,8 +1037,8 @@ def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_
     tell" prices nothing. `one_numa_node` is no condition here: a row that fails it, or can't show it, is still
     priced."""
 
-    assert R.CHECKS == tuple(getattr(S, name) for name in GATES)
-    assert S.CHECKS == tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) and S.one_numa_node not in R.CHECKS
+    assert tuple(getattr(S, name) for name in GATES) == R.CHECKS
+    assert tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) == S.CHECKS and S.one_numa_node not in R.CHECKS
     good = {row["type"]: row for row in REFUSALS}["good"]
     rows = [row for row in REFUSALS if "stage" in row] + [changed(good, change) for change, _ in STRICT]
     for row in rows:
@@ -1203,6 +1244,23 @@ def plan_art(s: Store, **change) -> str:
     return s.tree("evidence/v1", R.PLAN_FILE, fixture("mix.json") | change)
 
 
+#: the exfiltration run of record whose world year rows `fixtures/prove/exfiltration/` holds, cut to the fields its
+#: reader reads (`exfiltration.at_share`)
+DESIGN = fixture("records.json")[E.RECORD]
+
+
+def designed(s: Store, tmp: Path, run: str = DESIGN) -> str:
+    """The exfiltration run of record's rows in the store, its run files holding them as the planner's driver writes
+    them, labelled its record."""
+
+    files = tmp / "design-files" / run
+    (files / E.ROWS_FILES[0]).parent.mkdir(parents=True)
+    shutil.copy(FIXTURES / "exfiltration" / DESIGN / "rows.jsonl", files / E.ROWS_FILES[0])
+    s.ran(run, files)
+    s.label(run, R.RUN_OF_RECORD, E.RECORD)
+    return run
+
+
 def recorded(tmp: Path, **plan_change) -> tuple[Store, dict[str, str]]:
     """The fixtures' records in a store, each labelled its slot's record: the census, its cut, the single-session card,
     the three proof server runs and the sampling plan (with `plan_change` over its fields)."""
@@ -1357,6 +1415,65 @@ def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):
     table = text[text.index("| block type |"):].split("\n\n")[0].splitlines()
     assert table[0].count("|") == 10 and "| ms per block in the plan |" in table[0] and len(table) == 2 + 2 + 1
     assert table[-1].startswith("| 148 more block types | | ") and {line.count("|") for line in table} == {10}
+
+
+def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_records_design_beside_the_plans(tmp_path):
+    """Beside the prover GPUs a serving GPU at the sampling plan of record, SPOT's table gives them at the exfiltration
+    run of record's design, each line naming its source: the planner's world year at 10% of total compute, read off by
+    `verity bench exfiltration`'s reader from that run's rows (`fixtures/prove/exfiltration/`, the run of record's own
+    world year rows), its proving's share of total compute over 1 - its audit budget. With no record, or a superseded
+    one, the line says why and the table stands; with every block proved there is no such line."""
+
+    s, arts = recorded(tmp_path)
+    bare = R.build("spot", "glm53", store=s.fresh("bare"), root=REPO)
+    assert bare["at_record"]["gpus_per_serving_gpu"] is None and bare["at_record"]["run"] is None
+    nothing = (f"no planner rows of record: nothing in the store carries `{R.RUN_OF_RECORD}={E.RECORD}` (label each run "
+               f"that holds them: `research data label RUN {R.RUN_OF_RECORD} {E.RECORD} --by LANE`)")
+    assert bare["at_record"]["why"] == nothing
+    text = R.render(bare)
+    assert (f"- prover GPUs per serving GPU at the sampling plan of record ({arts[R.SAMPLING]}): 0.542, modeled\n"
+            f"- prover GPUs per serving GPU at the exfiltration run of record's design (`{R.RUN_OF_RECORD}={E.RECORD}`): "
+            f"not read: {nothing}\n") in text
+    (none,) = R.measurements(bare, {"a/z": R.AT_RECORD})
+    assert none == {"name": "a/z", "value": None, "unit": "prover GPUs a serving GPU", "mark": "modeled",
+                    "why": f"not read: {nothing}", "inputs": []}
+    assert kit.writer(tmp_path / "bare-run").measurement(**none)["inputs"] == ["modeled"]
+
+    designed(s, tmp_path)
+    spot = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    got = spot["at_record"]
+    rows = [json.loads(line) for line in (FIXTURES / "exfiltration" / DESIGN / "rows.jsonl").read_text().splitlines()]
+    slope, intercept = linear_regression([r["b10"] for r in rows], [r["total"] for r in rows])
+    beta = (0.10 - intercept) / slope
+    lo, hi = next((a, b) for a, b in zip(rows, rows[1:], strict=False) if a["b10"] <= beta <= b["b10"])
+    prove = lo["prove"] + (hi["prove"] - lo["prove"]) * (beta - lo["b10"]) / (hi["b10"] - lo["b10"])
+    assert (got["record"], got["run"], got["scope"], got["share"], got["status"], got["why"]) == (
+        E.RECORD, DESIGN, "world year", 0.10, "modeled", None)
+    assert got["beta"] == pytest.approx(beta, rel=1e-12) == pytest.approx(0.054555103866200196, rel=1e-12)
+    assert got["prove_share"] == pytest.approx(prove, rel=1e-12) == pytest.approx(0.052138852549246315, rel=1e-12)
+    assert got["gpus_per_serving_gpu"] == pytest.approx(prove / (1 - beta), rel=1e-12)
+    assert got["gpus_per_serving_gpu"] == pytest.approx(0.055147426108551965, rel=1e-12)
+    # the table's own figures don't move
+    assert spot["totals"] == bare["totals"] and spot["rows"] == bare["rows"]
+    text = R.render(spot)
+    assert (f"- prover GPUs per serving GPU at the sampling plan of record ({arts[R.SAMPLING]}): 0.542, modeled\n"
+            "- prover GPUs per serving GPU at the exfiltration run of record's design: 0.05515, modeled: run "
+            f"{DESIGN} (`{R.RUN_OF_RECORD}={E.RECORD}`), the planner's world year at 10% of total compute: its proving's "
+            "5.214% of total compute over 1 - its audit budget, 5.456%\n") in text
+    (one,) = R.measurements(spot, {"a/z": R.AT_RECORD})
+    assert one == {"name": "a/z", "value": got["gpus_per_serving_gpu"], "unit": "prover GPUs a serving GPU",
+                   "mark": "modeled", "inputs": [f"modeled: {R._design(got)}", DESIGN]}
+
+    s.label(DESIGN, R.SUPERSEDED_BY, "r20261114-000000-0000")
+    gone = R.build("spot", "glm53", store=s.fresh("gone"), root=REPO)["at_record"]
+    assert gone["gpus_per_serving_gpu"] is None and gone["why"] == (
+        f"no run of record holds the planner's rows: {DESIGN} superseded by r20261114-000000-0000 (label one that does: "
+        f"`research data label RUN {R.RUN_OF_RECORD} {E.RECORD} --by LANE`)")
+
+    flock = R.build("flock", "glm53", store=s.fresh("flock"), root=REPO)
+    assert "at_record" not in flock and "run of record's design" not in R.render(flock)
+    with pytest.raises(ValueError, match="`gpus_per_serving_gpu_at_record` is SPOT's: only a table at a sampling plan"):
+        R.measurements(flock, {"a/z": R.AT_RECORD})
 
 
 def test_an_unlabelled_or_superseded_input_is_refused_by_name(tmp_path):
@@ -1563,8 +1680,9 @@ def registered(block: str) -> str:
 
     from verity.definitions import boolean
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
+    from verity.definitions.registry.catalog import load
 
-    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block))).id
+    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block), load()[0])).id
 
 
 def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():
@@ -2245,11 +2363,12 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     """Under a research run, `verity bench prove --system spot` writes run.py's metrics into the run's result through
     the kit: each total of SPOT's table at the plan of record in its unit with its mark first among its inputs, the Lean
     verifier's seconds and the proof's bytes with no value and why until a Lean verifier run of record measures a type
-    and then modeled with what its accept holds, the six checks as the validation and the table as its evidence. What
-    it prints is the same in a run as outside one, where it writes nothing; with every block proved it records
-    nothing."""
+    and then modeled with what its accept holds, the prover GPUs a serving GPU at the exfiltration run of record's
+    design, modeled, from that run, the six checks as the validation and the table as its evidence. What it prints is
+    the same in a run as outside one, where it writes nothing; with every block proved it records nothing."""
 
     s, arts = recorded(tmp_path)
+    designed(s, tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261112-000000-0000")
@@ -2289,21 +2408,26 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     by = {m["name"]: m for m in got["measurements"]}
     assert list(by) == list(metrics) == [
         "benchmarks/prover-gpus-per-serving-gpu", "benchmarks/prover-gpu-seconds-per-token",
-        "benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"]
+        "benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token",
+        "benchmarks/prover-gpus-per-serving-gpu-at-record"]
     assert [m["unit"] for m in by.values()] == [R.FIGURES[f] for f in metrics.values()]
+    design = by["benchmarks/prover-gpus-per-serving-gpu-at-record"]
+    assert design["value"] == pytest.approx(0.055147426108551965, rel=1e-12) and design["mark"] == "modeled"
+    assert design["inputs"] == [f"modeled: {R._design(doc['at_record'])}", DESIGN] and "why" not in design
     t, targets = doc["totals"], [*dict.fromkeys(x for i in doc["inputs"] for x in i["targets"])]
     assert arts[R.SAMPLING] in targets
     head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
     assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
-    assert head["inputs"][0] == (f"modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
-                                 f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")
-    assert head["inputs"][1].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][2:] == targets
-    assert seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
+    assert head["mark"] == "modeled" and head["inputs"][:2] == [
+        "modeled", (f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                    f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")]
+    assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == targets
+    assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
     assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
     for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
-        assert by[name]["value"] is None and by[name]["inputs"] == targets
-        assert by[name]["why"] == "not measured: no Lean verifier run of record measures a block type " \
-                                  "(`run_of_record=prove-glm53-lean-verify`)"
+        assert by[name]["value"] is None and by[name]["mark"] == "modeled" and by[name]["inputs"] == ["modeled", *targets]
+        assert by[name]["why"] == ("not measured: no Lean verifier run of record measures a block type "
+                                   "(`run_of_record=prove-glm53-lean-verify`)")
     steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
     assert got["validation"] == {
         "status": "passed", "checker": "verity_bench.prove_records.CHECKS", "evidence": [R.TABLE],
@@ -2319,7 +2443,7 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     for name, key, unit in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token", "s an AND gate"),
                             ("benchmarks/proof-bytes-per-token", "proof_bytes_per_token", "bytes a witness bit")):
         v = t[key]
-        assert lean[name]["value"] == v["value"] and "why" not in lean[name]
+        assert lean[name]["value"] == v["value"] and lean[name]["mark"] == "modeled" and "why" not in lean[name]
         own, family, fitted = (v["sources"][k] for k in ("measured", "family", "fitted"))
         assert own["block_types"] == 1 and fitted["block_types"] > 0 and v["fitted_rate"] > 0
         assert lean[name]["inputs"][0] == (
@@ -2338,11 +2462,36 @@ def test_the_proving_totals_marks_give_the_plans_own_prices_where_its_record_sta
     mix = fixture("mix.json")
     s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
     doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
-    marks = [m["inputs"][0] for m in R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})]
+    head, seconds = R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})
+    marks = [head["inputs"][1], seconds["inputs"][0]]
     planned = doc["totals"]["planned"]
     assert [m.rsplit("; ", 1)[1] for m in marks] == [
         f"at the sampling plan's own prices, which its planner sized the sample at: {planned[k]:.6g}"
         for k in ("gpus_per_serving_gpu", "gpu_seconds_per_token")]
+
+
+def test_the_prover_gpus_a_serving_gpu_take_the_weaker_of_provings_and_the_serving_rates_marks(tmp_path):
+    """The headline is the proving total over a stated serving rate, so its mark is the weaker of the two's (measured,
+    then partial, then modeled), and its inputs list both; the proving GPU-seconds keep proving's own."""
+
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    assert R.STRENGTH == ("measured", "partial", "modeled") and set(R.STRENGTH) == set(kit.MARKS)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"}
+    for proving, missing, serving, weaker in (("measured", [], "modeled", "modeled"), ("measured", [], "measured", "measured"),
+                                              ("measured", ["t"], "measured", "partial"), ("modeled", [], "measured", "modeled"),
+                                              ("measured", ["t"], "modeled", "modeled")):
+        given = doc | {"totals": doc["totals"] | {"status": proving, "missing": missing},
+                       "serving": doc["serving"] | {"status": serving}}
+        head, seconds = R.measurements(given, metrics)
+        own = "partial" if missing else proving
+        assert (head["mark"], seconds["mark"]) == (weaker, own), (proving, missing, serving)
+        assert head["inputs"][0] == weaker and head["inputs"][1].startswith(f"proving: {own}")
+        assert head["inputs"][2].startswith(f"serving rate ({serving}, a stated input): ")
+        assert seconds["inputs"][0].startswith(own)
+        w = kit.writer(tmp_path / f"{proving}-{len(missing)}-{serving}")
+        assert w.measurement(**head)["inputs"] == head["inputs"] and w.measurement(**seconds)["mark"] == own
 
 
 def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():

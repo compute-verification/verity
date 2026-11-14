@@ -82,7 +82,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, factorial, floor, isqrt
 
-from verity.protocols.reporting import PERIODS
+from verity.protocol import MONITORING_PERIODS
 
 #: the extractor's waits a session
 WAITS = 210
@@ -339,7 +339,7 @@ def periods(design: Design, phase: int = PHASE, machines: int = 1, first_stage: 
     """Each monitoring period's runs and its bound: the sum over its runs, each of `first_stage` sampled replay
     blocks (`at_run`)."""
     one = bound(at_run(design, first_stage), at_B)
-    return {name: (n, n * one) for name, seconds in PERIODS for n in [runs(seconds, phase, machines)]}
+    return {name: (n, n * one) for name, seconds in MONITORING_PERIODS for n in [runs(seconds, phase, machines)]}
 
 
 def most_gates(design: Design, target: int, runs: int = 1, first_stage: int = 1) -> int:
