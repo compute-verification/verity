@@ -351,7 +351,8 @@ def test_gc_acts_on_a_filesystem_out_of_inodes_with_blocks_to_spare(tmp_path):
     """Inodes at 100% with blocks at 32%: gc must not skip every path as "not needed"."""
     a = kept(tmp_path, "pouw/a")
     disk = Disk(100 * UNIT, 31 * UNIT, [a])                                   # blocks 32%
-    full = lambda _p: (1000, 990 if a.exists() else 0)                         # inodes 99% while a exists
+    def full(_p):
+        return (1000, 990 if a.exists() else 0)  # inodes 99% while a exists
     assert not run_gc(tmp_path, disk)["acting"]
     plan = run_gc(tmp_path, disk, apply=True, inodes=full)
     assert (plan["acting"], plan["pct_before"], plan["inodes_pct_before"]) == (True, 99.0, 99.0)

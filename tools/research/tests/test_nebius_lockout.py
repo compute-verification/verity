@@ -341,7 +341,8 @@ def test_systemd_run_runs_a_scope_as_the_caller_and_a_unit_only_as_a_job_user(tm
     env = tmp_path / "job.env"
     env.write_text("A=1\n")
     os.chown(env, CALLER, CALLER_GID)
-    job = lambda n: (_ for _ in ()).throw(VS.Refused("privileged")) if n in ("root", "0") else type("pw", (), {"pw_gid": 1000})()
+    def job(n):
+        return (_ for _ in ()).throw(VS.Refused("privileged")) if n in ("root", "0") else type("pw", (), {"pw_gid": 1000})()
     unit = ["--unit=job-1", "--uid=ubuntu", "--wait", "--pipe", "--collect", "--quiet", "--service-type=exec", "--expand-environment=no",
             "--working-directory=/workspace", "-p", f"EnvironmentFile={env}", "-p", "CapabilityBoundingSet=", "-p", "NoNewPrivileges=yes",
             "--", "python3", "job.py"]
@@ -384,7 +385,8 @@ def test_systemctl_stops_only_a_scope_whose_processes_are_all_the_callers(proc, 
     (cg / "x.slice" / "fill-timing-1.scope" / "sub").mkdir(parents=True)
     (cg / "x.slice" / "fill-timing-1.scope" / "cgroup.procs").write_text("123\n")
     (cg / "x.slice" / "fill-timing-1.scope" / "sub" / "cgroup.procs").write_text("777\n")   # exited: no /proc entry
-    show = lambda u: "/x.slice/fill-timing-1.scope"
+    def show(u):
+        return "/x.slice/fill-timing-1.scope"
     assert VS.systemctl(["stop", "fill-timing-1.scope"], ME, show, cg, proc) == [VS.SYSTEMCTL, "stop", "fill-timing-1.scope"]
     assert VS.systemctl(["kill", "--signal=SIGTERM", "fill-timing-1.scope"], ME, show, cg, proc)[2] == "--signal=SIGTERM"
     for args, uid in ((["stop", "fill-timing-1.scope"], ME + 1), (["stop", "vy-custody.service"], ME), (["start", "x.scope"], ME),
@@ -1251,7 +1253,8 @@ def test_admin_setup_takes_only_public_keys_from_its_file_and_prints_fingerprint
     subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "dan@laptop", "-f", str(tmp_path / "k")], check=True)
     pub = (tmp_path / "k.pub").read_text().strip()
     script = LOCKOUT / "admin_setup.sh"
-    sh = lambda f, *a: subprocess.run(["bash", str(script), str(f), *a], capture_output=True, text=True)
+    def sh(f, *a):
+        return subprocess.run(["bash", str(script), str(f), *a], capture_output=True, text=True)
     keys = tmp_path / "keys"
     keys.write_text(f"# Dan\n{pub}\n\n")
     r = sh(keys, "--check")

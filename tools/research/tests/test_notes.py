@@ -586,7 +586,8 @@ def test_the_reaper_takes_only_pods_of_final_lanes_past_the_grace_that_are_not_k
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted)
     assert lines == ["21:00Z FINAL-POD done vy-done p1 $0.74/h (final 15m ago): --reap terminates it, checkpoint --keep-pod WHY keeps it"]
     assert notes.reap_lines(tmp_path, rows, NOW, 10, noted) == [] and killed == []     # said once; nothing terminated
-    ok = lambda lane, p: asked.append((lane, p["id"])) or (True, "2 cited art(s) preserved")
+    def ok(lane, p):
+        return asked.append((lane, p["id"])) or (True, "2 cited art(s) preserved")
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=ok)
     assert killed == ["p1"] and asked == [("done", "p1")]      # custody asked only for the reapable pod; kept/fresh/open untouched
     assert lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago); custody: 2 cited art(s) preserved"]
@@ -599,7 +600,8 @@ def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_r
             {"id": "nots", "name": "vy-red-team-flock", "usd_h": 0.48}]                     # no start time in the listing: same
     rows = [{"lane": "red-team-flock", "state": "final", "done_ts": done, "pods": pods}]
     noted, killed, state = set(), [], {}
-    never = lambda lane, p: pytest.fail("no custody check for a resumed pod")
+    def never(lane, p):
+        return pytest.fail("no custody check for a resumed pod")
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state)
     assert killed == [] and lines == [
         "21:00Z RESUMED-POD red-team-flock vy-red-team-flock fzs8 (created 20:58Z, after FINAL 19:56Z): not reaped",
@@ -610,7 +612,8 @@ def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_r
 
 def test_the_reaper_says_nothing_about_a_pod_runpod_no_longer_knows(tmp_path):
     pod = {"id": "gone", "name": "vy-done", "usd_h": 0.48, "started_ts": NOW.timestamp() - 3600, "idle": True, "idle_min": 60}
-    gone = lambda lane, p: (False, "its run dirs' custody is unknown: PodError: GET /pods/gone -> HTTP 404: not found (terminated, or never existed)")
+    def gone(lane, p):
+        return (False, "its run dirs' custody is unknown: PodError: GET /pods/gone -> HTTP 404: not found (terminated, or never existed)")
     final = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
     stale = [{"lane": "slow", "state": "open", "stale": True, "age_min": 90, "pods": [pod]}]
     killed: list = []
@@ -623,7 +626,8 @@ def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_aft
     pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
     rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
     noted, killed, state = set(), [], {}
-    blocked = lambda lane, p: (False, "art:deadbeef not preserved: 404")
+    def blocked(lane, p):
+        return (False, "art:deadbeef not preserved: 404")
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=blocked, state=state)
     assert killed == [] and lines == ["21:00Z REAP-BLOCKED done vy-done: art:deadbeef not preserved: 404"]
     assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
@@ -633,7 +637,8 @@ def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_aft
     lines = notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append,
                              custody=lambda lane, p: (True, "ok"), state=state)
     assert killed == ["p1"] and lines == ["21:31Z REAPED done vy-done p1 $0.74/h (final 46m ago); custody: ok"]
-    boom = lambda lane, p: 1 / 0
+    def boom(lane, p):
+        return 1 / 0
     rows[0]["pods"] = [{**pod, "id": "p2"}]
     assert notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append, custody=boom, state=state) == [
         "21:31Z REAP-BLOCKED done vy-done: custody not checked (ZeroDivisionError: division by zero)"] and killed == ["p1"]

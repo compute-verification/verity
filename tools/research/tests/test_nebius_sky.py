@@ -146,7 +146,8 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
     assert n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0] == body
     assert 'then discard_kept_bundles "$row_dir"; fi' in n2 and "rm -rf \"$row_dir\"/commit/replay_bundle_p" not in n2
     (tmp_path / "discard.py").write_text(body)
-    sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+    def sha(p):
+        return hashlib.sha256(p.read_bytes()).hexdigest()
 
     def row(name: str, pairs=(0,), keep: dict[int, dict] | None = None) -> Path:
         """A replayed row with a sealed bundle per pair, and for each pair in `keep` its slim keep, slim.json fields overridden."""
@@ -173,7 +174,8 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
         assert out.splitlines() == [ln.split(" ", 1)[1] for ln in (r / "row.log").read_text().splitlines()]
         return out.splitlines()
 
-    bundle = lambda r, p=0: r / "commit" / f"replay_bundle_p{p}"
+    def bundle(r, p=0):
+        return r / "commit" / f"replay_bundle_p{p}"
     r = row("kept-whole", keep={0: {}})
     [line] = discard(r)
     assert not bundle(r).exists() and "deleted" in line and (r / "commit" / "replay_slim_p0" / "slim.json").is_file()
@@ -1154,7 +1156,8 @@ def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tm
     live, src = tmp_path / "src" / "live" / "pkg", tmp_path / "src"
     live.mkdir(parents=True)
     pyc = tmp_path / "pycache"
-    mirror = lambda p: pyc / str(p).lstrip("/")
+    def mirror(p):
+        return pyc / str(p).lstrip("/")
     for d, n in ((live, 2), (src / "gone" / "pkg", 3), (live / "removed", 1)):
         mirror(d).mkdir(parents=True)
         for i in range(n):
@@ -1318,7 +1321,8 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
         assert set(f["nodes"]) == holds_runs, "the collector runs on every node of deploy.toml that holds research runs"
     cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
     status = tmp_path / "status.txt"
-    gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
+    def gate():
+        return subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
     assert gate() == 0, "node 1 has no fill status: it runs"
     status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed True, window waiting False\n")
     assert gate() != 0, "node 2 inside a timed window: skipped"
