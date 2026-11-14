@@ -30,7 +30,8 @@ Weights      the weights' registration
 ~~~
 
 Each direction is the one the code has. A body is the bytes the writer writes today, and no message but `Replay` has a
-bound of its own, so each takes the frame's (`MAX_BODY`).
+bound of its own, so each takes the frame's (`MAX_BODY`). `FILES` is the name of the file or log that carries a message
+today, for each that one carries.
 """
 
 from __future__ import annotations
@@ -61,5 +62,17 @@ CHANNELS = (
     Channel(WORKLOAD, PROVER, ("Circuit", "Settings", "Window", "Io", "Summary", "Advice", "Programs", "Values", "Replay")),
     Channel(PROVER, WORKLOAD, ("Compiler", "Weights")),
 )
+FILES = {
+    "Circuit": "predicted.json",
+    "Settings": "serve.json",
+    "Window": "windows.jsonl",
+    "Io": "requests.jsonl",
+    "Summary": "summary.json",
+    "Advice": "advice.bin",
+    "Weights": "weights_registration.json",
+}
+"""The file or log that carries a message today, by the name it has in its writer's directory. A program takes the name
+from here; a shell script, or a program that runs where `verity` is not installed, states it once, in an assignment the
+list's test holds to this."""
 
-__all__ = ["BLOCK", "CHANNELS", "MAX_BLOCKS", "MAX_BODY", "MAX_REPLAY", "MESSAGES", "PROVER", "REPLAY", "WORKLOAD"]
+__all__ = ["BLOCK", "CHANNELS", "FILES", "MAX_BLOCKS", "MAX_BODY", "MAX_REPLAY", "MESSAGES", "PROVER", "REPLAY", "WORKLOAD"]

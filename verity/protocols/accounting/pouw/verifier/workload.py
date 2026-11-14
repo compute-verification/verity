@@ -1,7 +1,8 @@
 """PoUW's messages with the workload: its own message types (`verity.channel.Schema`) and its channel from the workload
 to the prover (`verity.protocol.Channel`), which also names a message sampled proofs declare
 (`verity.protocols.proofs.spot.verifier.workload`, where a message that serves more than one protocol sits once).
-`tests/test_workload_messages.py` holds the list, and where the tree writes and reads each message today.
+`tests/test_workload_messages.py` holds the list, and where the tree writes and reads each message today. `FILES` is the
+name of the file that carries a message today, as sampled proofs' is.
 
 ~~~text
 workload -> prover
@@ -26,5 +27,6 @@ MESSAGES = (
     Schema("Calls", 1, "commitment", BLOCK, Body(max=MAX_BODY)),
 )
 CHANNELS = (Channel(WORKLOAD, PROVER, ("Multiply", "WindowProgram", "Calls", "Window")),)
+FILES = {"WindowProgram": "window-program.json.gz", "Calls": "pouw-h1-calls.json"}
 
-__all__ = ["CHANNELS", "MESSAGES"]
+__all__ = ["CHANNELS", "FILES", "MESSAGES"]

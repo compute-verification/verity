@@ -11,6 +11,12 @@ does its first test.
 with the files that write it and the files that read it, each by a line it holds.  A message whose writer or reader
 moved fails here, naming the line of ``TODAY`` to change, so the list says where every message is.
 
+**A file's name is stated once**: a declaration's ``FILES`` names the file or log that carries a message.  A file that
+writes or reads the message takes the name from there (``FILES["Settings"]``); a shell script, or a program that runs
+where ``verity`` isn't installed, states it once, in an assignment at the start of a line, which fails here when the
+declaration's name changes.  The files that still spell a name are ``SPELLED_BY_PROGRAMS`` and ``SPELLED_BY_ADAPTERS``,
+which only shrink.
+
 **What else crosses** between the two is ``EXCEPTIONS``, one line each with its kind (``KINDS``).  It only shrinks: it
 holds at most ``EXCEPTIONS_MAX`` lines, a line whose crossing is gone warns until it is deleted, and nothing crosses by
 an import that no line names: every side of a protocol (``verity/protocols/GROUP/NAME/SIDE``) and the values' library
@@ -45,6 +51,9 @@ DRIVER = f"{PROVE_PATH}/prove_path.py"
 POUS_PIECE = "benchmarks/pous/served_piece.py"
 CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
 POUW_PROVER = f"{PROTOCOLS}/accounting/pouw/prover"
+TRACES, E2E = "benchmarks/network_traces", "benchmarks/network_e2e"
+SERVE = "demos/vllm/serve.sh"
+TOOLS = "adapters/vllm/tools"
 
 
 @dataclass(frozen=True)
@@ -68,23 +77,33 @@ TODAY = {
     "Circuit": Line("a file: the Build of record (`predicted.json`, with its Programs), by `verity-vllm predict row`",
                     writes=((f"{V}/program/predict/aot.py", r"predicted\.json"),
                             (f"{V}/records/predicted_row.py", r'FILE = "predicted\.json"')),
-                    reads=((LAUNCHER, r"\$PRED/predicted\.json"), (f"{ONE_STAGE}/served_compare.py", r'"--pred"'))),
+                    reads=((LAUNCHER, r"predicted\.json"), (f"{ONE_STAGE}/served_compare.py", r'"--pred"'),
+                           (SERVE, r"predicted\.json"))),
     "Settings": Line("a file: `serve.json`",
-                     writes=((f"{V}/pipeline/serve_openai.py", r"serve\.json"),),
+                     writes=_all(r"serve\.json", f"{V}/pipeline/serve_openai.py", f"{TRACES}/certifier_serve.py",
+                                 f"{TRACES}/demo_endpoint.py"),
                      reads=_all(r"serve\.json", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/inference_only.py",
-                                f"{ONE_STAGE}/served_compare.py", POUS_PIECE, "benchmarks/network_traces/served_session.py",
-                                f"{V}/pipeline/advice.py", "adapters/vllm/tools/advice_compile.py")),
+                                f"{ONE_STAGE}/served_compare.py", POUS_PIECE, f"{TRACES}/served_session.py",
+                                f"{V}/pipeline/advice.py", f"{TOOLS}/advice_compile.py", f"{E2E}/chain.py", CERTIFIER_PIECE,
+                                f"{ONE_STAGE}/served_overhead.py", LAUNCHER, f"{PROVE_PATH}/run.sh", SERVE,
+                                f"{V}/pipeline/serve_commit.py", f"{TOOLS}/admit_rows_check.py", f"{TOOLS}/retain_device_gpu.sh")),
     "Window": Line("a record in a log: a line of `windows.jsonl`",
-                   writes=((f"{V}/pipeline/serve_commit.py", r"windows\.jsonl"),),
+                   writes=_all(r"windows\.jsonl", f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
                    reads=_all(r"windows\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/pouw_piece.py",
-                              f"{ONE_STAGE}/inference_only.py", LAUNCHER, f"{PROVE_PATH}/run.sh", f"{V}/pipeline/advice.py")),
+                              f"{ONE_STAGE}/inference_only.py", LAUNCHER, f"{PROVE_PATH}/run.sh", f"{V}/pipeline/advice.py",
+                              f"{E2E}/chain.py", CERTIFIER_PIECE, f"{TRACES}/served_session.py",
+                              f"{ONE_STAGE}/served_overhead.py", SERVE, f"{TOOLS}/advice_compile.py",
+                              f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")),
     "Io": Line("a record in a log: a line of `requests.jsonl`",
-               writes=((f"{V}/pipeline/serve_commit.py", r"requests\.jsonl"),),
+               writes=_all(r"requests\.jsonl", f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
                reads=_all(r"requests\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/inference_only.py",
-                          CERTIFIER_PIECE, f"{V}/pipeline/advice.py")),
+                          CERTIFIER_PIECE, f"{V}/pipeline/advice.py", f"{E2E}/chain.py", f"{TRACES}/served_session.py",
+                          LAUNCHER, SERVE, f"{TOOLS}/advice_compile.py", f"{TOOLS}/admit_rows_check.py",
+                          f"{TOOLS}/retain_device_gpu.sh")),
     "Summary": Line("a file: `summary.json`",
                     writes=((f"{V}/pipeline/serve_openai.py", r"summary\.json"),),
-                    reads=((f"{V}/pipeline/advice.py", r"summary\.json"),)),
+                    reads=_all(r"summary\.json", f"{V}/pipeline/advice.py", SERVE, f"{V}/pipeline/serve_commit.py",
+                               f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")),
     "Advice": Line("a file: `advice/w<k>/private/advice.bin`, by `verity-vllm advice`",
                    writes=((f"{V}/pipeline/advice.py", r"advice\.bin"),),
                    reads=_all(r"advice\.bin", LAUNCHER, DRIVER, "adapters/vllm/tools/advice_compile.py")),
@@ -107,7 +126,7 @@ TODAY = {
     "Weights": Line("a file: `weights_registration.json`, by `prove_path.py weights-registration`",
                     writes=((DRIVER, r"def weights_registration_of_serve"), (LAUNCHER, r"prove_path\.py weights-registration")),
                     reads=((f"{V}/pipeline/advice.py", r"weights-of-record"), (POUS_PIECE, r"weights_registration\.json"),
-                           (f"{PROVE_PATH}/records_audit.py", r'"--registered"'))),
+                           (f"{PROVE_PATH}/records_audit.py", r'"--registered"'), (SERVE, r"weights_registration\.json"))),
     "Multiply": Line("a function call: the adapter calls PoUW's prover package, by its schemes and circuits",
                      writes=_all(r"verity\.protocols\.accounting\.pouw\.prover", f"{V}/pipeline/serve_pearl.py",
                                  f"{V}/protocols/pouw/__init__.py"),
@@ -255,6 +274,38 @@ EXCEPTIONS = (
 )
 EXCEPTIONS_MAX = 38
 
+#: The programs outside ``adapters/`` that still spell the name of a file they write or read, each with the messages
+#: whose names it spells.  Delete a line when its file takes the names from the list, and lower ``PROGRAMS_MAX`` with it.
+SPELLED_BY_PROGRAMS: dict[str, tuple[str, ...]] = {
+    "benchmarks/network_e2e/chain.py": ("Settings", "Window", "Io"),
+    "benchmarks/network_traces/certifier_piece.py": ("Io",),
+    "benchmarks/network_traces/certifier_serve.py": ("Settings",),
+    "benchmarks/network_traces/demo_endpoint.py": ("Settings", "Window", "Io"),
+    "benchmarks/network_traces/served_session.py": ("Settings", "Window", "Io"),
+    "benchmarks/one_stage/inference_only.py": ("Settings", "Window", "Io"),
+    "benchmarks/one_stage/pouw_piece.py": ("Window", "WindowProgram", "Calls"),
+    "benchmarks/one_stage/served_compare.py": ("Circuit", "Settings"),
+    "benchmarks/one_stage/served_verdicts.py": ("Settings", "Window", "Io", "WindowProgram"),
+    "benchmarks/one_stage/served_verdicts.sh": ("Circuit", "Settings", "Window", "Io", "Advice", "Weights", "WindowProgram"),
+    "benchmarks/pous/served_piece.py": ("Settings", "Weights"),
+    "benchmarks/prove_path/prove_path.py": ("Settings", "Window", "Io", "Advice"),
+    "benchmarks/prove_path/run.sh": ("Settings", "Window"),
+    "demos/vllm/serve.sh": ("Circuit", "Settings", "Window", "Io", "Summary", "Weights"),
+}
+PROGRAMS_MAX = 14
+
+#: The same for the files under ``adapters/``, with ``ADAPTERS_MAX``.
+SPELLED_BY_ADAPTERS: dict[str, tuple[str, ...]] = {
+    "adapters/vllm/tools/admit_rows_check.py": ("Settings", "Io"),
+    "adapters/vllm/tools/advice_compile.py": ("Settings", "Window", "Io", "Advice"),
+    "adapters/vllm/tools/retain_device_gpu.py": ("Window", "Summary"),
+    "adapters/vllm/tools/retain_device_gpu.sh": ("Settings", "Window", "Io", "Summary"),
+    "adapters/vllm/verity_vllm/pipeline/advice.py": ("Settings", "Window", "Io", "Summary", "Advice"),
+    "adapters/vllm/verity_vllm/pipeline/serve_commit.py": ("Window", "Io"),
+    "adapters/vllm/verity_vllm/pipeline/serve_openai.py": ("Settings", "Summary"),
+}
+ADAPTERS_MAX = 7
+
 
 def declarations() -> dict[str, Any]:
     """Each protocol's declaration, by its path: the module ``workload`` in its ``verifier/``, sampled proofs' first."""
@@ -265,6 +316,16 @@ def declarations() -> dict[str, Any]:
 
 def _name(path: str) -> str:
     return path.split("/")[-3]
+
+
+def names(mods: dict[str, Any]) -> dict[str, str]:
+    """Each message that a file or log carries, with the file's name: every declaration's ``FILES``."""
+    return {t: n for m in mods.values() for t, n in getattr(m, "FILES", {}).items()}
+
+
+def takes(message: str) -> str:
+    """What a file that takes the name of ``message``'s file from the list holds: its entry of a declaration's ``FILES``."""
+    return rf'FILES\["{message}"\]'
 
 
 def problems(mods: dict[str, Any], today: dict[str, Line], exceptions: tuple[Exc, ...], most: int) -> list[str]:
@@ -285,6 +346,8 @@ def problems(mods: dict[str, Any], today: dict[str, Line], exceptions: tuple[Exc
                 owner[s.type] = path
     way: dict[str, tuple[str, str]] = {}
     for path, m in mods.items():
+        out += [f"{path}: FILES names the file of {t}, which its MESSAGES doesn't declare"
+                for t in sorted(set(getattr(m, "FILES", {})) - {s.type for s in m.MESSAGES if isinstance(s, Schema)})]
         out += [f"{path}: {a} is {getattr(m, a)!r}, and {SPOT}'s is {getattr(spot, a)!r}: a declaration that states it states the same"
                 for a in ("WORKLOAD", "PROVER", "MAX_BODY") if getattr(m, a, getattr(spot, a)) != getattr(spot, a)]
         pairs = [(c.sender, c.receiver) for c in m.CHANNELS if isinstance(c, Channel)]
@@ -322,15 +385,36 @@ def declared_elsewhere(owner: dict[str, str], texts: dict[str, str]) -> list[str
             for rel, text in sorted(texts.items()) for m in one.finditer(text) if rel != owner[m.group(1)]]
 
 
-def missing(line: Line, texts: dict[str, str | None]) -> list[str]:
-    """The stated writers and readers of ``line`` that hold no such line: ``texts`` is each file's text, None if gone."""
+def missing(line: Line, texts: dict[str, str | None], taken: str | None = None) -> list[str]:
+    """The stated writers and readers of ``line`` that hold no such line: ``texts`` is each file's text, None if gone.  A
+    file that holds ``taken``, the list's name for the message's file, holds its line."""
     out = []
     for role, sites in (("writes", line.writes), ("reads", line.reads)):
         for f, pattern in sites:
             if texts.get(f) is None:
                 out.append(f"{role}: {f} is gone")
-            elif not re.search(pattern, texts[f], re.M):
+            elif not re.search(pattern, texts[f], re.M) and not (taken and re.search(taken, texts[f])):
                 out.append(f"{role}: no line of {f} holds /{pattern}/")
+    return out
+
+
+def spells(rel: str, text: str, name: str) -> bool:
+    """Whether ``rel`` spells the file name ``name``: it holds the name twice, or once and not in an assignment at the
+    start of a line.  In Python a string that is the name, or a path ending in it, counts, so a sentence doesn't; in a
+    shell script every word of it outside a comment does."""
+    py = rel.endswith(".py")
+    one = re.compile((r"""(?<!["'])(["'])(?:[^"'\s]*/)?%s\1(?!["'])""" if py else r"(?<![\w.-])%s(?![\w.-])") % re.escape(name))
+    lines = [line for line in text.splitlines() for _ in one.finditer(line if py else re.sub(r"(^|\s)#.*", "", line))]
+    return len(lines) > 1 or (len(lines) == 1 and not re.match(r"[A-Za-z_][\w, ]*\s?=", lines[0]))
+
+
+def spelling(today: dict[str, Line], named: dict[str, str], texts: dict[str, str | None]) -> dict[str, tuple[str, ...]]:
+    """Each file that spells the name of a file it writes or reads by ``today``, with the messages whose names it spells."""
+    out: dict[str, tuple[str, ...]] = {}
+    for t, line in today.items():
+        for f in sorted({f for f, _ in (*line.writes, *line.reads)} if t in named else ()):
+            if texts.get(f) is not None and spells(f, texts[f], named[t]):
+                out[f] = (*out.get(f, ()), t)
     return out
 
 
@@ -409,8 +493,8 @@ def test_the_declarations_are_one_list_and_the_tree_carries_each_message_where_i
                           cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
     twice = declared_elsewhere(owner, {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in grep})
     assert not twice, "a message between the workload and the prover is declared once:\n" + "\n".join(twice)
-    texts = _texts(list(TODAY.values()))
-    moved = [f"{t}: {m}" for t, line in TODAY.items() for m in missing(line, texts)]
+    texts, named = _texts(list(TODAY.values())), names(mods)
+    moved = [f"{t}: {m}" for t, line in TODAY.items() for m in missing(line, texts, takes(t) if t in named else None)]
     assert not moved, ("a message between the workload and the prover is written or read elsewhere than tests/"
                        "test_workload_messages.py's TODAY says. Name the file that writes or reads it now and a line it "
                        "holds, in that message's line of TODAY:\n" + "\n".join(moved))
@@ -425,6 +509,23 @@ def test_an_adapter_imports_only_what_a_line_of_the_list_names() -> None:
                      "the message in the protocol's verifier/workload.py and name what the adapter imports for it in its "
                      "line of TODAY (`calls`); EXCEPTIONS only shrinks:\n"
                      + "\n".join(f"{t}: {', '.join(files[:3])}{' ...' if len(files) > 3 else ''}" for t, files in sorted(new.items())))
+
+
+def test_a_file_takes_the_name_of_a_messages_file_from_the_list() -> None:
+    """No file that writes or reads a message's file spells its name, but those ``SPELLED_BY_PROGRAMS`` and
+    ``SPELLED_BY_ADAPTERS`` list, and neither list grows."""
+    named = names(declarations())
+    listed = {**SPELLED_BY_PROGRAMS, **SPELLED_BY_ADAPTERS}
+    new = [f"{f}: {t}'s `{named[t]}`" for f, ts in sorted(spelling(TODAY, named, _texts(list(TODAY.values()))).items())
+           for t in ts if t not in listed.get(f, ())]
+    assert not new, ("a file that writes or reads a message's file takes its name from the list (tests/"
+                     "test_workload_messages.py). Import the declaration's FILES and write FILES[\"<message>\"]; in a shell "
+                     "script, or a program that runs where verity isn't installed, state the name once, in an assignment at "
+                     "the start of a line:\n" + "\n".join(new))
+    grown = [f"{name} holds {len(d)} files, above {cap}" for name, d, cap in (
+        ("SPELLED_BY_PROGRAMS", SPELLED_BY_PROGRAMS, PROGRAMS_MAX), ("SPELLED_BY_ADAPTERS", SPELLED_BY_ADAPTERS, ADAPTERS_MAX))
+        if len(d) > cap or any(f.startswith(ADAPTERS) != (d is SPELLED_BY_ADAPTERS) for f in d)]
+    assert not grown, "the lists of files that spell a name only shrink, each with its own files:\n" + "\n".join(grown)
 
 
 def test_every_exception_is_current() -> None:
@@ -443,12 +544,17 @@ def test_every_exception_is_current() -> None:
               if e.kind == "direction" and e.of in to_prover]
     assert not stale, ("tests/test_workload_messages.py's EXCEPTIONS names crossings the tree no longer has. Delete each "
                        "line, or name where its crossing is now, and lower EXCEPTIONS_MAX:\n" + "\n".join(stale))
+    spelled = spelling(TODAY, names(mods), _texts(list(TODAY.values())))
+    taken = [f"{f}: {t}" for f, ts in sorted({**SPELLED_BY_PROGRAMS, **SPELLED_BY_ADAPTERS}.items()) for t in ts
+             if t not in spelled.get(f, ())]
+    assert not taken, ("tests/test_workload_messages.py's SPELLED_BY_PROGRAMS and SPELLED_BY_ADAPTERS list files that no "
+                       "longer spell the name. Delete each, and lower its list's cap:\n" + "\n".join(taken))
 
 
 def test_a_broken_list_is_found() -> None:
     """The checks above aren't vacuous: a party under another name, a message declared twice, one no channel carries, a name no declaration holds, a
     line of ``TODAY`` with no message, a list grown past its cap, a second ``Schema`` of a declared type, a writer that
-    moved and an import in each form are each found."""
+    moved, an import in each form and a spelled name are each found, and a name taken from the list or stated once isn't."""
     mods = dict(declarations())
     spot = mods[SPOT]
 
@@ -473,6 +579,16 @@ def test_a_broken_list_is_found() -> None:
            "def f():\n    from verity.protocols.proofs.spot.verifier.one_stage import registration\n"
            "from verity.protocols.proofs import spot\nfrom . import verifier\n")
     assert targets(src, sides) == {*sides, "verity/commitments/windows"}
+    assert missing(Line("a file", reads=(("a.py", r"serve\.json"),)), {"a.py": 'd / FILES["Settings"]\n'}, takes("Settings")) == []
+    for rel, text, spelled in (("a.py", 'def f(d):\n    return d / "serve.json"\n', True), ("a.py", 'SERVE = "serve.json"\nx = d / SERVE\n', False),
+                               ("a.py", 'A, B = "x", "h1/serve.json"\nhelp = "its serve.json"\n', False),
+                               ("a.py", 'SERVE = "serve.json"\ny = f"{d}/serve.json"\n', True), ("a.py", '"""serve.json\'s"""\n', False),
+                               ("a.sh", 'F=serve.json\ncp "$D/$F" x  # its serve.json\n', False), ("a.sh", 'cp "$D/serve.json" x\n', True),
+                               ("a.sh", 'F=serve.json\nsay "no serve.json"\n', True), ("a.sh", 'cp "$D/preserve.json" "$D/serve.json.gz"\n', False)):
+        assert spells(rel, text, "serve.json") is spelled, (rel, text)
+    line = Line("a file", writes=(("a.py", "x"),), reads=(("b.sh", "x"), ("c.py", "x")))
+    assert spelling({"Settings": line, "Lone": line}, {"Settings": "serve.json"}, {
+        "a.py": 'open("serve.json")', "b.sh": "F=serve.json\n", "c.py": None}) == {"a.py": ("Settings",)}
 
 
 if __name__ == "__main__":
