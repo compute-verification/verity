@@ -133,6 +133,7 @@ import sys
 import threading
 import time
 from collections.abc import Sequence
+from fractions import Fraction
 from pathlib import Path
 
 from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, timing
@@ -378,7 +379,7 @@ def memory_error(ledgers: dict) -> float | None:
         if "error" in ledgers.get(name, {}):
             d = ledgers.get("delta", {})
             return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
-                    + d.get("hiding", 0.0) + d.get("binding", 0.0) + d.get("rejection", 0.0))
+                    + sum(float(Fraction(d.get(k, 0))) for k in ("hiding", "binding", "rejection")))
     return None
 
 
@@ -1480,7 +1481,8 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
-        `delta` is the memory line's δ in its six parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
+        `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
+        forms carry.
         No δ or error here holds the windows' PRF advantages: each reads `ledger.DELTA_FORM`, and `named`
         (`ledger.NAMED_TERMS`) is that term, beside `delta` and in each object that carries a δ or an error.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
@@ -1535,7 +1537,7 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
-        out["delta"] = ledger.delta_parts(record)
+        out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
