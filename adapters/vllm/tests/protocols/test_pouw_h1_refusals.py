@@ -2403,16 +2403,19 @@ def test_a_host_library_that_returns_nonzero_is_refused_by_what_it_was_asked(mon
 
 def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_their_kernels_dont_build(monkeypatch):
     """`tables_device.available`: with no CUDA the call tables hash on the host and nothing is said. With CUDA and
-    kernels that don't build, here with no nvcc, a warning says that they hash with `hiding_rows` and why. The z
-    table's kernel is asked for only where the values' kernels are there, and where it doesn't build a warning
-    says that the z tables hash apart from their values."""
+    kernels that don't build, here with no nvcc, a warning says that they hash with `hiding_rows` and why; once they
+    are built for the current device, the GPU path is taken. The z table's kernel is asked for only where the
+    values' kernels are there, and where it doesn't build a warning says that the z tables hash apart from their
+    values. Both build with `pouw_device`'s nvcc."""
+    built: list[tuple] = []
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert TBD.available.__wrapped__() is False and RGD.zy_available.__wrapped__() is False
+    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    assert TBD.nvcc() == RGD.nvcc() == "/a/toolchain/nvcc"
+    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: None)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))
-    for module in (TBD, RGD):
-        monkeypatch.setattr(module, "nvcc", lambda: None)
     with pytest.warns(RuntimeWarning) as said:
         assert TBD.available.__wrapped__() is False
     assert [str(w.message) for w in said] == [("H1's call tables hash with hiding_rows: the GPU path doesn't build here "
@@ -2423,3 +2426,5 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     assert [str(w.message) for w in said] == [("H1's call z tables hash apart from their zy@<c> values: zy_commit.cu "
                                                "doesn't build here (RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on "
                                                "the path))")]
+    monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]
