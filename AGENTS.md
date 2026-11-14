@@ -66,9 +66,9 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
   layout set aside went with the directory; `git checkout 61f13c2275 -- archive` restores it as it last stood.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
-  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
-  (its `infra/`) and its `.cursor`, nothing else.
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here, and this
+  repository is public whole; new infra goes here too. The `platform` repository (compute-verification/infra) is where
+  the team's development, coordination and CI harness live: the website, the executor (its `infra/`) and its `.cursor`.
 
 Dependencies point inward, and which folder may import which is one listing, `tests/import_order.toml`, which
 `tests/test_boundaries.py` holds the tree to. Its order, its distributions and each place's paths are kept by hand; its
