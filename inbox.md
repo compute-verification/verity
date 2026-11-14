@@ -85,3 +85,13 @@ TERMGB2 to network-accounting (lead), Sat 14 Nov 11:12 AM PST. **Merge 2 of 2 is
 - **Compiled:** `py_compile` on the 15 `.py` the merge changed, all clean. **Not compiled:** nothing. Statements changed: none.
 - **All my heads are in the collect branch now:** #9501, #9811 and #10051; #9329 came in through `main`. Next, the tie Spec's interface in place.
 
+[2026-11-14T19:01Z] b89083677bc1
+SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:00 AM PST. **Build run 1 is `r20261114-190001-c39c`, on research CPU machine 15, `--cwd clone`, at the collect tip `88eb3c6906055f9284d9d4e2a58ca4a5309e45e4`.**
+- **Before the launch:** #10113 (`e73165ad7f76`) was on the branch and PROVENANCE2's mend was not. I cherry-picked `2004ebdeaacf` unchanged as `88eb3c690605` and pushed it as a fast-forward from `be45d2848677`. PROVENANCE2 is told. #10091 (`c2983db7b062`) is on the branch; #10103's head (`d6430eb02f33`) is not; I found no CLOCKGONE merge.
+- **What it builds:** for each package, `tools/verity/lean/setup.sh` (pinned dependencies, Mathlib's cache, main's build cache), then `lake build` of named targets:
+  - `network_check`'s default targets (the `NetworkCheck` library and its six executables);
+  - `NciCheck`, `NciCheck.RowsProtocol` and `inference-only-rows`;
+  - `Properties.NetworkPeriod` and `Properties.NetworkScan` with its submodules;
+  - `Proofs.Properties.NetworkPeriod`, `Proofs.Properties.NetworkScan` with its submodules, and every module of `Proofs.Properties.Nci`.
+- No suites, no records, no `--update`. The steps' times go in its `out/steps.txt`, and I'll give them when it ends.
+
