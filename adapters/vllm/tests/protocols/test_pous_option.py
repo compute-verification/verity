@@ -158,42 +158,41 @@ def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
     sampled from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
     the plaintext's to the bit, and closing restores W decoded from C*."""
     before, served = hooks.live(), toy.outputs()
-    comp = PO.install(toy, _ctx(ENTRY))
-    opt, s = comp.get("pous"), comp.get("pous").store
-    assert all(m.weight.numel() == 0 for m in toy.layers.values())                    # only C* is held
-    for name, out in toy.outputs().items():
-        assert torch.equal(out, served[name])                                          # decoded from C* on every use
+    with PO.install(toy, _ctx(ENTRY)) as comp:
+        opt, s = comp.get("pous"), comp.get("pous").store
+        assert all(m.weight.numel() == 0 for m in toy.layers.values())                    # only C* is held
+        for name, out in toy.outputs().items():
+            assert torch.equal(out, served[name])                                          # decoded from C* on every use
 
-    q, lay = s.params, s.layout                                                         # the store's frozen layout
-    assert (q.w, q.c0, q.blocks_per_segment, q.segments) == (1024, 105, 8, 2) and q.payload_bytes == 126
-    assert [(p.name, p.offset, p.size) for p in lay.tensors] == [("q", 0, 384), ("k", 4 * 126, 640)]
-    assert s.rows.shape == (16, 128) and s.rows.dtype == torch.uint8
+        q, lay = s.params, s.layout                                                         # the store's frozen layout
+        assert (q.w, q.c0, q.blocks_per_segment, q.segments) == (1024, 105, 8, 2) and q.payload_bytes == 126
+        assert [(p.name, p.offset, p.size) for p in lay.tensors] == [("q", 0, 384), ("k", 4 * 126, 640)]
+        assert s.rows.shape == (16, 128) and s.rows.dtype == torch.uint8
 
-    c = opt.commitment()
-    w = lay.pack({"q": toy.plain["q"].numpy().tobytes(), "k": toy.plain["k"].numpy().tobytes()})
-    assert c["commitment"] == setup.commit(q, w).hex()
-    assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
-    held = s.held()                                                                     # the verifier's setup check of C*
-    period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
-    assert held.published.root.hex() == c["storage_root"]
-    assert [b for seg in period.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
+        c = opt.commitment()
+        w = lay.pack({"q": toy.plain["q"].numpy().tobytes(), "k": toy.plain["k"].numpy().tobytes()})
+        assert c["commitment"] == setup.commit(q, w).hex()
+        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
+        held = s.held()                                                                     # the verifier's setup check of C*
+        period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
+        assert held.published.root.hex() == c["storage_root"]
+        assert [b for seg in period.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
 
-    plain = opt.weights()                                                               # tied weights: encoded once, one tensor
-    assert {n: t.numpy().tobytes() for n, t in plain.items()} == {
-        "q.weight": w[:384], "k.weight": w[504:1144], "head.weight": w[:384]}
-    assert plain["q.weight"] is plain["head.weight"]
-    view = PO.weights_view(comp, toy)                                                   # what the Commit's replay reads
-    assert {n: t.numpy().tobytes() for n, t in view.named_parameters() if n.endswith(".weight")} == \
-        {n: t.numpy().tobytes() for n, t in plain.items()}
-    assert [type(e).__name__ for e in hooks.live(ENTRY)] == ["Service", "Patch", "Patch", "Patch", "Service"]
-    wc = next(p for p in comp.record()["protocols"] if p["entry"] == ENTRY)["weights"]  # phase 1, before any salt
-    assert wc == {"scheme": P2, "covers": "linears", "tensors": 2, "bytes": 1024, "commitment": c["commitment"],
-                  "layout": c["layout"]}
-    info = comp.info()[ENTRY]
-    assert info["salt_source"] == "settings" and info["used_blocks"] == 10 and info["blocks"] == 16
-    assert info["certifies"] == {"certified": False, "eps": "0", "s_bits": 0} and info["gaps"]
+        plain = opt.weights()                                                               # tied weights: encoded once, one tensor
+        assert {n: t.numpy().tobytes() for n, t in plain.items()} == {
+            "q.weight": w[:384], "k.weight": w[504:1144], "head.weight": w[:384]}
+        assert plain["q.weight"] is plain["head.weight"]
+        view = PO.weights_view(comp, toy)                                                   # what the Commit's replay reads
+        assert {n: t.numpy().tobytes() for n, t in view.named_parameters() if n.endswith(".weight")} == \
+            {n: t.numpy().tobytes() for n, t in plain.items()}
+        assert [type(e).__name__ for e in hooks.live(ENTRY)] == ["Service", "Patch", "Patch", "Patch", "Service"]
+        wc = next(p for p in comp.record()["protocols"] if p["entry"] == ENTRY)["weights"]  # phase 1, before any salt
+        assert wc == {"scheme": P2, "covers": "linears", "tensors": 2, "bytes": 1024, "commitment": c["commitment"],
+                      "layout": c["layout"]}
+        info = comp.info()[ENTRY]
+        assert info["salt_source"] == "settings" and info["used_blocks"] == 10 and info["blocks"] == 16
+        assert info["certifies"] == {"certified": False, "eps": "0", "s_bits": 0} and info["gaps"]
 
-    comp.close()
     for name, m in toy.layers.items():
         assert torch.equal(m.weight, toy.plain["q" if name == "head" else name])
     assert toy.layers["q"].weight is toy.layers["head"].weight and hooks.live() == before
