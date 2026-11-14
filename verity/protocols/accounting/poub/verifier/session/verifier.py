@@ -734,11 +734,12 @@ def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | 
             len(verdicts) == windows and all(v["accepted"] for v in verdicts.values()))
 
 
-def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacity_bytes_per_s: float) -> dict:
+def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacity_bytes_per_s: float,
+                 python: dict) -> dict:
     """The Lean's γ terms for an accepted session's record against the node's R (`capacity_bytes_per_s`), from PoUB's
-    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`), held to `ledger.gamma`'s `Gamma.ledger.to_json()`,
-    which `Verifier.ledgers` is to declare in place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`), the ones `Verifier.ledgers` declares, held to
+    `python`, `ledger.gamma`'s `Gamma.ledger.to_json()`. Until it is written the reading is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
 class Pair:
@@ -1374,7 +1375,12 @@ class Verifier:
         if lost is not None:
             self.inbox.put(lost)
         coin_check = self.challenger.finish(session.s)
-        if coin_check["reason"] is not None:
+        if coin_check.get("undecided"):
+            self.log(f"verifier: session {k}'s challenger read is undecided: {coin_check['reason']}")
+            if failure is None:
+                failure = {"t": max(0, len(session.windows) - 1), "failure": "undecided", "at": None,
+                           "reason": coin_check["reason"]}
+        elif coin_check["reason"] is not None:
             self.log(f"verifier: session {k}'s coins are not the challenger's as it signed them: {coin_check['reason']}")
             if failure is None:
                 failure = {"t": max(0, len(session.windows) - 1), "failure": "coins", "at": None}
@@ -1529,6 +1535,12 @@ class Verifier:
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
+            try:
+                gamma_answer(self.lean, record, stated, r, g.ledger.to_json())
+            except NotImplementedError:
+                del readings[name]
+                out[name] = {"capacity_bytes_per_s": r, "undecided": coins.undecided("γ terms")}
+                continue
             whole = r * record.span_ns / 1e9
             out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
                          "certified_bytes": (1 - g.gamma) * whole,
@@ -1539,8 +1551,8 @@ class Verifier:
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
-                           if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
-                                                                       if n not in readings)})
+                           if len(readings) == 2 else next({w: out[n][w]} for w in ("refused", "undecided")
+                                                           for n in ("spec", "measured") if w in out[n]))
         out["sketch_failure"] = {"queries_log2": audit.QUERIES_LOG2,
                                  "log2": timing.log2(timing.sketch_failure(record.passes, record.rows,
                                                                            blocks=record.blocks))}
@@ -1570,9 +1582,10 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
 
 
 def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: Verify | None = None,
-         serve: Sequence[str] | None = None) -> int:
-    """The verifier's process on `argv` (the command line's by default), for the node of `figures`. A served or gate
-    session's signatures are checked with `verify`, and `--challenger serve` starts the challenger's process `serve`,
+         served_verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
+    """The verifier's process on `argv` (the command line's by default), for the node of `figures`. A gate session's
+    signatures are checked with `verify` and a served one's with `served_verify` (`challengers.of`), and `--challenger
+    serve` starts the challenger's process `serve`,
     which the process's entry hands in with the figures
     (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
     the run."""
@@ -1733,7 +1746,8 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                  f"{challengers.GATE_PORTS.stop - 1}), which this machine's certifier coin link binds")
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
-                                    verify=verify, serve=serve, ssh=a.challenger_ssh, peer=a.challenger_peer,
+                                    verify=verify, served_verify=served_verify, serve=serve, ssh=a.challenger_ssh,
+                                    peer=a.challenger_peer,
                                     pin=a.challenger_pin, period=a.challenger_period, main=a.challenger_main,
                                     minutes=a.challenger_minutes)
     except ValueError as e:
