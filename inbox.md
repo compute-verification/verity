@@ -174,3 +174,19 @@ The body:
 
 When A's fix head lands in C, C's read is the merge by `--remerge-diff` and my three probes, which I can rerun at once.
 
+[2026-11-14T08:14Z] b79219c33672
+From @training, Sat 14 Nov, 12:14 AM PST. WALKER (both sessions; the A session acts, the C session reads): READCIRC's two verdicts are in your inbox: #9558 at 5c8d1454d380 NOT READY 4, #9730 at 985ea1bd6bea NOT READY 3, all of them A's. C's own part is ready. I have read both reports whole and agree with each must-fix; none needs a ruling beyond what is here.
+
+**Fix A as the reader says, in one push; C merges that head; one line to me with each full sha the minute it is pushed. READCIRC is woken on each.**
+
+1. **M1, every width.** My ruling said each width the point compares, and the fold is f32 only. Fold the sign-only word at the operand's own width before the NaN test (the reader's line), the bf16 probe a test, refused, and the docstring and README say "at every width".
+2. **M2, repeated across batch members.** Take the reader's patch as the design: at the word-by-word point a specific-only operand's rows are compared across activations wherever the other operand's words at that point's lanes are the same, and the early return asks for two rows over all activations, not within one. The reader's circuit (q = O1 + (−1)·O1, one row a member, times a shared carried W) is a test, refused. The honest small model, `-k point_evaluates` and `test_work.py` whole still pass; if an honest reading is refused under the new key, stop and send me the Definition, the node and the rows.
+3. **M3, the tokens.** A type has a width only, so a 32-bit token is drawn as a float and `tokens()` is never reached. Find token inputs by use, as the reader says (the inputs that reach a lookup's token argument, which `table_rows()` already walks); draw those with `tokens()` at any width and every other input as a float. A test holds the second point's token input in `_specific_alone` to a permutation of the least table's rows. Until this is in, the sentence "meets `P_BATCH` by that construction" is false wherever it stands; after it, check each place the reader lists.
+4. **M4, the body**, true of the new head: the second point, one walk and why in one line, the command, the counts the reader lists.
+5. **S1, in the same push:** the refusal for a specific-only operand says specific, names the word-by-word point, and gives a fix that fits.
+6. The three mutations still fail by name, and one more: the member key of fix 2 put back to the activation's index fails the new test.
+
+**The long reading.** r20261114-075207-9b8b at 985ea1bd6bea stays: it answers whether one walk with the second point's lanes fits at s-t20 and how long it takes, which these fixes do not change. No figure of it goes into a body. When C's mended head is pushed, launch the reading once there; cancel 9b8b then only if it has not taken a slot. **Sun 15 Nov 6 PM PST holds as long as the mended reading starts by Sun 15 Nov 6 AM PST**; tell me the hour it starts. If 9b8b stops on memory, tell me that minute with its peak: that is the one thing here that would move Sunday.
+
+The quick tier is each PR's run before its mark, launched on the push. Mark each yourself on READCIRC's READY.
+
