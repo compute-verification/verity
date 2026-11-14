@@ -21,7 +21,7 @@ the read finder's SHA-512 collision plus the forger's forgery of the challenger'
   open, the interior audit's `coins`). Each is read under the parameters' challenger key (`keyOf`, the interior audit's,
   at the deployed LMS parameters), its window, its family and what its coins follow.
 * **The log the check read** (`readsLogs`, `LogIsDevice`): each session's releases read as v2 reads a session's log
-  (`Verity.Sampled.readLog`), the first with the coins its sample read (`Spot.Challenger.drawCoins`) and the interior
+  (`Verity.Sampled.readLog`), the first with the coins its sample read (`Spot.Challenger.sampleCoins`) and the interior
   with the second stage's (`OneStageZk.coinsOf`) and its sessions' records. On one window the two are one session, and
   each read is to be the play's log `o.log`; on two, the first's releases then the interior's are (`logsOf`).
   `LogIsDevice o`: each such log is `o.log`, release by release, in order and no other (`Binding.Read.Of`).
@@ -65,7 +65,7 @@ def paramsAt (θ : ByteArray) : Flock.V VStar.Recursive.SampledTwo.Params := do
   let some x := ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the parameters name no sampled proofs"
   _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.SampledTwo.paramsOfJson
 
-/-- The registration and the evidence of the case the composition's evidence names under the sampled proofs' id,
+/-- The registration and the evidence of the case the composition's evidence names under SPOT's id,
 each read by the two-stage form's decoder. -/
 def caseIn (s : Verity.Sent) : Flock.V (Spot.OneStage.Commitment × VStar.Recursive.SampledTwo.Evidence) := do
   let ev ← _root_.Core.Composition.decodeEvidence s.evidence
@@ -112,7 +112,7 @@ theorem keyOf_deployed (θ : ByteArray) : ∀ key ∈ keyOf θ, key.params = Lms
   intro key hk
   exact atDeployed_eq (Option.filter_eq_some_iff.1 (Option.mem_def.1 hk)).2
 
-/-- The first stage's coin evidence as `drawCoins` reads it: the form's `coins`, as the run of record hands them to its
+/-- The first stage's coin evidence as `sampleCoins` reads it: the form's `coins`, as the run of record hands them to its
 coin check (`Spot.Run.coinsCode`). -/
 def firstCoins (e : VStar.Recursive.SampledTwo.Evidence) : Json :=
   e.coins
@@ -128,7 +128,7 @@ def boundaryOf (p : VStar.Recursive.SampledTwo.Params) : Flock.V Spot.OneStage.P
 
 /-- **What the first session's coins are read under**: the parameters' key (the interior audit's challenger's), the
 boundary registration's window and its challenger's family, after the boundary registration's digest. -/
-def firstDraws (key : ChallengerKey) (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
+def firstSamples (key : ChallengerKey) (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
     (e : VStar.Recursive.SampledTwo.Evidence) : Option Draws := do
   let bp ← (boundaryOf p).toOption
   let w ← bp.verifier.windowRoot
@@ -141,7 +141,7 @@ def interiorOf (e : VStar.Recursive.SampledTwo.Evidence) : Flock.V Spot.OneStage
 
 /-- **What the interior session's coins are read under**: the interior audit's challenger's key and family, its
 window, after the interior registration's digest (`oneStageZkSource`). -/
-def secondDraws (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) : Option Draws := do
+def secondSamples (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) : Option Draws := do
   oneStageZkSource p.audit (← (interiorOf e).toOption)
 
 /-- **The two sessions' records in what the prover sent**: the first stage's sample with its coin evidence, then the
@@ -150,8 +150,8 @@ at the deployed parameters; at most two. -/
 def records (s : Verity.Sent) : List (Draws × Json) :=
   match caseOf s, keyOf s.params with
   | .ok (p, c, e), some key =>
-    ((firstDraws key p c e).map fun d => (d, firstCoins e)).toList ++
-      ((secondDraws p e).map fun d => (d, e.interior.base.coins)).toList
+    ((firstSamples key p c e).map fun d => (d, firstCoins e)).toList ++
+      ((secondSamples p e).map fun d => (d, e.interior.base.coins)).toList
   | _, _ => []
 
 /-! ## The log the check read -/
@@ -169,13 +169,13 @@ def secondRecords (bs : _root_.Core.Blobs) (e : VStar.Recursive.SampledTwo.Evide
 /-- **The first session's releases as the check read them**, with the coins `ξ` placed (`.empty` for none). -/
 def firstRead (key : ChallengerKey) (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
     (e : VStar.Recursive.SampledTwo.Evidence) (ξ : ByteArray) : Option (List Release) := do
-  let d ← firstDraws key p c e
+  let d ← firstSamples key p c e
   Verity.Sampled.readLog d.label d.after [] ξ (← (firstLines e).toOption)
 
 /-- **The interior session's releases as the check read them**, with the coins `ξ` placed (`.empty` for none). -/
 def secondRead (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence)
     (bs : _root_.Core.Blobs) (ξ : ByteArray) : Option (List Release) := do
-  let d ← secondDraws p e
+  let d ← secondSamples p e
   Verity.Sampled.readLog d.label d.after (← secondRecords bs e) ξ (← (Verity.Sampled.linesOf e.interior).toOption)
 
 /-- **The logs the session reads make of the play's log**: where both sessions are on one window, they are one session
@@ -186,16 +186,16 @@ def logsOf (w₁ w₂ : String) (r₁ r₂ : List Release) : List (List Release)
 
 /-- **The device's log as the two-stage form's check read it**, from what the prover sent, as the logs it makes of
 the play's log (`logsOf`): the first session's releases with the coins its sample read under the parameters' key
-(`drawCoins`), and the interior's with the second stage's coins (`OneStageZk.coinsOf`); none where either doesn't
+(`sampleCoins`), and the interior's with the second stage's coins (`OneStageZk.coinsOf`); none where either doesn't
 read. -/
 def readsLogs (s : Verity.Sent) : List (List Release) :=
   (do
     let (p, c, e) ← (caseOf s).toOption
     let key ← keyOf s.params
-    let d₁ ← firstDraws key p c e
-    let ξ ← (Spot.Challenger.drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e)).toOption
+    let d₁ ← firstSamples key p c e
+    let ξ ← (Spot.Challenger.sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e)).toOption
     let c₂ ← (interiorOf e).toOption
-    let d₂ ← secondDraws p e
+    let d₂ ← secondSamples p e
     let ξ₂ ← (Spot.OneStageZk.coinsOf p.audit c₂ e.interior).toOption
     let bs := _root_.Core.Blobs.ofArray s.blobs
     pure (logsOf d₁.window d₂.window (← firstRead key p c e ξ) (← secondRead p e bs ξ₂)) :
@@ -206,8 +206,8 @@ def opensReads (s : Verity.Sent) : List (List Release) :=
   (do
     let (p, c, e) ← (caseOf s).toOption
     let key ← keyOf s.params
-    let d₁ ← firstDraws key p c e
-    let d₂ ← secondDraws p e
+    let d₁ ← firstSamples key p c e
+    let d₂ ← secondSamples p e
     let bs := _root_.Core.Blobs.ofArray s.blobs
     pure (logsOf d₁.window d₂.window (← firstRead key p c e .empty) (← secondRead p e bs .empty)) :
     Option (List (List Release))).getD []
@@ -340,8 +340,8 @@ def PrintsTwo (dev : History) (w₁ w₂ : String) (log : List Release) : Prop :
   if w₁ = w₂ then PrintsOn dev w₁ log
   else ∃ log₁ log₂, log = log₁ ++ log₂ ∧ PrintsOn dev w₁ log₁ ∧ PrintsOn dev w₂ log₂
 
-/-- **The two sessions' windows the parameters name**: the boundary registration's (`firstDraws`) and the interior
-audit's (`secondDraws`), each its open root. -/
+/-- **The two sessions' windows the parameters name**: the boundary registration's (`firstSamples`) and the interior
+audit's (`secondSamples`), each its open root. -/
 def windowsOf (θ : ByteArray) : Option (String × String) := do
   let p ← (paramsAt θ).toOption
   let bp ← (boundaryOf p).toOption

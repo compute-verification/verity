@@ -4,7 +4,7 @@ For each program (A4 P6's six-template population, as core's sample test builds 
 
 - the sampling design: `verity-verify-proof draw --program P --partition Q --stratified K` against `draw.derive`, and the population against
   `partition.units`;
-- the units on a given stream: against `reference_draw`, the sampler of record written out here (each stratum's
+- the units on a given stream: against `reference_sample`, the sampler of record written out here (each stratum's
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
 - the sample: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
 - U2: `verity-verify-proof draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted sample;
@@ -67,7 +67,7 @@ def _nth(ranges, j: int) -> int:
     raise IndexError(j)
 
 
-def reference_draw(law: dict, src: bytes) -> list[int] | None:
+def reference_sample(law: dict, src: bytes) -> list[int] | None:
     """The stratified sampler of record on the given bytes: stratum s's stream is the next `2 k_s · width(n_s) + 64` bytes."""
     out, at = [], 0
     for s in law["strata"]:
@@ -185,7 +185,7 @@ def main() -> int:
             d = got[0]
             if D.law_of(d) != law or d["population"] != n:
                 bad.append((label, k, "law or population"))
-            ref = reference_draw(law, src)
+            ref = reference_sample(law, src)
             if ref is not None and d["units"] != ref:
                 bad.append((label, k, "units against the reference sampler"))
             v = D.check_draw(d, {"population": n}, law)

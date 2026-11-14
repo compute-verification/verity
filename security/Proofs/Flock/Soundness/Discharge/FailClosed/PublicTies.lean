@@ -83,7 +83,7 @@ pinned dummy `b ‖ c` is `dummyBc`; with public outputs, each output port's roo
 structure PublicTies (hidden : Bool) (c : Circuit) (pub : Public) : Prop where
   frame : ∃ fv, pub.frameV3 = .ok fv ∧ J.str fv "frame" "public file" = .ok "frame-v3-sha512" ∧
     J.str fv "row_key_sha512" "public file" = .ok (hexOf (Sha512.hash Hm96.Default512.key))
-  instances : ∀ d, pub.header.getObjVal? "unit_draw" = .ok d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
+  instances : ∀ d, pub.header.getObjVal? "unit_draw" = .ok d → ∃ u, Draw.UnitSample.ofJson d = .ok u ∧
     J.nat pub.header "instances" "public file" = .ok u.proved.size ∧ pub.n = u.proved.size
   schemas : ∀ p < c.ports.size, ∃ fv s, pub.frameV3 = .ok fv ∧ J.get fv "schemas" "public file" = .ok s ∧
     J.str s c.ports[p]!.name "public file" = .ok (rowSchema c.ports[p]!)
@@ -173,7 +173,7 @@ theorem ties_of_check {hidden : Bool} {c : Circuit} {pub : Public}
         | (rw [hu] at hd; cases hd; done)
         | (obtain rfl := Except.ok.inj (hu.symm.trans hd)
            have hcu := not_or_true ‹¬ ((_ : ℕ) != _ || _) = true›
-           exact ⟨_, ‹Draw.UnitDraw.ofJson _ = _›, ok_of_not_bne ‹J.nat _ "instances" _ = _› hcu.1,
+           exact ⟨_, ‹Draw.UnitSample.ofJson _ = _›, ok_of_not_bne ‹J.nat _ "instances" _ = _› hcu.1,
              by simpa using hcu.2⟩)
       schemas := fun p hp => (hin p hp).1.2
       inputs := fun p hp => (hin p hp).1.1

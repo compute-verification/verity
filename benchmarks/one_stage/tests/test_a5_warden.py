@@ -21,7 +21,7 @@ import pytest
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import HEADER
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
-from verity.commitments.windows import rows as SR
+from verity.commitments.periods import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -83,7 +83,7 @@ def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
                                                                                              for s in x.opening.salts}
 
 
-def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(run):
+def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest(run):
     tmp, at = run
     mine, c, rec, _win = committed(tmp, at, "law")
     tg, rid = mine.members[0].template, mine.members[-1].template

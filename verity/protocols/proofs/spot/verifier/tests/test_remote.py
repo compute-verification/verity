@@ -743,7 +743,7 @@ def tree_record(nonce: bytes, tree_root: bytes, key: bytes, points: list[int], r
                                                  for k, (m, n, coins) in enumerate(rs)]} for s, rs in rounds.items()]}
 
 
-def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
+def test_a_coin_tree_is_sampled_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
     """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them

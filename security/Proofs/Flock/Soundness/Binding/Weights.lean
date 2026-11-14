@@ -76,7 +76,7 @@ open Audit.Partition in
 on a message of its table (`cand … = some M`), the value that message holds at the commit string of each of `u`'s wires is
 the registered one, or `collide` of the two openings is a SHA-512 collision. -/
 theorem registered_weights_extracted {D : Type} [Inhabited D] (H : List UInt8 → D)
-    (E : Merkle.Enc (List FlockLevel3.GF128) D) {L : Law n} (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R)
+    (E : Merkle.Enc (List FlockLevel3.GF128) D) {L : SamplingDesign n} (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R)
     (lay : Layout P plan tab decode) (scheme : lay.Pos → ExplicitLeaf lay.Val) (hreg : lay.Registered scheme)
     {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω) {bs : List (List (OutC FlockLevel3.GF128 D))}
     {M : Msg plan tab (L.draw ω) R u} (hM : cand H E plan tab R τ ω u bs = some M) {g : Fin C.N} (hg : g ∈ P.io u)

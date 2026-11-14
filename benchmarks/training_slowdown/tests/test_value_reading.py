@@ -42,7 +42,7 @@ from torch import nn
 from test_program_reading import LF, WK, loop
 
 from verity.definitions.numerics.serve3_reference import materialize
-from verity_vllm.program.frontend.train_step import AdamW, step_program
+from verity_torch.frontend.train_step import AdamW, step_program
 
 V, D, T, L = 8, 4, 4, 2
 K0 = 65536.0

@@ -14,9 +14,9 @@ it the device's (`ReadIsDevice`), on a case map that is the one sent (`CaseIsSen
 
 An accepted play is on two windows: the form refuses an interior audit on the boundary registration's window, so the
 two windows its parameters name differ (`windowsOf_ne`, `CutAccept.lean`). There the play's log is the first
-session's releases and then the interior's (`logsOf`). The first stage's bytes start the coins `drawCoins` reads
-from the first session (`firstDrawn_of`), which are the coins of the first sample that the first session's releases
-show (`drawn_shown`), and the first session's read holds no opening: the form's check refuses a first session's log
+session's releases and then the interior's (`logsOf`). The first stage's bytes start the coins `sampleCoins` reads
+from the first session (`firstSampled_of`), which are the coins of the first sample that the first session's releases
+show (`sampled_shown`), and the first session's read holds no opening: the form's check refuses a first session's log
 that holds a coin tree's line there (`SessionCoins.firstTreeless_of_check`, `SessionCoins.readLog_treeless`).
 -/
 
@@ -30,13 +30,13 @@ open Verity.Sampled (freshCoins readLog)
 
 /-- **`FirstShownEarly`**, where `Good` holds the check to have read a log and found it the device's: the two
 windows the parameters name differ (`windowsOf_ne`), so the play's log is the first session's releases then the
-interior's, the first session's releases show the coins the first stage's bytes start (`firstDrawn_of`,
-`drawn_shown`), and none of them is an opening (`SessionCoins.firstTreeless_of_check`,
+interior's, the first session's releases show the coins the first stage's bytes start (`firstSampled_of`,
+`sampled_shown`), and none of them is an opening (`SessionCoins.firstTreeless_of_check`,
 `SessionCoins.readLog_treeless`). -/
 theorem firstShownEarly (C : CaseOf) (Good : Verity.Exchange → Prop) (hG : ∀ o, Good o → ReadIsDevice o)
     (hC : CaseIsSent C) : FirstShownEarly C Good := by
   intro o ha hgood i read hi hread _
-  have hD : FirstDrawn C := firstDrawn_of C hC
+  have hD : FirstSampled C := firstSampled_of C hC
   have hfree : SessionCoins.FirstTreeless C :=
     SessionCoins.firstTreeless_of_check C hC fun _ _ _ _ _ _ _ _ => rfl
   obtain ⟨hne, hg⟩ := hG o hgood
@@ -62,7 +62,7 @@ theorem firstShownEarly (C : CaseOf) (Good : Verity.Exchange → Prop) (hG : ∀
     (hfree o ha _ _ _ key d₁ ξ r₁ d₂ hcase hkey hd₁ hξ hr₁ hd₂ hw)
   refine ⟨d₁.label, d₁.after, a, b, ?_, hab, ?_, ?_⟩
   · rw [hk, Option.bind_some]
-    exact firstDraw_of hd hd₁
+    exact firstSample_of hd hd₁
   · intro r hr j s n hrf
     obtain ⟨x', hx', hRx⟩ := SessionCoins.forall₂_mem_of_right h₁ r hr
     obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hx'
@@ -70,7 +70,7 @@ theorem firstShownEarly (C : CaseOf) (Good : Verity.Exchange → Prop) (hG : ∀
       (congrArg SessionCoins.openTree ((SessionCoins.of_ofV2 hRx).1.trans hrf)).trans rfl
     rw [hop x hx] at hopen
     cases hopen
-  · rw [drawn_shown hξ hls hlsl hrl h₁]
+  · rw [sampled_shown hξ hls hlsl hrl h₁]
     exact hpre
 
 end Verity.SampledTwo

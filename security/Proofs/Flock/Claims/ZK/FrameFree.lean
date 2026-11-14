@@ -588,10 +588,10 @@ theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Op
       (Frame.sq (piopK jj) (piopN m jj)).enc).toArray, piopN m jj, C jj))
     (hC : ∀ jj, jj + 1 < piopNR m kLog → (C jj).size = piopN m jj)
     (hout : ∀ e < m - 13, ((C 1)[e]! + 1).isZero = false) :
-    ∃ tail, (Loop.maskedOf (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) {} rs).toList =
+    ∃ tail, (Loop.maskedOf (Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) {} rs).toList =
       (List.range (lay.fa + 2) ++ List.range' (lay.fa + 3) (2 * lay.nLc + 64)).map mk ++ tail := by
-  set c := Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms with hcdef
-  have hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size := ofDraws_order lay b ms
+  set c := Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms with hcdef
+  have hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size := ofSamples_order lay b ms
   have hN : c.nPiop ≤ c.order.size := Nat.sub_le _ _
   have hNP : c.nPiop = lay.fa + 2 + (2 * lay.nLc + 64) := by
     show (absorbed lay).size - _root_.Flock.ZkServer.Frame.nLig lay = _
@@ -721,11 +721,11 @@ at `i`'s absorbed position plus pad `i`. -/
 theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (M : Array F128) (fc : F128) {i : ℕ} (hi : i < lay.zp 64) (hne : i ≠ lay.fc)
     (hM : lay.fa + 2 + (2 * lay.nLc + 64) ≤ M.size) :
-    (Loop.valsOf (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[i]! =
+    (Loop.valsOf (Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[i]! =
       M[absPos lay i]! + (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[i]! := by
-  have hcl : (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
-  have hco : (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).order = absorbed lay := rfl
-  have hch : (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).h =
+  have hcl : (Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
+  have hco : (Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).order = absorbed lay := rfl
+  have hch : (Cfg.ofSamples lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).h =
       (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h := rfl
   have hfc : lay.fc = lay.fa + 2 := rfl
   have hzp : lay.zp 64 = lay.fa + 3 + 2 * lay.nLc + 64 := by
@@ -740,7 +740,7 @@ theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option
     unfold absPos
     split_ifs <;> omega
   have hih : i < (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h.size := by
-    have := ofDraws_order lay b ms (absPos lay i) hp
+    have := ofSamples_order lay b ms (absPos lay i) hp
     rwa [hco, hord, hch] at this
   have hzl : ((absorbed lay).zip M).toList.length = min (absorbed lay).size M.size := by simp
   have hpz : absPos lay i < ((absorbed lay).zip M).toList.length := by rw [hzl]; omega

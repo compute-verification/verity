@@ -18,7 +18,7 @@ from test_scan_zk import sz
 
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.windows import rows as RWS
+from verity.commitments.periods import rows as RWS
 
 S = sz.W63K4
 V2 = sz.REG.SCHEMA_V2

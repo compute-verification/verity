@@ -25,7 +25,7 @@ registered circuit's SHA-512 (`names`), then runs
 the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
 (`NciCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
-* `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and sampled proofs' records have
+* `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and SPOT's records have
   one digest, which every Commit record the period's windows name has, the record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
   registers (`NciCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
   (`NciCheck.Properties.Expands`), has a parse and a registered circuit the program lays out with θ, whose inference
@@ -34,10 +34,10 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
   (`Nci.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
   bit wide, its bit-level expansion a `(ΓW, ⌊αΓW⌋)`-partition when they are at most `W` bits wide, with no assumption
-  that it is Boolean or of positive fan-in; and the record sampled proofs' case commits to names, by its SHA-512, the program the form its params
+  that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program the form its params
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
-  registered circuit the policy checked and the program sampled proofs verifies have one SHA-512.
+  registered circuit the policy checked and the program SPOT verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerThreaded` reads, `Nci.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other. `Nci.Guarantees.DampenerRemote` reads the count
   verdict instead, `Nci.CompliesAtMost c k n d`, which a published `complies` of the count gives
@@ -47,7 +47,7 @@ A check that accepts every input accepts `ev = []`, where neither conclusion hol
 `CompliesHeld` take three cases): the proofs show both fail there.
 
 `Γ` and `α = num / den` are the verifier's own: the parameters the composite names for the policy. No statement takes an
-assumption: the digests are those the code computes and compares, so that PoUW and sampled proofs read the policy's
+assumption: the digests are those the code computes and compares, so that PoUW and SPOT read the policy's
 record is up to a SHA-512 collision between two records the run carries, which the statements leave to their readers.
 
 The registered circuit is the program the policy's parameters carry and the record names by its SHA-512. That it is the
@@ -115,22 +115,29 @@ def CaseHeld (k : Case) : Prop :=
 verifier, `VStar.Recursive.Caller.check` returns no code exactly when the record keeps `Properties.Spot.CallerHeld`
 against that verifier: its day's declared program, its window's stream, prover, seed salt, the pool's reset, week and
 spent mark with at most one reset a week, and the registration log's compiler and advice within its length, and, when
-the verifier expects values registered, the pool its window opens. Sampled proofs' one-stage form and the recursive
-audit read SPOT's acceptance through that check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's
-facts off it. -/
+the verifier expects values registered, the pool its window opens and no output value reading a port of a record its
+verdict log names refused. SPOT's one-stage form and the recursive audit read SPOT's acceptance through that
+check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's facts off it (`CallerCheckSound`). -/
 def CallerCheckMeans : Prop :=
   ∀ (rec : Json) (v : Spot.Registration.Verifier),
     VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
 
-/-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
+/-- **Where the caller's check finds nothing, the record keeps the caller's facts**: `CallerCheckMeans`' forward half,
+which is all `StageHeld` reads. On every record and every verifier, where `VStar.Recursive.Caller.check` returns no
+code, the record keeps `Properties.Spot.CallerHeld` against that verifier. -/
+def CallerCheckSound : Prop :=
+  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+    VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
+
+/-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
 (`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
 params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
 (`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
 soundness the recursive audit (`RecursiveAuditC3`) states. In either form the record keeps the caller's facts against
 that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
-prover, the seed salt, the registered compiler and the pool's reset the verifier holds, and it opens the pool the previous window of record
-left. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
+prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
+window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
 verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. -/
 def StageHeld (k : Case) : Prop :=
   (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
@@ -143,16 +150,15 @@ def StageHeld (k : Case) : Prop :=
     Properties.Spot.CallerHeld c.record q.base.verifier)
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
-policy's `kI`, PoUW's period's `kW` and sampled proofs' `kS`; the policy's and sampled proofs' commitments decode,
-each under its own subprotocol's decoder (sampled proofs' is the one-stage registration record's), to one digest `r`,
+policy's `kI`, PoUW's period's `kW` and SPOT's `kS`; the policy's and SPOT's commitments decode,
+each under its own subprotocol's decoder (SPOT's is the one-stage registration record's), to one digest `r`,
 the run's record's;
 every Commit record the
 period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
 refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
-and every declaration the registered circuit lays out, with the declared division, meets the policy; and sampled
-proofs' case is `StageHeld`: its record names, by its SHA-512, the program its named form verifies the sessions
+and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: its record names, by its SHA-512, the program its named form verifies the sessions
 against, and keeps the caller's facts against that form's verifier. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧

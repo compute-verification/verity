@@ -13,10 +13,11 @@ to (`binding`; `R6-stream`, `R6-prover`), the seed salt the verifier read from t
 `R6-seed-salt`), the pool's reset, week and spent mark, at most one reset a week (`pool`; `R6-pool-reset`,
 `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), and the registration log's compiler and advice within its
 length (`compiler`; `R6-compiler`, `R6-advice-length`); and, when the verifier expects values registered, the record's
-entry for the pool's `pin` is the pool its window opens (`R7-pool-chain`).
+entry for the pool's `pin` is the pool its window opens (`R7-pool-chain`), and no output value reads a port of a record
+the verifier's verdict log names refused (`verdicts`; `Registration.portsAccepted`, `R7-output-refused`).
 
 Each step is one term (`Spot.Registration.kept`), so the check is one composition with no join point. `gate` runs it
-after SPOT's check accepts: sampled proofs' one-stage form (`VStar.Recursive.Sampled.checkBlobs`) and the recursive
+after SPOT's check accepts: SPOT's one-stage form (`VStar.Recursive.Sampled.checkBlobs`) and the recursive
 audit (`VStar.Recursive.checkBlobs`) both read SPOT's acceptance through it. What its emptiness means is
 `Properties.Remote.CallerCheckMeans`.
 -/
@@ -101,7 +102,8 @@ def check (rec : Json) (v : Verifier) : Array String :=
   let c := kept (jeq (getD w "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   let c := poolMarks w v.pool v.log c
   let c := compilerMarks w v.compiler c
-  kept (!v.v2 || poolChained rec v) c "R7-pool-chain"
+  let c := kept (!v.v2 || poolChained rec v) c "R7-pool-chain"
+  kept (!v.v2 || Registration.portsAccepted v) c "R7-output-refused"
 
 /-- SPOT's outcome `o` held to the caller's check: an acceptance stands only when `check` finds nothing, and is refused
 by its codes otherwise; any other outcome is SPOT's own. -/

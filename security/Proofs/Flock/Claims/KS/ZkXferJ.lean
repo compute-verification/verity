@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.ZkAccJ
 public import Proofs.Flock.Claims.KS.ZkDecJ
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -227,13 +227,13 @@ def ZkXferJ (x : Claims.Msg) : Prop :=
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **`ZkXferJ` gives `ZkLiveAccJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a sample (`acc_draw_of_setup`), and the deployed decoders are right at `OkOffJ` on `AccOffJ`
+carries a sample (`acc_sample_of_setup`), and the deployed decoders are right at `OkOffJ` on `AccOffJ`
 (`decodesOff_deploy`), whose verdict at table `j` accepts with no opening off `C` unless it self-clashes. -/
 theorem zkLiveAccJ_of_xferJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferJ x) :
     ZkLiveAccJ x := by
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨d, hd⟩ := acc_draw_of_setup hno hset
+  obtain ⟨d, hd⟩ := acc_sample_of_setup hno hset
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
   refine ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
   obtain ⟨dg, N, rootB₀, τ, _, _, σL, hσ, htr, hadv, hP, hTau, hsc⟩ := hω ω j hj C hC

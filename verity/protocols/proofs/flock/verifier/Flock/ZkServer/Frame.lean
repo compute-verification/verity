@@ -98,7 +98,7 @@ def absorbed (l : Zk.PadLayout) : Array Nat := Id.run do
 def codeLen (l : Zk.PadLayout) : Nat := (l.len + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
 
 /-- The OS bytes a rep's samples take: `h`, `μ` and the two rows' padding (16 bytes a word), `τ`'s salt, a salt per leaf. -/
-def drawBytes (l : Zk.PadLayout) : Nat := 16 * (2 * l.len + 2 * Zk.K_PAD) + Zk.TAU_SALT_BYTES + SALT * codeLen l
+def sampleBytes (l : Zk.PadLayout) : Nat := 16 * (2 * l.len + 2 * Zk.K_PAD) + Zk.TAU_SALT_BYTES + SALT * codeLen l
 
 /-- `n` words of `b` from byte `o`, 16 bytes each, low then high, little-endian. -/
 def words (b : ByteArray) (o n : Nat) : Array F128 :=
@@ -116,7 +116,7 @@ structure Draws where
   salts : ByteArray
   deriving Inhabited
 
-/-- The samples in the bytes `b` (`drawBytes l` of them): `h`, `μ`, the rows' padding, `τ`'s salt and the leaf salts, in that
+/-- The samples in the bytes `b` (`sampleBytes l` of them): `h`, `μ`, the rows' padding, `τ`'s salt and the leaf salts, in that
 order, with `h_ab := h_a h_b` and `w := x y` (the triple) set from the others. -/
 def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
   let s := l.len
@@ -128,15 +128,15 @@ def Draws.ofBytes (l : Zk.PadLayout) (b : ByteArray) : Draws :=
     tauSalt := b.extract o (o + Zk.TAU_SALT_BYTES),
     salts := b.extract (o + Zk.TAU_SALT_BYTES) (o + Zk.TAU_SALT_BYTES + SALT * codeLen l) }
 
-/-- The samples in the bytes `b` one read returned, refused unless there are exactly `drawBytes l` of them: `Draws.ofBytes`
+/-- The samples in the bytes `b` one read returned, refused unless there are exactly `sampleBytes l` of them: `Draws.ofBytes`
 reads past a short input as zeros, which would be pads no one drew. -/
 def Draws.ofRead (l : Zk.PadLayout) (b : ByteArray) : Except String Draws :=
-  if b.size = drawBytes l then .ok (Draws.ofBytes l b)
-  else .error s!"{b.size} bytes where the draws take {drawBytes l}"
+  if b.size = sampleBytes l then .ok (Draws.ofBytes l b)
+  else .error s!"{b.size} bytes where the draws take {sampleBytes l}"
 
-/-- The rep's samples from a byte source, in one read of `drawBytes l` bytes from `get` (`cmd`'s is `IO.getRandomBytes`). -/
-def drawsWith {m : Type → Type} [Monad m] (get : USize → m ByteArray) (l : Zk.PadLayout) : m (Except String Draws) :=
-  Draws.ofRead l <$> get (drawBytes l).toUSize
+/-- The rep's samples from a byte source, in one read of `sampleBytes l` bytes from `get` (`cmd`'s is `IO.getRandomBytes`). -/
+def samplesWith {m : Type → Type} [Monad m] (get : USize → m ByteArray) (l : Zk.PadLayout) : m (Except String Draws) :=
+  Draws.ofRead l <$> get (sampleBytes l).toUSize
 
 /-- The root over leaves `l` (a power of two of them): each node `SHA-512(left ‖ right)`, a level at a time. -/
 def treeRoot (l : Array ByteArray) : ByteArray := go l l.size
@@ -250,7 +250,7 @@ structure Cfg where
 
 /-- The configuration of a rep of layout `l` with the samples `d` and the statement's mask slot: `d`'s pads and rows, and the
 root the frame computes over `d` (`padsRoot`). -/
-def Cfg.ofDraws (l : Zk.PadLayout) (d : Draws) (mask : Option MaskSlot) : Cfg :=
+def Cfg.ofSamples (l : Zk.PadLayout) (d : Draws) (mask : Option MaskSlot) : Cfg :=
   { lay := l, h := d.h, order := absorbed l, nPiop := (absorbed l).size - nLig l, lig := l.k0 > 0,
     root := padsRoot l d, mask, rowH := d.h ++ d.padH, rowMu := d.mu ++ d.padMu }
 
@@ -667,7 +667,7 @@ def run (c : Cfg) : State → List Req → State × Bool
     if a.ends then (st', true) else run c st' qs
 
 /-- One rep's samples, refusals and release, served on `ch` beside the host's hooks `hk`, its samples read from `get`.
-The first line starts the rep (`start`): the frame samples `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
+The first line starts the rep (`start`): the frame samples `sampleBytes` bytes from `get` in one read (`samplesWith`, refusing
 any other count), commits them (`padsRoot`), and answers `ok 64` followed by the root alone: the samples never leave the
 frame. `prior N` followed by `16 N` bytes, before the first round, is an
 earlier rep of the table's algebraic-phase coins, whose claim points the rank check covers too; it is answered `ok`.
@@ -700,10 +700,10 @@ def serveWith (get : USize → IO ByteArray) (ch : Chan) (hk : Hooks) : IO UInt3
   let (l, mask) ← match JsonParse.parse first >>= start with
     | .ok x => pure x
     | .error e => return (← refuse s!"the rep's start: {e}")
-  let d ← match ← drawsWith get l with
+  let d ← match ← samplesWith get l with
     | .ok d => pure d
     | .error e => return (← refuse s!"the rep's start: {e}")
-  let c := Cfg.ofDraws l d mask
+  let c := Cfg.ofSamples l d mask
   if let .error e := c.check then return (← refuse s!"the rep's start: {e}")
   let mut st : State := {}
   say s!"ok {c.root.size}"

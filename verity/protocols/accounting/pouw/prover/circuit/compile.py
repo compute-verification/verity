@@ -24,7 +24,7 @@ by its unit (Replace), PoUW's own Program and not the served one.
   one-stage verifier fills itself, so the prover chooses none of them (`spot.one_stage.registered`'s
   `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
   port's, an AROW row table's included, and the registered weights', which the verifier holds to the root it pinned
-  before the salt, `one_stage.registration.check`'s `pinned`), `pouw.positions` after every unit of the log's earlier records
+  before the salt, `one_stage.docket.check`'s `pinned`), `pouw.positions` after every unit of the log's earlier records
   (`registered.log_base`, so no two records of a log share a position), and `pouw.salt` per execution phase, filled by the
   verifier. R7 refuses a record that registers any other commitment of them (`R7-supplied`); `Compiled.inputs` gives the
   leaves the verifier fills. A seed group is the calls committed together (`groups`; by default a site, one

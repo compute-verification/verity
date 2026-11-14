@@ -186,9 +186,9 @@ def TableAtHOfAccepts : Prop :=
   ∀ {I : Exec.Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}, I.tags.typed = false →
     HmOut.parse I.tags I.circuitFile I.tables = .ok c → c.outNet = c.unitNet →
     I.tags.hiddenOutputs = true → I.count ≤ 1 →
-    ∀ (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {t : Exec.Transcript},
+    ∀ (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {t : Exec.Transcript},
       Accepts I t → recordDraw t.record = some (dj S) →
-      (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) →
+      (∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) →
       (∀ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition
         I.program = .ok st → st.mPts = mPts) →
       ∃ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program =

@@ -24,6 +24,7 @@ from test_remote_bandwidth import SCHEDULE, Entropy, drive, finish, params, stor
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.poub.verifier import coins
 from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier
 from verity.protocols.proofs.spot.device import remote as R
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
@@ -222,6 +223,47 @@ def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path,
     assert s.trusted_reason(service.directory, [ledger.path], key(), PINS, MAIN, verify, "p-1") is None
     later = PINS + [C.pin_line(MAIN[0], MAIN[0], "2026-10-23T09:00:00Z")]
     assert s.trusted_reason(service.directory, [ledger.path], key(), later, MAIN, verify, "p-1") is None
+
+
+TRUSTED_PIECES = ["challenger_head", "challenger_pinned", "challenger_session"]
+
+
+def _honest_trusted(store, tmp_path, sign):
+    ledger = Ledger(tmp_path / "windows.jsonl", sign)
+    ledger.period()
+    ledger.open("s-r", coins.window_root(store.registration.digest, 0))
+    service = Service(tmp_path / "s-r", sign, "s-r", 0, params().windows, b"service")
+    s, verdicts = served_session(store, service)
+    assert all(v.accepted for v in verdicts) and service.close() is None
+    ledger.end(service)
+    return s, service, ledger
+
+
+@pytest.mark.parametrize("lean", ["agrees", "refuses", "differs"])
+@pytest.mark.parametrize("piece", TRUSTED_PIECES)
+def test_the_session_trusted_is_the_leans_and_the_python_alone_trusts_none(store, tmp_path, sign, monkeypatch, piece,
+                                                                           lean):
+    """`coins.trusted` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, the pinned session and
+    the session's commitment and roots, in that order, and acts on its answers: an honest session the Python trusts is
+    trusted where the Lean agrees, and refused, naming the check, where the Lean refuses any one of the three or
+    answers it otherwise than the Python."""
+    s, service, ledger = _honest_trusted(store, tmp_path, sign)
+    asked, real = [], spot_verifier.lean
+
+    def lean_(name, request):
+        asked.append(name)
+        got = real(name, request)
+        if name != piece or lean == "agrees":
+            return got
+        return {"refused": "a stand-in's refusal"} if lean == "refuses" else {**got, "stand-in": True}
+    monkeypatch.setattr(spot_verifier, "lean", lean_)
+    why = s.trusted_reason(service.directory, [ledger.path], key(), PINS, MAIN, verify, "p-1")
+    if lean == "agrees":
+        assert why is None and asked == TRUSTED_PIECES
+    elif lean == "refuses":
+        assert why.endswith(f"the Lean verifier refuses the challenger's {piece}: a stand-in's refusal")
+    else:
+        assert why.endswith(f"the Lean verifier's {piece} is not the Python's, so neither is taken")
 
 
 OFF_MAIN = ("session s-r ran commit {}, which the host's pins log records but which is not on main's first-parent line "

@@ -96,7 +96,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .node_window import _GRAIN, NAME, Lowering, NodeWindow
 from .window_builder import Grain

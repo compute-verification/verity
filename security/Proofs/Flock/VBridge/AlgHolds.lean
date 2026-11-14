@@ -98,7 +98,7 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 open FlockVBridge.Decode
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **A part the verifier pinned computes its residuals at its group's indices** (`decode_check`, its `hwI` and `hV`
 from `part_sizes`): copy `j`'s row ports registered bits of `w` at `wIdx` of group `p`'s ports and its `v` port of the
@@ -191,7 +191,7 @@ open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **Copy `j` of unit `u` is part `p` of the groups `gs`, its outputs registered zero**: `decode_part`'s facts about
 one copy, with every output column of the part (`16 · RES_OUT_WORDS` bits) a registered 0 (`RegOut`), as V* registers
@@ -323,7 +323,7 @@ section outer
 
 open FlockVBridge.Compiled (Accepted layers AlgebraDecodes)
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
 
 /-- **G items 1–3 from the parts' units**: `algebraHolds_of_decode` at every accepted outer proof, each rep's part `p`
 in session `sess p`, with the verifier's coefficients and the sizes at the rep's values. -/

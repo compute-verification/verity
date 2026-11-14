@@ -110,13 +110,25 @@ def _manifest_facts(path: str | Path) -> dict[str, dict]:
     return out
 
 
+def evaluate_spec(spec, operand_words: list[np.ndarray]) -> list[int]:
+    """Encodings returned by one call of `spec` on operands given as word arrays: core `verity.circuits.evaluation.evaluate`."""
+    from verity.circuits.evaluation import evaluate
+
+    params, _ = spec.signature()
+    if len(params) != len(operand_words):
+        raise ValueError(f"{spec.id}: {len(params)} parameters, {len(operand_words)} operands")
+    for (pname, pt), w in zip(params, operand_words):
+        if pt.leaves != w.size:
+            raise ValueError(f"{spec.id}: parameter {pname} has {pt.leaves} leaves, operand has {w.size} words")
+    return list(evaluate(spec, *(w.reshape(-1).tolist() for w in operand_words)))
+
+
 def _lane() -> tuple[Any, Any]:
     """The interpreter and the module of the lane evaluator's Definition, imported on a call since they load the core `verity`,
     which importing this module does not; `recompute_run` calls this at its opening, so that a worker it forks starts with both
     loaded."""
     from verity.definitions.registry import sampling_topp_difftest
 
-    from verity_vllm.properties.admission import evaluate_spec
     return evaluate_spec, sampling_topp_difftest
 
 
