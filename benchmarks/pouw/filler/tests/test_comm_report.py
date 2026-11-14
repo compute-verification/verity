@@ -136,19 +136,31 @@ def test_a_time_and_a_field_are_medians_over_an_arms_repeats(tmp_path):
     assert row["gates_ok"] is None  # no rank wrote a gate's verdict
 
 
+def test_a_field_is_the_median_over_every_ranks_record_of_every_repeat(tmp_path):
+    # two repeats of base on two ranks, four clocks: their median, 1930, is no rank's, no repeat's and not their mean
+    clocks = ((2000.0, 1900.0), (1960.0, 1700.0))  # each rank's, one a repeat
+    _write_set(tmp_path, [[_tp(r, 32, 1e11, "base", [40] * 3, mhz=mhz) for mhz in of_rank]
+                          for r, of_rank in enumerate(clocks)])
+    (row,) = R.rows(str(tmp_path))
+    assert row["served"] == pytest.approx(1e11 / 40e-3 / (1024 * 188 * 1930.0 * 1e6))
+
+
 def test_a_rank_cut_short_times_the_reps_every_rank_has(tmp_path):
     _write_set(tmp_path, [[_tp(0, 32, 1e11, "base", [40, 42, 90])], [_tp(1, 32, 1e11, "base", [41, 43])]])
     (row,) = R.rows(str(tmp_path))
     assert row["base_ms"] == 42  # the median of 41 and 43, the slower rank's time of each rep both ranks have
 
 
-def test_one_failed_gate_fails_the_set_and_only_the_wrapped_point_is_flagged(tmp_path):
-    _write_set(tmp_path, [[json.dumps({"mode": "pf_gate", "rank": r, "ok": r == 0}),  # rank 1's gate fails
-                           *(_tp(r, B, 1e11, "base", [40] * 3) for B in (32, 64)),
+@pytest.mark.parametrize("failed", [0, 1])
+def test_one_failed_gate_fails_the_set_and_only_the_wrapped_point_is_flagged(tmp_path, failed):
+    # the wrapped point, and three that each differ from it in one part of (tp, B, L)
+    points = ((2, 64, 2048), (2, 32, 2048), (2, 64, 4096), (4, 64, 2048))
+    _write_set(tmp_path, [[json.dumps({"mode": "pf_gate", "rank": r, "ok": r != failed}),  # one rank's gate fails
+                           *(_tp(r, B, 1e11, "base", [40] * 3, tp=tp, L=L) for tp, B, L in points),
                            json.dumps({"mode": "point", "tp": 2, "rank": r, "B": 64, "L": 2048, "kv_wrapped": True})]
                           for r in (0, 1)])
-    got = [(row["B"], row["gates_ok"], row["kv_wrapped"]) for row in R.rows(str(tmp_path))]
-    assert got == [(32, False, False), (64, False, True)]
+    got = [(row["tp"], row["B"], row["L"], row["gates_ok"], row["kv_wrapped"]) for row in R.rows(str(tmp_path))]
+    assert got == [(*key, False, key == points[0]) for key in sorted(points)]
 
 
 def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
