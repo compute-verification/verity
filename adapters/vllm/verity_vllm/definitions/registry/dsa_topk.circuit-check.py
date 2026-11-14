@@ -7,7 +7,7 @@ from typing import Any, Callable
 #: GLM-5.3's sparse MLA reads past INDEX_TOPK keys: its latent rows (W = KV_LORA + QK_ROPE = 576 bf16 words) a row's Waksman
 #: settings route to its top 2,048, over every key count from the first row past INDEX_TOPK to the longest served row, checked at
 #: these spots (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaWaksmanRows_v1``).  Past 7,281 keys the rows are
-#: over circuit-check's input budget and read lazily (`circuit_check.targets.LAZY_OPERANDS`)
+#: over circuit-check's input budget and read lazily (`circuit_check.targets.lazy_operands`)
 RANGES = {
     "DsaWaksmanRows_v1{N=2049..32533,K=2048,W=576,E=16}": (
         # the ends: the first row past INDEX_TOPK, and the longest served row

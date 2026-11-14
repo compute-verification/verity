@@ -964,7 +964,7 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
     {"summary.json": "{}", "window/audit.json": json.dumps({"accepted": False, "checks": {"proved": {"ok": False}}})},
     {"summary.json": None},
 ])
-def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomputed_here_unchanged(
+def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
     """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
     hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
@@ -1015,7 +1015,7 @@ def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomp
     ("no-blob", "error", "blob(s) that aren't files"),
     ("no-line", "error", "answered no line"),
 ])
-def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
+def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
         tmp_path, monkeypatch, capsys, change, verdict, said):
     """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
     saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
@@ -1744,7 +1744,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["protocol"], row["verdict"], row["commitment"], row["delta"]) == (S.PEARLPLUS_PROTOCOL, "accept",
                                                                                   "c1" * 64, "1/100")
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
@@ -1841,7 +1841,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     document, its ``why`` the development verdict and the condition, in `pearlplus_of_record`'s order, so remote's record
     composes pending and names it."""
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
     assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
     _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",

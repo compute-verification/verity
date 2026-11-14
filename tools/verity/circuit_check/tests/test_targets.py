@@ -277,18 +277,20 @@ def test_a_struct_slots_split_is_read_by_the_one_sidecar_that_defines_its_reader
 @pytest.mark.parametrize("name", sorted(TG.HOOKS))
 def test_each_hook_is_read_from_the_one_sidecar_that_defines_it(monkeypatch, name):
     """circuit-check names no module of the catalog's: each of `HOOKS` is what the one sidecar defining it at its top level
-    hands (one on this tree), and a tree with none or two is refused by name, never read as none."""
+    hands (one on this tree), and a tree with two is refused by name; one with none is refused too, but an `OPTIONAL` table,
+    which is then empty."""
     from circuit_check import sidecars as SC
 
     assert len(SC.handing(name)) == 1, [mod for mod, _m in SC.handing(name)]
     hand = object()
-    for found, want in (([("a", types.SimpleNamespace(**{name: hand}))], hand), ([], "0 that .* do: none"),
+    for found, want in (([("a", types.SimpleNamespace(**{name: hand}))], hand),
+                        ([], dict if name in TG.OPTIONAL else "0 that .* do: none"),
                         ([("a", types.SimpleNamespace(**{name: hand})), ("b", types.SimpleNamespace(**{name: hand}))],
                          r"2 that .* do: a.circuit-check#, b.circuit-check#")):
         monkeypatch.setattr(TG, "_HANDS", {})
         monkeypatch.setattr(SC, "handing", lambda n, found=found: found if n == name else [])
-        if want is hand:
-            assert TG._handed(name) is hand
+        if not isinstance(want, str):
+            assert TG._handed(name) is want
         else:
             with pytest.raises(ValueError, match=f"handed by the one sidecar that defines `{name}`, and {want}"):
                 TG._handed(name)

@@ -848,3 +848,10 @@ def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(r
     out = relay.text(rec)
     assert out.startswith(relay.slack.tag(relay.slack.entry(relay.REG, "top"))) and f"<@{daniel['slack_user']}>" in out
     assert "5 coordinators have been down" in out and "@kernels, @proofs" in out and "every 15 min" in out
+
+
+def test_a_sent_file_that_does_not_parse_counts_no_line_as_posted_and_says_so(relay, capsys):
+    assert relay.load_sent() == {} and capsys.readouterr().out == ""
+    relay.sent_path().write_text("{")
+    assert relay.load_sent() == {}
+    assert "unreadable, so no line counts as posted before (JSONDecodeError" in capsys.readouterr().out

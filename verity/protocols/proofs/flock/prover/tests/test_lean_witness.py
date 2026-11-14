@@ -129,7 +129,7 @@ def inner(once) -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def level(inner, restaged) -> list[str]:  # noqa: F811
+def level(inner, restaged) -> list[str]:
     """`flock-witness session`'s files at the recorded level restaged (`test_lean_rec_coins`' `restaged`, which registers
     every port the level's outputs read, so `Registered.checkComplete` passes it at setup), and the recorded session."""
     level = restaged
@@ -410,7 +410,7 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 
 
 @pytest.mark.parametrize("part", [pytest.param("L3", marks=UNREGISTERED_ROWS), "cap"])
-def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa: F811
+def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):
     """`flock-verify verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
     session its coefficients are checked against, the verifier's full sample of that session (`_f1_draw`), and the challenger's

@@ -18,7 +18,6 @@ process's start and exit. CPU seconds over wall seconds say how many threads it 
 from __future__ import annotations
 
 import gzip
-import json
 import re
 from collections import Counter
 from collections.abc import Iterable, Iterator

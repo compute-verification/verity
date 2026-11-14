@@ -1,0 +1,42 @@
+# The auditor's devices, third step: what `tools/move/rename.py --map tools/move/device_tokens_map.toml` renames, the
+# words the two certified moves leave (`device_term_map.toml` renames the prose, `device_map.toml` the Lean name), on a
+# tree they have run on. Each is a token a move's certificate can't cover, so this map's commit is generated and
+# reviewed, not certified:
+# - the assumption's id `trusted-host` where code, a string or a data file holds it: its claim id (`verity/claims`), the
+#   claim lists that cite it (PoUS's `P2_CLAIMS` in Python and in the grader's Lean, the scheme fixtures), the key
+#   `placement["trusted-host"]` under which a run's profile says whether its premise held, the trusted base's line for it
+#   (`Claims.trustedBase`, whose record in `security/lean-audit.json` changes with it), and each `trusted-host` in
+#   backticks; its display name "Trusted host"; and a test's name that spells it (`trusted_host`);
+# - "auditor host" and "auditor's host" in string literals (refusals, report lines and the tests that match them, the
+#   `Auditor host:` stub of `benchmarks/network_e2e/chain.py`), in backticks and in data files' comments.
+# A run recorded before this move keeps `trusted-host` as its placement key: `benchmarks/one_stage/served_verdicts.py`
+# names the premise for runs recorded after it.
+
+[words]
+"auditor's hosts" = "auditor's devices"
+"auditor's host" = "auditor's device"
+"auditor hosts" = "auditor devices"
+"auditor host" = "auditor device"
+"Auditor host" = "Auditor device"
+"auditor-trusted host" = "auditor-trusted device"
+"trusted-host" = "trusted-device"
+"trusted_host" = "trusted_device"
+
+# the assumption's display name in the claims registry
+[[words_in]]
+files = ["**/claims/__init__.py"]
+[words_in.words]
+"Trusted host" = "Trusted device"
+
+# "trusted host" where it names the auditor's device, the role `trusted-host` states (each file by a glob that still
+# matches it after a directory move)
+[[words_in]]
+files = ["**/test_provider_names.py", "**/certifier/verifier/protocol/coin-link.md", "**/pouw/verifier/README.md"]
+[words_in.words]
+"trusted host" = "trusted device"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]

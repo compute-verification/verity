@@ -38,7 +38,8 @@ stage_one() {   # stage_one SPEC D O: D holds the proof block's staged files, fr
       echo '{"hit": true, "dir": "'"$S"'"}' > "$O/stage-cache.json"
     else
       rm -rf "$S" && mkdir -p "$S"
-      $TIME "$O/stage.time" bash -c "$(vlimit $STAGE_GB) exec $PY $SU/stage.py $spec $N $S" > "$O/stage.out" 2> "$O/stage.err" || exit 1
+      # quoted: a census name's statics are commas inside braces, which bash -c would brace-expand into one word a static
+      $TIME "$O/stage.time" bash -c "$(vlimit $STAGE_GB) exec $PY $SU/stage.py $(printf '%q ' "$spec" "$N" "$S")" > "$O/stage.out" 2> "$O/stage.err" || exit 1
       cp "$O/stage.time" "$S/stage.time" && touch "$S/.done"
       echo '{"hit": false, "dir": "'"$S"'"}' > "$O/stage-cache.json"
     fi

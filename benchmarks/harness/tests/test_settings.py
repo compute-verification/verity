@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -124,3 +125,28 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     assert record == settings.record() and record["values"] == {"RESEARCH_SOURCE_SHA": "a" * 40}
     envelope = json.loads((tmp_path / "result.json").read_text())
     assert envelope["run_id"] == "r20261027-000000-0000" and "out/settings.json" in envelope["artifacts"]
+
+
+@pytest.mark.parametrize("steady, says", [("spec", "is a steady-state spec"), ("point", "is a steady-state point")])
+def test_a_point_refuses_a_steady_state_spec_or_point(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, steady: str,
+                                                      says: str) -> None:
+    """`_vllm-point` runs a vLLM spec's points: a steady-state spec's plan, or a steady-state point in a plan, is
+    `steady_plan`'s, and is refused with TypeError before anything runs."""
+    from verity_bench import cli, steady_plan
+
+    root = Path(__file__).resolve().parents[3]
+    held = steady_plan.make_plan("glm53-flock-steady-head-block-h200", root=root,
+                                 lookup=lambda spec, item, identity: (None, None))
+    plan = held
+    if steady == "point":
+        served = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+        plan = replace(served, points=(replace(served.points[0], point=held.points[0].point),))
+    item = plan.points[0]
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-0000")
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(jobs, "make_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: pytest.fail("the point ran"))
+    with pytest.raises(TypeError, match=says):
+        cli.main(["_vllm-point", "--spec", "s", "--point", item.point.id, "--identity", item.identity])

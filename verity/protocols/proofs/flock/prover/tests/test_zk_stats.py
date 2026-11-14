@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("scipy")
 
 sys.path.insert(0, os.path.dirname(__file__))
-import zk_stats  # noqa: E402
+import zk_stats
 
 SIZES = {"exposed": 60, "s_ab": 16, "s_c": 16, "inner_scalars": 3, "inner_y": 40, "inner_open_h": 20, "inner_open_mu": 20,
          "lig_exposed": 10, "lig_tprime_ybar": 20, "lig_rows0": 20, "lig_deep": 20}

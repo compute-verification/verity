@@ -16,6 +16,7 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -36,7 +37,8 @@ def epoch(s: str | None) -> float | None:
         return None
     try:
         return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
-    except ValueError:
+    except ValueError as e:
+        print(f"deadman: time {str(s)[:40]!r} does not parse, so it counts as no time ({e})", file=sys.stderr)
         return None
 
 
@@ -62,7 +64,8 @@ def findings(row: dict | None, now: float) -> list[tuple[str, float | None]]:
                  "and with it every watcher on it", now - (t or 0) - STALE_S)]
     try:
         body = json.loads(row.get("body") or "{}")
-    except ValueError:
+    except ValueError as e:
+        print(f"deadman: the heartbeat's body is not JSON, so the cloud watch's pass is not judged ({e})", file=sys.stderr)
         body = {}
     cw = epoch(body.get("cloud_watch_t"))
     if cw is not None and now - cw >= CLOUD_WATCH_STALE_S:

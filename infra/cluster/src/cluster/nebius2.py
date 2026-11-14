@@ -23,6 +23,7 @@ more is `gpu_pool`, the only GPUs it may be granted, as `gpu-lease --on` means.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -85,8 +86,8 @@ def held_by(pid: int, paths: set[Path], proc: Path = Path("/proc")) -> set[Path]
             target = os.readlink(fd_dir / fd)
             if target in want and "\nlock:" in (proc / str(pid) / "fdinfo" / fd).read_text():
                 out.add(Path(target))
-        except (FileNotFoundError, PermissionError):
-            continue
+        except (FileNotFoundError, PermissionError) as e:
+            print(f"lease read: descriptor {fd} of pid {pid} not read, so not counted ({type(e).__name__})", file=sys.stderr)
     return out
 
 
@@ -95,7 +96,9 @@ def locked(paths: set[Path], proc: Path = Path("/proc")) -> set[Path] | None:
     long gone); None when it can't be read."""
     try:
         text = (proc / "locks").read_text()
-    except OSError:
+    except OSError as e:
+        print(f"lease read: {proc / 'locks'} unreadable, so no lock is known held ({type(e).__name__}: {e})",
+              file=sys.stderr)
         return None
     held = {p[5] for p in (line.split() for line in text.splitlines()) if len(p) > 5 and p[1] == "FLOCK"}
     out = set()
@@ -103,6 +106,7 @@ def locked(paths: set[Path], proc: Path = Path("/proc")) -> set[Path] | None:
         try:
             st = os.stat(path)
         except FileNotFoundError:
+            print(f"lease read: {path} was gone when read, so not counted held", file=sys.stderr)
             continue
         if f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}" in held:
             out.add(path)
@@ -134,7 +138,7 @@ def read(t: int, lease_dir: Path = LEASE_DIR, proc: Path = Path("/proc")) -> Obs
                 if held_by(pid, {lease_dir / name}, proc):
                     waits.append((name, (lease_dir / name).read_text().strip()))
         except FileNotFoundError:
-            continue
+            print(f"lease read: {lease_dir / name} was gone when read, so not counted", file=sys.stderr)
     for pid, lines in owners.items():
         held = held_by(pid, {lease_dir / f"{i}.lock" for i, _ in lines}, proc)
         for i, line in lines:

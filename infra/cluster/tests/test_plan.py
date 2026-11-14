@@ -151,7 +151,7 @@ def test_frozen_time_does_not_count_against_max_s_but_the_admission_end_is_a_har
     assert Thaw(a.id) in plan(c, "n1", held, [], T0 + 3999) and plan(c, "n1", held, [], T0 + 4000) == [Expire(a.id)]
 
 
-def test_guest_share_caps_and_cpus():
+def test_guest_share_limits_and_cpus():
     c = cluster(node("n1", "p"), shares=(Share("g", "n1", cpus=cpuset.parse("20-23"), max_jobs=1, max_gpus=0),))
     acts = plan(c, "n1", [], [job("g-1", "g", cpus=4), job("g-2", "g", cpus=1), job("g-3", "g", gpus=1, submitted=T0 + 1)], T0)
     assert by_job(acts, Start)["g-1"].alloc.cpus == cpuset.parse("20-23")
