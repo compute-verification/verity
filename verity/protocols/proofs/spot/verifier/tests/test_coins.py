@@ -65,13 +65,13 @@ def _subset_on(k, n, src):
     return sorted(swapped.get(i, i) for i in range(k))
 
 
-def _sample_on(law, n, src):
+def _sample_on(sampling_design, n, src):
     """The Lean verifier's `Flock.Draw.sampleOn`: subset and bernoulli on the one stream; stratified and work on consecutive
     segments, stratum s's the next 2 k_s width(n_s) + 64 bytes (`verity/protocols/proofs/flock/prover/tests/stratified_agree.py`)."""
-    if law["law"] == "subset":
-        return _subset_on(law["k"], n, src)
-    if law["law"] == "bernoulli":
-        num, den = map(int, law["p"].split("/"))
+    if sampling_design["law"] == "subset":
+        return _subset_on(sampling_design["k"], n, src)
+    if sampling_design["law"] == "bernoulli":
+        num, den = map(int, sampling_design["p"].split("/"))
         if num == 0:
             return []
         if num == den:
@@ -85,7 +85,7 @@ def _sample_on(law, n, src):
             pos = r[1]
         return out
     out, at = [], 0
-    for s in law["strata"]:
+    for s in sampling_design["strata"]:
         n_s = sum(hi - lo for lo, hi in s["units"])
         need = 2 * s["k"] * ((n_s.bit_length() + 64 + 7) // 8) + 64
         local = _subset_on(s["k"], n_s, src[at:at + need])
@@ -119,15 +119,15 @@ def test_sample_first_is_the_lean_verifiers_sample_on_the_same_bytes():
     are `sampleOn`'s on the same bytes, for every sampling design (a bernoulli sampling design at its NUM/DEN as written, unreduced), and
     `one_stage.draw.check_draw` accepts the sample against the sampling design and the population."""
     rng = random.Random(8)
-    laws = [{"law": "subset", "k": 1}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
+    sampling_designs = [{"law": "subset", "k": 1}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
             {"law": "bernoulli", "p": "0/3"}, {"law": "bernoulli", "p": "3/3"}, _stratified(1), _stratified(4), _stratified(10),
             _work(1), _work(4), _work(10)]
     for case in range(120):
-        law = laws[case % len(laws)]
+        sampling_design = sampling_designs[case % len(sampling_designs)]
         src = rng.randbytes(4096)
-        d = draw_first(OwnRandomness(_stream(src)), law, 10)
-        assert d["units"] == _sample_on(law, 10, src), (case, law)
-        assert d == {**law, "population": 10, "units": d["units"]} and D.check_draw(d, {"population": 10}, law).ok
+        d = draw_first(OwnRandomness(_stream(src)), sampling_design, 10)
+        assert d["units"] == _sample_on(sampling_design, 10, src), (case, sampling_design)
+        assert d == {**sampling_design, "population": 10, "units": d["units"]} and D.check_draw(d, {"population": 10}, sampling_design).ok
     big = {"law": "subset", "k": 300}
     src = rng.randbytes(8192)
     assert draw_first(OwnRandomness(_stream(src)), big, 1_000_000)["units"] == _sample_on(big, 1_000_000, src)
@@ -151,22 +151,22 @@ def test_a_work_sample_carries_its_closure():
     when empty), and `one_stage.draw.proved` is sampled and closure."""
     closure = {0: [1, 4], 2: [3], 4: [5, 0], 7: [8, 9], 9: [7]}
     assert closure_of(closure, [0, 4]) == [1, 5] and closure_of(closure, [7, 9]) == [8] and closure_of(closure, [6]) == []
-    law = _work()
+    sampling_design = _work()
     for seed in range(20):
-        d = draw_first(_seeded(seed), law, 10, closure)
+        d = draw_first(_seeded(seed), sampling_design, 10, closure)
         want = closure_of(closure, d["units"])
         assert d.get("closure", []) == want and ("closure" in d) == bool(want)
-        assert D.check_draw(d, {"population": 10}, law).ok and D.proved(d) == sorted(d["units"] + want)
+        assert D.check_draw(d, {"population": 10}, sampling_design).ok and D.proved(d) == sorted(d["units"] + want)
     for other in ({"law": "subset", "k": 3}, _stratified()):
         with pytest.raises(ValueError, match="work draw only"):
             draw_first(_seeded(0), other, 10, closure)
 
 
 def test_sample_first_refuses_what_lean_refuses():
-    for law, n in (({"law": "subset", "k": 4}, 3), (_stratified(), 9), ({**_stratified(), "k": 5}, 10),
+    for sampling_design, n in (({"law": "subset", "k": 4}, 3), (_stratified(), 9), ({**_stratified(), "k": 5}, 10),
                    ({"law": "bernoulli", "p": "1/0"}, 10), ({"law": "uniform", "k": 1}, 10)):
         with pytest.raises(ValueError):
-            draw_first(_seeded(0), law, n)
+            draw_first(_seeded(0), sampling_design, n)
 
 
 def test_the_samples_come_from_the_lean_verifiers_coins():

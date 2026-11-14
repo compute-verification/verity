@@ -164,7 +164,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
     _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
-    assert second.law == S.second_law(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
+    assert second.law == S.second_sampling_design(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
 

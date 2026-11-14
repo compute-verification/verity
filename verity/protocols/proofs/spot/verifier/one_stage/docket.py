@@ -183,18 +183,18 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
-def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
+def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
            previous: str | None = None, partition: Mapping[str, Any] | None = None,
            work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
-    `law` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
+    `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
     `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
     which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],
            "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
-           "law": D.derive(program, query, law, work_table), "scheme": scheme,
+           "law": D.derive(program, query, sampling_design, work_table), "scheme": scheme,
            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
            "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
     if registered:
@@ -253,7 +253,7 @@ def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
     return HT.resolve(roots, supplied)
 
 
-def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
@@ -366,9 +366,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
-        mine = D.derive(program, query, law, work_table)
+        mine = D.derive(program, query, sampling_design, work_table)
     except (P.QueryRefused, ValueError) as e:
-        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(law)} does not apply: {e}"})
+        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(sampling_design)} does not apply: {e}"})
     else:
         if not D.same_design(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
@@ -437,7 +437,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     if members:
         try:
-            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+            refused = LP.refused(*LP.sampling_design_of(program, query, sampling_design, work_table), members)
         except (P.QueryRefused, ValueError) as e:
             c.fail("link-points", str(e))
         else:

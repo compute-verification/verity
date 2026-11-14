@@ -27,7 +27,7 @@ TEMPLATE = "RoPEHead_v1{D=64}"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
 
-def _law(why: str) -> str:
+def _sampling_design(why: str) -> str:
     return f"refused: {why}: no soundness claim draws by this law"
 
 
@@ -41,8 +41,8 @@ def verdicts(tmp_path_factory):
     (d / "closure.json").write_text(json.dumps({"0": [1]}))
     work = ["--work", "2", "--work-table", str(d / "work.json")]
 
-    def draw(*law: str) -> dict:
-        p = subprocess.run([str(BIN), "draw", *s.bound, *law, "--stream", "00112233445566778899aabbccddeeff" * 2],
+    def draw(*sampling_design: str) -> dict:
+        p = subprocess.run([str(BIN), "draw", *s.bound, *sampling_design, "--stream", "00112233445566778899aabbccddeeff" * 2],
                            capture_output=True, text=True, check=True)
         return json.loads(p.stdout.removeprefix("DRAW "))
 
@@ -53,10 +53,10 @@ def verdicts(tmp_path_factory):
              "subset": {"law": "subset", "population": 8, "k": 2, "units": [1, 6]},
              "stratified": draw("--stratified", "2"), "none": None}
     sessions = {}
-    for name, law in draws.items():
+    for name, sampling_design in draws.items():
         sessions[name] = d / name
         sessions[name].mkdir()
-        (sessions[name] / "session.json").write_text(session_text({} if law is None else {"unit_draw": law}))
+        (sessions[name] / "session.json").write_text(session_text({} if sampling_design is None else {"unit_draw": sampling_design}))
     flags = [*s.bound, "--registered", str(s.dir / "own.json"), *work, "--stratified", "2", "--closure", str(d / "closure.json")]
 
     def verify(zk: bool, names: list[str]) -> dict:
@@ -76,14 +76,14 @@ def verdicts(tmp_path_factory):
 @pytest.mark.parametrize("zk", [False, True])
 @pytest.mark.parametrize("name, why", [("work", "a work draw"), ("closure", "a work draw with a closure"),
                                        ("bernoulli", "a bernoulli draw")])
-def test_no_claim_samples_by_these_laws_in_either_mode(verdicts, zk, name, why):
+def test_no_claim_samples_by_these_sampling_designs_in_either_mode(verdicts, zk, name, why):
     """At the verifier's own K, work table, program, partition and closure map the work samples set up, and are refused for
     their sampling design; so is a bernoulli sample."""
     v = verdicts[zk][name]
-    assert not v["accepted"] and v["why"] == _law(why), v["why"]
+    assert not v["accepted"] and v["why"] == _sampling_design(why), v["why"]
 
 
-def test_a_subset_sample_at_hidden_outputs_passes_the_law_in_either_mode(verdicts):
+def test_a_subset_sample_at_hidden_outputs_passes_the_sampling_design_in_either_mode(verdicts):
     """At hidden outputs a plain claim samples a subset (`SoundExecH`), as `--zk` does: the subset sample sets up and meets
     the session's files in either mode, as a stratified sample does without `--zk`. At public outputs, without `--zk`, it is
     refused for its sampling design (`test_lean_session_tables.py`'s `SUBSET`)."""
