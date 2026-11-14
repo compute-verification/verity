@@ -111,7 +111,7 @@ def wipeEgressUnitsFn (j : Json) : V Json := do
   pure (Lean.toJson (StreamedWipe.egressUnits (← J.asInt (← J.get j "egress_bits" "input") "egress_bits")))
 
 /-- `wipe_period.named(commitment, signed, egress_mib)`: what a composition's tie reads off a wipe's case, `null` for
-none. -/
+none, refused where the session's message is. -/
 def wipeNamedFn (j : Json) : V Json := do
   let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
   let signed ← match ← J.get j "signed" "input" with
@@ -120,7 +120,8 @@ def wipeNamedFn (j : Json) : V Json := do
   let egress ← match ← J.get j "egress_mib" "input" with
     | .null => pure none
     | n => pure (some (← J.asInt n "egress_mib"))
-  pure (match WipeProtocol.named c ⟨signed, egress⟩ with
+  let named ← WipeProtocol.named c ⟨signed, egress⟩
+  pure (match named with
     | none => .null
     | some n => Json.mkObj [("egress_mib", Lean.toJson n.egressMib), ("end_message", hexJ n.endMessage),
         ("start_mark", hexJ n.startMark), ("start_message", hexJ n.startMessage)])

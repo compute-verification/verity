@@ -255,17 +255,15 @@ def answer(server: bytes, session: bytes, trusted: Collection[bytes], commitment
 def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
           egress_mib: int | None) -> dict[str, Any] | None:
     """`MemoryChallenger.WipeProtocol.named`, what a composition's tie reads off the wipe's case: the start mark the
-    signed message names, the 64 bytes each of the session's two marks opens to (`streamed_wipe.start_message`,
-    `streamed_wipe.end_message`) and the evidence's count in whole MiB. None while the session is unsigned, when the
-    evidence gives no count, or when the signed session has no end message. It names no device, link or key."""
+    signed message names, the session's start and end messages (`streamed_wipe.start_message` and `end_message`, the
+    64 bytes the memory challenger hands the network certifier for each of its two marks) and the evidence's count in
+    whole MiB. None while the session is unsigned or the evidence gives no count. It raises what `end_message` raises
+    where the signed session's message can't be formed (a batch record past a field's width), as no session `outcome`
+    accepts is. It names no device, link or key."""
     if signed is None or egress_mib is None:
         return None
-    try:
-        end = sw.end_message(signed)
-    except (ValueError, TypeError, OverflowError):
-        return None
-    return {"start_mark": signed.start_mark, "start_message": sw.start_message(commitment), "end_message": end,
-            "egress_mib": egress_mib}
+    return {"start_mark": signed.start_mark, "start_message": sw.start_message(commitment),
+            "end_message": sw.end_message(signed), "egress_mib": egress_mib}
 
 
 def counted_profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:

@@ -11,10 +11,10 @@ signs it. This module is the wipe's half of the step that holds that count to th
 span between the session's two marks: what a composition's tie reads off the wipe's case, and the check that publishes
 on the count once a composition holds it.
 
-* `named`: the start mark the signed message names, the 64 bytes each of the session's two marks opens to
-  (`StreamedWipe.startMessage`, `StreamedWipe.endMessage`), and the evidence's count, in whole MiB
-  (`StreamedWipe.egressUnits`' unit). A composition holds each to what the count over a span between two marks names of
-  its own case. The wipe names no device, link or key.
+* `named`: the start mark the signed message names, the session's start and end messages (`StreamedWipe.startMessage`
+  and `StreamedWipe.endMessage`, the 64 bytes the memory challenger hands the network certifier for each of its two
+  marks), and the evidence's count, in whole MiB (`StreamedWipe.egressUnits`' unit). A composition holds each to what
+  the count over a span between two marks names of its own case. The wipe names no device, link or key.
 * `checkCounted`: `check`, and on its acceptance a rejection of an evidence that gives no count (`NO_COUNT`) and of a
   session that names no start mark (`NO_MARK`), else `certify` at the evidence's count in `uncounted`'s place. Its
   profile names the bound's gaps and not the count as one (`countedProfileJson`).
@@ -45,23 +45,23 @@ def NO_COUNT : String :=
 def NO_MARK : String :=
   "the session names no start mark: the memory challenger held no start certificate, so no count is of its span"
 
-/-- What a wipe's case says of its span: the start mark its signed message names, the 64 bytes each of its two marks
-opens to, and the egress its evidence gives, in whole MiB. -/
+/-- What a wipe's case says of its span: the start mark its signed message names, its start and end messages, and
+the egress its evidence gives, in whole MiB. -/
 structure Named where
   startMark : ByteArray
   startMessage : ByteArray
   endMessage : ByteArray
   egressMib : Int
 
-/-- `Named` of a case's commitment and evidence; `none` while the session is unsigned, when the evidence gives no
-count, or when the signed session has no end message. -/
-def named (c : StreamedWipe.Commitment) (e : Evidence) : Option Named :=
+/-- `Named` of a case's commitment and evidence; `none` while the session is unsigned or the evidence gives no count.
+Refused where the signed session's message is (`StreamedWipe.endMessage`: a batch record past a field's width), as no
+session `check` accepts is. -/
+def named (c : StreamedWipe.Commitment) (e : Evidence) : Except String (Option Named) :=
   match e.signed, e.egressMib with
-  | some s, some n =>
-    match StreamedWipe.endMessage s with
-    | .ok m => some ⟨s.startMark, StreamedWipe.startMessage c, m, n⟩
-    | .error _ => none
-  | _, _ => none
+  | some s, some n => do
+    let m ← StreamedWipe.endMessage s
+    pure (some ⟨s.startMark, StreamedWipe.startMessage c, m, n⟩)
+  | _, _ => pure none
 
 /-- `check` with the count held by a composition: its refusals, then `NO_COUNT` and `NO_MARK`, and on acceptance
 `certify` at the evidence's count. -/
@@ -70,8 +70,9 @@ def checkCounted (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) 
   match check schemes p c e with
   | .accept _ _ =>
     match named c e with
-    | none => .reject NO_COUNT
-    | some n =>
+    | .error r => .reject r
+    | .ok none => .reject NO_COUNT
+    | .ok (some n) =>
       if n.startMark.size != StreamedWipe.MARK_BYTES then .reject NO_MARK
       else .accept (certify c.params n.egressMib) (c.params, n.egressMib)
   | o => o
@@ -110,11 +111,18 @@ private def guardMark : ByteArray := ⟨Array.replicate StreamedWipe.MARK_BYTES 
 private def guardSigned : StreamedWipe.Signed :=
   ⟨guardCommitment, StreamedWipe.COMPLETE, guardMark, 0, 0, #[], "", ByteArray.empty, ByteArray.empty⟩
 
-#guard (named guardCommitment ⟨some guardSigned, some 3⟩).map (fun n =>
-    (n.startMark == guardMark, n.startMessage == StreamedWipe.startMessage guardCommitment, n.endMessage.size,
-      n.egressMib)) == some (true, true, 64, 3)
-#guard (named guardCommitment ⟨some guardSigned, none⟩).isNone
-#guard (named guardCommitment ⟨none, some 3⟩).isNone
+#guard match named guardCommitment ⟨some guardSigned, some 3⟩ with
+  | .ok (some n) => n.startMark == guardMark && n.startMessage == StreamedWipe.startMessage guardCommitment &&
+    n.endMessage.size == 64 && n.egressMib == 3
+  | _ => false
+#guard match named guardCommitment ⟨some guardSigned, none⟩, named guardCommitment ⟨none, some 3⟩ with
+  | .ok none, .ok none => true
+  | _, _ => false
+-- a batch record past a field's width: the session has no message, and `named` refuses it
+#guard match named guardCommitment
+    ⟨some { guardSigned with batches := #[⟨2 ^ 32, 0, 1, 0, 0, 0, ByteArray.empty⟩] }, some 3⟩ with
+  | .error _ => true
+  | _ => false
 -- `check`'s own refusals stand: an unsigned session is undecided, and one under no accepted scheme rejected
 #guard match checkCounted TEST_SCHEMES ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ guardCommitment ⟨none, some 3⟩ with
   | .undecided _ => true

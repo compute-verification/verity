@@ -57,7 +57,7 @@ named_server = D.server_fixture(named_port(st.none()))
 
 
 @st.composite
-def drawn(draw) -> dict:
+def sampled(draw) -> dict:
     """A sampled session's case: as it ran, under one adversarial edit, unsigned, or under params of another server."""
     s = draw(WC.sessions())
     x = draw(st.integers(0, 2 ** 16))
@@ -71,7 +71,7 @@ def drawn(draw) -> dict:
 
 @pytest.mark.slow
 def test_the_counted_check_agrees(counted_server):
-    stats = D.run(counted_port(drawn()), examples=400, server=counted_server)
+    stats = D.run(counted_port(sampled()), examples=400, server=counted_server)
     assert stats.counts.get("accept", 0) > 5 and stats.counts.get("undecided", 0) > 3 and stats.rejects > 100, stats
 
 
@@ -124,11 +124,12 @@ def test_a_marked_wipe_is_certified_on_its_count_and_nothing_else_is(counted_ser
 @st.composite
 def named_inputs(draw) -> dict:
     """A sampled session's commitment, its signed session or none, and a sampled egress; now and then a field dropped,
-    an egress that is no integer, or a commitment `WipeParams` refuses."""
+    an egress that is no integer, a commitment `WipeParams` refuses, a session that is no object, or a batch record past
+    a field's width, which leaves the session no message."""
     s = draw(WC.sessions())
     j = {"commitment": s.commitment.to_json(),
          "signed": draw(st.sampled_from([s.signed.to_json(), s.signed.to_json(), None])), "egress_mib": draw(WC.EGRESS)}
-    how = draw(st.sampled_from(["as-is"] * 8 + ["dropped", "egress", "labels", "signed"]))
+    how = draw(st.sampled_from(["as-is"] * 8 + ["dropped", "egress", "labels", "signed", "wide"]))
     if how == "dropped":
         del j[draw(st.sampled_from(sorted(j)))]
     elif how == "egress":
@@ -137,6 +138,9 @@ def named_inputs(draw) -> dict:
         j["commitment"] = j["commitment"] | {"labels": 0}
     elif how == "signed":
         j["signed"] = draw(st.sampled_from([1, "signed", []]))
+    elif how == "wide" and j["signed"] is not None and j["signed"]["batches"]:
+        first, *rest = j["signed"]["batches"]
+        j["signed"] = j["signed"] | {"batches": [first | {"b": 2 ** 32}, *rest]}
     return j
 
 
@@ -147,7 +151,8 @@ def test_named_agrees(named_server):
 
 def test_named_is_the_sessions_marks_and_the_evidences_count(named_server):
     """On a session with a start mark, `named` is the certificate's SHA-512, the session's start and end messages and
-    the count as given, in range or not; it is none while the session is unsigned or the evidence gives no count."""
+    the count as given, in range or not; it is none while the session is unsigned or the evidence gives no count, and
+    refused where a batch record is past its field's width."""
     params = sw.WipeParams(8, 3, 1, 1_000, (("gpu", 8 * sw.LABEL_BYTES),))
     s = WC.run(params, M.test_signer(M.SECRETS[0], 1, 1), certificate=CERTIFICATE)
     port = named_port(st.none())
@@ -161,3 +166,9 @@ def test_named_is_the_sessions_marks_and_the_evidences_count(named_server):
     for value in ({"commitment": c, "signed": None, "egress_mib": 7}, {"commitment": c, "signed": signed, "egress_mib": None}):
         assert D.replay(port, value, named_server) == ("output", D.canonical(None)), value
         assert named(value) is None
+    wide = signed | {"batches": [signed["batches"][0] | {"b": 2 ** 32}, *signed["batches"][1:]]}
+    assert D.replay(port, {"commitment": c, "signed": wide, "egress_mib": 7}, named_server)[0] == "reject"
+    with pytest.raises(OverflowError):
+        named({"commitment": c, "signed": wide, "egress_mib": 7})
+    # with no count nothing reads the session's message, and both give none
+    assert D.replay(port, {"commitment": c, "signed": wide, "egress_mib": None}, named_server) == ("output", D.canonical(None))
