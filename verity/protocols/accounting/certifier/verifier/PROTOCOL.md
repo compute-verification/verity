@@ -293,8 +293,7 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. The period check is not in the public tree, because it reads the inference-only
-policy's layout check, which is withheld.
+and the bound `K` it publishes. The period check reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 
@@ -2178,8 +2177,8 @@ prompt ids and a size of ids released, each a power of two.
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
   connection that ended before any id have the same response row and the same end row, and only the request row
   tells them apart. Under form 2 no table has an unheld row.
-- **The count under form 2.** A class's three tables have one count of rows, the execution phase's releases filed
-  in the class. Its three entries in the head hold that count as their rows, and each one's domain binds it. A table
+- **The count under form 2.** A class's tables have one count of rows, the execution phase's releases filed
+  in the class. Its entries in the head hold that count as their rows, and each one's domain binds it. A table
   of no row has no leaf: its domain is the one of 0 rows and its root is 64 zero bytes
   (`connection_rows.NO_ROWS_ROOT`), which no read opens.
   - **The bound.** A count is at most R = `WardenParams.phase_releases` = `lanes` · ⌈(T + `ingress_buckets` −
@@ -2187,13 +2186,37 @@ prompt ids and a size of ids released, each a power of two.
     execution phase's releases are of connections admitted in T + `ingress_buckets` − 1 buckets in a row; a
     connection holds its lane through its admission's bucket + D, so those admitted in any D + 1 buckets in a row
     hold a lane each at once. R is the schedule's own number and a bound: at some schedules a load releases R in an
-    execution phase, and at others none does.
+    execution phase, and at others none does. It does not use that the device releases no request in its
+    admission's bucket, so it may count one bucket more than a load can reach.
   - **The verifier's read** (`connection_rows.check_registration`) takes a class's count from the registration:
-    from 0 to R, the same in the class's three entries, and at 0 only with the zero root. It derives each domain at
+    from 0 to R, the same in each of the class's entries, and at 0 only with the zero root. It derives each domain at
     the count it read, and the certificate over the head holds the counts as it holds the roots. A registration of
     another schedule, of either form, has that schedule's digest for its parameters and is refused by it.
   - **The port** (`connection_rows.port`) of a class's table has a population of its count, proof block j reading
     held row j, so a proof block is one a held row. A table of no row has no port.
+- **The request words** (`WardenParams.request_words`, none by default, with content rows under form 2 and a
+  response cap only). A schedule with them has a fourth table a class, `words.i`, which the head lists after
+  `end.i`. Its row r is two u32 words of the release whose request is row r of `request.i`: its `max_tokens` and
+  the count of its prompt's ids, 8 bytes. Its count is the class's, held with the other three's, a class of no
+  release has it with no row, and its port is `connection_rows.port`'s by its name.
+  - **The parse rule** is public and stated once (`content_rows.request_words`, under "A request's words" there).
+    The words are the network certifier's own reading of the request's bytes as it cut them, cell by cell, as it
+    reads each cell before it releases it (`io_request.read`). Nothing a server or a prover says enters them.
+  - **It applies no default.** With lengths rows the device holds every request cell to the canonical id request's
+    form and fails the connection as `malformed` at the first that doesn't read. So a released request has
+    `max_tokens` at its place, the number its response is held to under the cap, and no key but the canonical
+    ones. A request without `max_tokens` at its place, or with an `ignore_eos` key, is never released and has no
+    row. The row holds no `ignore_eos`: no released request has the key, so a proof block that reads the table
+    takes it as the constant 0, a registered value of its Definition.
+  - **The count of prompt ids is at most the class's P.** A canonical id request's length grows with its prompt's
+    count alone, and a release is filed only in a class that holds its request's bytes.
+  - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
+    naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
+    more ids released than its `max_tokens`. These are `tables`' own checks of what the device already holds:
+    under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
+    count.
+  - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
+    schedule's.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
   cells' ids, as it cut and released them and never from the server's report, four bytes an id, from the release to
   the hand that carries it: the lengths rows' hand, at the close of the next execution phase, or under form 2 at
@@ -2216,7 +2239,8 @@ prompt ids and a size of ids released, each a power of two.
     the time its head is signed and published. Nothing here charges the counts or that time to a bound.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
-digest, records, heads and certificates. As for the lengths rows, that the tables say what the records say rests on
+digest, records, heads and certificates. So do the request words, where a schedule has them: one without them
+hashes nothing of them and keeps its digest, its tables and its heads. As for the lengths rows, that the tables say what the records say rests on
 the network certifier's own code (`trusted-host`). The head of execution phase w exists from the close of execution
 phase w + 1, and that of a run's last, under form 2, from its own close. Nothing here orders its signature or its
 registration against the compute audit's coins.
@@ -2325,6 +2349,21 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   on a connection of its own, so the server may read line T first. A release named lost may still arrive (a close
   sends what its transport held); the engine skips it. The network certifier never reads that stream and no tick waits
   on it: one holding more than `WRITE_BACKLOG` unwritten is closed.
+- The stream's path is the network certifier's alone, with the watermark or without. Released, a client's request to
+  it would reach the server under the run's id, as the stream does. So a request whose first cell opens as one to
+  that path, read as a server reads it off the request line (`release.to_watermark`), is refused before any cell of
+  it is cut (`malformed`): it has no place in the release order and no byte for the server. A request line that ends
+  past the first cell is read at the request's `END`, with the request whole, before that cell is cut: its earlier
+  cells are in the ingress record, and it too has no `END`, no place in the release order and no byte for the server.
+- A connection's bytes are one request. A server reads as many requests in a release as its bytes hold, and a second
+  one would reach it behind the first with no release headers but its sender's own, to any path, the watermark's
+  included. So the request is read whole at its `END`, before that cell is cut (`release.one_request`), and refused
+  there as the watermark's is (`malformed`) unless it is at most one request to a server: bytes that open none (a
+  first line of one word, or no head's end), or a request whose head is the one the headers go in, each field a name,
+  a colon and a value on one line, with no transfer coding and at most one `content-length`, a decimal count, and
+  with no byte past the body that length gives it. A line of the body that looks like a request line is the body's.
+  A head read any other way is one servers end differently, and is refused whole: line breaks that aren't CRLF or
+  come before the request line, a folded field, a space before a colon, a chunked body, two lengths.
 - The headers and the stream are on the server's side only. No cell or record holds them, so the cell counts, the
   prompt lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak
   bound is unchanged. N, a and n are functions of the signed ingress record, which the prover holds as witness, a

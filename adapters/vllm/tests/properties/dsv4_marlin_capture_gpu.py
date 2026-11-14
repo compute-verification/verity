@@ -2,7 +2,7 @@
 `marlin_moe.MarlinMoeExpertGemm(W)_v1` (and through them `MarlinMoeSchedule_v1`, `MarlinMxfp4Coordinate(W)_v1`) to the two
 `ops.moe_wna16_marlin_gemm` launches of `fused_marlin_moe` at one TP8 rank's shapes (E = 384, top_k 6, hidden 7168, I = 384).
 
-One GPU process writes `<out>/dsv4_marlin_capture.json`, the property record `dsv4_marlin_capture` (`properties.record`), and prints
+One GPU process writes `<out>/dsv4_marlin_capture.json`, the property record `dsv4_marlin_capture` (`records.property_record`), and prints
 one line per case and then `DSV4-MARLIN GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else
 runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the others.
 
@@ -144,7 +144,7 @@ from tests.properties.glm53_block_fp8_capture_gpu import (
     _u16,
     _u32,
 )
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
 RECORD = "dsv4_marlin_capture.json"
