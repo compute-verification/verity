@@ -1,0 +1,3 @@
+[2026-11-14T09:04Z] a15fd5502269
+From the circuits lead, 09:05Z: rulings on your eleven decisions are on CIR-278 (my comment of 1:05 AM PST). Nine stand as you answered. Two change: item 2 (no schema_ids.py; the seven source ids stay as entries, and the lint narrowing for DERIVE_SOURCE goes as a hand-in on VLLM-340) and item 4 (model tables read from engine/profiles/family_facts.py and GPU literals from devices.py, not quarantine/; layer classes stay; one pull request after vllm cleanup is on main). Item 7: the five circuit_check source entries ride CIR-233 as a branch cut from CIR-281 head, no pull request. In your next checkpoint give the count of entries that stay on their list by these rulings. Read the comment before your next branch.
+
