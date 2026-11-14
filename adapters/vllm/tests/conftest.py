@@ -17,7 +17,7 @@ import shutil
 import subprocess
 
 import pytest
-from verity.protocols.accounting.pouw.prover.serving import int8_arm
+from verity.protocols.accounting.pouw.prover.serving import use_int8_arm
 
 #: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
@@ -34,7 +34,7 @@ KNOWN_FAILURES = {
 }
 
 #: PoUW's H1 checks the int8 arm's records with the arm's own GEMM and dequantization, as the option hands them in at install
-int8_arm.use(lambda: importlib.import_module("verity_vllm.engine.int8_exact"))
+use_int8_arm(lambda: importlib.import_module("verity_vllm.engine.int8_exact"))
 
 
 def pytest_configure(config) -> None:

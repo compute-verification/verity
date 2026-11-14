@@ -153,6 +153,13 @@ class LeadRun:
         self.record, self.window, self.m, self.leaves = record, window, m, leaves
         return record, window
 
+    def gemm(self, site: int, x: Any, weight: Any, bias: Any = None, /) -> Any:
+        """`serving.run_matmul` on the lead: ``x`` the arm's `serving.QuantizedRows` and ``weight`` the linear as the
+        backend loaded it (`LeadBackend.load`), its y the arm's pre-bias y (`call`), so ``bias`` is None."""
+        if bias is not None:
+            raise Refused(f"linear {site}: the lead serves the arm's pre-bias y, and the arm adds the bias after it")
+        return self.call(site, weight, x.rows, x.scales)
+
     def call(self, w: int, layer: Any, xq: Any, s_a: Any) -> Any:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] and their scales ``s_a``: the served y. A call off linear
         ``w``'s n x k, or on other than the window's m, is refused, and its window is never published."""
