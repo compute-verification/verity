@@ -70,7 +70,7 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
 
 
 def test_a_schedule_with_rows_hashes_as_the_period_check_reads_it():
-    """The digest of a schedule with lengths rows, with content rows and with a response cap beside them is the one
+    """The digest of a schedule with lengths rows, with content rows and with `max_tokens_cap` beside them is the one
     the period check's Lean computes for the schedule it parses (`Schedule.digest`), pinned on both sides; so are a
     slot stride's releases, an execution phase's and a connection's span (`Schedule.strideReleases`,
     `executionPhaseReleases` and `span`), and the least cell of a schedule with lengths rows (`firstPromptEnd`)."""

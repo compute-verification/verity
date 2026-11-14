@@ -311,7 +311,7 @@ def _classes(j) -> tuple[tuple[int, ...], ...]:
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
-    `WardenParams` holds it: its response cap, its lengths rows' form and its content rows' classes."""
+    `WardenParams` holds it."""
     keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
     values = {k: _classes(j[k]) if k == "content" else _nat(j[k], "schedule") for k in keys}

@@ -71,14 +71,14 @@ the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `prog
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.executionPhasePrograms`;
-its response cap `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a cell's payload holds
-an id request's `max_tokens` field, `maxTokensEnd`; its lengths rows' form `lengths` when it has them, 1 or 2, under
+its `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a cell's payload holds an id
+request's `max_tokens` field, `maxTokensEnd`; its lengths rows' form `lengths` when it has them, 1 or 2, under
 which ingress ends by the delay, a connection ends within a window of its admission (`Schedule.span`), its egress
 cells count in a u16, a cell's payload holds an id request's head and first prompt id (`firstPromptEnd`) and a slot
 stride's releases are at most a lengths row's slots (`Schedule.strideReleases`, `mostSlots`); and its content rows'
 classes `content` when it has them, which only a schedule with lengths rows has, each (P, O, rows) under form 1 and
 (P, O) under form 2, `classesRefusal`; and `request_words`, true, when it has request words, which only a schedule
-with content rows under form 2 and a response cap has, and which lists at most `mostClassesWords` classes),
+with content rows under form 2 and `max_tokens_cap` has, and which lists at most `mostClassesWords` classes),
 whose digest `WardenParams.digest` every registration binds. A schedule with lengths rows registers its connection
 rows, which this check does not read: it is parsed as the network certifier builds it, its digest is the network
 certifier's, and it is refused by name, in the parameters and in the check (`connectionRowsRefusal`,
@@ -588,8 +588,7 @@ def scheduleKeys : List String :=
   ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
     "slots", "window"]
 
-/-- The keys a schedule has only where it sets them (`warden.OPTIONAL_FIELDS`): its content rows' classes, its lengths
-rows' form, its response cap and that it has request words. -/
+/-- The keys a schedule has only where it sets them (`warden.OPTIONAL_FIELDS`). -/
 def optionalScheduleKeys : List String := ["content", "lengths", "max_tokens_cap", "request_words"]
 
 /-- The keys of a schedule that sets the optional keys `set` holds, in the order an object lists its keys. -/
@@ -684,15 +683,15 @@ def scheduleOf (j : Json) : V Schedule := do
     unless s.content.isSome ∧ s.closes ∧ s.maxTokensCap.isSome do
       throw "schedule: a words row is a release's in its class, one for each the class holds, and its max_tokens the \
         one its response is held to, so a schedule with request words has content rows under the lengths rows' form \
-        2 and a response cap"
+        2 and max_tokens_cap"
   if let some classes := s.content then
     if let some why := classesRefusal s classes then throw s!"schedule: {why}"
   pure s
 
 /-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
-tagged. A schedule without a response cap has neither the cap nor `capReason` in it, one without lengths rows not
-their form, one without content rows not their classes and one without request words not that it has none, so its
-digest is the one it had before any of them was a parameter. -/
+tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
+before the cap was a parameter. So with the lengths rows' form, the content rows' classes and the request words: a
+schedule without one has nothing of it in its digest. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
   Identity.identityDigestSha512 scheduleTag (Json.mkObj ([
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
@@ -1207,7 +1206,7 @@ def plainSchedule : Schedule :=
     ingressCells := 4, lanes := 2, queue := 2, slots := 2, window := 16 }
 
 -- `WardenParams.digest` of `plainSchedule`, with lengths rows of form 1 and of form 2, with form 1's classes
--- (2, 2, 1) and (4, 8, 16), with form 2's classes (2, 2) and (4, 8), with those under a response cap of 4, and with
+-- (2, 2, 1) and (4, 8, 16), with form 2's classes (2, 2) and (4, 8), with those under `max_tokens_cap` 4, and with
 -- request words beside them: the lengths rows' form, the content rows' classes and the request words are in the
 -- digest only of a schedule that sets them
 #guard (plainSchedule.digest.map Flock.hexOf).toOption == some
@@ -1286,8 +1285,8 @@ def plainSchedule : Schedule :=
     !reads [form 1, classes #[#[2, 2]]] && !reads [form 2, classes #[#[3, 2]]] && !reads [form 2, classes #[#[2, 1]]] &&
     !reads [form 2, classes #[#[2, 8192]]] && !reads [form 2, classes #[#[4096, 2]]] &&
     !reads [form 1, classes #[#[2, 2, 0]]] && !reads [form 1, classes #[#[2, 2, 17]]]
--- the parse reads `plainSchedule` with request words beside form 2's classes and a response cap, and refuses request
--- words that are not true, under form 1, without content rows, without a response cap and without lengths rows; a
+-- the parse reads `plainSchedule` with request words beside form 2's classes and `max_tokens_cap`, and refuses request
+-- words that are not true, under form 1, without content rows, without `max_tokens_cap` and without lengths rows; a
 -- schedule with request words lists at most `mostClassesWords` classes, and one without them more
 #guard
   let n := fun (x : Nat) => toJson x
@@ -1296,19 +1295,19 @@ def plainSchedule : Schedule :=
     ("ingress_cells", n 4), ("lanes", n 2), ("queue", n 2), ("slots", n 2), ("window", n 16)] ++ more)))
   let classes := fun (cs : Array (Array Nat)) => ("content", toJson cs)
   let form := fun (f : Nat) => ("lengths", n f)
-  let cap := ("max_tokens_cap", n 4)
+  let limit := ("max_tokens_cap", n 4)
   let words := fun (b : Bool) => ("request_words", toJson b)
   let many := fun (k : Nat) => classes (Array.replicate k #[2, 2])
-  (reads [form 2, classes #[#[2, 2]], cap, words true]).toOption.map (·.requestWords) == some true &&
-    (reads [form 2, classes #[#[2, 2]], cap]).toOption.map (·.requestWords) == some false &&
-    (reads [form 2, classes #[#[2, 2]], cap, words false]).toOption.isNone &&
-    (reads [form 2, classes #[#[2, 2]], cap, ("request_words", n 1)]).toOption.isNone &&
-    (reads [form 1, classes #[#[2, 2, 1]], cap, words true]).toOption.isNone &&
-    (reads [form 2, cap, words true]).toOption.isNone &&
-    (reads [form 2, classes #[#[2, 2]], words true]).toOption.isNone && (reads [cap, words true]).toOption.isNone &&
-    (reads [form 2, many mostClassesWords, cap, words true]).toOption.isSome &&
-    (reads [form 2, many (mostClassesWords + 1), cap, words true]).toOption.isNone &&
-    (reads [form 2, many (mostClassesWords + 1), cap]).toOption.isSome
+  (reads [form 2, classes #[#[2, 2]], limit, words true]).toOption.map (·.requestWords) == some true &&
+    (reads [form 2, classes #[#[2, 2]], limit]).toOption.map (·.requestWords) == some false &&
+    (reads [form 2, classes #[#[2, 2]], limit, words false]).toOption.isNone &&
+    (reads [form 2, classes #[#[2, 2]], limit, ("request_words", n 1)]).toOption.isNone &&
+    (reads [form 1, classes #[#[2, 2, 1]], limit, words true]).toOption.isNone &&
+    (reads [form 2, limit, words true]).toOption.isNone &&
+    (reads [form 2, classes #[#[2, 2]], words true]).toOption.isNone && (reads [limit, words true]).toOption.isNone &&
+    (reads [form 2, many mostClassesWords, limit, words true]).toOption.isSome &&
+    (reads [form 2, many (mostClassesWords + 1), limit, words true]).toOption.isNone &&
+    (reads [form 2, many (mostClassesWords + 1), limit]).toOption.isSome
 
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
@@ -2043,7 +2042,7 @@ def protocol : Core.Protocol where
   rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
     (rowsWfCheck (p (2 ^ 25))).isSome
 -- the check refuses a schedule with connection rows, whatever parse it came from, and no other: the period of no
--- link-window and no audit under `plainSchedule` at T = 2 is accepted, and with lengths rows it is refused by name
+-- execution phase and no audit under `plainSchedule` at T = 2 is accepted, and with lengths rows it is refused by name
 #guard
   let p := fun (s : Schedule) =>
     (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩ : Params)
