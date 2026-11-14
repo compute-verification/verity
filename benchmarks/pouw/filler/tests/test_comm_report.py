@@ -163,6 +163,35 @@ def test_one_failed_gate_fails_the_set_and_only_the_wrapped_point_is_flagged(tmp
     assert got == [(*key, False, key == points[0]) for key in sorted(points)]
 
 
+def test_the_fillers_arms_are_read_at_their_own_clock_time_and_fold(tmp_path):
+    # the filler's arms ran at other clocks than base's 2000 MHz: phase at 1800 under the ram fold, commphase at 1900;
+    # the point at B 64 has a commphase arm and no comm arm to hold it against
+    _write_set(tmp_path, [[_tp(r, 32, 1e11, "base", [40] * 3), _tp(r, 32, 0.0, "comm", [8] * 3),
+                           _tp(r, 32, 1e11, "phase", [41] * 3, mhz=1800.0, fill_macs_rep=4e10, fold_nc=4, fold_xin=0),
+                           _tp(r, 32, 0.0, "commphase", [10] * 3, mhz=1900.0, fill_macs_rep=2e9),
+                           _tp(r, 64, 0.0, "commphase", [10] * 3, fill_macs_rep=2e9)] for r in (0, 1)])
+    row, lone = R.rows(str(tmp_path))
+    assert row["fill"] == pytest.approx(4e10 / 41e-3 / (0.9 * PEAK))
+    assert row["served_phase"] == pytest.approx(1e11 / 41e-3 / (0.9 * PEAK))
+    assert (row["fold"], row["fill_k"]) == ("ram", pytest.approx(0.45 * row["fill"]))
+    assert row["coverage"] == pytest.approx(0.225 * row["served_phase"] + 0.45 * row["fill"])
+    assert row["comm_slowdown"] == pytest.approx(10 / 8)
+    assert row["fill_in_comm"] == pytest.approx(2e9 / 10e-3 / (0.95 * PEAK))
+    assert "comm_slowdown" not in lone and "fill_in_comm" not in lone
+
+
+COUNTS = ("rec_bad", "rec_checked", "whole_checked", "warps_checked", "shape_bad")
+
+
+def test_a_points_receipt_counts_are_sums_over_every_record_of_the_phase(tmp_path):
+    # two repeats of phase on two ranks: the four records hold 1, 2, 3 and 4 of each count, and as many cut warps
+    def phase(r, n):
+        return _tp(r, 32, 1e11, "phase", [41] * 3, fill_macs_rep=4e10, cut_warps=n, **dict.fromkeys(COUNTS, n))
+    _write_set(tmp_path, [[_tp(r, 32, 1e11, "base", [40] * 3), phase(r, 1 + r), phase(r, 3 + r)] for r in (0, 1)])
+    (row,) = R.rows(str(tmp_path))
+    assert [row[k] for k in COUNTS] == [10] * 5 and row["cut_warps"] == 2.5
+
+
 def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
     _write_pfill(tmp_path)
     (row,) = R.rows(str(tmp_path))
@@ -230,3 +259,21 @@ def test_defer_fill_k_xin_is_provisional(tmp_path):
     (row,) = R.rows(str(tmp_path))
     assert row["defer_fold"] == "xin13/li(prov)"
     assert row["defer_fill_k"] == pytest.approx(row["defer_fill"] * 0.45)
+
+
+def test_the_deferred_pass_is_read_from_every_record_of_the_defer_arm(tmp_path):
+    # two repeats of defer on two ranks at 1800 MHz, beside base at 2000 and dalone: 0.6 of the demand ran in the gaps
+    # and 0.3 drained after, nothing was stored, and the four records hold 1, 2, 3 and 4 of each count
+    def defer(r, n):
+        return _tp(r, 32, 1e11, "defer", [88] * 3, mhz=1800.0, fill_macs_rep=4e10, defer_demand_macs=1e11,
+                   defer_gap_macs_rep=6e10, defer_drain_macs_rep=3e10, defer_store_bytes=0, dcap=10, dSd=64, dT=8192,
+                   dp_whole_bad=n, dp_whole_control_equal=10 * n, dp_whole_checked=100 * n, fill_shape_bad=n)
+    _write_set(tmp_path, [[_tp(r, 32, 1e11, "base", [80] * 3), defer(r, 1 + r), defer(r, 3 + r),
+                           _tp(r, 32, 1e11, "dalone", [60] * 3)] for r in (0, 1)])
+    (row,) = R.rows(str(tmp_path))
+    assert (row["defer_gap_share"], row["defer_overflow_share"]) == pytest.approx((0.6, 0.3))
+    assert row["defer_fill"] == pytest.approx(4e10 / 88e-3 / (0.9 * PEAK))
+    assert row["defer_store_gib"] is None
+    assert (row["dp_whole_bad"], row["dp_whole_checked"], row["defer_fill_bad"]) == (110, 1000, 10)
+    assert (row["dcap"], row["dSd"], row["dT"]) == (10, 64, 8192)
+    assert (row["dalone_ms"], row["dalone_cost"]) == (60, pytest.approx(60 / 80))
